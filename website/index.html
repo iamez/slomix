@@ -3415,6 +3415,15 @@
           .story-fold[open] > summary::after { transform: rotate(90deg); }
           .story-fold > summary:hover { background: rgba(255,255,255,0.02); }
           .story-fold > summary:focus-visible { outline: 2px solid rgba(245,158,11,0.6); outline-offset: -2px; }
+          /* Per-map disclosure inside a player card — same idiom, card scale. */
+          .story-fold-mini > summary { list-style: none; }
+          .story-fold-mini > summary::-webkit-details-marker { display: none; }
+          .story-fold-mini > summary::after {
+            content: '\25B8';
+            transition: transform 0.15s ease-out;
+          }
+          .story-fold-mini[open] > summary::after { transform: rotate(90deg); }
+          .story-fold-mini > summary:focus-visible { outline: 2px solid rgba(245,158,11,0.6); outline-offset: -2px; }
           .story-fold > summary .story-fold-hint { margin-left: auto; }
           .story-fold > summary .story-fold-hint::before { content: 'Show'; }
           .story-fold[open] > summary .story-fold-hint::before { content: 'Hide'; }

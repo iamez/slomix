@@ -1073,6 +1073,12 @@ function renderPlayerCards(players) {
             _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
         ));
 
+        // Per-map split — the session total hides that the same player can
+        // carry one map and vanish on the next. Lazy on purpose: the source
+        // (/stats/session/<gsid>/detail) is ~42 KB and runs stopwatch scoring,
+        // so it must never load with the page.
+        if (p.guid) card.appendChild(_perMapFold(p.guid));
+
         // KIS drill-down: prikaže per-kill izračun (preverjanje halucinacij).
         if (p.guid) {
             const detailsBtn = _el('button',
@@ -1088,6 +1094,164 @@ function renderPlayerCards(players) {
     });
 
     bindKisDetailsHandler(container);
+}
+
+// ── Per-map split (Korak 4a) ────────────────────────────────────
+//
+// Source: GET /stats/session/<gsid>/detail -> `team_matrix`, which already
+// carries a per-player, per-map cell grid. Nothing new is computed here.
+// Two properties of that payload drive the code below:
+//   * it is ~42 KB and triggers stopwatch scoring -> fetch once per session,
+//     on the first click, shared by every card;
+//   * it depends on the session having resolvable teams -> it can come back
+//     {available: false, reason: ...}, which the UI must state plainly
+//     instead of rendering an empty box.
+
+let _matrixCache = { gsid: null, promise: null };
+
+function _fetchSessionMatrix() {
+    const gsid = storyState.gamingSessionId;
+    if (gsid == null) return Promise.resolve(null);
+    if (_matrixCache.gsid !== gsid || !_matrixCache.promise) {
+        _matrixCache = {
+            gsid,
+            promise: fetchJSON(`${API_BASE}/stats/session/${encodeURIComponent(gsid)}/detail`)
+                .then(d => d?.team_matrix ?? null)
+                .catch(() => null),
+        };
+    }
+    return _matrixCache.promise;
+}
+
+const MATRIX_UNAVAILABLE_REASON = {
+    no_rounds: 'this session has no scored rounds',
+    no_teams: 'the session has no team assignment',
+    side_mapping_failed: 'axis/allies sides could not be matched to the teams',
+};
+
+/** All roster entries for one player. A player who switched teams mid-session
+ * is present in BOTH rosters with his stats split — that is intentional in the
+ * payload, so it is shown as two labelled blocks rather than silently summed. */
+function _matrixEntriesFor(matrix, guid) {
+    const short = String(guid || '').slice(0, 8).toUpperCase();
+    const out = [];
+    for (const key of ['team_a', 'team_b']) {
+        const roster = Array.isArray(matrix?.rosters?.[key]) ? matrix.rosters[key] : [];
+        for (const row of roster) {
+            if (String(row?.player_guid || '').slice(0, 8).toUpperCase() === short) {
+                out.push({ teamKey: key, row });
+            }
+        }
+    }
+    return out;
+}
+
+function _perMapRows(matrix, entry) {
+    const maps = Array.isArray(matrix?.maps) ? matrix.maps : [];
+    const cells = Array.isArray(entry.row?.cells) ? entry.row.cells : [];
+    const played = cells.filter(c => c?.played);
+    // "Best map" is the player's own peak DPM, so the highlight answers the
+    // question the split is for: where was this player actually good?
+    const bestDpm = played.reduce((m, c) => Math.max(m, Number(c.dpm) || 0), 0);
+
+    const list = _el('div', 'mt-1');
+    cells.forEach(cell => {
+        const meta = maps[cell.map_index] || {};
+        const name = meta.map_name || `map ${cell.map_index + 1}`;
+        const row = _el('div', 'flex items-center gap-2 py-0.5 text-[10px] text-slate-400');
+
+        // Result dot: did the player's team take this map?
+        const a = Number(meta.team_a_score);
+        const b = Number(meta.team_b_score);
+        let dotCls = 'bg-slate-700';
+        if (Number.isFinite(a) && Number.isFinite(b) && a !== b) {
+            const won = (entry.teamKey === 'team_a') === (a > b);
+            dotCls = won ? 'bg-emerald-500' : 'bg-rose-500';
+        }
+        const dot = _el('span', `w-1.5 h-1.5 rounded-full ${dotCls}`);
+        row.appendChild(dot);
+        row.appendChild(_el('span', 'flex-1 truncate', name));
+
+        if (!cell.played) {
+            row.appendChild(_el('span', 'text-slate-500', 'did not play'));
+        } else {
+            row.appendChild(_el('span', 'tabular-nums text-white', `${cell.kills}-${cell.deaths}`));
+            const dpm = Number(cell.dpm) || 0;
+            const isBest = bestDpm > 0 && dpm === bestDpm;
+            row.appendChild(_el('span',
+                `tabular-nums w-12 text-right ${isBest ? 'text-amber-400 font-bold' : ''}`,
+                `${dpm.toFixed(0)} dpm`));
+        }
+        list.appendChild(row);
+    });
+    return list;
+}
+
+function _renderPerMap(body, matrix, guid) {
+    body.textContent = '';
+
+    if (!matrix) {
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1',
+            'Per-map split could not be loaded.'));
+        return;
+    }
+    if (matrix.available === false) {
+        const why = MATRIX_UNAVAILABLE_REASON[matrix.reason] || 'this session is missing team data';
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1',
+            `No per-map split — ${why}.`));
+        return;
+    }
+
+    const entries = _matrixEntriesFor(matrix, guid);
+    if (entries.length === 0) {
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1',
+            'This player is not on either team roster for the session.'));
+        return;
+    }
+
+    entries.forEach(entry => {
+        if (entries.length > 1) {
+            const teamName = entry.teamKey === 'team_a'
+                ? (matrix.team_a_name || 'Team A')
+                : (matrix.team_b_name || 'Team B');
+            body.appendChild(_el('div',
+                'text-[9px] uppercase tracking-wider text-slate-500 mt-1',
+                `as ${stripEtColors(teamName)}`));
+        }
+        body.appendChild(_perMapRows(matrix, entry));
+    });
+
+    if (entries.length > 1) {
+        body.appendChild(_el('div', 'text-[9px] text-amber-400/80 mt-1',
+            'Switched teams this session — stats are split, not summed.'));
+    }
+}
+
+/** The per-map disclosure on a player card. Native <details>, filled on the
+ * first open and never re-fetched (the session matrix is cached per gsid). */
+function _perMapFold(guid) {
+    const fold = _el('details', 'story-fold-mini mt-2 border-t border-white/5 pt-1');
+    const summary = _el('summary',
+        'flex items-center justify-between text-[10px] font-bold text-slate-400 hover:text-white cursor-pointer select-none py-1',
+        'Per-map');
+    const body = _el('div');
+    fold.appendChild(summary);
+    fold.appendChild(body);
+
+    fold.addEventListener('toggle', () => {
+        if (!fold.open || fold.dataset.filled) return;
+        fold.dataset.filled = '1';
+        body.textContent = '';
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1', 'Loading per-map split…'));
+        const gsidAtClick = storyState.gamingSessionId;
+        _fetchSessionMatrix().then(matrix => {
+            // A session switch while the (slow) request was in flight must not
+            // paint the previous session's maps into the new cards.
+            if (storyState.gamingSessionId !== gsidAtClick) return;
+            _renderPerMap(body, matrix, guid);
+        });
+    });
+    return fold;
 }
 
 /** Drop the "Name: " prefix the backend puts in front of every player
