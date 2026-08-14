@@ -42,7 +42,15 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from bot.core.round_contract import derive_round_outcome  # noqa: E402
+try:  # noqa: E402
+    from bot.core.round_contract import derive_round_outcome
+except ImportError:  # pragma: no cover - older checkout (pre-#728)
+    # Production may still run a build without the shared rule. Rather than
+    # copy that rule in here — two implementations of one rule is the exact
+    # failure this repair exists to clean up — restore the SIDES only and let
+    # scripts/repair_round_winner_outcome.py derive the outcomes afterwards.
+    # It is pure SQL, needs no new code, and already runs on production.
+    derive_round_outcome = None
 from scripts.apply_migrations import (  # noqa: E402
     get_connection_kwargs,
     get_target_dsn_parts,
@@ -112,8 +120,11 @@ def collect(cur, headers) -> list[tuple]:
         if identities[key] != 1 or key not in headers:
             continue
         file_defender, file_winner, limit, actual = headers[key]
-        new_outcome = derive_round_outcome(
-            file_winner, file_defender, limit, actual, round_number, sides_trusted=True
+        new_outcome = (
+            derive_round_outcome(
+                file_winner, file_defender, limit, actual, round_number, sides_trusted=True
+            )
+            if derive_round_outcome is not None else None
         )
         plan.append((rid, winner, defender, outcome, file_winner, file_defender, new_outcome))
     return plan
@@ -173,16 +184,28 @@ def main() -> int:
     with _connect() as conn, conn.cursor() as cur:
         written = 0
         for rid, _, _, _, file_winner, file_defender, new_outcome in plan:
-            cur.execute(
-                """
-                UPDATE rounds
-                SET winner_team = %s, defender_team = %s, round_outcome = %s
-                WHERE id = %s
-                  AND (winner_team IS NULL OR winner_team = 0
-                       OR defender_team IS NULL OR defender_team = 0)
-                """,
-                (file_winner, file_defender, new_outcome, rid),
-            )
+            if new_outcome is None:
+                cur.execute(
+                    """
+                    UPDATE rounds
+                    SET winner_team = %s, defender_team = %s
+                    WHERE id = %s
+                      AND (winner_team IS NULL OR winner_team = 0
+                           OR defender_team IS NULL OR defender_team = 0)
+                    """,
+                    (file_winner, file_defender, rid),
+                )
+            else:
+                cur.execute(
+                    """
+                    UPDATE rounds
+                    SET winner_team = %s, defender_team = %s, round_outcome = %s
+                    WHERE id = %s
+                      AND (winner_team IS NULL OR winner_team = 0
+                           OR defender_team IS NULL OR defender_team = 0)
+                    """,
+                    (file_winner, file_defender, new_outcome, rid),
+                )
             written += cur.rowcount
         if written != len(plan):
             # The plan was read before this transaction. If anything repaired a
@@ -202,13 +225,19 @@ def main() -> int:
                   (CASE WHEN winner_team = defender_team THEN 'Fullhold' ELSE 'Completed' END)
             """
         )
-        remaining = cur.fetchone()[0]
+        # Only an invariant when this run set the outcomes; on an older checkout
+        # they are still the old heuristic's until the Phase-O script runs.
+        remaining = cur.fetchone()[0] if derive_round_outcome is not None else 0
         if remaining:
             conn.rollback()
             print(f"\nABORT: {remaining} outcome contradictions remain — rolled back.")
             return 1
         conn.commit()
-    print(f"\nApplied — sides restored on {written:,} rounds, outcomes re-derived.")
+    if derive_round_outcome is None:
+        print(f"\nApplied — sides restored on {written:,} rounds. Outcomes NOT set "
+              "(older checkout): now run scripts/repair_round_winner_outcome.py.")
+    else:
+        print(f"\nApplied — sides restored on {written:,} rounds, outcomes re-derived.")
     return 0
 
 
