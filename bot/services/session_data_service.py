@@ -143,11 +143,13 @@ class SessionDataService:
         - A single date may have multiple gaming sessions
         - A gaming session may span multiple dates (midnight crossover)
 
-        Strategy: Get ALL gaming_session_ids that have at least one round on the target date,
-        then fetch ALL rounds from those sessions (even rounds from adjacent dates).
-
-        This ensures complete session context. For example, if a session ran 23:00-01:00
-        crossing midnight, querying either date will show the complete session.
+        Strategy (owner definition, 2026-08-14): a session is the gap-bounded
+        unit — resolve the date to exactly ONE session and return that
+        session's COMPLETE rounds (including a midnight tail on the next
+        date). Prefer sessions that started on the date; fall back to any
+        session touching it; among several, the most recent. Never merge two
+        sessions into one payload (the old ALL-touching-sessions strategy
+        presented two evenings as one 19-map "session").
 
         Args:
             target_date: Date string in YYYY-MM-DD format
@@ -155,13 +157,26 @@ class SessionDataService:
         Returns:
             (sessions, session_ids, session_ids_str, player_count) or (None, None, None, 0)
         """
-        # Get all gaming_session_ids that have rounds on this date
+        # Candidate sessions touching this date, each with its own start date.
+        # A SESSION is the gap-bounded unit (gaming_session_id) — the owner's
+        # definition (2026-08-14): play is continuous until the server empties
+        # past the gap; a day can hold several sessions and a session can
+        # cross midnight. A date is therefore only a LOOKUP KEY and must never
+        # merge two sessions: the old behaviour returned ALL rounds of ALL
+        # touching sessions, so a date shared by one session's midnight tail
+        # and the next evening's session (e.g. 2026-08-04 = gsid 142's tail +
+        # gsid 143) presented 19 maps as one "session".
         result = await self.db_adapter.fetch_all(
             """
-            SELECT DISTINCT gaming_session_id
+            SELECT gaming_session_id, MIN(SUBSTR(round_date, 1, 10)) AS start_date
             FROM rounds
-            WHERE SUBSTR(round_date, 1, 10) = ?
-              AND gaming_session_id IS NOT NULL
+            WHERE gaming_session_id IN (
+                SELECT DISTINCT gaming_session_id
+                FROM rounds
+                WHERE SUBSTR(round_date, 1, 10) = ?
+                  AND gaming_session_id IS NOT NULL
+            )
+            GROUP BY gaming_session_id
             ORDER BY gaming_session_id DESC
             """,
             (target_date,),
@@ -170,26 +185,26 @@ class SessionDataService:
         if not result:
             return None, None, None, 0
 
-        # Extract session IDs (could be multiple sessions on same date)
-        gaming_session_ids = [row[0] for row in result]
+        # Prefer sessions that STARTED on the target date (the list page keys
+        # a session by its start date); querying a tail date still finds the
+        # whole session via the fallback. Among several, take the most recent
+        # — and only ever ONE session's rounds.
+        started = [row[0] for row in result if str(row[1]) == target_date]
+        chosen_gsid = started[0] if started else result[0][0]
 
-        # Get all rounds from ALL these gaming sessions (R1 and R2 only)
-        # This includes rounds that may be on adjacent dates due to midnight crossover
-        placeholders = ",".join("?" * len(gaming_session_ids))
         sessions = await self.db_adapter.fetch_all(
-            f"""
+            """
             SELECT id, map_name, round_number, actual_time
             FROM rounds
-            WHERE gaming_session_id IN ({placeholders})
+            WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
               AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
               AND is_valid
             ORDER BY
-                gaming_session_id,
                 round_date,
                 CAST(REPLACE(round_time, ':', '') AS INTEGER)
-            """,  # nosec B608 - parameterized
-            tuple(gaming_session_ids),
+            """,
+            (chosen_gsid,),
         )
 
         if not sessions:
@@ -213,13 +228,12 @@ class SessionDataService:
     async def get_gaming_session_ids_for_date(self, target_date: str) -> list[int]:
         """The gaming sessions that have at least one round on `target_date`.
 
-        fetch_session_data_by_date() computes this internally and then throws it
-        away, returning only round ids. Callers that need to tell the user what
-        they are looking at need the session ids themselves: a date can hold
-        more than one gaming session, and that method deliberately merges them
-        all so a midnight-crossing session is never shown cut in half. Without
-        this, /api/sessions/{date} presented several evenings as a single
-        "session detail" with nothing in the payload to reveal it.
+        fetch_session_data_by_date() now resolves the date to exactly ONE
+        session (owner definition 2026-08-14: sessions are gap-bounded units;
+        a date must never merge two). Callers that want to tell the user
+        "this date also touches other sessions" still need the full list —
+        e.g. /api/sessions/{date} exposes it so the UI can offer the other
+        evenings for navigation.
 
         Kept as its own method rather than widening the existing 4-tuple return,
         which has three callers including bot/cogs/session_cog.py.
