@@ -701,6 +701,17 @@ class UltimateETLegacyBot(
         else:
             logger.info("⏸️  Prediction cogs hidden (PREDICTIONS_ENABLED!=true) — 12 commands off")
 
+        # 📸 SUPASTATS CROSS-CHECK: dev tool — reads supa's morning screenshot
+        # and DMs the owner how it compares with our numbers. Off by default;
+        # retire it once the numbers agree and we leave prototype.
+        if self.config.supastats_check_enabled:
+            try:
+                await self.load_extension("bot.cogs.supastats_cog")
+                logger.info("✅ Supastats cross-check loaded (watching channel "
+                            f"{self.config.supastats_channel_id}, !supacheck)")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not load Supastats cog: {e}")
+
         # 📊 AVAILABILITY POLL: Daily gaming availability tracking
         try:
             from bot.cogs.availability_poll_cog import AvailabilityPollCog
