@@ -2,7 +2,7 @@
 
 This document lists Discord bot commands declared in the repository (via `@commands.command(...)` and `@commands.group(...)`), with aliases and short descriptions. It is **auto-generated** from the source by `scripts/regen_commands_doc.py` — re-run that script after adding, renaming, or removing commands.
 
-**Coverage:** 108 visible commands across 21 cog files / cog-mixin groups.
+**Coverage:** 109 visible commands across 22 cog files / cog-mixin groups.
 
 > Hidden commands (`@commands.command(hidden=True)`) are intentionally excluded.
 > Slash commands (`@app_commands.command(...)`) are NOT in this list — none are currently declared in the repo.
@@ -224,6 +224,14 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `help` | `commands`, `cmds`, `bothelp`, `help_command` | 📚 Show all available commands with examples |
 | `ping` | (none) | 🏓 Check bot status and performance |
 | `season_info` | `season`, `seasons` | 📅 Show current season information and champions |
+
+---
+
+## Supastats cog (`bot/cogs/supastats_cog.py`)
+
+| Command | Aliases | Description |
+|---|---|---|
+| `supacheck` | (none) | Re-run the check on an attached sheet (or the one you replied to) |
 
 ---
 
