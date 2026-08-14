@@ -171,6 +171,7 @@ def main() -> int:
         return 1
 
     with _connect() as conn, conn.cursor() as cur:
+        written = 0
         for rid, _, _, _, file_winner, file_defender, new_outcome in plan:
             cur.execute(
                 """
@@ -182,6 +183,15 @@ def main() -> int:
                 """,
                 (file_winner, file_defender, new_outcome, rid),
             )
+            written += cur.rowcount
+        if written != len(plan):
+            # The plan was read before this transaction. If anything repaired a
+            # row in between, its predicate now matches nothing — committing
+            # would report len(plan) repairs while having made fewer.
+            conn.rollback()
+            print(f"\nABORT: updated {written} rows but planned {len(plan)} — "
+                  "the data moved under us; rolled back, nothing committed.")
+            return 1
         cur.execute(
             """
             SELECT COUNT(*) FROM rounds
@@ -198,7 +208,7 @@ def main() -> int:
             print(f"\nABORT: {remaining} outcome contradictions remain — rolled back.")
             return 1
         conn.commit()
-    print(f"\nApplied — sides restored on {len(plan):,} rounds, outcomes re-derived.")
+    print(f"\nApplied — sides restored on {written:,} rounds, outcomes re-derived.")
     return 0
 
 
