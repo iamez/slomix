@@ -82,8 +82,17 @@ class SupastatsCog(commands.Cog):
             logger.exception("supastats listener failed")
 
     @commands.command(name="supacheck")
+    @commands.cooldown(1, 60, commands.BucketType.user)
     async def supacheck(self, ctx, date: str | None = None):
-        """Re-run the check on an attached sheet (or the one you replied to)."""
+        """Re-run the check on an attached sheet (or the one you replied to).
+
+        Rate-limited: every call downloads an attachment and runs the CPU-bound
+        decoder. Restricted to the watched channel and the admin channels so it
+        cannot be used as a decode-on-demand service from anywhere.
+        """
+        allowed = {self.config.supastats_channel_id, *self.config.admin_channels}
+        if ctx.channel.id not in {c for c in allowed if c}:
+            return
         attachment = self._first_image(ctx.message)
         if attachment is None and ctx.message.reference:
             try:
@@ -166,7 +175,11 @@ class SupastatsCog(commands.Cog):
         row = await adapter.fetch_one(
             "SELECT gaming_session_id FROM rounds WHERE id = ?", (session_ids[0],)
         )
-        gsid = int(row[0]) if row else None
+        gsid = int(row[0]) if row and row[0] is not None else None
+        if gsid is None:
+            # Say so plainly: without this the empty session query surfaces as a
+            # map-count mismatch and blames the data instead of the lookup.
+            return f"⚠️ rounds for {session_date} carry no gaming_session_id — cannot compare"
 
         ours = await load_our_session(adapter, gsid)
         our_winners: list[str] = []

@@ -137,11 +137,14 @@ class BotConfig:
         # screenshot of his sheet the morning after a gather; when enabled the
         # bot reads it and DMs the owner how it compares with our numbers.
         # Retire this once the numbers agree and the project leaves prototype.
-        self.supastats_check_enabled: bool = self._get_config(
-            'SUPASTATS_CHECK_ENABLED', 'false'
-        ).lower() == 'true'
+        # str() throughout: _get_config returns the RAW json value when the key
+        # comes from bot_config.json, so `"SUPASTATS_CHECK_ENABLED": true` would
+        # otherwise crash the whole bot on .lower().
+        self.supastats_check_enabled: bool = str(
+            self._get_config('SUPASTATS_CHECK_ENABLED', 'false')
+        ).strip().lower() == 'true'
         self.supastats_channel_id: int = int(self._get_config('SUPASTATS_CHANNEL_ID', '0'))
-        supastats_authors_str = self._get_config('SUPASTATS_AUTHOR_IDS', '')
+        supastats_authors_str = str(self._get_config('SUPASTATS_AUTHOR_IDS', ''))
         self.supastats_author_ids: list[int] = [
             int(a.strip()) for a in supastats_authors_str.split(",") if a.strip().isdigit()
         ]

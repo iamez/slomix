@@ -7,11 +7,18 @@ a naive "split a multi-digit cell into equal parts" bootstrap contaminates them
 ("1" is narrower than the rest, so equal splitting bleeds its neighbours into
 it, which is exactly how "21" starts reading as "24").
 
-So this bootstraps by SELF-VERIFICATION instead: label cells from values we
-already trust in the database, decode them with the current templates, and
-harvest new samples ONLY from cells whose decode matches the known value — with
-the reader's own segmentation deciding the cut points. Repeat until stable.
-Wrong readings can never become training data.
+So this bootstraps by SUPERVISED ALIGNMENT instead: the cell values come from
+the database, so the digit IDENTITIES are known and only the cut points are
+searched. That is what makes it converge — free decoding would have to guess
+identities and cuts at once, so a bad template produces a bad cut which
+produces a worse template (measured: it stalls at 35/42 and never recovers,
+while alignment reaches 48/48 and free decode then follows at 47/48).
+
+The generated file is therefore only ever as good as the labels, never as good
+as the previous templates: a wrong template can shift a cut, but it can never
+relabel a glyph. Each iteration prints the free-decode accuracy so a regression
+is visible, and the fixtures in tests/unit/test_supastats_image_reader.py pin
+the result against database-verified values.
 
 Usage (dev only, read-only):
     python scripts/build_supastats_glyphs.py [--write]

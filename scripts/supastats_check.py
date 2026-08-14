@@ -84,7 +84,10 @@ async def run(image: Path, date: str | None, gsid: int | None) -> int:
             row = await adapter.fetch_one(
                 "SELECT gaming_session_id FROM rounds WHERE id = ?", (session_ids[0],)
             )
-            gsid = int(row[0]) if row else None
+            gsid = int(row[0]) if row and row[0] is not None else None
+            if gsid is None:
+                print(f"    rounds for {session_date} carry no gaming_session_id")
+                return 2
             touching = await data_service.get_gaming_session_ids_for_date(session_date)
             if touching and len(touching) > 1:
                 print(f"    note: {session_date} also touches {sorted(set(touching) - {gsid})}"

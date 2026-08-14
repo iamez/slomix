@@ -159,7 +159,15 @@ def reconcile(
                     f"kills — {name}, map {map_index}: supastats {theirs}, we have {ours}"
                 )
 
-    dpm_rows = {i: r for i, r in enumerate(sheet.dpm)}
+    # The DPM block is only row-aligned with the kills block when both hold the
+    # same players in the same order; comparing across a size mismatch would
+    # attribute one player's DPM to another and invent mismatches.
+    dpm_aligned = len(sheet.dpm) == len(sheet.kills) and all(
+        d.team == k.team for d, k in zip(sheet.dpm, sheet.kills)
+    )
+    if sheet.dpm and not dpm_aligned:
+        report.unmatched.append("DPM block does not line up with the kills block — DPM not compared")
+    dpm_rows = dict(enumerate(sheet.dpm)) if dpm_aligned else {}
     for index, name in linked.items():
         row = dpm_rows.get(index)
         if row is None or name not in our_dpm:
@@ -269,7 +277,7 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     rows = await db_adapter.fetch_all(
         f"""
         WITH mapno AS ({_MAP_ORDER_SQL})
-        SELECT mn.map_no, p.player_name,
+        SELECT mn.map_no, MAX(p.player_name) AS player_name,
                SUM(p.kills) AS kills,
                SUM(p.damage_given) AS damage,
                SUM(p.time_played_seconds) AS seconds
@@ -277,7 +285,10 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
         JOIN mapno mn ON mn.match_id = r.match_id
         JOIN player_comprehensive_stats p ON p.round_id = r.id
         WHERE r.gaming_session_id = ? AND r.round_number IN (1, 2) AND r.is_valid
-        GROUP BY mn.map_no, p.player_name
+        -- Group by GUID, never by name (project rule): a rename mid-session
+        -- would otherwise split one player into two half kill-vectors, and
+        -- _link_players would report both as unlinkable.
+        GROUP BY mn.map_no, p.player_guid
         ORDER BY mn.map_no
         """,  # nosec B608 - _MAP_ORDER_SQL is a module constant, parameters are bound
         (gaming_session_id, gaming_session_id),
@@ -306,9 +317,14 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
         target = r1 if int(round_number) == 1 else r2
         target[int(map_no)] = _to_seconds(actual)
 
-    map_count = max(
-        [max(v) for v in kills.values() if v] + [max(r1)] if kills or r1 else [0]
-    )
+    # Explicit list build: the conditional expression binds looser than "+",
+    # so the terser form evaluated max() on an empty r1 and raised.
+    map_numbers: list[int] = [max(v) for v in kills.values() if v]
+    if r1:
+        map_numbers.append(max(r1))
+    if r2:
+        map_numbers.append(max(r2))
+    map_count = max(map_numbers) if map_numbers else 0
     order = list(range(1, map_count + 1))
     return {
         "kills": {n: [v.get(i, 0) for i in order] for n, v in kills.items()},
