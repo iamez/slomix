@@ -166,15 +166,26 @@ class SessionDataService:
         # touching sessions, so a date shared by one session's midnight tail
         # and the next evening's session (e.g. 2026-08-04 = gsid 142's tail +
         # gsid 143) presented 19 maps as one "session".
+        # Candidates carry the SAME eligibility predicate as the rounds fetch
+        # below (CodeRabbit on #730): without it, a newer session whose rows
+        # are all invalid/bot (e.g. a bot-test session sharing the date with a
+        # real gather) would be chosen and return an empty payload while an
+        # eligible session exists.
         result = await self.db_adapter.fetch_all(
             """
             SELECT gaming_session_id, MIN(SUBSTR(round_date, 1, 10)) AS start_date
             FROM rounds
-            WHERE gaming_session_id IN (
+            WHERE round_number IN (1, 2)
+              AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+              AND is_valid
+              AND gaming_session_id IN (
                 SELECT DISTINCT gaming_session_id
                 FROM rounds
                 WHERE SUBSTR(round_date, 1, 10) = ?
                   AND gaming_session_id IS NOT NULL
+                  AND round_number IN (1, 2)
+                  AND (round_status IN ('completed', 'cancelled', 'substitution') OR round_status IS NULL)
+                  AND is_valid
             )
             GROUP BY gaming_session_id
             ORDER BY gaming_session_id DESC

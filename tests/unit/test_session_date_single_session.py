@@ -78,3 +78,28 @@ async def test_two_sessions_started_same_date_picks_most_recent():
 async def test_no_sessions_returns_empty():
     svc = _service(candidates=[], rounds_by_gsid={})
     assert await svc.fetch_session_data_by_date("1999-01-01") == (None, None, None, 0)
+
+
+@pytest.mark.asyncio
+async def test_candidate_query_carries_eligibility_gate():
+    """A newer all-invalid session (e.g. a bot test sharing the date with a
+    real gather) must never be chosen over an eligible one. The candidate
+    query itself filters on validity/status/round_number — pin that the SQL
+    carries the same predicate as the rounds fetch (CodeRabbit on #730)."""
+    seen = {}
+    svc = SessionDataService.__new__(SessionDataService)
+    svc.db_adapter = MagicMock()
+
+    async def fetch_all(query, params=()):
+        if "start_date" in query:
+            seen["candidate_sql"] = query
+            return []
+        return []
+
+    svc.db_adapter.fetch_all = fetch_all
+    svc.db_adapter.fetch_one = AsyncMock(return_value=(0,))
+    await svc.fetch_session_data_by_date("2026-08-11")
+    sql = seen["candidate_sql"]
+    assert sql.count("is_valid") == 2          # outer + inner subquery
+    assert sql.count("round_number IN (1, 2)") == 2
+    assert sql.count("round_status IN ('completed', 'cancelled', 'substitution')") == 2
