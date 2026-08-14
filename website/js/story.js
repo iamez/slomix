@@ -302,14 +302,17 @@ async function loadStoryData() {
         // converted too (accepts gaming_session_id), so all panels share `q`.
         const q = _storyScopeQuery();
 
-        // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
+        // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking).
+        // Every failure path re-checks `loadId` exactly like its success path:
+        // a rejection that lands AFTER a session switch must not clear the
+        // panel of the session now on screen (CodeRabbit, #736).
         fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
             if (loadId === storyLoadId) renderNarrative(narData);
-        }).catch(() => renderNarrative(null));
+        }).catch(() => { if (loadId === storyLoadId) renderNarrative(null); });
 
         fetchJSON(`${API_BASE}/storytelling/momentum?${q}`).then(momtData => {
             if (loadId === storyLoadId) renderMomentum(momtData);
-        }).catch(() => renderMomentum(null));
+        }).catch(() => { if (loadId === storyLoadId) renderMomentum(null); });
 
         // Moments + best-lives render into the SAME reel (the life card is a
         // moment-card variant, not a new panel), so settle both before drawing.
@@ -324,7 +327,7 @@ async function loadStoryData() {
                 mom.status === 'fulfilled' ? mom.value : null,
                 lives.status === 'fulfilled' ? lives.value : null
             );
-        }).catch(() => renderMoments(null, null));
+        }).catch(() => { if (loadId === storyLoadId) renderMoments(null, null); });
 
         // Per-player micro-narratives — pure enrichment of the player cards
         // that are already on screen (the cards never wait on this fetch).
@@ -334,11 +337,11 @@ async function loadStoryData() {
 
         fetchJSON(`${API_BASE}/storytelling/synergy?${q}`).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
-        }).catch(() => renderTeamSynergy(null));
+        }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
         fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
             if (loadId === storyLoadId) renderWinContribution(pwcData);
-        }).catch(() => renderWinContribution(null));
+        }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
 
         // Advanced metrics + Comp Skill board share one card (own containers)
         // and are rendered together so the card fills in one paint.
@@ -364,7 +367,7 @@ async function loadStoryData() {
                 renderHeroResult(d);
                 renderBoxScore(d);
             })
-            .catch(() => renderBoxScore(null));
+            .catch(() => { if (loadId === storyLoadId) renderBoxScore(null); });
 
         // Invisible Value — 5 parallel fetches
         Promise.allSettled([
@@ -382,7 +385,9 @@ async function loadStoryData() {
                 l.status === 'fulfilled' ? l.value : null,
                 d.status === 'fulfilled' ? d.value : null
             );
-        }).catch(() => renderInvisibleValue(null, null, null, null, null));
+        }).catch(() => {
+            if (loadId === storyLoadId) renderInvisibleValue(null, null, null, null, null);
+        });
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -1113,12 +1118,16 @@ function _fetchSessionMatrix() {
     const gsid = storyState.gamingSessionId;
     if (gsid == null) return Promise.resolve(null);
     if (_matrixCache.gsid !== gsid || !_matrixCache.promise) {
-        _matrixCache = {
-            gsid,
-            promise: fetchJSON(`${API_BASE}/stats/session/${encodeURIComponent(gsid)}/detail`)
-                .then(d => d?.team_matrix ?? null)
-                .catch(() => null),
-        };
+        const promise = fetchJSON(`${API_BASE}/stats/session/${encodeURIComponent(gsid)}/detail`)
+            .then(d => d?.team_matrix ?? null)
+            .catch(() => {
+                // A FAILED request must not be cached, or one dropped
+                // connection would leave every card on the page permanently
+                // stuck on "could not be loaded" with no way to retry.
+                if (_matrixCache.promise === promise) _matrixCache = { gsid: null, promise: null };
+                return null;
+            });
+        _matrixCache = { gsid, promise };
     }
     return _matrixCache.promise;
 }
@@ -1248,6 +1257,9 @@ function _perMapFold(guid) {
             // A session switch while the (slow) request was in flight must not
             // paint the previous session's maps into the new cards.
             if (storyState.gamingSessionId !== gsidAtClick) return;
+            // Only a FAILED fetch is retryable — `available:false` is a real
+            // answer, so that one stays put instead of re-asking on every open.
+            if (matrix == null) delete fold.dataset.filled;
             _renderPerMap(body, matrix, guid);
         });
     });
