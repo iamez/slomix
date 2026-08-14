@@ -295,9 +295,26 @@ async function loadStoryData() {
             if (loadId === storyLoadId) renderMomentum(momtData);
         }).catch(() => renderMomentum(null));
 
-        fetchJSON(`${API_BASE}/storytelling/moments?${q}&limit=10`).then(momData => {
-            if (loadId === storyLoadId) renderMoments(momData);
-        }).catch(() => renderMoments(null));
+        // Moments + best-lives render into the SAME reel (the life card is a
+        // moment-card variant, not a new panel), so settle both before drawing.
+        // best-lives failing must never cost us the moments strip — hence
+        // allSettled with a null fallback rather than a chained .catch.
+        Promise.allSettled([
+            fetchJSON(`${API_BASE}/storytelling/moments?${q}&limit=10`),
+            fetchJSON(`${API_BASE}/storytelling/best-lives?${q}&limit=1`),
+        ]).then(([mom, lives]) => {
+            if (loadId !== storyLoadId) return;
+            renderMoments(
+                mom.status === 'fulfilled' ? mom.value : null,
+                lives.status === 'fulfilled' ? lives.value : null
+            );
+        }).catch(() => renderMoments(null, null));
+
+        // Per-player micro-narratives — pure enrichment of the player cards
+        // that are already on screen (the cards never wait on this fetch).
+        fetchJSON(`${API_BASE}/storytelling/player-narratives?${q}`).then(pnData => {
+            if (loadId === storyLoadId) renderPlayerNarratives(pnData);
+        }).catch(() => { /* cards stay as-is; a missing story is not an error */ });
 
         fetchJSON(`${API_BASE}/storytelling/synergy?${q}`).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
@@ -841,6 +858,19 @@ function renderPlayerCards(players) {
         );
         card.appendChild(_el('div', 'flex items-start justify-between mb-3', headerLeft, headerRight));
 
+        // Micro-narrative slot — filled by renderPlayerNarratives() once
+        // /storytelling/player-narratives resolves (separate, slower request).
+        // Hidden until it has text so a card without a story shows no gap.
+        // Keyed by the 8-char guid prefix: kill-impact sends the 32-char GUID,
+        // player-narratives sends guid_short.
+        if (p.guid) {
+            const narrativeSlot = _el('div',
+                'mb-3 border-l-2 border-white/10 pl-3 text-[11px] leading-snug text-slate-400 italic');
+            narrativeSlot.dataset.narrativeFor = String(p.guid).slice(0, 8).toUpperCase();
+            narrativeSlot.style.display = 'none';
+            card.appendChild(narrativeSlot);
+        }
+
         // Stats grid
         const statCell = (val, label, cls) => _el('div', null,
             _el('div', `text-xs font-bold ${cls}`, String(val)),
@@ -905,6 +935,46 @@ function renderPlayerCards(players) {
     });
 
     bindKisDetailsHandler(container);
+}
+
+/** Drop the "Name: " prefix the backend puts in front of every player
+ * narrative — the card header already shows the name, and repeating it eats
+ * a whole line. Colour codes are stripped from both sides before comparing
+ * (the narrative is built from the same raw names the cards carry). */
+function _playerNarrativeText(narrative, name) {
+    const text = stripEtColors(narrative || '').trim();
+    if (!text) return '';
+    const who = stripEtColors(name || '').trim();
+    if (who && text.toLowerCase().startsWith(`${who.toLowerCase()}: `)) {
+        return text.slice(who.length + 2).trim();
+    }
+    return text;
+}
+
+/** Fill the player cards' narrative slots from /storytelling/player-narratives.
+ * Pure enrichment: the cards are already rendered, so a missing/late/failed
+ * response simply leaves them as they were. */
+function renderPlayerNarratives(data) {
+    const container = document.getElementById('story-players');
+    if (!container) return;
+
+    const rows = Array.isArray(data?.player_narratives) ? data.player_narratives : [];
+    if (rows.length === 0) return;
+
+    const byGuid = new Map();
+    rows.forEach(r => {
+        if (r?.guid_short) byGuid.set(String(r.guid_short).toUpperCase(), r);
+    });
+
+    container.querySelectorAll('[data-narrative-for]').forEach(slot => {
+        const row = byGuid.get(slot.dataset.narrativeFor);
+        if (!row) return;
+        const text = _playerNarrativeText(row.narrative, row.name);
+        if (!text) return;
+        slot.textContent = text;   // text node — ET colour codes already stripped
+        slot.title = text;
+        slot.style.display = '';
+    });
 }
 
 function renderKISBreakdown(players) {
@@ -1027,23 +1097,129 @@ const MOMENT_TYPES = {
     multikill:          { icon: '\u{1F525}',        color: 'amber',   bg: 'bg-amber-500/15',   border: 'border-amber-500/30',   text: 'text-amber-400' },
 };
 
-function renderMoments(data) {
+/** The "why it mattered" facts each moment already carries in `detail` but
+ * that nothing rendered until now. Returns short chip labels (max 3).
+ *
+ * The narrative prose holds most of these too, but it is line-clamped to two
+ * lines in a w-56 card, so the tail ("(69% efficiency)", "with 2 enemies
+ * nearby") is routinely clipped out of sight. Chips keep the number glanceable
+ * regardless of clamping. Keys below are the ones the detector actually emits
+ * (verified against /storytelling/moments for a real session).
+ */
+function _momentDetailChips(m) {
+    const d = m?.detail;
+    if (!d || typeof d !== 'object') return [];
+
+    const pct = v => `${Math.round(v * 100)}%`;
+    const secs = ms => `${(ms / 1000).toFixed(1)}s`;
+    const words = v => String(v).replace(/_/g, ' ');
+    const chips = [];
+
+    switch (m.type) {
+        case 'push_success':
+            if (d.objective) chips.push(`⚑ ${words(d.objective)}`);
+            if (Number.isFinite(d.push_quality)) chips.push(`${pct(d.push_quality)} quality`);
+            if (Number.isFinite(d.participant_count)) chips.push(`${d.participant_count} pushing`);
+            break;
+        case 'objective_secured':
+            if (Number.isFinite(d.efficiency)) chips.push(`${pct(d.efficiency)} efficient`);
+            if (Number.isFinite(d.carry_distance)) chips.push(`${d.carry_distance}u carried`);
+            if (Number.isFinite(d.duration_ms)) chips.push(secs(d.duration_ms));
+            break;
+        case 'objective_denied':
+            if (Number.isFinite(d.carry_distance)) chips.push(`${d.carry_distance}u denied`);
+            if (Number.isFinite(d.duration_ms)) chips.push(`${secs(d.duration_ms)} carry`);
+            break;
+        case 'objective_run':
+            if (d.action_type) chips.push(words(d.action_type));
+            if (Number.isFinite(d.enemies_nearby)) chips.push(`${d.enemies_nearby} enemies near`);
+            if (Number.isFinite(d.nearby_teammates)) chips.push(`${d.nearby_teammates} mates near`);
+            break;
+        case 'team_wipe':
+            if (d.wiping_team && Number.isFinite(d.team_size)) chips.push(`${d.wiping_team} → ${d.team_size} down`);
+            if (Number.isFinite(d.duration_ms)) chips.push(secs(d.duration_ms));
+            break;
+        case 'multikill':
+            if (d.is_ace) chips.push('ACE');
+            if (Number.isFinite(d.kill_count) && Number.isFinite(d.duration_ms)) {
+                chips.push(`${d.kill_count} in ${secs(d.duration_ms)}`);
+            }
+            if (d.near_objective) chips.push('at the objective');
+            break;
+        case 'kill_streak':
+            if (Number.isFinite(d.streak_count)) chips.push(`${d.streak_count}-kill streak`);
+            if (d.near_objective) chips.push('at the objective');
+            break;
+        case 'focus_survival':
+            if (Number.isFinite(d.attacker_count)) chips.push(`${d.attacker_count} on him`);
+            if (Number.isFinite(d.focus_score)) chips.push(`focus ${pct(d.focus_score)}`);
+            break;
+        case 'trade_chain':
+            if (Number.isFinite(d.delta_ms)) chips.push(`traded in ${secs(d.delta_ms)}`);
+            break;
+        default:
+            break;
+    }
+    return chips.slice(0, 3);
+}
+
+/** The night's standout single life, rendered as a moment-card variant so it
+ * lives in the same reel (plan: enrich existing panels, never add new boxes). */
+function _bestLifeCard(life) {
+    const name = stripEtColors(life?.name || '');
+    const kills = Number(life?.kills) || 0;
+    if (!name || kills <= 0) return null;
+
+    const card = _el('div', 'flex-shrink-0 w-56 rounded-xl border border-amber-400/40 bg-amber-500/15 p-4 ring-1 ring-amber-400/40');
+
+    const topRow = _el('div', 'flex items-center justify-between mb-2');
+    topRow.appendChild(_el('span', 'text-lg', '\u{1F3C5}'));
+    topRow.appendChild(_el('span', 'text-[9px] font-bold uppercase tracking-wider text-amber-300', 'Best life'));
+    card.appendChild(topRow);
+
+    const headline = _el('div', 'flex items-baseline gap-2 mb-1');
+    headline.appendChild(_el('span', 'text-2xl font-black text-amber-400 tabular-nums', String(kills)));
+    headline.appendChild(_el('span', 'text-[10px] uppercase tracking-wider text-slate-400', 'kills · one life'));
+    card.appendChild(headline);
+
+    const nameEl = _el('div', 'text-xs font-bold text-white mb-1 truncate', name);
+    nameEl.title = name;
+    card.appendChild(nameEl);
+
+    const lifeSeconds = Number(life?.life_seconds);
+    card.appendChild(_el('div', 'text-[11px] text-slate-300 mb-2 leading-relaxed',
+        Number.isFinite(lifeSeconds) ? `${lifeSeconds}s alive without dying` : 'One unbroken life'));
+
+    const meta = _el('div', 'flex items-center gap-2 text-[10px] text-slate-500');
+    if (life?.round_number) meta.appendChild(_el('span', null, `R${life.round_number}`));
+    if (life?.map_name) meta.appendChild(_el('span', 'truncate', String(life.map_name)));
+    card.appendChild(meta);
+
+    return card;
+}
+
+function renderMoments(data, livesData) {
     const container = document.getElementById('story-moments');
     if (!container) return;
 
     const moments = Array.isArray(data?.moments) ? data.moments : [];
-    if (moments.length === 0) {
+    const lives = Array.isArray(livesData?.lives) ? livesData.lives : [];
+    const lifeCard = lives.length > 0 ? _bestLifeCard(lives[0]) : null;
+
+    if (moments.length === 0 && !lifeCard) {
         container.textContent = '';
         container.appendChild(_el('div', 'text-slate-500 text-sm py-4', 'No key moments for this session'));
         return;
     }
 
     container.textContent = '';
+    if (lifeCard) container.appendChild(lifeCard);
     moments.forEach((m, idx) => {
         const mt = MOMENT_TYPES[m.type] || MOMENT_TYPES.kill_streak;
         const stars = '\u2605'.repeat(Math.min(Math.max(Math.round(m.impact_stars || m.impact || 0), 0), 5));
         const safeName = stripEtColors(m.player || m.player_name || '');
-        const safeNarrative = m.narrative || '';
+        // Narratives embed raw player names, which can carry ^-colour codes.
+        const safeNarrative = stripEtColors(m.narrative || '');
         const safeMap = m.map_name || '';
         const roundLabel = (m.round_number || m.round_num) ? `R${m.round_number || m.round_num}` : '';
         const timeLabel = m.time_formatted || '';
@@ -1067,8 +1243,20 @@ function renderMoments(data) {
         nameEl.title = safeName;
         card.appendChild(nameEl);
 
-        // Narrative
-        card.appendChild(_el('div', 'text-[11px] text-slate-300 mb-2 line-clamp-2 leading-relaxed', safeNarrative));
+        // Narrative (clamped to 2 lines — full text on hover)
+        const narrativeEl = _el('div', 'text-[11px] text-slate-300 mb-2 line-clamp-2 leading-relaxed', safeNarrative);
+        if (safeNarrative) narrativeEl.title = safeNarrative;
+        card.appendChild(narrativeEl);
+
+        // Why it mattered — the numbers from `detail` the clamp would hide
+        const chips = _momentDetailChips(m);
+        if (chips.length > 0) {
+            const chipRow = _el('div', 'flex flex-wrap gap-1 mb-2');
+            chips.forEach(label => chipRow.appendChild(
+                _el('span', `inline-flex items-center px-1.5 py-0.5 rounded bg-black/20 text-[9px] font-bold ${mt.text}`, label)
+            ));
+            card.appendChild(chipRow);
+        }
 
         // Round + map labels
         const meta = _el('div', 'flex items-center gap-2 text-[10px] text-slate-500');
