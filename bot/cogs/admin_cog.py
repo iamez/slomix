@@ -201,6 +201,11 @@ class AdminCog(commands.Cog, name="Admin"):
             await ctx.send(f"❌ correlation_status failed: {sanitize_error_message(e)}")
 
 
+    @is_moderator()
+    # Every invocation opens an outbound HTTP call that itself runs a UDP probe
+    # and several queries, so it is rate-limited per channel on top of the
+    # access check — a status command must never become a load generator.
+    @commands.cooldown(1, 30, commands.BucketType.channel)
     @commands.command(name="sistem", aliases=["system"])
     async def system_status(self, ctx):
         """🩺 Ali cela veriga teče? (isti vir kot stran #/system)"""
@@ -219,10 +224,24 @@ class AdminCog(commands.Cog, name="Admin"):
             await ctx.send("🔴 **Sistem:** spletni API se ne odziva — to je hkrati odgovor.")
             return
 
-        overall = data.get("overall", "unknown")
+        try:
+            await ctx.send(self._format_system_overview(data))
+        except Exception as e:
+            # A malformed payload is a status finding too, not a stack trace.
+            logger.warning("sistem: could not format overview (%s)", e)
+            await ctx.send("🟠 **Sistem:** odgovor ni v pričakovani obliki.")
+
+    @staticmethod
+    def _format_system_overview(data) -> str:
+        """Render the overview payload; tolerant of anything the API sends."""
+        if not isinstance(data, dict):
+            raise TypeError(f"overview payload is {type(data).__name__}, not a dict")
+        overall = str(data.get("overall", "unknown"))
         lines = [f"{_SYSTEM_STATE_EMOJI.get(overall, '❔')} **Sistem — {overall.upper()}**"]
 
         for stage in data.get("stages") or []:
+            if not isinstance(stage, dict):
+                continue
             emoji = _SYSTEM_STATE_EMOJI.get(stage.get("state"), "❔")
             lines.append(f"{emoji} **{stage.get('label', stage.get('key'))}** — {stage.get('summary', '')}")
 
@@ -241,7 +260,7 @@ class AdminCog(commands.Cog, name="Admin"):
         if generated:
             lines.append(f"_preverjeno {str(generated).replace('T', ' ')[:19]} UTC_")
 
-        await ctx.send("\n".join(lines))
+        return "\n".join(lines)
 
 
 async def setup(bot):

@@ -189,6 +189,26 @@ async def test_failing_section_degrades_alone(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_pipeline_failure_still_lists_its_stages(monkeypatch):
+    """A page that renders four green rows out of five reads as healthy — so a
+    pipeline that could not be measured must still appear, as unknown."""
+    db = FakeSystemDB()
+    db.fail_on = {"capture"}
+
+    async def _explode(_self_db):
+        raise RuntimeError("pipeline section exploded")
+
+    monkeypatch.setattr(diagnostics_router, "_system_pipeline", _explode, raising=True)
+    body = await _get(db, monkeypatch)
+
+    keys = [s["key"] for s in body["stages"]]
+    assert {"capture", "parser", "derived"}.issubset(set(keys))
+    for key in ("capture", "parser", "derived"):
+        assert _stage(body, key)["state"] == "unknown"
+    assert body["overall"] in {"unknown", "warn", "down"}
+
+
+@pytest.mark.asyncio
 async def test_database_loss_is_reported_not_raised(monkeypatch):
     db = FakeSystemDB()
     db.select_one_fails = True

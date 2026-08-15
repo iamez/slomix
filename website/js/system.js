@@ -199,7 +199,14 @@ export async function loadSystemView() {
             // refreshes in the background, so a status page would keep
             // claiming everything is fine for a full extra cycle after a
             // stage went down. A status page must never read from a cache.
-            const data = await fetchJSON(`${API_BASE}/system/overview`, { cachePolicy: 'no-store' });
+            // Two layers, both required: `cachePolicy` bypasses fetchJSON's own
+            // stale-while-revalidate memory cache, `cache: 'no-store'` stops the
+            // browser/HTTP layer from serving a stored response. A status page
+            // must never read from either.
+            const data = await fetchJSON(`${API_BASE}/system/overview`, {
+                cachePolicy: 'no-store',
+                cache: 'no-store',
+            });
             _render(container, data);
         } catch (err) {
             // The page itself IS a status report: say the API is unreachable
@@ -213,14 +220,22 @@ export async function loadSystemView() {
 
     // Light auto-refresh: the acceptance test for this page is that a stage
     // going bad shows up without a manual reload.
-    if (_systemTimer) clearInterval(_systemTimer);
-    _systemTimer = setInterval(() => {
-        const view = document.getElementById('view-system');
-        if (!view || view.classList.contains('hidden')) {
-            clearInterval(_systemTimer);
-            _systemTimer = null;
-            return;
-        }
-        refresh();
-    }, 30000);
+    //
+    // Chained timeout rather than setInterval: setInterval fires on a fixed
+    // clock regardless of whether the previous refresh finished, so a slow API
+    // or a slow device would stack overlapping requests. Here the next tick is
+    // only scheduled once the current one has settled.
+    if (_systemTimer) clearTimeout(_systemTimer);
+    const schedule = () => {
+        _systemTimer = setTimeout(async () => {
+            const view = document.getElementById('view-system');
+            if (!view || view.classList.contains('hidden')) {
+                _systemTimer = null;
+                return;
+            }
+            await refresh();
+            schedule();
+        }, 30000);
+    };
+    schedule();
 }

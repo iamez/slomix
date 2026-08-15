@@ -173,14 +173,19 @@ if overview="$(curl -fsS --max-time 15 "$API_BASE_URL/api/system/overview" 2>/de
     # No f-strings and no backslashes on purpose: this program lives inside a
     # single-quoted shell string, where a backslash-escaped quote would reach
     # Python as a literal backslash and fail to parse.
-    printf '%s' "$overview" | python3 -c '
+    if printf '%s' "$overview" | python3 -c '
 import json, sys
 d = json.load(sys.stdin)
 print("      overall: " + str(d.get("overall")))
 for s in d.get("stages") or []:
     print("      [%-7s] %-14s %s" % (s.get("state", "?"), s.get("label", s.get("key")), s.get("summary", "")))
-' || warn "overview response could not be parsed"
-    ok "pipeline overview read from $API_BASE_URL"
+'; then
+        ok "pipeline overview read from $API_BASE_URL"
+    else
+        # One verdict per check: printing OK after a parse failure would have
+        # the summary count the same check twice, once as each outcome.
+        warn "overview response could not be parsed"
+    fi
 else
     warn "pipeline overview unreachable at $API_BASE_URL — start the web service or set API_BASE_URL"
 fi

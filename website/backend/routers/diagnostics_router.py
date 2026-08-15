@@ -255,7 +255,15 @@ async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
         ))
 
     if isinstance(pipeline, Exception):
+        # Without this the response would simply LACK capture/parser/derived,
+        # and a page that renders four green rows out of five reads as healthy.
+        # A stage that could not be measured must still appear, as unknown.
         logger.warning("system overview: pipeline section failed: %s", pipeline)
+        stages.extend([
+            _stage("capture", "Lua capture", "unknown", "capture state unavailable"),
+            _stage("parser", "Parser", "unknown", "round state unavailable"),
+            _stage("derived", "Smart Stats", "unknown", "derived state unavailable"),
+        ])
     else:
         stages.extend(pipeline)
 
