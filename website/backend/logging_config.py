@@ -368,13 +368,16 @@ def setup_logging(
     # Select formatter
     file_formatter = JSONFormatter() if json_logs else StandardFormatter()
 
-    # Setup file handlers. "client_error" is deliberately excluded from this
-    # loop: every handler here attaches to the root logger with no
-    # logger-name filter, so (pre-existing behavior, not changed here) each
-    # of these files ends up catching every INFO+ message from the whole
-    # process, not just messages that match its own name. That's tolerable
-    # for the existing five (general operational logs), but client_errors.log
-    # needs to be genuinely dedicated to client error reports — see below.
+    # Setup file handlers. Every handler here attaches to the root logger, so
+    # what a file ends up holding is decided by the name filter added below:
+    #   access.log / security.log -> OnlyStreamFilter, their own stream only
+    #   web.log                   -> ExcludeDedicatedStreamsFilter, the rest
+    #   errors.log / debug.log    -> no name filter, deliberately catch-alls
+    #                                (errors.log is shared with the bot process,
+    #                                debug.log is the firehose), so an
+    #                                access-layer failure stays visible in both.
+    # "client_error" is excluded from this loop entirely: it needs a genuinely
+    # dedicated, owner-only file for client error reports — see below.
     #
     # GroupWritableRotatingFileHandler (not the stdlib class) because these
     # five ARE the shared bot/web files: the 0660 mode has to be re-applied on
