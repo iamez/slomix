@@ -848,16 +848,44 @@ function _drawRatingSparkline(canvasId, values) {
     ctx.fill();
 }
 
-function _statCell(label, value, color = 'text-white') {
+function _statCell(label, value, color = 'text-white', slot = '') {
+    // `slot` marks a cell whose value arrives with the deferred heavy sections
+    // (see loadEnhancedProfileSections) so it can be filled without re-rendering
+    // the panel around it.
+    const attr = slot ? ` data-pf-slot="${escapeHtml(slot)}"` : '';
     return `
         <div class="bg-slate-800/40 rounded-lg p-3 border border-white/5">
             <div class="text-[10px] uppercase tracking-wide text-slate-500">${escapeHtml(label)}</div>
-            <div class="text-lg font-bold ${color}">${value}</div>
+            <div class="text-lg font-bold ${color}"${attr}>${value}</div>
         </div>`;
 }
 
 function _na(msg = 'No data available') {
     return `<div class="text-sm text-slate-500 italic py-2">${escapeHtml(msg)}</div>`;
+}
+
+/**
+ * Stand-in for the True Aim panel until the deferred fetch lands. It occupies
+ * the panel's slot in the tab order so the page does not reflow around it, and
+ * it says "loading" rather than "no data" — the difference matters for the ~74 %
+ * of players who genuinely have no proximity_shot_fired rows.
+ */
+function _aimPlaceholder() {
+    return _panel('True Aim', 'crosshair',
+        '<div class="text-sm text-slate-500 italic py-2 flex items-center gap-2">'
+        + '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Reading shot history…</div>',
+        'combat')
+        .replace('class="glass-panel', 'data-pf-aim class="glass-panel');
+}
+
+/** One cell of the deferred `advanced` section: value, or a dash while waiting. */
+function _advCell(adv, key) {
+    const block = adv && adv[key];
+    if (!block || !block.available) return '--';
+    if (key === 'utro') {
+        return `${_num(block.utro, 1)} <span class="text-xs text-slate-500">(${_num(block.utro_per_kill, 2)}/kill)</span>`;
+    }
+    return `${_num(block.score, 1)}%`;
 }
 
 function _num(v, d = 0) {
@@ -876,7 +904,12 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
 
     let data;
     try {
-        data = await fetchJSON(`${API_BASE}/players/${encodeURIComponent(playerIdentifier)}/profile`);
+        // `core` = every section except aim and advanced. Those two read
+        // proximity_shot_fired / combat_engagement and cost 11–17 s on a cold
+        // cache against ~500 ms for all the others together, so waiting for them
+        // held the entire page hostage. They are fetched right after the first
+        // paint and dropped into their slots.
+        data = await fetchJSON(`${API_BASE}/players/${encodeURIComponent(playerIdentifier)}/profile?sections=core`);
     } catch (e) {
         console.error('Failed to load enhanced profile:', e);
         root.innerHTML = '';
@@ -897,7 +930,7 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         _tag(renderRelationships(data.relationships), 'overview'),
         _tag(renderWeapons(data.weapons), 'combat'),
         _tag(renderHitRegions(data.hit_regions), 'combat'),
-        _tag(renderAimSection(data.aim, data.guid), 'combat'),
+        _tag(_aimPlaceholder(), 'combat'),
         _tag(renderCombatTiming(data.combat_timing), 'timing'),
         _tag(renderMovement(data.movement), 'movement'),
         _tag(renderNickHistory(data.nick_history), 'history'),
@@ -919,7 +952,6 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
     const mapList = (data.maps && data.maps.available && Array.isArray(data.maps.maps))
         ? data.maps.maps.map(m => m.map).filter(Boolean)
         : [];
-    wireAimRose(data.guid, mapList);
 
     // Stopwatch Competitive card loads separately (own endpoint, like aim).
     loadCompetitiveCard(root, data.guid).catch((e) =>
@@ -928,6 +960,53 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
     // Reactions & Readiness (SSR components; owner answer A3 — profile surface).
     loadReactionsCard(root, data.guid).catch((e) =>
         console.warn('reactions card load failed', e));
+
+    // The two expensive sections, now that the page is on screen.
+    _fillDeferredSections(root, playerIdentifier, data.guid, mapList).catch((e) =>
+        console.warn('deferred profile sections failed', e));
+}
+
+/**
+ * Fetch `aim` + `advanced` after the first paint and put them where the core
+ * render left room: the True Aim panel is replaced whole, the UTRO and Bait
+ * cells are filled in place. A failure here leaves the placeholders standing —
+ * the rest of the profile is already usable and must not be torn down for it.
+ */
+async function _fillDeferredSections(root, playerIdentifier, guid, mapList) {
+    const heavy = await fetchJSON(
+        `${API_BASE}/players/${encodeURIComponent(playerIdentifier)}/profile?sections=aim,advanced`);
+
+    // Guard against a stale response: the visitor may have navigated to another
+    // player while this was in flight (same reason the story page checks loadId).
+    if (!root.isConnected || (heavy.guid && guid && heavy.guid !== guid)) return;
+
+    const adv = heavy.advanced || {};
+    root.querySelectorAll('[data-pf-slot]').forEach((slot) => {
+        const key = slot.dataset.pfSlot;
+        if (key !== 'utro' && key !== 'bait') return;
+        slot.replaceChildren();
+        safeInsertHTML(slot, 'beforeend', _advCell(adv, key));
+    });
+
+    const aimPanel = root.querySelector('[data-pf-aim]');
+    if (aimPanel) {
+        const html = renderAimSection(heavy.aim, heavy.guid || guid)
+            .replace('data-pf-tab="overview"', 'data-pf-tab="combat"');
+        const holder = document.createElement('div');
+        safeInsertHTML(holder, 'beforeend', html);
+        const fresh = holder.firstElementChild;
+        if (fresh) {
+            fresh.setAttribute('data-pf-aim', '');
+            aimPanel.replaceWith(fresh);
+        }
+    }
+
+    _applyActivePfTab();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    // The rose lives inside the aim panel, so it can only be wired once that
+    // panel exists — which is here, not in the core pass.
+    wireAimRose(heavy.guid || guid, mapList);
 }
 
 // ── Reactions & Readiness card (SSR components, owner answer A3) ────────────
@@ -1026,9 +1105,12 @@ function renderSkillAndLifetime(data) {
             </div>`;
     }
 
-    const utro = adv.utro && adv.utro.available
-        ? `${_num(adv.utro.utro, 1)} <span class="text-xs text-slate-500">(${_num(adv.utro.utro_per_kill, 2)}/kill)</span>` : '--';
-    const bait = adv.bait && adv.bait.available ? `${_num(adv.bait.score, 1)}%` : '--';
+    // `advanced` is one of the two deferred sections: absent on the first pass,
+    // filled in by _fillDeferredSections. Absent ≠ empty, so show the waiting
+    // dash rather than the "no data" dash — same glyph, but the panel is not
+    // claiming the player has no UTRO.
+    const utro = _advCell(adv, 'utro');
+    const bait = _advCell(adv, 'bait');
     let streakStr = '--';
     if (streaks.available) {
         const t = streaks.current_type === 'W' ? 'text-emerald-400' : streaks.current_type === 'L' ? 'text-rose-400' : 'text-slate-400';
@@ -1060,8 +1142,8 @@ function renderSkillAndLifetime(data) {
         _statCell('Double Kills', _num(lt.double_kills)),
         _statCell('Triple Kills', _num(lt.triple_kills)),
         _statCell('Best Spree', _num(lt.best_killing_spree)),
-        _statCell('UTRO', utro, 'text-amber-300'),
-        _statCell('Bait Score', bait, 'text-cyan-300'),
+        _statCell('UTRO', utro, 'text-amber-300', 'utro'),
+        _statCell('Bait Score', bait, 'text-cyan-300', 'bait'),
         _statCell('Streak', streakStr),
     ].join('');
 
