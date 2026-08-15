@@ -586,6 +586,25 @@ async def get_kill_matrix(
     return result
 
 
+@router.get("/storytelling/movement")
+@limiter.limit("10/minute")
+async def get_movement(
+    request: Request,
+    scope: GamingSessionScope = Depends(resolve_story_scope),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player movement for the session: distance, speed, sprint share.
+
+    Straight read of `player_track`, which has recorded it per life since the
+    tracker shipped. Values are ET engine units / units-per-second, raw — no
+    metric conversion, because the constant would be invented precision.
+    """
+    svc = StorytellingService(db)
+    result = await svc.compute_movement(scope)
+    result["scope"] = scope.to_metadata()
+    return result
+
+
 @router.get("/storytelling/momentum")
 @limiter.limit("10/minute")
 async def get_momentum(
