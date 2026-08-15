@@ -1321,7 +1321,12 @@ function renderPlayerMovement(data) {
     const avgPerMin = paced.length
         ? paced.reduce((sum, r) => sum + r.distance_per_min, 0) / paced.length
         : 0;
-    const ranked = [...paced].sort((a, b) => b.distance_per_min - a.distance_per_min);
+    // Tie-break on the guid: Array.sort is not required to be stable for
+    // equal keys across engines, so two players on the same distance could
+    // otherwise swap ranks between browsers or between reloads.
+    const ranked = [...paced].sort((a, b) =>
+        (b.distance_per_min - a.distance_per_min)
+        || String(a.guid_short).localeCompare(String(b.guid_short)));
     const rankOf = new Map(ranked.map((r, i) => [r.guid_short, i + 1]));
 
     const byGuid = new Map();
@@ -1356,7 +1361,9 @@ function renderPlayerMovement(data) {
             slot.appendChild(chip('Sprint', `${Math.round(row.sprint_pct)}%`,
                 'share of alive time spent sprinting'));
         }
-        slot.style.display = '';
+        // Only reveal the row if it actually got a chip — a player with no
+        // usable track data would otherwise leave an empty gap on the card.
+        if (slot.children.length > 0) slot.style.display = '';
     });
 }
 

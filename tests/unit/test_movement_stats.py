@@ -30,8 +30,9 @@ class _Scope:
     gaming_session_id = 144
 
 
-def _row(guid, name, lives, distance, avg_speed, peak, sprint, post_spawn, alive_ms):
-    return (guid, name, lives, distance, avg_speed, peak, sprint, post_spawn, alive_ms)
+def _row(guid, name, lives, distance, avg_speed, peak, sprint_sec, post_spawn, alive_ms):
+    """Column 6 is SUM(sprint_sec), not a percentage — see the weighted share."""
+    return (guid, name, lives, distance, avg_speed, peak, sprint_sec, post_spawn, alive_ms)
 
 
 @pytest.mark.asyncio
@@ -89,3 +90,33 @@ async def test_scopes_by_gaming_session_id_and_gates_bot_rounds():
     assert "r.is_bot_round IS DISTINCT FROM TRUE" in sql
     assert "r.is_valid IS DISTINCT FROM FALSE" in sql
     assert params == (144,)
+
+
+@pytest.mark.asyncio
+async def test_sprint_share_is_weighted_by_alive_time():
+    """AVG(sprint_percentage) would count a 4-second life as heavily as a
+    4-minute one; on session 144 the two differ by 3.8 points."""
+    # 120 s sprinting out of 600 s alive = 20 %.
+    db = FakeDB([_row("AAAAAAAA", "vid", 8, 1000.0, 250.0, 500.0, 120.0, 50.0, 600_000)])
+    out = await _Svc(db).compute_movement(_Scope())
+
+    assert out["players"][0]["sprint_pct"] == 20.0
+
+
+@pytest.mark.asyncio
+async def test_sprint_share_is_none_without_alive_time():
+    db = FakeDB([_row("AAAAAAAA", "vid", 1, 10.0, 0.0, 0.0, 5.0, 0.0, 0)])
+    out = await _Svc(db).compute_movement(_Scope())
+
+    assert out["players"][0]["sprint_pct"] is None
+    assert out["players"][0]["distance_per_min"] is None
+
+
+@pytest.mark.asyncio
+async def test_query_sums_sprint_seconds_rather_than_averaging_percentages():
+    db = FakeDB([])
+    await _Svc(db).compute_movement(_Scope())
+
+    sql, _ = db.queries[0]
+    assert "SUM(pt.sprint_sec)" in sql
+    assert "AVG(pt.sprint_percentage)" not in sql
