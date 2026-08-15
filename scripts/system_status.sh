@@ -113,6 +113,14 @@ open_release_pr="$(git log --oneline -1 origin/main 2>/dev/null | head -1)"
 # ---------------------------------------------------------------------------
 section "lua (game server)"
 
+# Content with trailing whitespace and trailing blank lines removed — two files
+# that agree here run identically, whatever their byte counts say.
+lua_strip() {
+    awk '{gsub(/[ \t\r]+$/,"")} {a[NR]=$0}
+         END{n=NR; while (n>0 && a[n]=="") n--; for (i=1;i<=n;i++) print a[i]}' "$1" \
+        | sha256sum | cut -d' ' -f1
+}
+
 # repo path -> filename on the game server
 LUA_PAIRS=(
     "vps_scripts/c0rnp0rn8.lua:c0rnp0rn8.lua"
@@ -157,9 +165,30 @@ elif remote_sums="$(ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" 
         fi
         if [ "$repo_sum" = "$effective" ]; then
             ok "$remote_name matches the repo (loaded from $source_dir)"
-        else
-            warn "$remote_name DIFFERS from the repo in $source_dir (needs a three-way merge + full map load)"
+            continue
         fi
+
+        # Different bytes are not necessarily a different script. live_events.lua
+        # carried one stray blank line at EOF and reported DIFFERS for months;
+        # a section that always warns is a section people stop reading, and then
+        # the real drift (proximity_tracker.lua, 66 changed lines) goes unread
+        # with it. Fetch just this one file and compare with trailing whitespace
+        # and trailing blank lines removed. Normalising happens HERE, not over
+        # ssh: an awk program sent through the remote shell mangled into an empty
+        # hash that made every file look identical.
+        remote_dir="$GAME_LUA_DIR"
+        [ "$source_dir" = "homepath" ] && remote_dir="$GAME_LUA_HOME"
+        drift_tmp="$(mktemp)"
+        if ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" \
+                "$GAME_SSH_HOST" "cat '$remote_dir/$remote_name'" > "$drift_tmp" 2>/dev/null \
+            && [ -s "$drift_tmp" ] \
+            && [ "$(lua_strip "$drift_tmp")" = "$(lua_strip "$repo_path")" ]; then
+            ok "$remote_name matches the repo (loaded from $source_dir; differs only in trailing whitespace)"
+        else
+            changed="$(diff "$drift_tmp" "$repo_path" 2>/dev/null | grep -c '^[<>]')"
+            warn "$remote_name DIFFERS from the repo in $source_dir — ${changed:-?} line(s) (needs a three-way merge + full map load)"
+        fi
+        rm -f "$drift_tmp"
     done
 else
     warn "game server unreachable over ssh ($GAME_SSH_HOST) — lua drift unknown"
