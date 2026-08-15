@@ -566,6 +566,8 @@ function _renderPfTabBar() {
 }
 
 let _pfActiveTab = 'overview';
+// Monotonic render token — see loadEnhancedProfileSections / _fillDeferredSections.
+let _pfLoadId = 0;
 
 // Apply the active tab to ALL panels (incl. async-appended competitive/history).
 function _applyActivePfTab() {
@@ -899,6 +901,11 @@ function _num(v, d = 0) {
 export async function loadEnhancedProfileSections(playerIdentifier) {
     const root = document.getElementById('profile-enhanced');
     if (!root) return;
+    // Every render claims the root. A deferred response from a previous player
+    // must not paint into it: the root element is reused across navigations, so
+    // neither `isConnected` nor comparing the guid to the one this same request
+    // asked for can tell A's late answer from B's page.
+    const loadId = ++_pfLoadId;
     root.innerHTML = '<div class="text-center py-6 text-slate-500"><i data-lucide="loader" class="w-6 h-6 animate-spin mx-auto"></i></div>';
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
@@ -962,7 +969,7 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         console.warn('reactions card load failed', e));
 
     // The two expensive sections, now that the page is on screen.
-    _fillDeferredSections(root, playerIdentifier, data.guid, mapList).catch((e) =>
+    _fillDeferredSections(root, playerIdentifier, loadId, mapList).catch((e) =>
         console.warn('deferred profile sections failed', e));
 }
 
@@ -972,13 +979,14 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
  * cells are filled in place. A failure here leaves the placeholders standing —
  * the rest of the profile is already usable and must not be torn down for it.
  */
-async function _fillDeferredSections(root, playerIdentifier, guid, mapList) {
+async function _fillDeferredSections(root, playerIdentifier, loadId, mapList) {
     const heavy = await fetchJSON(
         `${API_BASE}/players/${encodeURIComponent(playerIdentifier)}/profile?sections=aim,advanced`);
 
-    // Guard against a stale response: the visitor may have navigated to another
-    // player while this was in flight (same reason the story page checks loadId).
-    if (!root.isConnected || (heavy.guid && guid && heavy.guid !== guid)) return;
+    // Stale-response guard: if another profile started rendering while this was
+    // in flight, its render owns the root now (same reason the story page
+    // carries a loadId).
+    if (loadId !== _pfLoadId || !root.isConnected) return;
 
     const adv = heavy.advanced || {};
     root.querySelectorAll('[data-pf-slot]').forEach((slot) => {
@@ -990,7 +998,7 @@ async function _fillDeferredSections(root, playerIdentifier, guid, mapList) {
 
     const aimPanel = root.querySelector('[data-pf-aim]');
     if (aimPanel) {
-        const html = renderAimSection(heavy.aim, heavy.guid || guid)
+        const html = renderAimSection(heavy.aim, heavy.guid)
             .replace('data-pf-tab="overview"', 'data-pf-tab="combat"');
         const holder = document.createElement('div');
         safeInsertHTML(holder, 'beforeend', html);
@@ -1006,7 +1014,7 @@ async function _fillDeferredSections(root, playerIdentifier, guid, mapList) {
 
     // The rose lives inside the aim panel, so it can only be wired once that
     // panel exists — which is here, not in the core pass.
-    wireAimRose(heavy.guid || guid, mapList);
+    wireAimRose(heavy.guid, mapList);
 }
 
 // ── Reactions & Readiness card (SSR components, owner answer A3) ────────────

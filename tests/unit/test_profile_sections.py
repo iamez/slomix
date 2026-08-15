@@ -14,6 +14,7 @@ import re
 import pytest
 from fastapi import HTTPException
 
+from website.backend.routers import players_profile_router as P
 from website.backend.routers.players_profile_router import (
     _HEAVY_SECTIONS,
     _PROFILE_SECTIONS,
@@ -82,3 +83,105 @@ def test_registry_and_declared_sections_cannot_drift():
 
 def test_heavy_sections_are_real_sections():
     assert _HEAVY_SECTIONS <= _PROFILE_SECTIONS
+
+
+# ── handler level ──────────────────────────────────────────────────────────
+#
+# The parser tests above pin the vocabulary; these pin what the endpoint does
+# with it — which sections actually run, what the payload carries, and that the
+# 400/404 boundaries did not move.
+
+
+@pytest.fixture
+def stub_profile(monkeypatch):
+    """Replace every section fetcher with a recorder, so a call to the handler
+    reports exactly which sections were scheduled."""
+    called: list[str] = []
+
+    def _stub(name):
+        async def _fetch(*_args, **_kwargs):
+            called.append(name)
+            return {"available": True, "section": name}
+        return _fetch
+
+    for name in _PROFILE_SECTIONS:
+        attr = "_fetch_aim_summary" if name == "aim" else f"_fetch_{name}"
+        monkeypatch.setattr(P, attr, _stub(name))
+
+    async def _lifetime(*_a, **_k):
+        called.append("lifetime")
+        return {"available": True}
+
+    async def _resolve(_db, identifier):
+        return None if identifier == "nobody" else "D8423F90"
+
+    async def _guid32(*_a, **_k):
+        called.append("guid32")
+        return "D8423F90" + "0" * 24
+
+    monkeypatch.setattr(P, "_fetch_lifetime", _lifetime)
+    monkeypatch.setattr(P, "resolve_player_guid", _resolve)
+    monkeypatch.setattr(P, "_resolve_guid32", _guid32)
+    return called
+
+
+async def test_core_runs_only_the_cheap_sections(stub_profile):
+    payload = await P.get_player_profile("vid", sections="core", db=object())
+
+    ran = set(stub_profile) - {"lifetime", "guid32"}
+    assert ran == _PROFILE_SECTIONS - _HEAVY_SECTIONS
+    # Not requested → absent, so a caller can tell "not asked for" from "no data".
+    assert "aim" not in payload and "advanced" not in payload
+    assert payload["weapons"] == {"available": True, "section": "weapons"}
+    assert payload["sections"] == sorted(_PROFILE_SECTIONS - _HEAVY_SECTIONS)
+
+
+async def test_heavy_only_request_skips_the_twelve_cheap_ones(stub_profile):
+    payload = await P.get_player_profile("vid", sections="aim,advanced", db=object())
+
+    assert set(stub_profile) - {"lifetime"} == _HEAVY_SECTIONS
+    assert set(payload) - {"guid", "generated_at", "sections", "lifetime"} == _HEAVY_SECTIONS
+    # guid32 is only needed by relationships; it must not be resolved here.
+    assert "guid32" not in stub_profile
+
+
+async def test_no_parameter_still_returns_the_whole_profile(stub_profile):
+    payload = await P.get_player_profile("vid", db=object())
+
+    assert set(stub_profile) - {"lifetime", "guid32"} == _PROFILE_SECTIONS
+    assert set(payload) - {"guid", "generated_at", "sections", "lifetime"} == _PROFILE_SECTIONS
+
+
+async def test_relationships_gets_its_guid32(stub_profile):
+    await P.get_player_profile("vid", sections="relationships", db=object())
+
+    assert "guid32" in stub_profile
+
+
+async def test_unknown_section_is_400_even_for_a_player_that_does_not_exist(stub_profile):
+    """The parameter is validated before the lookup: a typo must not come back as
+    404 'player not found', which would send the caller hunting the wrong bug."""
+    with pytest.raises(HTTPException) as exc:
+        await P.get_player_profile("nobody", sections="weapns", db=object())
+
+    assert exc.value.status_code == 400
+    assert stub_profile == []      # nothing was scheduled, no lookup happened
+
+
+async def test_missing_player_is_still_404(stub_profile):
+    with pytest.raises(HTTPException) as exc:
+        await P.get_player_profile("nobody", sections="core", db=object())
+
+    assert exc.value.status_code == 404
+
+
+async def test_a_failing_section_does_not_sink_the_others(stub_profile, monkeypatch):
+    async def _boom(*_a, **_k):
+        raise RuntimeError("proximity table went away")
+
+    monkeypatch.setattr(P, "_fetch_weapons", _boom)
+
+    payload = await P.get_player_profile("vid", sections="core", db=object())
+
+    assert payload["weapons"] == {"available": False, "reason": "error"}
+    assert payload["maps"]["available"] is True

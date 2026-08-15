@@ -1108,14 +1108,18 @@ async def get_player_profile(
     from the response — distinguishable from a section that ran and has no data
     (`{"available": false}`) or one that blew up (`reason: "error"`).
     """
+    # Validate the parameter before touching the database: a malformed request is
+    # a 400 whether or not the player exists, and an unknown player must not turn
+    # a typo into a 404 that hides it. (Also skips a lookup for junk requests.)
+    #
+    # Parsing also has to precede the guid32 resolution below: `core` expands to a
+    # set that includes relationships, so asking the raw string whether it
+    # mentions the section would answer "no" and hand the fetcher a null guid32.
+    wanted = _parse_sections(sections, _PROFILE_SECTIONS)
+
     guid8 = await resolve_player_guid(db, identifier)
     if not guid8:
         raise HTTPException(status_code=404, detail="Player not found")
-
-    # Parse BEFORE resolving guid32: `core` expands to a set that includes
-    # relationships, so asking the raw string whether it mentions the section
-    # would answer "no" and hand the fetcher a null guid32.
-    wanted = _parse_sections(sections, _PROFILE_SECTIONS)
 
     # guid32 is only used by relationships; skip the lookup when it is not asked for.
     guid32 = await _resolve_guid32(db, guid8) if "relationships" in wanted else None
