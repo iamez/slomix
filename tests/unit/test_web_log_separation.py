@@ -57,17 +57,66 @@ def test_web_log_excludes_streams_that_own_a_file():
         assert f.filter(_record(f"{stream}.sub")) is False
 
 
-def test_error_and_debug_handlers_carry_no_stream_filter(tmp_path, monkeypatch):
-    """errors.log is shared with the bot and debug.log is the firehose — an
-    access-layer error must still land in both, or the separation would hide
-    exactly the records someone is hunting."""
-    monkeypatch.setenv("WEB_LOG_DIR", str(tmp_path))
+@pytest.fixture
+def web_logging(tmp_path, monkeypatch):
+    """Run `setup_logging()` against `tmp_path` and undo every global it
+    touches: it clears and replaces the root handlers, re-points
+    `client_error`, lowers six third-party logger levels, and the module-level
+    LOG_DIR is frozen at import time (hence the reload). Left in place, the
+    next test in the same pytest process would keep writing into this test's
+    `tmp_path` — which pytest then deletes."""
     import importlib
 
     import website.backend.logging_config as lc
 
+    root = logging.getLogger()
+    client_error = logging.getLogger("client_error")
+    third_party = (
+        "uvicorn.access",
+        "uvicorn.error",
+        "httpx",
+        "httpcore",
+        "asyncpg",
+        "multipart",
+    )
+    saved = {
+        "root_handlers": root.handlers[:],
+        "root_level": root.level,
+        "ce_handlers": client_error.handlers[:],
+        "ce_level": client_error.level,
+        "ce_propagate": client_error.propagate,
+        "levels": {name: logging.getLogger(name).level for name in third_party},
+    }
+    monkeypatch.setenv("WEB_LOG_DIR", str(tmp_path))
     importlib.reload(lc)
-    lc.setup_logging()
+    # console_output=False: these tests only read files, and a console handler
+    # would fight pytest's own stdout capture.
+    lc.setup_logging(console_output=False)
+    try:
+        yield lc
+    finally:
+        for logger, key in ((root, "root_handlers"), (client_error, "ce_handlers")):
+            for handler in logger.handlers:
+                if handler not in saved[key]:
+                    handler.close()
+            logger.handlers = saved[key]
+        root.setLevel(saved["root_level"])
+        client_error.setLevel(saved["ce_level"])
+        client_error.propagate = saved["ce_propagate"]
+        for name, level in saved["levels"].items():
+            logging.getLogger(name).setLevel(level)
+        # LOG_DIR is read at import time, so leaving the module bound to
+        # tmp_path would poison any later importer. monkeypatch is torn down
+        # after this fixture (a fixture's dependencies outlive it), so undo it
+        # here to make the reload land on the real environment.
+        monkeypatch.undo()
+        importlib.reload(lc)
+
+
+def test_error_and_debug_handlers_carry_no_stream_filter(tmp_path, web_logging):
+    """errors.log is shared with the bot and debug.log is the firehose — an
+    access-layer error must still land in both, or the separation would hide
+    exactly the records someone is hunting."""
 
     logging.getLogger("access").error("request blew up")
     logging.getLogger("security").info("auth ok")
