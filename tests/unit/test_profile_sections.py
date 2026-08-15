@@ -113,6 +113,7 @@ def stub_profile(monkeypatch):
         return {"available": True}
 
     async def _resolve(_db, identifier):
+        called.append("lookup")
         return None if identifier == "nobody" else "D8423F90"
 
     async def _guid32(*_a, **_k):
@@ -128,7 +129,7 @@ def stub_profile(monkeypatch):
 async def test_core_runs_only_the_cheap_sections(stub_profile):
     payload = await P.get_player_profile("vid", sections="core", db=object())
 
-    ran = set(stub_profile) - {"lifetime", "guid32"}
+    ran = set(stub_profile) - {"lifetime", "guid32", "lookup"}
     assert ran == _PROFILE_SECTIONS - _HEAVY_SECTIONS
     # Not requested → absent, so a caller can tell "not asked for" from "no data".
     assert "aim" not in payload and "advanced" not in payload
@@ -139,7 +140,7 @@ async def test_core_runs_only_the_cheap_sections(stub_profile):
 async def test_heavy_only_request_skips_the_twelve_cheap_ones(stub_profile):
     payload = await P.get_player_profile("vid", sections="aim,advanced", db=object())
 
-    assert set(stub_profile) - {"lifetime"} == _HEAVY_SECTIONS
+    assert set(stub_profile) - {"lifetime", "lookup"} == _HEAVY_SECTIONS
     assert set(payload) - {"guid", "generated_at", "sections", "lifetime"} == _HEAVY_SECTIONS
     # guid32 is only needed by relationships; it must not be resolved here.
     assert "guid32" not in stub_profile
@@ -148,7 +149,7 @@ async def test_heavy_only_request_skips_the_twelve_cheap_ones(stub_profile):
 async def test_no_parameter_still_returns_the_whole_profile(stub_profile):
     payload = await P.get_player_profile("vid", db=object())
 
-    assert set(stub_profile) - {"lifetime", "guid32"} == _PROFILE_SECTIONS
+    assert set(stub_profile) - {"lifetime", "guid32", "lookup"} == _PROFILE_SECTIONS
     assert set(payload) - {"guid", "generated_at", "sections", "lifetime"} == _PROFILE_SECTIONS
 
 
@@ -165,7 +166,8 @@ async def test_unknown_section_is_400_even_for_a_player_that_does_not_exist(stub
         await P.get_player_profile("nobody", sections="weapns", db=object())
 
     assert exc.value.status_code == 400
-    assert stub_profile == []      # nothing was scheduled, no lookup happened
+    # Nothing ran at all — not the player lookup, not one section.
+    assert stub_profile == []
 
 
 async def test_missing_player_is_still_404(stub_profile):
