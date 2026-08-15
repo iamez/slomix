@@ -9034,7 +9034,7 @@ CREATE TABLE IF NOT EXISTS player_aim_summary (
     formula_version  INTEGER     NOT NULL,
     shot_count       BIGINT      NOT NULL,
     last_event_time  BIGINT      NULL,
-    round_id_sum     NUMERIC     NULL,
+    round_id_sum     BIGINT      NULL,
     payload          JSONB       NOT NULL,
     computed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

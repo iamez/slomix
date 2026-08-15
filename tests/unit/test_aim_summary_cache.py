@@ -22,7 +22,7 @@ from website.backend.routers.players_profile_router import (
 class FakeDB:
     """Minimal stand-in: canned rows per query fragment, plus a call log."""
 
-    def __init__(self, *, cache_row=None, fingerprint=(10, 500, 1234.0), fail_read=False,
+    def __init__(self, *, cache_row=None, fingerprint=(10, 500, 1234), fail_read=False,
                  fail_write=False):
         self.cache_row = cache_row
         self.fingerprint = fingerprint
@@ -68,22 +68,22 @@ def counted_compute(monkeypatch):
 
 
 async def test_a_current_row_is_served_without_computing(no_compute):
-    db = FakeDB(cache_row=(json.dumps(SUMMARY), 10, 500, 1234.0))
+    db = FakeDB(cache_row=(json.dumps(SUMMARY), 10, 500, 1234))
 
     assert await _fetch_aim_summary(db, "D8423F90") == SUMMARY
 
 
 async def test_payload_already_decoded_is_accepted(no_compute):
     """asyncpg may hand JSONB back as a dict or as text depending on codecs."""
-    db = FakeDB(cache_row=(SUMMARY, 10, 500, 1234.0))
+    db = FakeDB(cache_row=(SUMMARY, 10, 500, 1234))
 
     assert await _fetch_aim_summary(db, "D8423F90") == SUMMARY
 
 
 @pytest.mark.parametrize("stored,label", [
-    ((json.dumps(SUMMARY), 11, 500, 1234.0), "a shot was added or removed"),
-    ((json.dumps(SUMMARY), 10, 501, 1234.0), "a newer shot exists"),
-    ((json.dumps(SUMMARY), 10, 500, 9999.0), "shots were re-linked to other rounds"),
+    ((json.dumps(SUMMARY), 11, 500, 1234), "a shot was added or removed"),
+    ((json.dumps(SUMMARY), 10, 501, 1234), "a newer shot exists"),
+    ((json.dumps(SUMMARY), 10, 500, 9999), "shots were re-linked to other rounds"),
 ])
 async def test_every_fingerprint_column_invalidates(counted_compute, stored, label):
     """round_id_sum is not decoration: the flick window is partitioned by round,
@@ -106,7 +106,7 @@ async def test_a_missing_row_computes_and_stores(counted_compute):
     written = db.writes[0]
     assert written[0] == "D8423F90"
     assert written[1] == _AIM_FORMULA_VERSION
-    assert written[2:5] == (10, 500, 1234.0)
+    assert written[2:5] == (10, 500, 1234)
     assert json.loads(written[5]) == SUMMARY
 
 
@@ -127,14 +127,14 @@ async def test_an_unwritable_cache_still_serves_the_answer(counted_compute):
 
 
 async def test_a_corrupt_payload_is_recomputed_not_served(counted_compute):
-    db = FakeDB(cache_row=("{not json", 10, 500, 1234.0))
+    db = FakeDB(cache_row=("{not json", 10, 500, 1234))
 
     assert await _fetch_aim_summary(db, "D8423F90") == SUMMARY
     assert counted_compute["n"] == 1
 
 
 async def test_a_payload_that_is_not_an_object_is_rejected(counted_compute):
-    db = FakeDB(cache_row=(json.dumps([1, 2, 3]), 10, 500, 1234.0))
+    db = FakeDB(cache_row=(json.dumps([1, 2, 3]), 10, 500, 1234))
 
     assert await _fetch_aim_summary(db, "D8423F90") == SUMMARY
     assert counted_compute["n"] == 1
@@ -152,7 +152,7 @@ async def test_the_formula_version_is_part_of_the_lookup(no_compute):
                 captured["params"] = params
             return await super().fetch_one(query, params)
 
-    db = VersionDB(cache_row=(json.dumps(SUMMARY), 10, 500, 1234.0))
+    db = VersionDB(cache_row=(json.dumps(SUMMARY), 10, 500, 1234))
     await _fetch_aim_summary(db, "D8423F90")
 
     assert "formula_version = $2" in captured["query"]

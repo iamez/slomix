@@ -737,7 +737,7 @@ async def _fetch_recent_matches(db, guid8: str, limit: int = 10) -> dict:
 _AIM_FORMULA_VERSION = 1
 
 
-async def _aim_fingerprint(db, guid8: str) -> tuple[int, int | None, float | None]:
+async def _aim_fingerprint(db, guid8: str) -> tuple[int, int | None, int | None]:
     """One indexed aggregate (~45 ms warm) describing the summary's whole input.
 
     * ``shot_count``     — shots added or deleted
@@ -745,6 +745,9 @@ async def _aim_fingerprint(db, guid8: str) -> tuple[int, int | None, float | Non
     * ``round_id_sum``   — re-linking. The flick window is partitioned by round,
                            so moving a shot between rounds changes the answer
                            without changing either of the other two.
+
+    All three stay integers end to end: comparing a cache's validity through a
+    float would tie it to mantissa width for no gain.
     """
     row = await db.fetch_one(
         """
@@ -759,7 +762,7 @@ async def _aim_fingerprint(db, guid8: str) -> tuple[int, int | None, float | Non
     return (
         _i(row[0]),
         int(row[1]) if row[1] is not None else None,
-        float(row[2]) if row[2] is not None else None,
+        int(row[2]) if row[2] is not None else None,
     )
 
 
@@ -787,7 +790,7 @@ async def _read_aim_cache(db, guid8: str, fingerprint) -> dict | None:
         return None
 
     stored = (_i(row[1]), int(row[2]) if row[2] is not None else None,
-              float(row[3]) if row[3] is not None else None)
+              int(row[3]) if row[3] is not None else None)
     if stored != (shots, last_event, round_sum):
         return None
 

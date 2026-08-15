@@ -20,6 +20,9 @@
 --   last_event_time new shots, even in the pathological equal-count case
 --   round_id_sum    re-linking, which changes the flick index because that
 --                   window is partitioned by round even when no shot moved
+-- SUM(round_id) over an integer column is a bigint, so the column is BIGINT and
+-- the comparison is exact integer equality — a float round-trip would put the
+-- freshness of the cache at the mercy of mantissa width.
 -- A read compares the stored fingerprint with a fresh one; anything different
 -- means recompute. There is no TTL to tune and no import hook to forget.
 --
@@ -35,7 +38,7 @@ CREATE TABLE IF NOT EXISTS player_aim_summary (
     formula_version  INTEGER     NOT NULL,
     shot_count       BIGINT      NOT NULL,
     last_event_time  BIGINT      NULL,
-    round_id_sum     NUMERIC     NULL,
+    round_id_sum     BIGINT      NULL,
     payload          JSONB       NOT NULL,
     computed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
