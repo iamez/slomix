@@ -148,13 +148,33 @@ def test_a_broken_delay_becomes_no_delay_not_an_immediate_resend(monkeypatch, ba
     assert status.online is True
 
 
-def test_the_log_never_counts_towards_a_nonsense_total(monkeypatch, caplog):
-    """attempts=0 must read as 1 attempt everywhere, not "attempt 1/0"."""
+def test_attempts_zero_still_queries_once(monkeypatch, caplog):
+    """attempts=0 means one attempt, not none — and with one attempt the retry
+    log never runs, so "no /0 in the log" alone would also pass if the function
+    silently did nothing. Assert the query itself."""
     monkeypatch.setattr(Q.time, "sleep", lambda _s: None)
-    once, _ = _fake_once([ServerStatus(online=False, error="Server not responding")])
+    once, calls = _fake_once([ServerStatus(online=False, error="Server not responding")])
     monkeypatch.setattr(Q, "_query_once", once)
 
     with caplog.at_level("DEBUG", logger=Q.logger.name):
-        query_game_server("puran.hehe.si", attempts=0)
+        status = query_game_server("puran.hehe.si", attempts=0)
 
+    assert calls["n"] == 1
+    assert status.online is False
     assert "/0" not in caplog.text
+
+
+def test_the_logged_denominator_is_the_normalised_total(monkeypatch, caplog):
+    """This one actually reaches the retry log, so it can check what it says."""
+    monkeypatch.setattr(Q.time, "sleep", lambda _s: None)
+    once, calls = _fake_once([ServerStatus(online=False, error="Server not responding")])
+    monkeypatch.setattr(Q, "_query_once", once)
+
+    with caplog.at_level("DEBUG", logger=Q.logger.name):
+        query_game_server("puran.hehe.si", attempts=3)
+
+    assert calls["n"] == 3
+    assert "attempt 1/3" in caplog.text
+    assert "attempt 2/3" in caplog.text
+    # The last failure is not a "retrying" line — there is nothing after it.
+    assert "attempt 3/3" not in caplog.text
