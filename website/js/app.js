@@ -27,6 +27,7 @@ import { loadProximityView } from './proximity.js?v=20260812-b3';
 import { loadStoryView } from './story.js?v=20260815-permap';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
+import { loadSystemView } from './system.js?v=20260815-system';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
 import { loadAdminPanelView } from './admin-panel.js';
 import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260813-resumable';
@@ -147,6 +148,7 @@ const legacyRuntime = {
     loadStoryView,
     loadReplayView,
     loadRivalriesView,
+    loadSystemView,
     loadSmartStatsDiagView,
     loadGreatshotView,
     loadGreatshotDemoDetail,
