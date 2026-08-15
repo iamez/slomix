@@ -83,6 +83,24 @@ local configuration = {
     -- Format: https://discord.com/api/webhooks/WEBHOOK_ID/WEBHOOK_TOKEN
     discord_webhook_url = "REPLACE_WITH_YOUR_WEBHOOK_URL",
 
+    -- Optional: deliver the SAME payload to several webhooks. One game server
+    -- feeds two bots (production and dev) that listen in different Discord
+    -- channels, and until 2026-08-15 only one of them could be reached — the
+    -- dev bot dropped every message as "channel mismatch" and therefore never
+    -- imported a round at the moment it ended.
+    --
+    -- Overrides discord_webhook_url when it holds at least one real URL; the
+    -- single-URL key stays supported so an untouched deployment keeps working.
+    -- Set it from the secret config file, never here.
+    --
+    -- Declared as an EMPTY TABLE, not nil: the override loader below accepts a
+    -- key only when `configuration[key] ~= nil` and the types match, so a nil
+    -- default made the live server reject the secret config with
+    -- "unknown key 'discord_webhook_urls' ignored" — caught on the first real
+    -- map load, because the unit tests set the field directly and never went
+    -- through the loader.
+    discord_webhook_urls = {},
+
     -- Enable/disable the webhook notifications
     enabled = true,
 
@@ -147,6 +165,14 @@ local configuration = {
 -- config file simply returns a table whose keys override `configuration`:
 --
 --   return { discord_webhook_url = "https://discord.com/api/webhooks/ID/TOKEN" }
+--
+-- To deliver the same payload to more than one bot (production + dev listen in
+-- different channels), return a list instead — it takes precedence:
+--
+--   return { discord_webhook_urls = {
+--       "https://discord.com/api/webhooks/PROD_ID/PROD_TOKEN",
+--       "https://discord.com/api/webhooks/DEV_ID/DEV_TOKEN",
+--   } }
 --
 -- If no config file is found the URL stays at its placeholder and the
 -- existing guards refuse to send + print a warning at init.
@@ -516,18 +542,65 @@ local function generate_pending_id()
     return string.format("%d-%06d", now_ms, rand)
 end
 
+-- Every webhook that is actually configured, in delivery order.
+--
+-- `discord_webhook_urls` (a list) wins when it holds at least one usable
+-- entry; otherwise the single `discord_webhook_url` is used. Placeholder and
+-- empty values are skipped in both, so a half-filled config degrades to the
+-- URLs that ARE set instead of sending to a literal "REPLACE_WITH…".
+local function configured_webhook_urls()
+    local urls = {}
+    local function add(value)
+        if type(value) == "string"
+            and value ~= ""
+            and value ~= "REPLACE_WITH_YOUR_WEBHOOK_URL" then
+            table.insert(urls, value)
+        end
+    end
+
+    if type(configuration.discord_webhook_urls) == "table" then
+        for _, value in ipairs(configuration.discord_webhook_urls) do
+            add(value)
+        end
+    end
+    if #urls == 0 then
+        add(configuration.discord_webhook_url)
+    end
+    return urls
+end
+
 local function build_curl_command(payload_path, exit_marker_path)
+    local urls = configured_webhook_urls()
+    if #urls == 0 then
+        return nil
+    end
+
+    local parts = {}
+    for _, url in ipairs(urls) do
+        table.insert(parts, string.format(
+            "curl -s -X POST -H 'Content-Type: application/json' --data-binary @%s %s " ..
+            "--compressed --connect-timeout %d --max-time %d --retry %d --retry-delay %d --retry-max-time %d " ..
+            "> /dev/null 2>&1 || rc=$?",
+            shell_escape(payload_path),
+            shell_escape(url),
+            configuration.curl_connect_timeout,
+            configuration.curl_max_time,
+            configuration.curl_retry,
+            configuration.curl_retry_delay,
+            configuration.curl_retry_max_time
+        ))
+    end
+
+    -- ONE exit marker for the whole fan-out, holding the last failing code.
+    -- The retry buffer treats a non-zero marker as "re-send this payload", so
+    -- a partial failure re-sends to EVERY target and can duplicate a message
+    -- in the channel that already got it. That trade is deliberate: for a
+    -- stats notification a rare duplicate is cheap, a silently missing round
+    -- is not — and the alternative (a marker per URL) would leave the payload
+    -- cleanup unable to tell "all done" from "one still pending".
     return string.format(
-        "(curl -s -X POST -H 'Content-Type: application/json' --data-binary @%s %s " ..
-        "--compressed --connect-timeout %d --max-time %d --retry %d --retry-delay %d --retry-max-time %d " ..
-        "> /dev/null 2>&1; echo $? > %s) &",
-        shell_escape(payload_path),
-        shell_escape(configuration.discord_webhook_url),
-        configuration.curl_connect_timeout,
-        configuration.curl_max_time,
-        configuration.curl_retry,
-        configuration.curl_retry_delay,
-        configuration.curl_retry_max_time,
+        "(rc=0; %s; echo $rc > %s) &",
+        table.concat(parts, "; "),
         shell_escape(exit_marker_path)
     )
 end
@@ -587,6 +660,9 @@ local function execute_curl_async(payload_json)
     f:close()
 
     local curl_cmd = build_curl_command(payload_path, exit_marker_path)
+    if not curl_cmd then
+        return false, "no webhook URL configured"
+    end
     local ok, exit_type, exit_code = os.execute(curl_cmd)
 
     if ok == true or ok == 0 then
@@ -638,12 +714,14 @@ local function pending_retry_sweep()
                     -- curl reported failure — clear marker + re-launch
                     log(string.format("[retry-buffer] re-launching failed payload (exit=%s) %s", tostring(code), path))
                     os.execute(string.format("rm -f %s 2>/dev/null", shell_escape(exit_path)))
-                    os.execute(build_curl_command(path, exit_path))
+                    local retry_cmd = build_curl_command(path, exit_path)
+                    if retry_cmd then os.execute(retry_cmd) end
                 end
             elseif age > configuration.pending_grace_seconds then
                 -- no marker + old → original curl never finished
                 log(string.format("[retry-buffer] re-launching abandoned payload (age=%ds) %s", age, path))
-                os.execute(build_curl_command(path, exit_path))
+                local retry_cmd = build_curl_command(path, exit_path)
+                if retry_cmd then os.execute(retry_cmd) end
             end
             -- else: no marker + fresh → original curl in flight, skip
         end
@@ -1098,7 +1176,7 @@ local function send_webhook()
         return
     end
 
-    if configuration.discord_webhook_url == "REPLACE_WITH_YOUR_WEBHOOK_URL" then
+    if #configured_webhook_urls() == 0 then
         et.G_Print(string.format("[%s] ERROR: Discord webhook URL not configured!\n", modname))
         return
     end
@@ -1481,8 +1559,12 @@ function et_InitGame(levelTime, randomSeed, restart)
     for _, warning in ipairs(config_override_warnings) do
         et.G_Print(string.format("[%s] WARNING: %s\n", modname, warning))
     end
-    if configuration.discord_webhook_url == "REPLACE_WITH_YOUR_WEBHOOK_URL" then
+    local active_urls = configured_webhook_urls()
+    if #active_urls == 0 then
         et.G_Print(string.format("[%s] WARNING: Webhook URL not configured! Deploy stats_discord_webhook_config.lua next to this script.\n", modname))
+    else
+        -- Count only: the URLs carry tokens and this goes to the server console.
+        et.G_Print(string.format("[%s] Webhook targets configured: %d\n", modname, #active_urls))
     end
 end
 
