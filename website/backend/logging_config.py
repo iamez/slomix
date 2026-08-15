@@ -210,6 +210,51 @@ class StandardFormatter(logging.Formatter):
         )
 
 
+# Loggers that own a dedicated file. Everything else is "the app", and lands
+# in web.log.
+#
+# Until 2026-08-15 no handler carried a name filter, so web.log, security.log
+# and access.log were byte-identical: three copies of every INFO+ record in the
+# process (verified by md5 of their tails, 5.3 MB each plus rotations). The
+# practical cost was not disk — it was that `security.log` did not mean
+# security and `access.log` did not mean access, so looking for one event meant
+# reading the same soup three times.
+#
+# bot/logging_config.py has always done this correctly by attaching
+# commands/database/webhook to named child loggers; this brings the web side in
+# line with it, without moving a single file (every path stays where logrotate,
+# health_check.sh and usage_report.py expect it).
+DEDICATED_STREAMS = ("access", "security")
+
+
+def _stream_root(record: logging.LogRecord) -> str:
+    """Top-level logger name, so `access.middleware` still counts as access."""
+    return record.name.split(".", 1)[0]
+
+
+class OnlyStreamFilter(logging.Filter):
+    """Keep only records from one top-level logger (e.g. `access`)."""
+
+    def __init__(self, stream: str):
+        super().__init__()
+        self._stream = stream
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return _stream_root(record) == self._stream
+
+
+class ExcludeDedicatedStreamsFilter(logging.Filter):
+    """Drop records that already have a file of their own.
+
+    Applied to web.log only: errors.log and debug.log stay deliberate
+    catch-alls (errors.log is shared with the bot process, debug.log is the
+    firehose), so an access-layer error is still visible in both.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return _stream_root(record) not in DEDICATED_STREAMS
+
+
 class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
     """RotatingFileHandler that re-applies 0660 after every rollover.
 
@@ -348,6 +393,16 @@ def setup_logging(
         handler.setLevel(config["level"])
         handler.setFormatter(file_formatter)
         handler.addFilter(security_filter)
+
+        # Route the record streams that own a file (see DEDICATED_STREAMS).
+        # The handlers stay on the ROOT logger rather than being attached to
+        # the `access`/`security` loggers directly: root is where the 0660
+        # rollover handling and the redaction filter already live, and a
+        # name filter achieves the same separation without a second code path.
+        if name in DEDICATED_STREAMS:
+            handler.addFilter(OnlyStreamFilter(name))
+        elif name == "app":
+            handler.addFilter(ExcludeDedicatedStreamsFilter())
 
         # Set file permissions (owner+group read/write). 0640 (group
         # read-only) blocks the bot service — a different OS user in the
