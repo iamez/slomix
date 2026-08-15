@@ -397,13 +397,23 @@ async def get_composite_stats(
         pcs_cols = ("p.player_guid, MAX(p.player_name) as player_name, "
                     "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
                     "SUM(p.gibs) as gibs")
+        # Round-quality gate, the same one every other KPI applies (S6 audit):
+        # excluding bots by NAME is not enough. Session 121 carries one round
+        # flagged is_valid = FALSE, and its 53 kills were inflating the
+        # composite by 8-16 % for the four players in it (SuperBoyy 147 -> 135,
+        # qmr 128 -> 108) — invisible, because the players are real.
         pcs_where = ("WHERE r.gaming_session_id = $1 AND r.round_number > 0 "
+                     "AND r.is_valid IS DISTINCT FROM FALSE "
+                     "AND r.is_bot_round IS DISTINCT FROM TRUE "
                      "AND p.player_guid NOT LIKE 'OMNIBOT%' "
                      "AND p.player_name NOT LIKE '[BOT]%'")
         pcs_group = "GROUP BY p.player_guid"
         pcs_alias = "p."
         ski_where = "WHERE gaming_session_id = $1"
-        round_set = "round_id IN (SELECT id FROM rounds WHERE gaming_session_id = $1)"
+        round_set = ("round_id IN (SELECT id FROM rounds "
+                     "WHERE gaming_session_id = $1 "
+                     "  AND is_valid IS DISTINCT FROM FALSE "
+                     "  AND is_bot_round IS DISTINCT FROM TRUE)")
     else:
         if not session_date:
             row = await db.fetch_one(
@@ -414,15 +424,24 @@ async def get_composite_stats(
                         "gaming_session_id": None, "players": []}
             session_date = str(row[0])
         scope_param = session_date
-        pcs_from = "player_comprehensive_stats"
-        pcs_cols = ("player_guid, MAX(player_name) as player_name, "
-                    "SUM(kills) as kills, SUM(deaths) as deaths, "
-                    "SUM(gibs) as gibs")
-        pcs_where = "WHERE round_date = $1 AND round_number > 0"
-        pcs_group = "GROUP BY player_guid"
-        pcs_alias = ""
+        # The legacy date path cannot separate two sessions sharing a date —
+        # that is its known limitation — but it can at least apply the same
+        # quality gate, so an invalid round never counts on either path.
+        pcs_from = ("player_comprehensive_stats p "
+                    "JOIN rounds r ON r.id = p.round_id")
+        pcs_cols = ("p.player_guid, MAX(p.player_name) as player_name, "
+                    "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
+                    "SUM(p.gibs) as gibs")
+        pcs_where = ("WHERE p.round_date = $1 AND p.round_number > 0 "
+                     "AND r.is_valid IS DISTINCT FROM FALSE "
+                     "AND r.is_bot_round IS DISTINCT FROM TRUE")
+        pcs_group = "GROUP BY p.player_guid"
+        pcs_alias = "p."
         ski_where = "WHERE session_date = $1::date"
-        round_set = "session_date = $1::date"
+        round_set = ("round_id IN (SELECT id FROM rounds "
+                     "WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) = $1 "
+                     "  AND is_valid IS DISTINCT FROM FALSE "
+                     "  AND is_bot_round IS DISTINCT FROM TRUE)")
 
     # Query per-player aggregates for this session from proximity + PCS. The
     # scope fragments above are code-controlled (no user input) and the scope

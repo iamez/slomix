@@ -3481,6 +3481,26 @@
           </div>
         </div>
 
+        <!-- SYSTEM VIEW — one page for "is the chain running?" -->
+        <div id="view-system" class="view-section hidden">
+          <div class="max-w-4xl mx-auto px-6 py-8">
+            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950/40 to-slate-900 p-8 mb-6">
+              <div class="absolute inset-0 bg-gradient-to-r from-slate-500/5 via-transparent to-slate-500/5 pointer-events-none"></div>
+              <div class="relative z-10">
+                <div class="text-slate-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">System</div>
+                <h2 class="text-3xl font-black text-white mb-2">Ali cela veriga teče?</h2>
+                <p class="text-slate-400 text-sm max-w-3xl">
+                  Od igralnega strežnika prek Lua zajema in parserja do Smart Stats in tega API-ja.
+                  Stran loči <span class="text-slate-300 font-bold">nihče ni igral</span> od
+                  <span class="text-amber-400 font-bold">nekaj se je pokvarilo</span> — tiho obdobje ni napaka.
+                  Stanje se osveži samo od sebe vsakih 30 s.
+                </p>
+              </div>
+            </div>
+            <div id="system-content"></div>
+          </div>
+        </div>
+
         <!-- GREATSHOT VIEW -->
         <div id="view-greatshot" class="view-section">
             <div class="max-w-7xl mx-auto px-6 py-12">
@@ -5063,6 +5083,7 @@
                     <a href="#" class="hover:text-white transition">Discord</a>
                     <a href="#" class="hover:text-white transition">GitHub</a>
                     <a href="#" class="hover:text-white transition">API Docs</a>
+                    <a href="#/system" class="hover:text-white transition">System</a>
                 </div>
             </div>
         </div>
