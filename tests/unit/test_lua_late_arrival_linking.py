@@ -24,8 +24,9 @@ from bot.services.lua_round_storage_mixin import (
 
 
 class FakeDB:
-    def __init__(self, rounds_rows):
+    def __init__(self, rounds_rows, update_result="UPDATE 1"):
         self.rounds_rows = rounds_rows
+        self.update_result = update_result
         self.queries: list[tuple[str, tuple]] = []
         self.updates: list[tuple[str, tuple]] = []
 
@@ -35,7 +36,7 @@ class FakeDB:
 
     async def execute(self, query, params=None):
         self.updates.append((" ".join(query.split()), params or ()))
-        return "UPDATE 1"
+        return self.update_result
 
 
 class _Bot(_LuaRoundStorageMixin):
@@ -153,3 +154,31 @@ async def test_unparseable_round_time_is_skipped_not_crashed():
     )
 
     assert linked == 2
+
+
+@pytest.mark.asyncio
+async def test_write_reasserts_that_the_round_is_still_unclaimed():
+    """The candidate lookup and the write are not atomic; another linker may
+    claim the round in between. There is no UNIQUE index on round_id, so the
+    failure mode is a silent duplicate link, not an exception."""
+    db = FakeDB([(11218, ROUND_DATE, ROUND_TIME)])
+    bot = _Bot(db)
+
+    await bot._link_late_lua_row(map_name="sw_goldrush_te", round_number=1, lua_unix=ROUND_UNIX)
+
+    sql, params = db.updates[0]
+    assert "NOT EXISTS (SELECT 1 FROM lua_round_teams o WHERE o.round_id = ?)" in sql
+    assert params[-1] == 11218
+
+
+@pytest.mark.asyncio
+async def test_a_row_claimed_between_lookup_and_write_is_not_reported_as_linked():
+    db = FakeDB([(11218, ROUND_DATE, ROUND_TIME)], update_result="UPDATE 0")
+    bot = _Bot(db)
+
+    linked = await bot._link_late_lua_row(
+        map_name="sw_goldrush_te", round_number=1, lua_unix=ROUND_UNIX
+    )
+
+    assert linked is None          # nothing was written, so nothing is claimed
+    assert len(db.updates) == 1

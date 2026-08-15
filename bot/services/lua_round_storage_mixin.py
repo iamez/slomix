@@ -278,12 +278,33 @@ class _LuaRoundStorageMixin:
             return None
 
         round_id = tied[0]
-        await self.db_adapter.execute(
+        # Re-assert BOTH preconditions at write time. The candidate query ran a
+        # moment ago and another linker may have claimed either side since;
+        # there is no UNIQUE index on round_id, so the failure mode is not an
+        # exception but a silent duplicate link — exactly what the linkage
+        # anomaly service counts as `duplicate_lua_round_links`.
+        result = await self.db_adapter.execute(
             "UPDATE lua_round_teams SET round_id = ? "
             "WHERE round_id IS NULL AND LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
-            "  AND round_number = ? AND COALESCE(round_end_unix, round_start_unix) = ?",
-            (round_id, map_name, round_number, lua_unix),
+            "  AND round_number = ? AND COALESCE(round_end_unix, round_start_unix) = ? "
+            "  AND NOT EXISTS (SELECT 1 FROM lua_round_teams o WHERE o.round_id = ?)",
+            (round_id, map_name, round_number, lua_unix, round_id),
         )
+        # asyncpg reports "UPDATE <n>"; anything but a positive n means the row
+        # was claimed underneath us, so do not report a link that did not happen.
+        updated = 0
+        if isinstance(result, str) and result.upper().startswith("UPDATE"):
+            parts = result.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                updated = int(parts[1])
+        if updated <= 0:
+            webhook_logger.info(
+                "Lua late link skipped: map=%s R%s round_id=%s was claimed "
+                "between the lookup and the write",
+                map_name, round_number, round_id,
+            )
+            return None
+
         webhook_logger.info(
             "🔗 Lua late link: map=%s R%s → round_id=%s (%ss apart)",
             map_name, round_number, round_id, best_distance,

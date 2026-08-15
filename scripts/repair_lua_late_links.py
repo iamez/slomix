@@ -44,6 +44,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from bot.services.lua_round_storage_mixin import (  # noqa: E402
+    _LATE_LINK_TOLERANCE_SECONDS as TOLERANCE_SECONDS,
+)
 from scripts.apply_migrations import (  # noqa: E402
     get_connection_kwargs,
     get_target_dsn_parts,
@@ -56,8 +59,6 @@ except ImportError:  # pragma: no cover
         import psycopg as _pg  # type: ignore[no-redef]
     except ImportError:  # pragma: no cover
         _pg = None  # type: ignore[assignment]
-
-TOLERANCE_SECONDS = 30
 
 
 def _connect():
@@ -103,8 +104,7 @@ def collect(cur) -> tuple[list[tuple], dict[str, int]]:
         """
         SELECT r.id, r.map_name, r.round_number, r.round_date, r.round_time
         FROM rounds r
-        WHERE r.round_number IN (1, 2)
-          AND NOT EXISTS (SELECT 1 FROM lua_round_teams l WHERE l.round_id = r.id)
+        WHERE NOT EXISTS (SELECT 1 FROM lua_round_teams l WHERE l.round_id = r.id)
         """
     )
     rounds_by_key: dict[tuple, list[tuple[int, int]]] = {}
