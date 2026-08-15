@@ -351,6 +351,18 @@ const ROUTE_DEFINITIONS = Object.freeze({
         buildHash: () => '#/replay',
         load: ({ legacy }) => legacy.loadReplayView(),
     },
+    system: {
+        viewId: 'system',
+        label: 'System',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'C',
+        // Deliberately outside STATS_VIEWS: this is an operations page, not a
+        // stats page, so it does not belong in the Stats menu. It is linked
+        // from the footer and reachable at #/system.
+        buildHash: () => '#/system',
+        load: ({ legacy }) => legacy.loadSystemView(),
+    },
     'smart-stats-diag': {
         viewId: 'smart-stats-diag',
         label: 'Smart Stats — Diag',
