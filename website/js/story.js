@@ -330,6 +330,12 @@ async function loadStoryData() {
             );
         }).catch(() => { if (loadId === storyLoadId) renderMoments(null, null); });
 
+        // Per-player movement — same enrichment contract as the narratives:
+        // the cards never wait on it.
+        fetchJSON(`${API_BASE}/storytelling/movement?${q}`).then(mvData => {
+            if (loadId === storyLoadId) renderPlayerMovement(mvData);
+        }).catch(() => { /* cards stay as-is; missing track data is not an error */ });
+
         // Per-player micro-narratives — pure enrichment of the player cards
         // that are already on screen (the cards never wait on this fetch).
         fetchJSON(`${API_BASE}/storytelling/player-narratives?${q}`).then(pnData => {
@@ -1064,6 +1070,16 @@ function renderPlayerCards(players) {
         if (p.time_dead_pct != null) infoRow.appendChild(_el('span', null, `Dead: ${(p.time_dead_pct * 100).toFixed(0)}%`));
         card.appendChild(infoRow);
 
+        // Movement slot — filled by renderPlayerMovement() once
+        // /storytelling/movement resolves. Hidden until it has content so a
+        // card without track data shows no empty row.
+        if (p.guid) {
+            const moveSlot = _el('div', 'flex flex-wrap gap-x-3 mt-1');
+            moveSlot.dataset.movementFor = String(p.guid).slice(0, 8).toUpperCase();
+            moveSlot.style.display = 'none';
+            card.appendChild(moveSlot);
+        }
+
         // Oksii multiplier badges
         const oksiiRow = _el('div', 'flex flex-wrap gap-1 mt-2');
         const badge = (label, count, cls) => {
@@ -1272,6 +1288,76 @@ function _perMapFold(guid) {
         });
     });
     return fold;
+}
+
+/** Compact ET-unit formatting: 713781 -> "714k". Raw units on purpose — the
+ * metric conversions published elsewhere disagree with themselves (15.9 kph
+ * beside 10.6 mph is a 7 % gap), so a "metres" label would be invented
+ * precision. */
+function _units(n) {
+    const v = Number(n);
+    if (!Number.isFinite(v)) return '—';
+    return v >= 10000 ? `${(v / 1000).toFixed(0)}k` : String(Math.round(v));
+}
+
+/** Fill the movement slot on each player card from /storytelling/movement.
+ * Pure enrichment, like renderPlayerNarratives: the cards are already on
+ * screen, so a missing or late response leaves them as they were.
+ *
+ * Shown RELATIVE to the session, not as raw numbers. Measured across sessions
+ * 138-144: average speed spans ~5 % between the fastest and slowest player and
+ * distance per minute ~7-13 %, so three near-identical absolute figures on
+ * every card would be noise. Rank plus the gap to the session average is the
+ * part that actually says something; the raw values stay on hover.
+ */
+function renderPlayerMovement(data) {
+    const container = document.getElementById('story-players');
+    if (!container) return;
+
+    const rows = Array.isArray(data?.players) ? data.players : [];
+    if (data?.available === false || rows.length === 0) return;
+
+    const paced = rows.filter(r => Number.isFinite(r.distance_per_min));
+    const avgPerMin = paced.length
+        ? paced.reduce((sum, r) => sum + r.distance_per_min, 0) / paced.length
+        : 0;
+    const ranked = [...paced].sort((a, b) => b.distance_per_min - a.distance_per_min);
+    const rankOf = new Map(ranked.map((r, i) => [r.guid_short, i + 1]));
+
+    const byGuid = new Map();
+    rows.forEach(r => {
+        if (r?.guid_short) byGuid.set(String(r.guid_short).toUpperCase(), r);
+    });
+
+    container.querySelectorAll('[data-movement-for]').forEach(slot => {
+        const row = byGuid.get(slot.dataset.movementFor);
+        if (!row) return;
+
+        slot.textContent = '';
+        const chip = (label, value, title) => {
+            const el = _el('span', 'text-[10px] text-slate-500', `${label} ${value}`);
+            if (title) el.title = title;
+            return el;
+        };
+
+        if (Number.isFinite(row.distance_per_min) && avgPerMin > 0) {
+            const rank = rankOf.get(row.guid_short);
+            const delta = Math.round(((row.distance_per_min / avgPerMin) - 1) * 100);
+            const sign = delta > 0 ? '+' : '';
+            slot.appendChild(chip(
+                'Move',
+                `#${rank}${delta === 0 ? '' : ` (${sign}${delta}%)`}`,
+                `${_units(row.distance_per_min)} ET units per minute alive, `
+                + `${_units(row.total_distance)} across ${row.lives} lives · `
+                + `${Math.round(row.avg_speed)} ups average, peak ${Math.round(row.peak_speed)}`
+            ));
+        }
+        if (row.sprint_pct != null) {
+            slot.appendChild(chip('Sprint', `${Math.round(row.sprint_pct)}%`,
+                'share of alive time spent sprinting'));
+        }
+        slot.style.display = '';
+    });
 }
 
 /** Drop the "Name: " prefix the backend puts in front of every player
