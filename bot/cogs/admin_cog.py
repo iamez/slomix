@@ -20,6 +20,8 @@ NOTE: Other commands moved to specialized cogs:
 
 import logging
 
+import aiohttp
+
 # import aiosqlite  # Removed - using database adapter
 from discord.ext import commands
 
@@ -27,6 +29,18 @@ from bot.core.checks import is_admin, is_moderator, is_owner
 from bot.core.utils import sanitize_error_message
 
 logger = logging.getLogger(__name__)
+
+# The system overview is a handful of small queries plus one UDP probe; if it
+# has not answered by then, "the website API is not answering" IS the status.
+_SYSTEM_HTTP_TIMEOUT_S = 10
+
+_SYSTEM_STATE_EMOJI = {
+    "ok": "🟢",
+    "idle": "⚪",
+    "warn": "🟠",
+    "down": "🔴",
+    "unknown": "❔",
+}
 
 
 class AdminCog(commands.Cog, name="Admin"):
@@ -185,6 +199,68 @@ class AdminCog(commands.Cog, name="Admin"):
         except Exception as e:
             logger.error(f"Error in correlation_status: {e}", exc_info=True)
             await ctx.send(f"❌ correlation_status failed: {sanitize_error_message(e)}")
+
+
+    @is_moderator()
+    # Every invocation opens an outbound HTTP call that itself runs a UDP probe
+    # and several queries, so it is rate-limited per channel on top of the
+    # access check — a status command must never become a load generator.
+    @commands.cooldown(1, 30, commands.BucketType.channel)
+    @commands.command(name="sistem", aliases=["system"])
+    async def system_status(self, ctx):
+        """🩺 Ali cela veriga teče? (isti vir kot stran #/system)"""
+        url = f"{self.bot.config.website_api_base}/system/overview"
+        try:
+            timeout = aiohttp.ClientTimeout(total=_SYSTEM_HTTP_TIMEOUT_S)
+            async with aiohttp.ClientSession(timeout=timeout) as http, http.get(url) as resp:
+                if resp.status != 200:
+                    await ctx.send(f"🔴 **Sistem:** spletni API je odgovoril s HTTP {resp.status}.")
+                    return
+                data = await resp.json()
+        except Exception as e:
+            # The command's whole job is to report state, so an unreachable API
+            # is an answer, not an error to swallow.
+            logger.info("sistem: overview unreachable (%s)", e)
+            await ctx.send("🔴 **Sistem:** spletni API se ne odziva — to je hkrati odgovor.")
+            return
+
+        try:
+            await ctx.send(self._format_system_overview(data))
+        except Exception as e:
+            # A malformed payload is a status finding too, not a stack trace.
+            logger.warning("sistem: could not format overview (%s)", e)
+            await ctx.send("🟠 **Sistem:** odgovor ni v pričakovani obliki.")
+
+    @staticmethod
+    def _format_system_overview(data) -> str:
+        """Render the overview payload; tolerant of anything the API sends."""
+        if not isinstance(data, dict):
+            raise TypeError(f"overview payload is {type(data).__name__}, not a dict")
+        overall = str(data.get("overall", "unknown"))
+        lines = [f"{_SYSTEM_STATE_EMOJI.get(overall, '❔')} **Sistem — {overall.upper()}**"]
+
+        for stage in data.get("stages") or []:
+            if not isinstance(stage, dict):
+                continue
+            emoji = _SYSTEM_STATE_EMOJI.get(stage.get("state"), "❔")
+            lines.append(f"{emoji} **{stage.get('label', stage.get('key'))}** — {stage.get('summary', '')}")
+
+        linkage = data.get("linkage") or {}
+        if linkage.get("available"):
+            breaches = linkage.get("breaches") or []
+            if breaches:
+                detail = ", ".join(
+                    f"{b.get('metric')} {b.get('value')} (meja {b.get('threshold')})" for b in breaches
+                )
+                lines.append(f"🟠 **Integriteta:** {detail}")
+            else:
+                lines.append("🟢 **Integriteta:** nobena meja ni presežena")
+
+        generated = data.get("generated_at")
+        if generated:
+            lines.append(f"_preverjeno {str(generated).replace('T', ' ')[:19]} UTC_")
+
+        return "\n".join(lines)
 
 
 async def setup(bot):
