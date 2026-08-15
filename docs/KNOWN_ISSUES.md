@@ -43,28 +43,31 @@ grep -n "_PERMANENT_ORPHAN_AGE_HOURS = " bot/cogs/proximity_mixins/relinker_mixi
 grep -n "dead" bot/cogs/proximity_mixins/ingestion_mixin.py         # no dead-hours gate
 ```
 
-### Re-linker inventory covers 7 of 27 proximity round_id tables — High
+### Orphan round_id backlog — Medium (coverage part CLOSED)
 
-27 `proximity_*` tables carry a `round_id` column; `LINKAGE_INVENTORY_TABLES`
-(`bot/services/linkage_inventory_service.py`) lists 7 of them (plus
-`combat_engagement` and `player_track`). ~28,000 orphan rows sit in uncovered
-tables, outside every repair tool — largest: `proximity_team_cohesion` (21,170),
-`proximity_weapon_accuracy` (2,462), `proximity_aim_lock` (2,383),
-`proximity_revive` (1,088). `proximity_shot_fired` was not an exception, just
-the only instance anyone noticed. Additionally 4 round_id tables lack a
-`*_round_lookup_unlinked` partial index (`aim_lock`, `comm_event`,
-`skill_snapshot`, `spawn_select`).
+**Re-measured 2026-08-15.** The coverage half of this issue is closed:
+`LINKAGE_INVENTORY_TABLES` (`bot/services/linkage_inventory_service.py`) now
+lists **29 tables — all 27 `proximity_*` tables with a `round_id` column, plus
+`combat_engagement` and `player_track`**. Nothing is outside the repair tools
+any more (FIX 9 landed with the schema-coverage contract test).
 
-Fix is two-part (FIX 9 in `docs/research/FIX_ME_2026-08-11.md`): derive the list
-from the schema with a failing test, then run the re-linker over the expanded
-set with a dry-run report before `--apply`.
+What remains open is the historical BACKLOG of unlinked rows, and it has grown
+rather than shrunk: **57,676 orphan rows** across the inventory today, largest
+`proximity_team_cohesion` 34,870 of 1,094,566 (was 21,170), `combat_engagement`
+3,669, `proximity_hit_region` 3,230, `proximity_aim_lock` 2,995,
+`proximity_weapon_accuracy` 2,730. Those rows cannot be attributed to a session
+by any route, so every session-scoped metric silently excludes them.
+
+Remaining fix: run the re-linker over the (now complete) inventory with a
+dry-run report before `--apply`, and find why new orphans keep arriving —
+growth, not the historical tail, is the live problem.
 
 Verify:
 ```bash
 PGPASSWORD=... psql -h 127.0.0.1 -U etlegacy_user -d etlegacy -tAc \
   "SELECT COUNT(*) FROM information_schema.columns
    WHERE column_name='round_id' AND table_schema='public' AND table_name LIKE 'proximity%'"
-# → 27; compare against LINKAGE_INVENTORY_TABLES in bot/services/linkage_inventory_service.py
+# → 27; LINKAGE_INVENTORY_TABLES lists 29 (those 27 + combat_engagement + player_track)
 ```
 
 ### round_number disagreement defeats the relinker on covered tables — Medium
@@ -125,22 +128,24 @@ FROM proximity_vehicle_progress; -- both counts equal (94|94 on 2026-08-11)
 
 ### Lua drift repo ↔ puran (deploy owner-gated) — High
 
-Live SSH diff 2026-08-07: 4 of 5 scripts on puran differ from the repo
-(`c0rnp0rn8.lua`, `endstats.lua`, `stats_discord_webhook.lua`,
-`proximity_tracker.lua`; only `team-lock.lua` matches). The drift is
-**two-directional** — neither side is a superset:
+**Re-measured by sha256 on 2026-08-15 (`scripts/system_status.sh`): 2 of 5
+scripts differ, not 4.** `c0rnp0rn8.lua` and `stats_discord_webhook.lua` are
+now byte-identical to the repo — the `% 8` reinf clamp IS deployed, so that
+half of the risk is gone. `VEHICLE_PROGRESS` is present on both sides too.
 
-- Repo has UNDEPLOYED safety fixes: `proximity_tracker.lua` aim_lock duration
-  clamp + `last_seen` round-end flush, and the `c0rnp0rn8.lua` reinf-offset
-  `% 8` clamp (in the repo since #356, 2026-06-02 — the live copy predates it,
-  so `bit.rshift(...) >= 8` can still nil out `aReinfOffset` live and silently
-  kill wave-dependent metrics for a team).
-- Live tracker is AHEAD of the repo: `shot_fired=false` with an 8-line rationale
-  comment, and (new, 2026-08-11) a `# VEHICLE_PROGRESS` output section the repo
-  file does not have.
+What still differs:
+
+- **`proximity_tracker.lua`** — 66 lines. The repo holds four UNDEPLOYED
+  fixes: the aim_lock duration clamp, the round-end flush at `last_seen`, a
+  two-pass stale close, and the **C4 escort fix** (whole-vector origin read;
+  `is_moving` was permanently false, so every escort credit recorded 0
+  distance) with a `MAX_SANE_MOVE` cap against garbage entity reads.
+  Live is ahead only in a comment (the `shot_fired = false` rationale).
+- **`live_events.lua`** — differs; live-view tailer script.
 
 Consequence already measured in data: `proximity_aim_lock` max duration
-220,000 ms (3 min 40 s, 78× above p99, ~15 rows > 5 s) from the missing clamp.
+220,000 ms (3 min 40 s, 78× above p99, ~15 rows > 5 s) from the missing clamp,
+and 0 escort distance on every credit until the C4 fix is deployed.
 
 **Never blind-copy in either direction.** Fix = per-file three-way merge →
 commit → `scp` → activation via full map load (never `lua_restart`), in an
@@ -149,7 +154,7 @@ owner-scheduled window. Plan: `docs/research/BACKLOG_MASTER_2026-08-10.md` §1.2
 
 Verify (documented, runs against the game server):
 ```bash
-ssh et@puran.hehe.si -p 48101 'sha256sum legacy/luascripts/*.lua'  # compare vs repo sha256sum
+scripts/system_status.sh            # does this comparison for you, per file
 grep -n "% 8" vps_scripts/c0rnp0rn8.lua                            # repo clamp present (lines 193-194)
 ```
 
@@ -233,18 +238,23 @@ grep -ln "session_date" website/backend/routers/proximity_{combat,player,dashboa
 grep -ln "with_session_scope" website/backend/routers/proximity_{combat,player,dashboard,trades,movement,quality,support,events,journey}.py | wc -l  # 0
 ```
 
-### `/skill/composite` single-date, no validity gate — Medium
+### ~~`/skill/composite` single-date, no validity gate~~ — CLOSED 2026-08-15
 
-`get_composite_stats` in `website/backend/routers/skill_router.py` accepts only `session_date`,
-falls back to `SELECT MAX(session_date) FROM proximity_kill_outcome`, and has
-neither `is_valid` nor bot filters — bot rounds count into the Comp Skill
-composite. Last SS-D holdout (together with React `client.ts` single-date).
-Fix pattern exists: storytelling routers + `_round_quality_gate_sql`
-(`proximity_helpers.py`).
+**Re-measured 2026-08-15: both halves are now false.** `get_composite_stats`
+gained `gaming_session_id` in the C3 scope-parity pass (it is what the Story
+page's Comp Skill panel calls), and the round-quality gate
+(`is_valid IS DISTINCT FROM FALSE AND is_bot_round IS DISTINCT FROM TRUE`)
+was added on both the gsid and the legacy date path.
+
+Impact when it was measured: exactly one session was affected today — 121
+carries a single `is_valid = FALSE` round whose 53 kills inflated the composite
+by 8-16 % for the four players in it (SuperBoyy 147 -> 135 kills, qmr 128 ->
+108). Invisible without the gate, because the players themselves are real.
 
 Verify:
 ```bash
-sed -n '/def get_composite_stats/,/fetch_all/p' website/backend/routers/skill_router.py | grep -c "gaming_session_id\|is_valid"  # 0
+sed -n '/def get_composite_stats/,/fetch_all/p' website/backend/routers/skill_router.py \
+  | grep -c "gaming_session_id\|is_valid"   # > 0 since 2026-08-15
 ```
 
 ### skill_router SDS reads capped PCS `denied_playtime` — Low
