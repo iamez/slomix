@@ -677,14 +677,20 @@ fi
 chown -R "$BOT_USER:$SLX_GROUP" "$APP_DIR"
 chmod -R g+rX "$APP_DIR"
 
-# Create runtime directories the bot and website expect
-for dir in local_stats logs processed_stats website/logs website/data website/data/uploads; do
+# Create runtime directories the bot and website expect.
+# website/logs is deliberately NOT here: both services resolve their log
+# directory to <repo>/logs (bot/logging_config.py and
+# website/backend/logging_config.py default to the repository root, and
+# WEB_LOG_DIR is unset on both hosts), so provisioning it only created an
+# empty directory that logrotate then had to glob (removed 2026-08-15 —
+# it was still empty on production, and 76 MB of fossils on dev).
+for dir in local_stats logs processed_stats website/data website/data/uploads; do
   mkdir -p "$APP_DIR/$dir"
 done
 chown -R "$BOT_USER:$SLX_GROUP" "$APP_DIR/local_stats" "$APP_DIR/logs" "$APP_DIR/processed_stats"
-chown -R "$WEB_USER:$SLX_GROUP" "$APP_DIR/website/logs" "$APP_DIR/website/data"
+chown -R "$WEB_USER:$SLX_GROUP" "$APP_DIR/website/data"
 chmod -R g+rwX "$APP_DIR/local_stats" "$APP_DIR/logs" "$APP_DIR/processed_stats" \
-               "$APP_DIR/website/logs" "$APP_DIR/website/data"
+               "$APP_DIR/website/data"
 
 # Create SSH key directory for the bot user (for game server polling later)
 mkdir -p "$BOT_SSH_DIR"
