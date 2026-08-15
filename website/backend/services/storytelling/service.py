@@ -15,6 +15,7 @@ from .kis_shadow import _KisShadowMixin
 from .loaders import _LoadersMixin
 from .moments import _MomentsMixin
 from .momentum import _MomentumMixin
+from .movement import _MovementMixin
 from .narrative import _NarrativeMixin
 from .synergy import _SynergyMixin
 from .win_contribution import _WinContributionMixin
@@ -30,6 +31,7 @@ class StorytellingService(
     _SynergyMixin,
     _WinContributionMixin,
     _MomentumMixin,
+    _MovementMixin,
     _NarrativeMixin,
     _AdvancedMetricsMixin,
 ):
