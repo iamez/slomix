@@ -8,6 +8,7 @@ import re
 import socket
 import time
 from dataclasses import dataclass, field
+from math import isfinite
 
 logger = logging.getLogger(__name__)
 
@@ -92,23 +93,32 @@ def query_game_server(
         port: Server port (default 27960)
         timeout: Query timeout in seconds, per attempt
         attempts: How many datagrams to send before believing the silence
-        retry_delay: Pause between attempts, to clear the engine's rate limiter
+                  (values below 1 mean one attempt)
+        retry_delay: Pause between attempts, to clear the engine's rate limiter.
+                     Negative or non-finite values are treated as no pause —
+                     they would defeat the pacing rather than tune it.
 
     Returns:
         ServerStatus object with server info including ping_ms
     """
+    total = max(1, attempts)
+    # A negative or non-finite delay would quietly undo the pacing this function
+    # exists for — an immediate resend lands back in the engine's rate limiter,
+    # and math.inf would make time.sleep hang or raise. Clamp, don't trust.
+    delay = retry_delay if isfinite(retry_delay) and retry_delay > 0 else 0.0
+
     last = ServerStatus(online=False, error='Server not responding')
-    for attempt in range(max(1, attempts)):
+    for attempt in range(total):
         last = _query_once(host, port, timeout)
         if last.online or last.error == 'DNS resolution failed':
             return last
-        if attempt + 1 < max(1, attempts):
+        if attempt + 1 < total:
             logger.debug(
                 "Game server query attempt %d/%d failed (%s), retrying in %.2fs: %s:%s",
-                attempt + 1, attempts, last.error, retry_delay, host, port,
+                attempt + 1, total, last.error, delay, host, port,
             )
-            if retry_delay > 0:
-                time.sleep(retry_delay)
+            if delay:
+                time.sleep(delay)
     return last
 
 

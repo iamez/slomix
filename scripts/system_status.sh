@@ -113,6 +113,16 @@ open_release_pr="$(git log --oneline -1 origin/main 2>/dev/null | head -1)"
 # ---------------------------------------------------------------------------
 section "lua (game server)"
 
+# Hash both Lua directories in one go. Walking each directory separately and
+# exiting 0 is deliberate: `sha256sum A/*.lua B/*.lua` returns non-zero as soon as
+# ONE glob matches nothing, which made the `&&` below fail and skipped the entire
+# Lua section — reported as "game server unreachable". A homepath-only or
+# basepath-only deployment is normal and must still be checked. Genuine ssh
+# failures are still caught, because ssh's own exit status is what the `&&` tests.
+LUA_REMOTE_SUMS_CMD="for d in '$GAME_LUA_DIR' '$GAME_LUA_HOME'; do
+  for f in \"\$d\"/*.lua; do [ -f \"\$f\" ] && sha256sum \"\$f\"; done
+done; exit 0"
+
 # Content with trailing whitespace and trailing blank lines removed — two files
 # that agree here run identically, whatever their byte counts say.
 lua_strip() {
@@ -133,11 +143,14 @@ LUA_PAIRS=(
 if [ "$SKIP_REMOTE" -eq 1 ]; then
     warn "lua comparison skipped (--skip-remote)"
 elif remote_sums="$(ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" \
-        "$GAME_SSH_HOST" "sha256sum '$GAME_LUA_DIR'/*.lua '$GAME_LUA_HOME'/*.lua 2>/dev/null" 2>/dev/null)" \
+        "$GAME_SSH_HOST" "$LUA_REMOTE_SUMS_CMD" 2>/dev/null)" \
     && [ -n "$remote_sums" ]; then
+    # Exact path equality, not a regex or a substring: the filename carries dots
+    # ("foo.lua" as a pattern also matches "fooXlua"), and one directory path can
+    # be a substring of another, which would hand back the wrong file's hash.
     sum_in_dir() {   # $1 = directory, $2 = filename
         printf '%s\n' "$remote_sums" \
-            | awk -v d="$1" -v f="$2" 'index($2, d "/" f) && $2 ~ f"$" {print $1; exit}'
+            | awk -v p="$1/$2" '$2 == p {print $1; exit}'
     }
     for pair in "${LUA_PAIRS[@]}"; do
         repo_path="${pair%%:*}"
@@ -179,10 +192,14 @@ elif remote_sums="$(ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" 
         remote_dir="$GAME_LUA_DIR"
         [ "$source_dir" = "homepath" ] && remote_dir="$GAME_LUA_HOME"
         drift_tmp="$(mktemp)"
-        if ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" \
+        if ! ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" \
                 "$GAME_SSH_HOST" "cat '$remote_dir/$remote_name'" > "$drift_tmp" 2>/dev/null \
-            && [ -s "$drift_tmp" ] \
-            && [ "$(lua_strip "$drift_tmp")" = "$(lua_strip "$repo_path")" ]; then
+            || [ ! -s "$drift_tmp" ]; then
+            # Could not read the file — say exactly that. Reporting "DIFFERS" here
+            # would invent drift out of a dropped connection and send someone into
+            # a three-way merge that has nothing to merge.
+            warn "$remote_name: hashes differ from the repo but the $source_dir copy could not be read — drift unconfirmed"
+        elif [ "$(lua_strip "$drift_tmp")" = "$(lua_strip "$repo_path")" ]; then
             ok "$remote_name matches the repo (loaded from $source_dir; differs only in trailing whitespace)"
         else
             changed="$(diff "$drift_tmp" "$repo_path" 2>/dev/null | grep -c '^[<>]')"

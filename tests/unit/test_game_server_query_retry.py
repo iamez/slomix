@@ -127,3 +127,34 @@ def test_dns_failure_does_not_even_wait(monkeypatch):
     query_game_server("nope.invalid")
 
     assert slept == []
+
+
+@pytest.mark.parametrize("bad_delay", [-1.0, float("inf"), float("nan")])
+def test_a_broken_delay_becomes_no_delay_not_an_immediate_resend(monkeypatch, bad_delay):
+    """A negative delay would silently restore the behaviour this fix removes,
+    and inf would hang or raise inside time.sleep. Neither may reach sleep()."""
+    slept: list[float] = []
+    monkeypatch.setattr(Q.time, "sleep", lambda s: slept.append(s))
+    once, calls = _fake_once([
+        ServerStatus(online=False, error="Server not responding"),
+        ServerStatus(online=True, map_name="supply"),
+    ])
+    monkeypatch.setattr(Q, "_query_once", once)
+
+    status = query_game_server("puran.hehe.si", retry_delay=bad_delay)
+
+    assert slept == []          # never handed a bad value to sleep
+    assert calls["n"] == 2      # still retried
+    assert status.online is True
+
+
+def test_the_log_never_counts_towards_a_nonsense_total(monkeypatch, caplog):
+    """attempts=0 must read as 1 attempt everywhere, not "attempt 1/0"."""
+    monkeypatch.setattr(Q.time, "sleep", lambda _s: None)
+    once, _ = _fake_once([ServerStatus(online=False, error="Server not responding")])
+    monkeypatch.setattr(Q, "_query_once", once)
+
+    with caplog.at_level("DEBUG", logger=Q.logger.name):
+        query_game_server("puran.hehe.si", attempts=0)
+
+    assert "/0" not in caplog.text
