@@ -2,7 +2,7 @@
 
 This document lists Discord bot commands declared in the repository (via `@commands.command(...)` and `@commands.group(...)`), with aliases and short descriptions. It is **auto-generated** from the source by `scripts/regen_commands_doc.py` — re-run that script after adding, renaming, or removing commands.
 
-**Coverage:** 109 visible commands across 22 cog files / cog-mixin groups.
+**Coverage:** 110 visible commands across 22 cog files / cog-mixin groups.
 
 > Hidden commands (`@commands.command(hidden=True)`) are intentionally excluded.
 > Slash commands (`@app_commands.command(...)`) are NOT in this list — none are currently declared in the repo.
@@ -25,6 +25,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `cache_clear` | (none) | 🗑️ Clear query cache (Admin only - use in admin channel) |
 | `correlation_status` | (none) | 🔗 Show round correlation status (Admin only) |
 | `reload` | (none) | 🔄 Reload the bot (Root only) - Reconnects to Discord with updated code |
+| `sistem` | `system` | 🩺 Ali cela veriga teče? (isti vir kot stran #/system) |
 | `weapon_diag` | (none) | 🧪 Diagnostic: show weapon stats aggregates for a session |
 
 ---
