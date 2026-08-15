@@ -1,4 +1,9 @@
-${APP_DIR}/logs/*.log ${APP_DIR}/website/logs/*.log {
+# ${APP_DIR}/website/logs was dropped on 2026-08-15: nothing has written there
+# since 2026-02-19. Both services resolve their log directory to <repo>/logs
+# (bot/logging_config.py and website/backend/logging_config.py both default to
+# the repository root), so the second glob only kept a 76 MB fossil tree alive
+# in every rotation run.
+${APP_DIR}/logs/*.log {
     daily
     missingok
     rotate 14
