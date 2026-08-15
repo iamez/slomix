@@ -205,6 +205,7 @@ const STORY_PANEL_IDS = [
     'story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
     'story-team-synergy', 'story-win-contribution', 'story-box-score',
     'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill',
+    'story-kill-matrix',
 ];
 
 function _clearStoryPanels() {
@@ -358,6 +359,13 @@ async function loadStoryData() {
             renderAdvancedMetrics(comp.status === 'fulfilled' ? comp.value : null);
             renderCompSkillBoard(ssr.status === 'fulfilled' ? ssr.value : null);
         });
+
+        // Kill matrix — loaded with the page rather than on fold-open like the
+        // per-map split: the response is one row per PAIRING (18 for a 6-player
+        // night), not per kill, so it is far smaller than the session matrix.
+        fetchJSON(`${API_BASE}/storytelling/kill-matrix?${q}`)
+            .then(d => { if (loadId === storyLoadId) renderKillMatrix(d); })
+            .catch(() => { if (loadId === storyLoadId) renderKillMatrix(null); });
 
         // Box Score — the panel AND the hero headline (the result is the first
         // thing the page must answer, so it no longer waits a screen down).
@@ -2438,6 +2446,104 @@ async function openKisDetailsModal(playerGuid, playerName) {
         formulaSlot.textContent = '';
         formulaSlot.appendChild(_renderFormulaPanel(formula));
     });
+}
+
+// ── Kill matrix (FAZA B) ────────────────────────────────────────
+//
+// Who killed whom, from /storytelling/kill-matrix. The pairing has been in
+// proximity_kill_outcome all along — 507 duels in session 144 alone — and
+// nothing ever showed it, which is the first thing players argue about after
+// a night.
+
+/** Colour a cell by how one-sided the duel was relative to the night's worst
+ * beating, not by raw count: 8 kills means one thing in a 500-kill session
+ * and another in a 90-kill one. */
+function _matrixCellClass(kills, max) {
+    if (!kills) return 'text-slate-600';
+    const share = max > 0 ? kills / max : 0;
+    if (share >= 0.75) return 'bg-amber-500/20 text-amber-300 font-bold';
+    if (share >= 0.5) return 'bg-amber-500/10 text-amber-400';
+    if (share >= 0.25) return 'bg-white/[0.06] text-slate-200';
+    return 'text-slate-400';
+}
+
+function renderKillMatrix(data) {
+    const container = document.getElementById('story-kill-matrix');
+    if (!container) return;
+    container.textContent = '';
+
+    const players = Array.isArray(data?.players) ? data.players : [];
+    const cells = Array.isArray(data?.cells) ? data.cells : [];
+    if (data?.available === false || players.length === 0 || cells.length === 0) {
+        container.appendChild(_el('div', 'text-xs text-slate-500 py-2',
+            'No tracked duels for this session.'));
+        return;
+    }
+
+    const byPair = new Map();
+    let maxKills = 0;
+    cells.forEach(c => {
+        byPair.set(`${c.killer} ${c.victim}`, c);
+        if (c.kills > maxKills) maxKills = c.kills;
+    });
+
+    const table = _el('table', 'border-collapse text-[10px]');
+
+    const head = _el('tr');
+    head.appendChild(_el('th',
+        'sticky left-0 bg-slate-900 text-left text-[9px] uppercase tracking-wider text-slate-500 px-1.5 py-1',
+        'killer / victim'));
+    players.forEach(p => head.appendChild(
+        _el('th', 'px-1.5 py-1 text-[9px] text-slate-400 whitespace-nowrap', p.name)
+    ));
+    head.appendChild(_el('th', 'px-1.5 py-1 text-[9px] uppercase tracking-wider text-slate-500', 'K'));
+    table.appendChild(head);
+
+    players.forEach(killer => {
+        const row = _el('tr');
+        row.appendChild(_el('td',
+            'sticky left-0 bg-slate-900 text-left text-[10px] text-white whitespace-nowrap px-1.5 py-1',
+            killer.name));
+        players.forEach(victim => {
+            if (killer.guid_short === victim.guid_short) {
+                // The diagonal is not a duel; leave it visibly empty.
+                row.appendChild(_el('td', 'text-center px-1.5 py-1 text-slate-600', '·'));
+                return;
+            }
+            const cell = byPair.get(`${killer.guid_short} ${victim.guid_short}`);
+            const kills = cell ? cell.kills : 0;
+            const td = _el('td',
+                `text-center px-1.5 py-1 tabular-nums ${_matrixCellClass(kills, maxKills)}`,
+                kills ? String(kills) : '—');
+            if (cell) {
+                td.title = `${killer.name} → ${victim.name}: ${kills} kills`
+                    + (cell.gibs ? `, ${cell.gibs} gibbed` : '')
+                    + (cell.revived ? `, ${cell.revived} revived` : '');
+            }
+            row.appendChild(td);
+        });
+        row.appendChild(_el('td', 'text-center px-1.5 py-1 tabular-nums text-white', String(killer.kills)));
+        table.appendChild(row);
+    });
+
+    const deaths = _el('tr');
+    deaths.appendChild(_el('td',
+        'sticky left-0 bg-slate-900 text-left text-[9px] uppercase tracking-wider text-slate-500 px-1.5 py-1',
+        'deaths'));
+    players.forEach(p => deaths.appendChild(
+        _el('td', 'text-center px-1.5 py-1 tabular-nums text-slate-400', String(p.deaths))
+    ));
+    deaths.appendChild(_el('td', 'px-1.5 py-1'));
+    table.appendChild(deaths);
+
+    // The grid is wide by nature: it scrolls inside its own box so the page
+    // body never gains a horizontal scrollbar (mobile 390 px).
+    const scroller = _el('div', 'overflow-x-auto pb-2');
+    scroller.appendChild(table);
+    container.appendChild(scroller);
+
+    container.appendChild(_el('div', 'text-[10px] text-slate-500 mt-2',
+        `${data.total_kills} tracked duels · read a row as "killed", a column as "died to"`));
 }
 
 export async function loadStoryView({ date, gsid } = {}) {

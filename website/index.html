@@ -3366,6 +3366,18 @@
             </div>
           </details>
 
+          <!-- Kill matrix — who killed whom. Wide by nature, so the grid gets
+               its own horizontal scroll container; the page body never scrolls. -->
+          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
+            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
+              <span class="text-sm font-bold text-white">&#9876;&#65039; Kill matrix &mdash; who killed whom</span>
+              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
+            </summary>
+            <div class="px-6 pb-5">
+              <div id="story-kill-matrix"></div>
+            </div>
+          </details>
+
           <!-- Advanced Metrics (ET Rating v2 composite stats) + Comp Skill board.
                Two independent panels, one card: each owns its OWN container so
                neither render can clear the other (they used to share a single
