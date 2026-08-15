@@ -59,15 +59,25 @@ SSH_OPTS=(-o ConnectTimeout=10 -o BatchMode=yes)
 section "release"
 
 local_version="$(grep -m1 '^version = ' pyproject.toml | cut -d'"' -f2)"
-[ -n "$local_version" ] && ok "repo version $local_version" || warn "could not read version from pyproject.toml"
+# if/else, not `A && B || C`: with the short-circuit form a failing `ok` would
+# ALSO run `warn`, reporting both outcomes for one check (Codacy SC2015).
+if [ -n "$local_version" ]; then
+    ok "repo version $local_version"
+else
+    warn "could not read version from pyproject.toml"
+fi
 
+# SC2029 below is intended: PROD_REPO_DIR / GAME_LUA_DIR are operator-set
+# config values, and `ssh host cmd` joins its arguments into a single remote
+# command string — expanding them here is the only way to pass them at all.
+# shellcheck disable=SC2029
 if git rev-parse --verify -q origin/main >/dev/null 2>&1; then
     main_sha="$(git rev-parse --short origin/main)"
 
     if [ "$SKIP_REMOTE" -eq 1 ]; then
         warn "production check skipped (--skip-remote)"
     elif prod_sha="$(ssh "${SSH_OPTS[@]}" "$PROD_SSH_HOST" \
-            "cd $PROD_REPO_DIR 2>/dev/null && git rev-parse --short HEAD" 2>/dev/null)" \
+            "cd '$PROD_REPO_DIR' 2>/dev/null && git rev-parse --short HEAD" 2>/dev/null)" \
         && [ -n "$prod_sha" ]; then
         if [ "$prod_sha" = "$main_sha" ]; then
             ok "production is on origin/main ($main_sha)"
@@ -104,10 +114,11 @@ LUA_PAIRS=(
     "proximity/lua/proximity_tracker.lua:proximity_tracker.lua"
 )
 
+# shellcheck disable=SC2029  # see the note above: client-side expansion is intended
 if [ "$SKIP_REMOTE" -eq 1 ]; then
     warn "lua comparison skipped (--skip-remote)"
 elif remote_sums="$(ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" \
-        "$GAME_SSH_HOST" "sha256sum $GAME_LUA_DIR/*.lua" 2>/dev/null)" \
+        "$GAME_SSH_HOST" "sha256sum '$GAME_LUA_DIR'/*.lua" 2>/dev/null)" \
     && [ -n "$remote_sums" ]; then
     for pair in "${LUA_PAIRS[@]}"; do
         repo_path="${pair%%:*}"
