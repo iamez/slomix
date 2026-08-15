@@ -3329,9 +3329,13 @@
             <div id="story-win-contribution"></div>
           </div>
 
-          <!-- Advanced Metrics (ET Rating v2 composite stats) -->
+          <!-- Advanced Metrics (ET Rating v2 composite stats) + Comp Skill board.
+               Two independent panels, one card: each owns its OWN container so
+               neither render can clear the other (they used to share a single
+               div, which only worked because of call order). -->
           <div class="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 p-6 mt-6">
             <div id="story-advanced-metrics"></div>
+            <div id="story-comp-skill"></div>
           </div>
 
          </div><!-- /max-w-6xl -->
