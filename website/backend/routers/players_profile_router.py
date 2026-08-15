@@ -1055,9 +1055,11 @@ async def _resolve_guid32(db, guid8: str) -> str | None:
 # afterwards — the pattern the story page already uses for its per-map split.
 _HEAVY_SECTIONS = frozenset({"aim", "advanced"})
 
-# Every section key the endpoint can return, in response order. Kept next to
-# _HEAVY_SECTIONS so the `sections` parameter can be validated before any work
-# starts; tests/unit/test_profile_sections.py pins it against the live registry.
+# Every section key the endpoint can return. A set, deliberately: it exists so
+# the `sections` parameter can be validated before any work starts, and it makes
+# no ordering promise — response order follows the `fetchers` insertion order in
+# the handler, and the payload's own `sections` list is sorted.
+# tests/unit/test_profile_sections.py pins this against the live registry.
 _PROFILE_SECTIONS = frozenset({
     "identity", "streaks", "advanced", "movement", "weapons", "hit_regions",
     "relationships", "skill", "maps", "recent_matches", "aim",

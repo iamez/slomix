@@ -537,9 +537,13 @@ export async function loadPlayerWeaponChart(playerName) {
 
 const _AIM_YAW_BUCKETS = 16;
 
-function _panel(title, icon, bodyHtml, tab = 'overview') {
+function _panel(title, icon, bodyHtml, tab = 'overview', marker = '') {
+    // `marker` is a bare data-attribute name for panels that get looked up later
+    // (see _aimPlaceholder). Declared here rather than patched into the string
+    // afterwards, so reformatting this template cannot silently drop it.
+    const mark = marker ? ` ${marker}` : '';
     return `
-        <div class="glass-panel p-6 rounded-xl" data-pf-tab="${tab}">
+        <div${mark} class="glass-panel p-6 rounded-xl" data-pf-tab="${tab}">
             <h3 class="font-bold text-white mb-5 flex items-center gap-2">
                 <i data-lucide="${icon}" class="w-5 h-5 text-brand-cyan"></i> ${escapeHtml(title)}
             </h3>
@@ -876,8 +880,7 @@ function _aimPlaceholder() {
     return _panel('True Aim', 'crosshair',
         '<div class="text-sm text-slate-500 italic py-2 flex items-center gap-2">'
         + '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> Reading shot history…</div>',
-        'combat')
-        .replace('class="glass-panel', 'data-pf-aim class="glass-panel');
+        'combat', 'data-pf-aim');
 }
 
 /** One cell of the deferred `advanced` section: value, or a dash while waiting. */
@@ -969,8 +972,10 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
         console.warn('reactions card load failed', e));
 
     // The two expensive sections, now that the page is on screen.
-    _fillDeferredSections(root, playerIdentifier, loadId, mapList).catch((e) =>
-        console.warn('deferred profile sections failed', e));
+    _fillDeferredSections(root, playerIdentifier, loadId, mapList).catch((e) => {
+        console.warn('deferred profile sections failed', e);
+        _markDeferredFailed(root, loadId);
+    });
 }
 
 /**
@@ -979,6 +984,22 @@ export async function loadEnhancedProfileSections(playerIdentifier) {
  * cells are filled in place. A failure here leaves the placeholders standing —
  * the rest of the profile is already usable and must not be torn down for it.
  */
+/**
+ * The deferred fetch failed. Stop the placeholder from spinning forever — a
+ * spinner that never resolves claims the data is still coming. The rest of the
+ * profile stays exactly as it is; this section is the only thing that failed.
+ */
+function _markDeferredFailed(root, loadId) {
+    if (loadId !== _pfLoadId || !root.isConnected) return;
+    const panel = root.querySelector('[data-pf-aim]');
+    if (!panel) return;
+    const body = panel.querySelector('div');
+    if (!body) return;
+    body.replaceChildren();
+    body.className = 'text-sm text-slate-500 italic py-2';
+    body.textContent = 'Shot history could not be loaded — reload to try again.';
+}
+
 async function _fillDeferredSections(root, playerIdentifier, loadId, mapList) {
     const heavy = await fetchJSON(
         `${API_BASE}/players/${encodeURIComponent(playerIdentifier)}/profile?sections=aim,advanced`);
