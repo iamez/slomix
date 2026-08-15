@@ -40,6 +40,9 @@ const storyState = {
     // Human-readable "2026-07-18" or "2026-07-18 → 2026-07-19" for the hero
     // heading / selector.
     sessionDateLabel: null,
+    // The resolved `scope` block of the current session (round count, maps,
+    // last_round_unix) — the hero's identity + freshness line reads it.
+    scope: null,
     players: [],
     loading: false,
 };
@@ -193,16 +196,31 @@ async function _fetchWithAmbiguityDetection(url) {
     return { ambiguous: false, data: body };
 }
 
+/** Every panel container the story page fills, EXCEPT #story-players (whose
+ * callers replace it with their own placeholder). One list, so a panel added
+ * later cannot be cleared on one load path and left stale on another — the
+ * exact class of bug that left a previous session's advanced metrics on
+ * screen. */
+const STORY_PANEL_IDS = [
+    'story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown',
+    'story-team-synergy', 'story-win-contribution', 'story-box-score',
+    'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill',
+];
+
+function _clearStoryPanels() {
+    for (const id of STORY_PANEL_IDS) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    }
+}
+
 /** A legacy #/story/date/<date> deep link hit a date shared by >1 gaming
  * session — let the user pick instead of guessing (Codex SS-D, same
  * "never guess" principle the backend resolver enforces server-side). */
 function renderAmbiguousSessionPicker(candidates) {
-    const title = document.getElementById('story-title');
+    _resetHero('Multiple sessions on this date');
     const subtitle = document.getElementById('story-subtitle');
-    const statsRow = document.getElementById('story-stats-row');
-    if (title) title.textContent = 'Multiple sessions on this date';
     if (subtitle) subtitle.textContent = 'This date has more than one gaming session — choose which one you meant:';
-    if (statsRow) statsRow.textContent = '';
 
     const players = document.getElementById('story-players');
     if (players) {
@@ -226,10 +244,7 @@ function renderAmbiguousSessionPicker(candidates) {
         });
         players.appendChild(wrap);
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = '';
-    }
+    _clearStoryPanels();
 }
 
 async function loadStoryData() {
@@ -261,6 +276,7 @@ async function loadStoryData() {
         // the gsid form so every fetch below (and the address bar) use the
         // canonical identity from here on.
         const scope = data?.scope;
+        storyState.scope = scope || null;
         if (scope?.gaming_session_id != null) {
             storyState.gamingSessionId = scope.gaming_session_id;
             storyState.sessionDate = (scope.dates && scope.dates[0]) || storyState.sessionDate;
@@ -286,14 +302,17 @@ async function loadStoryData() {
         // converted too (accepts gaming_session_id), so all panels share `q`.
         const q = _storyScopeQuery();
 
-        // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
+        // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking).
+        // Every failure path re-checks `loadId` exactly like its success path:
+        // a rejection that lands AFTER a session switch must not clear the
+        // panel of the session now on screen (CodeRabbit, #736).
         fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
             if (loadId === storyLoadId) renderNarrative(narData);
-        }).catch(() => renderNarrative(null));
+        }).catch(() => { if (loadId === storyLoadId) renderNarrative(null); });
 
         fetchJSON(`${API_BASE}/storytelling/momentum?${q}`).then(momtData => {
             if (loadId === storyLoadId) renderMomentum(momtData);
-        }).catch(() => renderMomentum(null));
+        }).catch(() => { if (loadId === storyLoadId) renderMomentum(null); });
 
         // Moments + best-lives render into the SAME reel (the life card is a
         // moment-card variant, not a new panel), so settle both before drawing.
@@ -308,7 +327,7 @@ async function loadStoryData() {
                 mom.status === 'fulfilled' ? mom.value : null,
                 lives.status === 'fulfilled' ? lives.value : null
             );
-        }).catch(() => renderMoments(null, null));
+        }).catch(() => { if (loadId === storyLoadId) renderMoments(null, null); });
 
         // Per-player micro-narratives — pure enrichment of the player cards
         // that are already on screen (the cards never wait on this fetch).
@@ -318,11 +337,11 @@ async function loadStoryData() {
 
         fetchJSON(`${API_BASE}/storytelling/synergy?${q}`).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
-        }).catch(() => renderTeamSynergy(null));
+        }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
         fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
             if (loadId === storyLoadId) renderWinContribution(pwcData);
-        }).catch(() => renderWinContribution(null));
+        }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
 
         // Advanced metrics + Comp Skill board share one card (own containers)
         // and are rendered together so the card fills in one paint.
@@ -340,10 +359,15 @@ async function loadStoryData() {
             renderCompSkillBoard(ssr.status === 'fulfilled' ? ssr.value : null);
         });
 
-        // Box Score
+        // Box Score — the panel AND the hero headline (the result is the first
+        // thing the page must answer, so it no longer waits a screen down).
         fetchJSON(`${API_BASE}/storytelling/box-score?${q}`)
-            .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
-            .catch(() => renderBoxScore(null));
+            .then(d => {
+                if (loadId !== storyLoadId) return;
+                renderHeroResult(d);
+                renderBoxScore(d);
+            })
+            .catch(() => { if (loadId === storyLoadId) renderBoxScore(null); });
 
         // Invisible Value — 5 parallel fetches
         Promise.allSettled([
@@ -361,7 +385,9 @@ async function loadStoryData() {
                 l.status === 'fulfilled' ? l.value : null,
                 d.status === 'fulfilled' ? d.value : null
             );
-        }).catch(() => renderInvisibleValue(null, null, null, null, null));
+        }).catch(() => {
+            if (loadId === storyLoadId) renderInvisibleValue(null, null, null, null, null);
+        });
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
@@ -370,48 +396,37 @@ async function loadStoryData() {
     }
 }
 
-function renderLoading() {
+/** Reset the hero back to "no result known yet" — every load path must go
+ * through this, or a stale score from the previous session survives the
+ * switch (the title is only overwritten once the NEXT box score lands). */
+function _resetHero(titleText) {
     const title = document.getElementById('story-title');
-    const subtitle = document.getElementById('story-subtitle');
-    const statsRow = document.getElementById('story-stats-row');
-    if (title) title.textContent = 'Loading...';
-    if (subtitle) subtitle.textContent = '';
-    if (statsRow) statsRow.textContent = '';
+    if (title) {
+        title.textContent = titleText;
+        delete title.dataset.hasResult;
+    }
+    for (const id of ['story-subtitle', 'story-stats-row', 'story-hero-arc',
+                      'story-hero-turning', 'story-hero-freshness']) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = '';
+    }
+}
 
-    const narrative = document.getElementById('story-narrative');
-    if (narrative) narrative.textContent = '';
-    const momentum = document.getElementById('story-momentum');
-    if (momentum) momentum.textContent = '';
-    const moments = document.getElementById('story-moments');
-    if (moments) moments.textContent = '';
+function renderLoading() {
+    _resetHero('Loading...');
+    _clearStoryPanels();
+
     const players = document.getElementById('story-players');
     if (players) {
         players.textContent = '';
         players.appendChild(_el('div', 'col-span-full text-center text-slate-500 py-12', 'Loading kill impact data...'));
     }
-    const breakdown = document.getElementById('story-kis-breakdown');
-    if (breakdown) breakdown.textContent = '';
-    const synergy = document.getElementById('story-team-synergy');
-    if (synergy) synergy.textContent = '';
-    const pwc = document.getElementById('story-win-contribution');
-    if (pwc) pwc.textContent = '';
-    const adv = document.getElementById('story-advanced-metrics');
-    if (adv) adv.textContent = '';
-    const compSkill = document.getElementById('story-comp-skill');
-    if (compSkill) compSkill.textContent = '';
-    const boxScore = document.getElementById('story-box-score');
-    if (boxScore) boxScore.textContent = '';
-    const invisValue = document.getElementById('story-invisible-value');
-    if (invisValue) invisValue.textContent = '';
 }
 
 function renderEmpty(message) {
-    const title = document.getElementById('story-title');
+    _resetHero('Smart Stats');
     const subtitle = document.getElementById('story-subtitle');
-    const statsRow = document.getElementById('story-stats-row');
-    if (title) title.textContent = 'Smart Stats';
     if (subtitle) subtitle.textContent = message;
-    if (statsRow) statsRow.textContent = '';
 
     const players = document.getElementById('story-players');
     if (players) {
@@ -421,16 +436,57 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
-        const el = document.getElementById(id);
-        if (el) el.textContent = '';
+    _clearStoryPanels();
+}
+
+/** "Last round 21:41 \u00b7 3 days ago" \u2014 the freshness stamp (Korak 3 / 4d).
+ * `last_round_unix` is the START of the session's last accepted round, which
+ * is what the scope carries; a session that is still being played therefore
+ * reads as very recent, and we say so out loud. */
+function _freshnessLabel(lastRoundUnix) {
+    const secs = Number(lastRoundUnix);
+    if (!Number.isFinite(secs) || secs <= 0) return '';
+
+    const when = new Date(secs * 1000);
+    if (Number.isNaN(when.getTime())) return '';
+    const clock = when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    const ageMin = Math.floor((Date.now() - when.getTime()) / 60000);
+    let ago;
+    if (ageMin < 0) return `Last round ${clock}`;   // clock skew \u2014 don't invent an age
+    else if (ageMin < 60) ago = `${ageMin} min ago`;
+    else if (ageMin < 60 * 24) ago = `${Math.floor(ageMin / 60)} h ago`;
+    else ago = `${Math.floor(ageMin / 1440)} d ago`;
+
+    // Under two hours old, the evening may not be over \u2014 rounds can still land
+    // and every panel on this page would then be provisional.
+    const live = ageMin < 120 ? ' \u00b7 may still be running' : '';
+    return `Last round ${clock} \u00b7 ${ago}${live}`;
+}
+
+/** The session's own identity line: which session this is (matters at
+ * midnight, rule #730) and how much play it holds. */
+function _sessionIdentityLine(sessionDate, playerCount) {
+    const scope = storyState.scope;
+    const parts = [];
+    if (storyState.gamingSessionId != null) parts.push(`Session ${storyState.gamingSessionId}`);
+    if (sessionDate) parts.push(String(sessionDate));
+    const rounds = Number(scope?.accepted_round_count);
+    if (Number.isFinite(rounds) && rounds > 0) {
+        const maps = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
+        parts.push(maps > 0
+            ? `${rounds} rounds across ${maps} map${maps === 1 ? '' : 's'}`
+            : `${rounds} rounds`);
     }
+    if (playerCount > 0) parts.push(`${playerCount} players`);
+    return parts.join(' \u00b7 ');
 }
 
 function renderStoryHero(sessionDate, players) {
     const title = document.getElementById('story-title');
     const subtitle = document.getElementById('story-subtitle');
     const statsRow = document.getElementById('story-stats-row');
+    const freshness = document.getElementById('story-hero-freshness');
 
     const totalKIS = players.reduce((s, p) => s + (p.total_kis || 0), 0);
     // Prefer the backend's real session total; fall back to the KIS-kill sum only
@@ -441,8 +497,12 @@ function renderStoryHero(sessionDate, players) {
         : players.reduce((s, p) => s + (p.kills || 0), 0);
     const topPlayer = players[0];
 
-    if (title) title.textContent = `Session ${sessionDate}`;
-    if (subtitle) subtitle.textContent = `${players.length} players \u2022 Kill Impact Score analysis`;
+    // The title is the RESULT slot \u2014 renderHeroResult() fills it once the BOX
+    // score lands. Until then it holds the session label, so the hero never
+    // renders headless.
+    if (title && !title.dataset.hasResult) title.textContent = `Session ${sessionDate}`;
+    if (subtitle) subtitle.textContent = _sessionIdentityLine(sessionDate, players.length);
+    if (freshness) freshness.textContent = _freshnessLabel(storyState.scope?.last_round_unix);
 
     if (statsRow) {
         statsRow.textContent = '';
@@ -454,6 +514,116 @@ function renderStoryHero(sessionDate, players) {
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
         statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
+    }
+}
+
+/** Where the evening was actually decided, derived from the BOX map list the
+ * page already shows — no new data, no new computation on the server.
+ *
+ * A map "clinches" when the leader's margin exceeds every point still to be
+ * awarded after it; that is the honest definition of a turning point in a
+ * points-per-map format, and it is what a reader means by "when was it over".
+ */
+function _clinchSentence(data) {
+    const maps = Array.isArray(data?.maps) ? data.maps : [];
+    if (maps.length === 0) return '';
+
+    const pts = maps.map(m => ({
+        a: Number(m.alpha_points) || 0,
+        b: Number(m.beta_points) || 0,
+        name: m.map_name || '',
+        num: Number(m.map_number),
+    }));
+
+    // Points still on the table AFTER map i (walking backwards once).
+    const remainingAfter = new Array(pts.length).fill(0);
+    let tail = 0;
+    for (let i = pts.length - 1; i >= 0; i--) {
+        remainingAfter[i] = tail;
+        tail += pts[i].a + pts[i].b;
+    }
+
+    const alpha = stripEtColors(data.alpha_team || 'Alpha');
+    const beta = stripEtColors(data.beta_team || 'Beta');
+
+    let a = 0;
+    let b = 0;
+    for (let i = 0; i < pts.length; i++) {
+        a += pts[i].a;
+        b += pts[i].b;
+        const lead = Math.abs(a - b);
+        if (lead === 0 || lead <= remainingAfter[i]) continue;
+
+        const leader = a > b ? alpha : beta;
+        const mapNo = Number.isFinite(pts[i].num) ? pts[i].num : i + 1;
+        const where = pts[i].name ? `map ${mapNo} (${pts[i].name})` : `map ${mapNo}`;
+        const left = remainingAfter[i];
+        // Leader's score first: "Team B … at 6–12" would read as Team B's 6.
+        const hi = Math.max(a, b);
+        const lo = Math.min(a, b);
+        return left === 0
+            ? `${leader} sealed it on the last map, ${where} — ${hi}–${lo}.`
+            : `${leader} clinched it on ${where} at ${hi}–${lo}, with ${left} point${left === 1 ? '' : 's'} still to play.`;
+    }
+
+    return a === b ? `Level at ${a}–${b} after ${pts.length} maps.` : '';
+}
+
+/** Hero headline = the result (Korak 3). Called when the BOX score lands; the
+ * hero shows the session label until then. */
+function renderHeroResult(data) {
+    const title = document.getElementById('story-title');
+    const turning = document.getElementById('story-hero-turning');
+    if (turning) turning.textContent = '';
+    if (!title) return;
+
+    const maps = Array.isArray(data?.maps) ? data.maps : [];
+    if (maps.length === 0) return;   // nothing verified to claim — keep the label
+
+    const alpha = stripEtColors(data.alpha_team || 'Alpha');
+    const beta = stripEtColors(data.beta_team || 'Beta');
+    const aScore = Number(data.alpha_score) || 0;
+    const bScore = Number(data.beta_score) || 0;
+    const winner = data.winner;   // 'alpha' | 'beta' | null (BOX, #727/#728)
+
+    // Dim the loser only when there IS a winner. A drawn night comes back as
+    // winner:'draw' (not null), and dimming both sides then reads as if both
+    // teams lost — so anything that isn't alpha/beta keeps both colours.
+    const decided = winner === 'alpha' || winner === 'beta';
+    const alphaCls = (!decided || winner === 'alpha') ? 'text-cyan-400' : 'text-slate-400';
+    const betaCls = (!decided || winner === 'beta') ? 'text-rose-400' : 'text-slate-400';
+
+    title.textContent = '';
+    title.appendChild(_el('span', alphaCls, alpha));
+    title.appendChild(_el('span', 'text-white tabular-nums', ` ${aScore} `));
+    title.appendChild(_el('span', 'text-slate-500', '–'));
+    title.appendChild(_el('span', 'text-white tabular-nums', ` ${bScore} `));
+    title.appendChild(_el('span', betaCls, beta));
+    title.dataset.hasResult = '1';
+
+    if (turning) {
+        const sentence = _clinchSentence(data);
+        if (sentence) turning.textContent = sentence;
+    }
+}
+
+/** The shape-of-the-night pill, in the hero next to the result (it used to sit
+ * above the narrative prose, a screen below the score it describes). */
+function renderHeroArc(data) {
+    const row = document.getElementById('story-hero-arc');
+    if (!row) return;
+    row.textContent = '';
+
+    const arc = data?.session_arc;
+    const meta = arc && arc.shape ? ARC_SHAPE_META[arc.shape] : null;
+    if (!meta) return;
+
+    row.appendChild(_el('span',
+        `inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${meta.cls}`,
+        meta.label));
+    if (arc.winner != null && arc.ws != null && arc.ls != null) {
+        row.appendChild(_el('span', 'text-xs text-slate-400',
+            `${stripEtColors(String(arc.winner))} · ${arc.ws}–${arc.ls}`));
     }
 }
 
@@ -473,27 +643,13 @@ function renderNarrative(data) {
     if (!container) return;
     container.textContent = '';
 
+    // The arc pill belongs next to the score it describes — hero, not here.
+    renderHeroArc(data);
+
     const text = data?.narrative;
     if (!text) return;
 
     const card = _el('div', 'rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4');
-
-    // Session arc — glanceable shape-of-the-night pill above the prose, so the
-    // story's shape reads at a glance and not only buried in the paragraph.
-    const arc = data?.session_arc;
-    const meta = arc && arc.shape ? ARC_SHAPE_META[arc.shape] : null;
-    if (meta) {
-        const row = _el('div', 'mb-3 flex items-center gap-2 flex-wrap');
-        const pill = _el('span',
-            `inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${meta.cls}`,
-            meta.label);
-        row.appendChild(pill);
-        if (arc.winner != null && arc.ws != null && arc.ls != null) {
-            row.appendChild(_el('span', 'text-xs text-slate-400',
-                `${arc.winner} · ${arc.ws}–${arc.ls}`));
-        }
-        card.appendChild(row);
-    }
 
     const content = _el('div', 'text-sm text-slate-400 italic leading-relaxed', text);
     content.style.opacity = '0.8';
@@ -922,6 +1078,12 @@ function renderPlayerCards(players) {
             _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
         ));
 
+        // Per-map split — the session total hides that the same player can
+        // carry one map and vanish on the next. Lazy on purpose: the source
+        // (/stats/session/<gsid>/detail) is ~42 KB and runs stopwatch scoring,
+        // so it must never load with the page.
+        if (p.guid) card.appendChild(_perMapFold(p.guid));
+
         // KIS drill-down: prikaže per-kill izračun (preverjanje halucinacij).
         if (p.guid) {
             const detailsBtn = _el('button',
@@ -937,6 +1099,171 @@ function renderPlayerCards(players) {
     });
 
     bindKisDetailsHandler(container);
+}
+
+// ── Per-map split (Korak 4a) ────────────────────────────────────
+//
+// Source: GET /stats/session/<gsid>/detail -> `team_matrix`, which already
+// carries a per-player, per-map cell grid. Nothing new is computed here.
+// Two properties of that payload drive the code below:
+//   * it is ~42 KB and triggers stopwatch scoring -> fetch once per session,
+//     on the first click, shared by every card;
+//   * it depends on the session having resolvable teams -> it can come back
+//     {available: false, reason: ...}, which the UI must state plainly
+//     instead of rendering an empty box.
+
+let _matrixCache = { gsid: null, promise: null };
+
+function _fetchSessionMatrix() {
+    const gsid = storyState.gamingSessionId;
+    if (gsid == null) return Promise.resolve(null);
+    if (_matrixCache.gsid !== gsid || !_matrixCache.promise) {
+        const promise = fetchJSON(`${API_BASE}/stats/session/${encodeURIComponent(gsid)}/detail`)
+            .then(d => d?.team_matrix ?? null)
+            .catch(() => {
+                // A FAILED request must not be cached, or one dropped
+                // connection would leave every card on the page permanently
+                // stuck on "could not be loaded" with no way to retry.
+                if (_matrixCache.promise === promise) _matrixCache = { gsid: null, promise: null };
+                return null;
+            });
+        _matrixCache = { gsid, promise };
+    }
+    return _matrixCache.promise;
+}
+
+const MATRIX_UNAVAILABLE_REASON = {
+    no_rounds: 'this session has no scored rounds',
+    no_teams: 'the session has no team assignment',
+    side_mapping_failed: 'axis/allies sides could not be matched to the teams',
+};
+
+/** All roster entries for one player. A player who switched teams mid-session
+ * is present in BOTH rosters with his stats split — that is intentional in the
+ * payload, so it is shown as two labelled blocks rather than silently summed. */
+function _matrixEntriesFor(matrix, guid) {
+    const short = String(guid || '').slice(0, 8).toUpperCase();
+    const out = [];
+    for (const key of ['team_a', 'team_b']) {
+        const roster = Array.isArray(matrix?.rosters?.[key]) ? matrix.rosters[key] : [];
+        for (const row of roster) {
+            if (String(row?.player_guid || '').slice(0, 8).toUpperCase() === short) {
+                out.push({ teamKey: key, row });
+            }
+        }
+    }
+    return out;
+}
+
+function _perMapRows(matrix, entry) {
+    const maps = Array.isArray(matrix?.maps) ? matrix.maps : [];
+    const cells = Array.isArray(entry.row?.cells) ? entry.row.cells : [];
+    const played = cells.filter(c => c?.played);
+    // "Best map" is the player's own peak DPM, so the highlight answers the
+    // question the split is for: where was this player actually good?
+    const bestDpm = played.reduce((m, c) => Math.max(m, Number(c.dpm) || 0), 0);
+
+    const list = _el('div', 'mt-1');
+    cells.forEach(cell => {
+        const meta = maps[cell.map_index] || {};
+        const name = meta.map_name || `map ${cell.map_index + 1}`;
+        const row = _el('div', 'flex items-center gap-2 py-0.5 text-[10px] text-slate-400');
+
+        // Result dot: did the player's team take this map?
+        const a = Number(meta.team_a_score);
+        const b = Number(meta.team_b_score);
+        let dotCls = 'bg-slate-700';
+        if (Number.isFinite(a) && Number.isFinite(b) && a !== b) {
+            const won = (entry.teamKey === 'team_a') === (a > b);
+            dotCls = won ? 'bg-emerald-500' : 'bg-rose-500';
+        }
+        const dot = _el('span', `w-1.5 h-1.5 rounded-full ${dotCls}`);
+        row.appendChild(dot);
+        row.appendChild(_el('span', 'flex-1 truncate', name));
+
+        if (!cell.played) {
+            row.appendChild(_el('span', 'text-slate-500', 'did not play'));
+        } else {
+            row.appendChild(_el('span', 'tabular-nums text-white', `${cell.kills}-${cell.deaths}`));
+            const dpm = Number(cell.dpm) || 0;
+            const isBest = bestDpm > 0 && dpm === bestDpm;
+            row.appendChild(_el('span',
+                `tabular-nums w-12 text-right ${isBest ? 'text-amber-400 font-bold' : ''}`,
+                `${dpm.toFixed(0)} dpm`));
+        }
+        list.appendChild(row);
+    });
+    return list;
+}
+
+function _renderPerMap(body, matrix, guid) {
+    body.textContent = '';
+
+    if (!matrix) {
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1',
+            'Per-map split could not be loaded.'));
+        return;
+    }
+    if (matrix.available === false) {
+        const why = MATRIX_UNAVAILABLE_REASON[matrix.reason] || 'this session is missing team data';
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1',
+            `No per-map split — ${why}.`));
+        return;
+    }
+
+    const entries = _matrixEntriesFor(matrix, guid);
+    if (entries.length === 0) {
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1',
+            'This player is not on either team roster for the session.'));
+        return;
+    }
+
+    entries.forEach(entry => {
+        if (entries.length > 1) {
+            const teamName = entry.teamKey === 'team_a'
+                ? (matrix.team_a_name || 'Team A')
+                : (matrix.team_b_name || 'Team B');
+            body.appendChild(_el('div',
+                'text-[9px] uppercase tracking-wider text-slate-500 mt-1',
+                `as ${stripEtColors(teamName)}`));
+        }
+        body.appendChild(_perMapRows(matrix, entry));
+    });
+
+    if (entries.length > 1) {
+        body.appendChild(_el('div', 'text-[9px] text-amber-400/80 mt-1',
+            'Switched teams this session — stats are split, not summed.'));
+    }
+}
+
+/** The per-map disclosure on a player card. Native <details>, filled on the
+ * first open and never re-fetched (the session matrix is cached per gsid). */
+function _perMapFold(guid) {
+    const fold = _el('details', 'story-fold-mini mt-2 border-t border-white/5 pt-1');
+    const summary = _el('summary',
+        'flex items-center justify-between text-[10px] font-bold text-slate-400 hover:text-white cursor-pointer select-none py-1',
+        'Per-map');
+    const body = _el('div');
+    fold.appendChild(summary);
+    fold.appendChild(body);
+
+    fold.addEventListener('toggle', () => {
+        if (!fold.open || fold.dataset.filled) return;
+        fold.dataset.filled = '1';
+        body.textContent = '';
+        body.appendChild(_el('div', 'text-[10px] text-slate-500 py-1', 'Loading per-map split…'));
+        const gsidAtClick = storyState.gamingSessionId;
+        _fetchSessionMatrix().then(matrix => {
+            // A session switch while the (slow) request was in flight must not
+            // paint the previous session's maps into the new cards.
+            if (storyState.gamingSessionId !== gsidAtClick) return;
+            // Only a FAILED fetch is retryable — `available:false` is a real
+            // answer, so that one stays put instead of re-asking on every open.
+            if (matrix == null) delete fold.dataset.filled;
+            _renderPerMap(body, matrix, guid);
+        });
+    });
+    return fold;
 }
 
 /** Drop the "Name: " prefix the backend puts in front of every player
@@ -2125,6 +2452,12 @@ export async function loadStoryView({ date, gsid } = {}) {
     if (gsid != null) {
         storyState.gamingSessionId = gsid;
     } else if (date) {
+        // Drop the previously-resolved gsid: _storyScopeQuery() prefers it, so
+        // keeping it would silently ignore the date this link asked for and
+        // leave the hero describing the session the user just navigated away
+        // from (only reachable via an in-page hash change to the date form).
+        storyState.gamingSessionId = null;
+        storyState.sessionDateLabel = null;
         storyState.sessionDate = date;
     }
     await loadStoryScopes();

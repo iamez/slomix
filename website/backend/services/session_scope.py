@@ -54,6 +54,16 @@ class GamingSessionScope:
     distinct_map_names: tuple[str, ...]
     scope_version: str = SCOPE_VERSION
 
+    @property
+    def last_round_unix(self) -> int | None:
+        """Start time (epoch seconds) of this session's LAST accepted round,
+        or None when no round carries one. Derived from `round_keys` we
+        already hold — no extra query. Consumers use it as the session's
+        freshness stamp ("last round at …"); it is deliberately the round's
+        START, since that is the only per-round timestamp the scope carries."""
+        stamps = [rsu for rsu, _map_name, _rnum in self.round_keys if rsu]
+        return max(stamps) if stamps else None
+
     def to_metadata(self) -> dict[str, Any]:
         """The `scope` block every scoped response should embed (§5)."""
         return {
@@ -63,6 +73,7 @@ class GamingSessionScope:
             "dates": list(self.dates),
             "accepted_round_count": self.accepted_round_count,
             "distinct_map_names": list(self.distinct_map_names),
+            "last_round_unix": self.last_round_unix,
         }
 
     # ── Per-panel multi-date query filters (deep SS-C) ────────────────
