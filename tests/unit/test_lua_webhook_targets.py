@@ -123,6 +123,20 @@ def test_empty_and_placeholder_entries_are_skipped():
     assert out == "1"
 
 
+def test_config_declares_the_list_key_so_the_override_loader_accepts_it():
+    """The loader only takes a key when `configuration[key] ~= nil` AND the
+    types match. Declaring the default as nil made the live server reject the
+    secret config with "unknown key 'discord_webhook_urls' ignored" — the unit
+    tests missed it because they set the field directly, bypassing the loader.
+    """
+    src = SCRIPT.read_text(encoding="utf-8")
+    config_block = src[src.index("local configuration = {"):src.index("-- Enable/disable the webhook")]
+    assert "discord_webhook_urls = {}" in config_block, (
+        "the key must default to an empty TABLE: nil is rejected as unknown, "
+        "and a non-table default would fail the loader's type check"
+    )
+
+
 def test_empty_list_falls_back_to_the_single_url():
     out = _run_lua("""
         configuration.discord_webhook_url = "https://discord.com/api/webhooks/1/AAA"

@@ -92,7 +92,14 @@ local configuration = {
     -- Overrides discord_webhook_url when it holds at least one real URL; the
     -- single-URL key stays supported so an untouched deployment keeps working.
     -- Set it from the secret config file, never here.
-    discord_webhook_urls = nil,
+    --
+    -- Declared as an EMPTY TABLE, not nil: the override loader below accepts a
+    -- key only when `configuration[key] ~= nil` and the types match, so a nil
+    -- default made the live server reject the secret config with
+    -- "unknown key 'discord_webhook_urls' ignored" — caught on the first real
+    -- map load, because the unit tests set the field directly and never went
+    -- through the loader.
+    discord_webhook_urls = {},
 
     -- Enable/disable the webhook notifications
     enabled = true,
