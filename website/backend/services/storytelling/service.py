@@ -9,6 +9,7 @@ from __future__ import annotations
 from .advanced_metrics import _AdvancedMetricsMixin
 from .archetypes import _ArchetypesMixin
 from .base import *  # noqa: F401, F403  (constants + helpers)
+from .kill_matrix import _KillMatrixMixin
 from .kis import _KisMixin
 from .kis_shadow import _KisShadowMixin
 from .loaders import _LoadersMixin
@@ -22,6 +23,7 @@ from .win_contribution import _WinContributionMixin
 class StorytellingService(
     _KisMixin,
     _KisShadowMixin,
+    _KillMatrixMixin,
     _LoadersMixin,
     _MomentsMixin,
     _ArchetypesMixin,
