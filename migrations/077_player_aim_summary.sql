@@ -51,4 +51,15 @@ COMMENT ON COLUMN player_aim_summary.formula_version IS
     'Bumped in code (_AIM_FORMULA_VERSION) when the computation changes; rows '
     'from an older version are ignored and recomputed.';
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON player_aim_summary TO website_app;
+-- Grant each role only if it exists, so a fresh CI/test database (which has
+-- etlegacy_user but NOT website_app) applies cleanly while dev and prod get the
+-- real grants. Same pattern as migration 073.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'website_app') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON player_aim_summary TO website_app;
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'etlegacy_user') THEN
+    GRANT SELECT, INSERT, UPDATE, DELETE ON player_aim_summary TO etlegacy_user;
+  END IF;
+END $$;
