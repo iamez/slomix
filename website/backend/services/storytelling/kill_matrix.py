@@ -28,9 +28,17 @@ class _KillMatrixMixin:
     """Who-killed-whom pairings for a session (mixed into StorytellingService)."""
 
     async def compute_kill_matrix(self, scope: GamingSessionScope) -> dict:
+        # Both axes are keyed the SAME way, or a player lands under one key as a
+        # killer and another as a victim and the grid stops being square.
+        # `killer_guid_canonical` cannot be that key: it is 32 chars for
+        # OMNIBOT rows while `LEFT(killer_guid, 8)` is 8, and there is no
+        # `victim_guid_canonical` column to mirror it with. Bot identities are
+        # excluded outright for the same reason — every OMNIBOT raw guid starts
+        # with the same `OMNIBOT0` prefix, so on the victim side they cannot be
+        # told apart at all (they are already gated out of every KPI, #724/#725).
         rows = await self.db.fetch_all("""
             SELECT
-                COALESCE(o.killer_guid_canonical, LEFT(o.killer_guid, 8)) AS killer_key,
+                LEFT(o.killer_guid, 8)                                    AS killer_key,
                 LEFT(o.victim_guid, 8)                                    AS victim_key,
                 MAX(o.killer_name)                                        AS killer_name,
                 MAX(o.victim_name)                                        AS victim_name,
@@ -45,6 +53,8 @@ class _KillMatrixMixin:
               AND r.is_valid IS DISTINCT FROM FALSE
               AND o.killer_guid IS NOT NULL
               AND o.victim_guid IS NOT NULL
+              AND o.killer_guid NOT LIKE 'OMNIBOT%'
+              AND o.victim_guid NOT LIKE 'OMNIBOT%'
             GROUP BY killer_key, victim_key
         """, (scope.gaming_session_id,))
 
