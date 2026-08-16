@@ -368,7 +368,10 @@ async function loadStoryData() {
         }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
         fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
-            if (loadId === storyLoadId) renderWinContribution(pwcData);
+            if (loadId !== storyLoadId) return;
+            renderWinContribution(pwcData);
+            const top = (pwcData?.players || [])[0];
+            if (top?.name) _setFoldHint('Player win contribution', `top: ${stripEtColors(top.name)}`);
         }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
 
         // Advanced metrics + Comp Skill board share one card (own containers)
@@ -391,18 +394,35 @@ async function loadStoryData() {
         // per-map split: the response is one row per PAIRING (18 for a 6-player
         // night), not per kill, so it is far smaller than the session matrix.
         fetchJSON(`${API_BASE}/storytelling/kill-matrix?${q}`)
-            .then(d => { if (loadId === storyLoadId) renderKillMatrix(d); })
+            .then(d => {
+                if (loadId !== storyLoadId) return;
+                renderKillMatrix(d);
+                const cells = Array.isArray(d?.cells) ? d.cells.length : 0;
+                const kills = Number(d?.total_kills) || 0;
+                if (cells) _setFoldHint('Kill matrix', `${kills} kills across ${cells} pairings`);
+            })
             .catch(() => { if (loadId === storyLoadId) renderKillMatrix(null); });
 
         // Box Score — the panel AND the hero headline (the result is the first
         // thing the page must answer, so it no longer waits a screen down).
-        fetchJSON(`${API_BASE}/storytelling/box-score?${q}`)
-            .then(d => {
-                if (loadId !== storyLoadId) return;
-                renderHeroResult(d);
-                renderBoxScore(d);
-            })
-            .catch(() => { if (loadId === storyLoadId) renderBoxScore(null); });
+        // The box score feeds three surfaces: the hero scoreline chip, the
+        // folded panel, and the map-by-map timeline. The timeline also needs the
+        // session detail for wall-clock start times, so the two are zipped once
+        // both land — the detail request is shared with the per-map folds.
+        Promise.allSettled([
+            fetchJSON(`${API_BASE}/storytelling/box-score?${q}`),
+            _fetchSessionDetail(),
+        ]).then(([boxRes, detailRes]) => {
+            if (loadId !== storyLoadId) return;
+            const box = boxRes.status === 'fulfilled' ? boxRes.value : null;
+            renderHeroResult(box);
+            renderBoxScore(box);
+            renderNightTimeline(box, detailRes.status === 'fulfilled' ? detailRes.value : null);
+            const bMaps = Array.isArray(box?.maps) ? box.maps.length : 0;
+            if (bMaps) {
+                _setFoldHint('Box score', `${bMaps} map plays · ${box.alpha_score ?? 0}–${box.beta_score ?? 0}`);
+            }
+        });
 
         // Invisible Value — 5 parallel fetches
         Promise.allSettled([
@@ -525,6 +545,40 @@ function _sessionIdentityLine(sessionDate, playerCount) {
     return parts.join(' \u00b7 ');
 }
 
+/**
+ * "Whose night was it?" — the hero headline.
+ *
+ * The verb is chosen from the actual gap to the runner-up, so a runaway night
+ * and a photo finish do not get the same word. Silent when there is nobody to
+ * compare against, rather than crowning a single player by default.
+ */
+function _renderNightHeadline(title, players) {
+    title.textContent = '';
+    const top = players?.[0];
+    if (!top) { title.textContent = 'No players in this session'; return; }
+
+    const best = Number(top.total_kis) || 0;
+    const second = Number(players[1]?.total_kis) || 0;
+    const lead = (best > 0 && second > 0) ? (best - second) / second : null;
+
+    let verb = 'led the night';
+    if (lead != null && lead >= 0.15) verb = 'owned the night';
+    else if (lead != null && lead < 0.03) verb = 'edged it';
+
+    title.appendChild(_el('span', 'text-amber-400', stripEtColors(top.name)));
+    title.appendChild(_el('span', 'text-white', ` ${verb}`));
+
+    const detail = document.getElementById('story-hero-lead');
+    if (detail) {
+        detail.textContent = '';
+        detail.appendChild(_el('span', 'text-slate-300', `${best.toFixed(0)} KIS`));
+        if (lead != null && players[1]) {
+            detail.appendChild(_el('span', 'text-slate-500',
+                ` · ${(lead * 100).toFixed(0)}% clear of ${stripEtColors(players[1].name)}`));
+        }
+    }
+}
+
 function renderStoryHero(sessionDate, players) {
     const title = document.getElementById('story-title');
     const subtitle = document.getElementById('story-subtitle');
@@ -538,12 +592,15 @@ function renderStoryHero(sessionDate, players) {
     const totalKills = (storyState.totalKills != null)
         ? storyState.totalKills
         : players.reduce((s, p) => s + (p.kills || 0), 0);
-    const topPlayer = players[0];
 
     // The title is the RESULT slot \u2014 renderHeroResult() fills it once the BOX
     // score lands. Until then it holds the session label, so the hero never
-    // renders headless.
-    if (title && !title.dataset.hasResult) title.textContent = `Session ${sessionDate}`;
+    // The headline answers "whose night was it?", not "what was the team score?".
+    // Teams are reshuffled between maps, so the team result is a fact about two
+    // temporary labels — it read as the loudest thing on the page while saying
+    // the least. It is still on screen, in words, in the clinch sentence right
+    // below and in the Box score panel. The people are what the night was about.
+    if (title) _renderNightHeadline(title, players);
     if (subtitle) subtitle.textContent = _sessionIdentityLine(sessionDate, players.length);
     if (freshness) freshness.textContent = _freshnessLabel(storyState.scope?.last_round_unix);
 
@@ -556,7 +613,15 @@ function renderStoryHero(sessionDate, players) {
         statsRow.appendChild(stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400'));
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
-        statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
+        // Not MVP: the headline above already names them, and a stat strip that
+        // repeats the headline spends a slot to say nothing. Top DPM is a
+        // different dimension, so it can disagree with the KIS leader — which is
+        // exactly what makes it worth a slot.
+        const topDpm = players.reduce((best, p) => ((p.dpm || 0) > (best?.dpm || 0) ? p : best), null);
+        statsRow.appendChild(stat(
+            'Top DPM',
+            topDpm?.dpm ? `${stripEtColors(topDpm.name)} ${topDpm.dpm.toFixed(0)}` : '-',
+            'text-cyan-400'));
     }
 }
 
@@ -612,6 +677,94 @@ function _clinchSentence(data) {
     return a === b ? `Level at ${a}–${b} after ${pts.length} maps.` : '';
 }
 
+/**
+ * Fill a folded section's hint with what is inside it.
+ *
+ * The six folds were six identical grey bars — nothing to choose between them,
+ * so nobody opens any. The markup already carried an empty `.story-fold-hint`
+ * span next to every title; it was never written to. Each hint is a fact from
+ * the data that panel already received, so an unopened fold still tells the
+ * reader whether it is worth opening.
+ */
+function _setFoldHint(titleText, hint) {
+    if (!hint) return;
+    const folds = document.querySelectorAll('#view-story details.story-fold');
+    for (const fold of folds) {
+        const title = fold.querySelector('summary span');
+        if (!title || !title.textContent.includes(titleText)) continue;
+        const slot = fold.querySelector('.story-fold-hint');
+        if (slot) slot.textContent = hint;
+        return;
+    }
+}
+
+/**
+ * The night, map by map.
+ *
+ * Two sources the page already loads, zipped by position: the BOX score gives
+ * the result and the round clocks of each map PLAY, the session detail gives
+ * the wall-clock time each play started. They are parallel lists in the same
+ * chronological order (verified against session 143, whose last play crosses
+ * midnight), so index is the join key — there is no play id to join on.
+ *
+ * Moments are deliberately NOT pinned to these rows: a moment carries a map
+ * NAME and round number but no play index, and a map can be played three times
+ * in one night. Attaching them would look precise and be wrong, so they stay a
+ * list of their own below.
+ */
+function renderNightTimeline(box, detail) {
+    const container = document.getElementById('story-timeline');
+    if (!container) return;
+    container.textContent = '';
+
+    const maps = Array.isArray(box?.maps) ? box.maps : [];
+    if (maps.length === 0) {
+        container.appendChild(_el('div', 'text-slate-500 text-sm py-2', 'No completed maps in this session'));
+        return;
+    }
+    const matches = Array.isArray(detail?.matches) ? detail.matches : [];
+    const alpha = stripEtColors(box.alpha_team || 'Alpha');
+    const beta = stripEtColors(box.beta_team || 'Beta');
+
+    const clockOf = (i) => {
+        const t = matches[i]?.rounds?.[0]?.round_time;
+        const s = t != null ? String(t).padStart(6, '0') : '';
+        return /^\d{6}$/.test(s) ? `${s.slice(0, 2)}:${s.slice(2, 4)}` : '';
+    };
+    const mmss = (sec) => {
+        const n = Number(sec);
+        if (!Number.isFinite(n) || n <= 0) return '';
+        return `${Math.floor(n / 60)}:${String(Math.round(n % 60)).padStart(2, '0')}`;
+    };
+
+    maps.forEach((m, i) => {
+        const a = Number(m.alpha_points) || 0;
+        const b = Number(m.beta_points) || 0;
+        const aCls = m.winner === 'alpha' ? 'text-cyan-400' : 'text-slate-400';
+        const bCls = m.winner === 'beta' ? 'text-rose-400' : 'text-slate-400';
+        const total = (Number(m.r1_time) || 0) + (Number(m.r2_time) || 0);
+
+        const rowCls = 'flex items-center gap-3 rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2';
+        const row = _el('div', rowCls);
+        row.appendChild(_el('span', 'text-[11px] text-slate-500 tabular-nums w-10 shrink-0', clockOf(i)));
+        row.appendChild(_el('span', 'text-sm text-white flex-1 truncate', m.map_name || '—'));
+        row.appendChild(_el('span', 'text-sm font-bold tabular-nums shrink-0',
+            _el('span', aCls, String(a)),
+            _el('span', 'text-slate-600', '–'),
+            _el('span', bCls, String(b))
+        ));
+        if (m.is_fullhold_draw) {
+            row.appendChild(_el('span', 'text-[10px] text-slate-500 uppercase tracking-wider shrink-0', 'fullhold'));
+        }
+        row.appendChild(_el('span', 'text-[11px] text-slate-500 tabular-nums w-12 text-right shrink-0', mmss(total)));
+        container.appendChild(row);
+    });
+
+    const legend = _el('div', 'text-[10px] text-slate-500 mt-2',
+        `Points: ${alpha} (left) – ${beta} (right)`);
+    container.appendChild(legend);
+}
+
 /** Hero headline = the result (Korak 3). Called when the BOX score lands; the
  * hero shows the session label until then. */
 function renderHeroResult(data) {
@@ -636,13 +789,18 @@ function renderHeroResult(data) {
     const alphaCls = (!decided || winner === 'alpha') ? 'text-cyan-400' : 'text-slate-400';
     const betaCls = (!decided || winner === 'beta') ? 'text-rose-400' : 'text-slate-400';
 
-    title.textContent = '';
-    title.appendChild(_el('span', alphaCls, alpha));
-    title.appendChild(_el('span', 'text-white tabular-nums', ` ${aScore} `));
-    title.appendChild(_el('span', 'text-slate-500', '–'));
-    title.appendChild(_el('span', 'text-white tabular-nums', ` ${bScore} `));
-    title.appendChild(_el('span', betaCls, beta));
-    title.dataset.hasResult = '1';
+    // The scoreline is a chip beside the arc pill, not the headline. It is a
+    // fact about two labels that get reshuffled every map; the headline belongs
+    // to the player whose night it was.
+    const chip = document.getElementById('story-hero-score');
+    if (chip) {
+        chip.textContent = '';
+        chip.appendChild(_el('span', alphaCls, alpha));
+        chip.appendChild(_el('span', 'text-white tabular-nums', ` ${aScore} `));
+        chip.appendChild(_el('span', 'text-slate-500', '–'));
+        chip.appendChild(_el('span', 'text-white tabular-nums', ` ${bScore} `));
+        chip.appendChild(_el('span', betaCls, beta));
+    }
 
     if (turning) {
         const sentence = _clinchSentence(data);
@@ -1036,12 +1194,27 @@ function _mapPlaysInScope() {
     return rounds / 2;
 }
 
+/**
+ * The session's players, ranked — the spine of the page.
+ *
+ * Teams are reshuffled between maps, so a team score says nothing about the
+ * night; the people do. Each player is one scannable ROW (rank, name, KIS
+ * against the leader, three supporting numbers) and everything the old card
+ * showed lives one click down. The card carried roughly twenty numbers at the
+ * same size and weight, six times over — nowhere for the eye to land.
+ *
+ * Nothing here is recomputed: the expanded half is the previous card body,
+ * moved verbatim, including the slots that later requests fill in by
+ * `data-narrative-for` / `data-movement-for` (they resolve against the DOM,
+ * which exists whether or not the row is open).
+ */
 function renderPlayerCards(players) {
     const container = document.getElementById('story-players');
     if (!container) return;
     container.textContent = '';
 
     const mapPlays = _mapPlaysInScope();
+    const topKis = Math.max(...players.map(p => Number(p.total_kis) || 0), 0);
     players.forEach((p, idx) => {
         const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
@@ -1053,28 +1226,49 @@ function renderPlayerCards(players) {
         const pushBar = p.kills > 0 ? ((p.push_kills / p.kills) * 100).toFixed(0) : 0;
         const crossfireBar = p.kills > 0 ? ((p.crossfire_kills / p.kills) * 100).toFixed(0) : 0;
 
-        const card = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 p-4 group');
+        const row = _el('details', 'rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 group');
+        const card = _el('div', 'px-4 pb-5 pt-1');
 
-        // Header. `tier` is null when the scope has not resolved a round count
-        // to normalise by — the rank chip and the score then fall back to a
-        // neutral treatment instead of asserting a grade nothing supports.
+        // `tier` is null when the scope has not resolved a round count to
+        // normalise by — the rank chip then falls back to a neutral treatment
+        // instead of asserting a grade nothing supports.
         const tierCss = tier ? tier.css : 'from-slate-500 to-slate-600';
-        const headerLeft = _el('div', 'flex items-center gap-2.5',
-            _el('div', `w-7 h-7 rounded-lg bg-gradient-to-br ${tierCss} flex items-center justify-center text-xs font-black text-black/80`, String(rank)),
-            _el('div', null,
-                _el('div', 'text-sm font-semibold text-white leading-tight', stripEtColors(p.name)),
-                _el('div', 'flex items-center gap-1.5 mt-0.5',
-                    _el('span', `inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${colors.bg} ${colors.border} ${colors.text} border`, `${arch.icon} ${arch.label}`)
-                )
-            )
-        );
-        const headerRight = _el('div', 'text-right',
-            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`, (p.total_kis ?? 0).toFixed(1)),
-            tier
-                ? _el('div', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label)
-                : _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'KIS')
-        );
-        card.appendChild(_el('div', 'flex items-start justify-between mb-3', headerLeft, headerRight));
+
+        // ── the row itself: rank · name · score against the leader · three numbers
+        const kis = Number(p.total_kis) || 0;
+        const share = topKis > 0 ? Math.max(2, Math.round((kis / topKis) * 100)) : 0;
+        const bar = _el('div', 'h-1.5 rounded-full bg-slate-800 overflow-hidden w-full');
+        const fill = _el('div', `h-full rounded-full bg-gradient-to-r ${tierCss}`);
+        fill.style.width = `${share}%`;
+        bar.appendChild(fill);
+
+        const supporting = [];
+        if (p.kills != null) supporting.push(`${p.kills} kills`);
+        if (p.dpm) supporting.push(`${(p.dpm).toFixed(0)} DPM`);
+        if (p.time_dead_pct != null) supporting.push(`${(p.time_dead_pct * 100).toFixed(0)}% dead`);
+
+        const summary = _el('summary', 'flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none');
+        summary.appendChild(_el('div', `w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br ${tierCss} flex items-center justify-center text-xs font-black text-black/80`, String(rank)));
+        summary.appendChild(_el('div', 'min-w-0 flex-1',
+            _el('div', 'flex items-baseline gap-2',
+                _el('span', 'text-sm font-semibold text-white truncate', stripEtColors(p.name)),
+                tier ? _el('span', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label) : null
+            ),
+            _el('div', 'text-[10px] text-slate-500 mt-0.5', supporting.join(' · '))
+        ));
+        summary.appendChild(_el('div', 'w-24 shrink-0 hidden sm:block', bar));
+        summary.appendChild(_el('div', 'text-right shrink-0',
+            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`, kis.toFixed(1)),
+            _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'KIS')
+        ));
+        summary.appendChild(_el('span', 'text-slate-500 text-xs shrink-0 transition-transform group-open:rotate-180', '\u25BE'));
+        row.appendChild(summary);
+
+        // The archetype moves inside: it describes HOW someone played, which is
+        // detail, not identity — and it repeated six times in the old header.
+        card.appendChild(_el('div', 'flex items-center gap-1.5 mb-3',
+            _el('span', `inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${colors.bg} ${colors.border} ${colors.text} border`, `${arch.icon} ${arch.label}`)
+        ));
 
         // Micro-narrative slot — filled by renderPlayerNarratives() once
         // /storytelling/player-narratives resolves (separate, slower request).
@@ -1165,7 +1359,8 @@ function renderPlayerCards(players) {
             card.appendChild(detailsBtn);
         }
 
-        container.appendChild(card);
+        row.appendChild(card);
+        container.appendChild(row);
     });
 
     bindKisDetailsHandler(container);
@@ -1173,33 +1368,43 @@ function renderPlayerCards(players) {
 
 // ── Per-map split (Korak 4a) ────────────────────────────────────
 //
-// Source: GET /stats/session/<gsid>/detail -> `team_matrix`, which already
-// carries a per-player, per-map cell grid. Nothing new is computed here.
-// Two properties of that payload drive the code below:
-//   * it is ~42 KB and triggers stopwatch scoring -> fetch once per session,
-//     on the first click, shared by every card;
-//   * it depends on the session having resolvable teams -> it can come back
-//     {available: false, reason: ...}, which the UI must state plainly
-//     instead of rendering an empty box.
+// Source: GET /stats/session/<gsid>/detail, which carries both the per-player
+// per-map cell grid (`team_matrix`) and the match list the timeline reads for
+// wall-clock start times. Nothing new is computed here.
+//
+// This used to be fetched ONLY on the first fold click, because six cards each
+// firing it would have been six copies of an expensive payload. It is now
+// requested once with the page, for the timeline. Measured on dev before making
+// that call: 48 KB in ~185 ms, once per session, shared by every consumer —
+// and it warms the per-map folds, so the first click is instant instead of
+// paying the round trip. It stays a single shared promise; what changed is when
+// it starts, not how many times it runs.
+//
+// It depends on the session having resolvable teams, so it can come back
+// {available: false, reason: ...}, which the UI must state plainly instead of
+// rendering an empty box.
 
-let _matrixCache = { gsid: null, promise: null };
+let _detailCache = { gsid: null, promise: null };
 
-function _fetchSessionMatrix() {
+function _fetchSessionDetail() {
     const gsid = storyState.gamingSessionId;
     if (gsid == null) return Promise.resolve(null);
-    if (_matrixCache.gsid !== gsid || !_matrixCache.promise) {
+    if (_detailCache.gsid !== gsid || !_detailCache.promise) {
         const promise = fetchJSON(`${API_BASE}/stats/session/${encodeURIComponent(gsid)}/detail`)
-            .then(d => d?.team_matrix ?? null)
             .catch(() => {
                 // A FAILED request must not be cached, or one dropped
                 // connection would leave every card on the page permanently
                 // stuck on "could not be loaded" with no way to retry.
-                if (_matrixCache.promise === promise) _matrixCache = { gsid: null, promise: null };
+                if (_detailCache.promise === promise) _detailCache = { gsid: null, promise: null };
                 return null;
             });
-        _matrixCache = { gsid, promise };
+        _detailCache = { gsid, promise };
     }
-    return _matrixCache.promise;
+    return _detailCache.promise;
+}
+
+function _fetchSessionMatrix() {
+    return _fetchSessionDetail().then(d => d?.team_matrix ?? null);
 }
 
 const MATRIX_UNAVAILABLE_REASON = {
@@ -1454,6 +1659,12 @@ function renderPlayerNarratives(data) {
 }
 
 function renderKISBreakdown(players) {
+    if (Array.isArray(players) && players.length) {
+        const kills = players.reduce((n, p) => n + (Number(p.kills) || 0), 0);
+        const avg = players.reduce((n, p) => n + (Number(p.avg_impact) || 0), 0) / players.length;
+        _setFoldHint('Impact detail', `${kills} tracked kills · avg impact ${avg.toFixed(2)}`);
+    }
+
     const container = document.getElementById('story-kis-breakdown');
     if (!container) return;
     container.textContent = '';
@@ -1646,7 +1857,7 @@ function _bestLifeCard(life) {
     const kills = Number(life?.kills) || 0;
     if (!name || kills <= 0) return null;
 
-    const card = _el('div', 'flex-shrink-0 w-56 rounded-xl border border-amber-400/40 bg-amber-500/15 p-4 ring-1 ring-amber-400/40');
+    const card = _el('div', 'w-full rounded-xl border border-amber-400/40 bg-amber-500/15 p-4 ring-1 ring-amber-400/40');
 
     const topRow = _el('div', 'flex items-center justify-between mb-2');
     topRow.appendChild(_el('span', 'text-lg', '\u{1F3C5}'));
@@ -1674,9 +1885,13 @@ function _bestLifeCard(life) {
     return card;
 }
 
+/** How many moments stay open before the rest fold away. */
+const _MOMENTS_SHOWN = 4;
+
 function renderMoments(data, livesData) {
     const container = document.getElementById('story-moments');
     if (!container) return;
+    const overflow = document.createDocumentFragment();
 
     const moments = Array.isArray(data?.moments) ? data.moments : [];
     const lives = Array.isArray(livesData?.lives) ? livesData.lives : [];
@@ -1701,8 +1916,10 @@ function renderMoments(data, livesData) {
         const timeLabel = m.time_formatted || '';
         const delay = idx * 80;
 
-        const cardWidth = (m.kills && m.kills.length > 0) ? 'w-72' : 'w-56';
-        const card = _el('div', `flex-shrink-0 ${cardWidth} rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3`);
+        // Full width, stacked: the old fixed-width cards in an overflow-x
+        // strip cut the fifth moment in half at 1440 px and truncated every
+        // description mid-sentence.
+        const card = _el('div', `w-full rounded-xl border ${mt.border} ${mt.bg} p-4 opacity-0 translate-y-3`);
         card.style.animation = `momentFadeUp 0.4s ease-out ${delay}ms forwards`;
 
         // Top row: icon + stars + time
@@ -1763,8 +1980,22 @@ function renderMoments(data, livesData) {
             card.appendChild(breakdown);
         }
 
-        container.appendChild(card);
+        // Stacking every moment full-width made the page 4,084 px tall — the
+        // horizontal strip cut them off, this buried everything under them.
+        // The first few are the story; the rest are there for whoever wants
+        // them, one click away.
+        (idx < _MOMENTS_SHOWN ? container : overflow).appendChild(card);
     });
+
+    if (overflow.children.length > 0) {
+        const fold = _el('details', 'rounded-xl border border-white/[0.06] bg-white/[0.02]');
+        const label = `Show ${overflow.children.length} more moment${overflow.children.length === 1 ? '' : 's'}`;
+        fold.appendChild(_el('summary', 'cursor-pointer list-none select-none px-4 py-2 text-xs font-bold text-slate-400 hover:text-white', label));
+        const body = _el('div', 'flex flex-col gap-2 p-2');
+        while (overflow.firstChild) body.appendChild(overflow.firstChild);
+        fold.appendChild(body);
+        container.appendChild(fold);
+    }
 }
 
 const SYNERGY_AXES = [
@@ -1781,6 +2012,19 @@ const GROUP_STYLES = {
 };
 
 function renderTeamSynergy(data) {
+    // `groups` is an object keyed group_a / group_b, each a side with its own
+    // `players` list and cohesion score — not a list of pairings, which is why
+    // the first two guesses at this hint printed nothing.
+    const hintGroups = data?.groups && typeof data.groups === 'object' ? Object.values(data.groups) : [];
+    const sided = hintGroups.filter(g => Array.isArray(g?.players) && g.players.length);
+    if (sided.length) {
+        const best = sided.reduce((a, g) => ((g.cohesion ?? 0) > (a.cohesion ?? 0) ? g : a));
+        const cohesion = Number(best?.cohesion);
+        _setFoldHint('Team synergy', Number.isFinite(cohesion)
+            ? `${sided.length} sides · best cohesion ${cohesion.toFixed(0)}`
+            : `${sided.length} sides`);
+    }
+
     const container = document.getElementById('story-team-synergy');
     if (!container) return;
 
@@ -2289,6 +2533,9 @@ const COMPOSITE_METRICS = [
 ];
 
 function renderAdvancedMetrics(data) {
+    const rated = Array.isArray(data?.players) ? data.players.length : 0;
+    if (rated) _setFoldHint('Advanced metrics', `${rated} players rated`);
+
     const container = document.getElementById('story-advanced-metrics');
     if (!container) return;
     container.textContent = '';
@@ -2318,7 +2565,10 @@ function renderAdvancedMetrics(data) {
         card.appendChild(nameRow);
 
         // Metrics grid
-        const grid = _el('div', 'grid grid-cols-5 gap-2');
+        // Five columns do not fit 390 px: the row overflowed its card on a
+        // phone (caught by the responsive check, pre-existing). Wrap to three
+        // and go five-wide only when there is room.
+        const grid = _el('div', 'grid grid-cols-3 sm:grid-cols-5 gap-2');
 
         COMPOSITE_METRICS.forEach(m => {
             const value = player[m.key] ?? 0;
