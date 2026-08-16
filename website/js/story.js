@@ -306,23 +306,44 @@ async function loadStoryData() {
             _syncStoryHash();
         }
 
-        storyState.players = Array.isArray(data?.players) ? data.players : [];
+        const kisPlayers = Array.isArray(data?.players) ? data.players : [];
         // Session's REAL total kills (backend now sends the player_comprehensive_stats
         // count, not the KIS-tracked subset the per-player rows carry).
         storyState.totalKills = Number.isFinite(data?.total_kills) ? data.total_kills : null;
 
+        // The ranking is built on WIN CONTRIBUTION, not Kill Impact.
+        //
+        // In stopwatch the map is won by finishing the objective faster; kills
+        // are the means, not the end. PWC is anchored to that — it asks how much
+        // a player contributed to the rounds their team won — and it is 72 % PCS
+        // plus 28 % proximity, so it survives a night where the proximity
+        // tracker did not. KIS is 100 % proximity: on production, session 138
+        // has 1,396 kills and not one score, and this page used to render
+        // nothing at all for it.
+        //
+        // They are not two views of one thing: across nine sessions they named
+        // a different top player four times. Both are shown, and KIS keeps its
+        // own column — see _mergePlayerMetrics.
+        const q = _storyScopeQuery();
+        const pwcData = await fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`)
+            .catch(() => null);
+        if (loadId !== storyLoadId) return;
+
+        storyState.pwc = pwcData;
+        storyState.players = _mergePlayerMetrics(pwcData, kisPlayers);
+
         if (storyState.players.length === 0) {
-            renderEmpty('No kill impact data for this session');
+            renderEmpty('No player data for this session');
             return;
         }
 
         renderStoryHero(storyState.sessionDateLabel || storyState.sessionDate, storyState.players);
         renderPlayerCards(storyState.players);
-        renderKISBreakdown(storyState.players);
+        renderKISBreakdown(kisPlayers);
+        _loadCoverageNote(loadId);
 
-        // gsid-native query for every panel (SS-C). skill/composite is now
-        // converted too (accepts gaming_session_id), so all panels share `q`.
-        const q = _storyScopeQuery();
+        // `q` (gsid-native scope query, SS-C) is built above — every panel
+        // below shares it, including skill/composite which now accepts a gsid.
 
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking).
         // Every failure path re-checks `loadId` exactly like its success path:
@@ -546,6 +567,100 @@ function _sessionIdentityLine(sessionDate, playerCount) {
 }
 
 /**
+ * One row per player, carrying both metrics and the honest kill count.
+ *
+ * Ranked by PWC (contribution to rounds won) because that is what decides a
+ * stopwatch map; KIS rides along as a second column. Where a player appears in
+ * only one of the two, they still get a row — dropping them would silently
+ * shrink the night.
+ *
+ * `kills` comes from PWC's per-round breakdown, which carries the real PCS
+ * count. The kill-impact payload's `kills` is the proximity-TRACKED subset and
+ * is kept under `tracked_kills`: on a session with partial coverage the two
+ * differ by an order of magnitude, and the row used to print the small one
+ * under the word "kills" next to a full-session DPM.
+ */
+function _mergePlayerMetrics(pwcData, kisPlayers) {
+    const byGuid = new Map();
+    const key = (g) => String(g || '').slice(0, 8).toUpperCase();
+
+    for (const p of (pwcData?.players || [])) {
+        const rounds = Array.isArray(p.per_round) ? p.per_round : [];
+        byGuid.set(key(p.guid), {
+            guid: p.guid,
+            name: p.name,
+            total_pwc: Number(p.total_pwc) || 0,
+            rounds_won: p.rounds_won,
+            total_rounds: p.total_rounds,
+            kills: rounds.reduce((n, r) => n + (Number(r.kills) || 0), 0),
+        });
+    }
+
+    for (const k of (kisPlayers || [])) {
+        const id = key(k.guid);
+        const row = byGuid.get(id) || { guid: k.guid, name: k.name, total_pwc: null };
+        // Everything the expanded card already renders stays exactly as it was.
+        Object.assign(row, k, {
+            tracked_kills: k.kills,
+            kills: row.kills != null ? row.kills : k.kills,
+            name: row.name || k.name,
+            total_pwc: row.total_pwc,
+            rounds_won: row.rounds_won,
+            total_rounds: row.total_rounds,
+        });
+        byGuid.set(id, row);
+    }
+
+    return [...byGuid.values()].sort((a, b) => {
+        const d = (b.total_pwc ?? -1) - (a.total_pwc ?? -1);
+        return d !== 0 ? d : (b.total_kis ?? 0) - (a.total_kis ?? 0);
+    });
+}
+
+/**
+ * Say what share of the night the scores actually describe.
+ *
+ * The backend has computed this all along — `/diagnostics/storytelling-
+ * completeness` returns a status, a ratio and a plain-language warning — and the
+ * page never asked for it. A session scored on 6 % of its kills rendered exactly
+ * like one scored on 100 %.
+ */
+async function _loadCoverageNote(loadId) {
+    const slot = document.getElementById('story-coverage');
+    if (!slot) return;
+    slot.textContent = '';
+    slot.style.display = 'none';
+
+    const day = storyState.sessionDate;
+    if (!day) return;
+    const info = await fetchJSON(
+        `${API_BASE}/diagnostics/storytelling-completeness?session_date=${encodeURIComponent(day)}`
+    ).catch(() => null);
+    if (!info || loadId !== storyLoadId) return;
+
+    const ratio = Number(info.completeness_ratio);
+    if (!Number.isFinite(ratio) || ratio >= 0.995) return;   // nothing to warn about
+
+    const scored = Number(info.kis_rows) || 0;
+    const total = Number(info.kills_total) || 0;
+    slot.textContent = '';
+    slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this day: '));
+    slot.appendChild(_el('span', null,
+        `${scored.toLocaleString()} of ${total.toLocaleString()} kills scored (${Math.round(ratio * 100)} %). `
+        + 'Win contribution is unaffected — it is computed from the match stats.'));
+    slot.style.display = '';
+
+    // Qualify the hero's "Total KIS" in place — it is the sum over the scored
+    // share, not over the night.
+    const kisStat = document.querySelector('#story-stats-row [data-kis-total]');
+    const label = kisStat && kisStat.firstElementChild;
+    if (label && !label.dataset.qualified) {
+        label.textContent = `Total KIS (${Math.round(ratio * 100)}% scored)`;
+        label.dataset.qualified = '1';
+    }
+}
+
+/**
  * "Whose night was it?" — the hero headline.
  *
  * The verb is chosen from the actual gap to the runner-up, so a runaway night
@@ -557,8 +672,13 @@ function _renderNightHeadline(title, players) {
     const top = players?.[0];
     if (!top) { title.textContent = 'No players in this session'; return; }
 
-    const best = Number(top.total_kis) || 0;
-    const second = Number(players[1]?.total_kis) || 0;
+    // Ranked on contribution to rounds won, so the headline is about the same
+    // thing the list below is. Falls back to Kill Impact only when a session has
+    // no win contribution at all, and says which one it used either way.
+    const usePwc = Number.isFinite(Number(top.total_pwc));
+    const value = (p) => Number(usePwc ? p?.total_pwc : p?.total_kis) || 0;
+    const best = value(top);
+    const second = value(players[1]);
     const lead = (best > 0 && second > 0) ? (best - second) / second : null;
 
     let verb = 'led the night';
@@ -571,10 +691,18 @@ function _renderNightHeadline(title, players) {
     const detail = document.getElementById('story-hero-lead');
     if (detail) {
         detail.textContent = '';
-        detail.appendChild(_el('span', 'text-slate-300', `${best.toFixed(0)} KIS`));
+        detail.appendChild(_el('span', 'text-slate-300',
+            usePwc ? `${best.toFixed(2)} win contribution` : `${best.toFixed(0)} kill impact`));
         if (lead != null && players[1]) {
             detail.appendChild(_el('span', 'text-slate-500',
                 ` · ${(lead * 100).toFixed(0)}% clear of ${stripEtColors(players[1].name)}`));
+        }
+        // When the two metrics disagree, that IS the story: fragging hard on a
+        // losing side reads very differently from riding a winning one.
+        const kisTop = [...players].sort((a, b) => (Number(b.total_kis) || 0) - (Number(a.total_kis) || 0))[0];
+        if (usePwc && kisTop && kisTop !== top && (Number(kisTop.total_kis) || 0) > 0) {
+            detail.appendChild(_el('span', 'text-slate-500',
+                ` · hardest-hitting kills: ${stripEtColors(kisTop.name)}`));
         }
     }
 }
@@ -610,7 +738,12 @@ function renderStoryHero(sessionDate, players) {
             _el('span', 'text-xs text-slate-500 uppercase tracking-wider', label),
             _el('span', `text-lg font-bold ${cls}`, value)
         );
-        statsRow.appendChild(stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400'));
+        const kisStat = stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400');
+        // Marked so the coverage check can qualify it: this sum is over whatever
+        // share of the night was actually scored, and it sits one slot away from
+        // KILLS, which is the whole session. Two populations, one strip.
+        kisStat.dataset.kisTotal = '1';
+        statsRow.appendChild(kisStat);
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
         // Not MVP: the headline above already names them, and a stat strip that
@@ -1214,7 +1347,7 @@ function renderPlayerCards(players) {
     container.textContent = '';
 
     const mapPlays = _mapPlaysInScope();
-    const topKis = Math.max(...players.map(p => Number(p.total_kis) || 0), 0);
+    const topPwc = Math.max(...players.map(p => Number(p.total_pwc) || 0), 0);
     players.forEach((p, idx) => {
         const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
@@ -1232,34 +1365,56 @@ function renderPlayerCards(players) {
         // `tier` is null when the scope has not resolved a round count to
         // normalise by — the rank chip then falls back to a neutral treatment
         // instead of asserting a grade nothing supports.
+        // The rank chip is neutral: the list is ordered by contribution, while the
+        // tier grades kill impact. Colouring the rank by the tier made the chip
+        // claim something the ordering does not.
         const tierCss = tier ? tier.css : 'from-slate-500 to-slate-600';
+        const rankCss = 'from-slate-600 to-slate-700';
 
-        // ── the row itself: rank · name · score against the leader · three numbers
+        // ── the row: rank · name · what they contributed · what their kills were worth
         const kis = Number(p.total_kis) || 0;
-        const share = topKis > 0 ? Math.max(2, Math.round((kis / topKis) * 100)) : 0;
+        const pwc = Number(p.total_pwc);
+        const hasPwc = Number.isFinite(pwc);
+        const share = (hasPwc && topPwc > 0) ? Math.max(2, Math.round((pwc / topPwc) * 100)) : 0;
         const bar = _el('div', 'h-1.5 rounded-full bg-slate-800 overflow-hidden w-full');
         const fill = _el('div', `h-full rounded-full bg-gradient-to-r ${tierCss}`);
         fill.style.width = `${share}%`;
         bar.appendChild(fill);
 
         const supporting = [];
+        // p.kills is the real PCS count (from PWC's per-round breakdown), not
+        // the proximity-tracked subset — those differ by 8x on a session with
+        // partial coverage, and this line sits next to a full-session DPM.
         if (p.kills != null) supporting.push(`${p.kills} kills`);
         if (p.dpm) supporting.push(`${(p.dpm).toFixed(0)} DPM`);
-        if (p.time_dead_pct != null) supporting.push(`${(p.time_dead_pct * 100).toFixed(0)}% dead`);
+        if (p.rounds_won != null && p.total_rounds) {
+            supporting.push(`${p.rounds_won}/${p.total_rounds} rounds won`);
+        } else if (p.time_dead_pct != null) {
+            supporting.push(`${(p.time_dead_pct * 100).toFixed(0)}% dead`);
+        }
 
         const summary = _el('summary', 'flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none');
-        summary.appendChild(_el('div', `w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br ${tierCss} flex items-center justify-center text-xs font-black text-black/80`, String(rank)));
+        summary.appendChild(_el('div', `w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br ${rankCss} flex items-center justify-center text-xs font-black text-white`, String(rank)));
         summary.appendChild(_el('div', 'min-w-0 flex-1',
             _el('div', 'flex items-baseline gap-2',
-                _el('span', 'text-sm font-semibold text-white truncate', stripEtColors(p.name)),
-                tier ? _el('span', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label) : null
+                _el('span', 'text-sm font-semibold text-white truncate', stripEtColors(p.name))
             ),
             _el('div', 'text-[10px] text-slate-500 mt-0.5', supporting.join(' · '))
         ));
         summary.appendChild(_el('div', 'w-24 shrink-0 hidden sm:block', bar));
+        // Two numbers, two questions: what the night's rounds owed them (PWC),
+        // and what their kills were worth when they came (KIS). They disagree
+        // often enough to be worth showing side by side.
         summary.appendChild(_el('div', 'text-right shrink-0',
-            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`, kis.toFixed(1)),
-            _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'KIS')
+            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`,
+                hasPwc ? pwc.toFixed(2) : '—'),
+            _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'contribution')
+        ));
+        summary.appendChild(_el('div', 'text-right shrink-0 w-16 hidden sm:block',
+            _el('div', `text-sm font-bold tabular-nums ${tier && kis > 0 ? tier.textCss : 'text-slate-300'}`,
+                kis > 0 ? kis.toFixed(0) : '—'),
+            _el('div', 'text-[10px] text-slate-500 uppercase tracking-wider',
+                tier && kis > 0 ? tier.label.toLowerCase() : 'kill impact')
         ));
         summary.appendChild(_el('span', 'text-slate-500 text-xs shrink-0 transition-transform group-open:rotate-180', '\u25BE'));
         row.appendChild(summary);
