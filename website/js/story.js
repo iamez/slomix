@@ -644,10 +644,20 @@ async function _loadCoverageNote(loadId) {
     const scored = Number(info.kis_rows) || 0;
     const total = Number(info.kills_total) || 0;
     slot.textContent = '';
-    slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this day: '));
-    slot.appendChild(_el('span', null,
-        `${scored.toLocaleString()} of ${total.toLocaleString()} kills scored (${Math.round(ratio * 100)} %). `
-        + 'Win contribution is unaffected — it is computed from the match stats.'));
+    if (total === 0) {
+        // Not "0 of 0 scored (0 %)", which reads as a failure. The proximity
+        // tracker only started producing data in March 2026; every session
+        // before that has no kill-level detail to score and never will.
+        slot.appendChild(_el('span', 'font-bold', 'No Kill Impact for this session: '));
+        slot.appendChild(_el('span', null,
+            'there is no kill-level tracking data for this day. '
+            + 'The ranking below is win contribution, computed from the match stats.'));
+    } else {
+        slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this day: '));
+        slot.appendChild(_el('span', null,
+            `${scored.toLocaleString()} of ${total.toLocaleString()} kills scored (${Math.round(ratio * 100)} %). `
+            + 'Win contribution is unaffected — it is computed from the match stats.'));
+    }
     slot.style.display = '';
 
     // Qualify the hero's "Total KIS" in place — it is the sum over the scored
@@ -691,11 +701,18 @@ function _renderNightHeadline(title, players) {
     const detail = document.getElementById('story-hero-lead');
     if (detail) {
         detail.textContent = '';
+        // Two players separated by 0.002 both print "4.76" at two decimals, so a
+        // real gap reads as a tie. Add a digit only when the rounding hides it.
+        const digits = (usePwc && second > 0 && best.toFixed(2) === second.toFixed(2)) ? 3 : 2;
         detail.appendChild(_el('span', 'text-slate-300',
-            usePwc ? `${best.toFixed(2)} win contribution` : `${best.toFixed(0)} kill impact`));
+            usePwc ? `${best.toFixed(digits)} win contribution` : `${best.toFixed(0)} kill impact`));
         if (lead != null && players[1]) {
+            const pct = lead * 100;
+            // "0% clear of X" is not a margin, it is a tie with extra words.
             detail.appendChild(_el('span', 'text-slate-500',
-                ` · ${(lead * 100).toFixed(0)}% clear of ${stripEtColors(players[1].name)}`));
+                pct < 0.5
+                    ? ` · level with ${stripEtColors(players[1].name)}`
+                    : ` · ${pct.toFixed(0)}% clear of ${stripEtColors(players[1].name)}`));
         }
         // When the two metrics disagree, that IS the story: fragging hard on a
         // losing side reads very differently from riding a winning one.

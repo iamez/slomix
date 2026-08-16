@@ -136,9 +136,20 @@ def test_the_gap_query_uses_the_canonical_round_key():
 
 
 @pytest.mark.parametrize("attr,minimum", [
-    ("_KIS_RECONCILE_LOOKBACK_DAYS", 1),
     ("_KIS_RECONCILE_MAX_PER_PASS", 1),
     ("_KIS_RECONCILE_MAX_ATTEMPTS", 1),
 ])
 def test_the_knobs_are_sane(attr, minimum):
     assert getattr(_MonitorTasksMixin, attr) >= minimum
+
+
+def test_the_detector_looks_at_all_of_history():
+    """A lookback window was the first version of this, and production has gaps
+    119 and 143 days old that it would never have reached. The per-pass cap is
+    what bounds the work; the query is 51 ms over everything."""
+    import inspect
+
+    src = inspect.getsource(_MonitorTasksMixin._find_kis_coverage_gaps)
+
+    assert "CURRENT_DATE" not in src
+    assert not hasattr(_MonitorTasksMixin, "_KIS_RECONCILE_LOOKBACK_DAYS")

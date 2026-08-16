@@ -630,7 +630,11 @@ class _MonitorTasksMixin:
     # and triggers the SAME internal compute the warm does. No scoring logic
     # lives here. It both prevents new gaps and heals old ones, so history
     # needs no hand-repair.
-    _KIS_RECONCILE_LOOKBACK_DAYS = 90
+    # No lookback window. A 90-day one looked prudent and cost nothing but
+    # coverage: production has gaps at 119 and 143 days old (sessions 112 and
+    # 103) that it would never have healed. The whole-history query costs 51 ms
+    # against 57 ms for the windowed one — the window bought nothing — and the
+    # per-pass cap below is what actually bounds the work.
     _KIS_RECONCILE_MAX_PER_PASS = 3
     _KIS_RECONCILE_MAX_ATTEMPTS = 3
 
@@ -689,8 +693,8 @@ class _MonitorTasksMixin:
 
         Aggregates each side by canonical round key ONCE and joins, rather than
         running a correlated subquery per round: measured 5,325 ms the naive way
-        against 57 ms this way over a 90-day window, which is the difference
-        between a loop that is free and one that is not.
+        against 51 ms this way over ALL history, which is the difference between
+        a loop that is free and one that is not.
 
         The canonical key (round_start_unix, map_name, round_number) is the same
         one the compute filters by, so a gap here is exactly a gap there.
@@ -703,7 +707,6 @@ class _MonitorTasksMixin:
                 FROM rounds
                 WHERE gaming_session_id IS NOT NULL AND is_valid AND round_number > 0
                   AND is_bot_round IS DISTINCT FROM TRUE AND round_start_unix IS NOT NULL
-                  AND round_date::date >= CURRENT_DATE - $1::int
             ), prox AS (
                 SELECT ko.round_start_unix AS rsu, ko.map_name, ko.round_number AS rn,
                        COUNT(*) AS n
@@ -729,8 +732,7 @@ class _MonitorTasksMixin:
             HAVING SUM(COALESCE(p.n, 0)) > 0
                AND SUM(COALESCE(kk.n, 0)) < SUM(COALESCE(p.n, 0))
             ORDER BY s.gsid DESC
-            """,
-            (self._KIS_RECONCILE_LOOKBACK_DAYS,),
+            """
         )
         return [(int(r[0]), str(r[1]), int(r[2]), int(r[3])) for r in (rows or [])]
 
