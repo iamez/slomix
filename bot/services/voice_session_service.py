@@ -428,8 +428,12 @@ class VoiceSessionService:
             # leaving the cache empty with nothing to refill it (Codex #546).
             session_gsids = await self._session_gsids(session_ids)
             session_dates = await self._session_dates_touched(session_ids)
+            # _safe_create_task, not asyncio.create_task: a bare task drops its
+            # exception on the floor, so a failed KIS refresh left the session
+            # scoreless AND silent. The bot's reconcile loop is the net that
+            # catches it afterwards, but the log line is what says why.
             for sd in (session_dates or [start_date or str(latest_date)]):
-                asyncio.create_task(
+                self._background_task(
                     self._invalidate_kis_cache(sd, gsids=session_gsids),
                     name="kis-cache-invalidate",
                 )
@@ -479,7 +483,7 @@ class VoiceSessionService:
             # scoped to the session START date (midnight-safe — the endpoint
             # ranks sessions by MIN(round_date)), and fired as a background
             # task so a slow/unreachable website can never hold teardown.
-            asyncio.create_task(
+            self._background_task(
                 self._persist_s_effort(start_date or str(latest_date)),
                 name="s-effort-persist",
             )
@@ -582,12 +586,42 @@ class VoiceSessionService:
         # contract raises when one calendar date holds two sessions.
         if gsids:
             for gsid in gsids:
-                await self._warm_kis_cache(session_date, gaming_session_id=gsid)
+                await self.warm_kis_cache(session_date, gaming_session_id=gsid)
         else:
-            await self._warm_kis_cache(session_date)
+            await self.warm_kis_cache(session_date)
 
-    async def _warm_kis_cache(self, session_date: str, gaming_session_id: int | None = None) -> None:
-        """Proactively trigger a fresh KIS compute right after invalidation
+
+    def _background_task(self, coro, *, name=None):
+        """Fire-and-forget, but never silent.
+
+        The bot carries `_safe_create_task`, which attaches a done-callback that
+        logs an unhandled exception instead of letting it vanish. Use it when
+        available and fall back to a local equivalent, so this service still
+        works when constructed with a stub bot in tests.
+        """
+        safe = getattr(self.bot, "_safe_create_task", None)
+        if callable(safe):
+            return safe(coro, name=name)
+
+        task = asyncio.create_task(coro, name=name)
+
+        def _log_failure(t):
+            if t.cancelled():
+                return
+            exc = t.exception()
+            if exc:
+                logger.error("Unhandled exception in background task %s: %s",
+                             t.get_name(), exc, exc_info=exc)
+
+        task.add_done_callback(_log_failure)
+        return task
+
+    async def warm_kis_cache(self, session_date: str, gaming_session_id: int | None = None) -> None:
+        """Trigger a KIS compute for one session. PUBLIC: two callers need it —
+        the voice-session end path below, and the bot's KIS coverage reconcile
+        loop, which is the safety net for every way this trigger can be missed.
+
+        Proactively trigger a fresh KIS compute right after invalidation
         (see _invalidate_kis_cache for why). Mirrors
         session_digest_service.py's _fetch_kis_top call pattern.
         Best-effort; must never raise."""

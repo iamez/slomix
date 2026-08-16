@@ -799,6 +799,11 @@ class UltimateETLegacyBot(
             self.cache_refresher.start()
         if not self.live_status_updater.is_running():
             self.live_status_updater.start()
+        # Safety net for KIS: the compute is otherwise triggered only when a
+        # voice session ends, and every way that can be missed leaves a session
+        # scoreless forever (three such sessions existed on production).
+        if not self.kis_coverage_reconcile.is_running():
+            self.kis_coverage_reconcile.start()
         if self.config.idle_watchdog_enabled and not self.idle_restart_watchdog.is_running():
             self.idle_restart_watchdog.start()
             logger.info(
