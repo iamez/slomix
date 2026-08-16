@@ -303,3 +303,81 @@ def test_without_session_context_the_original_absolute_floors_apply():
     assert _classify(_stats(carrier_kills=3)) == "objective_specialist"
     assert _classify(_stats(carrier_returns=2)) == "objective_specialist"
     assert _classify(_stats(carrier_kills=2)) != "objective_specialist"
+
+
+# ---------------------------------------------------------------------------
+# The response's page size must not change anyone's archetype
+#
+# `get_kis_leaderboard` cut its SQL off at `limit`, and classify_players derives
+# every session average from exactly the rows it is handed. So the averages —
+# and with them the relative thresholds — were a function of how many rows the
+# CALLER asked for: narrative.py asks for 50, the /kis endpoint for 20. Same
+# night, same player, two different labels.
+# ---------------------------------------------------------------------------
+
+
+class _LeaderboardFakeDB:
+    """Returns a KIS board of `n` players and nothing for the enrichment queries."""
+
+    def __init__(self, n):
+        self.n = n
+        self.queries = []
+
+    async def fetch_all(self, query, params=()):
+        q = " ".join(str(query).split())
+        self.queries.append(q)
+        if "FROM storytelling_kill_impact" in q:
+            return [
+                (f"guid{i:032d}", f"player{i}", 100 - i, 20, 6 - (i // 2), 3, 2, 1.5, 0, 0, 0, 0)
+                for i in range(self.n)
+            ]
+        return []
+
+
+class _FakeScope:
+    gaming_session_id = 138
+    dates = ("2026-07-21",)
+
+    def round_key_arrays(self):
+        return ([1_700_000_000], ["supply"], [1])
+
+    def round_key_filter_sql(self, start):
+        return f"(round_start_unix, map_name, round_number) IN (SELECT * FROM unnest(${start}))"
+
+
+async def test_the_page_size_does_not_reach_the_averages():
+    """Ten players in, two rows out — but the classifier saw all ten."""
+    seen = {}
+
+    class Svc(StorytellingService):
+        def __init__(self, db):
+            self.db = db
+
+        async def classify_players(self, scope, kis_entries):
+            seen["count"] = len(kis_entries)
+            return {}, {}
+
+    svc = Svc(_LeaderboardFakeDB(10))
+
+    board = await svc.get_kis_leaderboard(_FakeScope(), limit=2)
+
+    assert len(board) == 2, "the caller still gets the page it asked for"
+    assert seen["count"] == 10, "classification must see the whole session"
+
+
+async def test_the_leaderboard_sql_carries_no_limit():
+    """Trimming happens after classification; a LIMIT in the SQL would put it
+    before, which is the bug."""
+    svc_db = _LeaderboardFakeDB(3)
+
+    class Svc(StorytellingService):
+        def __init__(self, db):
+            self.db = db
+
+        async def classify_players(self, scope, kis_entries):
+            return {}, {}
+
+    await Svc(svc_db).get_kis_leaderboard(_FakeScope(), limit=1)
+
+    kis_query = next(q for q in svc_db.queries if "FROM storytelling_kill_impact" in q)
+    assert "LIMIT" not in kis_query

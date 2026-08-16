@@ -656,6 +656,10 @@ class _MonitorTasksMixin:
         if attempts is None:
             attempts = {}
             self._kis_reconcile_attempts = attempts
+        abandoned = getattr(self, "_kis_reconcile_abandoned", None)
+        if abandoned is None:
+            abandoned = set()
+            self._kis_reconcile_abandoned = abandoned
 
         healed = 0
         for gsid, first_date, prox_kills, kis_rows in gaps:
@@ -663,6 +667,18 @@ class _MonitorTasksMixin:
                 break
             tries = attempts.get(gsid, 0)
             if tries >= self._KIS_RECONCILE_MAX_ATTEMPTS:
+                # Getting here means a LATER pass still found this session
+                # short — the last recompute did not close the gap, which is
+                # what makes the warning true. Warning right after firing the
+                # final attempt would have claimed failure before the result
+                # was known.
+                if gsid not in abandoned:
+                    abandoned.add(gsid)
+                    logger.warning(
+                        "[KIS-RECONCILE] session %s still short (%d scores for %d kills) after "
+                        "%d attempts — giving up, investigate rather than retrying forever",
+                        gsid, kis_rows, prox_kills, self._KIS_RECONCILE_MAX_ATTEMPTS,
+                    )
                 continue
             attempts[gsid] = tries + 1
             logger.info(
@@ -676,12 +692,6 @@ class _MonitorTasksMixin:
                 healed += 1
             except Exception:
                 logger.error("[KIS-RECONCILE] recompute failed for session %s", gsid, exc_info=True)
-            if tries + 1 == self._KIS_RECONCILE_MAX_ATTEMPTS:
-                logger.warning(
-                    "[KIS-RECONCILE] session %s still short after %d attempts — giving up, "
-                    "investigate rather than retrying forever",
-                    gsid, self._KIS_RECONCILE_MAX_ATTEMPTS,
-                )
 
     @kis_coverage_reconcile.before_loop
     async def before_kis_coverage_reconcile(self):

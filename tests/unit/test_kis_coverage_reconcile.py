@@ -97,6 +97,26 @@ async def test_a_hopeless_session_is_eventually_left_alone():
     assert len(bot.voice_session_service.calls) == _MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS
 
 
+async def test_giving_up_is_announced_once_and_only_after_a_later_pass_confirms_it(caplog):
+    """The warning claims the session is STILL short. Firing it in the same pass
+    as the last attempt would say that before the recompute's result was known —
+    the gap query has to disagree once more first. And it must be said once, not
+    every 15 minutes forever."""
+    bot = Bot([(138, "2026-07-21", 1396, 0)])
+
+    with caplog.at_level("WARNING"):
+        for _ in range(_MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS):
+            await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+        assert [r for r in caplog.records if "giving up" in r.getMessage()] == []
+
+        for _ in range(3):
+            await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+
+    giving_up = [r for r in caplog.records if "giving up" in r.getMessage()]
+    assert len(giving_up) == 1
+    assert "138" in giving_up[0].getMessage()
+
+
 async def test_a_failing_recompute_does_not_kill_the_loop():
     """The website being down must not stop the other sessions being tried, and
     must not raise out of a discord.ext task (which would stop the loop)."""

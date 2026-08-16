@@ -482,9 +482,26 @@ function _resetHero(titleText) {
         delete title.dataset.hasResult;
     }
     for (const id of ['story-subtitle', 'story-stats-row', 'story-hero-arc',
-                      'story-hero-turning', 'story-hero-freshness']) {
+                      'story-hero-turning', 'story-hero-freshness',
+                      // The lead line and the team-score chip are filled by
+                      // LATER responses than the ones that reset the hero, so
+                      // leaving them out meant the previous session's margin
+                      // ("2.14 win contribution, 8% clear of X") and score sat
+                      // under the new session's headline until those responses
+                      // landed — or forever, if this session has no box score.
+                      'story-hero-lead', 'story-hero-score']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
+    }
+    _clearFoldHints();
+}
+
+/** Fold hints describe what is INSIDE each fold, so they belong to a session.
+ * Left behind on a switch, an unopened fold advertises the previous night's
+ * contents; emptying them restores the CSS "Show" placeholder. */
+function _clearFoldHints() {
+    for (const slot of document.querySelectorAll('#view-story .story-fold-hint')) {
+        slot.textContent = '';
     }
 }
 
@@ -554,7 +571,10 @@ function _sessionIdentityLine(sessionDate, playerCount) {
         // Saying only the second put "5 maps" in the header while the sentence
         // right underneath said "after 8 maps" — both true, read as a
         // contradiction. Name both, or say neither.
-        const plays = Math.round(rounds / 2);
+        // One helper owns the divisor: the KIS tier scale divides by the same
+        // number, and an odd round count made the two disagree when each did
+        // its own arithmetic. Round for display only.
+        const plays = Math.round(_mapPlaysInScope() ?? rounds / 2);
         const distinct = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
         if (plays > 0 && distinct > 0) {
             parts.push(`${rounds} rounds · ${plays} map play${plays === 1 ? '' : 's'} (${distinct} different)`);
@@ -738,8 +758,6 @@ function renderStoryHero(sessionDate, players) {
         ? storyState.totalKills
         : players.reduce((s, p) => s + (p.kills || 0), 0);
 
-    // The title is the RESULT slot \u2014 renderHeroResult() fills it once the BOX
-    // score lands. Until then it holds the session label, so the hero never
     // The headline answers "whose night was it?", not "what was the team score?".
     // Teams are reshuffled between maps, so the team result is a fact about two
     // temporary labels — it read as the loudest thing on the page while saying
@@ -1241,14 +1259,32 @@ async function _renderSessionMomentum(container) {
     container.appendChild(note);
 }
 
+/** Redraw momentum the first time its fold is opened.
+ *
+ * Chart.js sizes a canvas to its LAID-OUT box, and a closed <details> gives it
+ * none: a chart drawn while the fold was shut comes back zero-width when the
+ * reader opens it. The data is already in memory (`_momentumLastData`) and the
+ * session view is cached per gsid, so redrawing on open costs nothing. */
+function _bindMomentumFold(container) {
+    const fold = container.closest('details.story-fold');
+    if (!fold || fold.dataset.momentumBound) return;
+    fold.dataset.momentumBound = '1';
+    fold.addEventListener('toggle', () => {
+        if (fold.open && _momentumLastData) renderMomentum(_momentumLastData);
+    });
+}
+
 function renderMomentum(data) {
     const container = document.getElementById('story-momentum');
     if (!container) return;
     container.textContent = '';
     _momentumLastData = data;
+    _bindMomentumFold(container);
 
     const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
     if (rounds.length === 0) return;
+
+    _setFoldHint('Momentum', `${rounds.length} round${rounds.length === 1 ? '' : 's'} charted`);
 
     const headRow = _el('div', 'flex items-center justify-between mb-3 flex-wrap gap-2');
     const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase', 'Momentum');
@@ -1411,6 +1447,12 @@ function renderPlayerCards(players) {
         }
 
         const summary = _el('summary', 'flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none');
+        // Read aloud, the concatenated row is a rank digit followed by the same
+        // score twice in two formats. Name it once, properly, and hide the
+        // decorative caret from the reading order.
+        summary.setAttribute('aria-label', hasPwc
+            ? `${stripEtColors(p.name)}, rank ${rank}, ${pwc.toFixed(2)} win contribution`
+            : `${stripEtColors(p.name)}, rank ${rank}`);
         summary.appendChild(_el('div', `w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br ${rankCss} flex items-center justify-center text-xs font-black text-white`, String(rank)));
         summary.appendChild(_el('div', 'min-w-0 flex-1',
             _el('div', 'flex items-baseline gap-2',
@@ -1433,7 +1475,9 @@ function renderPlayerCards(players) {
             _el('div', 'text-[10px] text-slate-500 uppercase tracking-wider',
                 tier && kis > 0 ? tier.label.toLowerCase() : 'kill impact')
         ));
-        summary.appendChild(_el('span', 'text-slate-500 text-xs shrink-0 transition-transform group-open:rotate-180', '\u25BE'));
+        const caret = _el('span', 'text-slate-500 text-xs shrink-0 transition-transform group-open:rotate-180', '\u25BE');
+        caret.setAttribute('aria-hidden', 'true');
+        summary.appendChild(caret);
         row.appendChild(summary);
 
         // The archetype moves inside: it describes HOW someone played, which is
