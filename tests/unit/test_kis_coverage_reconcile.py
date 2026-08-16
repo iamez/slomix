@@ -117,6 +117,26 @@ async def test_giving_up_is_announced_once_and_only_after_a_later_pass_confirms_
     assert "138" in giving_up[0].getMessage()
 
 
+async def test_a_healed_session_gets_a_fresh_budget_if_it_breaks_again():
+    """Late imports are one of the reasons KIS goes missing, so a session CAN
+    develop a second gap after being scored. Carrying the old attempt count over
+    would abandon that second gap on sight, without one recompute."""
+    bot = Bot([(138, "2026-07-21", 1396, 0)])
+
+    for _ in range(_MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS + 1):
+        await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+    spent = len(bot.voice_session_service.calls)
+    assert spent == _MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS
+
+    bot.db_adapter.rows = []                    # the pass that proves it healed
+    await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+
+    bot.db_adapter.rows = [(138, "2026-07-21", 1500, 1396)]   # a late import
+    await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+
+    assert len(bot.voice_session_service.calls) == spent + 1
+
+
 async def test_a_failing_recompute_does_not_kill_the_loop():
     """The website being down must not stop the other sessions being tried, and
     must not raise out of a discord.ext task (which would stop the loop)."""

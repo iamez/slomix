@@ -646,9 +646,6 @@ class _MonitorTasksMixin:
         except Exception:
             logger.error("[KIS-RECONCILE] gap query failed", exc_info=True)
             return
-        if not gaps:
-            return
-
         # A session that cannot be healed must not be retried forever: give up
         # after a few passes and say so once, rather than logging the same
         # failure every 15 minutes until someone notices the noise.
@@ -660,6 +657,21 @@ class _MonitorTasksMixin:
         if abandoned is None:
             abandoned = set()
             self._kis_reconcile_abandoned = abandoned
+
+        # A session no longer in the gap list is scored: forget its retry count.
+        # Kept, it would outlive the problem it counted — a LATER gap in the same
+        # session (a late import adding kills to a night already scored, which is
+        # one of the ways KIS went missing in the first place) would inherit an
+        # exhausted counter and be abandoned without a single attempt. Runs
+        # before the empty-gaps return, since "no gaps at all" is exactly the
+        # pass that proves every tracked session healed.
+        live = {row[0] for row in gaps}
+        for gsid in [g for g in attempts if g not in live]:
+            del attempts[gsid]
+        abandoned.intersection_update(live)
+
+        if not gaps:
+            return
 
         healed = 0
         for gsid, first_date, prox_kills, kis_rows in gaps:
