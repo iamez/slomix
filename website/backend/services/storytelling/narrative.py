@@ -16,8 +16,10 @@ import re
 from typing import TYPE_CHECKING
 
 from .base import (
+    _safe_short,
     asyncio,
     date,
+    logger,
     strip_et_colors,
 )
 
@@ -73,10 +75,23 @@ def _format_maps_list(maps: list[str]) -> str:
 # Three variants per slot avoids same-template fatigue across back-to-back
 # sessions while staying maintainable (no LLM, no per-style branches).
 
+# `{metric}` is the number the MVP was actually chosen by — "2.14 win
+# contribution" or "418 kill impact" — never a hard-coded metric name. The
+# sentence used to say "N KIS" while the pick had moved to win contribution,
+# which is the same disagreement one level down.
 _MVP_LEADS = (
-    "{name} led the leaderboard as {archetype} with {dpm} DPM (damage/min) and {kis:.0f} KIS",
-    "{name} took the top spot — {archetype} with {dpm} DPM and {kis:.0f} KIS",
-    "{name} carried the session as {archetype}, posting {dpm} DPM and {kis:.0f} KIS",
+    "{name} led the board as {archetype} with {dpm} DPM (damage/min) and {metric}",
+    "{name} took the top spot — {archetype} with {dpm} DPM and {metric}",
+    "{name} carried the session as {archetype}, posting {dpm} DPM and {metric}",
+)
+
+# Used when the MVP has no DPM to quote: a win-contribution leader whose kills
+# were never proximity-tracked has no PCS row in the archetype/stats map, and
+# "0 DPM" would read as a measurement rather than a missing one.
+_MVP_LEADS_NO_DPM = (
+    "{name} led the board as {archetype} with {metric}",
+    "{name} took the top spot — {archetype}, {metric}",
+    "{name} carried the session as {archetype} on {metric}",
 )
 
 _MEDIC_LEADS = (
@@ -363,14 +378,55 @@ class _NarrativeMixin:
         raw_maps = sorted(set(r1_maps))
         maps_played = _format_maps_list(raw_maps)
 
-        # 3. MVP (top KIS player)
-        mvp = kis_board[0]
-        mvp_name = strip_et_colors(mvp.get("name", "Unknown"))
-        mvp_archetype = (archetypes.get(mvp["guid"], "frontline_warrior")).replace("_", " ")
-        mvp_guid = mvp["guid"]
-        mvp_stats = stats.get(mvp_guid, {})
+        # 3. MVP — whoever the page's own board puts first.
+        #
+        # The board ranks by win contribution and drops back to kill impact only
+        # where PWC is missing (`_mergePlayerMetrics`, website/js/story.js:634).
+        # The recap has to name that same player: measured on dev, 4 of the last
+        # 10 sessions had a different leader under each metric (141, 138, 136,
+        # 135), so the heading and the prose named two different players for one
+        # night. `compute_win_contribution` returns `players` already sorted by
+        # total_pwc descending (win_contribution.py:337) and costs ~30 ms — the
+        # win-contribution panel further down the same page already calls it.
+        pwc_top = None
+        try:
+            pwc_players = (await self.compute_win_contribution(scope)).get("players") or []
+            pwc_top = pwc_players[0] if pwc_players else None
+        except Exception:
+            # A recap that names the KIS leader is wrong in 4 sessions out of 10;
+            # a recap that raises is wrong in all of them.
+            logger.warning(
+                "win contribution unavailable for narrative MVP (gsid=%s) — "
+                "falling back to kill impact",
+                getattr(scope, "gaming_session_id", None), exc_info=True)
+
+        # KIS and PWC come from different tables (storytelling_kill_impact vs
+        # player_comprehensive_stats), so match GUIDs the way the page does:
+        # on the 8-char short form, case-insensitively.
+        def _gk(g) -> str:
+            return str(g or "").strip()[:8].lower()
+
+        if pwc_top and float(pwc_top.get("total_pwc") or 0) > 0:
+            mvp_guid = pwc_top.get("guid") or ""
+            mvp_name = strip_et_colors(pwc_top.get("name") or _safe_short(mvp_guid))
+            mvp_metric = f"{float(pwc_top['total_pwc']):.2f} win contribution"
+            # Archetype and DPM are keyed by the KIS board's GUID; a PWC leader
+            # with no tracked kills has neither and gets the neutral default.
+            kis_entry = next(
+                (e for e in kis_board if _gk(e.get("guid")) == _gk(mvp_guid)), {})
+        else:
+            # Sessions before March 2026 have no proximity data and therefore no
+            # PWC — there the KIS board IS the board, exactly as the page shows it.
+            kis_entry = kis_board[0]
+            mvp_guid = kis_entry.get("guid") or ""
+            mvp_name = strip_et_colors(kis_entry.get("name", "Unknown"))
+            mvp_metric = f"{float(kis_entry.get('total_kis') or 0):.0f} kill impact"
+
+        stats_guid = kis_entry.get("guid") or mvp_guid
+        mvp_archetype = (
+            archetypes.get(stats_guid) or "frontline_warrior").replace("_", " ")
+        mvp_stats = stats.get(stats_guid, {})
         mvp_dpm = round(mvp_stats.get("dpm", 0))
-        mvp_kis = mvp.get("total_kis", 0)
 
         # 4. Medic anchor (most revives)
         medic_name = ""
@@ -498,8 +554,9 @@ class _NarrativeMixin:
         if session_arc:
             parts.append(" " + session_arc["sentence"] + ".")
 
-        parts.append(" " + _pick_variant(_MVP_LEADS, seed).format(
-            name=mvp_name, archetype=mvp_archetype, dpm=mvp_dpm, kis=mvp_kis,
+        mvp_templates = _MVP_LEADS if mvp_dpm > 0 else _MVP_LEADS_NO_DPM
+        parts.append(" " + _pick_variant(mvp_templates, seed).format(
+            name=mvp_name, archetype=mvp_archetype, dpm=mvp_dpm, metric=mvp_metric,
         ) + ".")
 
         if medic_name and medic_revives > 0:
