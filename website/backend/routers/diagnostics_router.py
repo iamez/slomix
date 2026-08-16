@@ -1136,6 +1136,11 @@ async def get_storytelling_completeness(
         # session's own dates back, so a ratio can never be quietly reused as if
         # it described a different scope than the one requested.
         "session_date": session_date if scope is None else scope.dates[0],
+        # Every date the counted scope touches. A session can cross midnight
+        # (142 starts on 2026-08-03 and ends on the 4th), and the single date
+        # above would let a caller re-query or label only half of what was
+        # counted here.
+        "session_dates": [session_date] if scope is None else list(scope.dates),
         "gaming_session_id": gaming_session_id,
         "scope": "date" if scope is None else "gaming_session",
         "status": status,

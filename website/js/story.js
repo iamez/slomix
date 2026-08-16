@@ -579,7 +579,8 @@ function _sessionIdentityLine(sessionDate, playerCount) {
         // One helper owns the divisor: the KIS tier scale divides by the same
         // number, and an odd round count made the two disagree when each did
         // its own arithmetic. Round for display only.
-        const plays = Math.round(_mapPlaysInScope() ?? rounds / 2);
+        // _mapPlaysInScope already rounds; the fallback still needs it.
+        const plays = _mapPlaysInScope() ?? Math.max(1, Math.round(rounds / 2));
         const distinct = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
         if (plays > 0 && distinct > 0) {
             parts.push(`${rounds} rounds · ${plays} map play${plays === 1 ? '' : 's'} (${distinct} different)`);
@@ -1390,7 +1391,12 @@ function renderMomentum(data) {
 function _mapPlaysInScope() {
     const rounds = Number(storyState.scope?.accepted_round_count);
     if (!Number.isFinite(rounds) || rounds <= 0) return null;
-    return rounds / 2;
+    // A map play is R1+R2, but a session can end on an odd round: 30 of 140
+    // sessions do, and 10 of those hold a single round. Left fractional, that
+    // one round became 0.5 map plays and every KIS-per-map tier computed
+    // against it DOUBLED — a quiet night rendered "Legendary". Half a play is
+    // still a play, so round up from zero.
+    return Math.max(1, Math.round(rounds / 2));
 }
 
 /**
@@ -1574,7 +1580,9 @@ function renderPlayerCards(players) {
         // Footer
         card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-400',
             _el('span', null, `Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}`),
-            _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
+            // Same population rule as the three bars above: tracked numerators
+            // need the tracked denominator, or the footer contradicts the bars.
+            _el('span', null, `Context: ${ctxKills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / ctxKills) * 100).toFixed(0) : 0}%`)
         ));
 
         // Per-map split — the session total hides that the same player can

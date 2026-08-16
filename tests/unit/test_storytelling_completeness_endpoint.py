@@ -248,3 +248,36 @@ async def test_asking_about_nothing_is_refused():
         await get_storytelling_completeness(None, db, None)
 
     assert exc.value.status_code == 422
+
+
+class _TwoDayScopeStub(_ScopeStub):
+    """Session 142 really does this: starts 2026-08-03, ends on the 4th."""
+    dates = ("2026-08-03", "2026-08-04")
+
+
+@pytest.mark.asyncio
+async def test_a_midnight_crossing_session_reports_every_date_it_counted(monkeypatch):
+    """The queries span both dates, so the answer must not name only one of
+    them — a caller re-querying by the returned date would ask about half the
+    session it was just told about."""
+    from website.backend.routers import diagnostics_router as mod
+
+    async def _fake_resolve(db, *, gaming_session_id=None, session_date=None):
+        return _TwoDayScopeStub()
+
+    monkeypatch.setattr(mod, "resolve_gaming_session_scope", _fake_resolve)
+    db = _ComplianceFakeDb()
+
+    result = await get_storytelling_completeness(None, db, 142)
+
+    assert result["session_dates"] == ["2026-08-03", "2026-08-04"]
+    assert result["session_date"] == "2026-08-03"
+
+
+@pytest.mark.asyncio
+async def test_the_date_path_reports_its_one_date_the_same_way():
+    db = _ComplianceFakeDb()
+
+    result = await get_storytelling_completeness("2026-04-21", db)
+
+    assert result["session_dates"] == ["2026-04-21"]
