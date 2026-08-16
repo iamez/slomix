@@ -210,6 +210,8 @@ class _ArchetypesMixin:
             session_stats["avg_dpm"] = sum(s.get("dpm", 0) for s in all_stats) / len(all_stats)
             session_stats["avg_denied"] = sum(s.get("denied_time", 0) for s in all_stats) / len(all_stats)
             session_stats["avg_time_dead_pct"] = sum(s.get("time_dead_pct", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_carrier"] = sum(s.get("carrier_kills", 0) for s in all_stats) / len(all_stats)
+            session_stats["avg_carrier_returns"] = sum(s.get("carrier_returns", 0) for s in all_stats) / len(all_stats)
 
         # Classify each player relative to session
         result = {}
@@ -250,8 +252,28 @@ class _ArchetypesMixin:
         # In competitive 3v3, everyone does everything. Archetypes must be
         # RELATIVE to the session — who stands out in what dimension.
 
-        # Objective player — carrier kills are rare and always significant
-        if carrier_kills >= 3 or stats.get("carrier_returns", 0) >= 2:
+        # Objective player — must stand out, not merely participate. The old
+        # rule was `carrier_kills >= 3` over a WHOLE session, which everyone
+        # clears: measured over 11 sessions it claimed 59 of 72 player-slots
+        # (82 %) and made FIVE sessions unanimous — every player the same
+        # archetype, which tells the reader nothing. It was also the only
+        # absolute rule in a function whose own comment demands relative ones.
+        # Now it needs a real edge over the session, with the old floor kept so
+        # a session where nobody touches the objective cannot crown someone on
+        # a single carrier kill.
+        # BOTH branches have to be relative. Making only the kills side relative
+        # moved session 140 not at all: one player cleared the kills bar, yet all
+        # six still came back objective_specialist because `carrier_returns >= 2`
+        # was left absolute and everyone clears it.
+        # Defaulting the average to the player's OWN value would make the bar
+        # 1.5x themselves — unreachable by construction. With no session to
+        # compare against, fall back to the original absolute floors instead.
+        carrier_returns = stats.get("carrier_returns", 0)
+        avg_carrier = ss.get("avg_carrier")
+        avg_returns = ss.get("avg_carrier_returns")
+        carrier_bar = max(3, avg_carrier * 1.5) if avg_carrier is not None else 3
+        returns_bar = max(2, avg_returns * 1.5) if avg_returns is not None else 2
+        if carrier_kills >= carrier_bar or carrier_returns >= returns_bar:
             return "objective_specialist"
         # Pressure engine — top DPM OR top kills+KD (sustained aggression)
         if dpm >= avg_dpm * 1.12 and kills >= avg_kills * 1.05:

@@ -251,3 +251,55 @@ def test_falls_back_to_kills_when_pcs_kills_missing():
     stats = _stats(kills=15, deaths=10)
     stats.pop("pcs_kills")  # simulate older payload
     assert _classify(stats, avgs) == "pressure_engine"
+
+
+# ---------------------------------------------------------------------------
+# Objective specialist must mean "stood out", not "took part"
+#
+# Both entry branches were absolute (`carrier_kills >= 3`, `carrier_returns >=
+# 2`) inside a function whose own comment demands relative thresholds. Measured
+# over 11 real sessions that claimed 59 of 72 player-slots (82 %) and left FIVE
+# sessions unanimous — every player the same archetype, which tells a reader
+# nothing. Making only the kills branch relative moved session 140 not at all,
+# because the returns branch still fired for everyone; both have to be relative.
+# ---------------------------------------------------------------------------
+
+
+def test_a_whole_session_of_objective_players_cannot_all_be_specialists():
+    """The regression that motivated the change: six players, everyone over the
+    old absolute bar of 3, must not all come back with the same label."""
+    carriers = [6, 5, 4, 3, 3, 1]
+    avgs = _avgs(avg_carrier=sum(carriers) / len(carriers), avg_carrier_returns=0)
+
+    labels = [_classify(_stats(carrier_kills=c), avgs) for c in carriers]
+
+    assert labels.count("objective_specialist") < len(labels)
+    assert labels[0] == "objective_specialist"      # the one who truly stood out
+
+
+def test_carrier_returns_branch_is_relative_too():
+    """Everyone returning two objectives is a normal night, not six specialists."""
+    avgs = _avgs(avg_carrier=0, avg_carrier_returns=2.0)
+
+    typical = _classify(_stats(carrier_returns=2), avgs)
+    standout = _classify(_stats(carrier_returns=4), avgs)
+
+    assert typical != "objective_specialist"
+    assert standout == "objective_specialist"
+
+
+def test_the_floor_survives_a_quiet_session():
+    """When nobody touches the objective, a single carrier kill must not crown a
+    specialist — the relative bar never drops below the original absolute one."""
+    avgs = _avgs(avg_carrier=0.2, avg_carrier_returns=0.0)
+
+    assert _classify(_stats(carrier_kills=1), avgs) != "objective_specialist"
+    assert _classify(_stats(carrier_kills=3), avgs) == "objective_specialist"
+
+
+def test_without_session_context_the_original_absolute_floors_apply():
+    """Defaulting the average to the player's own value would set the bar at
+    1.5x themselves — unreachable by construction, so the branch would be dead."""
+    assert _classify(_stats(carrier_kills=3)) == "objective_specialist"
+    assert _classify(_stats(carrier_returns=2)) == "objective_specialist"
+    assert _classify(_stats(carrier_kills=2)) != "objective_specialist"
