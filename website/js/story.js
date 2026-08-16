@@ -102,10 +102,31 @@ function getArchetype(player) {
     return (a && ARCHETYPES[a]) ? a : 'frontline_warrior';
 }
 
-function getKISTier(kis) {
-    if (kis >= 40) return { label: 'Legendary', css: 'from-amber-400 to-yellow-500', textCss: 'text-amber-400' };
-    if (kis >= 25) return { label: 'Great', css: 'from-emerald-400 to-cyan-500', textCss: 'text-emerald-400' };
-    if (kis >= 15) return { label: 'Solid', css: 'from-blue-400 to-indigo-500', textCss: 'text-blue-400' };
+/**
+ * Tier for a session KIS total.
+ *
+ * The thresholds are per MAP PLAYED, not on the raw total, because the total
+ * grows with the length of the night: a quiet player on a 16-map evening
+ * out-totals a dominant one on a 6-map evening. Judged on raw totals (the old
+ * `kis >= 40`), 65 of 72 player-slots measured across 11 sessions came back
+ * "Legendary" — a badge that only ever says one thing.
+ *
+ * Cut points are the measured quantiles of KIS-per-map over those same 72
+ * slots (min 1 · p25 32 · median 40 · p75 47 · p90 55 · max 64), so the four
+ * labels land on roughly the top 10 % / next 15 % / middle 50 % / bottom 25 %.
+ * Re-measure them if the KIS formula version changes.
+ */
+function getKISTier(kis, mapsPlayed) {
+    const maps = Number(mapsPlayed);
+    // Without a map count there is nothing to normalise by; say so rather than
+    // silently grading a total against per-map cut points.
+    if (!Number.isFinite(maps) || maps <= 0) return null;
+    const perMap = Number(kis) / maps;
+    if (!Number.isFinite(perMap)) return null;
+
+    if (perMap >= 55) return { label: 'Legendary', css: 'from-amber-400 to-yellow-500', textCss: 'text-amber-400' };
+    if (perMap >= 47) return { label: 'Great', css: 'from-emerald-400 to-cyan-500', textCss: 'text-emerald-400' };
+    if (perMap >= 32) return { label: 'Solid', css: 'from-blue-400 to-indigo-500', textCss: 'text-blue-400' };
     return { label: 'Quiet', css: 'from-slate-400 to-slate-500', textCss: 'text-slate-400' };
 }
 
@@ -487,10 +508,18 @@ function _sessionIdentityLine(sessionDate, playerCount) {
     if (sessionDate) parts.push(String(sessionDate));
     const rounds = Number(scope?.accepted_round_count);
     if (Number.isFinite(rounds) && rounds > 0) {
-        const maps = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
-        parts.push(maps > 0
-            ? `${rounds} rounds across ${maps} map${maps === 1 ? '' : 's'}`
-            : `${rounds} rounds`);
+        // Two counts, and they are not the same thing: how many maps were
+        // PLAYED (a map can come up twice) versus how many DIFFERENT maps.
+        // Saying only the second put "5 maps" in the header while the sentence
+        // right underneath said "after 8 maps" — both true, read as a
+        // contradiction. Name both, or say neither.
+        const plays = Math.round(rounds / 2);
+        const distinct = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
+        if (plays > 0 && distinct > 0) {
+            parts.push(`${rounds} rounds · ${plays} map play${plays === 1 ? '' : 's'} (${distinct} different)`);
+        } else {
+            parts.push(`${rounds} rounds`);
+        }
     }
     if (playerCount > 0) parts.push(`${playerCount} players`);
     return parts.join(' \u00b7 ');
@@ -996,16 +1025,28 @@ function renderMomentum(data) {
     _momentumChart = _createMomentumChart(canvas, rounds[0], 0);
 }
 
+/** Map plays in the current scope — the divisor the KIS tier normalises by.
+ * A stopwatch map play is two rounds, so the accepted round count halves into
+ * plays and agrees with the box score (session 143: 16 rounds -> 8 plays).
+ * Returns null when the scope has not resolved, so the tier is omitted rather
+ * than computed against a guess. */
+function _mapPlaysInScope() {
+    const rounds = Number(storyState.scope?.accepted_round_count);
+    if (!Number.isFinite(rounds) || rounds <= 0) return null;
+    return rounds / 2;
+}
+
 function renderPlayerCards(players) {
     const container = document.getElementById('story-players');
     if (!container) return;
     container.textContent = '';
 
+    const mapPlays = _mapPlaysInScope();
     players.forEach((p, idx) => {
         const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
         const colors = ARCHETYPE_COLORS[arch.color];
-        const tier = getKISTier(p.total_kis);
+        const tier = getKISTier(p.total_kis, mapPlays);
         const rank = idx + 1;
 
         const carrierBar = p.kills > 0 ? ((p.carrier_kills / p.kills) * 100).toFixed(0) : 0;
@@ -1014,9 +1055,12 @@ function renderPlayerCards(players) {
 
         const card = _el('div', 'rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 p-4 group');
 
-        // Header
+        // Header. `tier` is null when the scope has not resolved a round count
+        // to normalise by — the rank chip and the score then fall back to a
+        // neutral treatment instead of asserting a grade nothing supports.
+        const tierCss = tier ? tier.css : 'from-slate-500 to-slate-600';
         const headerLeft = _el('div', 'flex items-center gap-2.5',
-            _el('div', `w-7 h-7 rounded-lg bg-gradient-to-br ${tier.css} flex items-center justify-center text-xs font-black text-black/80`, String(rank)),
+            _el('div', `w-7 h-7 rounded-lg bg-gradient-to-br ${tierCss} flex items-center justify-center text-xs font-black text-black/80`, String(rank)),
             _el('div', null,
                 _el('div', 'text-sm font-semibold text-white leading-tight', stripEtColors(p.name)),
                 _el('div', 'flex items-center gap-1.5 mt-0.5',
@@ -1025,8 +1069,10 @@ function renderPlayerCards(players) {
             )
         );
         const headerRight = _el('div', 'text-right',
-            _el('div', `text-lg font-black bg-gradient-to-r ${tier.css} bg-clip-text text-transparent`, (p.total_kis ?? 0).toFixed(1)),
-            _el('div', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label)
+            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`, (p.total_kis ?? 0).toFixed(1)),
+            tier
+                ? _el('div', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label)
+                : _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'KIS')
         );
         card.appendChild(_el('div', 'flex items-start justify-between mb-3', headerLeft, headerRight));
 
