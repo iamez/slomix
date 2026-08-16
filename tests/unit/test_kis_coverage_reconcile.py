@@ -23,14 +23,20 @@ from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 
 
 class FakeVoiceService:
-    def __init__(self, fail: bool = False):
+    """`ran` mirrors warm_kis_cache's contract: True only when the compute
+    actually ran (HTTP 200). False means the call never reached it — no
+    secret, website down, non-200 — which must not cost the session a retry."""
+
+    def __init__(self, fail: bool = False, ran: bool = True):
         self.calls: list[tuple] = []
         self.fail = fail
+        self.ran = ran
 
     async def warm_kis_cache(self, session_date, gaming_session_id=None):
         self.calls.append((session_date, gaming_session_id))
         if self.fail:
             raise RuntimeError("website unreachable")
+        return self.ran
 
 
 class FakeDB:
@@ -46,9 +52,9 @@ class FakeDB:
 class Bot(_MonitorTasksMixin):
     """Just enough bot for the loop: the mixin only touches these two."""
 
-    def __init__(self, rows, fail: bool = False):
+    def __init__(self, rows, fail: bool = False, ran: bool = True):
         self.db_adapter = FakeDB(rows)
-        self.voice_session_service = FakeVoiceService(fail=fail)
+        self.voice_session_service = FakeVoiceService(fail=fail, ran=ran)
 
 
 async def test_a_session_with_no_scores_is_recomputed():
@@ -135,6 +141,33 @@ async def test_a_healed_session_gets_a_fresh_budget_if_it_breaks_again():
     await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
 
     assert len(bot.voice_session_service.calls) == spent + 1
+
+
+async def test_a_recompute_that_never_ran_does_not_cost_the_session_a_retry():
+    """warm_kis_cache returns False without reaching the compute when the
+    secret is missing or the website does not answer 200. Counting those as
+    attempts burned all three during a web restart and abandoned the session
+    until the bot process itself restarted — the silent failure this loop
+    exists to end, reintroduced one level up."""
+    bot = Bot([(138, "2026-07-21", 1396, 0)], ran=False)
+
+    for _ in range(_MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS + 4):
+        await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+
+    # Still trying on every pass — nothing was ever abandoned.
+    assert len(bot.voice_session_service.calls) == _MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS + 4
+    assert not getattr(bot, "_kis_reconcile_abandoned", set())
+
+
+async def test_a_recompute_that_ran_and_failed_still_counts():
+    """The give-up rule must survive the fix above: a compute that RAN and left
+    the gap open is exactly what the attempt counter is for."""
+    bot = Bot([(138, "2026-07-21", 1396, 0)], ran=True)
+
+    for _ in range(_MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS + 3):
+        await _MonitorTasksMixin.kis_coverage_reconcile.coro(bot)
+
+    assert len(bot.voice_session_service.calls) == _MonitorTasksMixin._KIS_RECONCILE_MAX_ATTEMPTS
 
 
 async def test_a_failing_recompute_does_not_kill_the_loop():

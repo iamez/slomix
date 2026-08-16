@@ -343,7 +343,12 @@ class _NarrativeMixin:
         # (deep SS-C — the kill-impact panels were the last single-date holdouts).
         if ensure_kis:
             await self.compute_session_kis_for_gsid(scope.gaming_session_id)
-        kis_board = await self.get_kis_leaderboard(scope, limit=50)
+        # limit=0 means "the whole session" (archetypes.py:end). A page size
+        # belongs to a caller who is paging; this one immediately re-classifies
+        # the list it gets back, and classification is RELATIVE to the session
+        # average — so a trimmed board would make the averages, and every
+        # archetype derived from them, a function of the page size.
+        kis_board = await self.get_kis_leaderboard(scope, limit=0)
         # get_kis_leaderboard enriches entries with the archetype subset; this
         # call returns the FULL stats_by_guid tuple the narrative needs below.
         archetypes, stats = await self.classify_players(scope, kis_board)
@@ -631,7 +636,9 @@ class _NarrativeMixin:
         # may trigger the gsid-native compute; public routes read existing cache.
         if ensure_kis:
             await self.compute_session_kis_for_gsid(scope.gaming_session_id)
-        kis_board = await self.get_kis_leaderboard(scope, limit=50)
+        # Whole session again: this builds one story PER PLAYER, so a page size
+        # would decide who has a story rather than what it says.
+        kis_board = await self.get_kis_leaderboard(scope, limit=0)
 
         # Index by guid_short
         g_map = {p["guid_short"]: p for p in gravity.get("players", [])}

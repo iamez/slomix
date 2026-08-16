@@ -227,6 +227,11 @@ const STORY_PANEL_IDS = [
     'story-team-synergy', 'story-win-contribution', 'story-box-score',
     'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill',
     'story-kill-matrix',
+    // The timeline is filled by the SLOWEST pair of requests on the page (box
+    // score + session detail). Left out of this list, the new session's heading
+    // sat above the previous session's map rows for as long as those two took —
+    // the same carry-over 20e8ad45 fixed in the hero, one panel further down.
+    'story-timeline',
 ];
 
 function _clearStoryPanels() {
@@ -651,10 +656,12 @@ async function _loadCoverageNote(loadId) {
     slot.textContent = '';
     slot.style.display = 'none';
 
-    const day = storyState.sessionDate;
-    if (!day) return;
+    // Ask about THIS session, not the calendar day. One date can hold several
+    // gaming sessions (2026-03-25 held four), and a day-wide ratio was being
+    // used to qualify a session-scoped "Total KIS" below.
+    if (storyState.gamingSessionId == null && !storyState.sessionDate) return;
     const info = await fetchJSON(
-        `${API_BASE}/diagnostics/storytelling-completeness?session_date=${encodeURIComponent(day)}`
+        `${API_BASE}/diagnostics/storytelling-completeness?${_storyScopeQuery()}`
     ).catch(() => null);
     if (!info || loadId !== storyLoadId) return;
 
@@ -670,10 +677,10 @@ async function _loadCoverageNote(loadId) {
         // before that has no kill-level detail to score and never will.
         slot.appendChild(_el('span', 'font-bold', 'No Kill Impact for this session: '));
         slot.appendChild(_el('span', null,
-            'there is no kill-level tracking data for this day. '
+            'there is no kill-level tracking data for this session. '
             + 'The ranking below is win contribution, computed from the match stats.'));
     } else {
-        slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this day: '));
+        slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this session: '));
         slot.appendChild(_el('span', null,
             `${scored.toLocaleString()} of ${total.toLocaleString()} kills scored (${Math.round(ratio * 100)} %). `
             + 'Win contribution is unaffected — it is computed from the match stats.'));
@@ -895,6 +902,12 @@ function renderNightTimeline(box, detail) {
     const beta = stripEtColors(box.beta_team || 'Beta');
 
     const clockOf = (i) => {
+        // Index is the join key, so the two lists must actually describe the
+        // same play. They can diverge — BOX drops rounds the session detail
+        // keeps (session 146: 0 box maps against 1 match) — and one dropped
+        // play would silently shift every later start time by a whole map.
+        // Checking the name costs nothing and turns a wrong clock into none.
+        if (matches[i]?.map_name !== maps[i]?.map_name) return '';
         const t = matches[i]?.rounds?.[0]?.round_time;
         const s = t != null ? String(t).padStart(6, '0') : '';
         return /^\d{6}$/.test(s) ? `${s.slice(0, 2)}:${s.slice(2, 4)}` : '';
@@ -1408,9 +1421,15 @@ function renderPlayerCards(players) {
         const tier = getKISTier(p.total_kis, mapPlays);
         const rank = idx + 1;
 
-        const carrierBar = p.kills > 0 ? ((p.carrier_kills / p.kills) * 100).toFixed(0) : 0;
-        const pushBar = p.kills > 0 ? ((p.push_kills / p.kills) * 100).toFixed(0) : 0;
-        const crossfireBar = p.kills > 0 ? ((p.crossfire_kills / p.kills) * 100).toFixed(0) : 0;
+        // Carrier / push / crossfire counts describe the proximity-TRACKED
+        // kills only, so the denominator has to be the tracked count too.
+        // Dividing them by `p.kills` — which is now the full PCS count — made
+        // every segment read up to 8x too small on a partially covered
+        // session, i.e. exactly when the numbers matter most.
+        const ctxKills = Number(p.tracked_kills ?? p.kills) || 0;
+        const carrierBar = ctxKills > 0 ? ((p.carrier_kills / ctxKills) * 100).toFixed(0) : 0;
+        const pushBar = ctxKills > 0 ? ((p.push_kills / ctxKills) * 100).toFixed(0) : 0;
+        const crossfireBar = ctxKills > 0 ? ((p.crossfire_kills / ctxKills) * 100).toFixed(0) : 0;
 
         const row = _el('details', 'rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 group');
         const card = _el('div', 'px-4 pb-5 pt-1');

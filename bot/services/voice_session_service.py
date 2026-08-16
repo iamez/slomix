@@ -616,7 +616,7 @@ class VoiceSessionService:
         task.add_done_callback(_log_failure)
         return task
 
-    async def warm_kis_cache(self, session_date: str, gaming_session_id: int | None = None) -> None:
+    async def warm_kis_cache(self, session_date: str, gaming_session_id: int | None = None) -> bool:
         """Trigger a KIS compute for one session. PUBLIC: two callers need it —
         the voice-session end path below, and the bot's KIS coverage reconcile
         loop, which is the safety net for every way this trigger can be missed.
@@ -624,7 +624,13 @@ class VoiceSessionService:
         Proactively trigger a fresh KIS compute right after invalidation
         (see _invalidate_kis_cache for why). Mirrors
         session_digest_service.py's _fetch_kis_top call pattern.
-        Best-effort; must never raise."""
+        Best-effort; must never raise.
+
+        Returns True only when a compute actually ran (HTTP 200). A missing
+        secret, an unreachable website or a non-200 answer all return False:
+        the reconcile loop counts retries, and counting one for a call that
+        never reached the compute would exhaust a session's attempts during a
+        website restart and abandon it until the bot itself restarts."""
         # Warming's whole job is to TRIGGER a compute, which now requires a
         # valid internal token. Without a secret the call can only ever come
         # back read-only (or 401), so skip it with one clear warning instead
@@ -633,7 +639,7 @@ class VoiceSessionService:
         if not secret:
             logger.warning("KIS cache warm skipped for %s: INTERNAL_API_SECRET "
                            "not configured on the bot", session_date)
-            return
+            return False
         url = "(unbuilt)"
         try:
             import aiohttp
@@ -652,12 +658,14 @@ class VoiceSessionService:
                              headers=headers) as resp:
                 if resp.status == 200:
                     logger.info("✅ KIS cache warmed for %s", session_date)
-                else:
-                    logger.warning("KIS cache warm HTTP %s for %s (url=%s)",
-                                    resp.status, session_date, url)
+                    return True
+                logger.warning("KIS cache warm HTTP %s for %s (url=%s)",
+                                resp.status, session_date, url)
+                return False
         except Exception as e:
             logger.warning("KIS cache warm failed for %s (url=%s): %s",
                             session_date, url, e)
+            return False
 
     async def _delete_kis_rows(self, session_date: str, gsids=None) -> None:
         """Delete THIS session's cached KIS rows for session_date.

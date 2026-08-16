@@ -692,18 +692,32 @@ class _MonitorTasksMixin:
                         gsid, kis_rows, prox_kills, self._KIS_RECONCILE_MAX_ATTEMPTS,
                     )
                 continue
-            attempts[gsid] = tries + 1
             logger.info(
                 "[KIS-RECONCILE] session %s (%s): %d scores for %d kills — recomputing (attempt %d)",
                 gsid, first_date, kis_rows, prox_kills, tries + 1,
             )
+            # The pass budget is spent either way — a failed call still costs a
+            # request — but an ATTEMPT is only consumed when the compute really
+            # ran. warm_kis_cache returns False without reaching it when the
+            # secret is missing or the website is down; counting those would
+            # burn all three attempts during a web restart and abandon the
+            # session until the bot process itself restarts, which is the very
+            # silent-failure mode this loop exists to end.
+            healed += 1
             try:
-                await self.voice_session_service.warm_kis_cache(
+                ran = await self.voice_session_service.warm_kis_cache(
                     first_date, gaming_session_id=gsid,
                 )
-                healed += 1
             except Exception:
                 logger.error("[KIS-RECONCILE] recompute failed for session %s", gsid, exc_info=True)
+                continue
+            if ran:
+                attempts[gsid] = tries + 1
+            else:
+                logger.warning(
+                    "[KIS-RECONCILE] session %s: recompute did not run (no secret, or the "
+                    "website did not answer 200) — not counting it as an attempt", gsid,
+                )
 
     @kis_coverage_reconcile.before_loop
     async def before_kis_coverage_reconcile(self):
