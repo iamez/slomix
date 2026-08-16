@@ -1,5 +1,6 @@
 # Release config for v1.37.0 — uploads modernisation.
-# ADDS migration 076 (uploads.poster_path) for client-captured clip poster
+# ADDS migrations 076 (uploads.poster_path) and 077 (player_aim_summary, the
+# cached true-aim summary — derived data, safe to TRUNCATE) for clip poster
 # thumbnails, on top of the 073/074/075 already applied in v1.35.0/v1.36.0. Also
 # carries the uploads video-lifecycle fix + modern player and the Data Trust /
 # hero-KILLS work from v1.36.1 (code-only). The full 045+ range is kept so
@@ -46,8 +47,12 @@ MIGRATIONS=(
   "074_seed_ownator_sick_leave.sql"
   "075_canonical_guid_function.sql"
   "076_uploads_poster.sql"
+  # 077 ships with this tag: player_aim_summary, the cached true-aim summary
+  # (PR #746). Derived data only — safe to TRUNCATE, every row rebuilds itself
+  # on the next profile read.
+  "077_player_aim_summary.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
 )
-RELEASE_NOTES="Uploads modernisation. Video stops on navigate-away + a modern player (keyboard/PiP/speed/focus-trap). Gallery poster thumbnails: adds migration 076 (uploads.poster_path) for client-captured clip posters shown lazily on cards. .avi/.mkv stay download-only (future .mp4 transcode)."
+RELEASE_NOTES="Uploads modernisation + cached aim summary. Video stops on navigate-away + a modern player (keyboard/PiP/speed/focus-trap). Gallery poster thumbnails: adds migration 076 (uploads.poster_path) for client-captured clip posters shown lazily on cards. .avi/.mkv stay download-only (future .mp4 transcode). Adds migration 077 (player_aim_summary): the profile's true-aim section is computed once and cached on a fingerprint of its inputs instead of on every view (12.8 s -> 42 ms for the heaviest player)."
