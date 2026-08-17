@@ -117,6 +117,11 @@ function getKISTier(kis, mapsPlayed) {
         return { label: '', css: 'from-slate-400 to-slate-500', textCss: 'text-slate-400' };
     }
     const perMap = Number(kis) / maps;
+    // Non-numeric KIS must stay neutral too — falling through would grade
+    // NaN as "Quiet", which asserts a judgement about a missing number.
+    if (!Number.isFinite(perMap)) {
+        return { label: '', css: 'from-slate-400 to-slate-500', textCss: 'text-slate-400' };
+    }
     if (perMap >= 55) return { label: 'Legendary', css: 'from-amber-400 to-yellow-500', textCss: 'text-amber-400' };
     if (perMap >= 47) return { label: 'Great', css: 'from-emerald-400 to-cyan-500', textCss: 'text-emerald-400' };
     if (perMap >= 32) return { label: 'Solid', css: 'from-blue-400 to-indigo-500', textCss: 'text-blue-400' };
@@ -253,7 +258,8 @@ function renderAmbiguousSessionPicker(candidates) {
         });
         players.appendChild(wrap);
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+    _clearAuxPanels();
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value', 'story-advanced-metrics']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
@@ -352,8 +358,9 @@ async function loadStoryData() {
             }
         }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
 
-        // Advanced metrics + Comp Skill board render into the SAME container,
-        // sequentially (renderAdvancedMetrics clears it) — so fetch together.
+        // Advanced metrics + Comp Skill board have their OWN containers now
+        // (#734 port) — fetched together only so the card area fills in one
+        // paint, not because of any container coupling.
         // /skill/composite now accepts gaming_session_id (scope-resolver
         // parity): `q` sends it when we have a gsid, so the panel is bound to
         // THIS session's rounds. That fixes the date-scope bug where a bot
@@ -398,6 +405,17 @@ async function loadStoryData() {
     }
 }
 
+/** Session-bound panels the reset paths must clear. story-comp-skill got its
+ * own container (#734 port) and story-coverage is filled by a LATE response —
+ * left out of a reset, the previous session's board/warning survives into an
+ * ambiguous, empty, or freshly loading state. */
+function _clearAuxPanels() {
+    const comp = document.getElementById('story-comp-skill');
+    if (comp) comp.textContent = '';
+    const cov = document.getElementById('story-coverage');
+    if (cov) { cov.textContent = ''; cov.style.display = 'none'; }
+}
+
 function renderLoading() {
     const title = document.getElementById('story-title');
     const subtitle = document.getElementById('story-subtitle');
@@ -429,6 +447,7 @@ function renderLoading() {
     if (boxScore) boxScore.textContent = '';
     const invisValue = document.getElementById('story-invisible-value');
     if (invisValue) invisValue.textContent = '';
+    _clearAuxPanels();
 }
 
 function renderEmpty(message) {
@@ -447,7 +466,8 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+    _clearAuxPanels();
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value', 'story-advanced-metrics']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
@@ -2005,10 +2025,17 @@ export async function loadStoryView({ date, gsid } = {}) {
     // session shows the picker instead of guessing).
     // loadStoryScopes only defaults gamingSessionId when BOTH are unset, so
     // a requested gsid/date survives the scopes load.
+    // Clear the OTHER identity key on every deep link: a previous visit may
+    // have resolved a gsid, and a later #/story/date/<X> link would otherwise
+    // keep loading that old gsid (loadStoryData prefers it).
     if (gsid != null) {
         storyState.gamingSessionId = gsid;
+        storyState.sessionDate = null;
+        storyState.sessionDateLabel = null;
     } else if (date) {
         storyState.sessionDate = date;
+        storyState.gamingSessionId = null;
+        storyState.sessionDateLabel = null;
     }
     await loadStoryScopes();
     await loadStoryData();
