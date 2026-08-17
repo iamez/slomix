@@ -116,12 +116,36 @@ async function fetchAndRenderRecords() {
             { key: 'dyna_defused', icon: 'shield', color: 'text-blue-400', bg: 'bg-blue-400/10', border: 'border-blue-400/20' },
             { key: 'obj_stolen', icon: 'flag', color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' },
             { key: 'obj_returned', icon: 'check-circle', color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/20' },
-            { key: 'useful_kills', icon: 'swords', color: 'text-indigo-400', bg: 'bg-indigo-400/10', border: 'border-indigo-400/20' }
+            { key: 'useful_kills', icon: 'swords', color: 'text-indigo-400', bg: 'bg-indigo-400/10', border: 'border-indigo-400/20' },
+            // Match records: both rounds of one map summed (R1+R2 per match_id)
+            { key: 'match_damage', icon: 'zap', color: 'text-brand-blue', bg: 'bg-brand-blue/10', border: 'border-brand-blue/20', match: true },
+            { key: 'match_kills', icon: 'skull', color: 'text-brand-rose', bg: 'bg-brand-rose/10', border: 'border-brand-rose/20', match: true },
+            { key: 'match_headshots', icon: 'crosshair', color: 'text-brand-purple', bg: 'bg-brand-purple/10', border: 'border-brand-purple/20', match: true },
+            { key: 'match_xp', icon: 'star', color: 'text-brand-gold', bg: 'bg-brand-gold/10', border: 'border-brand-gold/20', match: true },
+            { key: 'match_revives', icon: 'heart', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', border: 'border-brand-cyan/20', match: true },
+            { key: 'match_gibs', icon: 'bomb', color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20', match: true }
         ];
 
+        let matchDividerInserted = false;
         categories.forEach(cat => {
             const recordList = data[cat.key];
             if (!recordList || recordList.length === 0) return;
+
+            // The single-round cards above measure ONE round; these measure a
+            // whole map (both rounds). A divider keeps the two scales apart.
+            if (cat.match && !matchDividerInserted) {
+                container.insertAdjacentHTML('beforeend', `
+                    <div class="col-span-full mt-6 mb-1 flex items-center gap-3">
+                        <div class="h-px flex-1 bg-white/10"></div>
+                        <div class="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                            <i data-lucide="layers" class="w-4 h-4"></i>
+                            Full-Map Records <span class="text-slate-600 normal-case font-normal">(both rounds combined)</span>
+                        </div>
+                        <div class="h-px flex-1 bg-white/10"></div>
+                    </div>
+                `);
+                matchDividerInserted = true;
+            }
 
             const topRecord = recordList[0];
             const value = formatRecordValue(topRecord.value);

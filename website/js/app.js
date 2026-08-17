@@ -21,7 +21,7 @@ import { loadHomePulseCards } from './home.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260813-audit-brandslate';
 import { loadFormView } from './form.js';
 
-import { loadRecordsView } from './records.js';
+import { loadRecordsView } from './records.js?v=20260817-match';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260812-b3';
 import { loadStoryView } from './story.js?v=20260817-restore';
