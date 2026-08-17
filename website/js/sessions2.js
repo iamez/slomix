@@ -235,13 +235,28 @@ function _renderS2Card(session) {
         ? `navigateTo('session-detail', true, { sessionId: ${Number(sessionId)} })`
         : `navigateTo('session-detail', true, { sessionDate: '${escapeJsString(rawDate)}' })`;
 
-    const alliesWins = session.allies_wins ?? 0;
-    const axisWins = session.axis_wins ?? 0;
-    const scoreColor = alliesWins > axisWins
-        ? 'text-brand-blue'
-        : axisWins > alliesWins
-            ? 'text-brand-rose'
-            : 'text-slate-400';
+    // Team score comes from BOX scoring (session_results). The old
+    // allies_wins/axis_wins fields count round wins by SIDE — teams swap
+    // sides every stopwatch round, so that tally is not a team score and
+    // must never be rendered as one. Sessions without team attribution
+    // (pre-BOX era) show a dash instead of a fake score.
+    // 0:0 means no map could be attributed to a team (every counted BOX map
+    // awards points) — treat it the same as no data.
+    const hasTeamScore = session.team_1_score != null && session.team_2_score != null
+        && (Number(session.team_1_score) + Number(session.team_2_score) > 0);
+    const t1Score = Number(session.team_1_score);
+    const t2Score = Number(session.team_2_score);
+    const teamNames = hasTeamScore
+        ? `${stripEtColors(session.team_1_name || 'Team A')} · ${stripEtColors(session.team_2_name || 'Team B')}`
+        : '';
+    const scoreColor = !hasTeamScore
+        ? 'text-slate-500'
+        : t1Score > t2Score
+            ? 'text-brand-blue'
+            : t2Score > t1Score
+                ? 'text-brand-rose'
+                : 'text-slate-400';
+    const scoreDisplay = hasTeamScore ? `${t1Score} : ${t2Score}` : '—';
 
     return `
         <div class="glass-panel rounded-xl overflow-hidden session2-card cursor-pointer
@@ -286,9 +301,9 @@ function _renderS2Card(session) {
                             <div class="text-2xl font-black text-brand-emerald">${totalKills.toLocaleString()}</div>
                             <div class="text-xs text-slate-500 uppercase">Kills</div>
                         </div>` : ''}
-                        <div class="text-center">
-                            <div class="text-2xl font-black ${scoreColor}">${alliesWins} - ${axisWins}</div>
-                            <div class="text-xs text-slate-500 uppercase">Score</div>
+                        <div class="text-center" ${teamNames ? `title="${escapeHtml(teamNames)}"` : ''}>
+                            <div class="text-2xl font-black ${scoreColor}">${scoreDisplay}</div>
+                            <div class="text-xs text-slate-500 uppercase">${hasTeamScore ? 'Score' : 'No team data'}</div>
                         </div>
                     </div>
 

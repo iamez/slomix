@@ -501,6 +501,19 @@ async def get_sessions_list(
               AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
+        ),
+        -- BOX team score per session (see the /stats/sessions comment: the
+        -- side tallies above are NOT a team score in stopwatch).
+        session_box AS (
+            SELECT DISTINCT ON (gaming_session_id)
+                gaming_session_id,
+                team_1_name,
+                team_2_name,
+                team_1_score,
+                team_2_score,
+                winning_team
+            FROM session_results
+            ORDER BY gaming_session_id, id DESC
         )
         SELECT
             sr.session_date,
@@ -512,9 +525,15 @@ async def get_sessions_list(
             sr.maps_played,
             sr.allies_wins,
             sr.axis_wins,
-            sr.draws
+            sr.draws,
+            sb.team_1_name,
+            sb.team_2_name,
+            sb.team_1_score,
+            sb.team_2_score,
+            sb.winning_team
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
+        LEFT JOIN session_box sb ON sr.gaming_session_id = sb.gaming_session_id
         ORDER BY sr.session_date DESC, sr.gaming_session_id DESC
         LIMIT $1 OFFSET $2
     """
@@ -563,6 +582,12 @@ async def get_sessions_list(
                 "allies_wins": row[7],
                 "axis_wins": row[8],
                 "draws": row[9],
+                # BOX team score; None when the session has no team attribution.
+                "team_1_name": row[10],
+                "team_2_name": row[11],
+                "team_1_score": row[12],
+                "team_2_score": row[13],
+                "winning_team": row[14],
                 "time_ago": time_ago,
                 "formatted_date": dt.strftime("%A, %B %d, %Y"),
             }
@@ -1264,6 +1289,7 @@ async def get_stats_sessions(
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1277,6 +1303,7 @@ async def get_stats_sessions(
             INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1288,6 +1315,7 @@ async def get_stats_sessions(
             LEFT JOIN lua_round_teams lrt ON lrt.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1299,8 +1327,26 @@ async def get_stats_sessions(
             INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
+        ),
+        -- Team result per session from BOX scoring (session_results is written
+        -- by the bot's session scorer and ground-truth verified 2026-08-14).
+        -- The allies_wins/axis_wins tallies above count round wins by SIDE —
+        -- in stopwatch the teams swap sides every round, so a side tally is
+        -- NOT a team score and must never be rendered as one. DISTINCT ON
+        -- guards against a session ever being scored twice.
+        session_box AS (
+            SELECT DISTINCT ON (gaming_session_id)
+                gaming_session_id,
+                team_1_name,
+                team_2_name,
+                team_1_score,
+                team_2_score,
+                winning_team
+            FROM session_results
+            ORDER BY gaming_session_id, id DESC
         )
         SELECT
             sr.gaming_session_id,
@@ -1316,11 +1362,17 @@ async def get_stats_sessions(
             COALESCE(sp.total_kills, 0) as total_kills,
             COALESCE(sp.total_deaths, 0) as total_deaths,
             COALESCE(sd.total_duration_seconds, 0) as duration_seconds,
-            COALESCE(sn.player_names, '') as player_names
+            COALESCE(sn.player_names, '') as player_names,
+            sb.team_1_name,
+            sb.team_2_name,
+            sb.team_1_score,
+            sb.team_2_score,
+            sb.winning_team
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
         LEFT JOIN session_duration sd ON sr.gaming_session_id = sd.gaming_session_id
         LEFT JOIN session_names sn ON sr.gaming_session_id = sn.gaming_session_id
+        LEFT JOIN session_box sb ON sr.gaming_session_id = sb.gaming_session_id
         WHERE 1=1
         {search_filter}
         ORDER BY sr.gaming_session_id DESC
@@ -1350,6 +1402,11 @@ async def get_stats_sessions(
         total_deaths = row[11]
         duration_seconds = row[12]
         player_names_str = row[13] if len(row) > 13 else ""
+        team_1_name = row[14]
+        team_2_name = row[15]
+        team_1_score = row[16]
+        team_2_score = row[17]
+        winning_team = row[18]
 
         # Format date
         if isinstance(first_date, str):
@@ -1400,6 +1457,14 @@ async def get_stats_sessions(
             "total_deaths": total_deaths,
             "allies_wins": allies_wins,
             "axis_wins": axis_wins,
+            # Team score from BOX scoring (session_results); None when the
+            # session predates team attribution — the UI must NOT fall back
+            # to the side tallies above, they are not a team score.
+            "team_1_name": team_1_name,
+            "team_2_name": team_2_name,
+            "team_1_score": team_1_score,
+            "team_2_score": team_2_score,
+            "winning_team": winning_team,
             "duration_seconds": duration_seconds,
             "player_names": player_names,
         })
