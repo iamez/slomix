@@ -620,3 +620,21 @@ async def resolve_name_guid_map(
     except Exception as e:
         logger.warning("resolve_name_guid_map failed: %s", e)
         return {}
+
+def valid_human_rows_gate(alias: str = "pcs") -> str:
+    """SQL fragment excluding rows every honest surface must exclude:
+    bot identities ([BOT] name / OMNIBOT guid — defence in depth for rounds
+    that predate the is_bot_round flag) and rows from rounds the pipeline
+    itself rejects (is_valid = FALSE, orphan-R2 cumulatives). Starts with
+    ' AND ...' so it appends to an existing WHERE. Same joint gate as
+    /stats/records; introduced when the Hall of Fame and season leaders were
+    found serving bot rows (Steber B gate matrix, 2026-08-17)."""
+    a = f"{alias}." if alias else ""
+    return (
+        f" AND {a}player_name NOT LIKE '[BOT]%'"
+        f" AND ({a}player_guid IS NULL OR {a}player_guid NOT LIKE 'OMNIBOT%')"
+        f" AND NOT EXISTS (SELECT 1 FROM rounds _vr"
+        f"                 WHERE _vr.id = {a}round_id"
+        f"                   AND (_vr.is_valid IS FALSE"
+        f"                        OR _vr.round_status = 'orphan_r2'))"
+    )
