@@ -149,7 +149,7 @@ _DB_SUBTRACT_COLUMNS = [
 
 def _backup_round(cur, r2_id: int, backup_lines: list[str]) -> None:
     for table in ("player_comprehensive_stats", "weapon_comprehensive_stats"):
-        cur.execute(f"SELECT * FROM {table} WHERE round_id = %s", (r2_id,))  # noqa: S608 # nosec B608 - table name from fixed tuple
+        cur.execute(f"SELECT * FROM {table} WHERE round_id = %s", (r2_id,))  # noqa: S608 # nosec B608 # nosemgrep: table name from fixed tuple
         cols = [d[0] for d in cur.description]
         for row in cur.fetchall():
             vals = ", ".join(_sql_literal(v) for v in row)
@@ -164,13 +164,13 @@ def _heal_suspect_by_db_subtraction(cur, pair: dict, repair_lines: list[str]) ->
     raw-file discriminator has already proven the stored R2 row IS the raw
     cumulative and the R1 round was imported from its own file."""
     cols = ", ".join(_DB_SUBTRACT_COLUMNS)
-    cur.execute(
+    cur.execute(  # nosemgrep: fixed column list, %s params
         f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 # nosec B608 - fixed column list
         "FROM player_comprehensive_stats WHERE round_id = %s",
         (pair["r1_id"],),
     )
     r1_rows = {row[0]: row[1:] for row in cur.fetchall()}
-    cur.execute(
+    cur.execute(  # nosemgrep: fixed column list, %s params
         f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 # nosec B608 - fixed column list
         "FROM player_comprehensive_stats WHERE round_id = %s",
         (pair["r2_id"],),
@@ -263,7 +263,7 @@ def _connect(readonly: bool):
 
 
 def _find_inverted_pairs(cur) -> list[dict]:
-    cur.execute(
+    cur.execute(  # nosemgrep: fixed column list, %s params
         """
         SELECT r2.id, r1.id, r2.map_name, r2.round_date::date::text, r2.match_id
         FROM rounds r1
@@ -286,7 +286,7 @@ def _find_suspect_pairs(cur) -> list[dict]:
     never has the whole lobby beating its own R1 on both axes — but a raw
     cumulative row always does. The raw-file discriminator makes the final
     call; this query only nominates."""
-    cur.execute(
+    cur.execute(  # nosemgrep: fixed column list, %s params
         """
         WITH pr AS (
             SELECT r1.id r1_id, r2.id r2_id, r2.map_name,
@@ -324,7 +324,7 @@ def _find_orphan_r2s(cur) -> list[dict]:
     through the parser's orphan path (match_id == the round's own timestamp),
     so the stored row holds raw CUMULATIVE values. Healable when the original
     R1 file exists on disk today."""
-    cur.execute(
+    cur.execute(  # nosemgrep: fixed column list, %s params
         """
         SELECT r2.id, r2.map_name, r2.round_date::date::text, r2.match_id,
                r2.round_status
@@ -407,7 +407,7 @@ def _db_rows_equal_raw_cumulative(cur, r2_id: int, raw_players: list[dict]) -> b
     (cumulative) parse of the candidate file on kills AND damage for every
     shared player. If it instead equals the differential, the round was
     imported correctly (or already healed) and must not be touched."""
-    cur.execute(
+    cur.execute(  # nosemgrep: fixed column list, %s params
         "SELECT player_guid, kills, damage_given "
         "FROM player_comprehensive_stats WHERE round_id = %s",
         (r2_id,),
@@ -562,7 +562,7 @@ def main() -> int:
                 f"UPDATE player_comprehensive_stats SET {set_clause} "  # noqa: S608 # nosec B608 - fixed column list
                 "WHERE round_id = %s AND player_guid = %s"
             )
-            cur.execute(update_sql, [*params, pair["r2_id"], guid])
+            cur.execute(update_sql, [*params, pair["r2_id"], guid])  # nosemgrep: fixed column list, %s params
             total_updates += cur.rowcount
 
             literal_set = ", ".join(
