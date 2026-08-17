@@ -17,7 +17,10 @@ from website.backend.routers import records_awards
 
 def test_records_gate_excludes_orphan_r2_rounds():
     src = inspect.getsource(records_awards.get_records)
-    assert "orphan_r2" in src, (
+    # Assert the SQL fragment itself, not just the word: the explanatory
+    # comment above base_where also says "orphan_r2", so a plain substring
+    # check would keep passing after the actual gate clause was deleted.
+    assert "OR r.round_status = 'orphan_r2'" in src, (
         "records base_where lost the orphan_r2 exclusion — cumulative R2 rows "
         "would re-enter the record book"
     )

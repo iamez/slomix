@@ -431,7 +431,10 @@ def _find_r1_endstats(r2_file: Path) -> Path | None:
         day = (r2_dt.date() - _dt.timedelta(days=day_offset)).isoformat()
         for cand in glob.glob(str(r2_file.parent / f"{day}-*-{map_name}-round-1-endstats.txt")):
             cparts = Path(cand).name.split("-")
-            c_dt = _dt.datetime.strptime("-".join(cparts[:4]), "%Y-%m-%d-%H%M%S")  # noqa: DTZ007
+            try:
+                c_dt = _dt.datetime.strptime("-".join(cparts[:4]), "%Y-%m-%d-%H%M%S")  # noqa: DTZ007
+            except ValueError:
+                continue  # glob wildcard matched something that is not a timestamp
             gap = (r2_dt - c_dt).total_seconds()
             if 0 < gap <= 3600 and (best is None or gap < best[0]):
                 best = (gap, Path(cand))
@@ -502,6 +505,9 @@ def main() -> int:
     ap.add_argument("--artifact-dir", default=str(_REPO_ROOT / "r2_repair_artifacts"),
                     help="where to write the backup + portable repair SQL")
     args = ap.parse_args()
+    if args.stamp_unhealable and not args.heal_orphans:
+        ap.error("--stamp-unhealable only classifies orphans found by "
+                 "--heal-orphans; pass both flags together")
 
     from bot.community_stats_parser import C0RNP0RN3StatsParser
 
@@ -688,8 +694,8 @@ def main() -> int:
 
     backup_path = artifact_dir / f"backup-{stamp}.sql"
     repair_path = artifact_dir / f"repair-{stamp}.sql"
-    backup_path.write_text("\n".join(backup_lines) + "\n")
-    repair_path.write_text("\n".join(repair_lines) + "\n")
+    backup_path.write_text("\n".join(backup_lines) + "\n", encoding="utf-8")
+    repair_path.write_text("\n".join(repair_lines) + "\n", encoding="utf-8")
     print(f"\nBackup of pre-repair rows: {backup_path}")
     print(f"Portable repair SQL (for prod): {repair_path}")
 
