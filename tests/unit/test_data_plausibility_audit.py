@@ -95,9 +95,12 @@ def test_sql_builders_produce_nonempty_statements():
 
 
 def _try_connect():
+    # get_connection() raises SystemExit (not an Exception subclass) when the
+    # POSTGRES_* env vars are absent — exactly the CI situation — so catching
+    # bare Exception is not enough for the "skip cleanly without a DB" promise.
     try:
         conn = get_connection()
-    except Exception:
+    except (Exception, SystemExit):
         return None
     return conn
 
