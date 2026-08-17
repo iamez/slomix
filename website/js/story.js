@@ -320,19 +320,19 @@ async function loadStoryData() {
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
         fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
             if (loadId === storyLoadId) renderNarrative(narData);
-        }).catch(() => renderNarrative(null));
+        }).catch(() => { if (loadId === storyLoadId) renderNarrative(null); });
 
         fetchJSON(`${API_BASE}/storytelling/momentum?${q}`).then(momtData => {
             if (loadId === storyLoadId) renderMomentum(momtData);
-        }).catch(() => renderMomentum(null));
+        }).catch(() => { if (loadId === storyLoadId) renderMomentum(null); });
 
         fetchJSON(`${API_BASE}/storytelling/moments?${q}&limit=10`).then(momData => {
             if (loadId === storyLoadId) renderMoments(momData);
-        }).catch(() => renderMoments(null));
+        }).catch(() => { if (loadId === storyLoadId) renderMoments(null); });
 
         fetchJSON(`${API_BASE}/storytelling/synergy?${q}`).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
-        }).catch(() => renderTeamSynergy(null));
+        }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
         fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
             if (loadId !== storyLoadId) return;
@@ -350,7 +350,7 @@ async function loadStoryData() {
             if (mvpCell && top?.name && Number(top.total_pwc) > 0) {
                 mvpCell.textContent = stripEtColors(top.name);
             }
-        }).catch(() => renderWinContribution(null));
+        }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
 
         // Advanced metrics + Comp Skill board render into the SAME container,
         // sequentially (renderAdvancedMetrics clears it) — so fetch together.
@@ -371,7 +371,7 @@ async function loadStoryData() {
         // Box Score
         fetchJSON(`${API_BASE}/storytelling/box-score?${q}`)
             .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
-            .catch(() => renderBoxScore(null));
+            .catch(() => { if (loadId === storyLoadId) renderBoxScore(null); });
 
         // Invisible Value — 5 parallel fetches
         Promise.allSettled([
@@ -389,7 +389,7 @@ async function loadStoryData() {
                 l.status === 'fulfilled' ? l.value : null,
                 d.status === 'fulfilled' ? d.value : null
             );
-        }).catch(() => renderInvisibleValue(null, null, null, null, null));
+        }).catch(() => { if (loadId === storyLoadId) renderInvisibleValue(null, null, null, null, null); });
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
