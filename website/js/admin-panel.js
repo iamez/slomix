@@ -89,45 +89,10 @@ function setVersion() {
     setText('about-build-info', `page rev: ${PAGE_REVISION}`);
 }
 
-/**
- * The KIS chips on the About page render from the LIVE scoring engine, so the
- * page can never lie about the formula again (the old hand-written facts
- * drifted: "Lua v6.01", "2,859 tests", "20 cogs" were all stale by August).
- * Retired terms (e.g. push in kis-v5) are skipped — they no longer score.
- */
-async function loadKisFormula() {
-    const box = document.getElementById('about-kis-formula');
-    if (!box) return;
-    try {
-        const f = await fetchJSON(`${API_BASE}/storytelling/formula`);
-        const chips = [];
-        const add = (label, value, title) => {
-            const span = document.createElement('span');
-            span.className = 'px-2 py-1 rounded-lg bg-slate-800/70 border border-white/10 text-[11px] font-bold text-slate-200';
-            span.textContent = `${label} ×${value}`;
-            if (title) span.title = title;
-            chips.push(span);
-        };
-        for (const [key, m] of Object.entries(f?.multipliers || {})) {
-            if (!m || m.status) continue;               // retired terms don't score
-            add(key.replace(/_/g, ' '), m.value ?? m.range, m.description);
-        }
-        for (const [key, m] of Object.entries(f?.outcome_multipliers || {})) {
-            if (!m || m.status) continue;
-            add(key.replace(/_/g, ' '), m.value ?? m.range, m.description);
-        }
-        if (!chips.length) return;                      // keep the loading note on empty
-        box.textContent = '';
-        for (const c of chips) box.appendChild(c);
-        const ver = document.getElementById('about-kis-version');
-        if (ver && f?.version) ver.textContent = f.version;
-    } catch { /* the static copy above the chips still reads fine */ }
-}
-
 export function loadAdminPanelView() {
     setVersion();
     // Fire in parallel; none is critical to render.
-    Promise.all([loadOverview(), loadStatus(), loadKisFormula()]).catch(() => { /* swallowed per-call */ });
+    Promise.all([loadOverview(), loadStatus()]).catch(() => { /* swallowed per-call */ });
     initialized = true;
 }
 
