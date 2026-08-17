@@ -1860,21 +1860,7 @@
 
             <!-- Retro Viz Teaser -->
             <div class="max-w-7xl mx-auto px-6 pb-20 relative z-20">
-                <div class="glass-card rounded-xl p-6 border border-brand-purple/20 hover:border-brand-purple/40 transition-colors group cursor-pointer" data-click-action="navigateTo('retro-viz')">
-                    <div class="flex items-center gap-5">
-                        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-purple/30 to-brand-cyan/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                            <i data-lucide="sparkles" class="w-7 h-7 text-brand-purple"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
-                                <h3 class="text-base font-bold text-white">Retro Viz Gallery</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-purple/20 text-brand-purple uppercase">New</span>
-                            </div>
-                            <p class="text-sm text-slate-400">Pixel-art visualizations, ASCII stats, and retro-styled match summaries from your gaming sessions.</p>
-                        </div>
-                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-brand-purple group-hover:translate-x-1 transition-all shrink-0"></i>
-                    </div>
-                </div>
+                
             </div>
         </div>
 
@@ -4154,9 +4140,10 @@
                             </div>
                             <h1 class="text-5xl md:text-6xl font-black text-white tracking-tight">Slomix</h1>
                             <p class="text-lg text-slate-300 max-w-2xl leading-relaxed">
-                                A production-grade analytics platform for competitive
-                                <span class="text-amber-400 font-bold">ET:Legacy</span> — Discord bot, web dashboard,
-                                demo highlight scanner, and game-server telemetry, all backed by a single PostgreSQL source of truth.
+                                Every gather night on our <span class="text-amber-400 font-bold">ET:Legacy</span> server,
+                                recorded and scored honestly — who carried, who clutched, whose kills actually moved the
+                                round, and whose were just noise. If a number is on this site, we can tell you exactly
+                                where it came from.
                             </p>
                         </div>
                         <div class="flex flex-wrap gap-3">
@@ -4204,30 +4191,108 @@
                     </div>
                 </section>
 
+                <!-- What the numbers mean -->
+                <section>
+                    <div class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-1 font-bold">What the numbers mean</div>
+                    <p class="text-sm text-slate-400 mb-4 max-w-3xl">First time here? Start with these. Every metric below is
+                        computed from real rounds on our server — no vibes, no manual entry, and when we can't measure
+                        something honestly, we say so instead of guessing.</p>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        <div class="glass-card rounded-2xl p-5 border border-amber-500/20">
+                            <div class="text-amber-400 font-black text-sm uppercase tracking-wider mb-1">DPM — damage per minute</div>
+                            <p class="text-sm text-slate-300 leading-relaxed">How much hurt you put out while you were actually
+                                alive. Our most reliable number by far — if you trust one stat on this site, trust this one.</p>
+                            <p class="text-[11px] text-slate-500 mt-2">Fine print: damage ÷ minutes alive. Split-half reliability r ≈ 0.99 on our data.</p>
+                        </div>
+
+                        <div class="glass-card rounded-2xl p-5 border border-rose-500/20">
+                            <div class="text-rose-400 font-black text-sm uppercase tracking-wider mb-1">KIS — what a kill was worth</div>
+                            <p class="text-sm text-slate-300 leading-relaxed">A kill is not just a kill. Gibbing the medic while
+                                outnumbered at the objective? Jackpot. Spraying down a guy two seconds before his respawn?
+                                Barely worth the ammo. Every kill starts at 1.0 and gets multiplied by context:</p>
+                            <div id="about-kis-formula" class="flex flex-wrap gap-1.5 mt-3">
+                                <span class="text-[11px] text-slate-500">loading live formula…</span>
+                            </div>
+                            <p class="text-[11px] text-slate-500 mt-2">These chips render from the <em>live</em> scoring engine
+                                (<span id="about-kis-version" class="font-mono">kis-?</span>) — if the formula changes, this page
+                                updates itself. Position tracking exists since March 2026; a coverage badge on Smart Stats tells
+                                you how much of a night is actually scored.</p>
+                        </div>
+
+                        <div class="glass-card rounded-2xl p-5 border border-cyan-500/20">
+                            <div class="text-cyan-400 font-black text-sm uppercase tracking-wider mb-1">PWC — your share of the win</div>
+                            <p class="text-sm text-slate-300 leading-relaxed">How much of the work in your team's <em>won</em>
+                                rounds was yours. Kills, damage, objectives, revives, survival — plus crossfires, trades and
+                                clutches. Padding stats in lost rounds does not move it. That's the point.</p>
+                            <p class="text-[11px] text-slate-500 mt-2">Fine print: 72% match stats + 28% position tracking. Works for every session we've ever recorded.</p>
+                        </div>
+
+                        <div class="glass-card rounded-2xl p-5 border border-emerald-500/20">
+                            <div class="text-emerald-400 font-black text-sm uppercase tracking-wider mb-1">Accuracy — hits over shots</div>
+                            <p class="text-sm text-slate-300 leading-relaxed">Light-weapons hits divided by shots fired. Sounds
+                                simple, is brutal: sustained 40% over a full round is elite company. Our all-time record stands
+                                on a <em>provable</em> sample — a record with a corrupted bullet count doesn't count, no matter
+                                how shiny the percentage.</p>
+                        </div>
+
+                        <div class="glass-card rounded-2xl p-5 border border-purple-500/20">
+                            <div class="text-purple-400 font-black text-sm uppercase tracking-wider mb-1">Round · Match · Session</div>
+                            <p class="text-sm text-slate-300 leading-relaxed"><span class="text-white font-bold">Round</span> —
+                                one attack or defense (R1 or R2). <span class="text-white font-bold">Match</span> — both rounds
+                                of one map, sides swapped, stopwatch rules: beat the attackers' time or hold them off.
+                                <span class="text-white font-bold">Session</span> — one gather night; a break longer than an
+                                hour starts a new one.</p>
+                            <p class="text-[11px] text-slate-500 mt-2">Fullhold = the defense never broke. The sweetest two words in stopwatch.</p>
+                        </div>
+
+                        <div class="glass-card rounded-2xl p-5 border border-blue-500/20">
+                            <div class="text-blue-400 font-black text-sm uppercase tracking-wider mb-1">BOX score &amp; tiers</div>
+                            <p class="text-sm text-slate-300 leading-relaxed">Team score for the night: win the map = 2 points,
+                                double fullhold = 1–1. Player tiers (Legendary → Quiet) grade your kill impact <em>per map</em> —
+                                an 11-map marathon doesn't out-badge a sharp 6-map evening.</p>
+                        </div>
+
+                    </div>
+
+                    <div class="glass-card rounded-2xl p-5 border border-white/10 mt-4">
+                        <div class="text-slate-200 font-black text-sm uppercase tracking-wider mb-1">🛡️ Why you can trust this</div>
+                        <p class="text-sm text-slate-400 leading-relaxed">Every page runs against the same database the capture
+                            pipeline writes, guarded by automated invariants: totals must add up, bots never enter leaderboards,
+                            records must stand on physically possible rows. When coverage is partial, the page says so —
+                            an honest "63% scored" beats a confident lie.</p>
+                    </div>
+                </section>
+
                 <!-- What is Slomix -->
                 <section class="glass-card rounded-3xl p-8 lg:p-10 border border-white/10">
                     <h2 class="text-2xl font-black text-white mb-4">What is this?</h2>
                     <div class="space-y-4 text-slate-300 leading-relaxed max-w-3xl">
                         <p>
-                            Slomix watches an ET:Legacy game server, captures every round's stats the moment they're written,
-                            and turns the raw output into something readable: per-player profiles, session summaries,
-                            leaderboards, kill-impact scoring, team rivalries, and demo highlights.
+                            A Slovenian crew has been playing competitive ET:Legacy together for years — gathers, scrims,
+                            the occasional LAN grudge. Slomix is the memory of all of it: the moment a round ends on our
+                            server, its stats are captured, parsed, scored and served — to a Discord bot that announces the
+                            damage, and to this site for the long-form story.
                         </p>
                         <p>
-                            Under the hood: SSH-based file monitoring, an R1/R2 differential parser, real-time Lua webhooks for
-                            timing-critical events (round end, surrender, captures), proximity tracking for crossfire / trade-kill
-                            analytics, and a 6-layer data validation pipeline. Everything lands in a single PostgreSQL 17 database
-                            (90+ tables) shared by the bot and the website.
+                            What makes it different from a scoreboard screenshot: context. Position tracking knows who was
+                            actually at the objective. Kill scoring knows a revived kill was undone. Session logic knows
+                            midnight doesn't end a gaming night. And when the data can't support a claim, the page shows
+                            its coverage instead of bluffing.
                         </p>
                         <p>
-                            Users see two faces: a Discord bot with 100+ commands across 20 cogs, and this React-fronted website
-                            for the longer-form view. Behind both: 2,800+ tests pinning regressions, conventional-commit history,
-                            and release-please-driven CHANGELOG.
+                            Curious how the sausage is made? Open the fold below.
                         </p>
                     </div>
                 </section>
 
-                <!-- Architecture pipeline -->
+                <!-- Architecture pipeline (folded: for the curious) -->
+                <details class="group">
+                <summary class="cursor-pointer list-none select-none glass-card rounded-2xl p-5 border border-white/10 flex items-center justify-between">
+                    <span class="text-sm font-black text-white uppercase tracking-wider">⚙️ How it works — for the curious</span>
+                    <span class="text-xs text-slate-500 group-open:hidden">Show</span><span class="text-xs text-slate-500 hidden group-open:inline">Hide</span>
+                </summary>
+                <div class="space-y-10 mt-6">
                 <section>
                     <div class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-4 font-bold">Pipeline</div>
                     <div class="glass-card rounded-3xl p-6 lg:p-8 border border-white/10">
@@ -4235,7 +4300,7 @@
                             <div class="pipeline-step bg-slate-800/40 border border-amber-500/30 rounded-2xl p-4">
                                 <div class="text-amber-400 text-xs font-bold uppercase tracking-wider">1. Source</div>
                                 <div class="text-white font-bold mt-2">Game Server</div>
-                                <div class="text-[11px] text-slate-400 mt-1">ET:Legacy + Lua v6.01 writes raw stats files + webhook events</div>
+                                <div class="text-[11px] text-slate-400 mt-1">ET:Legacy (Lua 5.4) — the proximity tracker and webhook scripts write raw stats + events</div>
                             </div>
                             <div class="pipeline-step bg-slate-800/40 border border-cyan-500/30 rounded-2xl p-4">
                                 <div class="text-cyan-400 text-xs font-bold uppercase tracking-wider">2. Capture</div>
@@ -4250,7 +4315,7 @@
                             <div class="pipeline-step bg-slate-800/40 border border-emerald-500/30 rounded-2xl p-4">
                                 <div class="text-emerald-400 text-xs font-bold uppercase tracking-wider">4. Store</div>
                                 <div class="text-white font-bold mt-2">PostgreSQL 17</div>
-                                <div class="text-[11px] text-slate-400 mt-1">95 tables, committed migrations, partial UNIQUE constraints</div>
+                                <div class="text-[11px] text-slate-400 mt-1">one source of truth: committed migrations, partial UNIQUE constraints</div>
                             </div>
                             <div class="pipeline-step bg-slate-800/40 border border-rose-500/30 rounded-2xl p-4">
                                 <div class="text-rose-400 text-xs font-bold uppercase tracking-wider">5. Surface</div>
@@ -4274,7 +4339,7 @@
                                 </div>
                             </div>
                             <p class="text-xs text-slate-400 leading-relaxed">
-                                100+ commands across 20 cogs. Real-time round notifications, AI match predictions,
+                                100+ commands. Real-time round notifications, AI match predictions,
                                 team management, achievements, retro stats backfill.
                             </p>
                         </div>
@@ -4296,7 +4361,7 @@
                                 <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-xl" aria-hidden="true">⚡</div>
                                 <div>
                                     <div class="text-white font-bold">Lua Webhook</div>
-                                    <div class="text-[11px] text-slate-500">v1.7.0 + retry buffer</div>
+                                    <div class="text-[11px] text-slate-500">surrender-aware + retry buffer</div>
                                 </div>
                             </div>
                             <p class="text-xs text-slate-400 leading-relaxed">
@@ -4340,7 +4405,7 @@
                             </div>
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 Magic-byte file validation, R2 differential reconstruction, round correlation linkage,
-                                canonical round ID, schema drift gates, 2,859 unit tests.
+                                canonical round ID, schema drift gates, and a CI wall of tests — including a Lua 5.4 parse gate.
                             </p>
                         </div>
                     </div>
@@ -4361,11 +4426,13 @@
                         <span class="tech-pill">Tailwind CSS v4</span>
                         <span class="tech-pill">Vite 7</span>
                         <span class="tech-pill">Lucide Icons</span>
-                        <span class="tech-pill">Lua 5.1 (ET:L)</span>
+                        <span class="tech-pill">Lua 5.4 (ET:L)</span>
                         <span class="tech-pill">UDT_json (Quake3 demo parser)</span>
                         <span class="tech-pill">FFmpeg</span>
                     </div>
                 </section>
+                </div>
+                </details>
 
                 <!-- Footer -->
                 <section class="text-center text-xs text-slate-500 pt-6 border-t border-white/5">
