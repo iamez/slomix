@@ -816,7 +816,14 @@ function renderMomentum(data) {
     _momentumLastData = data;
 
     const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
-    if (rounds.length === 0) return;
+    if (rounds.length === 0) {
+        // Every other exit from this function destroys the chart before
+        // building a new one; without this, switching to a session with no
+        // momentum rounds leaked the previous Chart.js instance (still
+        // registered, handlers bound to a detached canvas).
+        if (_momentumChart) { _momentumChart.destroy(); _momentumChart = null; }
+        return;
+    }
 
     const headRow = _el('div', 'flex items-center justify-between mb-3 flex-wrap gap-2');
     const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase', 'Momentum');
