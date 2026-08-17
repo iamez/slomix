@@ -58,6 +58,13 @@ if str(_REPO_ROOT) not in sys.path:
 # accuracy-record fix (#755) and repeated here for the same reason.
 PROVENANCE_CUTOFF = "2026-01-01"
 
+# First day the orphan-R2 sensor is armed: the whole backlog up to and
+# INCLUDING 2026-08-17 was triaged that day (healed from original files or
+# stamped round_status='orphan_r2' by
+# scripts/repair_inverted_r2_cumulative_rounds.py), so the rule starts at the
+# first day whose orphans nobody has hand-checked.
+ORPHAN_SENSOR_ARMED_FROM = "2026-08-18"
+
 # ── Env / connection (mirrors scripts/data_trust_check.py) ────────────────────
 
 
@@ -112,7 +119,16 @@ VALID_TABLES = {"player_comprehensive_stats", "rounds"}
 # Guard the regex before the split_part cast so a future malformed value fails
 # the *audit rule* (correctly, as "unparseable duration") instead of the query.
 _ACTUAL_TIME_LOOKS_VALID = "r.actual_time ~ '^[0-9]+:[0-9]{2}$'"
-_ACTUAL_TIME_SECONDS = "(split_part(r.actual_time, ':', 1)::int * 60 + split_part(r.actual_time, ':', 2)::int)"
+# PostgreSQL does NOT guarantee left-to-right short-circuit evaluation of AND/OR
+# operands, so pairing the regex guard and the cast as separate conjuncts is not
+# actually safe — the planner may evaluate the cast first and raise on a
+# malformed value. The CASE expression makes the guard part of the expression
+# itself: a non-matching actual_time yields NULL instead of a cast error.
+_ACTUAL_TIME_SECONDS = (
+    "(CASE WHEN r.actual_time ~ '^[0-9]+:[0-9]{2}$' "
+    "THEN split_part(r.actual_time, ':', 1)::int * 60 + split_part(r.actual_time, ':', 2)::int "
+    "END)"
+)
 
 
 @dataclass(frozen=True)
@@ -399,7 +415,7 @@ RULES: list[Rule] = [
         # importer stamps orphans at import time, so any new one sitting as
         # 'completed' is a live regression.
         predicate=(
-            "r.round_number = 2 AND r.round_date >= '2026-08-18' "
+            "r.round_number = 2 AND r.round_date >= '" + ORPHAN_SENSOR_ARMED_FROM + "' "
             "AND NOT EXISTS ("
             "SELECT 1 FROM rounds r1 "
             "WHERE r1.match_id = r.match_id AND r1.round_number = 1)"
@@ -661,7 +677,13 @@ def render_json(results: list[RuleResult], generated_at: str) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--top", type=int, default=3, help="Top offending rows to show per rule (default: 3)")
+    def _non_negative(value: str) -> int:
+        n = int(value)
+        if n < 0:
+            raise argparse.ArgumentTypeError("--top must be >= 0")
+        return n
+
+    parser.add_argument("--top", type=_non_negative, default=3, help="Top offending rows to show per rule (default: 3)")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON to stdout instead of markdown")
     parser.add_argument(
         "--output",
