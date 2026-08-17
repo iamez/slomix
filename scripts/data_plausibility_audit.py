@@ -487,7 +487,7 @@ def _date_col(rule: Rule) -> str:
 
 def build_count_sql(rule: Rule) -> str:
     from_clause, base_gate = _from_clause(rule)
-    return f"SELECT COUNT(*) FROM {from_clause} WHERE {base_gate} AND ({rule.predicate})"
+    return f"SELECT COUNT(*) FROM {from_clause} WHERE {base_gate} AND ({rule.predicate})"  # noqa: S608 # nosec B608 - rules are hardcoded literals validated at import
 
 
 def build_split_sql(rule: Rule) -> str:
@@ -497,7 +497,7 @@ def build_split_sql(rule: Rule) -> str:
         f"SELECT "
         f"COUNT(*) FILTER (WHERE {date_col} < '{PROVENANCE_CUTOFF}') AS backfill, "
         f"COUNT(*) FILTER (WHERE {date_col} >= '{PROVENANCE_CUTOFF}') AS live "
-        f"FROM {from_clause} WHERE {base_gate} AND ({rule.predicate})"
+        f"FROM {from_clause} WHERE {base_gate} AND ({rule.predicate})"  # noqa: S608 # nosec B608 - rules are hardcoded literals validated at import
     )
 
 
@@ -512,7 +512,7 @@ def build_top_rows_sql(rule: Rule, limit: int) -> tuple[str, list[str]]:
     extra_labels = [c.split(".", 1)[1] for c in rule.extra_cols]
     cols = identity + ("," if rule.extra_cols else "") + ", ".join(rule.extra_cols)
     order_by = rule.order_by or ("pcs.id DESC" if rule.table == "player_comprehensive_stats" else "r.id DESC")
-    sql = f"SELECT {cols} FROM {from_clause} WHERE {base_gate} AND ({rule.predicate}) ORDER BY {order_by} LIMIT {int(limit)}"
+    sql = f"SELECT {cols} FROM {from_clause} WHERE {base_gate} AND ({rule.predicate}) ORDER BY {order_by} LIMIT {int(limit)}"  # noqa: S608 # nosec B608 - rules are hardcoded literals validated at import
     return sql, id_labels + extra_labels
 
 
