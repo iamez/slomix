@@ -3279,8 +3279,12 @@
                 <div id="story-hero-freshness" class="text-[10px] text-slate-500 uppercase tracking-wider"></div>
               </div>
               <h2 id="story-title" class="text-3xl md:text-4xl font-black text-white mb-2">Loading...</h2>
+              <div id="story-hero-lead" class="text-sm mb-2"></div>
               <div id="story-subtitle" class="text-slate-400 text-sm"></div>
-              <div id="story-hero-arc" class="flex items-center gap-2 flex-wrap mt-3"></div>
+              <div class="flex items-center gap-3 flex-wrap mt-3">
+                <span id="story-hero-score" class="text-sm font-bold tabular-nums"></span>
+                <div id="story-hero-arc" class="flex items-center gap-2 flex-wrap"></div>
+              </div>
               <div id="story-hero-turning" class="text-sm text-slate-300 mt-2"></div>
               <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300 flex-wrap"></div>
             </div>
@@ -3295,20 +3299,31 @@
           <!-- Narrative -->
           <div id="story-narrative" class="mb-6"></div>
 
-          <!-- Momentum — the visual backbone of the evening, kept high -->
+          <!-- The people are the spine: teams reshuffle between maps, players
+               do not. One scannable row each; the old card body is one click
+               down. -->
+          <div id="story-players" class="flex flex-col gap-2 mb-6"></div>
+
+          <!-- The night, map by map. Moments hang off the map they happened on
+               instead of a horizontal strip that ran off the right edge. -->
           <div class="mb-6">
-            <div id="story-momentum"></div>
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">The night, map by map</h3>
+            <div id="story-timeline" class="flex flex-col gap-1"></div>
           </div>
 
-          <!-- Moments -->
+          <!-- Moments, vertical. They carry a map NAME and round number but no
+               map-play index, and a map can be played three times in a night —
+               so they cannot be pinned to a row above without guessing. Listed
+               here instead, each stating its own map, and no longer in a strip
+               that ran off the right edge. -->
           <div class="mb-6">
             <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9889; Key Moments</h3>
-            <div id="story-moments" class="flex gap-3 overflow-x-auto pb-2"></div>
+            <div id="story-moments" class="flex flex-col gap-2"></div>
           </div>
 
-          <!-- Player cards grid — "who was key?" is question 2, so it sits
-               right under the moments instead of ~3 screens down. -->
-          <div id="story-players" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+          <!-- Momentum is per-round detail, not a headline: folded with the rest
+               of the evidence below. -->
+          <div id="story-momentum" class="hidden"></div>
 
           <!-- Everything below is EVIDENCE: same panels as before, folded away
                by default (native <details>, no JS, keyboard-accessible). The
@@ -3437,7 +3452,10 @@
           .story-fold-mini[open] > summary::after { transform: rotate(90deg); }
           .story-fold-mini > summary:focus-visible { outline: 2px solid rgba(245,158,11,0.6); outline-offset: -2px; }
           .story-fold > summary .story-fold-hint { margin-left: auto; }
-          .story-fold > summary .story-fold-hint::before { content: 'Show'; }
+          /* 'Show' is a placeholder for an EMPTY hint. Once a fold states what
+             is inside it ("877 kills across 18 pairings"), the placeholder must
+             step aside — otherwise the two run together as "SHOW877 kills…". */
+          .story-fold > summary .story-fold-hint:empty::before { content: 'Show'; }
           .story-fold[open] > summary .story-fold-hint::before { content: 'Hide'; }
         </style>
 
