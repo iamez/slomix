@@ -105,6 +105,47 @@ async def get_records(
         q_params = (map_name, limit) if map_name else (limit,)
         plans.append((key, query, q_params))
 
+    # Match-level records: both rounds of one map, summed per player. Summing
+    # the (already differential) R1+R2 rows by match_id is the trustworthy
+    # path — R0 "match summary" rows are a known-unreliable aggregate and are
+    # deliberately not used. Only summable counters get a match category
+    # (ratios like accuracy do not survive summation). A match missing its R2
+    # simply sums lower — it can never fake-inflate a record.
+    match_categories = {
+        "match_damage": "damage_given",
+        "match_kills": "kills",
+        "match_headshots": "headshots",
+        "match_xp": "xp",
+        "match_revives": "revives_given",
+        "match_gibs": "gibs",
+    }
+    match_map_filter = " AND pcs.map_name = $1" if map_name else ""
+    match_limit_placeholder = "$2" if map_name else "$1"
+    for key, col in match_categories.items():
+        query = f"""
+            SELECT
+                MAX(pcs.player_name) as player_name,
+                SUM(pcs.{col}) as value,
+                MAX(pcs.map_name) as map_name,
+                MIN(pcs.round_date) as round_date
+            FROM player_comprehensive_stats pcs
+            JOIN rounds r ON r.id = pcs.round_id
+            WHERE pcs.round_number IN (1, 2)
+              AND pcs.time_played_seconds > 0
+              AND pcs.player_name NOT LIKE '[BOT]%'
+              AND pcs.player_guid IS NOT NULL
+              AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+              AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.round_status IS DISTINCT FROM 'orphan_r2'
+              AND r.match_id IS NOT NULL
+              {match_map_filter}
+            GROUP BY r.match_id, pcs.player_guid
+            ORDER BY value DESC
+            LIMIT {match_limit_placeholder}
+        """
+        q_params = (map_name, limit) if map_name else (limit,)
+        plans.append((key, query, q_params))
+
     sem = asyncio.Semaphore(5)
 
     async def _run(q: str, p: tuple):
