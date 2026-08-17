@@ -369,6 +369,69 @@ RULES: list[Rule] = [
         extra_cols=("r.round_time", "r.round_date"),
         order_by="r.id DESC",
     ),
+    # ── R2-cumulative family (2026-08-17, scripts/repair_inverted_r2_cumulative_rounds.py) ──
+    Rule(
+        name="rounds_orphan_r2_masquerading_as_completed",
+        table="rounds",
+        tier="T1",
+        severity="critical",
+        # Scoped to imports after the 2026-08-17 triage: every orphan R2 up to
+        # that day was either healed from its original files (values now true
+        # differentials — the round legitimately stays 'completed', only its
+        # R1 row is missing, which is a completeness matter, not a
+        # plausibility one) or stamped 'orphan_r2'. From that day on the
+        # importer stamps orphans at import time, so any new one sitting as
+        # 'completed' is a live regression.
+        predicate=(
+            "r.round_number = 2 AND r.round_date >= '2026-08-18' "
+            "AND NOT EXISTS ("
+            "SELECT 1 FROM rounds r1 "
+            "WHERE r1.match_id = r.match_id AND r1.round_number = 1)"
+        ),
+        note=(
+            "An R2 with no R1 round for its match went through the parser's "
+            "orphan path: its player rows hold raw CUMULATIVE (R1+R2) values. "
+            "The importer stamps these round_status='orphan_r2' so consumers "
+            "exclude them centrally — one sitting as 'completed' means the "
+            "stamp was missed and per-round surfaces are showing doubled "
+            "stats (this is how the fake all-time damage record happened). "
+            "Pre-2026-08-18 orphans are excluded: that backlog was healed or "
+            "stamped by scripts/repair_inverted_r2_cumulative_rounds.py."
+        ),
+        extra_cols=("r.match_id",),
+        order_by="r.id DESC",
+    ),
+    Rule(
+        name="rounds_r2_whole_lobby_outscored_r1",
+        table="rounds",
+        tier="T1",
+        severity="medium",
+        predicate=(
+            "r.round_number = 2 AND "
+            "(SELECT COUNT(*) FROM player_comprehensive_stats p2 "
+            " JOIN rounds r1 ON r1.match_id = r.match_id AND r1.round_number = 1 "
+            " JOIN player_comprehensive_stats p1 "
+            "   ON p1.round_id = r1.id AND p1.player_guid = p2.player_guid "
+            " WHERE p2.round_id = r.id) >= 4 AND "
+            "NOT EXISTS ("
+            "SELECT 1 FROM player_comprehensive_stats p2 "
+            "JOIN rounds r1 ON r1.match_id = r.match_id AND r1.round_number = 1 "
+            "JOIN player_comprehensive_stats p1 "
+            "  ON p1.round_id = r1.id AND p1.player_guid = p2.player_guid "
+            "WHERE p2.round_id = r.id "
+            "  AND (p2.kills < p1.kills OR p2.damage_given < p1.damage_given))"
+        ),
+        note=(
+            "Every shared player (4+) beat their own R1 on BOTH kills and "
+            "damage in R2 — the signature of a raw cumulative R2 row that "
+            "slipped past pairing. A nomination, not a verdict: "
+            "scripts/repair_inverted_r2_cumulative_rounds.py makes the final "
+            "call against the original stats file (a genuine whole-lobby R2 "
+            "bloodbath is possible, just rare)."
+        ),
+        extra_cols=("r.match_id",),
+        order_by="r.id DESC",
+    ),
 ]
 
 
