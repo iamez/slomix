@@ -208,7 +208,12 @@ elif remote_sums="$(ssh "${SSH_OPTS[@]}" -i "$GAME_SSH_KEY" -p "$GAME_SSH_PORT" 
         rm -f "$drift_tmp"
     done
 else
-    warn "game server unreachable over ssh ($GAME_SSH_HOST) — lua drift unknown"
+    # fail, not warn: an unreachable server means the drift SENSOR is down,
+    # which is a different and worse fact than "drift exists". A silent exit 0
+    # here is the same class of quiet failure this script exists to catch
+    # (RCA 2026-08-17: the live Lua crashed for three months with every
+    # sensor green).
+    fail "game server unreachable over ssh ($GAME_SSH_HOST) — lua drift UNKNOWN, sensor down"
 fi
 
 # ---------------------------------------------------------------------------

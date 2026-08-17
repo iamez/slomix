@@ -62,9 +62,28 @@
    file (backup taken in step 2). **Keep `features.shot_fired = false`** for
    the first deploy — ship the code dormant, verify zero behavioural change
    and that v6.02 parses clean end-to-end on a real round.
+6a. **[RUNTIME GATE — MANDATORY, added 2026-08-17]** Before anything touches
+   the live server: install the candidate Lua on the LOCAL ET clone
+   (`scripts/local_et_setup.sh` once; `scripts/local_et.sh start`), do one
+   full `map` load, and run `scripts/local_et.sh verify` — it greps the
+   clone's etconsole.log for `error running lua|attempt to
+   (index|call|compare|perform)|stack traceback|bad argument` and counts the
+   `loaded into Lua VM` lines. **A deploy proceeds only on a clean verify.**
+   This step exists because a `%d`-on-float crash printed into the LIVE
+   console on every supply load for three months while the old runbook's
+   "no etconsole errors" was an acceptance adjective with no step behind it
+   (RCA 2026-08-17).
 7. **Map reload** to load new Lua — **full map load, NEVER `lua_restart`**
    (per `feedback_lua_restart`: `lua_restart` crashes c0rnp0rn8). Coordinate
    with the user; do not restart anything autonomously.
+7a. **[RUNTIME GATE, live]** Immediately after the map load, grep the LIVE
+   console for the same error patterns as 6a (the bot's Lua console sentinel
+   watches continuously from #752 on, but the deploy session checks
+   explicitly and does not rely on it):
+   `ssh … 'tail -c 65536 ~/.etlegacy/legacy/etconsole.log' | grep -aiE
+   'error running lua|bad argument|stack traceback|attempt to
+   (index|call|compare|perform|concatenate)'` → must return nothing new, and
+   the `>>> Proximity Tracker v… initialized` banner must be present.
 8. **Runtime-validate `ps.viewangles`** on the server: temporarily, on a
    controlled test, enable `features.shot_fired` and inspect a few
    `SHOT_FIRED` lines in `etconsole.log` — confirm yaw/pitch are sane
