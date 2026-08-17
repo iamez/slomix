@@ -91,7 +91,7 @@ function setVersion() {
 
 export function loadAdminPanelView() {
     setVersion();
-    // Fire both in parallel; neither is critical to render.
+    // Fire in parallel; none is critical to render.
     Promise.all([loadOverview(), loadStatus()]).catch(() => { /* swallowed per-call */ });
     initialized = true;
 }
