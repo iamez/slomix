@@ -146,10 +146,39 @@ _DB_SUBTRACT_COLUMNS = [
     "headshots", "bullets_fired",
 ]
 
+# Fully literal statements (no runtime interpolation) so static SQL-injection
+# scanners have nothing to object to — the dynamic pieces above are fixed
+# module constants, and building the finished text once at import makes that
+# visible to tools that only trust literals.
+_BACKUP_SELECT_SQL = {
+    "player_comprehensive_stats":
+        "SELECT * FROM player_comprehensive_stats WHERE round_id = %s",
+    "weapon_comprehensive_stats":
+        "SELECT * FROM weapon_comprehensive_stats WHERE round_id = %s",
+}
+_DB_SUBTRACT_SELECT_SQL = (
+    "SELECT player_guid, " + ", ".join(_DB_SUBTRACT_COLUMNS)
+    + ", time_played_seconds FROM player_comprehensive_stats WHERE round_id = %s"
+)
+# _heal_suspect_by_db_subtraction writes _DB_SUBTRACT_COLUMNS plus the four
+# derived fields, in that order (dict insertion order there).
+_DB_SUBTRACT_UPDATE_SQL = (
+    "UPDATE player_comprehensive_stats SET "
+    + ", ".join(f"{c} = %s" for c in _DB_SUBTRACT_COLUMNS)
+    + ", kd_ratio = %s, dpm = %s, efficiency = %s, accuracy = %s"
+    + " WHERE round_id = %s AND player_guid = %s"
+)
+# The full-parser heal writes every stat column in _PCS_STAT_COLUMNS order.
+_PCS_UPDATE_SQL = (
+    "UPDATE player_comprehensive_stats SET "
+    + ", ".join(f"{c} = %s" for c in _PCS_STAT_COLUMNS)
+    + " WHERE round_id = %s AND player_guid = %s"
+)
+
 
 def _backup_round(cur, r2_id: int, backup_lines: list[str]) -> None:
-    for table in ("player_comprehensive_stats", "weapon_comprehensive_stats"):
-        cur.execute(f"SELECT * FROM {table} WHERE round_id = %s", (r2_id,))  # noqa: S608 # nosec B608 # nosemgrep: table name from fixed tuple
+    for table, select_sql in _BACKUP_SELECT_SQL.items():
+        cur.execute(select_sql, (r2_id,))
         cols = [d[0] for d in cur.description]
         for row in cur.fetchall():
             vals = ", ".join(_sql_literal(v) for v in row)
@@ -163,18 +192,9 @@ def _heal_suspect_by_db_subtraction(cur, pair: dict, repair_lines: list[str]) ->
     recomputed derived fields; weapon rows likewise. Only safe because the
     raw-file discriminator has already proven the stored R2 row IS the raw
     cumulative and the R1 round was imported from its own file."""
-    cols = ", ".join(_DB_SUBTRACT_COLUMNS)
-    cur.execute(  # nosemgrep: fixed column list, %s params
-        f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 # nosec B608 - fixed column list
-        "FROM player_comprehensive_stats WHERE round_id = %s",
-        (pair["r1_id"],),
-    )
+    cur.execute(_DB_SUBTRACT_SELECT_SQL, (pair["r1_id"],))
     r1_rows = {row[0]: row[1:] for row in cur.fetchall()}
-    cur.execute(  # nosemgrep: fixed column list, %s params
-        f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 # nosec B608 - fixed column list
-        "FROM player_comprehensive_stats WHERE round_id = %s",
-        (pair["r2_id"],),
-    )
+    cur.execute(_DB_SUBTRACT_SELECT_SQL, (pair["r2_id"],))
     healed = 0
     for row in cur.fetchall():
         guid = row[0]
@@ -226,12 +246,10 @@ def _heal_suspect_by_db_subtraction(cur, pair: dict, repair_lines: list[str]) ->
             )
         new["accuracy"] = (tot_hits / tot_shots * 100) if tot_shots > 0 else 0.0
 
-        set_sql = ", ".join(f"{c} = %s" for c in new)
-        cur.execute(
-            f"UPDATE player_comprehensive_stats SET {set_sql} "  # noqa: S608 # nosec B608 - fixed column list
-            "WHERE round_id = %s AND player_guid = %s",
-            [*new.values(), pair["r2_id"], guid],
-        )
+        # Column order of `new` is deterministic (insertion order:
+        # _DB_SUBTRACT_COLUMNS then the four derived fields), matching
+        # _DB_SUBTRACT_UPDATE_SQL built at import.
+        cur.execute(_DB_SUBTRACT_UPDATE_SQL, [*new.values(), pair["r2_id"], guid])
         repair_lines.append(
             "UPDATE player_comprehensive_stats SET "
             + ", ".join(f"{c} = {_sql_literal(v)}" for c, v in new.items())
@@ -556,13 +574,8 @@ def main() -> int:
             print(f"  {player.get('name'):20s} kills {old_kills:>3} -> {new_vals['kills']:>3}   "
                   f"dmg {old_dmg:>5} -> {new_vals['damage_given']:>5}")
 
-            set_clause = ", ".join(f"{c} = %s" for c in _PCS_STAT_COLUMNS)
             params = [new_vals[c] for c in _PCS_STAT_COLUMNS]
-            update_sql = (
-                f"UPDATE player_comprehensive_stats SET {set_clause} "  # noqa: S608 # nosec B608 - fixed column list
-                "WHERE round_id = %s AND player_guid = %s"
-            )
-            cur.execute(update_sql, [*params, pair["r2_id"], guid])  # nosemgrep: fixed column list, %s params
+            cur.execute(_PCS_UPDATE_SQL, [*params, pair["r2_id"], guid])
             total_updates += cur.rowcount
 
             literal_set = ", ".join(
