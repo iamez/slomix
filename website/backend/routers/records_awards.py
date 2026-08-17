@@ -16,6 +16,7 @@ from website.backend.routers.api_helpers import (
     resolve_display_name,
     resolve_name_guid_map,
     resolve_player_guid,
+    valid_human_rows_gate,
 )
 
 router = APIRouter()
@@ -740,6 +741,7 @@ async def _hof_compute_categories(
     params = list(base_params)
     limit_param = f"${param_idx}"
     params.append(limit)
+    valid_gate = valid_human_rows_gate("pcs")
 
     categories = {}
 
@@ -762,7 +764,7 @@ async def _hof_compute_categories(
             SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
                    {agg_expr} as value
             FROM player_comprehensive_stats pcs
-            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
+            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0{valid_gate} {date_filter}
             GROUP BY pcs.player_guid
             ORDER BY value DESC
             LIMIT {limit_param}
@@ -788,7 +790,7 @@ async def _hof_compute_categories(
                COUNT(*) as value
         FROM player_comprehensive_stats pcs
         JOIN rounds r ON pcs.round_id = r.id
-        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0
+        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0{valid_gate}
           AND r.winner_team != 0
           AND pcs.team = r.winner_team
           {date_filter}
@@ -819,7 +821,7 @@ async def _hof_compute_categories(
                ROUND((SUM(pcs.damage_given)::numeric / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0)), 2) as value,
                COUNT(*) as rounds_played
         FROM player_comprehensive_stats pcs
-        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
+        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0{valid_gate} {date_filter}
         GROUP BY pcs.player_guid
         HAVING COUNT(*) >= {dpm_min_rounds_param}
         ORDER BY value DESC
@@ -848,7 +850,7 @@ async def _hof_compute_categories(
                    r.gaming_session_id
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON pcs.round_id = r.id
-            WHERE pcs.time_played_seconds > 0
+            WHERE pcs.time_played_seconds > 0{valid_gate}
               AND r.gaming_session_id IS NOT NULL
               {date_filter}
             GROUP BY pcs.player_guid, r.gaming_session_id
