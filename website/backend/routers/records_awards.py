@@ -41,7 +41,16 @@ async def get_records(
         "accuracy": {
             "col": "accuracy",
             "label": "Best Accuracy",
-            "filter": "bullets_fired > 50",
+            # The sample-size gate (>50 bullets) is only meaningful when the
+            # bullet count itself can be trusted. It cannot be for the 2025
+            # supastats backfill: 7,311 of its 9,698 rows carry a bullets_fired
+            # above any physical fire rate (the old record row: 5,523 bullets
+            # in 269 s = 20.5/s where an MP40 tops out at ~11.6/s), while the
+            # 2026 live capture has zero such rows. The physics bound keeps the
+            # record on rows whose sample size is PROVABLE — 15/s = max rate
+            # plus margin — rather than letting corrupted counts qualify.
+            "filter": "bullets_fired > 50"
+                      " AND bullets_fired <= time_played_seconds * 15",
         },
         "revived": {"col": "times_revived", "label": "Most Times Revived"},
         "useful_kills": {"col": "most_useful_kills", "label": "Most Useful Kills"},
