@@ -148,7 +148,19 @@ class Rule:
 # own predicate. Kept generous per the audit's mandate: we're excluding rows
 # a rule literally cannot evaluate (e.g. tps=0 makes every /tps rate divide
 # by zero), not excluding "unusual" rows.
-_PCS_BASE_GATE = "pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0"
+_PCS_BASE_GATE = (
+    "pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 "
+    # Rows from rounds the pipeline itself already excludes (bot/test rounds
+    # flagged is_valid = FALSE, orphan R2 cumulatives) are KNOWN exclusions,
+    # not plausibility findings — before the 2026-08-18 bot-round backfill
+    # they produced most of the audit's live noise (OMNIBOT rows breaking
+    # headshot/dpm/revive invariants in test sessions). Same reasoning as
+    # _ROUNDS_BASE_GATE below.
+    "AND NOT EXISTS (SELECT 1 FROM rounds rr "
+    "                WHERE rr.id = pcs.round_id "
+    "                  AND (rr.is_valid IS FALSE "
+    "                       OR rr.round_status = 'orphan_r2'))"
+)
 # Rounds-table T1 rules only look at rounds the pipeline itself calls valid —
 # a round already flagged is_valid=FALSE or round_status != 'completed' is a
 # KNOWN exclusion (filler map, cancelled restart, orphan R2), not a plausibility
@@ -288,14 +300,16 @@ RULES: list[Rule] = [
         table="player_comprehensive_stats",
         tier="T1",
         severity="critical",
-        predicate="pcs.times_revived > pcs.deaths",
+        # 2026-08-18 refinement: a /kill body is revivable but self-kills are
+        # counted separately from deaths, so the true bound is
+        # deaths + self_kills. The one human "violation" of the stricter form
+        # (KaNii, te_escape2, 2026-06-28: revived=3, deaths=2, self_kills=1)
+        # is exactly this mechanic — 2 real deaths + 1 selfkill-then-revive.
+        predicate="pcs.times_revived > pcs.deaths + pcs.self_kills",
         note=(
-            "A revive requires a prior death. KEPT as a hard invariant (not demoted) after live-data "
-            "verification on 2026-08-17: live violations exist but are overwhelmingly OMNIBOT rows from "
-            "known bot-test sessions (2026-03-24/25, 2026-08-11/12); exactly one human row was found "
-            "(KaNii, te_escape2, 2026-06-28, times_revived=3 deaths=2) and is worth a one-off look, not a "
-            "rule change — it is not the 'deaths counted differently' structural failure this rule was "
-            "checked against."
+            "A revive requires a revivable body: a prior death or a self-kill "
+            "(counted separately from deaths in the TAB stats). "
+            "times_revived > deaths + self_kills cannot happen in the game."
         ),
         extra_cols=("pcs.times_revived", "pcs.deaths", "pcs.player_guid"),
         order_by="(pcs.times_revived - pcs.deaths) DESC",
