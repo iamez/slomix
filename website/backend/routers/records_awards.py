@@ -65,13 +65,18 @@ async def get_records(
     # flagged is_valid = FALSE by the importer); the [BOT]/OMNIBOT identity
     # filter is defence in depth for any historical round that predates the
     # validity flag. (Owner saw [BOT]vid holding the kills record.)
+    # round_status = 'orphan_r2' marks R2 rows whose R1 was never available:
+    # they hold raw CUMULATIVE (R1+R2) values, so any per-round record built
+    # on them is roughly doubled (the 2026-01-09 erdenberg "damage record"
+    # was exactly this).
     base_where = (
         "WHERE round_number IN (1, 2) AND time_played_seconds > 0 "
         "AND player_name NOT LIKE '[BOT]%' "
         "AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') "
         "AND NOT EXISTS (SELECT 1 FROM rounds r "
         "                WHERE r.id = player_comprehensive_stats.round_id "
-        "                  AND r.is_valid IS FALSE)"
+        "                  AND (r.is_valid IS FALSE "
+        "                       OR r.round_status = 'orphan_r2'))"
     )
     if map_name:
         base_where += " AND map_name = $1"
