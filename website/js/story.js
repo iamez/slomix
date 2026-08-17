@@ -393,12 +393,16 @@ async function loadStoryData() {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
         }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
-        fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
-            if (loadId !== storyLoadId) return;
-            renderWinContribution(pwcData);
+        // The ranking above already awaited this exact payload — render the
+        // panel from it rather than fetching the URL again. The refetch relied
+        // on the SWR cache to return the same body, and an expiry between the
+        // two calls would have let the panel disagree with the ranking it sits
+        // under.
+        renderWinContribution(pwcData);
+        {
             const top = (pwcData?.players || [])[0];
             if (top?.name) _setFoldHint('Player win contribution', `top: ${stripEtColors(top.name)}`);
-        }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
+        }
 
         // Advanced metrics + Comp Skill board share one card (own containers)
         // and are rendered together so the card fills in one paint.

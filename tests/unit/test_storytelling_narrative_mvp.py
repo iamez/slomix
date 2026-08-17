@@ -58,6 +58,8 @@ def _service(pwc_players, *, pwc_raises=False, stats=None, archetypes=None):
             return None
 
         async def get_kis_leaderboard(self, scope, limit=50):
+            self.kis_limits = getattr(self, "kis_limits", [])
+            self.kis_limits.append(limit)
             return list(_KIS_BOARD)
 
         async def classify_players(self, scope, board):
@@ -102,6 +104,10 @@ async def test_the_recap_names_the_win_contribution_leader_not_the_kis_leader():
 
     assert ".lgz" in out["narrative"]
     assert "bronze" not in out["narrative"]
+    # Classification is relative to the session average, so the board request
+    # must be the WHOLE session (limit=0) — a page size here would make the
+    # averages, and every archetype derived from them, a function of it.
+    assert svc.kis_limits == [0]
 
 
 async def test_the_sentence_quotes_the_number_the_pick_was_made_by():
