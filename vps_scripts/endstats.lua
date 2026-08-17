@@ -107,7 +107,10 @@ local function ensure_bit_compat()
 
 	bit = {
 		lshift = function(a, b)
-			return es_to_int(a) * (2 ^ es_to_int(b))
+			-- math.floor: 2^b is always a FLOAT in Lua 5.4, so the product
+			-- is float-typed even when integral — and any future
+			-- string.format("%d", bit.lshift(...)) would throw on it.
+			return math.floor(es_to_int(a) * (2 ^ es_to_int(b)))
 		end,
 		rshift = function(a, b)
 			return math.floor(es_to_int(a) / (2 ^ es_to_int(b)))

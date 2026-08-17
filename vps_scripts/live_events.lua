@@ -188,9 +188,17 @@ function et_Obituary(victim, killer, mod)
         local dx, dy, dz = kx - vx, ky - vy, kz - vz
         dist = math.floor(math.sqrt(dx * dx + dy * dy + dz * dz))
     end
+    -- Floor the raw ps.origin floats before %d: Lua 5.4 string.format("%d")
+    -- throws on a non-integral float (LuaJIT truncated silently), and one
+    -- fractional coordinate here would kill the whole obituary line. Same
+    -- idiom as movement_tick below, which already floors these. khp too —
+    -- health is integral today, but that assumption is how this crash class
+    -- ships.
     write(string.format("K %d %d %d %d %d,%d,%d %d,%d,%d %d %d",
         now_ms(lvl), killer, victim, mod or 0,
-        kx, ky, kz, vx, vy, vz, khp, dist))
+        math.floor(kx), math.floor(ky), math.floor(kz),
+        math.floor(vx), math.floor(vy), math.floor(vz),
+        math.floor(khp), dist))
 end
 
 -- et_Damage(target, attacker, damage, damageFlags, meansOfDeath)

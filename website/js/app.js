@@ -24,7 +24,7 @@ import { loadFormView } from './form.js';
 import { loadRecordsView } from './records.js';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260812-b3';
-import { loadStoryView } from './story.js?v=20260815-movement';
+import { loadStoryView } from './story.js?v=20260817-restore';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSystemView } from './system.js?v=20260815-system';
