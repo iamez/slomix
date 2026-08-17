@@ -190,6 +190,45 @@ jobs:
           printf 'ShellCheck: %d tracked shell script(s)\n' "${#sh_files[@]}"
           shellcheck -S error "${sh_files[@]}"
 
+  lua:
+    name: Lua 5.4 (parse + runtime-semantics smoke)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: luac5.4 parse gate for every tracked .lua
+        # The game server runs Lua 5.4 since ET:Legacy 2.84.0. CI had ZERO Lua
+        # steps while a runtime crash lived in production for three months
+        # (RCA 2026-08-17) — this gate at least guarantees every tracked
+        # script PARSES under the exact runtime major that executes it.
+        run: |
+          sudo apt-get update && sudo apt-get install -y lua5.4
+          mapfile -t lua_files < <(git ls-files '*.lua')
+          printf 'luac5.4 -p: %d tracked lua file(s)\n' "${#lua_files[@]}"
+          for f in "${lua_files[@]}"; do luac5.4 -p "$f"; done
+      - name: Lua 5.4 semantics smoke (the classes that actually bit us)
+        # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
+        # fixes rely on, in the real interpreter: %d throws on non-integral
+        # floats (so the guard-test grep discipline stays honest), the
+        # conditional trunc matches LuaJIT truncation on both signs, round()
+        # yields an integral float %d accepts, and 2^b is float-typed (why the
+        # bit-shim wraps in math.floor).
+        run: |
+          lua5.4 - <<'LUA'
+          assert(not pcall(string.format, "%d", 1234.5),
+                 "%d must throw on a non-integral float")
+          assert(select(2, pcall(string.format, "%d", 1234.5))
+                 :match("no integer representation"))
+          local function trunc(v) return v >= 0 and math.floor(v) or math.ceil(v) end
+          assert(trunc(2.7) == 2 and trunc(-2.7) == -2, "trunc toward zero")
+          local function round(x) return math.floor(x + 0.5) end
+          assert(pcall(string.format, "%d", round(2.5)),
+                 "%d must accept an integral float")
+          assert(math.type(2 ^ 3) == "float", "2^b is float in 5.4")
+          assert(math.type(math.floor(1 * (2 ^ 3))) == "integer",
+                 "the bit-shim wrap restores the integer subtype")
+          print("lua 5.4 semantics smoke: OK")
+          LUA
+
   security:
     name: Security (pip-audit + bandit)
     runs-on: ubuntu-latest
