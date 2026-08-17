@@ -203,8 +203,7 @@ jobs:
         run: |
           sudo apt-get update && sudo apt-get install -y lua5.4
           mapfile -t lua_files < <(git ls-files '*.lua')
-          printf 'luac5.4 -p: %d tracked lua file(s)
-' "${#lua_files[@]}"
+          printf 'luac5.4 -p: %d tracked lua file(s)\n' "${#lua_files[@]}"
           for f in "${lua_files[@]}"; do luac5.4 -p "$f"; done
       - name: Lua 5.4 semantics smoke (the classes that actually bit us)
         # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
