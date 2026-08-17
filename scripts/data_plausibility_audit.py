@@ -545,16 +545,16 @@ def run_audit(conn, rules: list[Rule], top_n: int = 3) -> list[RuleResult]:
     results: list[RuleResult] = []
     with conn.cursor() as cur:
         for rule in rules:
-            cur.execute(build_count_sql(rule))
+            cur.execute(build_count_sql(rule))  # nosemgrep: rule SQL is hardcoded literals validated at import
             total = int(cur.fetchone()[0])
 
-            cur.execute(build_split_sql(rule))
+            cur.execute(build_split_sql(rule))  # nosemgrep: rule SQL is hardcoded literals validated at import
             backfill, live = (int(v) for v in cur.fetchone())
 
             top_rows: list[dict[str, Any]] = []
             if total > 0:
                 sql, labels = build_top_rows_sql(rule, top_n)
-                cur.execute(sql)
+                cur.execute(sql)  # nosemgrep: rule SQL is hardcoded literals validated at import
                 top_rows.extend(dict(zip(labels, row, strict=True)) for row in cur.fetchall())
 
             results.append(RuleResult(rule=rule, total=total, backfill=backfill, live=live, top_rows=top_rows))
