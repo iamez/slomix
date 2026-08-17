@@ -101,3 +101,21 @@ def test_bit_lshift_shims_return_an_integer_subtype():
         assert "return es_to_int(a) * (2 ^ es_to_int(b))" not in src
         assert "math.floor(to_int(a) * (2 ^ to_int(b)))" in src or \
                "math.floor(es_to_int(a) * (2 ^ es_to_int(b)))" in src
+
+
+def test_denied_run_detection_reads_the_track_captured_before_it_was_cleared():
+    """et_Obituary calls endPlayerTrack (which nils player_tracks[victim]) and
+    the v6.01 denied-run block then read that same entry — always nil, so the
+    entire denied-run path was dead code: 0 `approach_killed`/`denied` rows in
+    4.5 months of production while 3,008 successful runs imported fine. The
+    track must be captured BEFORE endPlayerTrack and the block must use the
+    captured reference."""
+    src = _tracker()
+    i = src.index("function et_Obituary")
+    end_call = src.index("endPlayerTrack(victim", i)
+    capture = src.index("local victim_track = tracker.player_tracks[victim]", i)
+    assert capture < end_call, "capture must precede endPlayerTrack"
+    denied = src.index("Denied objective run detection", i)
+    block = src[denied:denied + 400]
+    assert "local orun_track = victim_track" in block
+    assert "tracker.player_tracks[victim]" not in block

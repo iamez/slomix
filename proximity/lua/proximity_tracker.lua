@@ -4171,6 +4171,13 @@ function et_Obituary(victim, killer, meansOfDeath)
 
     -- End player track
     local death_pos = getPlayerPos(victim)
+    -- Capture the victim's track BEFORE endPlayerTrack: that call nils
+    -- player_tracks[victim], and the v6.01 denied-run block further down read
+    -- the same entry AFTER it — always nil, so the whole block was dead code
+    -- (0 denied rows in 4.5 months of production; measured 2026-08-17). The
+    -- table itself lives on in completed_tracks, and endPlayerTrack even
+    -- appends the final death sample, which the approach metrics want.
+    local victim_track = tracker.player_tracks[victim]
     endPlayerTrack(victim, death_pos, death_type, killer_name)
 
     -- v4: Engagement tracking
@@ -4264,7 +4271,10 @@ function et_Obituary(victim, killer, meansOfDeath)
 
     -- v6.01: Denied objective run detection
     if isFeatureEnabled("objective_run_tracking") and death_type == "killed" then
-        local orun_track = tracker.player_tracks[victim]
+        -- victim_track was captured before endPlayerTrack cleared the slot —
+        -- re-reading the (now nil) live-tracks entry here is what kept this
+        -- block from ever running.
+        local orun_track = victim_track
         if orun_track and orun_track.class == "ENGINEER" then
             local orun_pos = death_pos or getPlayerPos(victim)
             if orun_pos then
