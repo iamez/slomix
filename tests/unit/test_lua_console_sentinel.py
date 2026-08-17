@@ -144,3 +144,95 @@ async def test_a_failing_alert_is_contained():
 
     bot = B([(1000, _CRASH)])
     await _tick(bot)          # must not raise
+
+
+async def test_a_failed_alert_does_not_consume_the_cooldown():
+    """The dedupe map is marked before the send; without the rollback a Discord
+    outage silenced the very lines the sentinel exists to surface — for an
+    hour, with the offset already advanced past them."""
+    class B(Bot):
+        def __init__(self, spans):
+            super().__init__(spans)
+            self.fail_alerts = 1
+
+        async def alert_admins(self, title, message):
+            if self.fail_alerts:
+                self.fail_alerts -= 1
+                raise RuntimeError("discord down")
+            self.alerts.append((title, message))
+
+    bot = B([(1000, _CRASH), (1000, _CRASH)])
+    await _tick(bot)                      # send fails → cooldown rolled back
+    assert bot.alerts == []
+    await _tick(bot)                      # same line must alert now
+    assert len(bot.alerts) == 1
+
+
+def test_fetch_never_advances_past_a_split_line(monkeypatch):
+    """A read can end mid-line; the offset must stop at the last complete
+    newline so an error straddling the boundary is scanned whole next pass."""
+    import io
+
+    class _FakeFile(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    class _FakeSftp:
+        def __init__(self, blob):
+            self._blob = blob
+
+        def stat(self, path):
+            class S:
+                st_size = len(self._blob)
+            return S()
+
+        def open(self, path, mode):
+            return _FakeFile(self._blob)
+
+        def get_channel(self):
+            class C:
+                def settimeout(self, t):
+                    pass
+            return C()
+
+    class _FakeSSH:
+        def __init__(self, blob):
+            self._blob = blob
+
+        def set_missing_host_key_policy(self, policy):
+            pass
+
+        def load_system_host_keys(self):
+            pass
+
+        def load_host_keys(self, path):
+            pass
+
+        def connect(self, **kw):
+            pass
+
+        def open_sftp(self):
+            return _FakeSftp(self._blob)
+
+        def close(self):
+            pass
+
+    blob = b"line one\n" + _CRASH.encode()      # crash line NOT yet newline-terminated
+    bot = Bot([])
+    import paramiko
+    monkeypatch.setattr(paramiko, "SSHClient", lambda: _FakeSSH(blob))
+
+    # the REAL fetch (the test Bot overrides it with a fake for loop tests)
+    new_off, text = _MonitorTasksMixin._fetch_console_span(bot, 0)
+
+    assert text == "line one\n"
+    assert new_off == len(b"line one\n")
+
+    # once the writer finishes the line, the next pass picks it up whole
+    blob2 = blob + b"\n"
+    monkeypatch.setattr(paramiko, "SSHClient", lambda: _FakeSSH(blob2))
+    new_off2, text2 = _MonitorTasksMixin._fetch_console_span(bot, new_off)
+    assert "2511" in text2 and new_off2 == len(blob2)

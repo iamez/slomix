@@ -953,6 +953,18 @@ class _MonitorTasksMixin:
             with sftp.open(path, "rb") as fh:
                 fh.seek(offset)
                 data = fh.read(min(size - offset, self._CONSOLE_MAX_READ_BYTES))
+            # Advance only past COMPLETE lines: a read can end mid-line —
+            # at the chunk cap or because the writer is mid-append at EOF —
+            # and an error whose text straddles the boundary would be split
+            # across two scans and never match. The fragment stays unread for
+            # the next pass. (A full-size read with no newline at all — not a
+            # thing a console log does — falls through whole rather than stall.)
+            cut = data.rfind(b"\n")
+            if cut < 0:
+                if len(data) < self._CONSOLE_MAX_READ_BYTES:
+                    return offset, ""
+            else:
+                data = data[:cut + 1]
             return offset + len(data), data.decode("utf-8", errors="replace")
         finally:
             ssh.close()
@@ -1013,6 +1025,12 @@ class _MonitorTasksMixin:
             )
         except Exception:
             logger.error("[LUA-SENTINEL] alert failed", exc_info=True)
+            # A failed send must not consume the cooldown: un-mark these lines
+            # so the next pass re-alerts them instead of silencing them for an
+            # hour. The offset has already advanced — the dedupe map is the
+            # only memory these lines have left.
+            for ln in fresh:
+                self._console_alerted.pop(ln.strip()[-200:], None)
 
     @lua_console_sentinel.before_loop
     async def before_lua_console_sentinel(self):
