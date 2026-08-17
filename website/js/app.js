@@ -16,7 +16,7 @@ import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './a
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260813-sickleave';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
-import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js?v=20260817-score';
+import { loadSeasonInfo, loadLastSession, loadSessionsView, toggleSeasonDetails } from './sessions.js?v=20260817-score';
 import { loadHomePulseCards } from './home.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260813-audit-brandslate';
 import { loadFormView } from './form.js';

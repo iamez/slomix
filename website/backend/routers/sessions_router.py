@@ -513,6 +513,8 @@ async def get_sessions_list(
                 team_2_score,
                 winning_team
             FROM session_results
+            WHERE gaming_session_id IS NOT NULL
+              AND map_name = 'ALL'
             ORDER BY gaming_session_id, id DESC
         )
         SELECT
@@ -1251,6 +1253,8 @@ async def get_stats_sessions(
                     SELECT r2.gaming_session_id FROM rounds r2
                     WHERE r2.gaming_session_id IS NOT NULL
                       AND r2.round_number IN (1, 2)
+                      AND r2.is_valid IS DISTINCT FROM FALSE
+                      AND (r2.round_status IN ('completed', 'substitution') OR r2.round_status IS NULL)
                       AND LOWER(r2.map_name) LIKE LOWER(${param_idx})
                 )
                 OR sr.gaming_session_id IN (
@@ -1258,6 +1262,8 @@ async def get_stats_sessions(
                     INNER JOIN player_comprehensive_stats p2 ON p2.round_id = r3.id
                     WHERE r3.gaming_session_id IS NOT NULL
                       AND r3.round_number IN (1, 2)
+                      AND r3.is_valid IS DISTINCT FROM FALSE
+                      AND (r3.round_status IN ('completed', 'substitution') OR r3.round_status IS NULL)
                       AND LOWER(p2.player_name) LIKE LOWER(${param_idx})
                 )
             )
@@ -1346,6 +1352,8 @@ async def get_stats_sessions(
                 team_2_score,
                 winning_team
             FROM session_results
+            WHERE gaming_session_id IS NOT NULL
+              AND map_name = 'ALL'
             ORDER BY gaming_session_id, id DESC
         )
         SELECT
