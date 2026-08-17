@@ -804,6 +804,11 @@ class UltimateETLegacyBot(
         # scoreless forever (three such sessions existed on production).
         if not self.kis_coverage_reconcile.is_running():
             self.kis_coverage_reconcile.start()
+        # RCA 2026-08-17 P1: the game server's console log printed a Lua
+        # error on every supply map load for three months and nothing read
+        # it. This is the reader.
+        if not self.lua_console_sentinel.is_running():
+            self.lua_console_sentinel.start()
         if self.config.idle_watchdog_enabled and not self.idle_restart_watchdog.is_running():
             self.idle_restart_watchdog.start()
             logger.info(
