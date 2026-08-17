@@ -335,7 +335,21 @@ async function loadStoryData() {
         }).catch(() => renderTeamSynergy(null));
 
         fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
-            if (loadId === storyLoadId) renderWinContribution(pwcData);
+            if (loadId !== storyLoadId) return;
+            renderWinContribution(pwcData);
+            // The hero's MVP cell rendered players[0] — the KIS leader — while
+            // the narrative names the win-contribution leader (measured: a
+            // different player on 4 of 10 sessions, so hero and prose said two
+            // names in one viewport). Once PWC lands, the hero follows the
+            // same rule the narrative uses: PWC leader, KIS as the fallback
+            // for pre-March-2026 sessions where PWC is empty. (The panel's
+            // own "Session MVP" card is a distinct, waa_bayes-based metric
+            // and deliberately stays as is.)
+            const top = (pwcData?.players || [])[0];
+            const mvpCell = document.querySelector('#story-stats-row [data-hero-mvp] span:last-child');
+            if (mvpCell && top?.name && Number(top.total_pwc) > 0) {
+                mvpCell.textContent = stripEtColors(top.name);
+            }
         }).catch(() => renderWinContribution(null));
 
         // Advanced metrics + Comp Skill board render into the SAME container,
@@ -519,7 +533,11 @@ function renderStoryHero(sessionDate, players) {
         statsRow.appendChild(kisStat);
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
-        statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
+        // data-hero-mvp: the win-contribution fetch retargets this cell to the
+        // PWC leader once it lands (KIS leader is only the provisional pick).
+        const mvpStat = stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400');
+        mvpStat.setAttribute('data-hero-mvp', '1');
+        statsRow.appendChild(mvpStat);
     }
 }
 
