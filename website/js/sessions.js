@@ -1404,10 +1404,24 @@ function renderSessionCard(session) {
                             <div class="text-xs text-slate-500 uppercase">Kills</div>
                         </div>
                         ` : ''}
-                        <div class="text-center">
-                            <div class="text-2xl font-black ${session.allies_wins > session.axis_wins ? 'text-brand-blue' : session.axis_wins > session.allies_wins ? 'text-brand-rose' : 'text-slate-400'}">${session.allies_wins} - ${session.axis_wins}</div>
-                            <div class="text-xs text-slate-500 uppercase">Score</div>
-                        </div>
+                        ${(() => {
+                            // BOX team score (session_results); allies_wins/axis_wins
+                            // count round wins by SIDE and are not a team score —
+                            // teams swap sides every stopwatch round.
+                            // 0:0 = no map attributed to a team (counted BOX
+                            // maps always award points) → same as no data.
+                            const hasScore = session.team_1_score != null && session.team_2_score != null
+                                && (Number(session.team_1_score) + Number(session.team_2_score) > 0);
+                            const t1 = Number(session.team_1_score);
+                            const t2 = Number(session.team_2_score);
+                            const color = !hasScore ? 'text-slate-500'
+                                : t1 > t2 ? 'text-brand-blue'
+                                : t2 > t1 ? 'text-brand-rose' : 'text-slate-400';
+                            return `<div class="text-center">
+                            <div class="text-2xl font-black ${color}">${hasScore ? `${t1} : ${t2}` : '—'}</div>
+                            <div class="text-xs text-slate-500 uppercase">${hasScore ? 'Score' : 'No team data'}</div>
+                        </div>`;
+                        })()}
                     </div>
 
                     <!-- Right: Expand Icon -->
