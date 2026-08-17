@@ -3566,19 +3566,19 @@ local function outputDataInner()
                 "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
                 "total_distance;max_health;final_health;destroyed_count\n"
             et.trap_FS_Write(vp_header, string.len(vp_header), fd)
+            -- Coordinates and health come from tonumber() and are floats;
+            -- Lua 5.4 %d throws on a non-integral float. This is a FILE
+            -- write the parser reads with a bare int(parts[i]) — so no
+            -- %.0f (that rounds half-to-even, where LuaJIT %d truncated
+            -- toward zero: a silent data-contract change). Truncate toward
+            -- zero exactly like SHOT_FIRED above (math.floor alone would
+            -- be off-by-one for negative world coords). Same guard on the
+            -- health fields: integral today, but "integral today" is how
+            -- this class of crash ships.
+            local function trunc(v)
+                return v >= 0 and math.floor(v) or math.ceil(v)
+            end
             for _, veh in ipairs(vp_items) do
-                -- Coordinates and health come from tonumber() and are floats;
-                -- Lua 5.4 %d throws on a non-integral float. This is a FILE
-                -- write the parser reads with a bare int(parts[i]) — so no
-                -- %.0f (that rounds half-to-even, where LuaJIT %d truncated
-                -- toward zero: a silent data-contract change). Truncate toward
-                -- zero exactly like SHOT_FIRED above (math.floor alone would
-                -- be off-by-one for negative world coords). Same guard on the
-                -- health fields: integral today, but "integral today" is how
-                -- this class of crash ships.
-                local function trunc(v)
-                    return v >= 0 and math.floor(v) or math.ceil(v)
-                end
                 local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d\n",
                     veh.name, veh.type,
                     trunc(veh.start_pos.x), trunc(veh.start_pos.y), trunc(veh.start_pos.z),
