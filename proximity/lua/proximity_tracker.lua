@@ -2493,17 +2493,29 @@ local function scanVehicleEntities()
                 -- fetched y, z and an out-of-bounds 3 → a static/garbage
                 -- position, which made vehicle delta 0 forever and left every
                 -- escort_credit distance at 0 (C4).
+                -- An entity read at map load before it spawns can return a
+                -- garbage origin (production print after the %d fix showed
+                -- 6.5e24 on supply's truck). MAX_SANE_MOVE already keeps such
+                -- values out of total_distance, but start_pos kept the raw
+                -- read forever — and a float beyond 2^63 survives floor/ceil
+                -- as a FLOAT, so %d at the VEHICLE_PROGRESS write would throw
+                -- again. ET map coordinates live within ±65k; anything past
+                -- 1e6 is garbage, not a position.
+                local function sane_coord(v)
+                    v = tonumber(v) or 0
+                    return (v > -1e6 and v < 1e6) and v or 0
+                end
                 local ox, oy, oz = 0, 0, 0
                 local vorigin = safe_gentity_get(i, "r.currentOrigin")
                 if vorigin then
                     if vorigin[1] then
-                        ox = tonumber(vorigin[1]) or 0
-                        oy = tonumber(vorigin[2]) or 0
-                        oz = tonumber(vorigin[3]) or 0
+                        ox = sane_coord(vorigin[1])
+                        oy = sane_coord(vorigin[2])
+                        oz = sane_coord(vorigin[3])
                     elseif vorigin.x then
-                        ox = tonumber(vorigin.x) or 0
-                        oy = tonumber(vorigin.y) or 0
-                        oz = tonumber(vorigin.z) or 0
+                        ox = sane_coord(vorigin.x)
+                        oy = sane_coord(vorigin.y)
+                        oz = sane_coord(vorigin.z)
                     end
                 end
                 local health = tonumber(safe_gentity_get(i, "health")) or 0
@@ -3576,7 +3588,11 @@ local function outputDataInner()
             -- health fields: integral today, but "integral today" is how
             -- this class of crash ships.
             local function trunc(v)
-                return v >= 0 and math.floor(v) or math.ceil(v)
+                local n = v >= 0 and math.floor(v) or math.ceil(v)
+                -- floor/ceil of a float beyond 2^63 stays a FLOAT and %d
+                -- throws on it; such a magnitude is never a real coordinate,
+                -- so write 0 rather than crash the whole section.
+                return math.type(n) == "integer" and n or 0
             end
             for _, veh in ipairs(vp_items) do
                 local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d\n",
