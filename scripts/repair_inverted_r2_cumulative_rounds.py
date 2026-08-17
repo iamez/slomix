@@ -156,24 +156,60 @@ _BACKUP_SELECT_SQL = {
     "weapon_comprehensive_stats":
         "SELECT * FROM weapon_comprehensive_stats WHERE round_id = %s",
 }
+# The statements are spelled out as PURE literals (static SQL-injection
+# scanners taint anything assembled at runtime, join over a constant list
+# included). The asserts below rebuild each one from the column-list
+# constants and fail the import on any drift, so the literals can never
+# silently disagree with the lists that drive the parameter ordering.
 _DB_SUBTRACT_SELECT_SQL = (
-    "SELECT player_guid, " + ", ".join(_DB_SUBTRACT_COLUMNS)
-    + ", time_played_seconds FROM player_comprehensive_stats WHERE round_id = %s"
+    "SELECT player_guid, kills, deaths, damage_given, damage_received, "
+    "team_damage_given, team_damage_received, gibs, self_kills, team_kills, "
+    "team_gibs, headshots, bullets_fired, time_played_seconds FROM "
+    "player_comprehensive_stats WHERE round_id = %s"
 )
 # _heal_suspect_by_db_subtraction writes _DB_SUBTRACT_COLUMNS plus the four
 # derived fields, in that order (dict insertion order there).
 _DB_SUBTRACT_UPDATE_SQL = (
+    "UPDATE player_comprehensive_stats SET kills = %s, deaths = %s, "
+    "damage_given = %s, damage_received = %s, team_damage_given = %s, "
+    "team_damage_received = %s, gibs = %s, self_kills = %s, team_kills = "
+    "%s, team_gibs = %s, headshots = %s, bullets_fired = %s, kd_ratio = %s, "
+    "dpm = %s, efficiency = %s, accuracy = %s WHERE round_id = %s AND "
+    "player_guid = %s"
+)
+# The full-parser heal writes every stat column in _PCS_STAT_COLUMNS order.
+_PCS_UPDATE_SQL = (
+    "UPDATE player_comprehensive_stats SET kills = %s, deaths = %s, "
+    "damage_given = %s, damage_received = %s, team_damage_given = %s, "
+    "team_damage_received = %s, gibs = %s, self_kills = %s, team_kills = "
+    "%s, team_gibs = %s, headshot_kills = %s, headshots = %s, "
+    "time_played_seconds = %s, time_played_minutes = %s, time_dead_minutes "
+    "= %s, time_dead_ratio = %s, time_played_percent = %s, xp = %s, "
+    "kd_ratio = %s, dpm = %s, efficiency = %s, bullets_fired = %s, accuracy "
+    "= %s, kill_assists = %s, objectives_stolen = %s, objectives_returned = "
+    "%s, dynamites_planted = %s, dynamites_defused = %s, times_revived = "
+    "%s, revives_given = %s, most_useful_kills = %s, useless_kills = %s, "
+    "kill_steals = %s, denied_playtime = %s, constructions = %s, "
+    "tank_meatshield = %s, double_kills = %s, triple_kills = %s, quad_kills "
+    "= %s, multi_kills = %s, mega_kills = %s, killing_spree_best = %s, "
+    "death_spree_worst = %s WHERE round_id = %s AND player_guid = %s"
+)
+
+assert (
+    "SELECT player_guid, " + ", ".join(_DB_SUBTRACT_COLUMNS)
+    + ", time_played_seconds FROM player_comprehensive_stats WHERE round_id = %s"
+) == _DB_SUBTRACT_SELECT_SQL, "_DB_SUBTRACT_SELECT_SQL drifted from _DB_SUBTRACT_COLUMNS"
+assert (
     "UPDATE player_comprehensive_stats SET "
     + ", ".join(f"{c} = %s" for c in _DB_SUBTRACT_COLUMNS)
     + ", kd_ratio = %s, dpm = %s, efficiency = %s, accuracy = %s"
     + " WHERE round_id = %s AND player_guid = %s"
-)
-# The full-parser heal writes every stat column in _PCS_STAT_COLUMNS order.
-_PCS_UPDATE_SQL = (
+) == _DB_SUBTRACT_UPDATE_SQL, "_DB_SUBTRACT_UPDATE_SQL drifted from _DB_SUBTRACT_COLUMNS"
+assert (
     "UPDATE player_comprehensive_stats SET "
     + ", ".join(f"{c} = %s" for c in _PCS_STAT_COLUMNS)
     + " WHERE round_id = %s AND player_guid = %s"
-)
+) == _PCS_UPDATE_SQL, "_PCS_UPDATE_SQL drifted from _PCS_STAT_COLUMNS"
 
 
 def _backup_round(cur, r2_id: int, backup_lines: list[str]) -> None:
