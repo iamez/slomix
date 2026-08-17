@@ -119,3 +119,18 @@ def test_denied_run_detection_reads_the_track_captured_before_it_was_cleared():
     block = src[denied:denied + 400]
     assert "local orun_track = victim_track" in block
     assert "tracker.player_tracks[victim]" not in block
+
+
+def test_garbage_origins_cannot_reach_the_vehicle_progress_write():
+    """Production, minutes after the %d deploy: supply's truck scanned at
+    6.5e24 (entity read before spawn). MAX_SANE_MOVE keeps that out of
+    total_distance, but start_pos kept the raw read — and floor/ceil of a
+    float beyond 2^63 stays a FLOAT, so %d at the VP write would throw again.
+    Two guards: the scan sanitizes (|v| > 1e6 → 0), and trunc() refuses to
+    return anything but an integer subtype."""
+    src = _tracker()
+    scan = src[src.index("local function scanVehicleEntities"):src.index("local function scanObjectiveEntities")]
+    assert "sane_coord" in scan
+    assert "1e6" in scan
+    vp = src[src.index("# VEHICLE_PROGRESS"):src.index("# VEHICLE_PROGRESS") + 2500]
+    assert 'math.type(n) == "integer" and n or 0' in vp
