@@ -149,7 +149,7 @@ _DB_SUBTRACT_COLUMNS = [
 
 def _backup_round(cur, r2_id: int, backup_lines: list[str]) -> None:
     for table in ("player_comprehensive_stats", "weapon_comprehensive_stats"):
-        cur.execute(f"SELECT * FROM {table} WHERE round_id = %s", (r2_id,))  # noqa: S608 table name from fixed tuple
+        cur.execute(f"SELECT * FROM {table} WHERE round_id = %s", (r2_id,))  # noqa: S608 # nosec B608 - table name from fixed tuple
         cols = [d[0] for d in cur.description]
         for row in cur.fetchall():
             vals = ", ".join(_sql_literal(v) for v in row)
@@ -165,13 +165,13 @@ def _heal_suspect_by_db_subtraction(cur, pair: dict, repair_lines: list[str]) ->
     cumulative and the R1 round was imported from its own file."""
     cols = ", ".join(_DB_SUBTRACT_COLUMNS)
     cur.execute(
-        f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 fixed column list
+        f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 # nosec B608 - fixed column list
         "FROM player_comprehensive_stats WHERE round_id = %s",
         (pair["r1_id"],),
     )
     r1_rows = {row[0]: row[1:] for row in cur.fetchall()}
     cur.execute(
-        f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 fixed column list
+        f"SELECT player_guid, {cols}, time_played_seconds "  # noqa: S608 # nosec B608 - fixed column list
         "FROM player_comprehensive_stats WHERE round_id = %s",
         (pair["r2_id"],),
     )
@@ -228,7 +228,7 @@ def _heal_suspect_by_db_subtraction(cur, pair: dict, repair_lines: list[str]) ->
 
         set_sql = ", ".join(f"{c} = %s" for c in new)
         cur.execute(
-            f"UPDATE player_comprehensive_stats SET {set_sql} "  # noqa: S608 fixed column list
+            f"UPDATE player_comprehensive_stats SET {set_sql} "  # noqa: S608 # nosec B608 - fixed column list
             "WHERE round_id = %s AND player_guid = %s",
             [*new.values(), pair["r2_id"], guid],
         )
@@ -559,7 +559,7 @@ def main() -> int:
             set_clause = ", ".join(f"{c} = %s" for c in _PCS_STAT_COLUMNS)
             params = [new_vals[c] for c in _PCS_STAT_COLUMNS]
             update_sql = (
-                f"UPDATE player_comprehensive_stats SET {set_clause} "  # noqa: S608 fixed column list
+                f"UPDATE player_comprehensive_stats SET {set_clause} "  # noqa: S608 # nosec B608 - fixed column list
                 "WHERE round_id = %s AND player_guid = %s"
             )
             cur.execute(update_sql, [*params, pair["r2_id"], guid])
