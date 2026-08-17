@@ -6,6 +6,15 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.38.1](https://github.com/iamez/slomix/compare/v1.38.0...v1.38.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **bot:** a stale roster can no longer swallow a session's box score ([#765](https://github.com/iamez/slomix/issues/765)) ([cb423f8](https://github.com/iamez/slomix/commit/cb423f859492b6b9af5111eee22bc2eca2b87302))
+* **db:** flag historical bot rounds and quiet the audit's known-noise ([#762](https://github.com/iamez/slomix/issues/762)) ([735b453](https://github.com/iamez/slomix/commit/735b4535d4e7223c3c59877259eafcae800e042a))
+* **website:** one validity gate for Hall of Fame, season leaders and recent matches ([#764](https://github.com/iamez/slomix/issues/764)) ([a5b6cc4](https://github.com/iamez/slomix/commit/a5b6cc47d10c3ca148b682bc6c69aff3d57b3b60))
+
 ## [1.38.0](https://github.com/iamez/slomix/compare/v1.37.0...v1.38.0) (2026-08-17)
 
 
