@@ -311,6 +311,11 @@ class BotConfig:
         self.ssh_user: str = self._get_config('SSH_USER', '')
         self.ssh_key_path: str = self._get_config('SSH_KEY_PATH', '')
         self.ssh_remote_path: str = self._get_config('REMOTE_STATS_PATH', '')
+        # Lua console sentinel (RCA 2026-08-17): the game server's console
+        # log had no reader for three months of a printed error. str() path,
+        # overridable per install; empty disables the sentinel.
+        self.game_console_log_path: str = str(self._get_config(
+            'GAME_CONSOLE_LOG', '/home/et/.etlegacy/legacy/etconsole.log'))
 
         # SSH monitoring behavior
         self.ssh_check_interval: int = int(self._get_config('SSH_CHECK_INTERVAL', '60'))  # seconds

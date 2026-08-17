@@ -878,3 +878,135 @@ class _MonitorTasksMixin:
         except Exception:
             logger.error("[IDLE-WATCHDOG] map load failed", exc_info=True)
             return False
+
+    # ------------------------------------------------------------------
+    # Lua console sentinel (P1 of the 2026-08-17 RCA)
+    #
+    # A Lua error printed into the game server's etconsole.log every supply
+    # map load for three months and nothing noticed: the only grep with the
+    # right pattern pointed at the local dev clone, the deploy runbook's "no
+    # etconsole errors" was an adjective without a step, and every alert path
+    # to Discord begins as a Python exception inside THIS process. This loop
+    # is the missing reader: it tails the remote console over the SSH access
+    # the bot already holds and alerts on the error classes we have actually
+    # been bitten by.
+    # ------------------------------------------------------------------
+
+    _CONSOLE_ERROR_RE = re.compile(
+        r"error running lua"
+        r"|bad argument"
+        r"|stack traceback"
+        r"|attempt to (?:index|call|compare|perform)"
+        r"|\[PROX\].*FAILED",
+        re.IGNORECASE,
+    )
+    # One alert per distinct error line per hour: the crash prints on EVERY
+    # map load, and an alert channel that repeats itself gets muted, which
+    # would recreate the very blindness this loop exists to end.
+    _CONSOLE_ALERT_COOLDOWN_S = 3600
+    # First run looks this far back so a bot restart re-surfaces a live,
+    # still-unfixed error once instead of never.
+    _CONSOLE_BACKSCAN_BYTES = 65536
+    _CONSOLE_MAX_READ_BYTES = 512 * 1024
+
+    def _fetch_console_span(self, offset: int | None):
+        """Return (new_offset, text) of the remote console log from `offset`.
+
+        Blocking (paramiko) — the caller runs it in a thread. Split out so
+        tests can override it with a fake; everything above this line is pure
+        bookkeeping that the tests pin.
+        """
+        import paramiko
+
+        from bot.automation.ssh_handler import configure_ssh_host_key_policy
+
+        ssh = paramiko.SSHClient()
+        configure_ssh_host_key_policy(ssh)
+        try:
+            ssh.connect(
+                hostname=self.config.ssh_host,
+                port=self.config.ssh_port,
+                username=self.config.ssh_user,
+                key_filename=self.config.ssh_key_path,
+                timeout=10,
+            )
+            sftp = ssh.open_sftp()
+            path = self.config.game_console_log_path
+            size = sftp.stat(path).st_size
+            if offset is None:
+                # first pass after (re)start: recent window, not all history
+                offset = max(0, size - self._CONSOLE_BACKSCAN_BYTES)
+            elif size < offset:
+                # the engine truncates/rewrites the log on server restart —
+                # and boot is exactly when init-time errors print, so start
+                # over rather than skipping to the end
+                offset = 0
+            if size == offset:
+                return size, ""
+            with sftp.open(path, "rb") as fh:
+                fh.seek(offset)
+                data = fh.read(min(size - offset, self._CONSOLE_MAX_READ_BYTES))
+            return offset + len(data), data.decode("utf-8", errors="replace")
+        finally:
+            ssh.close()
+
+    def _scan_console_chunk(self, text: str, now: float) -> list[str]:
+        """New alert-worthy lines in `text`, deduped by content with a cooldown."""
+        alerted = getattr(self, "_console_alerted", None)
+        if alerted is None:
+            alerted = {}
+            self._console_alerted = alerted
+        fresh: list[str] = []
+        for line in text.splitlines():
+            if not self._CONSOLE_ERROR_RE.search(line):
+                continue
+            key = line.strip()[-200:]
+            last = alerted.get(key)
+            if last is not None and now - last < self._CONSOLE_ALERT_COOLDOWN_S:
+                continue
+            alerted[key] = now
+            fresh.append(line.strip())
+        # keep the dedupe table bounded
+        if len(alerted) > 500:
+            cutoff = now - self._CONSOLE_ALERT_COOLDOWN_S
+            for k in [k for k, t in alerted.items() if t < cutoff]:
+                del alerted[k]
+        return fresh
+
+    @tasks.loop(seconds=120)
+    async def lua_console_sentinel(self):
+        cfg = self.config
+        if not getattr(cfg, "ssh_enabled", False):
+            return
+        if not all([cfg.ssh_host, cfg.ssh_user, cfg.ssh_key_path,
+                    getattr(cfg, "game_console_log_path", "")]):
+            return
+        try:
+            offset = getattr(self, "_console_log_offset", None)
+            new_offset, text = await asyncio.to_thread(self._fetch_console_span, offset)
+            self._console_log_offset = new_offset
+        except Exception:
+            # transient SSH failure must not kill the loop; the endstats
+            # monitor already alerts on sustained SSH breakage
+            logger.debug("[LUA-SENTINEL] console fetch failed", exc_info=True)
+            return
+        if not text:
+            return
+        fresh = self._scan_console_chunk(text, time.monotonic())
+        if not fresh:
+            return
+        shown = "\n".join(f"`{ln[:180]}`" for ln in fresh[:5])
+        more = f"\n… in še {len(fresh) - 5} vrstic" if len(fresh) > 5 else ""
+        logger.error("[LUA-SENTINEL] %d new game-server Lua error line(s):\n%s",
+                     len(fresh), "\n".join(fresh[:5]))
+        try:
+            await self.alert_admins(
+                "🔴 Lua napaka na igralnem strežniku",
+                f"etconsole.log ({cfg.ssh_host}):\n{shown}{more}",
+            )
+        except Exception:
+            logger.error("[LUA-SENTINEL] alert failed", exc_info=True)
+
+    @lua_console_sentinel.before_loop
+    async def before_lua_console_sentinel(self):
+        await self.wait_until_ready()
