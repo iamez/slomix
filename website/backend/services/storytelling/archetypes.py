@@ -49,8 +49,7 @@ class _ArchetypesMixin:
             WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
             GROUP BY killer_guid
             ORDER BY SUM(total_impact) DESC
-            LIMIT $5
-        """, (dates, starts, maps, rnums, limit))
+        """, (dates, starts, maps, rnums))
 
         kis_entries = [
             {
@@ -66,7 +65,15 @@ class _ArchetypesMixin:
             for r in (rows or [])
         ]
 
-        # Enrich with server-side archetypes and PCS metrics
+        # Enrich with server-side archetypes and PCS metrics.
+        #
+        # Classification is RELATIVE to the session average, so it must see every
+        # player the session had — not the page the caller asked for. Cutting the
+        # SQL off at `limit` made the averages a function of the response size:
+        # the same player came back "Objective Specialist" at limit=50 (narrative)
+        # and something else at limit=20 (the /kis endpoint), for one night's
+        # play. The limit is applied after classifying, where it belongs; a
+        # session's KIS board is at most a few dozen rows.
         if kis_entries:
             archetypes, player_stats = await self.classify_players(scope, kis_entries)
             for entry in kis_entries:
@@ -77,7 +84,7 @@ class _ArchetypesMixin:
                 entry["time_dead_pct"] = round(ps.get("time_dead_pct", 0), 2)
                 entry["revives_given"] = ps.get("revives_given", 0)
 
-        return kis_entries
+        return kis_entries[:limit] if limit and limit > 0 else kis_entries
 
     async def classify_players(
         self, scope: GamingSessionScope, kis_entries: list[dict]

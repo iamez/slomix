@@ -227,6 +227,11 @@ const STORY_PANEL_IDS = [
     'story-team-synergy', 'story-win-contribution', 'story-box-score',
     'story-invisible-value', 'story-advanced-metrics', 'story-comp-skill',
     'story-kill-matrix',
+    // The timeline is filled by the SLOWEST pair of requests on the page (box
+    // score + session detail). Left out of this list, the new session's heading
+    // sat above the previous session's map rows for as long as those two took —
+    // the same carry-over 20e8ad45 fixed in the hero, one panel further down.
+    'story-timeline',
 ];
 
 function _clearStoryPanels() {
@@ -306,23 +311,44 @@ async function loadStoryData() {
             _syncStoryHash();
         }
 
-        storyState.players = Array.isArray(data?.players) ? data.players : [];
+        const kisPlayers = Array.isArray(data?.players) ? data.players : [];
         // Session's REAL total kills (backend now sends the player_comprehensive_stats
         // count, not the KIS-tracked subset the per-player rows carry).
         storyState.totalKills = Number.isFinite(data?.total_kills) ? data.total_kills : null;
 
+        // The ranking is built on WIN CONTRIBUTION, not Kill Impact.
+        //
+        // In stopwatch the map is won by finishing the objective faster; kills
+        // are the means, not the end. PWC is anchored to that — it asks how much
+        // a player contributed to the rounds their team won — and it is 72 % PCS
+        // plus 28 % proximity, so it survives a night where the proximity
+        // tracker did not. KIS is 100 % proximity: on production, session 138
+        // has 1,396 kills and not one score, and this page used to render
+        // nothing at all for it.
+        //
+        // They are not two views of one thing: across nine sessions they named
+        // a different top player four times. Both are shown, and KIS keeps its
+        // own column — see _mergePlayerMetrics.
+        const q = _storyScopeQuery();
+        const pwcData = await fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`)
+            .catch(() => null);
+        if (loadId !== storyLoadId) return;
+
+        storyState.pwc = pwcData;
+        storyState.players = _mergePlayerMetrics(pwcData, kisPlayers);
+
         if (storyState.players.length === 0) {
-            renderEmpty('No kill impact data for this session');
+            renderEmpty('No player data for this session');
             return;
         }
 
         renderStoryHero(storyState.sessionDateLabel || storyState.sessionDate, storyState.players);
         renderPlayerCards(storyState.players);
-        renderKISBreakdown(storyState.players);
+        renderKISBreakdown(kisPlayers);
+        _loadCoverageNote(loadId);
 
-        // gsid-native query for every panel (SS-C). skill/composite is now
-        // converted too (accepts gaming_session_id), so all panels share `q`.
-        const q = _storyScopeQuery();
+        // `q` (gsid-native scope query, SS-C) is built above — every panel
+        // below shares it, including skill/composite which now accepts a gsid.
 
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking).
         // Every failure path re-checks `loadId` exactly like its success path:
@@ -367,12 +393,16 @@ async function loadStoryData() {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
         }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
-        fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
-            if (loadId !== storyLoadId) return;
-            renderWinContribution(pwcData);
+        // The ranking above already awaited this exact payload — render the
+        // panel from it rather than fetching the URL again. The refetch relied
+        // on the SWR cache to return the same body, and an expiry between the
+        // two calls would have let the panel disagree with the ranking it sits
+        // under.
+        renderWinContribution(pwcData);
+        {
             const top = (pwcData?.players || [])[0];
             if (top?.name) _setFoldHint('Player win contribution', `top: ${stripEtColors(top.name)}`);
-        }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
+        }
 
         // Advanced metrics + Comp Skill board share one card (own containers)
         // and are rendered together so the card fills in one paint.
@@ -461,9 +491,26 @@ function _resetHero(titleText) {
         delete title.dataset.hasResult;
     }
     for (const id of ['story-subtitle', 'story-stats-row', 'story-hero-arc',
-                      'story-hero-turning', 'story-hero-freshness']) {
+                      'story-hero-turning', 'story-hero-freshness',
+                      // The lead line and the team-score chip are filled by
+                      // LATER responses than the ones that reset the hero, so
+                      // leaving them out meant the previous session's margin
+                      // ("2.14 win contribution, 8% clear of X") and score sat
+                      // under the new session's headline until those responses
+                      // landed — or forever, if this session has no box score.
+                      'story-hero-lead', 'story-hero-score']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
+    }
+    _clearFoldHints();
+}
+
+/** Fold hints describe what is INSIDE each fold, so they belong to a session.
+ * Left behind on a switch, an unopened fold advertises the previous night's
+ * contents; emptying them restores the CSS "Show" placeholder. */
+function _clearFoldHints() {
+    for (const slot of document.querySelectorAll('#view-story .story-fold-hint')) {
+        slot.textContent = '';
     }
 }
 
@@ -533,7 +580,11 @@ function _sessionIdentityLine(sessionDate, playerCount) {
         // Saying only the second put "5 maps" in the header while the sentence
         // right underneath said "after 8 maps" — both true, read as a
         // contradiction. Name both, or say neither.
-        const plays = Math.round(rounds / 2);
+        // One helper owns the divisor: the KIS tier scale divides by the same
+        // number, and an odd round count made the two disagree when each did
+        // its own arithmetic. Round for display only.
+        // _mapPlaysInScope already rounds; the fallback still needs it.
+        const plays = _mapPlaysInScope() ?? Math.max(1, Math.round(rounds / 2));
         const distinct = Array.isArray(scope?.distinct_map_names) ? scope.distinct_map_names.length : 0;
         if (plays > 0 && distinct > 0) {
             parts.push(`${rounds} rounds · ${plays} map play${plays === 1 ? '' : 's'} (${distinct} different)`);
@@ -543,6 +594,112 @@ function _sessionIdentityLine(sessionDate, playerCount) {
     }
     if (playerCount > 0) parts.push(`${playerCount} players`);
     return parts.join(' \u00b7 ');
+}
+
+/**
+ * One row per player, carrying both metrics and the honest kill count.
+ *
+ * Ranked by PWC (contribution to rounds won) because that is what decides a
+ * stopwatch map; KIS rides along as a second column. Where a player appears in
+ * only one of the two, they still get a row — dropping them would silently
+ * shrink the night.
+ *
+ * `kills` comes from PWC's per-round breakdown, which carries the real PCS
+ * count. The kill-impact payload's `kills` is the proximity-TRACKED subset and
+ * is kept under `tracked_kills`: on a session with partial coverage the two
+ * differ by an order of magnitude, and the row used to print the small one
+ * under the word "kills" next to a full-session DPM.
+ */
+function _mergePlayerMetrics(pwcData, kisPlayers) {
+    const byGuid = new Map();
+    const key = (g) => String(g || '').slice(0, 8).toUpperCase();
+
+    for (const p of (pwcData?.players || [])) {
+        const rounds = Array.isArray(p.per_round) ? p.per_round : [];
+        byGuid.set(key(p.guid), {
+            guid: p.guid,
+            name: p.name,
+            total_pwc: Number(p.total_pwc) || 0,
+            rounds_won: p.rounds_won,
+            total_rounds: p.total_rounds,
+            kills: rounds.reduce((n, r) => n + (Number(r.kills) || 0), 0),
+        });
+    }
+
+    for (const k of (kisPlayers || [])) {
+        const id = key(k.guid);
+        const row = byGuid.get(id) || { guid: k.guid, name: k.name, total_pwc: null };
+        // Everything the expanded card already renders stays exactly as it was.
+        Object.assign(row, k, {
+            tracked_kills: k.kills,
+            kills: row.kills != null ? row.kills : k.kills,
+            name: row.name || k.name,
+            total_pwc: row.total_pwc,
+            rounds_won: row.rounds_won,
+            total_rounds: row.total_rounds,
+        });
+        byGuid.set(id, row);
+    }
+
+    return [...byGuid.values()].sort((a, b) => {
+        const d = (b.total_pwc ?? -1) - (a.total_pwc ?? -1);
+        return d !== 0 ? d : (b.total_kis ?? 0) - (a.total_kis ?? 0);
+    });
+}
+
+/**
+ * Say what share of the night the scores actually describe.
+ *
+ * The backend has computed this all along — `/diagnostics/storytelling-
+ * completeness` returns a status, a ratio and a plain-language warning — and the
+ * page never asked for it. A session scored on 6 % of its kills rendered exactly
+ * like one scored on 100 %.
+ */
+async function _loadCoverageNote(loadId) {
+    const slot = document.getElementById('story-coverage');
+    if (!slot) return;
+    slot.textContent = '';
+    slot.style.display = 'none';
+
+    // Ask about THIS session, not the calendar day. One date can hold several
+    // gaming sessions (2026-03-25 held four), and a day-wide ratio was being
+    // used to qualify a session-scoped "Total KIS" below.
+    if (storyState.gamingSessionId == null && !storyState.sessionDate) return;
+    const info = await fetchJSON(
+        `${API_BASE}/diagnostics/storytelling-completeness?${_storyScopeQuery()}`
+    ).catch(() => null);
+    if (!info || loadId !== storyLoadId) return;
+
+    const ratio = Number(info.completeness_ratio);
+    if (!Number.isFinite(ratio) || ratio >= 0.995) return;   // nothing to warn about
+
+    const scored = Number(info.kis_rows) || 0;
+    const total = Number(info.kills_total) || 0;
+    slot.textContent = '';
+    if (total === 0) {
+        // Not "0 of 0 scored (0 %)", which reads as a failure. The proximity
+        // tracker only started producing data in March 2026; every session
+        // before that has no kill-level detail to score and never will.
+        slot.appendChild(_el('span', 'font-bold', 'No Kill Impact for this session: '));
+        slot.appendChild(_el('span', null,
+            'there is no kill-level tracking data for this session. '
+            + 'The ranking below is win contribution, computed from the match stats.'));
+    } else {
+        slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this session: '));
+        slot.appendChild(_el('span', null,
+            `${scored.toLocaleString()} of ${total.toLocaleString()} kills scored (${Math.round(ratio * 100)} %). `
+            + 'Win contribution is unaffected — it is computed from the match stats.'));
+    }
+    slot.style.display = '';
+
+    // Qualify the hero's "Total KIS" in place — it is the sum over the scored
+    // share, not over the night.
+    const kisStat = document.querySelector('#story-stats-row [data-kis-total]');
+    const label = kisStat && kisStat.firstElementChild;
+    if (label && !label.dataset.qualified) {
+        label.textContent = `Total KIS (${Math.round(ratio * 100)}% scored)`;
+        label.dataset.qualified = '1';
+    }
 }
 
 /**
@@ -557,8 +714,13 @@ function _renderNightHeadline(title, players) {
     const top = players?.[0];
     if (!top) { title.textContent = 'No players in this session'; return; }
 
-    const best = Number(top.total_kis) || 0;
-    const second = Number(players[1]?.total_kis) || 0;
+    // Ranked on contribution to rounds won, so the headline is about the same
+    // thing the list below is. Falls back to Kill Impact only when a session has
+    // no win contribution at all, and says which one it used either way.
+    const usePwc = Number.isFinite(Number(top.total_pwc));
+    const value = (p) => Number(usePwc ? p?.total_pwc : p?.total_kis) || 0;
+    const best = value(top);
+    const second = value(players[1]);
     const lead = (best > 0 && second > 0) ? (best - second) / second : null;
 
     let verb = 'led the night';
@@ -571,10 +733,25 @@ function _renderNightHeadline(title, players) {
     const detail = document.getElementById('story-hero-lead');
     if (detail) {
         detail.textContent = '';
-        detail.appendChild(_el('span', 'text-slate-300', `${best.toFixed(0)} KIS`));
+        // Two players separated by 0.002 both print "4.76" at two decimals, so a
+        // real gap reads as a tie. Add a digit only when the rounding hides it.
+        const digits = (usePwc && second > 0 && best.toFixed(2) === second.toFixed(2)) ? 3 : 2;
+        detail.appendChild(_el('span', 'text-slate-300',
+            usePwc ? `${best.toFixed(digits)} win contribution` : `${best.toFixed(0)} kill impact`));
         if (lead != null && players[1]) {
+            const pct = lead * 100;
+            // "0% clear of X" is not a margin, it is a tie with extra words.
             detail.appendChild(_el('span', 'text-slate-500',
-                ` · ${(lead * 100).toFixed(0)}% clear of ${stripEtColors(players[1].name)}`));
+                pct < 0.5
+                    ? ` · level with ${stripEtColors(players[1].name)}`
+                    : ` · ${pct.toFixed(0)}% clear of ${stripEtColors(players[1].name)}`));
+        }
+        // When the two metrics disagree, that IS the story: fragging hard on a
+        // losing side reads very differently from riding a winning one.
+        const kisTop = [...players].sort((a, b) => (Number(b.total_kis) || 0) - (Number(a.total_kis) || 0))[0];
+        if (usePwc && kisTop && kisTop !== top && (Number(kisTop.total_kis) || 0) > 0) {
+            detail.appendChild(_el('span', 'text-slate-500',
+                ` · hardest-hitting kills: ${stripEtColors(kisTop.name)}`));
         }
     }
 }
@@ -593,8 +770,6 @@ function renderStoryHero(sessionDate, players) {
         ? storyState.totalKills
         : players.reduce((s, p) => s + (p.kills || 0), 0);
 
-    // The title is the RESULT slot \u2014 renderHeroResult() fills it once the BOX
-    // score lands. Until then it holds the session label, so the hero never
     // The headline answers "whose night was it?", not "what was the team score?".
     // Teams are reshuffled between maps, so the team result is a fact about two
     // temporary labels — it read as the loudest thing on the page while saying
@@ -610,7 +785,12 @@ function renderStoryHero(sessionDate, players) {
             _el('span', 'text-xs text-slate-500 uppercase tracking-wider', label),
             _el('span', `text-lg font-bold ${cls}`, value)
         );
-        statsRow.appendChild(stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400'));
+        const kisStat = stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400');
+        // Marked so the coverage check can qualify it: this sum is over whatever
+        // share of the night was actually scored, and it sits one slot away from
+        // KILLS, which is the whole session. Two populations, one strip.
+        kisStat.dataset.kisTotal = '1';
+        statsRow.appendChild(kisStat);
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
         // Not MVP: the headline above already names them, and a stat strip that
@@ -727,6 +907,12 @@ function renderNightTimeline(box, detail) {
     const beta = stripEtColors(box.beta_team || 'Beta');
 
     const clockOf = (i) => {
+        // Index is the join key, so the two lists must actually describe the
+        // same play. They can diverge — BOX drops rounds the session detail
+        // keeps (session 146: 0 box maps against 1 match) — and one dropped
+        // play would silently shift every later start time by a whole map.
+        // Checking the name costs nothing and turns a wrong clock into none.
+        if (matches[i]?.map_name !== maps[i]?.map_name) return '';
         const t = matches[i]?.rounds?.[0]?.round_time;
         const s = t != null ? String(t).padStart(6, '0') : '';
         return /^\d{6}$/.test(s) ? `${s.slice(0, 2)}:${s.slice(2, 4)}` : '';
@@ -1091,14 +1277,32 @@ async function _renderSessionMomentum(container) {
     container.appendChild(note);
 }
 
+/** Redraw momentum the first time its fold is opened.
+ *
+ * Chart.js sizes a canvas to its LAID-OUT box, and a closed <details> gives it
+ * none: a chart drawn while the fold was shut comes back zero-width when the
+ * reader opens it. The data is already in memory (`_momentumLastData`) and the
+ * session view is cached per gsid, so redrawing on open costs nothing. */
+function _bindMomentumFold(container) {
+    const fold = container.closest('details.story-fold');
+    if (!fold || fold.dataset.momentumBound) return;
+    fold.dataset.momentumBound = '1';
+    fold.addEventListener('toggle', () => {
+        if (fold.open && _momentumLastData) renderMomentum(_momentumLastData);
+    });
+}
+
 function renderMomentum(data) {
     const container = document.getElementById('story-momentum');
     if (!container) return;
     container.textContent = '';
     _momentumLastData = data;
+    _bindMomentumFold(container);
 
     const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
     if (rounds.length === 0) return;
+
+    _setFoldHint('Momentum', `${rounds.length} round${rounds.length === 1 ? '' : 's'} charted`);
 
     const headRow = _el('div', 'flex items-center justify-between mb-3 flex-wrap gap-2');
     const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase', 'Momentum');
@@ -1191,7 +1395,12 @@ function renderMomentum(data) {
 function _mapPlaysInScope() {
     const rounds = Number(storyState.scope?.accepted_round_count);
     if (!Number.isFinite(rounds) || rounds <= 0) return null;
-    return rounds / 2;
+    // A map play is R1+R2, but a session can end on an odd round: 30 of 140
+    // sessions do, and 10 of those hold a single round. Left fractional, that
+    // one round became 0.5 map plays and every KIS-per-map tier computed
+    // against it DOUBLED — a quiet night rendered "Legendary". Half a play is
+    // still a play, so round up from zero.
+    return Math.max(1, Math.round(rounds / 2));
 }
 
 /**
@@ -1214,7 +1423,7 @@ function renderPlayerCards(players) {
     container.textContent = '';
 
     const mapPlays = _mapPlaysInScope();
-    const topKis = Math.max(...players.map(p => Number(p.total_kis) || 0), 0);
+    const topPwc = Math.max(...players.map(p => Number(p.total_pwc) || 0), 0);
     players.forEach((p, idx) => {
         const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
@@ -1222,9 +1431,15 @@ function renderPlayerCards(players) {
         const tier = getKISTier(p.total_kis, mapPlays);
         const rank = idx + 1;
 
-        const carrierBar = p.kills > 0 ? ((p.carrier_kills / p.kills) * 100).toFixed(0) : 0;
-        const pushBar = p.kills > 0 ? ((p.push_kills / p.kills) * 100).toFixed(0) : 0;
-        const crossfireBar = p.kills > 0 ? ((p.crossfire_kills / p.kills) * 100).toFixed(0) : 0;
+        // Carrier / push / crossfire counts describe the proximity-TRACKED
+        // kills only, so the denominator has to be the tracked count too.
+        // Dividing them by `p.kills` — which is now the full PCS count — made
+        // every segment read up to 8x too small on a partially covered
+        // session, i.e. exactly when the numbers matter most.
+        const ctxKills = Number(p.tracked_kills ?? p.kills) || 0;
+        const carrierBar = ctxKills > 0 ? ((p.carrier_kills / ctxKills) * 100).toFixed(0) : 0;
+        const pushBar = ctxKills > 0 ? ((p.push_kills / ctxKills) * 100).toFixed(0) : 0;
+        const crossfireBar = ctxKills > 0 ? ((p.crossfire_kills / ctxKills) * 100).toFixed(0) : 0;
 
         const row = _el('details', 'rounded-xl border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] transition-all duration-200 group');
         const card = _el('div', 'px-4 pb-5 pt-1');
@@ -1232,36 +1447,66 @@ function renderPlayerCards(players) {
         // `tier` is null when the scope has not resolved a round count to
         // normalise by — the rank chip then falls back to a neutral treatment
         // instead of asserting a grade nothing supports.
+        // The rank chip is neutral: the list is ordered by contribution, while the
+        // tier grades kill impact. Colouring the rank by the tier made the chip
+        // claim something the ordering does not.
         const tierCss = tier ? tier.css : 'from-slate-500 to-slate-600';
+        const rankCss = 'from-slate-600 to-slate-700';
 
-        // ── the row itself: rank · name · score against the leader · three numbers
+        // ── the row: rank · name · what they contributed · what their kills were worth
         const kis = Number(p.total_kis) || 0;
-        const share = topKis > 0 ? Math.max(2, Math.round((kis / topKis) * 100)) : 0;
+        const pwc = Number(p.total_pwc);
+        const hasPwc = Number.isFinite(pwc);
+        const share = (hasPwc && topPwc > 0) ? Math.max(2, Math.round((pwc / topPwc) * 100)) : 0;
         const bar = _el('div', 'h-1.5 rounded-full bg-slate-800 overflow-hidden w-full');
         const fill = _el('div', `h-full rounded-full bg-gradient-to-r ${tierCss}`);
         fill.style.width = `${share}%`;
         bar.appendChild(fill);
 
         const supporting = [];
+        // p.kills is the real PCS count (from PWC's per-round breakdown), not
+        // the proximity-tracked subset — those differ by 8x on a session with
+        // partial coverage, and this line sits next to a full-session DPM.
         if (p.kills != null) supporting.push(`${p.kills} kills`);
         if (p.dpm) supporting.push(`${(p.dpm).toFixed(0)} DPM`);
-        if (p.time_dead_pct != null) supporting.push(`${(p.time_dead_pct * 100).toFixed(0)}% dead`);
+        if (p.rounds_won != null && p.total_rounds) {
+            supporting.push(`${p.rounds_won}/${p.total_rounds} rounds won`);
+        } else if (p.time_dead_pct != null) {
+            supporting.push(`${(p.time_dead_pct * 100).toFixed(0)}% dead`);
+        }
 
         const summary = _el('summary', 'flex items-center gap-3 px-4 py-3 cursor-pointer list-none select-none');
-        summary.appendChild(_el('div', `w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br ${tierCss} flex items-center justify-center text-xs font-black text-black/80`, String(rank)));
+        // Read aloud, the concatenated row is a rank digit followed by the same
+        // score twice in two formats. Name it once, properly, and hide the
+        // decorative caret from the reading order.
+        summary.setAttribute('aria-label', hasPwc
+            ? `${stripEtColors(p.name)}, rank ${rank}, ${pwc.toFixed(2)} win contribution`
+            : `${stripEtColors(p.name)}, rank ${rank}`);
+        summary.appendChild(_el('div', `w-7 h-7 shrink-0 rounded-lg bg-gradient-to-br ${rankCss} flex items-center justify-center text-xs font-black text-white`, String(rank)));
         summary.appendChild(_el('div', 'min-w-0 flex-1',
             _el('div', 'flex items-baseline gap-2',
-                _el('span', 'text-sm font-semibold text-white truncate', stripEtColors(p.name)),
-                tier ? _el('span', `text-[10px] ${tier.textCss} font-bold uppercase tracking-wider`, tier.label) : null
+                _el('span', 'text-sm font-semibold text-white truncate', stripEtColors(p.name))
             ),
             _el('div', 'text-[10px] text-slate-500 mt-0.5', supporting.join(' · '))
         ));
         summary.appendChild(_el('div', 'w-24 shrink-0 hidden sm:block', bar));
+        // Two numbers, two questions: what the night's rounds owed them (PWC),
+        // and what their kills were worth when they came (KIS). They disagree
+        // often enough to be worth showing side by side.
         summary.appendChild(_el('div', 'text-right shrink-0',
-            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`, kis.toFixed(1)),
-            _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'KIS')
+            _el('div', `text-lg font-black bg-gradient-to-r ${tierCss} bg-clip-text text-transparent`,
+                hasPwc ? pwc.toFixed(2) : '—'),
+            _el('div', 'text-[10px] text-slate-500 font-bold uppercase tracking-wider', 'contribution')
         ));
-        summary.appendChild(_el('span', 'text-slate-500 text-xs shrink-0 transition-transform group-open:rotate-180', '\u25BE'));
+        summary.appendChild(_el('div', 'text-right shrink-0 w-16 hidden sm:block',
+            _el('div', `text-sm font-bold tabular-nums ${tier && kis > 0 ? tier.textCss : 'text-slate-300'}`,
+                kis > 0 ? kis.toFixed(0) : '—'),
+            _el('div', 'text-[10px] text-slate-500 uppercase tracking-wider',
+                tier && kis > 0 ? tier.label.toLowerCase() : 'kill impact')
+        ));
+        const caret = _el('span', 'text-slate-500 text-xs shrink-0 transition-transform group-open:rotate-180', '\u25BE');
+        caret.setAttribute('aria-hidden', 'true');
+        summary.appendChild(caret);
         row.appendChild(summary);
 
         // The archetype moves inside: it describes HOW someone played, which is
@@ -1339,7 +1584,9 @@ function renderPlayerCards(players) {
         // Footer
         card.appendChild(_el('div', 'flex justify-between mt-1 text-[9px] text-slate-400',
             _el('span', null, `Avg impact: ${(p.avg_impact ?? 0).toFixed(2)}`),
-            _el('span', null, `Context: ${p.kills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / p.kills) * 100).toFixed(0) : 0}%`)
+            // Same population rule as the three bars above: tracked numerators
+            // need the tracked denominator, or the footer contradicts the bars.
+            _el('span', null, `Context: ${ctxKills > 0 ? (((p.carrier_kills + p.push_kills + p.crossfire_kills) / ctxKills) * 100).toFixed(0) : 0}%`)
         ));
 
         // Per-map split — the session total hides that the same player can

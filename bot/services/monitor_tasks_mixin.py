@@ -604,6 +604,174 @@ class _MonitorTasksMixin:
     # NEVER uses map_restart — issues a FULL `map <name>` load (et_InitGame),
     # per docs + feedback_lua_restart (map_restart/lua_restart break the Lua).
     # ------------------------------------------------------------------
+
+    # ── KIS coverage reconcile ─────────────────────────────────────────────
+    #
+    # Kill Impact Scores used to be computed ONLY as a side effect of a voice
+    # session ending (voice_session_service -> _invalidate_kis_cache ->
+    # warm_kis_cache). Every way that trigger can miss leaves a session with
+    # no scores forever, because nothing ever reconciled afterwards:
+    #
+    #   * the bot restarts between session end and the warm — no retry;
+    #   * INTERNAL_API_SECRET is unset, so the warm skips (the compute is
+    #     gated behind an internal-token request);
+    #   * the warm is a fire-and-forget task, so its exception is swallowed;
+    #   * nobody was in voice — no session end fires at all;
+    #   * rounds import LATE, after the warm already ran, leaving partial rows.
+    #
+    # Measured on production 2026-08-16: three sessions with kills but ZERO
+    # scores (138: 1,396 kills, 127: 82, 124: 542) and one partial (144:
+    # 490/507). Session 138 renders the Smart Stats page completely empty for a
+    # 22-round night, even though every kill is sitting in
+    # proximity_kill_outcome under the canonical round key.
+    #
+    # This loop closes the gap from the data side: it asks the only question
+    # that matters — "does this session have fewer scores than it has kills?" —
+    # and triggers the SAME internal compute the warm does. No scoring logic
+    # lives here. It both prevents new gaps and heals old ones, so history
+    # needs no hand-repair.
+    # No lookback window. A 90-day one looked prudent and cost nothing but
+    # coverage: production has gaps at 119 and 143 days old (sessions 112 and
+    # 103) that it would never have healed. The whole-history query costs 51 ms
+    # against 57 ms for the windowed one — the window bought nothing — and the
+    # per-pass cap below is what actually bounds the work.
+    _KIS_RECONCILE_MAX_PER_PASS = 3
+    _KIS_RECONCILE_MAX_ATTEMPTS = 3
+
+    @tasks.loop(seconds=900)
+    async def kis_coverage_reconcile(self):
+        """Recompute KIS for any session holding fewer scores than kills."""
+        try:
+            gaps = await self._find_kis_coverage_gaps()
+        except Exception:
+            logger.error("[KIS-RECONCILE] gap query failed", exc_info=True)
+            return
+        # A session that cannot be healed must not be retried forever: give up
+        # after a few passes and say so once, rather than logging the same
+        # failure every 15 minutes until someone notices the noise.
+        attempts = getattr(self, "_kis_reconcile_attempts", None)
+        if attempts is None:
+            attempts = {}
+            self._kis_reconcile_attempts = attempts
+        abandoned = getattr(self, "_kis_reconcile_abandoned", None)
+        if abandoned is None:
+            abandoned = set()
+            self._kis_reconcile_abandoned = abandoned
+
+        # A session no longer in the gap list is scored: forget its retry count.
+        # Kept, it would outlive the problem it counted — a LATER gap in the same
+        # session (a late import adding kills to a night already scored, which is
+        # one of the ways KIS went missing in the first place) would inherit an
+        # exhausted counter and be abandoned without a single attempt. Runs
+        # before the empty-gaps return, since "no gaps at all" is exactly the
+        # pass that proves every tracked session healed.
+        live = {row[0] for row in gaps}
+        for gsid in [g for g in attempts if g not in live]:
+            del attempts[gsid]
+        abandoned.intersection_update(live)
+
+        if not gaps:
+            return
+
+        healed = 0
+        for gsid, first_date, prox_kills, kis_rows in gaps:
+            if healed >= self._KIS_RECONCILE_MAX_PER_PASS:
+                break
+            tries = attempts.get(gsid, 0)
+            if tries >= self._KIS_RECONCILE_MAX_ATTEMPTS:
+                # Getting here means a LATER pass still found this session
+                # short — the last recompute did not close the gap, which is
+                # what makes the warning true. Warning right after firing the
+                # final attempt would have claimed failure before the result
+                # was known.
+                if gsid not in abandoned:
+                    abandoned.add(gsid)
+                    logger.warning(
+                        "[KIS-RECONCILE] session %s still short (%d scores for %d kills) after "
+                        "%d attempts — giving up, investigate rather than retrying forever",
+                        gsid, kis_rows, prox_kills, self._KIS_RECONCILE_MAX_ATTEMPTS,
+                    )
+                continue
+            logger.info(
+                "[KIS-RECONCILE] session %s (%s): %d scores for %d kills — recomputing (attempt %d)",
+                gsid, first_date, kis_rows, prox_kills, tries + 1,
+            )
+            # The pass budget is spent either way — a failed call still costs a
+            # request — but an ATTEMPT is only consumed when the compute really
+            # ran. warm_kis_cache returns False without reaching it when the
+            # secret is missing or the website is down; counting those would
+            # burn all three attempts during a web restart and abandon the
+            # session until the bot process itself restarts, which is the very
+            # silent-failure mode this loop exists to end.
+            healed += 1
+            try:
+                ran = await self.voice_session_service.warm_kis_cache(
+                    first_date, gaming_session_id=gsid,
+                )
+            except Exception:
+                logger.error("[KIS-RECONCILE] recompute failed for session %s", gsid, exc_info=True)
+                continue
+            if ran:
+                attempts[gsid] = tries + 1
+            else:
+                logger.warning(
+                    "[KIS-RECONCILE] session %s: recompute did not run (no secret, or the "
+                    "website did not answer 200) — not counting it as an attempt", gsid,
+                )
+
+    @kis_coverage_reconcile.before_loop
+    async def before_kis_coverage_reconcile(self):
+        """Wait for bot to be ready"""
+        await self.wait_until_ready()
+
+    async def _find_kis_coverage_gaps(self):
+        """Sessions whose KIS row count is below their proximity kill count.
+
+        Aggregates each side by canonical round key ONCE and joins, rather than
+        running a correlated subquery per round: measured 5,325 ms the naive way
+        against 51 ms this way over ALL history, which is the difference between
+        a loop that is free and one that is not.
+
+        The canonical key (round_start_unix, map_name, round_number) is the same
+        one the compute filters by, so a gap here is exactly a gap there.
+        """
+        rows = await self.db_adapter.fetch_all(
+            """
+            WITH scoped AS (
+                SELECT gaming_session_id AS gsid, round_start_unix AS rsu,
+                       map_name, round_number AS rn, round_date::date AS d
+                FROM rounds
+                WHERE gaming_session_id IS NOT NULL AND is_valid AND round_number > 0
+                  AND is_bot_round IS DISTINCT FROM TRUE AND round_start_unix IS NOT NULL
+            ), prox AS (
+                SELECT ko.round_start_unix AS rsu, ko.map_name, ko.round_number AS rn,
+                       COUNT(*) AS n
+                FROM proximity_kill_outcome ko
+                JOIN scoped s ON s.rsu = ko.round_start_unix AND s.map_name = ko.map_name
+                             AND s.rn = ko.round_number
+                GROUP BY 1, 2, 3
+            ), kis AS (
+                SELECT k.round_start_unix AS rsu, k.map_name, k.round_number AS rn,
+                       COUNT(*) AS n
+                FROM storytelling_kill_impact k
+                JOIN scoped s ON s.rsu = k.round_start_unix AND s.map_name = k.map_name
+                             AND s.rn = k.round_number
+                GROUP BY 1, 2, 3
+            )
+            SELECT s.gsid, MIN(s.d)::text AS first_date,
+                   SUM(COALESCE(p.n, 0)) AS prox_kills,
+                   SUM(COALESCE(kk.n, 0)) AS kis_rows
+            FROM scoped s
+            LEFT JOIN prox p ON p.rsu = s.rsu AND p.map_name = s.map_name AND p.rn = s.rn
+            LEFT JOIN kis kk ON kk.rsu = s.rsu AND kk.map_name = s.map_name AND kk.rn = s.rn
+            GROUP BY s.gsid
+            HAVING SUM(COALESCE(p.n, 0)) > 0
+               AND SUM(COALESCE(kk.n, 0)) < SUM(COALESCE(p.n, 0))
+            ORDER BY s.gsid DESC
+            """
+        )
+        return [(int(r[0]), str(r[1]), int(r[2]), int(r[3])) for r in (rows or [])]
+
     @tasks.loop(seconds=300)
     async def idle_restart_watchdog(self):
         cfg = self.config

@@ -20,6 +20,7 @@ from website.backend.routers.api_helpers import (
     normalize_monitoring_timestamp as _normalize_monitoring_timestamp,
 )
 from website.backend.services.game_server_query import query_game_server
+from website.backend.services.session_scope import resolve_gaming_session_scope
 
 router = APIRouter()
 logger = get_app_logger("api.diagnostics")
@@ -911,13 +912,24 @@ async def get_time_audit(
 
 @router.get("/diagnostics/storytelling-completeness")
 async def get_storytelling_completeness(
-    session_date: str = Query(..., description="YYYY-MM-DD"),
+    session_date: str | None = Query(None, description="YYYY-MM-DD (date-wide)"),
+    # `db` keeps its position so existing positional callers (and the contract
+    # tests) stay valid; the new parameter goes last on purpose.
     db: DatabaseAdapter = Depends(get_db),
+    gaming_session_id: int | None = Query(
+        None, description="canonical gaming session id — scopes the answer to ONE session"),
 ):
     """
-    Quick health check za Smart Stats podatke za izbrani session_date.
+    Quick health check za Smart Stats podatke za izbrano sejo (ali datum).
     Primerja kills v proximity_kill_outcome vs. KIS rows v storytelling_kill_impact
     in poroča linkage pokritost (kills brez round_id, rounds brez korelacije).
+
+    `gaming_session_id` je natančnejši in ima prednost: en koledarski datum lahko
+    nosi VEČ igralnih sej (2026-03-25 jih je imel štiri), zato je datumsko
+    razmerje napačna mera za sejo — stran ga je uporabila za oznako
+    "Total KIS (N% scored)", ki govori o eni sami seji. Filtrira se po
+    kanoničnem ključu runde, ne po `round_id`: seja 138 ima vse kille z
+    `round_id NULL` in bi ob join-u čez rounds izginila.
 
     Read-only, brez auth — UI uporablja kot 'show your work' za številke.
     Endpoint NE triggera compute side-effects, ker bi to bilo unauthenticated
@@ -925,37 +937,65 @@ async def get_storytelling_completeness(
     "Smart Stats še ni izračunan — odpri Smart Stats za ta datum" in
     `kis_computed=false` v response-u za tisti UX hint.
     """
-    try:
-        sd = datetime.strptime(session_date, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
-    except ValueError:
-        raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+    # Direct callers (the contract tests, internal helpers) pass plain values.
+    # A parameter they omit still carries FastAPI's Query object as its default,
+    # which is truthy — branching on it unnormalised sent every such call down
+    # the session path with a Query object as the session id.
+    gaming_session_id = gaming_session_id if isinstance(gaming_session_id, int) else None
+    session_date = session_date if isinstance(session_date, str) else None
+
+    if gaming_session_id is None and not session_date:
+        raise HTTPException(
+            status_code=422,
+            detail="One of gaming_session_id or session_date is required.")
+
+    sd = None
+    scope = None
+    if gaming_session_id is not None:
+        scope = await resolve_gaming_session_scope(db, gaming_session_id=gaming_session_id)
+        scope_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in scope.dates]  # noqa: DTZ007
+        starts, key_maps, key_rnums = scope.round_key_arrays()
+        params: tuple = (scope_dates, starts, key_maps, key_rnums)
+    else:
+        try:
+            sd = datetime.strptime(session_date, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
+        except ValueError:
+            raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+        params = (sd,)
+
+    def _scoped(alias: str) -> str:
+        """WHERE fragment for one table, in whichever scope was asked for."""
+        if scope is None:
+            return f"{alias}.session_date = $1"
+        return (f"{alias}.session_date = ANY($1) AND "
+                f"{scope.round_key_filter_sql(2, alias)}")
 
     try:
         kills_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(*) AS kills_total,
-                COUNT(*) FILTER (WHERE round_id IS NOT NULL) AS kills_with_round,
-                COUNT(DISTINCT round_id) FILTER (WHERE round_id IS NOT NULL) AS distinct_rounds,
-                COUNT(DISTINCT killer_guid) AS distinct_killers
-            FROM proximity_kill_outcome
-            WHERE session_date = $1
+                COUNT(*) FILTER (WHERE pko.round_id IS NOT NULL) AS kills_with_round,
+                COUNT(DISTINCT pko.round_id) FILTER (WHERE pko.round_id IS NOT NULL) AS distinct_rounds,
+                COUNT(DISTINCT pko.killer_guid) AS distinct_killers
+            FROM proximity_kill_outcome pko
+            WHERE {_scoped("pko")}
             """,
-            (sd,),
+            params,
         )
         kis_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(*) AS kis_rows,
-                COUNT(DISTINCT killer_guid) AS distinct_killers,
-                COALESCE(ROUND(SUM(total_impact)::numeric, 2), 0) AS total_impact_sum
-            FROM storytelling_kill_impact
-            WHERE session_date = $1
+                COUNT(DISTINCT k.killer_guid) AS distinct_killers,
+                COALESCE(ROUND(SUM(k.total_impact)::numeric, 2), 0) AS total_impact_sum
+            FROM storytelling_kill_impact k
+            WHERE {_scoped("k")}
             """,
-            (sd,),
+            params,
         )
         rounds_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(DISTINCT r.id) AS rounds_total,
                 COUNT(DISTINCT r.id) FILTER (WHERE rc.id IS NOT NULL) AS rounds_correlated
@@ -963,9 +1003,9 @@ async def get_storytelling_completeness(
             JOIN rounds r ON r.id = pko.round_id
             LEFT JOIN round_correlations rc
                 ON rc.r1_round_id = r.id OR rc.r2_round_id = r.id
-            WHERE pko.session_date = $1
+            WHERE {_scoped("pko")}
             """,
-            (sd,),
+            params,
         )
         # Exact-link check (Codex §18 / L1 methodology): a non-NULL round_id
         # only proves a kill points at SOME round, never the CORRECT one —
@@ -978,7 +1018,7 @@ async def get_storytelling_completeness(
         # exact" match, when it actually means neither side ever recorded a
         # real timestamp. Require > 0 on both sides (Copilot review on #525).
         wrong_link_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(*) FILTER (
                     WHERE pko.round_id IS NOT NULL
@@ -991,9 +1031,9 @@ async def get_storytelling_completeness(
                 ) AS exact_rows
             FROM proximity_kill_outcome pko
             LEFT JOIN rounds r ON r.id = pko.round_id
-            WHERE pko.session_date = $1
+            WHERE {_scoped("pko")}
             """,
-            (sd,),
+            params,
         )
     except Exception as e:
         logger.error("Database error in storytelling-completeness: %s", e, exc_info=True)
@@ -1092,7 +1132,17 @@ async def get_storytelling_completeness(
     ]
 
     return {
-        "session_date": session_date,
+        # Say which question was answered. A caller that asked by gsid gets the
+        # session's own dates back, so a ratio can never be quietly reused as if
+        # it described a different scope than the one requested.
+        "session_date": session_date if scope is None else scope.dates[0],
+        # Every date the counted scope touches. A session can cross midnight
+        # (142 starts on 2026-08-03 and ends on the 4th), and the single date
+        # above would let a caller re-query or label only half of what was
+        # counted here.
+        "session_dates": [session_date] if scope is None else list(scope.dates),
+        "gaming_session_id": gaming_session_id,
+        "scope": "date" if scope is None else "gaming_session",
         "status": status,
         "kills_total": kills_total,
         "kills_with_round": kills_with_round,

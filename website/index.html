@@ -3286,6 +3286,9 @@
                 <div id="story-hero-arc" class="flex items-center gap-2 flex-wrap"></div>
               </div>
               <div id="story-hero-turning" class="text-sm text-slate-300 mt-2"></div>
+              <!-- Coverage: filled only when the day's Kill Impact is incomplete.
+                   The backend has always computed this; the page never asked. -->
+              <div id="story-coverage" class="text-xs text-amber-300/90 mt-2" style="display:none"></div>
               <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300 flex-wrap"></div>
             </div>
           </div>
@@ -3321,14 +3324,24 @@
             <div id="story-moments" class="flex flex-col gap-2"></div>
           </div>
 
-          <!-- Momentum is per-round detail, not a headline: folded with the rest
-               of the evidence below. -->
-          <div id="story-momentum" class="hidden"></div>
-
           <!-- Everything below is EVIDENCE: same panels as before, folded away
                by default (native <details>, no JS, keyboard-accessible). The
                page keeps all 11 panels; it just stops shouting all of them at
                once. -->
+
+          <!-- Momentum is per-round detail, not a headline — so it folds with
+               the rest of the evidence. It must be a FOLD and not a bare
+               `hidden` div: nothing ever removed that class, so the panel
+               rendered into an element the page never showed. -->
+          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
+            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
+              <span class="text-sm font-bold text-white">Momentum &mdash; how the rounds swung</span>
+              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
+            </summary>
+            <div class="px-6 pb-5">
+              <div id="story-momentum"></div>
+            </div>
+          </details>
 
           <!-- How big vs how often: KIS (size of the contribution) next to
                Invisible Value (how often you contributed) — the CS ADR/KAST

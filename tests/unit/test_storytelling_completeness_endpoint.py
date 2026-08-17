@@ -178,3 +178,106 @@ async def test_endpoint_returns_known_issues_panel_always():
     assert "known_issues" in result
     keys = {ki["key"] for ki in result["known_issues"]}
     assert {"time_played_per_player", "headshot_pct", "distance_mult_hardcoded"} <= keys
+
+
+# ---------------------------------------------------------------------------
+# Session scope (2026-08-17)
+#
+# The Smart Stats page used this endpoint's ratio to qualify a SESSION-scoped
+# number ("Total KIS (N% scored)") while asking it a DATE-wide question. One
+# calendar date can hold several gaming sessions — 2026-03-25 held four — so on
+# those dates the label described a different population than the number it sat
+# on. The endpoint now answers per session when asked.
+# ---------------------------------------------------------------------------
+
+class _ScopeStub:
+    dates = ("2026-03-25",)
+
+    def round_key_arrays(self):
+        return ([1_700_000_000], ["supply"], [1])
+
+    def round_key_filter_sql(self, first_param, alias=""):
+        prefix = f"{alias}." if alias else ""
+        return f"ROUNDKEY({prefix}round_start_unix, ${first_param})"
+
+
+@pytest.mark.asyncio
+async def test_a_session_id_scopes_every_query_to_that_session(monkeypatch):
+    from website.backend.routers import diagnostics_router as mod
+
+    async def _fake_resolve(db, *, gaming_session_id=None, session_date=None):
+        assert gaming_session_id == 138
+        return _ScopeStub()
+
+    monkeypatch.setattr(mod, "resolve_gaming_session_scope", _fake_resolve)
+    db = _ComplianceFakeDb(kills_total=100, kis_rows=40, kills_with_round=100)
+
+    result = await get_storytelling_completeness(None, db, 138)
+
+    assert result["scope"] == "gaming_session"
+    assert result["gaming_session_id"] == 138
+    assert result["session_date"] == "2026-03-25"
+    # Every counting query must carry the round-key filter. A query left on the
+    # bare date would silently re-introduce the day-wide answer for one of the
+    # four numbers while the others were session-scoped.
+    counting = [q for q in db.queries if "session_date" in q]
+    assert counting, "no scoped query ran"
+    for q in counting:
+        assert "ROUNDKEY(" in q, q
+        assert "session_date = ANY($1)" in q, q
+
+
+@pytest.mark.asyncio
+async def test_the_date_path_is_untouched():
+    """The legacy caller (system overview, direct links) still gets the day."""
+    db = _ComplianceFakeDb(kills_total=10, kis_rows=10, kills_with_round=10)
+
+    result = await get_storytelling_completeness("2026-04-21", db)
+
+    assert result["scope"] == "date"
+    assert result["gaming_session_id"] is None
+    assert all("ROUNDKEY(" not in q for q in db.queries)
+
+
+@pytest.mark.asyncio
+async def test_asking_about_nothing_is_refused():
+    """Neither parameter used to mean "the string 'None'" reaching strptime."""
+    db = _ComplianceFakeDb()
+
+    with pytest.raises(HTTPException) as exc:
+        await get_storytelling_completeness(None, db, None)
+
+    assert exc.value.status_code == 422
+
+
+class _TwoDayScopeStub(_ScopeStub):
+    """Session 142 really does this: starts 2026-08-03, ends on the 4th."""
+    dates = ("2026-08-03", "2026-08-04")
+
+
+@pytest.mark.asyncio
+async def test_a_midnight_crossing_session_reports_every_date_it_counted(monkeypatch):
+    """The queries span both dates, so the answer must not name only one of
+    them — a caller re-querying by the returned date would ask about half the
+    session it was just told about."""
+    from website.backend.routers import diagnostics_router as mod
+
+    async def _fake_resolve(db, *, gaming_session_id=None, session_date=None):
+        return _TwoDayScopeStub()
+
+    monkeypatch.setattr(mod, "resolve_gaming_session_scope", _fake_resolve)
+    db = _ComplianceFakeDb()
+
+    result = await get_storytelling_completeness(None, db, 142)
+
+    assert result["session_dates"] == ["2026-08-03", "2026-08-04"]
+    assert result["session_date"] == "2026-08-03"
+
+
+@pytest.mark.asyncio
+async def test_the_date_path_reports_its_one_date_the_same_way():
+    db = _ComplianceFakeDb()
+
+    result = await get_storytelling_completeness("2026-04-21", db)
+
+    assert result["session_dates"] == ["2026-04-21"]
