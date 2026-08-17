@@ -56,6 +56,16 @@ def test_the_production_crash_line_matches():
     assert bot._scan_console_chunk(_CRASH, now=0.0) == [_CRASH]
 
 
+def test_common_lua54_runtime_errors_match():
+    """concatenate-on-nil is among the most common Lua 5.4 runtime errors and
+    is worded differently from index/call/compare/perform — the self-review
+    caught that the first pattern missed it."""
+    bot = Bot([])
+    lines = ("script:12: attempt to concatenate a nil value (field 'name')\n"
+             "script:9: attempt to perform arithmetic on a nil value")
+    assert len(bot._scan_console_chunk(lines, now=0.0)) == 2
+
+
 def test_the_prox_pcall_failures_match():
     """#751 made failures loud on purpose; the sentinel must hear them."""
     bot = Bot([])

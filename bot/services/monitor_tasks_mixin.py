@@ -896,7 +896,7 @@ class _MonitorTasksMixin:
         r"error running lua"
         r"|bad argument"
         r"|stack traceback"
-        r"|attempt to (?:index|call|compare|perform)"
+        r"|attempt to (?:index|call|compare|perform|concatenate)"
         r"|\[PROX\].*FAILED",
         re.IGNORECASE,
     )
