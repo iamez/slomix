@@ -6,6 +6,32 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.38.0](https://github.com/iamez/slomix/compare/v1.37.0...v1.38.0) (2026-08-17)
+
+
+### Features
+
+* **bot:** read the game server's console — the sensor the RCA said was missing ([#752](https://github.com/iamez/slomix/issues/752)) ([3421c6c](https://github.com/iamez/slomix/commit/3421c6c976bc636934b7d547e1749b52055a0a9f))
+* **ci:** gates the RCA said were missing — runbook runtime step, Lua CI, honest sensor exit ([#753](https://github.com/iamez/slomix/issues/753)) ([c67c23e](https://github.com/iamez/slomix/commit/c67c23e8d2cd7f511c2b9a4503e78f270ab1c799))
+* **db:** permanent data-plausibility audit (Data Trust pillar B) ([#759](https://github.com/iamez/slomix/issues/759)) ([bbae82b](https://github.com/iamez/slomix/commit/bbae82ba5555e9e21a4e204c863a2fe540a82df6))
+* **website:** an About page that actually tells you something ([#756](https://github.com/iamez/slomix/issues/756)) ([eb16e71](https://github.com/iamez/slomix/commit/eb16e719a859f67d732bf7fc8c9fef8c9681d93e))
+* **website:** full-map records alongside single-round records ([#760](https://github.com/iamez/slomix/issues/760)) ([86eb4ff](https://github.com/iamez/slomix/commit/86eb4ff6476132b9673548846655cb93d693d067))
+
+
+### Bug Fixes
+
+* **bot:** stop Smart Stats sessions from silently never being scored ([#748](https://github.com/iamez/slomix/issues/748)) ([b30cbe6](https://github.com/iamez/slomix/commit/b30cbe66890281f1e85bfcb6f1a378377265023a))
+* **db:** heal cumulative R2 rows and gate orphan R2s out of records ([#758](https://github.com/iamez/slomix/issues/758)) ([853460e](https://github.com/iamez/slomix/commit/853460e9ac5931b8092c21f3f25346a3317c7319))
+* **lua:** garbage vehicle origins can no longer resurrect the VP write crash ([#754](https://github.com/iamez/slomix/issues/754)) ([d94e8b0](https://github.com/iamez/slomix/commit/d94e8b0209bce1095883b204b2ef083ab7ce7cca))
+* **lua:** stop losing proximity data silently — Lua 5.4 %d crash + dead denied-run path ([#751](https://github.com/iamez/slomix/issues/751)) ([e107c1b](https://github.com/iamez/slomix/commit/e107c1b6eda2bbf696a59d973e40d1c3ffa93b46))
+* **website:** show the real team score on session lists, not a side tally ([#757](https://github.com/iamez/slomix/issues/757)) ([0b0a9d4](https://github.com/iamez/slomix/commit/0b0a9d47c4c0009871ba4bb6adadae9b96839491))
+* **website:** the accuracy record must stand on a provable sample ([#755](https://github.com/iamez/slomix/issues/755)) ([09f6709](https://github.com/iamez/slomix/commit/09f6709837a1f140d37c14c68036ddd3ca286327))
+
+
+### Reverts
+
+* **website:** Smart Stats back to its pre-redesign look, fixes kept ([#750](https://github.com/iamez/slomix/issues/750)) ([8a585f1](https://github.com/iamez/slomix/commit/8a585f10f2ffafa71fb0b5eb6d4b7d48ac7b25b5))
+
 ## [1.37.0](https://github.com/iamez/slomix/compare/v1.36.1...v1.37.0) (2026-08-16)
 
 
