@@ -344,8 +344,19 @@ RULES: list[Rule] = [
         table="rounds",
         tier="T1",
         severity="critical",
-        predicate="r.winner_team NOT IN (1, 2)",
-        note="ET:Legacy has exactly two teams (Axis=1, Allies=2); a completed valid round must have a winner in that set.",
+        # Scoped: rounds before 2026-02-03 predate lua_round_teams capture,
+        # and the ones still holding winner_team=0 (a 2026-01-15 cluster + two
+        # singles, verified 2026-08-17) have NO surviving source to attribute
+        # from — the #728-#730 winner backfill already healed everything
+        # healable. Zero violations exist in the live era, so a firing here
+        # means the CURRENT pipeline dropped a winner: a real regression.
+        predicate="r.winner_team NOT IN (1, 2) AND r.round_date >= '2026-02-03'",
+        note=(
+            "ET:Legacy has exactly two teams (Axis=1, Allies=2); a completed "
+            "valid round must have a winner in that set. Pre-2026-02-03 rounds "
+            "are excluded as unhealable pre-Lua-teams residue (no data to "
+            "attribute a winner from)."
+        ),
         extra_cols=("r.winner_team", "r.defender_team"),
         order_by="r.id DESC",
     ),
@@ -354,8 +365,13 @@ RULES: list[Rule] = [
         table="rounds",
         tier="T1",
         severity="critical",
-        predicate="r.defender_team NOT IN (1, 2)",
-        note="A completed valid round must have a defending team in {1, 2}.",
+        # Same era scope and rationale as rounds_winner_team_invalid.
+        predicate="r.defender_team NOT IN (1, 2) AND r.round_date >= '2026-02-03'",
+        note=(
+            "A completed valid round must have a defending team in {1, 2}. "
+            "Pre-2026-02-03 rounds are excluded as unhealable pre-Lua-teams "
+            "residue."
+        ),
         extra_cols=("r.defender_team", "r.winner_team"),
         order_by="r.id DESC",
     ),
