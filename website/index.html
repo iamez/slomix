@@ -3267,29 +3267,17 @@
         <!-- STORY / SMART STATS -->
         <div id="view-story" class="view-section hidden">
          <div class="max-w-6xl mx-auto px-4 py-8">
-          <!-- Hero = THE ANSWER (Story 2.0, Korak 3): who won, in what shape,
-               where it was decided, how fresh the data is. The result used to
-               live in the Box Score ~900px down; it belongs in the first
-               screen (5-second rule). -->
+          <!-- Hero -->
           <div id="story-hero" class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-amber-950/20 to-slate-900 p-8 mb-6" style="animation: storyGlow 6s ease-in-out infinite alternate">
             <div class="absolute inset-0 bg-gradient-to-r from-amber-500/5 via-transparent to-amber-500/5 pointer-events-none"></div>
             <div id="story-hero-content" class="relative z-10">
-              <div class="flex items-start justify-between gap-3 flex-wrap mb-2">
-                <div class="text-amber-400 text-xs font-bold tracking-[0.3em] uppercase">&#9889; Smart Stats</div>
-                <div id="story-hero-freshness" class="text-[10px] text-slate-500 uppercase tracking-wider"></div>
-              </div>
-              <h2 id="story-title" class="text-3xl md:text-4xl font-black text-white mb-2">Loading...</h2>
-              <div id="story-hero-lead" class="text-sm mb-2"></div>
+              <div class="text-amber-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">&#9889; Smart Stats</div>
+              <h2 id="story-title" class="text-3xl font-black text-white mb-2">Loading...</h2>
               <div id="story-subtitle" class="text-slate-400 text-sm"></div>
-              <div class="flex items-center gap-3 flex-wrap mt-3">
-                <span id="story-hero-score" class="text-sm font-bold tabular-nums"></span>
-                <div id="story-hero-arc" class="flex items-center gap-2 flex-wrap"></div>
-              </div>
-              <div id="story-hero-turning" class="text-sm text-slate-300 mt-2"></div>
-              <!-- Coverage: filled only when the day's Kill Impact is incomplete.
+              <!-- Coverage: filled only when the session's Kill Impact is incomplete.
                    The backend has always computed this; the page never asked. -->
               <div id="story-coverage" class="text-xs text-amber-300/90 mt-2" style="display:none"></div>
-              <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300 flex-wrap"></div>
+              <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300"></div>
             </div>
           </div>
 
@@ -3302,124 +3290,53 @@
           <!-- Narrative -->
           <div id="story-narrative" class="mb-6"></div>
 
-          <!-- The people are the spine: teams reshuffle between maps, players
-               do not. One scannable row each; the old card body is one click
-               down. -->
-          <div id="story-players" class="flex flex-col gap-2 mb-6"></div>
-
-          <!-- The night, map by map. Moments hang off the map they happened on
-               instead of a horizontal strip that ran off the right edge. -->
+          <!-- Momentum -->
           <div class="mb-6">
-            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">The night, map by map</h3>
-            <div id="story-timeline" class="flex flex-col gap-1"></div>
+            <div id="story-momentum"></div>
           </div>
 
-          <!-- Moments, vertical. They carry a map NAME and round number but no
-               map-play index, and a map can be played three times in a night —
-               so they cannot be pinned to a row above without guessing. Listed
-               here instead, each stating its own map, and no longer in a strip
-               that ran off the right edge. -->
+          <!-- Box Score -->
+          <div class="mb-6">
+            <div id="story-box-score"></div>
+          </div>
+
+          <!-- Moments -->
           <div class="mb-6">
             <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9889; Key Moments</h3>
-            <div id="story-moments" class="flex flex-col gap-2"></div>
+            <div id="story-moments" class="flex gap-3 overflow-x-auto pb-2"></div>
           </div>
 
-          <!-- Everything below is EVIDENCE: same panels as before, folded away
-               by default (native <details>, no JS, keyboard-accessible). The
-               page keeps all 11 panels; it just stops shouting all of them at
-               once. -->
-
-          <!-- Momentum is per-round detail, not a headline — so it folds with
-               the rest of the evidence. It must be a FOLD and not a bare
-               `hidden` div: nothing ever removed that class, so the panel
-               rendered into an element the page never showed. -->
-          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">Momentum &mdash; how the rounds swung</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5">
-              <div id="story-momentum"></div>
-            </div>
-          </details>
-
-          <!-- How big vs how often: KIS (size of the contribution) next to
-               Invisible Value (how often you contributed) — the CS ADR/KAST
-               pairing. They were at opposite ends of the page. -->
-          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">Impact detail &mdash; how big vs how often</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div>
-                <h4 class="text-xs text-slate-500 uppercase tracking-wider font-bold mb-3">Kill Impact Breakdown</h4>
-                <div id="story-kis-breakdown"></div>
-              </div>
-              <div id="story-invisible-value"></div>
-            </div>
-          </details>
-
-          <!-- Box Score (the result itself now lives in the hero; this is the
-               map-by-map evidence behind it) -->
-          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">Box score &mdash; map by map</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5">
-              <div id="story-box-score"></div>
-            </div>
-          </details>
-
           <!-- Team Synergy -->
-          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">&#9876;&#65039; Team synergy</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5">
-              <div id="story-team-synergy"></div>
-            </div>
-          </details>
+          <div class="mb-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-3">&#9876;&#65039; Team Synergy</h3>
+            <div id="story-team-synergy"></div>
+          </div>
+
+          <!-- Invisible Value (Gravity / Space / Enabler / Lurker) -->
+          <div class="mb-6">
+            <div id="story-invisible-value"></div>
+          </div>
+
+          <!-- Player cards grid -->
+          <div id="story-players" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6"></div>
+
+          <!-- KIS Breakdown -->
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
+            <h3 class="text-sm font-bold text-white mb-4">Kill Impact Breakdown</h3>
+            <div id="story-kis-breakdown"></div>
+          </div>
 
           <!-- Win Contribution -->
-          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">&#9733; Player win contribution</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5">
-              <div id="story-win-contribution"></div>
-            </div>
-          </details>
+          <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6 mt-6">
+            <h3 class="text-sm font-bold text-amber-400 tracking-widest uppercase mb-4">&#9733; Player Win Contribution</h3>
+            <div id="story-win-contribution"></div>
+          </div>
 
-          <!-- Kill matrix — who killed whom. Wide by nature, so the grid gets
-               its own horizontal scroll container; the page body never scrolls. -->
-          <details class="story-fold rounded-2xl border border-white/10 bg-white/[0.03] mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">&#9876;&#65039; Kill matrix &mdash; who killed whom</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5">
-              <div id="story-kill-matrix"></div>
-            </div>
-          </details>
-
-          <!-- Advanced Metrics (ET Rating v2 composite stats) + Comp Skill board.
-               Two independent panels, one card: each owns its OWN container so
-               neither render can clear the other (they used to share a single
-               div, which only worked because of call order). -->
-          <details class="story-fold rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 mb-4">
-            <summary class="flex items-center justify-between gap-3 px-6 py-4 cursor-pointer select-none">
-              <span class="text-sm font-bold text-white">Advanced metrics &amp; comp skill</span>
-              <span class="story-fold-hint text-[10px] text-slate-500 uppercase tracking-wider"></span>
-            </summary>
-            <div class="px-6 pb-5">
-              <div id="story-advanced-metrics"></div>
-              <div id="story-comp-skill"></div>
-            </div>
-          </details>
+          <!-- Advanced Metrics (ET Rating v2 composite stats) -->
+          <div class="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 p-6 mt-6">
+            <div id="story-advanced-metrics"></div>
+            <div id="story-comp-skill"></div>
+          </div>
 
          </div><!-- /max-w-6xl -->
         </div>
@@ -3440,36 +3357,6 @@
             -webkit-box-orient: vertical;
             overflow: hidden;
           }
-          /* Story 2.0 folds — plain CSS on purpose: the committed
-             tailwind.css is prebuilt, so no `open:`/`marker:` variants exist
-             in it (lesson #699). Native <details> keeps keyboard + find-in-page
-             behaviour that a JS accordion would cost us. */
-          .story-fold > summary { list-style: none; }
-          .story-fold > summary::-webkit-details-marker { display: none; }
-          .story-fold > summary::after {
-            content: '\25B8';
-            color: rgb(100 116 139);
-            font-size: 0.75rem;
-            transition: transform 0.15s ease-out;
-          }
-          .story-fold[open] > summary::after { transform: rotate(90deg); }
-          .story-fold > summary:hover { background: rgba(255,255,255,0.02); }
-          .story-fold > summary:focus-visible { outline: 2px solid rgba(245,158,11,0.6); outline-offset: -2px; }
-          /* Per-map disclosure inside a player card — same idiom, card scale. */
-          .story-fold-mini > summary { list-style: none; }
-          .story-fold-mini > summary::-webkit-details-marker { display: none; }
-          .story-fold-mini > summary::after {
-            content: '\25B8';
-            transition: transform 0.15s ease-out;
-          }
-          .story-fold-mini[open] > summary::after { transform: rotate(90deg); }
-          .story-fold-mini > summary:focus-visible { outline: 2px solid rgba(245,158,11,0.6); outline-offset: -2px; }
-          .story-fold > summary .story-fold-hint { margin-left: auto; }
-          /* 'Show' is a placeholder for an EMPTY hint. Once a fold states what
-             is inside it ("877 kills across 18 pairings"), the placeholder must
-             step aside — otherwise the two run together as "SHOW877 kills…". */
-          .story-fold > summary .story-fold-hint:empty::before { content: 'Show'; }
-          .story-fold[open] > summary .story-fold-hint::before { content: 'Hide'; }
         </style>
 
         <!-- REPLAY VIEW -->
