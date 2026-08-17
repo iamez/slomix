@@ -923,14 +923,21 @@ class _MonitorTasksMixin:
         ssh = paramiko.SSHClient()
         configure_ssh_host_key_policy(ssh)
         try:
+            import os as _os
             ssh.connect(
                 hostname=self.config.ssh_host,
                 port=self.config.ssh_port,
                 username=self.config.ssh_user,
-                key_filename=self.config.ssh_key_path,
+                # the repo's .env convention writes the key as ~/.ssh/…, and
+                # paramiko does NOT expand ~ — without this the sentinel
+                # authenticates only when the config happens to be absolute
+                key_filename=_os.path.expanduser(self.config.ssh_key_path),
                 timeout=10,
             )
             sftp = ssh.open_sftp()
+            # a hung remote read would otherwise block the worker thread
+            # far beyond the loop interval
+            sftp.get_channel().settimeout(20)
             path = self.config.game_console_log_path
             size = sftp.stat(path).st_size
             if offset is None:
@@ -1001,7 +1008,7 @@ class _MonitorTasksMixin:
                      len(fresh), "\n".join(fresh[:5]))
         try:
             await self.alert_admins(
-                "🔴 Lua napaka na igralnem strežniku",
+                "Lua napaka na igralnem strežniku",
                 f"etconsole.log ({cfg.ssh_host}):\n{shown}{more}",
             )
         except Exception:
