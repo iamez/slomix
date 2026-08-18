@@ -85,6 +85,11 @@ class ParsedSheet:
     effort_present: bool = False
     round1_seconds: list[int | None] = field(default_factory=list)
     round2_seconds: list[int | None] = field(default_factory=list)
+    # The unlabeled white row above the first block header (present on some
+    # sheets): one small integer per map, pattern matches map points on the
+    # BOX scale (2 = map win, 1 = draw side). Experimental until supa
+    # confirms the semantics; None when the row is absent or unreadable.
+    map_points: list[int] | None = None
     warnings: list[str] = field(default_factory=list)
 
     @property
@@ -438,6 +443,21 @@ def read_supastats_image(data: bytes) -> ParsedSheet:
         for c in range(n_maps)
     ]
 
+    # The nearest white row ABOVE the first header sometimes carries one
+    # small integer per map (map points, by the observed pattern). It was
+    # decoded-and-discarded until 2026-08-18; read it when every map cell
+    # decodes, otherwise leave None — never guess.
+    map_points: list[int] | None = None
+    for row in range(header_rows[0] - 1, -1, -1):
+        if roles[row] != "WHITE":
+            continue
+        candidate = [
+            _read_number(_cell(arr, edges, y0, c, row))[0] for c in range(n_maps)
+        ]
+        if all(v is not None for v in candidate):
+            map_points = [int(v) for v in candidate]
+        break  # only the row directly adjacent to the header block
+
     # Best effort only: the header row uses a smaller font than the data cells
     # and mixes hyphens into the glyph run, so the date often will not decode.
     # The caller resolves the session from the post date instead and confirms it
@@ -482,6 +502,7 @@ def read_supastats_image(data: bytes) -> ParsedSheet:
         effort_present=effort_present,
         round1_seconds=round1,
         round2_seconds=round2,
+        map_points=map_points,
         warnings=warnings,
     )
     if kills and not sheet.kills_checksum_ok:

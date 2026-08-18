@@ -9,7 +9,8 @@ exposed 17 genuinely inverted historical rounds.
 This cog watches for that post, reads the screenshot and DMs the owner the
 whole run — detected, downloaded, read, matched to a session, compared — so a
 disagreement surfaces the morning it happens instead of months later. It never
-writes to the database and never posts in the channel.
+writes to the database; its only channel-visible act is a reaction on the
+sheet post (✅ everything matches / ⚠️ differences found / ❌ unreadable).
 
 Retire it once our numbers and supa's agree and the project leaves prototype.
 """
@@ -100,6 +101,7 @@ class SupastatsCog(commands.Cog):
         if ctx.channel.id not in {c for c in allowed if c}:
             return
         attachment = self._first_image(ctx.message)
+        replied = None
         if attachment is None and ctx.message.reference:
             try:
                 replied = await ctx.channel.fetch_message(ctx.message.reference.message_id)
@@ -110,7 +112,9 @@ class SupastatsCog(commands.Cog):
             await ctx.send("Attach a supastats screenshot, or reply to the message with one.")
             return
         await ctx.send("Checking that sheet — the report goes to the owner's DMs.")
-        await self._run_check(ctx.message, attachment, source="manual", date_override=date)
+        # React on the message that carries the sheet, not the command.
+        await self._run_check(ctx.message, attachment, source="manual",
+                              date_override=date, react_message=replied)
 
     @staticmethod
     def _first_image(message: discord.Message):
@@ -122,7 +126,22 @@ class SupastatsCog(commands.Cog):
 
     # -- run ----------------------------------------------------------------
 
-    async def _run_check(self, message, attachment, *, source: str, date_override=None):
+    async def _react(self, target, emoji: str):
+        """Best-effort reaction on the sheet post — needs only the Add
+        Reactions guild permission (same non-critical pattern as
+        webhook_handler_mixin)."""
+        if target is None:
+            return
+        try:
+            await target.add_reaction(emoji)
+        except discord.DiscordException:
+            logger.debug("supastats: could not add reaction (non-critical)")
+
+    async def _run_check(self, message, attachment, *, source: str,
+                         date_override=None, react_message=None):
+        # The message carrying the sheet — for !supacheck as a reply that is
+        # the replied-to post, not the command message.
+        sheet_post = react_message or message
         # Success used to leave NO log trace (the DM was the only record),
         # which made the 2026-08-18 "did it fire?" investigation needlessly
         # hard — every phase now logs at INFO.
@@ -139,9 +158,11 @@ class SupastatsCog(commands.Cog):
         try:
             data = await attachment.read()
         except discord.HTTPException as exc:
+            await self._react(sheet_post, "❌")
             await self._dm(lines + [f"🔴 could not download the attachment: {exc}"])
             return
         if not data.startswith((PNG_MAGIC, JPEG_MAGIC)):
+            await self._react(sheet_post, "❌")
             await self._dm(lines + ["🔴 that attachment is not a PNG/JPEG"])
             return
         lines.append(f"• downloaded {len(data) / 1024:.0f} KB")
@@ -153,14 +174,17 @@ class SupastatsCog(commands.Cog):
         except UnsupportedScreenshot as exc:
             if source == "auto" and attachment.size < SMALL_IMAGE_BYTES:
                 # Tiny image that isn't a sheet = meme/paste noise; don't
-                # wake the owner for it. Explicit !supacheck still reports.
+                # wake the owner for it (and no reaction either). Explicit
+                # !supacheck still reports.
                 logger.info("supastats: skipping small non-sheet image "
                             "(%d KB): %s", attachment.size // 1024, exc)
                 return
+            await self._react(sheet_post, "❌")
             await self._dm(lines + [f"⚠️ cannot read this screenshot: {exc}"])
             return
         except Exception as exc:
             logger.exception("supastats reader crashed")
+            await self._react(sheet_post, "❌")
             await self._dm(lines + [f"🔴 reader crashed: {exc}"])
             return
 
@@ -178,14 +202,18 @@ class SupastatsCog(commands.Cog):
             report_text = await self._compare(sheet, date_override)
         except Exception as exc:
             logger.exception("supastats comparison failed")
+            await self._react(sheet_post, "❌")
             await self._dm(lines + [f"🔴 comparison failed: {exc}"])
             alert = getattr(self.bot, "alert_admins", None)
             if alert:
                 await alert("supastats check failed", str(exc), "warning")
             return
 
+        all_match = "everything comparable matches" in report_text
+        await self._react(sheet_post, "✅" if all_match else "⚠️")
         await self._dm(lines + ["", report_text])
-        logger.info("supastats: comparison report DMed to owner")
+        logger.info("supastats: comparison report DMed to owner (%s)",
+                    "all match" if all_match else "differences found")
 
     async def _compare(self, sheet, date_override) -> str:
         from bot.services.session_data_service import SessionDataService
@@ -210,6 +238,7 @@ class SupastatsCog(commands.Cog):
 
         ours = await load_our_session(adapter, gsid)
         our_winners: list[str] = []
+        our_points_pairs: list[tuple[int, int]] = []
         our_teams: dict[str, list[str]] = {}
         hardcoded = await data_service.get_hardcoded_teams(session_ids)
         rosters = {name: info.get("guids", []) for name, info in (hardcoded or {}).items()}
@@ -223,6 +252,7 @@ class SupastatsCog(commands.Cog):
                 for entry in scoring.get("maps", []) or []:
                     a_points = entry.get("team_a_points") or 0
                     b_points = entry.get("team_b_points") or 0
+                    our_points_pairs.append((a_points, b_points))
                     our_winners.append(
                         a_name if a_points > b_points
                         else (b_name if b_points > a_points else "draw")
@@ -239,7 +269,20 @@ class SupastatsCog(commands.Cog):
             our_map_winners=our_winners,
             our_teams=our_teams,
         )
-        return format_report(report, sheet)
+        report_text = format_report(report, sheet)
+
+        # Experimental: the sheet's unlabeled row above the DPM header looks
+        # like per-map points on the BOX scale (2 win / 1 draw). Show it next
+        # to our stopwatch map points for eyeballing — no pass/fail until
+        # supa confirms what the row means.
+        if sheet.map_points and our_points_pairs:
+            sheet_row = " ".join(str(v) for v in sheet.map_points)
+            ours_row = " ".join(f"{a}-{b}" for a, b in our_points_pairs)
+            report_text += (
+                f"\n🧪 map-points row (experimental): sheet [{sheet_row}]"
+                f" · ours A-B [{ours_row}]"
+            )
+        return report_text
 
     async def _dm(self, lines: list[str]):
         owner_id = getattr(self.config, "owner_user_id", 0)

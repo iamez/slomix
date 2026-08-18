@@ -42,9 +42,12 @@ def _cog_with_captured_dms(monkeypatch):
 
 
 def _message():
+    async def add_reaction(emoji):
+        pass
     return SimpleNamespace(
         author=SimpleNamespace(display_name="superboyy"),
         channel=SimpleNamespace(name="slomix", id=1),
+        add_reaction=add_reaction,
     )
 
 
@@ -77,3 +80,64 @@ async def test_manual_supacheck_always_reports(monkeypatch):
     await cog._run_check(_message(), _attachment(5 * 1024), source="manual")
     assert len(dms) == 1
     assert any("cannot read this screenshot" in line for line in dms[0])
+
+
+# ── reactions on the sheet post (2026-08-18) ─────────────────────────
+
+def _reacting_message():
+    reactions: list[str] = []
+
+    async def add_reaction(emoji):
+        reactions.append(emoji)
+    msg = SimpleNamespace(
+        author=SimpleNamespace(display_name="superboyy"),
+        channel=SimpleNamespace(name="slomix", id=1),
+        add_reaction=add_reaction,
+    )
+    return msg, reactions
+
+
+@pytest.mark.asyncio
+async def test_small_non_sheet_gets_no_reaction(monkeypatch):
+    cog, _ = _cog_with_captured_dms(monkeypatch)
+    msg, reactions = _reacting_message()
+    await cog._run_check(msg, _attachment(5 * 1024), source="auto")
+    assert reactions == []
+
+
+@pytest.mark.asyncio
+async def test_large_non_sheet_gets_cross(monkeypatch):
+    cog, _ = _cog_with_captured_dms(monkeypatch)
+    msg, reactions = _reacting_message()
+    await cog._run_check(msg, _attachment(SMALL_IMAGE_BYTES + 1), source="auto")
+    assert reactions == ["❌"]
+
+
+async def _run_success_path(monkeypatch, report_text):
+    cog, dms = _cog_with_captured_dms(monkeypatch)
+    fake_sheet = SimpleNamespace(map_count=8, kills=[1] * 6,
+                                 kills_checksum_ok=True, map_points=None)
+    monkeypatch.setattr(supastats_cog, "read_supastats_image",
+                        lambda data: fake_sheet)
+
+    async def fake_compare(sheet, date_override):
+        return report_text
+    cog._compare = fake_compare
+    msg, reactions = _reacting_message()
+    await cog._run_check(msg, _attachment(26 * 1024), source="auto")
+    return reactions, dms
+
+
+@pytest.mark.asyncio
+async def test_matching_sheet_gets_checkmark(monkeypatch):
+    reactions, dms = await _run_success_path(
+        monkeypatch, "✅ everything comparable matches")
+    assert reactions == ["✅"]
+    assert len(dms) == 1
+
+
+@pytest.mark.asyncio
+async def test_mismatching_sheet_gets_warning(monkeypatch):
+    reactions, _ = await _run_success_path(
+        monkeypatch, "kills differ: squaze map 3 sheet=41 ours=38")
+    assert reactions == ["⚠️"]
