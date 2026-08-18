@@ -9020,3 +9020,21 @@ CREATE OR REPLACE FUNCTION canonical_guid(p_guid TEXT) RETURNS TEXT AS $$
   )
   SELECT guid FROM chain ORDER BY depth DESC LIMIT 1;
 $$ LANGUAGE sql STABLE;
+
+-- 077: player_aim_summary — cached true-aim lifetime summary per player. The
+-- profile's aim section costs 2,770 ms warm / 16,887 ms cold to compute for the
+-- heaviest player, and its inputs only change when rounds import, so it is
+-- computed once and keyed on a fingerprint of those inputs (shot_count,
+-- last_event_time, round_id_sum) rather than on a TTL. Derived data: safe to
+-- TRUNCATE, every row rebuilds itself on the next profile read. Migration 077
+-- creates it; mirrored here so a fresh bootstrap matches the ledger
+-- (dump ≡ migrations).
+CREATE TABLE IF NOT EXISTS player_aim_summary (
+    guid_canonical   TEXT PRIMARY KEY,
+    formula_version  INTEGER     NOT NULL,
+    shot_count       BIGINT      NOT NULL,
+    last_event_time  BIGINT      NULL,
+    round_id_sum     BIGINT      NULL,
+    payload          JSONB       NOT NULL,
+    computed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

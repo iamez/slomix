@@ -99,11 +99,43 @@ function getArchetype(player) {
     return (a && ARCHETYPES[a]) ? a : 'frontline_warrior';
 }
 
-function getKISTier(kis) {
-    if (kis >= 40) return { label: 'Legendary', css: 'from-amber-400 to-yellow-500', textCss: 'text-amber-400' };
-    if (kis >= 25) return { label: 'Great', css: 'from-emerald-400 to-cyan-500', textCss: 'text-emerald-400' };
-    if (kis >= 15) return { label: 'Solid', css: 'from-blue-400 to-indigo-500', textCss: 'text-blue-400' };
+/**
+ * Tier a player's KIS by their PER-MAP average, not the raw session total.
+ *
+ * Raw-total cut points made the badge a map-count meter: a middling player on
+ * an 11-map night out-totalled a dominant one on a 6-map evening — measured
+ * across 11 sessions, 65 of 72 player-slots graded "Legendary". Cut points are
+ * the measured quantiles of KIS-per-map over those same 72 slots (min 1 ·
+ * p25 32 · median 40 · p75 47 · p90 55 · max 64). Re-measure them if the KIS
+ * formula version changes.
+ */
+function getKISTier(kis, mapsPlayed) {
+    const maps = Number(mapsPlayed);
+    // Without a map count there is nothing to normalise by; stay neutral
+    // rather than grading a total against per-map cut points.
+    if (!Number.isFinite(maps) || maps <= 0) {
+        return { label: '', css: 'from-slate-400 to-slate-500', textCss: 'text-slate-400' };
+    }
+    const perMap = Number(kis) / maps;
+    // Non-numeric KIS must stay neutral too — falling through would grade
+    // NaN as "Quiet", which asserts a judgement about a missing number.
+    if (!Number.isFinite(perMap)) {
+        return { label: '', css: 'from-slate-400 to-slate-500', textCss: 'text-slate-400' };
+    }
+    if (perMap >= 55) return { label: 'Legendary', css: 'from-amber-400 to-yellow-500', textCss: 'text-amber-400' };
+    if (perMap >= 47) return { label: 'Great', css: 'from-emerald-400 to-cyan-500', textCss: 'text-emerald-400' };
+    if (perMap >= 32) return { label: 'Solid', css: 'from-blue-400 to-indigo-500', textCss: 'text-blue-400' };
     return { label: 'Quiet', css: 'from-slate-400 to-slate-500', textCss: 'text-slate-400' };
+}
+
+/** Map plays in the loaded scope: R1+R2 = one play, and a session can end on
+ * an odd round (30 of 140 do; 10 hold a single round). Left fractional, one
+ * round became 0.5 plays and every per-map score DOUBLED — half a play is
+ * still a play, so round up from zero. */
+function _mapPlaysInScope() {
+    const rounds = Number(storyState.scope?.accepted_round_count);
+    if (!Number.isFinite(rounds) || rounds <= 0) return null;
+    return Math.max(1, Math.round(rounds / 2));
 }
 
 async function loadStoryScopes() {
@@ -226,7 +258,8 @@ function renderAmbiguousSessionPicker(candidates) {
         });
         players.appendChild(wrap);
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+    _clearAuxPanels();
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value', 'story-advanced-metrics']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
     }
@@ -261,6 +294,9 @@ async function loadStoryData() {
         // the gsid form so every fetch below (and the address bar) use the
         // canonical identity from here on.
         const scope = data?.scope;
+        // Kept for the KIS tier normalisation (accepted_round_count) and the
+        // coverage note — the response carries it either way.
+        storyState.scope = scope || null;
         if (scope?.gaming_session_id != null) {
             storyState.gamingSessionId = scope.gaming_session_id;
             storyState.sessionDate = (scope.dates && scope.dates[0]) || storyState.sessionDate;
@@ -281,6 +317,7 @@ async function loadStoryData() {
         renderStoryHero(storyState.sessionDateLabel || storyState.sessionDate, storyState.players);
         renderPlayerCards(storyState.players);
         renderKISBreakdown(storyState.players);
+        _loadCoverageNote(loadId);   // fire-and-forget; hides itself when complete
 
         // gsid-native query for every panel (SS-C). skill/composite is now
         // converted too (accepts gaming_session_id), so all panels share `q`.
@@ -289,26 +326,41 @@ async function loadStoryData() {
         // Fetch narrative, momentum, moments, synergy, win-contribution in parallel (non-blocking)
         fetchJSON(`${API_BASE}/storytelling/narrative?${q}`).then(narData => {
             if (loadId === storyLoadId) renderNarrative(narData);
-        }).catch(() => renderNarrative(null));
+        }).catch(() => { if (loadId === storyLoadId) renderNarrative(null); });
 
         fetchJSON(`${API_BASE}/storytelling/momentum?${q}`).then(momtData => {
             if (loadId === storyLoadId) renderMomentum(momtData);
-        }).catch(() => renderMomentum(null));
+        }).catch(() => { if (loadId === storyLoadId) renderMomentum(null); });
 
         fetchJSON(`${API_BASE}/storytelling/moments?${q}&limit=10`).then(momData => {
             if (loadId === storyLoadId) renderMoments(momData);
-        }).catch(() => renderMoments(null));
+        }).catch(() => { if (loadId === storyLoadId) renderMoments(null); });
 
         fetchJSON(`${API_BASE}/storytelling/synergy?${q}`).then(synData => {
             if (loadId === storyLoadId) renderTeamSynergy(synData);
-        }).catch(() => renderTeamSynergy(null));
+        }).catch(() => { if (loadId === storyLoadId) renderTeamSynergy(null); });
 
         fetchJSON(`${API_BASE}/storytelling/win-contribution?${q}`).then(pwcData => {
-            if (loadId === storyLoadId) renderWinContribution(pwcData);
-        }).catch(() => renderWinContribution(null));
+            if (loadId !== storyLoadId) return;
+            renderWinContribution(pwcData);
+            // The hero's MVP cell rendered players[0] — the KIS leader — while
+            // the narrative names the win-contribution leader (measured: a
+            // different player on 4 of 10 sessions, so hero and prose said two
+            // names in one viewport). Once PWC lands, the hero follows the
+            // same rule the narrative uses: PWC leader, KIS as the fallback
+            // for pre-March-2026 sessions where PWC is empty. (The panel's
+            // own "Session MVP" card is a distinct, waa_bayes-based metric
+            // and deliberately stays as is.)
+            const top = (pwcData?.players || [])[0];
+            const mvpCell = document.querySelector('#story-stats-row [data-hero-mvp] span:last-child');
+            if (mvpCell && top?.name && Number(top.total_pwc) > 0) {
+                mvpCell.textContent = stripEtColors(top.name);
+            }
+        }).catch(() => { if (loadId === storyLoadId) renderWinContribution(null); });
 
-        // Advanced metrics + Comp Skill board render into the SAME container,
-        // sequentially (renderAdvancedMetrics clears it) — so fetch together.
+        // Advanced metrics + Comp Skill board have their OWN containers now
+        // (#734 port) — fetched together only so the card area fills in one
+        // paint, not because of any container coupling.
         // /skill/composite now accepts gaming_session_id (scope-resolver
         // parity): `q` sends it when we have a gsid, so the panel is bound to
         // THIS session's rounds. That fixes the date-scope bug where a bot
@@ -326,7 +378,7 @@ async function loadStoryData() {
         // Box Score
         fetchJSON(`${API_BASE}/storytelling/box-score?${q}`)
             .then(d => { if (loadId === storyLoadId) renderBoxScore(d); })
-            .catch(() => renderBoxScore(null));
+            .catch(() => { if (loadId === storyLoadId) renderBoxScore(null); });
 
         // Invisible Value — 5 parallel fetches
         Promise.allSettled([
@@ -344,13 +396,24 @@ async function loadStoryData() {
                 l.status === 'fulfilled' ? l.value : null,
                 d.status === 'fulfilled' ? d.value : null
             );
-        }).catch(() => renderInvisibleValue(null, null, null, null, null));
+        }).catch(() => { if (loadId === storyLoadId) renderInvisibleValue(null, null, null, null, null); });
     } catch (err) {
         console.error('Story data load failed:', err);
         renderEmpty('Failed to load Smart Stats');
     } finally {
         storyState.loading = false;
     }
+}
+
+/** Session-bound panels the reset paths must clear. story-comp-skill got its
+ * own container (#734 port) and story-coverage is filled by a LATE response —
+ * left out of a reset, the previous session's board/warning survives into an
+ * ambiguous, empty, or freshly loading state. */
+function _clearAuxPanels() {
+    const comp = document.getElementById('story-comp-skill');
+    if (comp) comp.textContent = '';
+    const cov = document.getElementById('story-coverage');
+    if (cov) { cov.textContent = ''; cov.style.display = 'none'; }
 }
 
 function renderLoading() {
@@ -384,6 +447,7 @@ function renderLoading() {
     if (boxScore) boxScore.textContent = '';
     const invisValue = document.getElementById('story-invisible-value');
     if (invisValue) invisValue.textContent = '';
+    _clearAuxPanels();
 }
 
 function renderEmpty(message) {
@@ -402,9 +466,60 @@ function renderEmpty(message) {
             _el('div', 'text-slate-400 text-sm', message)
         ));
     }
-    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value']) {
+    _clearAuxPanels();
+    for (const id of ['story-narrative', 'story-momentum', 'story-moments', 'story-kis-breakdown', 'story-team-synergy', 'story-win-contribution', 'story-box-score', 'story-invisible-value', 'story-advanced-metrics']) {
         const el = document.getElementById(id);
         if (el) el.textContent = '';
+    }
+}
+
+/**
+ * Say what share of the night the scores actually describe.
+ *
+ * The backend has computed this forever (/diagnostics/storytelling-completeness);
+ * the page never asked for it. A session scored on 6 % of its kills rendered
+ * exactly like one scored on 100 %. Asks about THIS session, not the calendar
+ * day — one date can hold several gaming sessions (2026-03-25 held four).
+ */
+async function _loadCoverageNote(loadId) {
+    const slot = document.getElementById('story-coverage');
+    if (!slot) return;
+    slot.textContent = '';
+    slot.style.display = 'none';
+
+    if (storyState.gamingSessionId == null && !storyState.sessionDate) return;
+    const info = await fetchJSON(
+        `${API_BASE}/diagnostics/storytelling-completeness?${_storyScopeQuery()}`
+    ).catch(() => null);
+    if (!info || loadId !== storyLoadId) return;
+
+    const ratio = Number(info.completeness_ratio);
+    if (!Number.isFinite(ratio) || ratio >= 0.995) return;   // nothing to warn about
+
+    const scored = Number(info.kis_rows) || 0;
+    const total = Number(info.kills_total) || 0;
+    slot.textContent = '';
+    if (total === 0) {
+        // Not "0 of 0 scored (0 %)", which reads as a failure. The proximity
+        // tracker only started producing data in March 2026; every session
+        // before that has no kill-level detail to score and never will.
+        slot.appendChild(_el('span', 'font-bold', 'No Kill Impact for this session: '));
+        slot.appendChild(_el('span', null,
+            'there is no kill-level tracking data for this session.'));
+    } else {
+        slot.appendChild(_el('span', 'font-bold', 'Kill Impact is incomplete for this session: '));
+        slot.appendChild(_el('span', null,
+            `${scored.toLocaleString()} of ${total.toLocaleString()} kills scored (${Math.round(ratio * 100)} %).`));
+    }
+    slot.style.display = '';
+
+    // Qualify the hero's "Total KIS" in place — it is the sum over the scored
+    // share, not over the night.
+    const kisStat = document.querySelector('#story-stats-row [data-kis-total]');
+    const label = kisStat && kisStat.firstElementChild;
+    if (label && !label.dataset.qualified) {
+        label.textContent = `Total KIS (${Math.round(ratio * 100)}% scored)`;
+        label.dataset.qualified = '1';
     }
 }
 
@@ -431,23 +546,20 @@ function renderStoryHero(sessionDate, players) {
             _el('span', 'text-xs text-slate-500 uppercase tracking-wider', label),
             _el('span', `text-lg font-bold ${cls}`, value)
         );
-        statsRow.appendChild(stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400'));
+        // data-kis-total lets the coverage note qualify this label in place
+        // ("Total KIS (N% scored)") once the completeness answer lands.
+        const kisStat = stat('Total KIS', formatNumber(Math.round(totalKIS)), 'text-amber-400');
+        kisStat.setAttribute('data-kis-total', '1');
+        statsRow.appendChild(kisStat);
         statsRow.appendChild(stat('Kills', formatNumber(totalKills), 'text-white'));
         statsRow.appendChild(stat('Players', String(players.length), 'text-white'));
-        statsRow.appendChild(stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400'));
+        // data-hero-mvp: the win-contribution fetch retargets this cell to the
+        // PWC leader once it lands (KIS leader is only the provisional pick).
+        const mvpStat = stat('MVP', topPlayer ? stripEtColors(topPlayer.name) : '-', 'text-amber-400');
+        mvpStat.setAttribute('data-hero-mvp', '1');
+        statsRow.appendChild(mvpStat);
     }
 }
-
-// Session-arc badge palette. Every class here is one already emitted elsewhere in
-// this file, so the build-time Tailwind scan keeps them (the /70,/80 safelist
-// lesson) — do not introduce a new opacity/border variant without checking.
-const ARC_SHAPE_META = {
-    statement:  { label: 'Statement',  cls: 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' },
-    comeback:   { label: 'Comeback',   cls: 'bg-amber-500/15 text-amber-300 border border-amber-500/30' },
-    nail_biter: { label: 'Nail-biter', cls: 'bg-rose-500/15 text-rose-300 border border-rose-500/30' },
-    trade_fest: { label: 'Trade-fest', cls: 'bg-blue-500/15 text-blue-400 border border-blue-500/30' },
-    decisive:   { label: 'Decisive',   cls: 'bg-slate-500/20 text-slate-300' },
-};
 
 function renderNarrative(data) {
     const container = document.getElementById('story-narrative');
@@ -458,24 +570,6 @@ function renderNarrative(data) {
     if (!text) return;
 
     const card = _el('div', 'rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4');
-
-    // Session arc — glanceable shape-of-the-night pill above the prose, so the
-    // story's shape reads at a glance and not only buried in the paragraph.
-    const arc = data?.session_arc;
-    const meta = arc && arc.shape ? ARC_SHAPE_META[arc.shape] : null;
-    if (meta) {
-        const row = _el('div', 'mb-3 flex items-center gap-2 flex-wrap');
-        const pill = _el('span',
-            `inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider ${meta.cls}`,
-            meta.label);
-        row.appendChild(pill);
-        if (arc.winner != null && arc.ws != null && arc.ls != null) {
-            row.appendChild(_el('span', 'text-xs text-slate-400',
-                `${arc.winner} · ${arc.ws}–${arc.ls}`));
-        }
-        card.appendChild(row);
-    }
-
     const content = _el('div', 'text-sm text-slate-400 italic leading-relaxed', text);
     content.style.opacity = '0.8';
     card.appendChild(content);
@@ -722,7 +816,14 @@ function renderMomentum(data) {
     _momentumLastData = data;
 
     const rounds = Array.isArray(data?.rounds) ? data.rounds : [];
-    if (rounds.length === 0) return;
+    if (rounds.length === 0) {
+        // Every other exit from this function destroys the chart before
+        // building a new one; without this, switching to a session with no
+        // momentum rounds leaked the previous Chart.js instance (still
+        // registered, handlers bound to a detached canvas).
+        if (_momentumChart) { _momentumChart.destroy(); _momentumChart = null; }
+        return;
+    }
 
     const headRow = _el('div', 'flex items-center justify-between mb-3 flex-wrap gap-2');
     const heading = _el('h3', 'text-sm font-bold text-amber-400 tracking-widest uppercase', 'Momentum');
@@ -816,7 +917,7 @@ function renderPlayerCards(players) {
         const archKey = getArchetype(p);
         const arch = ARCHETYPES[archKey];
         const colors = ARCHETYPE_COLORS[arch.color];
-        const tier = getKISTier(p.total_kis);
+        const tier = getKISTier(p.total_kis, _mapPlaysInScope());
         const rank = idx + 1;
 
         const carrierBar = p.kills > 0 ? ((p.carrier_kills / p.kills) * 100).toFixed(0) : 0;
@@ -1438,9 +1539,13 @@ const PWC_COMPONENTS = [
 function renderCompSkillBoard(data) {
     // Comp Skill (SSR v0) + reactions in Smart Stats (owner answer A3:
     // "bi rad videl tudi to v nekih statsih"). ALL-TIME and group-relative —
-    // appended below the per-session Advanced Metrics, clearly labeled.
-    const container = document.getElementById('story-advanced-metrics');
-    if (!container || !data?.players?.length) return;
+    // in its OWN container (#734): sharing story-advanced-metrics meant
+    // whichever of the two async renders finished last wiped the other, so
+    // one panel was invisible depending on response order.
+    const container = document.getElementById('story-comp-skill');
+    if (!container) return;
+    container.textContent = '';
+    if (!data?.players?.length) return;
 
     const header = _el('div', 'flex items-center gap-3 mb-4 mt-8');
     header.appendChild(_el('div', 'w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-rose-600 flex items-center justify-center text-white text-sm font-bold', 'CS'));
@@ -1927,10 +2032,17 @@ export async function loadStoryView({ date, gsid } = {}) {
     // session shows the picker instead of guessing).
     // loadStoryScopes only defaults gamingSessionId when BOTH are unset, so
     // a requested gsid/date survives the scopes load.
+    // Clear the OTHER identity key on every deep link: a previous visit may
+    // have resolved a gsid, and a later #/story/date/<X> link would otherwise
+    // keep loading that old gsid (loadStoryData prefers it).
     if (gsid != null) {
         storyState.gamingSessionId = gsid;
+        storyState.sessionDate = null;
+        storyState.sessionDateLabel = null;
     } else if (date) {
         storyState.sessionDate = date;
+        storyState.gamingSessionId = null;
+        storyState.sessionDateLabel = null;
     }
     await loadStoryScopes();
     await loadStoryData();

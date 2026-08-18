@@ -19,6 +19,15 @@ exclude_paths:
   - "website/static/modern/route-host.js"
   # Test files — style issues in tests are not production concerns
   - "tests/**"
+  # Rules-as-data audit tool: its whole design is executing SQL assembled
+  # from the hardcoded RULES table (validated at import, structural tests in
+  # tests/unit/test_data_plausibility_audit.py), on a connection opened
+  # READ-ONLY, with no user input anywhere. Codacy's Opengrep pass flags
+  # every such execute as SQL injection and — like the bandit engine
+  # documented below — honours no inline suppression (# nosemgrep is
+  # ignored), so the only lever is a path exclusion. Coverage is not lost:
+  # ruff, bandit and the unit tests all run against this file in CI.
+  - "scripts/data_plausibility_audit.py"
   # Documentation and non-code assets
   - "docs/**"
   # (website/requirements.txt used to be excluded here: Codacy's trivy pass has

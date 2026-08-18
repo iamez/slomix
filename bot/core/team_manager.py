@@ -486,6 +486,11 @@ class TeamManager:
         # Get all players from session grouped by round_id and game-team.
         # IMPORTANT: Use round_id (unique per map+round), NOT round_number (1 or 2)
         # because in stopwatch mode, teams swap between maps.
+        # Bot/test rounds must never seed a roster: on 2026-08-11 a morning
+        # OMNIBOT test held gsid 144, its detected bot roster stayed in
+        # session_teams, and the humans who inherited the gsid that evening
+        # were box-scored 0:0 "roster changed" on every map. is_valid plus the
+        # identity pair below is the same joint gate every public surface uses.
         if gaming_session_id is not None:
             query = """
                 SELECT p.round_id, p.team, p.player_guid, p.player_name,
@@ -494,6 +499,9 @@ class TeamManager:
                 JOIN rounds r ON p.round_id = r.id
                 WHERE r.gaming_session_id = ?
                   AND r.round_number IN (1, 2)
+                  AND r.is_valid IS DISTINCT FROM FALSE
+                  AND p.player_name NOT LIKE '[BOT]%'
+                  AND (p.player_guid IS NULL OR p.player_guid NOT LIKE 'OMNIBOT%')
                 ORDER BY r.round_date, r.round_time, p.round_id, p.team
             """
             rows = await self.db.fetch_all(query, (gaming_session_id,))
@@ -505,6 +513,9 @@ class TeamManager:
                 JOIN rounds r ON p.round_id = r.id
                 WHERE p.round_date LIKE ?
                   AND r.round_number IN (1, 2)
+                  AND r.is_valid IS DISTINCT FROM FALSE
+                  AND p.player_name NOT LIKE '[BOT]%'
+                  AND (p.player_guid IS NULL OR p.player_guid NOT LIKE 'OMNIBOT%')
                 ORDER BY r.round_date, r.round_time, p.round_id, p.team
             """
             rows = await self.db.fetch_all(query, (f"{session_date}%",))

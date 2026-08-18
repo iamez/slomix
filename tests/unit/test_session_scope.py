@@ -215,7 +215,29 @@ def test_scope_to_metadata_shape():
         "dates": ["2026-07-18", "2026-07-19"],
         "accepted_round_count": 23,
         "distinct_map_names": ["supply", "radar"],
+        "last_round_unix": 1000,
     }
+
+
+def test_scope_last_round_unix_is_the_latest_round_start():
+    """The freshness stamp is the MAX round start the scope holds — and None
+    when no round carries one (legacy rows land in round_keys as 0)."""
+    from website.backend.services.session_scope import GamingSessionScope
+
+    def _scope(round_keys):
+        return GamingSessionScope(
+            gaming_session_id=137,
+            dates=("2026-07-18",),
+            round_keys=tuple(round_keys),
+            accepted_round_count=len(round_keys),
+            distinct_map_names=("supply",),
+        )
+
+    # Out of order on purpose: the value is a max, not "the last element".
+    assert _scope([(3000, "supply", 1), (1000, "radar", 2), (2000, "supply", 2)]).last_round_unix == 3000
+    assert _scope([(0, "supply", 1), (0, "supply", 2)]).last_round_unix is None
+    assert _scope([]).last_round_unix is None
+    assert _scope([(0, "supply", 1), (1500, "radar", 1)]).last_round_unix == 1500
 
 
 # ── Per-panel multi-date query filters (deep SS-C) ────────────────────

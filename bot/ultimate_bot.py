@@ -701,6 +701,17 @@ class UltimateETLegacyBot(
         else:
             logger.info("⏸️  Prediction cogs hidden (PREDICTIONS_ENABLED!=true) — 12 commands off")
 
+        # 📸 SUPASTATS CROSS-CHECK: dev tool — reads supa's morning screenshot
+        # and DMs the owner how it compares with our numbers. Off by default;
+        # retire it once the numbers agree and we leave prototype.
+        if self.config.supastats_check_enabled:
+            try:
+                await self.load_extension("bot.cogs.supastats_cog")
+                logger.info("✅ Supastats cross-check loaded (watching channel "
+                            f"{self.config.supastats_channel_id}, !supacheck)")
+            except Exception as e:
+                logger.warning(f"⚠️  Could not load Supastats cog: {e}")
+
         # 📊 AVAILABILITY POLL: Daily gaming availability tracking
         try:
             from bot.cogs.availability_poll_cog import AvailabilityPollCog
@@ -788,6 +799,21 @@ class UltimateETLegacyBot(
             self.cache_refresher.start()
         if not self.live_status_updater.is_running():
             self.live_status_updater.start()
+        # Safety net for KIS: the compute is otherwise triggered only when a
+        # voice session ends, and every way that can be missed leaves a session
+        # scoreless forever (three such sessions existed on production).
+        if not self.kis_coverage_reconcile.is_running():
+            self.kis_coverage_reconcile.start()
+        # RCA 2026-08-17 P1: the game server's console log printed a Lua
+        # error on every supply map load for three months and nothing read
+        # it. This is the reader.
+        if not self.lua_console_sentinel.is_running():
+            self.lua_console_sentinel.start()
+        # Data Trust pillar B: the plausibility audit runs daily inside the
+        # bot so a live impossible row alerts admins the same day it is
+        # written, instead of waiting for someone to run the script by hand.
+        if not self.data_plausibility_sentinel.is_running():
+            self.data_plausibility_sentinel.start()
         if self.config.idle_watchdog_enabled and not self.idle_restart_watchdog.is_running():
             self.idle_restart_watchdog.start()
             logger.info(

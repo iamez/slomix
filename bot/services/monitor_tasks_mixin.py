@@ -31,6 +31,7 @@ import json
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 
 from discord.ext import tasks
 
@@ -604,6 +605,174 @@ class _MonitorTasksMixin:
     # NEVER uses map_restart — issues a FULL `map <name>` load (et_InitGame),
     # per docs + feedback_lua_restart (map_restart/lua_restart break the Lua).
     # ------------------------------------------------------------------
+
+    # ── KIS coverage reconcile ─────────────────────────────────────────────
+    #
+    # Kill Impact Scores used to be computed ONLY as a side effect of a voice
+    # session ending (voice_session_service -> _invalidate_kis_cache ->
+    # warm_kis_cache). Every way that trigger can miss leaves a session with
+    # no scores forever, because nothing ever reconciled afterwards:
+    #
+    #   * the bot restarts between session end and the warm — no retry;
+    #   * INTERNAL_API_SECRET is unset, so the warm skips (the compute is
+    #     gated behind an internal-token request);
+    #   * the warm is a fire-and-forget task, so its exception is swallowed;
+    #   * nobody was in voice — no session end fires at all;
+    #   * rounds import LATE, after the warm already ran, leaving partial rows.
+    #
+    # Measured on production 2026-08-16: three sessions with kills but ZERO
+    # scores (138: 1,396 kills, 127: 82, 124: 542) and one partial (144:
+    # 490/507). Session 138 renders the Smart Stats page completely empty for a
+    # 22-round night, even though every kill is sitting in
+    # proximity_kill_outcome under the canonical round key.
+    #
+    # This loop closes the gap from the data side: it asks the only question
+    # that matters — "does this session have fewer scores than it has kills?" —
+    # and triggers the SAME internal compute the warm does. No scoring logic
+    # lives here. It both prevents new gaps and heals old ones, so history
+    # needs no hand-repair.
+    # No lookback window. A 90-day one looked prudent and cost nothing but
+    # coverage: production has gaps at 119 and 143 days old (sessions 112 and
+    # 103) that it would never have healed. The whole-history query costs 51 ms
+    # against 57 ms for the windowed one — the window bought nothing — and the
+    # per-pass cap below is what actually bounds the work.
+    _KIS_RECONCILE_MAX_PER_PASS = 3
+    _KIS_RECONCILE_MAX_ATTEMPTS = 3
+
+    @tasks.loop(seconds=900)
+    async def kis_coverage_reconcile(self):
+        """Recompute KIS for any session holding fewer scores than kills."""
+        try:
+            gaps = await self._find_kis_coverage_gaps()
+        except Exception:
+            logger.error("[KIS-RECONCILE] gap query failed", exc_info=True)
+            return
+        # A session that cannot be healed must not be retried forever: give up
+        # after a few passes and say so once, rather than logging the same
+        # failure every 15 minutes until someone notices the noise.
+        attempts = getattr(self, "_kis_reconcile_attempts", None)
+        if attempts is None:
+            attempts = {}
+            self._kis_reconcile_attempts = attempts
+        abandoned = getattr(self, "_kis_reconcile_abandoned", None)
+        if abandoned is None:
+            abandoned = set()
+            self._kis_reconcile_abandoned = abandoned
+
+        # A session no longer in the gap list is scored: forget its retry count.
+        # Kept, it would outlive the problem it counted — a LATER gap in the same
+        # session (a late import adding kills to a night already scored, which is
+        # one of the ways KIS went missing in the first place) would inherit an
+        # exhausted counter and be abandoned without a single attempt. Runs
+        # before the empty-gaps return, since "no gaps at all" is exactly the
+        # pass that proves every tracked session healed.
+        live = {row[0] for row in gaps}
+        for gsid in [g for g in attempts if g not in live]:
+            del attempts[gsid]
+        abandoned.intersection_update(live)
+
+        if not gaps:
+            return
+
+        healed = 0
+        for gsid, first_date, prox_kills, kis_rows in gaps:
+            if healed >= self._KIS_RECONCILE_MAX_PER_PASS:
+                break
+            tries = attempts.get(gsid, 0)
+            if tries >= self._KIS_RECONCILE_MAX_ATTEMPTS:
+                # Getting here means a LATER pass still found this session
+                # short — the last recompute did not close the gap, which is
+                # what makes the warning true. Warning right after firing the
+                # final attempt would have claimed failure before the result
+                # was known.
+                if gsid not in abandoned:
+                    abandoned.add(gsid)
+                    logger.warning(
+                        "[KIS-RECONCILE] session %s still short (%d scores for %d kills) after "
+                        "%d attempts — giving up, investigate rather than retrying forever",
+                        gsid, kis_rows, prox_kills, self._KIS_RECONCILE_MAX_ATTEMPTS,
+                    )
+                continue
+            logger.info(
+                "[KIS-RECONCILE] session %s (%s): %d scores for %d kills — recomputing (attempt %d)",
+                gsid, first_date, kis_rows, prox_kills, tries + 1,
+            )
+            # The pass budget is spent either way — a failed call still costs a
+            # request — but an ATTEMPT is only consumed when the compute really
+            # ran. warm_kis_cache returns False without reaching it when the
+            # secret is missing or the website is down; counting those would
+            # burn all three attempts during a web restart and abandon the
+            # session until the bot process itself restarts, which is the very
+            # silent-failure mode this loop exists to end.
+            healed += 1
+            try:
+                ran = await self.voice_session_service.warm_kis_cache(
+                    first_date, gaming_session_id=gsid,
+                )
+            except Exception:
+                logger.error("[KIS-RECONCILE] recompute failed for session %s", gsid, exc_info=True)
+                continue
+            if ran:
+                attempts[gsid] = tries + 1
+            else:
+                logger.warning(
+                    "[KIS-RECONCILE] session %s: recompute did not run (no secret, or the "
+                    "website did not answer 200) — not counting it as an attempt", gsid,
+                )
+
+    @kis_coverage_reconcile.before_loop
+    async def before_kis_coverage_reconcile(self):
+        """Wait for bot to be ready"""
+        await self.wait_until_ready()
+
+    async def _find_kis_coverage_gaps(self):
+        """Sessions whose KIS row count is below their proximity kill count.
+
+        Aggregates each side by canonical round key ONCE and joins, rather than
+        running a correlated subquery per round: measured 5,325 ms the naive way
+        against 51 ms this way over ALL history, which is the difference between
+        a loop that is free and one that is not.
+
+        The canonical key (round_start_unix, map_name, round_number) is the same
+        one the compute filters by, so a gap here is exactly a gap there.
+        """
+        rows = await self.db_adapter.fetch_all(
+            """
+            WITH scoped AS (
+                SELECT gaming_session_id AS gsid, round_start_unix AS rsu,
+                       map_name, round_number AS rn, round_date::date AS d
+                FROM rounds
+                WHERE gaming_session_id IS NOT NULL AND is_valid AND round_number > 0
+                  AND is_bot_round IS DISTINCT FROM TRUE AND round_start_unix IS NOT NULL
+            ), prox AS (
+                SELECT ko.round_start_unix AS rsu, ko.map_name, ko.round_number AS rn,
+                       COUNT(*) AS n
+                FROM proximity_kill_outcome ko
+                JOIN scoped s ON s.rsu = ko.round_start_unix AND s.map_name = ko.map_name
+                             AND s.rn = ko.round_number
+                GROUP BY 1, 2, 3
+            ), kis AS (
+                SELECT k.round_start_unix AS rsu, k.map_name, k.round_number AS rn,
+                       COUNT(*) AS n
+                FROM storytelling_kill_impact k
+                JOIN scoped s ON s.rsu = k.round_start_unix AND s.map_name = k.map_name
+                             AND s.rn = k.round_number
+                GROUP BY 1, 2, 3
+            )
+            SELECT s.gsid, MIN(s.d)::text AS first_date,
+                   SUM(COALESCE(p.n, 0)) AS prox_kills,
+                   SUM(COALESCE(kk.n, 0)) AS kis_rows
+            FROM scoped s
+            LEFT JOIN prox p ON p.rsu = s.rsu AND p.map_name = s.map_name AND p.rn = s.rn
+            LEFT JOIN kis kk ON kk.rsu = s.rsu AND kk.map_name = s.map_name AND kk.rn = s.rn
+            GROUP BY s.gsid
+            HAVING SUM(COALESCE(p.n, 0)) > 0
+               AND SUM(COALESCE(kk.n, 0)) < SUM(COALESCE(p.n, 0))
+            ORDER BY s.gsid DESC
+            """
+        )
+        return [(int(r[0]), str(r[1]), int(r[2]), int(r[3])) for r in (rows or [])]
+
     @tasks.loop(seconds=300)
     async def idle_restart_watchdog(self):
         cfg = self.config
@@ -710,3 +879,243 @@ class _MonitorTasksMixin:
         except Exception:
             logger.error("[IDLE-WATCHDOG] map load failed", exc_info=True)
             return False
+
+    # ------------------------------------------------------------------
+    # Lua console sentinel (P1 of the 2026-08-17 RCA)
+    #
+    # A Lua error printed into the game server's etconsole.log every supply
+    # map load for three months and nothing noticed: the only grep with the
+    # right pattern pointed at the local dev clone, the deploy runbook's "no
+    # etconsole errors" was an adjective without a step, and every alert path
+    # to Discord begins as a Python exception inside THIS process. This loop
+    # is the missing reader: it tails the remote console over the SSH access
+    # the bot already holds and alerts on the error classes we have actually
+    # been bitten by.
+    # ------------------------------------------------------------------
+
+    _CONSOLE_ERROR_RE = re.compile(
+        r"error running lua"
+        r"|bad argument"
+        r"|stack traceback"
+        r"|attempt to (?:index|call|compare|perform|concatenate)"
+        r"|\[PROX\].*FAILED",
+        re.IGNORECASE,
+    )
+    # One alert per distinct error line per hour: the crash prints on EVERY
+    # map load, and an alert channel that repeats itself gets muted, which
+    # would recreate the very blindness this loop exists to end.
+    _CONSOLE_ALERT_COOLDOWN_S = 3600
+    # First run looks this far back so a bot restart re-surfaces a live,
+    # still-unfixed error once instead of never.
+    _CONSOLE_BACKSCAN_BYTES = 65536
+    _CONSOLE_MAX_READ_BYTES = 512 * 1024
+
+    def _fetch_console_span(self, offset: int | None):
+        """Return (new_offset, text) of the remote console log from `offset`.
+
+        Blocking (paramiko) — the caller runs it in a thread. Split out so
+        tests can override it with a fake; everything above this line is pure
+        bookkeeping that the tests pin.
+        """
+        import paramiko
+
+        from bot.automation.ssh_handler import configure_ssh_host_key_policy
+
+        ssh = paramiko.SSHClient()
+        configure_ssh_host_key_policy(ssh)
+        try:
+            import os as _os
+            ssh.connect(
+                hostname=self.config.ssh_host,
+                port=self.config.ssh_port,
+                username=self.config.ssh_user,
+                # the repo's .env convention writes the key as ~/.ssh/…, and
+                # paramiko does NOT expand ~ — without this the sentinel
+                # authenticates only when the config happens to be absolute
+                key_filename=_os.path.expanduser(self.config.ssh_key_path),
+                timeout=10,
+            )
+            sftp = ssh.open_sftp()
+            # a hung remote read would otherwise block the worker thread
+            # far beyond the loop interval
+            sftp.get_channel().settimeout(20)
+            path = self.config.game_console_log_path
+            size = sftp.stat(path).st_size
+            if offset is None:
+                # first pass after (re)start: recent window, not all history
+                offset = max(0, size - self._CONSOLE_BACKSCAN_BYTES)
+            elif size < offset:
+                # the engine truncates/rewrites the log on server restart —
+                # and boot is exactly when init-time errors print, so start
+                # over rather than skipping to the end
+                offset = 0
+            if size == offset:
+                return size, ""
+            with sftp.open(path, "rb") as fh:
+                fh.seek(offset)
+                data = fh.read(min(size - offset, self._CONSOLE_MAX_READ_BYTES))
+            # Advance only past COMPLETE lines: a read can end mid-line —
+            # at the chunk cap or because the writer is mid-append at EOF —
+            # and an error whose text straddles the boundary would be split
+            # across two scans and never match. The fragment stays unread for
+            # the next pass. (A full-size read with no newline at all — not a
+            # thing a console log does — falls through whole rather than stall.)
+            cut = data.rfind(b"\n")
+            if cut < 0:
+                if len(data) < self._CONSOLE_MAX_READ_BYTES:
+                    return offset, ""
+            else:
+                data = data[:cut + 1]
+            return offset + len(data), data.decode("utf-8", errors="replace")
+        finally:
+            ssh.close()
+
+    def _scan_console_chunk(self, text: str, now: float) -> list[str]:
+        """New alert-worthy lines in `text`, deduped by content with a cooldown."""
+        alerted = getattr(self, "_console_alerted", None)
+        if alerted is None:
+            alerted = {}
+            self._console_alerted = alerted
+        fresh: list[str] = []
+        for line in text.splitlines():
+            if not self._CONSOLE_ERROR_RE.search(line):
+                continue
+            key = line.strip()[-200:]
+            last = alerted.get(key)
+            if last is not None and now - last < self._CONSOLE_ALERT_COOLDOWN_S:
+                continue
+            alerted[key] = now
+            fresh.append(line.strip())
+        # keep the dedupe table bounded
+        if len(alerted) > 500:
+            cutoff = now - self._CONSOLE_ALERT_COOLDOWN_S
+            for k in [k for k, t in alerted.items() if t < cutoff]:
+                del alerted[k]
+        return fresh
+
+    @tasks.loop(seconds=120)
+    async def lua_console_sentinel(self):
+        cfg = self.config
+        if not getattr(cfg, "ssh_enabled", False):
+            return
+        if not all([cfg.ssh_host, cfg.ssh_user, cfg.ssh_key_path,
+                    getattr(cfg, "game_console_log_path", "")]):
+            return
+        try:
+            offset = getattr(self, "_console_log_offset", None)
+            new_offset, text = await asyncio.to_thread(self._fetch_console_span, offset)
+            self._console_log_offset = new_offset
+        except Exception:
+            # transient SSH failure must not kill the loop; the endstats
+            # monitor already alerts on sustained SSH breakage
+            logger.debug("[LUA-SENTINEL] console fetch failed", exc_info=True)
+            return
+        if not text:
+            return
+        fresh = self._scan_console_chunk(text, time.monotonic())
+        if not fresh:
+            return
+        shown = "\n".join(f"`{ln[:180]}`" for ln in fresh[:5])
+        more = f"\n… in še {len(fresh) - 5} vrstic" if len(fresh) > 5 else ""
+        logger.error("[LUA-SENTINEL] %d new game-server Lua error line(s):\n%s",
+                     len(fresh), "\n".join(fresh[:5]))
+        try:
+            await self.alert_admins(
+                "Lua napaka na igralnem strežniku",
+                f"etconsole.log ({cfg.ssh_host}):\n{shown}{more}",
+            )
+        except Exception:
+            logger.error("[LUA-SENTINEL] alert failed", exc_info=True)
+            # A failed send must not consume the cooldown: un-mark these lines
+            # so the next pass re-alerts them instead of silencing them for an
+            # hour. The offset has already advanced — the dedupe map is the
+            # only memory these lines have left.
+            for ln in fresh:
+                self._console_alerted.pop(ln.strip()[-200:], None)
+
+    @lua_console_sentinel.before_loop
+    async def before_lua_console_sentinel(self):
+        await self.wait_until_ready()
+
+    # ── Daily data-plausibility sentinel (Data Trust pillar B, permanent) ────
+    #
+    # scripts/data_plausibility_audit.py exits with the number of rules that
+    # fired on LIVE rows (backfill noise excluded by design). Green (exit 0)
+    # is the steady state since 2026-08-18; any live finding means the CURRENT
+    # pipeline wrote an impossible row and someone should look today, not at
+    # the next manual run. Same sensor family as lua_console_sentinel: quiet
+    # when healthy, loud in the admin channel when not.
+
+    @staticmethod
+    def _summarize_audit_payload(payload) -> str | None:
+        """Return an alert body for live violations, or None when clean.
+
+        Accepts the script's --json output (a list of rule dicts, possibly
+        wrapped in {"rules": [...]}). Tolerant of shape drift: anything it
+        cannot read is reported as such rather than swallowed.
+        """
+        rules = payload.get("rules") if isinstance(payload, dict) else payload
+        if not isinstance(rules, list):
+            return "audit --json vrnil nepričakovano obliko — preveri skript"
+        live = [(r.get("name", "?"), int(r.get("live", 0) or 0))
+                for r in rules if isinstance(r, dict) and (r.get("live") or 0) > 0]
+        if not live:
+            return None
+        lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
+        more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
+        return (f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n"
+                f"{lines}{more}\n"
+                f"Podrobnosti: `python scripts/data_plausibility_audit.py`")
+
+    @staticmethod
+    def _run_audit_in_thread():
+        """Load the audit tool from scripts/ and run its rules synchronously.
+
+        In-process (no subprocess): the tool opens its own READ-ONLY psycopg2
+        connection, so running it in a worker thread is safe next to the
+        bot's asyncpg pool. Loaded by path because scripts/ is not a package.
+        """
+        import importlib.util
+        import sys
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "data_plausibility_audit.py"
+        spec = importlib.util.spec_from_file_location("data_plausibility_audit", script)
+        mod = importlib.util.module_from_spec(spec)
+        # dataclass machinery looks the module up in sys.modules during class
+        # creation — register it first or exec_module dies on @dataclass.
+        sys.modules["data_plausibility_audit"] = mod
+        spec.loader.exec_module(mod)
+        conn = mod.get_connection()
+        try:
+            results = mod.run_audit(conn, mod.RULES, top_n=0)
+        finally:
+            conn.close()
+        return [r.to_dict() for r in results]
+
+    @tasks.loop(hours=24)
+    async def data_plausibility_sentinel(self):
+        cfg = self.config
+        if not getattr(cfg, "data_audit_sentinel_enabled", True):
+            return
+        try:
+            payload = await asyncio.wait_for(
+                asyncio.to_thread(self._run_audit_in_thread), timeout=300)
+        except TimeoutError:
+            logger.error("[DATA-AUDIT] audit run timed out after 300s")
+            return
+        except Exception:
+            logger.error("[DATA-AUDIT] audit run failed", exc_info=True)
+            return
+        body = self._summarize_audit_payload(payload)
+        if body is None:
+            logger.info("[DATA-AUDIT] daily audit clean — no live violations")
+            return
+        logger.error("[DATA-AUDIT] %s", body.replace("\n", " | "))
+        try:
+            await self.alert_admins("Data-plausibility audit: žive kršitve", body)
+        except Exception:
+            logger.error("[DATA-AUDIT] alert failed", exc_info=True)
+
+    @data_plausibility_sentinel.before_loop
+    async def before_data_plausibility_sentinel(self):
+        await self.wait_until_ready()

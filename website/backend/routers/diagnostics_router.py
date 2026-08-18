@@ -20,6 +20,7 @@ from website.backend.routers.api_helpers import (
     normalize_monitoring_timestamp as _normalize_monitoring_timestamp,
 )
 from website.backend.services.game_server_query import query_game_server
+from website.backend.services.session_scope import resolve_gaming_session_scope
 
 router = APIRouter()
 logger = get_app_logger("api.diagnostics")
@@ -44,6 +45,263 @@ async def get_status(db: DatabaseAdapter = Depends(get_db)):
             "database": "error",
             "error": "Database connection failed",
         }
+
+
+# ── System overview ─────────────────────────────────────────────────
+#
+# One answer to "is the chain running?", assembled from the stages the
+# platform already has. Deliberately public and deliberately aggregate-only:
+# it exposes no table names, paths, versions or row samples — exactly the
+# line /live-status and /diagnostics/storytelling-completeness already draw.
+# Anything host-specific (systemd units, prod-vs-main drift, Lua file
+# hashes on the game server) is NOT here: this process cannot see it, so it
+# lives in scripts/system_status.sh instead of being guessed at.
+#
+# The states below distinguish "nobody played" from "something broke" —
+# gathers happen a few times a week, so a two-day-old round is normal and
+# must never render as a failure.
+
+# No captures at all for this long: the pipeline is simply idle, not broken.
+_PIPELINE_IDLE_S = 7 * 24 * 3600
+
+
+def _age_seconds(when: datetime | None) -> float | None:
+    if when is None:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (datetime.now(timezone.utc) - when).total_seconds())
+
+
+def _stage(key: str, label: str, state: str, summary: str, **detail) -> dict:
+    return {"key": key, "label": label, "state": state, "summary": summary, "detail": detail}
+
+
+async def _system_pipeline(db: DatabaseAdapter) -> list[dict]:
+    """Capture → parse → derive, measured in the database itself."""
+    stages: list[dict] = []
+
+    last_capture_at = None
+    unlinked_48h = 0
+    try:
+        row = await db.fetch_one(
+            """
+            SELECT MAX(captured_at),
+                   COUNT(*) FILTER (
+                       WHERE round_id IS NULL AND captured_at >= NOW() - INTERVAL '48 hours'
+                   )
+            FROM lua_round_teams
+            """
+        )
+        last_capture_at = row[0] if row else None
+        unlinked_48h = int(row[1] or 0) if row else 0
+    except Exception as exc:
+        logger.warning("system overview: lua capture query failed: %s", exc)
+        stages.append(_stage("capture", "Lua capture", "unknown", "capture state unavailable"))
+    else:
+        capture_age = _age_seconds(last_capture_at)
+        if capture_age is None:
+            state, summary = "unknown", "no captures recorded"
+        elif unlinked_48h > 0:
+            state, summary = "warn", f"{unlinked_48h} captured rounds not linked in the last 48 h"
+        elif capture_age > _PIPELINE_IDLE_S:
+            state, summary = "idle", "no rounds captured in the last 7 days"
+        else:
+            state, summary = "ok", "webhook captures are landing and linked"
+        stages.append(_stage(
+            "capture", "Lua capture", state, summary,
+            last_capture_at=str(last_capture_at) if last_capture_at else None,
+            age_seconds=capture_age,
+            unlinked_last_48h=unlinked_48h,
+        ))
+
+    try:
+        # Real play only, same gate every KPI uses — a bot-test night must not
+        # read as "the platform is broken".
+        #
+        # Counting and recency both run on `round_date`, NOT round_start_unix:
+        # only 863 of 2028 gated rounds carry a unix start (2026-08-11 has 14
+        # rounds, 4 with a timestamp), so a unix-based window would have
+        # reported 4 rounds for a 14-round night. The unix value is used only
+        # where it exists, to sharpen the display from a date to a time.
+        row = await db.fetch_one(
+            """
+            SELECT MAX(round_date),
+                   MAX(round_start_unix),
+                   COUNT(*) FILTER (WHERE round_date::date >= (NOW() - INTERVAL '7 days')::date)
+            FROM rounds
+            WHERE round_number IN (1, 2)
+              AND is_bot_round IS DISTINCT FROM TRUE
+              AND is_valid IS DISTINCT FROM FALSE
+            """
+        )
+        last_round_date = str(row[0]) if row and row[0] else None
+        last_round_unix = int(row[1]) if row and row[1] else None
+        rounds_7d = int(row[2] or 0) if row else 0
+    except Exception as exc:
+        logger.warning("system overview: rounds query failed: %s", exc)
+        stages.append(_stage("parser", "Parser", "unknown", "round state unavailable"))
+    else:
+        precise_at = (
+            datetime.fromtimestamp(last_round_unix, tz=timezone.utc) if last_round_unix else None
+        )
+        # Prefer the exact timestamp, but only when it belongs to the newest
+        # night — otherwise it would date the page to an older session.
+        if precise_at is not None and last_round_date and precise_at.strftime("%Y-%m-%d") == last_round_date[:10]:
+            last_round_at, round_age = precise_at.isoformat(), _age_seconds(precise_at)
+        elif last_round_date:
+            day = datetime.strptime(last_round_date[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            last_round_at, round_age = last_round_date[:10], _age_seconds(day)
+        else:
+            last_round_at, round_age = None, None
+
+        # No timestamp race here on purpose: "capture newer than round" cannot
+        # separate a broken parser from a bot session or a still-running
+        # evening. The precise signal — a capture that never became a linked
+        # round — is counted in the capture stage above.
+        if round_age is None:
+            state, summary = "unknown", "no rounds recorded"
+        elif rounds_7d == 0:
+            state, summary = "idle", "no rounds parsed in the last 7 days"
+        else:
+            state, summary = "ok", f"{rounds_7d} rounds parsed in the last 7 days"
+        stages.append(_stage(
+            "parser", "Parser", state, summary,
+            last_round_at=last_round_at,
+            age_seconds=round_age,
+            rounds_last_7d=rounds_7d,
+        ))
+
+    # Derived analytics for the last session people actually played — bot-test
+    # sessions are gated out the same way every KPI gates them (S6 audit), or
+    # a bot night would report the whole platform as broken.
+    try:
+        row = await db.fetch_one(
+            """
+            WITH latest AS (
+                SELECT MAX(gaming_session_id) AS gsid
+                FROM rounds
+                WHERE gaming_session_id IS NOT NULL
+                  AND round_number IN (1, 2)
+                  AND is_bot_round IS DISTINCT FROM TRUE
+                  AND is_valid IS DISTINCT FROM FALSE
+            )
+            SELECT l.gsid,
+                   (SELECT COUNT(*) FROM rounds r
+                     WHERE r.gaming_session_id = l.gsid AND r.round_number IN (1, 2)),
+                   (SELECT COUNT(*) FROM storytelling_kill_impact k
+                     WHERE k.gaming_session_id = l.gsid),
+                   (SELECT COUNT(*) FROM proximity_kill_outcome o
+                      JOIN rounds r2 ON o.round_id = r2.id
+                     WHERE r2.gaming_session_id = l.gsid)
+            FROM latest l
+            """
+        )
+    except Exception as exc:
+        logger.warning("system overview: derived query failed: %s", exc)
+        stages.append(_stage("derived", "Smart Stats", "unknown", "derived state unavailable"))
+    else:
+        gsid = int(row[0]) if row and row[0] is not None else None
+        rounds_n = int(row[1] or 0) if row else 0
+        kis_rows = int(row[2] or 0) if row else 0
+        prox_rows = int(row[3] or 0) if row else 0
+        if gsid is None:
+            state, summary = "unknown", "no completed session yet"
+        elif kis_rows == 0:
+            state, summary = "warn", f"session {gsid} has no Kill Impact rows"
+        elif prox_rows == 0:
+            state, summary = "warn", f"session {gsid} has no proximity data"
+        else:
+            state, summary = "ok", f"session {gsid} fully analysed"
+        stages.append(_stage(
+            "derived", "Smart Stats", state, summary,
+            gaming_session_id=gsid, rounds=rounds_n,
+            kill_impact_rows=kis_rows, proximity_kills=prox_rows,
+        ))
+
+    return stages
+
+
+@router.get("/system/overview")
+async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
+    """End-to-end state of the pipeline, one stage per link in the chain.
+
+    Every section degrades on its own (``state: "unknown"``) so a single
+    failing source never takes the page down — the same contract the
+    composite player profile uses.
+    """
+    pipeline_task = _system_pipeline(db)
+    # Blocking UDP socket → off the event loop (same reason as /live-status).
+    server_task = asyncio.to_thread(query_game_server, GAME_SERVER_HOST, GAME_SERVER_PORT)
+    linkage_task = assess_round_linkage_anomalies(db, sample_limit=1)
+
+    pipeline, server, linkage = await asyncio.gather(
+        pipeline_task, server_task, linkage_task, return_exceptions=True
+    )
+
+    stages: list[dict] = []
+
+    if isinstance(server, Exception):
+        logger.warning("system overview: game server query failed: %s", server)
+        stages.append(_stage("game_server", "Game server", "unknown", "server query failed"))
+    else:
+        stages.append(_stage(
+            "game_server", "Game server",
+            "ok" if server.online else "down",
+            f"{server.player_count}/{server.max_players} players on {server.map_name}"
+            if server.online else "server not responding",
+            online=server.online, map=server.map_name,
+            player_count=server.player_count, max_players=server.max_players,
+            ping_ms=server.ping_ms,
+        ))
+
+    if isinstance(pipeline, Exception):
+        # Without this the response would simply LACK capture/parser/derived,
+        # and a page that renders four green rows out of five reads as healthy.
+        # A stage that could not be measured must still appear, as unknown.
+        logger.warning("system overview: pipeline section failed: %s", pipeline)
+        stages.extend([
+            _stage("capture", "Lua capture", "unknown", "capture state unavailable"),
+            _stage("parser", "Parser", "unknown", "round state unavailable"),
+            _stage("derived", "Smart Stats", "unknown", "derived state unavailable"),
+        ])
+    else:
+        stages.extend(pipeline)
+
+    try:
+        await db.fetch_one("SELECT 1")
+        stages.append(_stage("api", "Website API", "ok", "serving and connected to the database"))
+    except Exception as exc:
+        logger.error("system overview: database unreachable: %s", exc)
+        stages.append(_stage("api", "Website API", "down", "database unreachable"))
+
+    # Linkage is the platform's own integrity signal; only the aggregate
+    # metrics and breach keys are exposed, never the sample rows.
+    linkage_out: dict = {"available": False}
+    if isinstance(linkage, Exception):
+        logger.warning("system overview: linkage assessment failed: %s", linkage)
+    elif isinstance(linkage, dict):
+        breaches = linkage.get("breaches") or []
+        linkage_out = {
+            "available": True,
+            "metrics": linkage.get("metrics") or {},
+            "breach_count": len(breaches),
+            "breaches": [
+                {"metric": b.get("metric"), "value": b.get("value"), "threshold": b.get("threshold")}
+                for b in breaches if isinstance(b, dict)
+            ],
+        }
+
+    # Worst state wins, so the page can show one honest headline.
+    order = {"down": 4, "warn": 3, "unknown": 2, "idle": 1, "ok": 0}
+    overall = max((s["state"] for s in stages), key=lambda s: order.get(s, 0), default="unknown")
+
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "overall": overall,
+        "stages": stages,
+        "linkage": linkage_out,
+    }
 
 
 @router.get("/diagnostics")
@@ -654,13 +912,24 @@ async def get_time_audit(
 
 @router.get("/diagnostics/storytelling-completeness")
 async def get_storytelling_completeness(
-    session_date: str = Query(..., description="YYYY-MM-DD"),
+    session_date: str | None = Query(None, description="YYYY-MM-DD (date-wide)"),
+    # `db` keeps its position so existing positional callers (and the contract
+    # tests) stay valid; the new parameter goes last on purpose.
     db: DatabaseAdapter = Depends(get_db),
+    gaming_session_id: int | None = Query(
+        None, description="canonical gaming session id — scopes the answer to ONE session"),
 ):
     """
-    Quick health check za Smart Stats podatke za izbrani session_date.
+    Quick health check za Smart Stats podatke za izbrano sejo (ali datum).
     Primerja kills v proximity_kill_outcome vs. KIS rows v storytelling_kill_impact
     in poroča linkage pokritost (kills brez round_id, rounds brez korelacije).
+
+    `gaming_session_id` je natančnejši in ima prednost: en koledarski datum lahko
+    nosi VEČ igralnih sej (2026-03-25 jih je imel štiri), zato je datumsko
+    razmerje napačna mera za sejo — stran ga je uporabila za oznako
+    "Total KIS (N% scored)", ki govori o eni sami seji. Filtrira se po
+    kanoničnem ključu runde, ne po `round_id`: seja 138 ima vse kille z
+    `round_id NULL` in bi ob join-u čez rounds izginila.
 
     Read-only, brez auth — UI uporablja kot 'show your work' za številke.
     Endpoint NE triggera compute side-effects, ker bi to bilo unauthenticated
@@ -668,37 +937,65 @@ async def get_storytelling_completeness(
     "Smart Stats še ni izračunan — odpri Smart Stats za ta datum" in
     `kis_computed=false` v response-u za tisti UX hint.
     """
-    try:
-        sd = datetime.strptime(session_date, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
-    except ValueError:
-        raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+    # Direct callers (the contract tests, internal helpers) pass plain values.
+    # A parameter they omit still carries FastAPI's Query object as its default,
+    # which is truthy — branching on it unnormalised sent every such call down
+    # the session path with a Query object as the session id.
+    gaming_session_id = gaming_session_id if isinstance(gaming_session_id, int) else None
+    session_date = session_date if isinstance(session_date, str) else None
+
+    if gaming_session_id is None and not session_date:
+        raise HTTPException(
+            status_code=422,
+            detail="One of gaming_session_id or session_date is required.")
+
+    sd = None
+    scope = None
+    if gaming_session_id is not None:
+        scope = await resolve_gaming_session_scope(db, gaming_session_id=gaming_session_id)
+        scope_dates = [datetime.strptime(d, "%Y-%m-%d").date() for d in scope.dates]  # noqa: DTZ007
+        starts, key_maps, key_rnums = scope.round_key_arrays()
+        params: tuple = (scope_dates, starts, key_maps, key_rnums)
+    else:
+        try:
+            sd = datetime.strptime(session_date, "%Y-%m-%d").date()  # noqa: DTZ007 date-only parsing, no time component used
+        except ValueError:
+            raise HTTPException(status_code=400, detail="session_date must be YYYY-MM-DD")
+        params = (sd,)
+
+    def _scoped(alias: str) -> str:
+        """WHERE fragment for one table, in whichever scope was asked for."""
+        if scope is None:
+            return f"{alias}.session_date = $1"
+        return (f"{alias}.session_date = ANY($1) AND "
+                f"{scope.round_key_filter_sql(2, alias)}")
 
     try:
         kills_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(*) AS kills_total,
-                COUNT(*) FILTER (WHERE round_id IS NOT NULL) AS kills_with_round,
-                COUNT(DISTINCT round_id) FILTER (WHERE round_id IS NOT NULL) AS distinct_rounds,
-                COUNT(DISTINCT killer_guid) AS distinct_killers
-            FROM proximity_kill_outcome
-            WHERE session_date = $1
+                COUNT(*) FILTER (WHERE pko.round_id IS NOT NULL) AS kills_with_round,
+                COUNT(DISTINCT pko.round_id) FILTER (WHERE pko.round_id IS NOT NULL) AS distinct_rounds,
+                COUNT(DISTINCT pko.killer_guid) AS distinct_killers
+            FROM proximity_kill_outcome pko
+            WHERE {_scoped("pko")}
             """,
-            (sd,),
+            params,
         )
         kis_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(*) AS kis_rows,
-                COUNT(DISTINCT killer_guid) AS distinct_killers,
-                COALESCE(ROUND(SUM(total_impact)::numeric, 2), 0) AS total_impact_sum
-            FROM storytelling_kill_impact
-            WHERE session_date = $1
+                COUNT(DISTINCT k.killer_guid) AS distinct_killers,
+                COALESCE(ROUND(SUM(k.total_impact)::numeric, 2), 0) AS total_impact_sum
+            FROM storytelling_kill_impact k
+            WHERE {_scoped("k")}
             """,
-            (sd,),
+            params,
         )
         rounds_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(DISTINCT r.id) AS rounds_total,
                 COUNT(DISTINCT r.id) FILTER (WHERE rc.id IS NOT NULL) AS rounds_correlated
@@ -706,9 +1003,9 @@ async def get_storytelling_completeness(
             JOIN rounds r ON r.id = pko.round_id
             LEFT JOIN round_correlations rc
                 ON rc.r1_round_id = r.id OR rc.r2_round_id = r.id
-            WHERE pko.session_date = $1
+            WHERE {_scoped("pko")}
             """,
-            (sd,),
+            params,
         )
         # Exact-link check (Codex §18 / L1 methodology): a non-NULL round_id
         # only proves a kill points at SOME round, never the CORRECT one —
@@ -721,7 +1018,7 @@ async def get_storytelling_completeness(
         # exact" match, when it actually means neither side ever recorded a
         # real timestamp. Require > 0 on both sides (Copilot review on #525).
         wrong_link_row = await db.fetch_one(
-            """
+            f"""
             SELECT
                 COUNT(*) FILTER (
                     WHERE pko.round_id IS NOT NULL
@@ -734,9 +1031,9 @@ async def get_storytelling_completeness(
                 ) AS exact_rows
             FROM proximity_kill_outcome pko
             LEFT JOIN rounds r ON r.id = pko.round_id
-            WHERE pko.session_date = $1
+            WHERE {_scoped("pko")}
             """,
-            (sd,),
+            params,
         )
     except Exception as e:
         logger.error("Database error in storytelling-completeness: %s", e, exc_info=True)
@@ -835,7 +1132,17 @@ async def get_storytelling_completeness(
     ]
 
     return {
-        "session_date": session_date,
+        # Say which question was answered. A caller that asked by gsid gets the
+        # session's own dates back, so a ratio can never be quietly reused as if
+        # it described a different scope than the one requested.
+        "session_date": session_date if scope is None else scope.dates[0],
+        # Every date the counted scope touches. A session can cross midnight
+        # (142 starts on 2026-08-03 and ends on the 4th), and the single date
+        # above would let a caller re-query or label only half of what was
+        # counted here.
+        "session_dates": [session_date] if scope is None else list(scope.dates),
+        "gaming_session_id": gaming_session_id,
+        "scope": "date" if scope is None else "gaming_session",
         "status": status,
         "kills_total": kills_total,
         "kills_with_round": kills_with_round,

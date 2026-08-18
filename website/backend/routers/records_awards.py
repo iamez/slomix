@@ -16,6 +16,7 @@ from website.backend.routers.api_helpers import (
     resolve_display_name,
     resolve_name_guid_map,
     resolve_player_guid,
+    valid_human_rows_gate,
 )
 
 router = APIRouter()
@@ -41,7 +42,16 @@ async def get_records(
         "accuracy": {
             "col": "accuracy",
             "label": "Best Accuracy",
-            "filter": "bullets_fired > 50",
+            # The sample-size gate (>50 bullets) is only meaningful when the
+            # bullet count itself can be trusted. It cannot be for the 2025
+            # supastats backfill: 7,311 of its 9,698 rows carry a bullets_fired
+            # above any physical fire rate (the old record row: 5,523 bullets
+            # in 269 s = 20.5/s where an MP40 tops out at ~11.6/s), while the
+            # 2026 live capture has zero such rows. The physics bound keeps the
+            # record on rows whose sample size is PROVABLE — 15/s = max rate
+            # plus margin — rather than letting corrupted counts qualify.
+            "filter": "bullets_fired > 50"
+                      " AND bullets_fired <= time_played_seconds * 15",
         },
         "revived": {"col": "times_revived", "label": "Most Times Revived"},
         "useful_kills": {"col": "most_useful_kills", "label": "Most Useful Kills"},
@@ -56,13 +66,18 @@ async def get_records(
     # flagged is_valid = FALSE by the importer); the [BOT]/OMNIBOT identity
     # filter is defence in depth for any historical round that predates the
     # validity flag. (Owner saw [BOT]vid holding the kills record.)
+    # round_status = 'orphan_r2' marks R2 rows whose R1 was never available:
+    # they hold raw CUMULATIVE (R1+R2) values, so any per-round record built
+    # on them is roughly doubled (the 2026-01-09 erdenberg "damage record"
+    # was exactly this).
     base_where = (
         "WHERE round_number IN (1, 2) AND time_played_seconds > 0 "
         "AND player_name NOT LIKE '[BOT]%' "
         "AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') "
         "AND NOT EXISTS (SELECT 1 FROM rounds r "
         "                WHERE r.id = player_comprehensive_stats.round_id "
-        "                  AND r.is_valid IS FALSE)"
+        "                  AND (r.is_valid IS FALSE "
+        "                       OR r.round_status = 'orphan_r2'))"
     )
     if map_name:
         base_where += " AND map_name = $1"
@@ -92,6 +107,47 @@ async def get_records(
             {base_where} {extra_filter}
             ORDER BY {col} DESC
             LIMIT {limit_placeholder}
+        """
+        q_params = (map_name, limit) if map_name else (limit,)
+        plans.append((key, query, q_params))
+
+    # Match-level records: both rounds of one map, summed per player. Summing
+    # the (already differential) R1+R2 rows by match_id is the trustworthy
+    # path — R0 "match summary" rows are a known-unreliable aggregate and are
+    # deliberately not used. Only summable counters get a match category
+    # (ratios like accuracy do not survive summation). A match missing its R2
+    # simply sums lower — it can never fake-inflate a record.
+    match_categories = {
+        "match_damage": "damage_given",
+        "match_kills": "kills",
+        "match_headshots": "headshots",
+        "match_xp": "xp",
+        "match_revives": "revives_given",
+        "match_gibs": "gibs",
+    }
+    match_map_filter = " AND pcs.map_name = $1" if map_name else ""
+    match_limit_placeholder = "$2" if map_name else "$1"
+    for key, col in match_categories.items():
+        query = f"""
+            SELECT
+                MAX(pcs.player_name) as player_name,
+                SUM(pcs.{col}) as value,
+                MAX(pcs.map_name) as map_name,
+                MIN(pcs.round_date) as round_date
+            FROM player_comprehensive_stats pcs
+            JOIN rounds r ON r.id = pcs.round_id
+            WHERE pcs.round_number IN (1, 2)
+              AND pcs.time_played_seconds > 0
+              AND pcs.player_name NOT LIKE '[BOT]%'
+              AND pcs.player_guid IS NOT NULL
+              AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+              AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.round_status IS DISTINCT FROM 'orphan_r2'
+              AND r.match_id IS NOT NULL
+              {match_map_filter}
+            GROUP BY r.match_id, pcs.player_guid
+            ORDER BY value DESC
+            LIMIT {match_limit_placeholder}
         """
         q_params = (map_name, limit) if map_name else (limit,)
         plans.append((key, query, q_params))
@@ -685,6 +741,7 @@ async def _hof_compute_categories(
     params = list(base_params)
     limit_param = f"${param_idx}"
     params.append(limit)
+    valid_gate = valid_human_rows_gate("pcs")
 
     categories = {}
 
@@ -707,7 +764,7 @@ async def _hof_compute_categories(
             SELECT pcs.player_guid, MAX(pcs.player_name) as player_name,
                    {agg_expr} as value
             FROM player_comprehensive_stats pcs
-            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
+            WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0{valid_gate} {date_filter}
             GROUP BY pcs.player_guid
             ORDER BY value DESC
             LIMIT {limit_param}
@@ -733,7 +790,7 @@ async def _hof_compute_categories(
                COUNT(*) as value
         FROM player_comprehensive_stats pcs
         JOIN rounds r ON pcs.round_id = r.id
-        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0
+        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0{valid_gate}
           AND r.winner_team != 0
           AND pcs.team = r.winner_team
           {date_filter}
@@ -764,7 +821,7 @@ async def _hof_compute_categories(
                ROUND((SUM(pcs.damage_given)::numeric / NULLIF(SUM(pcs.time_played_seconds) / 60.0, 0)), 2) as value,
                COUNT(*) as rounds_played
         FROM player_comprehensive_stats pcs
-        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0 {date_filter}
+        WHERE pcs.round_number IN (1, 2) AND pcs.time_played_seconds > 0{valid_gate} {date_filter}
         GROUP BY pcs.player_guid
         HAVING COUNT(*) >= {dpm_min_rounds_param}
         ORDER BY value DESC
@@ -793,7 +850,7 @@ async def _hof_compute_categories(
                    r.gaming_session_id
             FROM player_comprehensive_stats pcs
             JOIN rounds r ON pcs.round_id = r.id
-            WHERE pcs.time_played_seconds > 0
+            WHERE pcs.time_played_seconds > 0{valid_gate}
               AND r.gaming_session_id IS NOT NULL
               {date_filter}
             GROUP BY pcs.player_guid, r.gaming_session_id

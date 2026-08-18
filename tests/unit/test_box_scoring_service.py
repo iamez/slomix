@@ -233,3 +233,71 @@ class TestScoreMapMapNameAndNumber:
         ms = svc.score_map(r1, r2, alpha_side_r1=1, alpha_side_r2=2)
         assert ms.map_number == 3
         assert ms.map_name == "oasis"
+
+
+# ===========================================================================
+# _fetch_session_rounds: fullhold derivation (regression, gsid 141 supply)
+# ===========================================================================
+
+class TestFullholdDerivation:
+    """is_fullhold must come from winner/defender when both are known.
+
+    The stored round_outcome text is a parser TIME heuristic (<=30s from the
+    timelimit → "Fullhold"), so an objective completed in the last 30 seconds
+    is mislabeled. Trusting it scored a real map win as a 1-1 "double
+    fullhold" draw while the stopwatch scorer said 2-0 — a live cross-page
+    divergence on 3 of 10 recent sessions (gsid 141 supply, 137 brewdog,
+    142 escape2/goldrush).
+    """
+
+    @staticmethod
+    def _row(rid, map_name, rn, winner, defender, outcome, dur=600, ttb=0):
+        return (rid, map_name, rn, winner, defender, outcome, dur, ttb)
+
+    @staticmethod
+    async def _rounds(svc):
+        return await svc._fetch_session_rounds(141)
+
+    def _svc_with_rows(self, rows):
+        svc = _service()
+        svc.db.fetch_all = AsyncMock(return_value=rows)
+        return svc
+
+    async def test_winner_contradicts_fullhold_text(self):
+        # gsid 141 supply R1: completed at 11:57 of 12:00 → text says
+        # "Fullhold", but winner(2) != defender(1) → NOT a hold.
+        svc = self._svc_with_rows([self._row(11102, "supply", 1, 2, 1, "Fullhold", 716)])
+        (r1,) = await self._rounds(svc)
+        assert r1.is_fullhold is False
+
+    async def test_true_fullhold_kept(self):
+        svc = self._svc_with_rows([self._row(1, "supply", 1, 1, 1, "Fullhold")])
+        (r1,) = await self._rounds(svc)
+        assert r1.is_fullhold is True
+
+    async def test_text_fallback_when_sides_unknown(self):
+        svc = self._svc_with_rows([
+            self._row(1, "supply", 1, 0, 0, "Fullhold"),
+            self._row(2, "supply", 2, 0, 1, "Completed"),
+        ])
+        r1, r2 = await self._rounds(svc)
+        assert r1.is_fullhold is True   # winner unknown → trust the text
+        assert r2.is_fullhold is False
+
+    async def test_gsid141_supply_scores_2_0_not_draw(self):
+        # End-to-end regression: R1 mislabeled Fullhold (winner=attacker),
+        # R2 surrender (winner=defender). Correct result: the R1-attacking
+        # team takes the map 2-0 — not a 1-1 double-fullhold draw.
+        svc = _service()
+        svc.db.fetch_all = AsyncMock(side_effect=[
+            [],  # _get_team_names
+            [
+                self._row(11102, "supply", 1, 2, 1, "Fullhold", 716),
+                self._row(11103, "supply", 2, 1, 1, "Fullhold", 643),
+            ],
+        ])
+        score = await svc.calculate_session_score(141)
+        (ms,) = score.maps
+        assert ms.winner != "draw"
+        assert sorted([ms.alpha_points, ms.beta_points]) == [0, 2]
+        assert ms.is_fullhold_draw is False

@@ -336,10 +336,13 @@ async def test_calculate_session_winner_is_draw_when_scores_tie():
     """Equal scores AND maps_completed > 0 → winner='draw'.
     Pinned because a regression that drops the explicit 'draw' string
     would let the UI render an empty winner."""
-    # Double fullhold scenario gives 1/1
+    # Double fullhold scenario gives 1/1. A fullhold means the DEFENDING
+    # side won, so winner == defender on both rows (the old fixture said
+    # winner != defender, contradicting its own "Fullhold" text — is_fullhold
+    # is now derived from the sides, not the parser's time-heuristic label).
     rows = [
-        (1, "oasis", 1, 1, 2, "Fullhold", 600, 600),
-        (2, "oasis", 2, 2, 1, "Fullhold", 600, 600),
+        (1, "oasis", 1, 2, 2, "Fullhold", 600, 600),
+        (2, "oasis", 2, 1, 1, "Fullhold", 600, 600),
     ]
     svc = BOXScoringService(_FakeDb(round_rows=rows))
     out = await svc.calculate_session_score(99)
@@ -355,7 +358,8 @@ async def test_calculate_session_provisional_points_dont_count_toward_completion
     → winner stays None. Pin: a session with ONLY R1 data must not
     declare a winner."""
     rows = [
-        (1, "oasis", 1, 1, 2, "Fullhold", 600, 600),  # R1 fullhold only
+        # R1 fullhold only: winner == defender (side 1 = alpha on an odd map).
+        (1, "oasis", 1, 1, 1, "Fullhold", 600, 600),
     ]
     svc = BOXScoringService(_FakeDb(round_rows=rows))
     out = await svc.calculate_session_score(99)

@@ -517,11 +517,22 @@ async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
             else (int(end_u - start_u) if (start_u and end_u and end_u > start_u) else None)
         )
         round_outcome = r[12] if len(r) > 12 else None
+        # Fullhold = the defending side won the round. Derive it from the lua
+        # feed's own winner/defender (authoritative, already selected) — the
+        # rounds.round_outcome text is the parser's ±30s time heuristic that
+        # mislabels last-30s completions as holds, which scored real map wins
+        # as 1-1 draws here (same bug fixed in BOXScoringService #727). Text
+        # stays as fallback for rows whose sides are unknown.
+        defender = r[3]
+        if winner in (1, 2) and defender in (1, 2):
+            is_fullhold = winner == defender
+        else:
+            is_fullhold = bool(round_outcome) and round_outcome.lower() == "fullhold"
         mp["rounds"].append({
             "round": rnum, "winner": rteam,
             "axis_score": axis_sc, "allies_score": allies_sc,
             "a_on_axis": a_on_axis, "duration": duration,
-            "is_fullhold": bool(round_outcome) and round_outcome.lower() == "fullhold",
+            "is_fullhold": is_fullhold,
         })
 
     # --- Per-map stopwatch result in team terms. R2 is the decider; if only R1

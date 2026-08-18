@@ -133,6 +133,22 @@ class BotConfig:
         ]
         self.admin_channel_id: int = self.admin_channels[0] if self.admin_channels else 0
 
+        # supastats cross-check (DEV TOOL, off by default). Supa posts a
+        # screenshot of his sheet the morning after a gather; when enabled the
+        # bot reads it and DMs the owner how it compares with our numbers.
+        # Retire this once the numbers agree and the project leaves prototype.
+        # str() throughout: _get_config returns the RAW json value when the key
+        # comes from bot_config.json, so `"SUPASTATS_CHECK_ENABLED": true` would
+        # otherwise crash the whole bot on .lower().
+        self.supastats_check_enabled: bool = str(
+            self._get_config('SUPASTATS_CHECK_ENABLED', 'false')
+        ).strip().lower() == 'true'
+        self.supastats_channel_id: int = int(self._get_config('SUPASTATS_CHANNEL_ID', '0'))
+        supastats_authors_str = str(self._get_config('SUPASTATS_AUTHOR_IDS', ''))
+        self.supastats_author_ids: list[int] = [
+            int(a.strip()) for a in supastats_authors_str.split(",") if a.strip().isdigit()
+        ]
+
         # Root User ID (for highest permission tier - user ID whitelist)
         self.owner_user_id: int = int(self._get_config('OWNER_USER_ID', '0'))
         if self.owner_user_id == 0:
@@ -295,6 +311,16 @@ class BotConfig:
         self.ssh_user: str = self._get_config('SSH_USER', '')
         self.ssh_key_path: str = self._get_config('SSH_KEY_PATH', '')
         self.ssh_remote_path: str = self._get_config('REMOTE_STATS_PATH', '')
+        # Lua console sentinel (RCA 2026-08-17): the game server's console
+        # log had no reader for three months of a printed error. str() path,
+        # overridable per install; empty disables the sentinel.
+        # Daily data-plausibility sentinel (scripts/data_plausibility_audit.py
+        # run by the bot once a day; alerts admins when any rule fires on LIVE
+        # rows). Read-only; disable with DATA_AUDIT_SENTINEL_ENABLED=false.
+        self.data_audit_sentinel_enabled: bool = str(self._get_config(
+            'DATA_AUDIT_SENTINEL_ENABLED', 'true')).strip().lower() in ('1', 'true', 'yes')
+        self.game_console_log_path: str = str(self._get_config(
+            'GAME_CONSOLE_LOG', '/home/et/.etlegacy/legacy/etconsole.log'))
 
         # SSH monitoring behavior
         self.ssh_check_interval: int = int(self._get_config('SSH_CHECK_INTERVAL', '60'))  # seconds

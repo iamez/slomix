@@ -2,7 +2,7 @@
 
 This document lists Discord bot commands declared in the repository (via `@commands.command(...)` and `@commands.group(...)`), with aliases and short descriptions. It is **auto-generated** from the source by `scripts/regen_commands_doc.py` — re-run that script after adding, renaming, or removing commands.
 
-**Coverage:** 108 visible commands across 21 cog files / cog-mixin groups.
+**Coverage:** 110 visible commands across 22 cog files / cog-mixin groups.
 
 > Hidden commands (`@commands.command(hidden=True)`) are intentionally excluded.
 > Slash commands (`@app_commands.command(...)`) are NOT in this list — none are currently declared in the repo.
@@ -25,6 +25,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `cache_clear` | (none) | 🗑️ Clear query cache (Admin only - use in admin channel) |
 | `correlation_status` | (none) | 🔗 Show round correlation status (Admin only) |
 | `reload` | (none) | 🔄 Reload the bot (Root only) - Reconnects to Discord with updated code |
+| `sistem` | `system` | 🩺 Ali cela veriga teče? (isti vir kot stran #/system) |
 | `weapon_diag` | (none) | 🧪 Diagnostic: show weapon stats aggregates for a session |
 
 ---
@@ -171,7 +172,7 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `proximity_objectives` | (none) | Show which maps have objective coordinates configured |
 | `proximity_pushes` | `ppu` | Team push quality comparison - Axis vs Allies (v5) |
 | `proximity_scan` | (none) | Force scan for new engagement files (admin only) |
-| `proximity_session` | `psession`, `pscore` | Per-session proximity combat scores |
+| `proximity_session` | `psession`, `pscore` | Per-session proximity composite scores (v3.0) |
 | `proximity_spawn_efficiency` | `pse` | Top 10 players by spawn timing efficiency (v5) |
 | `proximity_status` | (none) | Show proximity tracker status (admin only) |
 | `proximity_trades_lua` | `ptl` | Lua-detected trade kill leaderboard (v5) |
@@ -224,6 +225,14 @@ This document lists Discord bot commands declared in the repository (via `@comma
 | `help` | `commands`, `cmds`, `bothelp`, `help_command` | 📚 Show all available commands with examples |
 | `ping` | (none) | 🏓 Check bot status and performance |
 | `season_info` | `season`, `seasons` | 📅 Show current season information and champions |
+
+---
+
+## Supastats cog (`bot/cogs/supastats_cog.py`)
+
+| Command | Aliases | Description |
+|---|---|---|
+| `supacheck` | (none) | Re-run the check on an attached sheet (or the one you replied to) |
 
 ---
 

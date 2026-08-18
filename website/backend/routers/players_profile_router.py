@@ -22,6 +22,7 @@ GUID handling (verified against live schema):
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 from datetime import datetime, timezone
@@ -731,7 +732,121 @@ async def _fetch_recent_matches(db, guid8: str, limit: int = 10) -> dict:
 
 # ── aim summary + improvements ──────────────────────────────────────────────
 
+# Bump when the aim maths changes: every cached row from an older version is
+# ignored and recomputed, so a formula change can never be served from the cache.
+_AIM_FORMULA_VERSION = 1
+
+
+async def _aim_fingerprint(db, guid8: str) -> tuple[int, int | None, int | None]:
+    """One indexed aggregate (~45 ms warm) describing the summary's whole input.
+
+    * ``shot_count``     — shots added or deleted
+    * ``last_event_time``— new shots even when the count happens to match
+    * ``round_id_sum``   — re-linking. The flick window is partitioned by round,
+                           so moving a shot between rounds changes the answer
+                           without changing either of the other two.
+
+    All three stay integers end to end: comparing a cache's validity through a
+    float would tie it to mantissa width for no gain.
+    """
+    row = await db.fetch_one(
+        """
+        SELECT COUNT(*), MAX(event_time), SUM(round_id)
+        FROM proximity_shot_fired
+        WHERE guid_canonical = $1
+        """,
+        (guid8,),
+    )
+    if not row:
+        return (0, None, None)
+    return (
+        _i(row[0]),
+        int(row[1]) if row[1] is not None else None,
+        int(row[2]) if row[2] is not None else None,
+    )
+
+
+async def _read_aim_cache(db, guid8: str, fingerprint) -> dict | None:
+    """Cached summary, or None when it is absent, stale or unreadable.
+
+    Every failure path returns None: a cache is an optimisation, and a profile
+    that 500s because a derived table is missing would be a worse product than a
+    slow one. The table is created by migration 077 but the endpoint predates it.
+    """
+    shots, last_event, round_sum = fingerprint
+    try:
+        row = await db.fetch_one(
+            """
+            SELECT payload, shot_count, last_event_time, round_id_sum
+            FROM player_aim_summary
+            WHERE guid_canonical = $1 AND formula_version = $2
+            """,
+            (guid8, _AIM_FORMULA_VERSION),
+        )
+    except Exception as exc:                      # noqa: BLE001 — see docstring
+        logger.debug("aim cache unreadable for %s: %s", guid8, exc)
+        return None
+    if not row:
+        return None
+
+    stored = (_i(row[1]), int(row[2]) if row[2] is not None else None,
+              int(row[3]) if row[3] is not None else None)
+    if stored != (shots, last_event, round_sum):
+        return None
+
+    payload = row[0]
+    if isinstance(payload, str):                  # asyncpg hands JSONB back as text
+        try:
+            payload = json.loads(payload)
+        except ValueError:
+            return None
+    return payload if isinstance(payload, dict) else None
+
+
+async def _write_aim_cache(db, guid8: str, fingerprint, summary: dict) -> None:
+    """Store the freshly computed summary. Never raises into the request."""
+    shots, last_event, round_sum = fingerprint
+    try:
+        await db.execute(
+            """
+            INSERT INTO player_aim_summary
+                (guid_canonical, formula_version, shot_count, last_event_time,
+                 round_id_sum, payload, computed_at)
+            VALUES ($1, $2, $3, $4, $5, $6, NOW())
+            ON CONFLICT (guid_canonical) DO UPDATE SET
+                formula_version = EXCLUDED.formula_version,
+                shot_count      = EXCLUDED.shot_count,
+                last_event_time = EXCLUDED.last_event_time,
+                round_id_sum    = EXCLUDED.round_id_sum,
+                payload         = EXCLUDED.payload,
+                computed_at     = NOW()
+            """,
+            (guid8, _AIM_FORMULA_VERSION, shots, last_event, round_sum,
+             json.dumps(summary)),
+        )
+    except Exception as exc:                      # noqa: BLE001 — see _read_aim_cache
+        logger.debug("aim cache not written for %s: %s", guid8, exc)
+
+
 async def _fetch_aim_summary(db, guid8: str) -> dict:
+    """True-aim lifetime summary, served from player_aim_summary when it is current.
+
+    The computation below is the most expensive thing on the profile — 2,770 ms
+    warm, 16,887 ms cold for the heaviest player — and its inputs only change
+    when rounds import. So it is computed once and cached, keyed on a fingerprint
+    of exactly those inputs rather than on a TTL. See migration 077.
+    """
+    fingerprint = await _aim_fingerprint(db, guid8)
+    cached = await _read_aim_cache(db, guid8, fingerprint)
+    if cached is not None:
+        return cached
+
+    summary = await _compute_aim_summary(db, guid8)
+    await _write_aim_cache(db, guid8, fingerprint, summary)
+    return summary
+
+
+async def _compute_aim_summary(db, guid8: str) -> dict:
     """True-aim lifetime summary + per-weapon + flick + enemy-relative.
 
     Map-agnostic (origin coords differ per map, so no rose here — the frontend
@@ -1038,19 +1153,115 @@ async def _resolve_guid32(db, guid8: str) -> str | None:
 
 # ── endpoint ────────────────────────────────────────────────────────────────
 
+# Sections whose cost is not in the query shape but in the tables they have to
+# read. Measured on dev for the heaviest player (103,258 `proximity_shot_fired`
+# rows), cold vs warm cache:
+#
+#   aim       16,887 ms cold / 2,770 ms warm   (trig aggregates + LAG window +
+#                                               two percentile_cont over ~100k shots)
+#   advanced  11,077 ms cold /   204 ms warm   (proximity_spawn_timing +
+#                                               combat_engagement)
+#   every other section          < 250 ms each, ~500 ms for all twelve together
+#
+# A covering index does NOT fix the cold side: `guid_canonical = ?` selects 12.8 %
+# of the table, so the planner takes a bitmap heap scan regardless (tried, 45 MB,
+# no change, dropped). Until the aim summary is precomputed on import, the fix
+# that helps a human is to let the page render without these two and fill them in
+# afterwards — the pattern the story page already uses for its per-map split.
+_HEAVY_SECTIONS = frozenset({"aim", "advanced"})
+
+# Every section key the endpoint can return. A set, deliberately: it exists so
+# the `sections` parameter can be validated before any work starts, and it makes
+# no ordering promise — response order follows the `fetchers` insertion order in
+# the handler, and the payload's own `sections` list is sorted.
+# tests/unit/test_profile_sections.py pins this against the live registry.
+_PROFILE_SECTIONS = frozenset({
+    "identity", "streaks", "advanced", "movement", "weapons", "hit_regions",
+    "relationships", "skill", "maps", "recent_matches", "aim",
+    "gather_summary", "nick_history", "combat_timing",
+})
+
+
+def _parse_sections(sections: str | None, available: frozenset[str]) -> frozenset[str]:
+    """Resolve the `sections` query parameter to a concrete set.
+
+    Absent → everything, so existing callers (and anyone poking the API by hand)
+    keep the response they have always had. `core` is the cheap subset.
+    """
+    if sections is None:
+        return available
+    wanted: set[str] = set()
+    for raw in sections.split(","):
+        name = raw.strip().lower()
+        if not name:
+            continue
+        if name == "core":
+            wanted |= set(available - _HEAVY_SECTIONS)
+        elif name == "all":
+            wanted |= set(available)
+        elif name in available:
+            wanted.add(name)
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown profile section: {name}",
+            )
+    if not wanted:
+        raise HTTPException(status_code=400, detail="No profile sections requested")
+    return frozenset(wanted)
+
+
 @router.get("/players/{identifier}/profile")
 async def get_player_profile(
     identifier: str,
+    sections: str | None = None,
     db: DatabaseAdapter = Depends(get_db),
 ):
-    """Composite gibhub.gg-parity player profile in one parallel round-trip."""
+    """Composite gibhub.gg-parity player profile in one parallel round-trip.
+
+    `sections` (comma-separated) narrows the work: `core` is everything except
+    the two heavy sections, `aim,advanced` fetches only those, `all` (or leaving
+    it off) is the full profile. Sections that were not requested are **absent**
+    from the response — distinguishable from a section that ran and has no data
+    (`{"available": false}`) or one that blew up (`reason: "error"`).
+    """
+    # Validate the parameter before touching the database: a malformed request is
+    # a 400 whether or not the player exists, and an unknown player must not turn
+    # a typo into a 404 that hides it. (Also skips a lookup for junk requests.)
+    #
+    # Parsing also has to precede the guid32 resolution below: `core` expands to a
+    # set that includes relationships, so asking the raw string whether it
+    # mentions the section would answer "no" and hand the fetcher a null guid32.
+    wanted = _parse_sections(sections, _PROFILE_SECTIONS)
+
     guid8 = await resolve_player_guid(db, identifier)
     if not guid8:
         raise HTTPException(status_code=404, detail="Player not found")
 
-    guid32 = await _resolve_guid32(db, guid8)
+    # guid32 is only used by relationships; skip the lookup when it is not asked for.
+    guid32 = await _resolve_guid32(db, guid8) if "relationships" in wanted else None
 
-    # Lifetime first (identity gate — 404 if the player has no stats); the rest fan out.
+    # Section registry: name -> a zero-arg factory, so nothing is scheduled (and
+    # no coroutine is left un-awaited) for sections the caller did not ask for.
+    fetchers = {
+        "identity": lambda: _fetch_identity(db, guid8, identifier),
+        "streaks": lambda: _fetch_streaks(db, guid8),
+        "advanced": lambda: _fetch_advanced(db, guid8),
+        "movement": lambda: _fetch_movement(db, guid8),
+        "weapons": lambda: _fetch_weapons(db, guid8),
+        "hit_regions": lambda: _fetch_hit_regions(db, guid8),
+        "relationships": lambda: _fetch_relationships(db, guid8, guid32),
+        "skill": lambda: _fetch_skill(db, guid8),
+        "maps": lambda: _fetch_maps(db, guid8),
+        "recent_matches": lambda: _fetch_recent_matches(db, guid8),
+        "aim": lambda: _fetch_aim_summary(db, guid8),
+        "gather_summary": lambda: _fetch_gather_summary(db, guid8),
+        "nick_history": lambda: _fetch_nick_history(db, guid8),
+        "combat_timing": lambda: _fetch_combat_timing(db, guid8),
+    }
+
+    # Lifetime is the identity gate (404 when the player has no stats), so it runs
+    # on every request regardless of `sections` — it is one of the cheap ones.
     lifetime = await _fetch_lifetime(db, guid8)
     if not lifetime.get("available"):
         raise HTTPException(status_code=404, detail="Player not found")
@@ -1065,23 +1276,9 @@ async def get_player_profile(
         async with sem:
             return await coro
 
-    (identity, streaks, advanced, movement, weapons, hit_regions,
-     relationships, skill, maps, recent, aim,
-     gather_summary, nick_history, combat_timing) = await asyncio.gather(
-        _guard(_fetch_identity(db, guid8, identifier)),
-        _guard(_fetch_streaks(db, guid8)),
-        _guard(_fetch_advanced(db, guid8)),
-        _guard(_fetch_movement(db, guid8)),
-        _guard(_fetch_weapons(db, guid8)),
-        _guard(_fetch_hit_regions(db, guid8)),
-        _guard(_fetch_relationships(db, guid8, guid32)),
-        _guard(_fetch_skill(db, guid8)),
-        _guard(_fetch_maps(db, guid8)),
-        _guard(_fetch_recent_matches(db, guid8)),
-        _guard(_fetch_aim_summary(db, guid8)),
-        _guard(_fetch_gather_summary(db, guid8)),
-        _guard(_fetch_nick_history(db, guid8)),
-        _guard(_fetch_combat_timing(db, guid8)),
+    ordered = [name for name in fetchers if name in wanted]
+    results = await asyncio.gather(
+        *(_guard(fetchers[name]()) for name in ordered),
         return_exceptions=True,
     )
 
@@ -1091,25 +1288,15 @@ async def get_player_profile(
             return {"available": False, "reason": "error"}
         return section
 
-    return {
+    payload = {
         "guid": guid8,
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "identity": _ok(identity, "identity"),
         "lifetime": lifetime,
-        "streaks": _ok(streaks, "streaks"),
-        "advanced": _ok(advanced, "advanced"),
-        "movement": _ok(movement, "movement"),
-        "weapons": _ok(weapons, "weapons"),
-        "hit_regions": _ok(hit_regions, "hit_regions"),
-        "relationships": _ok(relationships, "relationships"),
-        "skill": _ok(skill, "skill"),
-        "maps": _ok(maps, "maps"),
-        "recent_matches": _ok(recent, "recent_matches"),
-        "aim": _ok(aim, "aim"),
-        "gather_summary": _ok(gather_summary, "gather_summary"),
-        "nick_history": _ok(nick_history, "nick_history"),
-        "combat_timing": _ok(combat_timing, "combat_timing"),
+        "sections": sorted(wanted),
     }
+    for name, result in zip(ordered, results):
+        payload[name] = _ok(result, name)
+    return payload
 
 
 _AWARD_LABELS = {
