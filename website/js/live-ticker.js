@@ -193,7 +193,11 @@ function _pressureApply(ev) {
     }
     else if (ev.type === 'OBJECTIVE_DESTROYED') toAttackers(+18);
     else if (ev.type === 'ANNOUNCE' && /captured|destroyed|secured/i.test(ev.text || '')) toAttackers(+10);
-    else if (ev.type === 'KILL' && !ev._teamkill) {
+    else if ((ev.type === 'KILL' && !ev._teamkill)
+             || (ev.type === 'LIVE_KILL' && ev.killer_slot !== ev.victim_slot)) {
+        // LIVE_KILL is the preferred obituary since the server deduped the
+        // legacy copy (#772) — without this branch the pressure bar went
+        // deaf to kills whenever the LIVEX tailer was healthy (coderabbit).
         const kt = _slotTeam(ev.killer_slot);
         if (kt != null && _defenderSide != null) toAttackers(kt === _defenderSide ? -1.5 : +1.5);
     }
@@ -280,6 +284,16 @@ async function _poll() {
             // event between this page and the ring head, the 2026-08-18
             // "stuck on quiet then bursts" bug).
             const fresh = data.events.filter(ev => (ev.seq || 0) > _cursor);
+            // Feed gap (server pages from the newest end): events between our
+            // cursor and oldest_seq were skipped, so per-round derived state
+            // (streaks, MVP tallies) is no longer trustworthy — reset it
+            // rather than display stale numbers (coderabbit, PR #772). The
+            // roster/map recover from /api/live/state on its own poll.
+            if (_cursor > 0 && data.oldest_seq != null && data.oldest_seq > _cursor + 1) {
+                _streak.clear();
+                _mvp.clear();
+                _roundScores = [];
+            }
             // Per-event state (roster/streaks/momentum/MVP) MUST be updated
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.

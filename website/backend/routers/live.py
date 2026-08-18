@@ -99,7 +99,14 @@ _recent_livex_kills: dict[tuple[int, int], float] = {}
 # "https://www.slomix.fyi/api/live") and the LOCAL ring is empty, the GET
 # endpoints read through to the upstream. Local data (a replay test posting
 # into dev) always wins, so `scripts/liveview_replay.py --post` still works.
-_UPSTREAM = os.getenv("LIVE_UPSTREAM_URL", "").rstrip("/")
+# Guarded twice: the env var must be set AND this must not be production —
+# an accidentally-set upstream on prod would silently proxy live data to an
+# arbitrary host (operational risk; coderabbit, PR #772).
+_UPSTREAM = (
+    os.getenv("LIVE_UPSTREAM_URL", "").rstrip("/")
+    if os.getenv("BOT_ENVIRONMENT", "").lower() != "production"
+    else ""
+)
 
 
 async def _proxy(path: str, params: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -204,11 +211,14 @@ async def feed(
     roster/map from /state, the play-by-play in between is gone).
     Age retention keeps stale ring content out entirely.
     """
-    if _UPSTREAM and _seq == 0:
-        upstream = await _proxy("feed", {"since": since, "limit": limit,
-                                         "types": types})
-        if upstream is not None:
-            return upstream
+    if _UPSTREAM:
+        async with _lock:
+            ring_empty = _seq == 0
+        if ring_empty:
+            upstream = await _proxy("feed", {"since": since, "limit": limit,
+                                             "types": types})
+            if upstream is not None:
+                return upstream
     wanted: frozenset[str] | None = None
     if types:
         wanted = frozenset(t.strip().upper() for t in types.split(",") if t.strip())
@@ -238,10 +248,13 @@ async def state() -> dict[str, Any]:
     map, game state, timers, recent objectives). The client reads this on
     load so the page shows the real "right now" instead of replaying stale
     events from the ring."""
-    if _UPSTREAM and _seq == 0:
-        upstream = await _proxy("state")
-        if upstream is not None:
-            return upstream
+    if _UPSTREAM:
+        async with _lock:
+            ring_empty = _seq == 0
+        if ring_empty:
+            upstream = await _proxy("state")
+            if upstream is not None:
+                return upstream
     async with _lock:
         return _state.snapshot()
 
@@ -249,10 +262,13 @@ async def state() -> dict[str, Any]:
 @router.get("/status")
 async def status() -> dict[str, Any]:
     """Liveness for dashboards: how fresh is the newest event."""
-    if _UPSTREAM and _seq == 0:
-        upstream = await _proxy("status")
-        if upstream is not None:
-            return upstream
+    if _UPSTREAM:
+        async with _lock:
+            ring_empty = _seq == 0
+        if ring_empty:
+            upstream = await _proxy("status")
+            if upstream is not None:
+                return upstream
     async with _lock:
         newest = _events[-1]["received_at"] if _events else None
         count = len(_events)

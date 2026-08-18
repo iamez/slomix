@@ -184,7 +184,7 @@ async function _refresh() {
                  disagreeing status cards (2026-08-18 chaos). -->
             <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
                 <span class="text-xs uppercase tracking-widest text-slate-500 font-bold">Tonight's score</span>
-                <span class="text-xs text-slate-500">${escapeHtml(cur.status || '')} · updated ${_mmss(age)} ago</span>
+                <span class="text-xs text-slate-500">${cur.status ? `${escapeHtml(cur.status)} · ` : ''}updated ${_mmss(age)} ago</span>
             </div>
             ${data.director ? `<div class="text-center text-[15px] font-semibold text-slate-100 mb-5 px-2 leading-snug">${escapeHtml(data.director)}</div>` : ''}
             <div class="flex items-stretch gap-4">
