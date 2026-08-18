@@ -197,6 +197,13 @@ export function renderLiveState() {
         ? `<span class="text-slate-400 text-xs ml-2">R${s.round_number || '?'} · <span id="live-round-elapsed">${_clock(s.round_elapsed_seconds)}</span></span>` : '';
     const sessionLine = s.session_start_seconds != null
         ? `<span class="text-slate-500 text-xs">session <span id="live-session-elapsed">${_dur(s.session_start_seconds)}</span></span>` : '';
+    // Roster now LINGERS through tailer delivery gaps (backend
+    // roster_age_seconds) instead of flapping away — dim it when the
+    // supporting events are stale so nobody mistakes it for live truth.
+    const rosterAge = r.roster_age_seconds;
+    const rosterStaleNote = (rosterAge != null && rosterAge > 45)
+        ? `<span class="text-[10px] text-slate-500">last data ${rosterAge}s ago</span>` : '';
+    const rosterDim = (rosterAge != null && rosterAge > 45) ? 'opacity-60' : '';
     const botBadge = r.has_bots
         ? '<span class="px-1.5 py-0.5 rounded bg-fuchsia-500/20 text-fuchsia-300 text-[10px] font-black tracking-wider">BOT TEST</span>' : '';
     const specStrip = (r.spectators && r.spectators.length)
@@ -224,9 +231,9 @@ export function renderLiveState() {
                     <span class="text-slate-400">on ${mapLine}${roundTimer}</span>
                     ${botBadge}
                 </div>
-                <div class="flex items-center gap-2">${sessionLine}${staleWarn}</div>
+                <div class="flex items-center gap-2">${sessionLine}${rosterStaleNote}${staleWarn}</div>
             </div>
-            <div class="flex items-start gap-4">
+            <div class="flex items-start gap-4 ${rosterDim}">
                 ${_column('🔴', 'Axis', AXIS_COLOR, r.axis || [], false)}
                 <div class="text-center shrink-0 px-2 text-slate-400 self-center">
                     <div class="text-lg font-black text-slate-500">${(r.axis || []).length}<span class="text-slate-700 mx-0.5">v</span>${(r.allies || []).length}</div>
