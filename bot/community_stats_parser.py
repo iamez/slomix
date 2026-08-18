@@ -119,6 +119,29 @@ def is_bot_dominated_round(bot_player_count: int, human_player_count: int) -> bo
     )
 
 
+def normalize_header_playtime(raw_value) -> float | None:
+    """Header field 9 (measured playtime) normalized to SECONDS.
+
+    c0rnp0rn8.lua writes it in MILLISECONDS (trap_Milliseconds deltas minus
+    pauses); some legacy variants wrote whole seconds. Reading ms as seconds
+    made every 9-field round clamp to the timelimit (RCA 2026-08-18). The
+    value can also be NEGATIVE on the et_ShutdownGame save path (roundEnd
+    never set) — treated as unknown.
+
+    Threshold rationale: no real round exceeds 10 000 s, and every real
+    round exceeds 10 s (= 10 000 ms), so >10000 unambiguously means ms.
+    """
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return None
+    if value > 10000:
+        return value / 1000.0
+    if value > 0:
+        return value
+    return None
+
+
 def _parse_side_fields(header_parts: list[str]) -> tuple[int, int, dict[str, Any]]:
     """
     Parse defender/winner side fields and return diagnostics for fallback reasons.
@@ -1041,14 +1064,13 @@ class C0RNP0RN3StatsParser:
                     ",".join(side_parse_diagnostics["reasons"]),
                 )
 
-            # Check for NEW lua format: 9th field = actual playtime in seconds
+            # Check for NEW lua format: 9th field = measured playtime
+            # (normalized ms->s; see normalize_header_playtime).
             actual_playtime_seconds = None
             if len(header_parts) >= 9:
-                try:
-                    # New format has exact playtime in seconds as 9th field
-                    actual_playtime_seconds = float(header_parts[8])
-                except (ValueError, IndexError):
-                    actual_playtime_seconds = None
+                actual_playtime_seconds = normalize_header_playtime(
+                    header_parts[8]
+                )
 
             # Parse players
             players = []

@@ -2,12 +2,18 @@
 
 from fastapi import APIRouter, Depends
 
+from shared.round_time import round_duration_sql
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 
 router = APIRouter()
 logger = get_app_logger("api.records.maps")
+
+# Measured duration (webhook first, header text fallback) — actual_time
+# alone is the stopwatch TARGET and is inflated on surrender rounds
+# (RCA 2026-08-18, see shared/round_time.py).
+_DUR = round_duration_sql("r")
 
 
 @router.get("/stats/maps")
@@ -17,7 +23,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
     Returns times played, win rates, kill stats, etc.
     Note: In stopwatch mode, 2 rounds = 1 match.
     """
-    query = """
+    query = f"""
         WITH map_stats AS (
             SELECT
                 r.map_name,
@@ -27,31 +33,10 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
                 SUM(CASE WHEN r.winner_team = 2 THEN 1 ELSE 0 END) as allies_wins,
                 SUM(CASE WHEN r.winner_team = 1 THEN 1 ELSE 0 END) as axis_wins,
                 MAX(SUBSTR(CAST(r.round_date AS TEXT), 1, 10)) as last_played,
-                -- Parse M:SS format to seconds, then avg/min/max
-                AVG(
-                    CASE
-                        WHEN r.actual_time ~ '^[0-9]+:[0-9]+$' THEN
-                            SPLIT_PART(r.actual_time, ':', 1)::int * 60 +
-                            SPLIT_PART(r.actual_time, ':', 2)::int
-                        ELSE NULL
-                    END
-                ) as avg_duration,
-                MIN(
-                    CASE
-                        WHEN r.actual_time ~ '^[0-9]+:[0-9]+$' THEN
-                            SPLIT_PART(r.actual_time, ':', 1)::int * 60 +
-                            SPLIT_PART(r.actual_time, ':', 2)::int
-                        ELSE NULL
-                    END
-                ) as min_duration,
-                MAX(
-                    CASE
-                        WHEN r.actual_time ~ '^[0-9]+:[0-9]+$' THEN
-                            SPLIT_PART(r.actual_time, ':', 1)::int * 60 +
-                            SPLIT_PART(r.actual_time, ':', 2)::int
-                        ELSE NULL
-                    END
-                ) as max_duration
+                -- Measured duration (RCA 2026-08-18), then avg/min/max
+                AVG({_DUR}) as avg_duration,
+                MIN({_DUR}) as min_duration,
+                MAX({_DUR}) as max_duration
             FROM rounds r
             WHERE r.map_name IS NOT NULL
               AND r.round_number IN (1, 2)
@@ -157,22 +142,19 @@ async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
     round per map. Reuses the M:SS -> seconds parse from /stats/maps; degenerate
     0:00 rounds are excluded. is_valid filter keeps bot/filler rounds out.
     """
-    query = """
+    query = f"""
         SELECT DISTINCT ON (r.map_name)
             r.map_name,
-            SPLIT_PART(r.actual_time, ':', 1)::int * 60
-                + SPLIT_PART(r.actual_time, ':', 2)::int AS seconds,
+            {_DUR} AS seconds,
             r.actual_time,
             SUBSTR(CAST(r.round_date AS TEXT), 1, 10) AS played,
             r.winner_team,
             r.gaming_session_id
         FROM rounds r
         WHERE r.map_name IS NOT NULL
-          AND r.actual_time ~ '^[0-9]+:[0-9]+$'
           AND r.round_number IN (1, 2)
           AND r.is_valid IS DISTINCT FROM FALSE
-          AND (SPLIT_PART(r.actual_time, ':', 1)::int * 60
-               + SPLIT_PART(r.actual_time, ':', 2)::int) > 0
+          AND {_DUR} > 0
         ORDER BY r.map_name, seconds ASC
     """
     try:
@@ -182,10 +164,13 @@ async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
             winner = row[4]
             # winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Was inverted.
             side = "Axis" if winner == 1 else "Allies" if winner == 2 else "Draw"
+            secs = int(row[1])
             records.append({
                 "map_name": row[0],
-                "fastest_seconds": int(row[1]),
-                "fastest_time": row[2],
+                "fastest_seconds": secs,
+                # Display from the measured duration, not the (possibly
+                # inflated) actual_time header text.
+                "fastest_time": f"{secs // 60}:{secs % 60:02d}",
                 "played": row[3],
                 "winner_team": winner,
                 "winner_side": side,

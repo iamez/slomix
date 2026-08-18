@@ -269,10 +269,11 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     """Per-map kills, DPM and round durations for one gaming session.
 
     Maps are numbered by first-round time so the order matches the sheet's
-    left-to-right columns. Durations come from ``actual_time`` (the stats-file
-    header) rather than ``actual_duration_seconds``: the latter is Lua-sourced
-    and simply missing for most of session 144, while the former matched the
-    sheet to the second.
+    left-to-right columns. Durations prefer ``actual_duration_seconds``
+    (measured; verified 100% against demo times, RCA 2026-08-18) and fall
+    back to the ``actual_time`` header text only where the Lua measurement
+    is missing — the header value is the stopwatch TARGET and is inflated
+    on surrender rounds, which made this reconciler lie on R2.
     """
     rows = await db_adapter.fetch_all(
         f"""
@@ -304,7 +305,8 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     duration_rows = await db_adapter.fetch_all(
         f"""
         WITH mapno AS ({_MAP_ORDER_SQL})
-        SELECT mn.map_no, r.round_number, r.actual_time
+        SELECT mn.map_no, r.round_number, r.actual_time,
+               r.actual_duration_seconds
         FROM rounds r JOIN mapno mn ON mn.match_id = r.match_id
         WHERE r.gaming_session_id = ? AND r.round_number IN (1, 2) AND r.is_valid
         ORDER BY mn.map_no, r.round_number
@@ -313,9 +315,11 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     )
     r1: dict[int, int | None] = {}
     r2: dict[int, int | None] = {}
-    for map_no, round_number, actual in duration_rows or []:
+    for map_no, round_number, actual, dur_secs in duration_rows or []:
         target = r1 if int(round_number) == 1 else r2
-        target[int(map_no)] = _to_seconds(actual)
+        target[int(map_no)] = (
+            int(dur_secs) if dur_secs else _to_seconds(actual)
+        )
 
     # Explicit list build: the conditional expression binds looser than "+",
     # so the terser form evaluated max() on an empty r1 and raised.
