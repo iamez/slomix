@@ -314,6 +314,11 @@ class BotConfig:
         # Lua console sentinel (RCA 2026-08-17): the game server's console
         # log had no reader for three months of a printed error. str() path,
         # overridable per install; empty disables the sentinel.
+        # Daily data-plausibility sentinel (scripts/data_plausibility_audit.py
+        # run by the bot once a day; alerts admins when any rule fires on LIVE
+        # rows). Read-only; disable with DATA_AUDIT_SENTINEL_ENABLED=false.
+        self.data_audit_sentinel_enabled: bool = str(self._get_config(
+            'DATA_AUDIT_SENTINEL_ENABLED', 'true')).strip().lower() in ('1', 'true', 'yes')
         self.game_console_log_path: str = str(self._get_config(
             'GAME_CONSOLE_LOG', '/home/et/.etlegacy/legacy/etconsole.log'))
 

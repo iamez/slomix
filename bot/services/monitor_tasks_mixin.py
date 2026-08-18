@@ -29,8 +29,10 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 from discord.ext import tasks
 
@@ -1035,3 +1037,80 @@ class _MonitorTasksMixin:
     @lua_console_sentinel.before_loop
     async def before_lua_console_sentinel(self):
         await self.wait_until_ready()
+
+    # ── Daily data-plausibility sentinel (Data Trust pillar B, permanent) ────
+    #
+    # scripts/data_plausibility_audit.py exits with the number of rules that
+    # fired on LIVE rows (backfill noise excluded by design). Green (exit 0)
+    # is the steady state since 2026-08-18; any live finding means the CURRENT
+    # pipeline wrote an impossible row and someone should look today, not at
+    # the next manual run. Same sensor family as lua_console_sentinel: quiet
+    # when healthy, loud in the admin channel when not.
+
+    @staticmethod
+    def _summarize_audit_payload(payload) -> str | None:
+        """Return an alert body for live violations, or None when clean.
+
+        Accepts the script's --json output (a list of rule dicts, possibly
+        wrapped in {"rules": [...]}). Tolerant of shape drift: anything it
+        cannot read is reported as such rather than swallowed.
+        """
+        rules = payload.get("rules") if isinstance(payload, dict) else payload
+        if not isinstance(rules, list):
+            return "audit --json vrnil nepričakovano obliko — preveri skript"
+        live = [(r.get("name", "?"), int(r.get("live", 0) or 0))
+                for r in rules if isinstance(r, dict) and (r.get("live") or 0) > 0]
+        if not live:
+            return None
+        lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
+        more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
+        return (f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n"
+                f"{lines}{more}\n"
+                f"Podrobnosti: `python scripts/data_plausibility_audit.py`")
+
+    @tasks.loop(hours=24)
+    async def data_plausibility_sentinel(self):
+        cfg = self.config
+        if not getattr(cfg, "data_audit_sentinel_enabled", True):
+            return
+        script = Path(__file__).resolve().parents[2] / "scripts" / "data_plausibility_audit.py"
+        if not script.exists():
+            logger.warning("[DATA-AUDIT] script missing at %s — sentinel idle", script)
+            return
+        try:
+            proc = await asyncio.create_subprocess_exec(
+                sys.executable, str(script), "--json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            out, err = await asyncio.wait_for(proc.communicate(), timeout=300)
+        except TimeoutError:
+            logger.error("[DATA-AUDIT] audit run timed out after 300s")
+            return
+        except Exception:
+            logger.error("[DATA-AUDIT] audit run failed to start", exc_info=True)
+            return
+        if not out.strip():
+            logger.error("[DATA-AUDIT] audit produced no JSON (stderr: %s)",
+                         err.decode(errors="replace")[:300])
+            return
+        try:
+            payload = json.loads(out.decode(errors="replace"))
+        except ValueError:
+            logger.error("[DATA-AUDIT] audit output is not JSON: %s",
+                         out.decode(errors="replace")[:300])
+            return
+        body = self._summarize_audit_payload(payload)
+        if body is None:
+            logger.info("[DATA-AUDIT] daily audit clean — no live violations")
+            return
+        logger.error("[DATA-AUDIT] %s", body.replace("\n", " | "))
+        try:
+            await self.alert_admins("Data-plausibility audit: žive kršitve", body)
+        except Exception:
+            logger.error("[DATA-AUDIT] alert failed", exc_info=True)
+
+    @data_plausibility_sentinel.before_loop
+    async def before_data_plausibility_sentinel(self):
+        await self.wait_until_ready()
+

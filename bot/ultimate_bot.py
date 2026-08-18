@@ -809,6 +809,11 @@ class UltimateETLegacyBot(
         # it. This is the reader.
         if not self.lua_console_sentinel.is_running():
             self.lua_console_sentinel.start()
+        # Data Trust pillar B: the plausibility audit runs daily inside the
+        # bot so a live impossible row alerts admins the same day it is
+        # written, instead of waiting for someone to run the script by hand.
+        if not self.data_plausibility_sentinel.is_running():
+            self.data_plausibility_sentinel.start()
         if self.config.idle_watchdog_enabled and not self.idle_restart_watchdog.is_running():
             self.idle_restart_watchdog.start()
             logger.info(
