@@ -557,9 +557,15 @@ class TimingDebugService:
             while waited < wait_seconds:
                 await asyncio.sleep(poll_seconds)
                 waited += poll_seconds
+                # round_id can be temporarily NULL on freshly stored rows
+                # (the exact-source path defers linking), so also accept a
+                # row keyed by (match_id, round_number) — coderabbit, #774.
                 row = await self.db_adapter.fetch_one(
-                    "SELECT 1 FROM lua_round_teams WHERE round_id = $1",
-                    (round_id,))
+                    "SELECT 1 FROM lua_round_teams "
+                    "WHERE round_id = $1 "
+                    "   OR ($2::text IS NOT NULL AND match_id = $2 "
+                    "       AND round_number = $3)",
+                    (round_id, match_id, round_number))
                 if row:
                     break
             await self.post_round_timing_comparison(
