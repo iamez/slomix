@@ -30,6 +30,7 @@ local config = {
     log_name = "slomix-live.log",
     movement_interval = 2000,   -- ms between movement ticks (0.5 Hz)
     aggregate_interval = 10000, -- ms between combat aggregates
+    map_heartbeat_interval = 30000, -- ms between `I ... map ...` re-emits
     emit_viewangles = true,     -- try ps.viewangles; disabled if unsupported
     truncate_on_init = true,    -- reset the log each InitGame (tailer survives)
 }
@@ -63,6 +64,7 @@ local log_fd = nil
 local epoch_offset_ms = 0        -- os.time*1000 - levelTime at InitGame
 local last_move_tick = 0
 local last_agg_tick = 0
+local last_map_tick = 0
 local round_number = 0
 local unsupported = {}           -- gentity fields this engine rejects
 local agg = {}                   -- slot -> {dg, dr, k, d}
@@ -151,6 +153,7 @@ function et_InitGame(levelTime, _randomSeed, _restart)
     end
     last_move_tick = levelTime
     last_agg_tick = levelTime
+    last_map_tick = levelTime
     agg = {}
 end
 
@@ -260,5 +263,15 @@ function et_RunFrame(levelTime)
     if levelTime - last_agg_tick >= config.aggregate_interval then
         last_agg_tick = levelTime
         flush_aggregate(levelTime)
+    end
+    -- Map heartbeat (2026-08-18): the single init-time `I ... map ...` line
+    -- raced the tailer's truncation handling and a dropped delivery batch
+    -- lost the map for the whole round. Re-emitting it every 30 s makes a
+    -- lost marker self-heal; the website reducer treats a repeat of the
+    -- current map as a no-op.
+    if levelTime - last_map_tick >= config.map_heartbeat_interval then
+        last_map_tick = levelTime
+        write(string.format("I %d map %s", now_ms(levelTime),
+            tostring(et.trap_Cvar_Get("mapname"))))
     end
 end
