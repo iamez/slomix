@@ -8,8 +8,8 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260812-live6';
-import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260813-subs';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260818-feedfix';
+import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260818-feedfix';
 
 const POLL_MS = 8000;
 let _interval = null;
@@ -148,7 +148,6 @@ async function _refresh() {
     const teams = data.teams || { a: {}, b: {} };
     const cur = data.current || {};
     const age = Number(data.age_seconds || 0);
-    const fresh = age < 90;
     const aMaps = score.a_maps || 0, bMaps = score.b_maps || 0;
     const aLead = aMaps >= bMaps;
 
@@ -179,14 +178,13 @@ async function _refresh() {
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', '<div id="live-state"></div>' + `
         <div class="glass-panel p-6 rounded-xl mb-6">
+            <!-- One truth: the live-state card above owns the LIVE badge, map
+                 and timers. This panel is the DB-driven score board only —
+                 rendering a second badge/map header made the page show two
+                 disagreeing status cards (2026-08-18 chaos). -->
             <div class="flex items-center justify-between flex-wrap gap-3 mb-5">
-                <div class="flex items-center gap-3">
-                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full ${fresh ? 'bg-rose-500/15 text-rose-300' : 'bg-white/10 text-slate-400'} text-xs font-bold">
-                        <span class="w-2 h-2 rounded-full ${fresh ? 'bg-rose-400 animate-pulse' : 'bg-slate-500'}"></span>${fresh ? 'LIVE' : 'IDLE'}
-                    </span>
-                    <span class="text-sm text-slate-400">on <span class="text-white font-bold">${escapeHtml(cur.map || data.current_map || '—')}</span> <span class="text-slate-500">${escapeHtml(cur.status || '')}</span></span>
-                </div>
-                <span class="text-xs text-slate-500">updated ${_mmss(age)} ago</span>
+                <span class="text-xs uppercase tracking-widest text-slate-500 font-bold">Tonight's score</span>
+                <span class="text-xs text-slate-500">${cur.status ? `${escapeHtml(cur.status)} · ` : ''}updated ${_mmss(age)} ago</span>
             </div>
             ${data.director ? `<div class="text-center text-[15px] font-semibold text-slate-100 mb-5 px-2 leading-snug">${escapeHtml(data.director)}</div>` : ''}
             <div class="flex items-stretch gap-4">
