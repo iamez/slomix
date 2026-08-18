@@ -1615,7 +1615,10 @@ function renderWinContribution(data) {
             _el('div', 'text-2xl font-black text-amber-400', mvp.total_pwc.toFixed(2)),
             _el('div', 'text-[10px] text-slate-400',
                 `PWC \u00B7 WIS ${wisSign}${mvp.wis.toFixed(3)}`
-                + (typeof mvp.waa_bayes === 'number' ? ` \u00B7 win-avg ${mvp.waa_bayes.toFixed(3)}` : ''))
+                // win-avg only when it actually decided the MVP \u2014 showing it
+                // on the total_pwc fallback would contradict the subtitle
+                + (mvp.selected_by !== 'total_pwc_fallback' && typeof mvp.waa_bayes === 'number'
+                    ? ` \u00B7 win-avg ${mvp.waa_bayes.toFixed(3)}` : ''))
         );
 
         mvpRow.appendChild(mvpLeft);

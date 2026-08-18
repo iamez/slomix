@@ -598,8 +598,13 @@ async def get_pwc_formula():
                 "played, shrunk toward the session average with 2 phantom "
                 "rounds so short-sample players cannot spike it."
             ),
+            # NB: floor division, exactly as computed in win_contribution.py
+            # (5-round session -> threshold 2). Changing the rule to a
+            # ceiling would move published MVPs and therefore requires a
+            # pwc-v3 FORMULA_VERSION bump — out of scope for this
+            # transparency-only change.
             "eligibility": "won at least 1 round AND played >= max(2, "
-                           "half of the session's max rounds played)",
+                           "floor(max rounds played in session / 2))",
             "tiebreakers": ["total_pwc", "rounds_won"],
             "fallback": "if nobody qualifies, leaderboard #1 by total_pwc",
         },
