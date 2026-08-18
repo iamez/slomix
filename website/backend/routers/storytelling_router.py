@@ -19,6 +19,9 @@ from website.backend.services.session_scope import (
     resolve_gaming_session_scope,
 )
 from website.backend.services.storytelling.kis import FORMULA_VERSION
+from website.backend.services.storytelling.win_contribution import (
+    FORMULA_VERSION as PWC_FORMULA_VERSION,
+)
 from website.backend.services.storytelling_service import (
     CARRIER_CHAIN_MULTIPLIER,
     CARRIER_KILL_MULTIPLIER,
@@ -536,6 +539,70 @@ async def get_kis_formula():
             "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
         },
         "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
+    }
+
+
+@router.get("/storytelling/win-contribution/formula")
+async def get_pwc_formula():
+    """Return PWC weight definitions (transparency endpoint).
+
+    Same pattern as /storytelling/formula (KIS): public, values imported
+    from the owning module so this endpoint cannot drift from what is
+    actually computed.
+    """
+    weights = StorytellingService.pwc_weights()
+    descriptions = {
+        "kills": "Share of team kills in the round",
+        "objectives": (
+            "Share of team objective actions: completed/destroyed/stolen/"
+            "returned objectives, dynamite plants+defuses, constructions "
+            "(incl. MG repairs)"
+        ),
+        "revives": "Share of team revives given",
+        "damage": "Share of team damage given",
+        "crossfire": "Share of team crossfire kills",
+        "trade": "Share of team trade kills (avenging a teammate within "
+                 "the trade window)",
+        "survival": "Time alive vs team average, capped at 2.0x",
+        "clutch": "Share of team clutch kills (below 30 HP or outnumbered)",
+    }
+    return {
+        "status": "ok",
+        "version": PWC_FORMULA_VERSION,
+        "name": "Player Win Contribution (PWC)",
+        "description": (
+            "Per-round weighted sum of each player's SHARE of their own "
+            "team's output. A share is player_value / team_total for that "
+            "round, so scarce actions (a lone dynamite plant) can be worth "
+            "a full weight while kills are split across the team. Session "
+            "total_pwc is the sum over all valid rounds."
+        ),
+        "weights": {
+            k: {"value": v, "description": descriptions[k]}
+            for k, v in weights.items()
+        },
+        "zero_objective_rounds": {
+            "description": (
+                "When NO player in the round scored any objective action, "
+                "the 0.20 objectives weight is redistributed: kills +0.06, "
+                "damage +0.03, revives +0.03, survival +0.02, crossfire "
+                "+0.03, trade +0.03"
+            ),
+        },
+        "mvp": {
+            "metric": "waa_bayes",
+            "description": (
+                "MVP is NOT the leaderboard #1. Leaderboard sorts by "
+                "total_pwc (sum over all rounds); MVP is picked by "
+                "waa_bayes: PWC earned in WON rounds divided by all rounds "
+                "played, shrunk toward the session average with 2 phantom "
+                "rounds so short-sample players cannot spike it."
+            ),
+            "eligibility": "won at least 1 round AND played >= max(2, "
+                           "half of the session's max rounds played)",
+            "tiebreakers": ["total_pwc", "rounds_won"],
+            "fallback": "if nobody qualifies, leaderboard #1 by total_pwc",
+        },
     }
 
 

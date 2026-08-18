@@ -1604,13 +1604,18 @@ function renderWinContribution(data) {
             _el('div', null,
                 _el('div', 'text-xs text-amber-400 font-bold tracking-[0.2em] uppercase', 'Session MVP'),
                 _el('div', 'text-lg font-black text-white', mvpName),
-                _el('div', 'text-[9px] text-slate-500 mt-0.5', 'Highest avg contribution in winning rounds')
+                _el('div', 'text-[9px] text-slate-500 mt-0.5',
+                    mvp.selected_by === 'total_pwc_fallback'
+                        ? 'Highest total PWC (no player met the win-avg eligibility)'
+                        : 'Best win-adjusted avg per round — leaderboard below sorts by total PWC')
             )
         );
 
         const mvpRight = _el('div', 'text-right',
             _el('div', 'text-2xl font-black text-amber-400', mvp.total_pwc.toFixed(2)),
-            _el('div', 'text-[10px] text-slate-400', `PWC \u00B7 WIS ${wisSign}${mvp.wis.toFixed(3)}`)
+            _el('div', 'text-[10px] text-slate-400',
+                `PWC \u00B7 WIS ${wisSign}${mvp.wis.toFixed(3)}`
+                + (typeof mvp.waa_bayes === 'number' ? ` \u00B7 win-avg ${mvp.waa_bayes.toFixed(3)}` : ''))
         );
 
         mvpRow.appendChild(mvpLeft);

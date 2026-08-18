@@ -1782,6 +1782,8 @@ export interface PWCMvp {
   name: string;
   total_pwc: number;
   wis: number;
+  waa_bayes?: number;
+  selected_by?: 'waa_bayes' | 'total_pwc_fallback';
 }
 
 export interface WinContributionResponse {
