@@ -112,3 +112,34 @@ def test_colour_binding_follows_the_linked_players(winners):
     sheet = _sheet(kills, winners)
     our_winners = ["Reds" if w == "RED" else "Blues" for w in winners]
     assert _call(sheet, our_map_winners=our_winners).ok
+
+
+@pytest.mark.asyncio
+async def test_load_our_session_survives_mid_session_rename():
+    """A player renaming between maps must stay ONE vector (GROUP BY guid
+    rule — coderabbit, PR #771). Before the fix the per-(map,guid)
+    MAX(player_name) split them into two partial vectors."""
+    from bot.services.supastats_reconcile_service import load_our_session
+
+    class _Db:
+        async def fetch_all(self, query, params=()):
+            if "player_comprehensive_stats" in query:
+                # (map_no, guid, name, kills, deaths, damage, seconds)
+                return [
+                    (1, "AAAA1111", "oldname", 10, 5, 3000, 600),
+                    (2, "AAAA1111", "newname-longer", 7, 8, 2100, 600),
+                    (1, "BBBB2222", "stable", 4, 6, 1200, 600),
+                    (2, "BBBB2222", "stable", 6, 2, 1800, 600),
+                ]
+            # duration rows — shape follows the query: the base branch
+            # selects (map_no, rn, actual_time); after PR #770 lands the
+            # query also selects actual_duration_seconds.
+            rows = [(1, 1, "5:00", 300), (1, 2, "4:00", 240),
+                    (2, 1, "6:00", 360), (2, 2, "3:00", 180)]
+            if "actual_duration_seconds" in query:
+                return rows
+            return [r[:3] for r in rows]
+
+    ours = await load_our_session(_Db(), 42)
+    assert ours["kills"] == {"newname-longer": [10, 7], "stable": [4, 6]}
+    assert ours["deaths"] == {"newname-longer": [5, 8], "stable": [6, 2]}

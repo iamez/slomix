@@ -278,8 +278,9 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     rows = await db_adapter.fetch_all(
         f"""
         WITH mapno AS ({_MAP_ORDER_SQL})
-        SELECT mn.map_no, MAX(p.player_name) AS player_name,
+        SELECT mn.map_no, p.player_guid, MAX(p.player_name) AS player_name,
                SUM(p.kills) AS kills,
+               SUM(p.deaths) AS deaths,
                SUM(p.damage_given) AS damage,
                SUM(p.time_played_seconds) AS seconds
         FROM rounds r
@@ -295,12 +296,33 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
         (gaming_session_id, gaming_session_id),
     )
 
-    kills: dict[str, dict[int, int]] = {}
-    dpm: dict[str, dict[int, int]] = {}
-    for map_no, name, k, damage, seconds in rows or []:
-        kills.setdefault(name, {})[int(map_no)] = int(k or 0)
+    # Aggregate per GUID first: MAX(player_name) is per (map_no, guid), so a
+    # mid-session rename would otherwise split one player into two partial
+    # vectors keyed by two names (coderabbit, PR #771 — our own GROUP BY
+    # GUID rule). A single display name per guid is resolved afterwards.
+    per_guid: dict[str, dict[str, Any]] = {}
+    for map_no, guid, name, k, d, damage, seconds in rows or []:
+        entry = per_guid.setdefault(
+            guid, {"names": [], "kills": {}, "deaths": {}, "dpm": {}}
+        )
+        if name:
+            entry["names"].append(str(name))
+        entry["kills"][int(map_no)] = int(k or 0)
+        entry["deaths"][int(map_no)] = int(d or 0)
         per_minute = (float(damage or 0) * 60.0 / float(seconds)) if seconds else 0.0
-        dpm.setdefault(name, {})[int(map_no)] = int(round(per_minute))
+        entry["dpm"][int(map_no)] = int(round(per_minute))
+
+    kills: dict[str, dict[int, int]] = {}
+    deaths: dict[str, dict[int, int]] = {}
+    dpm: dict[str, dict[int, int]] = {}
+    for guid, entry in per_guid.items():
+        display = max(entry["names"], key=len) if entry["names"] else guid[:8]
+        if display in kills:
+            # Two guids sharing a display name would merge — disambiguate.
+            display = f"{display} [{guid[:4]}]"
+        kills[display] = entry["kills"]
+        deaths[display] = entry["deaths"]
+        dpm[display] = entry["dpm"]
 
     duration_rows = await db_adapter.fetch_all(
         f"""
@@ -336,6 +358,10 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     order = list(range(1, map_count + 1))
     return {
         "kills": {n: [v.get(i, 0) for i in order] for n, v in kills.items()},
+        # Ready for the day supa's sheet carries a Deaths block (his workbook
+        # already tracks K/A/D) — the comparison side lights up without a
+        # schema change here.
+        "deaths": {n: [v.get(i, 0) for i in order] for n, v in deaths.items()},
         "dpm": {n: [v.get(i, 0) for i in order] for n, v in dpm.items()},
         "durations": ([r1.get(i) for i in order], [r2.get(i) for i in order]),
         "map_count": map_count,
