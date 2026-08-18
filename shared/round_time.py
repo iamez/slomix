@@ -22,7 +22,10 @@ from __future__ import annotations
 
 import re
 
-_MMSS_RE = re.compile(r"^(\d+):(\d{2})$")
+# Seconds are strictly 00-59: a stopwatch clock never renders "4:60", so a
+# value like that is corrupt header data and must read as unknown, not as a
+# plausible duration (coderabbit, PR #770).
+_MMSS_RE = re.compile(r"^(\d+):([0-5]\d)$")
 
 
 def parse_mmss(text: object) -> int | None:

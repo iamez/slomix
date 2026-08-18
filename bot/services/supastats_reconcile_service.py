@@ -315,11 +315,15 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     )
     r1: dict[int, int | None] = {}
     r2: dict[int, int | None] = {}
+    from shared.round_time import round_duration_seconds
+
     for map_no, round_number, actual, dur_secs in duration_rows or []:
         target = r1 if int(round_number) == 1 else r2
-        target[int(map_no)] = (
-            int(dur_secs) if dur_secs else _to_seconds(actual)
-        )
+        # round_duration_seconds enforces the full contract (positive
+        # measurement first, parsed header text fallback) — an ad-hoc
+        # truthiness check here accepted negative corrupt measurements.
+        secs = round_duration_seconds(dur_secs, actual)
+        target[int(map_no)] = secs if secs is not None else _to_seconds(actual)
 
     # Explicit list build: the conditional expression binds looser than "+",
     # so the terser form evaluated max() on an empty r1 and raised.

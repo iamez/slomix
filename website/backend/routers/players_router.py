@@ -231,6 +231,14 @@ async def _hold_prob_curve(db, map_name: str) -> list[dict]:
           AND round_number IN (1, 2)
           AND is_valid IS DISTINCT FROM FALSE
           AND {dur} > 0
+          -- Completed attacks only: with measured durations a surrendered or
+          -- full-held round has a short/real duration too, and counting it
+          -- would report the attack as "done by t" when it never finished
+          -- (coderabbit, PR #770). Attackers completed <=> winner is not the
+          -- defender.
+          AND winner_team IN (1, 2)
+          AND defender_team IN (1, 2)
+          AND winner_team <> defender_team
         """,
         (map_name,),
     )

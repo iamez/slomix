@@ -328,47 +328,48 @@ class StopwatchScoringService:
                     ['$' + str(i+1) for i in range(len(session_ids))]
                 )
                 # nosec B608 - safe: parameterized placeholders ($1, $2...)
+                # lua_round_teams.round_id is UNIQUE — see the note on the
+                # date-variant query below; same join, same reasoning.
                 rounds_query = f"""
-                    SELECT map_name, gaming_session_id, round_number,
-                           defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time, match_id,
-                           round_start_unix, map_play_seq,
-                           actual_duration_seconds,
-                           (SELECT l.surrender_team FROM lua_round_teams l
-                            WHERE l.round_id = rounds.id LIMIT 1),
-                           (SELECT l.time_limit_minutes FROM lua_round_teams l
-                            WHERE l.round_id = rounds.id LIMIT 1)
-                    FROM rounds
-                    WHERE id IN ({placeholders})
-                    AND round_status = 'completed'
-                    AND is_valid
-                    AND round_number IN (1, 2)
-                    ORDER BY gaming_session_id,
-                             round_date,
-                             CAST(REPLACE(round_time, ':', '') AS INTEGER),
-                             round_number
+                    SELECT r.map_name, r.gaming_session_id, r.round_number,
+                           r.defender_team, r.winner_team, r.time_limit, r.actual_time,
+                           r.round_date, r.round_time, r.match_id,
+                           r.round_start_unix, r.map_play_seq,
+                           r.actual_duration_seconds,
+                           l.surrender_team, l.time_limit_minutes
+                    FROM rounds r
+                    LEFT JOIN lua_round_teams l ON l.round_id = r.id
+                    WHERE r.id IN ({placeholders})
+                    AND r.round_status = 'completed'
+                    AND r.is_valid
+                    AND r.round_number IN (1, 2)
+                    ORDER BY r.gaming_session_id,
+                             r.round_date,
+                             CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
+                             r.round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
             else:
+                # lua_round_teams.round_id is UNIQUE (verified in dev DB:
+                # lua_round_teams_round_id_key), so a plain LEFT JOIN cannot
+                # fan out rows and is cheaper than per-row scalar subqueries.
                 rounds_query = """
-                    SELECT map_name, gaming_session_id, round_number,
-                           defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time, match_id,
-                           round_start_unix, map_play_seq,
-                           actual_duration_seconds,
-                           (SELECT l.surrender_team FROM lua_round_teams l
-                            WHERE l.round_id = rounds.id LIMIT 1),
-                           (SELECT l.time_limit_minutes FROM lua_round_teams l
-                            WHERE l.round_id = rounds.id LIMIT 1)
-                    FROM rounds
-                    WHERE SUBSTRING(round_date, 1, 10) = $1
-                    AND round_status = 'completed'
-                    AND is_valid
-                    AND round_number IN (1, 2)
-                    ORDER BY gaming_session_id,
-                             round_date,
-                             CAST(REPLACE(round_time, ':', '') AS INTEGER),
-                             round_number
+                    SELECT r.map_name, r.gaming_session_id, r.round_number,
+                           r.defender_team, r.winner_team, r.time_limit, r.actual_time,
+                           r.round_date, r.round_time, r.match_id,
+                           r.round_start_unix, r.map_play_seq,
+                           r.actual_duration_seconds,
+                           l.surrender_team, l.time_limit_minutes
+                    FROM rounds r
+                    LEFT JOIN lua_round_teams l ON l.round_id = r.id
+                    WHERE SUBSTRING(r.round_date, 1, 10) = $1
+                    AND r.round_status = 'completed'
+                    AND r.is_valid
+                    AND r.round_number IN (1, 2)
+                    ORDER BY r.gaming_session_id,
+                             r.round_date,
+                             CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
+                             r.round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, (session_date,))
 
@@ -898,11 +899,9 @@ class StopwatchScoringService:
                        r.round_date, r.round_time, r.match_id,
                        r.round_start_unix, r.map_play_seq,
                        r.actual_duration_seconds,
-                       (SELECT l.surrender_team FROM lua_round_teams l
-                        WHERE l.round_id = r.id LIMIT 1),
-                       (SELECT l.time_limit_minutes FROM lua_round_teams l
-                        WHERE l.round_id = r.id LIMIT 1)
+                       l.surrender_team, l.time_limit_minutes
                 FROM rounds r
+                LEFT JOIN lua_round_teams l ON l.round_id = r.id
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
                 AND r.is_valid

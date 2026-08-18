@@ -31,6 +31,8 @@ def test_parse_mmss():
     assert parse_mmss("") is None
     assert parse_mmss(None) is None
     assert parse_mmss("4:2") is None  # seconds must be two digits
+    assert parse_mmss("4:60") is None  # a clock never renders :60
+    assert parse_mmss("1:99") is None  # corrupt header data, not a duration
 
 
 def test_round_duration_prefers_measurement():
