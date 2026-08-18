@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
+from shared.round_time import round_duration_sql
 from shared.season_manager import SeasonManager
 from shared.utils import escape_like_pattern
 from website.backend.dependencies import get_db
@@ -219,18 +220,25 @@ _TONIGHT_ACTIVE_SECONDS = 40 * 60  # session is "live" if a round landed in 40 m
 
 async def _hold_prob_curve(db, map_name: str) -> list[dict]:
     """Historical attack-completion curve for a map: P(attack done by time t),
-    from the distribution of actual_time (M:SS) across valid rounds."""
+    from MEASURED round durations across valid rounds (actual_time alone is
+    the stopwatch target and is inflated on surrenders — RCA 2026-08-18)."""
+    dur = round_duration_sql("rounds")
     rows = await db.fetch_all(
-        """
-        SELECT SPLIT_PART(actual_time, ':', 1)::int * 60
-               + SPLIT_PART(actual_time, ':', 2)::int AS secs
+        f"""
+        SELECT {dur} AS secs
         FROM rounds
         WHERE map_name = ?
-          AND actual_time ~ '^[0-9]+:[0-9]+$'
           AND round_number IN (1, 2)
           AND is_valid IS DISTINCT FROM FALSE
-          AND (SPLIT_PART(actual_time, ':', 1)::int * 60
-               + SPLIT_PART(actual_time, ':', 2)::int) > 0
+          AND {dur} > 0
+          -- Completed attacks only: with measured durations a surrendered or
+          -- full-held round has a short/real duration too, and counting it
+          -- would report the attack as "done by t" when it never finished
+          -- (coderabbit, PR #770). Attackers completed <=> winner is not the
+          -- defender.
+          AND winner_team IN (1, 2)
+          AND defender_team IN (1, 2)
+          AND winner_team <> defender_team
         """,
         (map_name,),
     )
