@@ -40,6 +40,12 @@ MAX_IMAGE_BYTES = 8 * 1024 * 1024
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 JPEG_MAGIC = b"\xff\xd8\xff"
 _RECENT_LIMIT = 50
+# Below this size an image that fails sheet detection is almost certainly a
+# meme/emoji paste, not a supastats sheet (real sheets observed at 26-64 KB;
+# 2026-08-18 produced 8 noise DMs from 1-9 KB images). Auto-triggered
+# failures under this size are logged instead of DMed; explicit !supacheck
+# always reports back.
+SMALL_IMAGE_BYTES = 15 * 1024
 
 
 class SupastatsCog(commands.Cog):
@@ -117,6 +123,15 @@ class SupastatsCog(commands.Cog):
     # -- run ----------------------------------------------------------------
 
     async def _run_check(self, message, attachment, *, source: str, date_override=None):
+        # Success used to leave NO log trace (the DM was the only record),
+        # which made the 2026-08-18 "did it fire?" investigation needlessly
+        # hard — every phase now logs at INFO.
+        logger.info(
+            "supastats: %s trigger from %s in #%s: %s (%d KB)",
+            source, message.author.display_name,
+            getattr(message.channel, "name", message.channel.id),
+            attachment.filename, attachment.size // 1024,
+        )
         lines = [
             f"📸 supastats sheet detected ({source}) from **{message.author.display_name}**",
             f"• file: `{attachment.filename}` ({attachment.size / 1024:.0f} KB)",
@@ -136,6 +151,12 @@ class SupastatsCog(commands.Cog):
             # stays responsive while it runs.
             sheet = await asyncio.to_thread(read_supastats_image, data)
         except UnsupportedScreenshot as exc:
+            if source == "auto" and attachment.size < SMALL_IMAGE_BYTES:
+                # Tiny image that isn't a sheet = meme/paste noise; don't
+                # wake the owner for it. Explicit !supacheck still reports.
+                logger.info("supastats: skipping small non-sheet image "
+                            "(%d KB): %s", attachment.size // 1024, exc)
+                return
             await self._dm(lines + [f"⚠️ cannot read this screenshot: {exc}"])
             return
         except Exception as exc:
@@ -143,6 +164,11 @@ class SupastatsCog(commands.Cog):
             await self._dm(lines + [f"🔴 reader crashed: {exc}"])
             return
 
+        logger.info(
+            "supastats: sheet read ok — %d maps, %d players, checksum %s",
+            sheet.map_count, len(sheet.kills),
+            "ok" if sheet.kills_checksum_ok else "FAILED",
+        )
         lines.append(
             f"• read: {sheet.map_count} maps, {len(sheet.kills)} players, "
             f"checksum {'ok' if sheet.kills_checksum_ok else 'FAILED'}"
@@ -159,6 +185,7 @@ class SupastatsCog(commands.Cog):
             return
 
         await self._dm(lines + ["", report_text])
+        logger.info("supastats: comparison report DMed to owner")
 
     async def _compare(self, sheet, date_override) -> str:
         from bot.services.session_data_service import SessionDataService
