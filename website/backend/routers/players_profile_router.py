@@ -1557,3 +1557,186 @@ async def get_player_memory_card(identifier: str, db: DatabaseAdapter = Depends(
         "signature_map": signature,
         "facts": facts,
     }
+
+
+# ── Player Card (SUPER LIVE 2.0, Val C) ─────────────────────────────────────
+# One composite payload for the FUT/tracker.gg-style card: rating + tier,
+# archetype, 90-day form with pool percentiles, last-10-sessions sparkline,
+# top badges. Everything is read/derived from EXISTING sources — no new
+# stats are invented here (data-correctness rule).
+
+_CARD_WINDOW_DAYS = 90
+_CARD_MIN_POOL_ROUNDS = 30  # a player needs this many rounds to anchor percentiles
+
+
+def _percentile(values: list[float], mine: float) -> int | None:
+    """Percent of pool values <= mine (0-100), None on an empty pool."""
+    if not values:
+        return None
+    below = sum(1 for v in values if v <= mine)
+    return round(below * 100 / len(values))
+
+
+@router.get("/players/{identifier}/card")
+async def get_player_card(identifier: str, db: DatabaseAdapter = Depends(get_db)):
+    """Composite payload for the player card (profile L / live-roster M)."""
+    from website.backend.routers.api_helpers import calculate_player_achievements
+    from website.backend.services.storytelling.archetypes import (
+        _ArchetypesMixin,  # noqa: PLC2701 — reusing the canonical classifier
+    )
+
+    guid8 = await resolve_player_guid(db, identifier)
+    if not guid8:
+        raise HTTPException(status_code=404, detail="Player not found")
+    name = await resolve_display_name(db, guid8, guid8[:8])
+
+    # 1) Stored ET rating (computed by skill_rating_service; read-only here).
+    rating_row = await db.fetch_one(
+        "SELECT et_rating, rating_class, games_rated "
+        "FROM player_skill_ratings WHERE player_guid = ?",
+        (guid8,),
+    )
+
+    # 2) 90-day form for THIS player + the whole pool in one query — the
+    # pool rows anchor the percentiles and the relative archetype.
+    pool_rows = await db.fetch_all(
+        """
+        SELECT pcs.player_guid,
+               COUNT(*) AS rounds,
+               SUM(pcs.kills) AS kills,
+               SUM(pcs.deaths) AS deaths,
+               SUM(pcs.damage_given) AS damage,
+               SUM(pcs.time_played_seconds) AS seconds,
+               SUM(pcs.revives_given) AS revives,
+               SUM(pcs.headshot_kills) AS hs_kills,
+               SUM(LEAST(COALESCE(pcs.time_dead_minutes, 0) * 60,
+                         pcs.time_played_seconds)) AS dead_seconds
+        FROM player_comprehensive_stats pcs
+        JOIN rounds r ON r.id = pcs.round_id
+        WHERE r.round_number IN (1, 2)
+          AND r.is_valid IS DISTINCT FROM FALSE
+          AND CAST(r.round_date AS DATE) >= CURRENT_DATE - ?::int
+        GROUP BY pcs.player_guid
+        """,
+        (_CARD_WINDOW_DAYS,),
+    )
+
+    def _derive(row):
+        rounds, kills, deaths = _i(row[1]), _i(row[2]), _i(row[3])
+        damage, seconds = _i(row[4]), _i(row[5])
+        revives, hs, dead_s = _i(row[6]), _i(row[7]), _i(row[8])
+        return {
+            "rounds": rounds,
+            "kills": kills,
+            "deaths": deaths,
+            "kd": round(kills / max(deaths, 1), 2),
+            "dpm": round(damage * 60 / seconds, 1) if seconds else 0.0,
+            "revives": revives,
+            "headshot_pct": round(hs * 100 / kills, 1) if kills else 0.0,
+            "time_dead_pct": round(dead_s * 100 / seconds, 1) if seconds else 0.0,
+        }
+
+    mine = None
+    pool = []
+    for row in pool_rows or []:
+        stats = _derive(row)
+        if row[0] == guid8:
+            mine = stats
+        if stats["rounds"] >= _CARD_MIN_POOL_ROUNDS:
+            pool.append(stats)
+    if mine is None:
+        raise HTTPException(status_code=404, detail="No recent rounds for player")
+
+    percentiles = {
+        "dpm": _percentile([p["dpm"] for p in pool], mine["dpm"]),
+        "kd": _percentile([p["kd"] for p in pool], mine["kd"]),
+        "revives": _percentile([p["revives"] / max(p["rounds"], 1) for p in pool],
+                               mine["revives"] / max(mine["rounds"], 1)),
+        "survival": _percentile([100 - p["time_dead_pct"] for p in pool],
+                                100 - mine["time_dead_pct"]),
+    }
+
+    # 3) Relative archetype via the canonical storytelling classifier: the
+    # pool averages play the "session average" role. Fields the 90-day
+    # aggregate cannot know (carrier/trade/crossfire) stay 0, so those
+    # branches simply never claim the player.
+    pool_avg = {
+        "avg_kills": (sum(p["kills"] for p in pool) / len(pool)) if pool else mine["kills"],
+        "avg_revives": (sum(p["revives"] for p in pool) / len(pool)) if pool else mine["revives"],
+        "avg_kd": (sum(p["kd"] for p in pool) / len(pool)) if pool else mine["kd"],
+        "avg_dpm": (sum(p["dpm"] for p in pool) / len(pool)) if pool else mine["dpm"],
+        "avg_time_dead_pct": (sum(p["time_dead_pct"] for p in pool) / len(pool))
+        if pool else mine["time_dead_pct"],
+    }
+    archetype = _ArchetypesMixin._classify_archetype(  # noqa: SLF001 — canonical classifier
+        {
+            "pcs_kills": mine["kills"],
+            "deaths": mine["deaths"],
+            "revives_given": mine["revives"],
+            "headshot_pct": mine["headshot_pct"],
+            "dpm": mine["dpm"],
+            "time_dead_pct": mine["time_dead_pct"],
+        },
+        pool_avg,
+    )
+
+    # 4) Form sparkline: DPM over the last 10 gaming sessions.
+    spark_rows = await db.fetch_all(
+        """
+        SELECT r.gaming_session_id,
+               SUM(pcs.damage_given) AS damage,
+               SUM(pcs.time_played_seconds) AS seconds
+        FROM player_comprehensive_stats pcs
+        JOIN rounds r ON r.id = pcs.round_id
+        WHERE pcs.player_guid = ?
+          AND r.gaming_session_id IS NOT NULL
+          AND r.round_number IN (1, 2)
+          AND r.is_valid IS DISTINCT FROM FALSE
+        GROUP BY r.gaming_session_id
+        ORDER BY r.gaming_session_id DESC
+        LIMIT 10
+        """,
+        (guid8,),
+    )
+    sparkline = [
+        round(_i(sr[1]) * 60 / _i(sr[2]), 1) if _i(sr[2]) else 0.0
+        for sr in reversed(spark_rows or [])
+    ]
+    trend = None
+    if len(sparkline) >= 4:
+        head = sum(sparkline[:-2]) / len(sparkline[:-2])
+        tail = sum(sparkline[-2:]) / 2
+        trend = "up" if tail > head * 1.05 else ("down" if tail < head * 0.95 else "flat")
+
+    # 5) Badges: top 3 unlocked kill milestones from the existing helper.
+    career = await db.fetch_one(
+        "SELECT COALESCE(SUM(pcs.kills), 0), COUNT(DISTINCT r.gaming_session_id) "
+        "FROM player_comprehensive_stats pcs JOIN rounds r ON r.id = pcs.round_id "
+        "WHERE pcs.player_guid = ? AND r.round_number IN (1,2) "
+        "AND r.is_valid IS DISTINCT FROM FALSE",
+        (guid8,),
+    )
+    career_kills = _i(career[0]) if career else 0
+    career_games = _i(career[1]) if career else 0
+    ach = calculate_player_achievements(career_kills, career_games, mine["kd"])
+    badges = sorted(ach.get("unlocked", []),
+                    key=lambda a: a.get("threshold", 0), reverse=True)[:3]
+
+    return {
+        "status": "ok",
+        "guid": guid8,
+        "name": name,
+        "rating": {
+            "value": round(float(rating_row[0]), 3) if rating_row else None,
+            "tier": rating_row[1] if rating_row else None,
+            "games_rated": _i(rating_row[2]) if rating_row else 0,
+            "trend": trend,
+        },
+        "archetype": archetype,
+        "window_days": _CARD_WINDOW_DAYS,
+        "form": mine,
+        "percentiles": percentiles,
+        "sparkline_dpm": sparkline,
+        "badges": badges,
+        "career": {"kills": career_kills, "sessions": career_games},
+    }
