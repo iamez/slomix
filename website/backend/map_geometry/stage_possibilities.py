@@ -3101,13 +3101,22 @@ def _project_alert_targets(
             else None
         )
         if chain_blocker is not None:
+            # Preserve the specific blocker reason: an unknown use callback
+            # in the chain is a different (weaker) claim than a script event
+            # we deliberately do not model, and flattening both to the chain
+            # constant misclassified the callback case (Copilot, PR #649).
+            disposition = (
+                AlertTargetDisposition.USE_CALLBACK_NOT_MODELED
+                if chain_blocker == "alertentity_use_callback_not_modeled"
+                else AlertTargetDisposition.USE_CHAIN_SCRIPT_EVENT_NOT_MODELED
+            )
             targets.append(
                 AlertTargetProjection(
                     entity_index,
                     identity.classname,
                     identity.script_name,
                     None,
-                    AlertTargetDisposition.USE_CHAIN_SCRIPT_EVENT_NOT_MODELED,
+                    disposition,
                 )
             )
             continue
