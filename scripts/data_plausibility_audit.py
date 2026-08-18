@@ -51,6 +51,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from shared.round_time import round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
+
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
 # every row on/after it was captured live by the current pipeline. No
@@ -129,6 +131,11 @@ _ACTUAL_TIME_SECONDS = (
     "THEN split_part(r.actual_time, ':', 1)::int * 60 + split_part(r.actual_time, ':', 2)::int "
     "END)"
 )
+# The DURATION of a round is NOT actual_time (that is the stopwatch TARGET,
+# g_nextTimeLimit — inflated on ~15% of rounds, RCA 2026-08-18 / PR #770).
+# Any rule that means "how long did this round last" must go through the one
+# shared helper, exactly like the bot and the website do.
+_ROUND_DURATION_SECONDS = round_duration_sql("r")
 
 
 @dataclass(frozen=True)
@@ -320,16 +327,21 @@ RULES: list[Rule] = [
         table="player_comprehensive_stats",
         tier="T1",
         severity="high",
-        predicate=(
-            f"{_ACTUAL_TIME_LOOKS_VALID} AND pcs.time_played_seconds > ({_ACTUAL_TIME_SECONDS} + 60)"
-        ),
+        predicate=f"pcs.time_played_seconds > ({_ROUND_DURATION_SECONDS} + 60)",
         note=(
-            "time_played_seconds cannot exceed the round's own actual_time duration by more than a 60s "
-            "slack (covers halftime/pause quirks). Rows whose actual_time doesn't parse as M:SS are "
-            "excluded here (they're independently caught by the rounds-table actual_time rule)."
+            "time_played_seconds cannot exceed the round's own MEASURED duration "
+            "(shared.round_time: lua actual_duration_seconds, falling back to parsed "
+            "actual_time) by more than a 60s slack (covers halftime/pause quirks). Rounds "
+            "with neither a measurement nor a parsable actual_time yield NULL and are "
+            "skipped here — they are independently caught by the rounds-table actual_time rule."
         ),
         needs_round_join=True,
-        extra_cols=("pcs.time_played_seconds", "r.actual_time", "pcs.player_guid"),
+        extra_cols=(
+            "pcs.time_played_seconds",
+            "r.actual_duration_seconds",
+            "r.actual_time",
+            "pcs.player_guid",
+        ),
         order_by="pcs.time_played_seconds DESC",
     ),
     # ── Internal consistency: two fields that should agree ─────────────────

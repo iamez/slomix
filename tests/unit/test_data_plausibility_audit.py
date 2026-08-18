@@ -27,6 +27,7 @@ from scripts.data_plausibility_audit import (  # noqa: E402
     get_connection,
     validate_rules,
 )
+from shared.round_time import round_duration_sql  # noqa: E402
 
 
 def test_rules_table_is_well_formed():
@@ -126,3 +127,37 @@ def test_rule_predicate_parses_against_schema(db_conn, rule):
         cur.execute(build_split_sql(rule))
         sql, _labels = build_top_rows_sql(rule, 0)  # LIMIT 0 — plan/parse only, no rows
         cur.execute(sql)
+
+
+# ── Duration doctrine (PR #770): actual_time is a TARGET, not a measurement ──
+
+
+def _rule(name: str):
+    for rule in RULES:
+        if rule.name == name:
+            return rule
+    raise AssertionError(f"rule {name!r} disappeared from RULES")
+
+
+def test_tps_rule_measures_duration_through_shared_round_time():
+    """The row-vs-round duration rule must compare against the MEASURED
+    duration (shared.round_time), never against the bare stopwatch target.
+
+    Reading actual_time as a duration overstated ~15% of rounds (RCA
+    2026-08-18); a rule built on it would have quietly excused rows that
+    played longer than the round actually lasted.
+    """
+    predicate = _rule("pcs_tps_exceeds_round_duration").predicate
+    assert "actual_duration_seconds" in predicate, "rule ignores the Lua measurement"
+    assert predicate.count("actual_time") == round_duration_sql("r").count("actual_time"), (
+        "rule references actual_time outside the shared round_duration_sql fallback"
+    )
+    assert round_duration_sql("r") in predicate, "rule does not use shared.round_time SQL"
+
+
+def test_actual_time_rules_still_target_actual_time_itself():
+    """The two rounds-table rules are ABOUT the header clock — they must keep
+    reading actual_time directly, or the audit stops watching the field whose
+    lie started all of this."""
+    for name in ("rounds_actual_time_missing_or_nonpositive", "rounds_actual_time_diverges_without_surrender"):
+        assert "actual_time" in _rule(name).predicate, name
