@@ -8,8 +8,8 @@
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
 import { initTonightBetting } from './bets.js?v=20260804-auth-dedupe';
-import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260818-feedfix';
-import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260818-feedfix';
+import { startLiveTicker, stopLiveTicker, renderLiveTicker, setLiveRoundContext } from './live-ticker.js?v=20260819-ladder';
+import { startLiveState, stopLiveState, renderLiveState } from './live-state.js?v=20260819-ladder';
 
 const POLL_MS = 8000;
 let _interval = null;

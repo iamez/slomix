@@ -235,3 +235,31 @@ def test_third_round_start_wraps_to_r1():
     for i in range(3):
         r.apply({"type": "ROUND_START", "received_at": now + i})
     assert r.snapshot()["round_number"] == 1
+
+
+def test_live_ladder_folds_aggregate_deltas_and_alive():
+    """Val A: LIVE_AGGREGATE deltas sum per round, LIVE_KILL flips the victim
+    dead, LIVE_MOVEMENT revives, ROUND_START resets the ladder."""
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply({"type": "TEAM_CHANGE", "slot": 3, "name": "vid", "team": 2,
+             "received_at": now - 120})
+    r.apply({"type": "ROUND_START", "received_at": now - 100})
+    r.apply({"type": "LIVE_AGGREGATE", "slot": 3, "kills": 2, "deaths": 1,
+             "damage_given": 600, "damage_received": 100, "received_at": now - 60})
+    r.apply({"type": "LIVE_AGGREGATE", "slot": 3, "kills": 1, "deaths": 0,
+             "damage_given": 400, "damage_received": 0, "received_at": now - 30})
+    r.apply({"type": "LIVE_KILL", "killer_slot": 5, "victim_slot": 3,
+             "received_at": now - 10})
+    snap = r.snapshot()
+    live = snap["roster"]["allies"][0]["live"]
+    assert live["kills"] == 3 and live["deaths"] == 1
+    assert live["alive"] is False
+    assert live["dpm"] is not None and live["dpm"] > 0
+
+    # movement marks him alive again; a new round wipes the tallies
+    r.apply({"type": "LIVE_MOVEMENT",
+             "players": [{"slot": 3, "x": 1, "y": 2}], "received_at": now - 5})
+    assert r.snapshot()["roster"]["allies"][0]["live"]["alive"] is True
+    r.apply({"type": "ROUND_START", "received_at": now})
+    assert "live" not in (r.snapshot()["roster"]["allies"][0])
