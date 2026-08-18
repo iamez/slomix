@@ -29,7 +29,6 @@ from __future__ import annotations
 import asyncio
 import json
 import re
-import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -1068,37 +1067,44 @@ class _MonitorTasksMixin:
                 f"{lines}{more}\n"
                 f"Podrobnosti: `python scripts/data_plausibility_audit.py`")
 
+    @staticmethod
+    def _run_audit_in_thread():
+        """Load the audit tool from scripts/ and run its rules synchronously.
+
+        In-process (no subprocess): the tool opens its own READ-ONLY psycopg2
+        connection, so running it in a worker thread is safe next to the
+        bot's asyncpg pool. Loaded by path because scripts/ is not a package.
+        """
+        import importlib.util
+        import sys
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "data_plausibility_audit.py"
+        spec = importlib.util.spec_from_file_location("data_plausibility_audit", script)
+        mod = importlib.util.module_from_spec(spec)
+        # dataclass machinery looks the module up in sys.modules during class
+        # creation — register it first or exec_module dies on @dataclass.
+        sys.modules["data_plausibility_audit"] = mod
+        spec.loader.exec_module(mod)
+        conn = mod.get_connection()
+        try:
+            results = mod.run_audit(conn, mod.RULES, top_n=0)
+        finally:
+            conn.close()
+        return [r.to_dict() for r in results]
+
     @tasks.loop(hours=24)
     async def data_plausibility_sentinel(self):
         cfg = self.config
         if not getattr(cfg, "data_audit_sentinel_enabled", True):
             return
-        script = Path(__file__).resolve().parents[2] / "scripts" / "data_plausibility_audit.py"
-        if not script.exists():
-            logger.warning("[DATA-AUDIT] script missing at %s — sentinel idle", script)
-            return
         try:
-            proc = await asyncio.create_subprocess_exec(
-                sys.executable, str(script), "--json",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-            )
-            out, err = await asyncio.wait_for(proc.communicate(), timeout=300)
+            payload = await asyncio.wait_for(
+                asyncio.to_thread(self._run_audit_in_thread), timeout=300)
         except TimeoutError:
             logger.error("[DATA-AUDIT] audit run timed out after 300s")
             return
         except Exception:
-            logger.error("[DATA-AUDIT] audit run failed to start", exc_info=True)
-            return
-        if not out.strip():
-            logger.error("[DATA-AUDIT] audit produced no JSON (stderr: %s)",
-                         err.decode(errors="replace")[:300])
-            return
-        try:
-            payload = json.loads(out.decode(errors="replace"))
-        except ValueError:
-            logger.error("[DATA-AUDIT] audit output is not JSON: %s",
-                         out.decode(errors="replace")[:300])
+            logger.error("[DATA-AUDIT] audit run failed", exc_info=True)
             return
         body = self._summarize_audit_payload(payload)
         if body is None:
@@ -1113,4 +1119,3 @@ class _MonitorTasksMixin:
     @data_plausibility_sentinel.before_loop
     async def before_data_plausibility_sentinel(self):
         await self.wait_until_ready()
-
