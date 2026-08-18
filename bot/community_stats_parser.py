@@ -6,6 +6,7 @@ Correctly parses the actual weapon format used by c0rnp0rn3.lua
 
 import hashlib
 import logging
+import math
 import os
 import re
 from datetime import datetime
@@ -135,11 +136,13 @@ def normalize_header_playtime(raw_value) -> float | None:
         value = float(raw_value)
     except (TypeError, ValueError):
         return None
+    if not math.isfinite(value) or value <= 0:
+        # inf/nan (e.g. "1e309" overflows to inf) would crash the int()
+        # conversion downstream; negatives are the et_ShutdownGame path.
+        return None
     if value > 10000:
         return value / 1000.0
-    if value > 0:
-        return value
-    return None
+    return value
 
 
 def _parse_side_fields(header_parts: list[str]) -> tuple[int, int, dict[str, Any]]:

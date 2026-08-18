@@ -158,6 +158,7 @@ class StopwatchScoringService:
             if lua_min and float(lua_min) > 0:
                 return int(float(lua_min) * 60)
         except (TypeError, ValueError):
+            # Unparsable lua value — fall through to the header text below.
             pass
         return self.parse_time_to_seconds(round_data.get('time_limit'))
 
@@ -196,14 +197,15 @@ class StopwatchScoringService:
         """
         r1_succ = self._attackers_succeeded(r1)
         r2_succ = self._attackers_succeeded(r2)
-        if r1_succ is None and r2_succ is None:
-            # No outcome data at all — legacy time-based path.
+        if r1_succ is None or r2_succ is None:
+            # Either round's outcome is undecidable (no winner/defender, no
+            # surrender record, no usable duration) — don't guess "fullhold"
+            # for it; keep the legacy time-based scoring for the whole match
+            # so degenerate rows behave exactly as before this fix.
             return self.calculate_map_score(
                 r1.get('time_limit'), r1.get('actual_time'),
                 r2.get('actual_time'),
             )
-        r1_succ = bool(r1_succ)
-        r2_succ = bool(r2_succ)
         r1_str = self._round_duration_str(r1) or 'fullhold'
         r2_str = self._round_duration_str(r2) or 'fullhold'
         if r1_succ and r2_succ:
@@ -1021,8 +1023,8 @@ class StopwatchScoringService:
                     NOT complete, so the winner defended — even though the
                     measured duration is below the limit (RCA 2026-08-18).
                     """
-                    winner_side = r1_data.get('winner_team')
-                    if winner_side not in (1, 2):
+                    winner_side = normalize_side(r1_data.get('winner_team'))
+                    if winner_side is None:
                         return None
 
                     if normalize_side(r1_data.get('surrender_team')) is not None:

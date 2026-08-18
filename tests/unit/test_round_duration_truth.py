@@ -67,6 +67,10 @@ def test_header_playtime_legacy_seconds_and_garbage():
     assert normalize_header_playtime("0") is None
     assert normalize_header_playtime("abc") is None
     assert normalize_header_playtime(None) is None
+    # non-finite floats must not leak into int() downstream (coderabbit)
+    assert normalize_header_playtime("inf") is None
+    assert normalize_header_playtime("1e309") is None  # overflows to inf
+    assert normalize_header_playtime("nan") is None
 
 
 # ── stopwatch scoring: surrender-aware map winner ────────────────────
@@ -132,6 +136,21 @@ def test_surrender_signal_alone_means_no_completion():
     r1 = _round(actual_time='5:00', winner_team=1, defender_team=2)
     r2 = _round(actual_time='5:00', surrender_team=1)
     t1, t2, _ = svc.calculate_map_score_from_rounds(r1, r2)
+    assert (t1, t2) == (2, 0)
+
+
+def test_one_undecidable_round_falls_back_to_legacy_scoring():
+    # r2 has literally no outcome data (no winner/defender, no surrender,
+    # no duration) — must NOT be guessed as "fullhold"; the whole match
+    # falls back to the legacy time-based table (coderabbit, PR #770).
+    svc = _svc()
+    r1 = _round(time_limit='10:00', actual_time='5:00',
+                actual_duration_seconds=300,
+                winner_team=1, defender_team=2, lua_time_limit_minutes=None)
+    r2 = _round(time_limit='10:00', actual_time='7:00',
+                lua_time_limit_minutes=None)
+    t1, t2, _ = svc.calculate_map_score_from_rounds(r1, r2)
+    # legacy table: both times < limit -> both "complete", faster wins
     assert (t1, t2) == (2, 0)
 
 
