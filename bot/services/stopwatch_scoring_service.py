@@ -364,6 +364,58 @@ class StopwatchScoringService:
                 team_names_list.append(team_name)
                 team_guids_list.append(set(player_guids))
 
+            # Stale-roster guard (session 144, 2026-08-11): a session_teams row
+            # can outlive the session it described — a morning OMNIBOT test
+            # held gsid 144, its bot roster stayed stored, and the humans who
+            # inherited the gsid that evening were scored 0:0 "roster changed"
+            # on every map. session_data_service has carried this exact guard
+            # since the #682 fix; the box scorer read the table directly and
+            # never got it. If the stored roster shares no GUID with the
+            # players who actually played, re-detect from the rounds instead.
+            if resolved_session_id is not None:
+                participants_query = """
+                    SELECT DISTINCT p.player_guid
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON r.id = p.round_id
+                    WHERE r.gaming_session_id = ?
+                      AND r.round_number IN (1, 2)
+                      AND r.is_valid IS DISTINCT FROM FALSE
+                """
+                participant_rows = await self.db.fetch_all(
+                    participants_query, (resolved_session_id,)
+                )
+            else:
+                participants_query = """
+                    SELECT DISTINCT p.player_guid
+                    FROM player_comprehensive_stats p
+                    JOIN rounds r ON r.id = p.round_id
+                    WHERE SUBSTRING(p.round_date, 1, 10) = ?
+                      AND r.round_number IN (1, 2)
+                      AND r.is_valid IS DISTINCT FROM FALSE
+                """
+                participant_rows = await self.db.fetch_all(
+                    participants_query, (session_date,)
+                )
+            participants = {row[0] for row in participant_rows if row[0]}
+            roster_guids = set().union(*team_guids_list) if team_guids_list else set()
+            if participants and not (roster_guids & participants):
+                logger.warning(
+                    "session_teams roster for %s shares no GUID with the %d "
+                    "players who actually played — stale roster, re-detecting "
+                    "before scoring",
+                    session_date, len(participants),
+                )
+                from bot.core.team_manager import TeamManager
+                detected = await TeamManager(self.db).detect_session_teams(
+                    session_date, gaming_session_id=resolved_session_id
+                )
+                if not detected or len(detected) < 2:
+                    logger.warning("Re-detection failed for %s — not scoring "
+                                   "with a stale roster", session_date)
+                    return None
+                team_names_list = list(detected.keys())
+                team_guids_list = [set(t.get('guids', [])) for t in detected.values()]
+
             # Map game team numbers to actual team names
             if session_ids:
                 sample_query = """
@@ -557,6 +609,17 @@ class StopwatchScoringService:
                     team_2_score = EXCLUDED.team_2_score,
                     team_1_name = EXCLUDED.team_1_name,
                     team_2_name = EXCLUDED.team_2_name,
+                    -- A re-score must overwrite EVERYTHING it computes: the
+                    -- session-144 incident left corrected scores next to the
+                    -- stale bot GUIDs because the roster columns were missing
+                    -- from this list.
+                    team_1_guids = EXCLUDED.team_1_guids,
+                    team_2_guids = EXCLUDED.team_2_guids,
+                    team_1_names = EXCLUDED.team_1_names,
+                    team_2_names = EXCLUDED.team_2_names,
+                    format = EXCLUDED.format,
+                    total_rounds = EXCLUDED.total_rounds,
+                    round_numbers = EXCLUDED.round_numbers,
                     winning_team = EXCLUDED.winning_team,
                     round_details = EXCLUDED.round_details,
                     updated_at = NOW()

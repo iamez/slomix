@@ -115,6 +115,8 @@ async def test_box_score_by_gaming_session_id_embeds_scope_metadata():
         "dates": ["2026-07-18"],
         "accepted_round_count": 2,
         "distinct_map_names": ["supply"],
+        # Freshness stamp for the Story hero: the LAST round's start.
+        "last_round_unix": 1600,
     }
 
 

@@ -72,6 +72,7 @@ class WebsiteSessionDataService(SessionDataService):
                 ON l.match_id = r.match_id
                AND l.round_number = r.round_number
             WHERE r.round_number IN (1, 2)
+              AND r.is_valid IS DISTINCT FROM FALSE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             ORDER BY
                 r.round_date DESC,
@@ -94,6 +95,7 @@ class WebsiteSessionDataService(SessionDataService):
                     r.round_time
                 FROM rounds r
                 WHERE r.round_number IN (1, 2)
+                  AND r.is_valid IS DISTINCT FROM FALSE
                   AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
                 ORDER BY
                     r.round_date DESC,

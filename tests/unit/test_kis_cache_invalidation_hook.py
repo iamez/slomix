@@ -176,7 +176,7 @@ async def test_invalidate_deletes_once_then_warms():
 
     async def _warm(sd):
         warmed.append(sd)
-    svc._warm_kis_cache = _warm  # noqa: SLF001
+    svc.warm_kis_cache = _warm  # noqa: SLF001
 
     await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
 
@@ -189,7 +189,7 @@ async def test_invalidate_deletes_once_then_warms():
 async def test_invalidate_never_raises_on_db_failure():
     svc = _svc()
     svc.db_adapter = _FakeAdapter(raise_exc=RuntimeError("db down"))
-    svc._warm_kis_cache = lambda sd: _noop()  # noqa: SLF001
+    svc.warm_kis_cache = lambda sd: _noop()  # noqa: SLF001
 
     await svc._invalidate_kis_cache("2026-07-07")  # noqa: SLF001
     # reaching here without an exception IS the assertion
@@ -200,7 +200,7 @@ async def _noop():
 
 
 # ---------------------------------------------------------------------------
-# _warm_kis_cache — proactive recompute trigger (mirrors _persist_s_effort)
+# warm_kis_cache — proactive recompute trigger (mirrors _persist_s_effort)
 # ---------------------------------------------------------------------------
 
 class _Resp:
@@ -252,7 +252,7 @@ def _warm_svc():
 async def test_warm_hits_kill_impact_with_the_date():
     sess = _Sess(status=200)
     with patch("aiohttp.ClientSession", return_value=sess):
-        await _warm_svc()._warm_kis_cache("2026-07-07")  # noqa: SLF001
+        await _warm_svc().warm_kis_cache("2026-07-07")  # noqa: SLF001
     assert sess.requested == "http://127.0.0.1:8000/api/storytelling/kill-impact"
     assert sess.params == {"session_date": "2026-07-07", "limit": 1}
     assert sess.headers == {"X-Internal-Token": "test-internal-secret"}
@@ -276,17 +276,17 @@ async def test_warm_skipped_when_secret_unset():
     misleading 'warmed' on a public read-only response (Copilot PR #487)."""
     sess = _Sess(status=200)
     with patch("aiohttp.ClientSession", return_value=sess):
-        await _warm_svc_no_secret()._warm_kis_cache("2026-07-07")  # noqa: SLF001
+        await _warm_svc_no_secret().warm_kis_cache("2026-07-07")  # noqa: SLF001
     assert sess.requested is None  # no HTTP call made
 
 
 @pytest.mark.asyncio
 async def test_warm_never_raises_on_http_error_or_connect_failure():
     with patch("aiohttp.ClientSession", return_value=_Sess(status=404)):
-        await _warm_svc()._warm_kis_cache("2026-07-07")  # noqa: SLF001
+        await _warm_svc().warm_kis_cache("2026-07-07")  # noqa: SLF001
     with patch("aiohttp.ClientSession",
                return_value=_Sess(raise_exc=ConnectionError("web down"))):
-        await _warm_svc()._warm_kis_cache("2026-07-07")  # noqa: SLF001
+        await _warm_svc().warm_kis_cache("2026-07-07")  # noqa: SLF001
     # reaching here without an exception IS the assertion
 
 
@@ -364,7 +364,7 @@ async def test_two_sessions_one_date_warms_by_gsid_and_spares_the_neighbour():
 
     async def _warm(sd, gaming_session_id=None):
         warmed.append((sd, gaming_session_id))
-    svc._warm_kis_cache = _warm  # noqa: SLF001
+    svc.warm_kis_cache = _warm  # noqa: SLF001
 
     await svc._invalidate_kis_cache("2026-03-25", gsids=[137])  # noqa: SLF001
 
@@ -389,7 +389,7 @@ async def test_every_resolved_gsid_gets_warmed():
 
     async def _warm(sd, gaming_session_id=None):
         warmed.append((sd, gaming_session_id))
-    svc._warm_kis_cache = _warm  # noqa: SLF001
+    svc.warm_kis_cache = _warm  # noqa: SLF001
 
     await svc._invalidate_kis_cache("2026-03-25", gsids=[137, 138])  # noqa: SLF001
 
@@ -406,7 +406,7 @@ async def test_warm_without_gsid_falls_back_to_the_date():
 
     async def _warm(sd, gaming_session_id=None):
         warmed.append((sd, gaming_session_id))
-    svc._warm_kis_cache = _warm  # noqa: SLF001
+    svc.warm_kis_cache = _warm  # noqa: SLF001
 
     await svc._invalidate_kis_cache("2026-03-25", gsids=[])  # noqa: SLF001
 
@@ -417,7 +417,7 @@ async def test_warm_without_gsid_falls_back_to_the_date():
 async def test_warm_sends_gaming_session_id_not_session_date():
     sess = _Sess(status=200)
     with patch("aiohttp.ClientSession", return_value=sess):
-        await _warm_svc()._warm_kis_cache("2026-03-25", gaming_session_id=137)  # noqa: SLF001
+        await _warm_svc().warm_kis_cache("2026-03-25", gaming_session_id=137)  # noqa: SLF001
     assert sess.params == {"gaming_session_id": 137, "limit": 1}
     assert "session_date" not in sess.params
 

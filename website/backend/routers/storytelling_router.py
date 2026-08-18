@@ -566,6 +566,45 @@ async def get_win_contribution(
     return {"status": "ok", **result, "scope": scope.to_metadata()}
 
 
+@router.get("/storytelling/kill-matrix")
+@limiter.limit("10/minute")
+async def get_kill_matrix(
+    request: Request,
+    scope: GamingSessionScope = Depends(resolve_story_scope),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Who killed whom this session — one cell per duel pairing.
+
+    Reads `proximity_kill_outcome`, which already stores both sides of every
+    kill; nothing new is computed. Returns `available: false` rather than an
+    empty grid when the session has no proximity kill data (coverage is uneven
+    across older sessions).
+    """
+    svc = StorytellingService(db)
+    result = await svc.compute_kill_matrix(scope)
+    result["scope"] = scope.to_metadata()
+    return result
+
+
+@router.get("/storytelling/movement")
+@limiter.limit("10/minute")
+async def get_movement(
+    request: Request,
+    scope: GamingSessionScope = Depends(resolve_story_scope),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Per-player movement for the session: distance, speed, sprint share.
+
+    Straight read of `player_track`, which has recorded it per life since the
+    tracker shipped. Values are ET engine units / units-per-second, raw — no
+    metric conversion, because the constant would be invented precision.
+    """
+    svc = StorytellingService(db)
+    result = await svc.compute_movement(scope)
+    result["scope"] = scope.to_metadata()
+    return result
+
+
 @router.get("/storytelling/momentum")
 @limiter.limit("10/minute")
 async def get_momentum(

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from bot.core.round_contract import normalize_end_reason, normalize_side_value
 from bot.core.round_linker import _parse_round_datetime
@@ -18,6 +18,19 @@ from bot.logging_config import get_logger
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
+
+# How far a late-arriving Lua row may sit from a round's filename timestamp
+# and still be considered the same round.
+#
+# The stats filename is written at flush time, i.e. round end + 0-3 s, and the
+# Lua payload carries the engine's own round end — so a true pair agrees to
+# within seconds. Measured on the live database (2026-08-15): of 88 orphaned
+# Lua rows, 32 had a nearest round within 30 s and 27 of those pointed at a
+# round with no Lua row yet; EVERY orphan whose nearest round was further away
+# than 30 s pointed at a round that already had its own Lua row, i.e. it was a
+# neighbouring replay of the same map, not a match. A wide window would
+# therefore not rescue anything — it would only invent wrong links.
+_LATE_LINK_TOLERANCE_SECONDS = 30
 
 
 def _lua_exact_source_lock_key(
@@ -184,6 +197,119 @@ class _LuaRoundStorageMixin:
             return None
         value = row[0] if isinstance(row, (list, tuple)) else row["round_id"]
         return int(value) if value is not None else None
+
+    async def _link_late_lua_row(
+        self,
+        *,
+        map_name: str,
+        round_number: int,
+        lua_unix: int,
+    ) -> int | None:
+        """Link a Lua row that arrived AFTER its round was already imported.
+
+        Two linking paths existed and neither covers this case:
+
+        * the exact path (`_reconcile_lua_exact_source`) needs
+          ``rounds.round_start_unix``, which is itself only ever filled FROM a
+          linked Lua row — circular, so it can never bootstrap;
+        * the fuzzy path (`_link_lua_round_teams`) runs when a ROUND is
+          imported and looks for Lua rows already present, so a row that lands
+          later is never reconsidered.
+
+        Result on the live database: rounds imported before their webhook
+        arrived stayed unlinked forever, and the timing comparison reported
+        "NO LUA DATA" for them (2026-08-11 onward, when the v1.7.2 retry
+        buffer started flushing captures in a late burst).
+
+        Matching is done in Python with `_parse_round_datetime`, the same
+        helper every other linker uses, so the local-naive filename convention
+        cannot drift between SQL and Python. Refuses to guess: a tie, an
+        already-claimed round or anything beyond the tolerance is left alone.
+        """
+        if not map_name or not lua_unix or round_number is None:
+            return None
+
+        try:
+            day = datetime.fromtimestamp(int(lua_unix)).date()  # noqa: DTZ006 local-naive filename convention
+        except (TypeError, ValueError, OSError):
+            return None
+
+        # A round is dated by its filename, so a round played across midnight
+        # can carry the neighbouring calendar date relative to the Lua stamp.
+        days = [str(day - timedelta(days=1)), str(day), str(day + timedelta(days=1))]
+
+        rows = await self.db_adapter.fetch_all(
+            """
+            SELECT r.id, r.round_date, r.round_time
+            FROM rounds r
+            WHERE LOWER(BTRIM(r.map_name)) = LOWER(BTRIM(?))
+              AND r.round_number = ?
+              AND r.round_date = ANY(?)
+              AND NOT EXISTS (
+                    SELECT 1 FROM lua_round_teams l WHERE l.round_id = r.id
+              )
+            """,
+            (map_name, round_number, days),
+        )
+        if not rows:
+            return None
+
+        candidates: list[tuple[int, int]] = []
+        for row in rows:
+            round_id, round_date, round_time = row[0], row[1], row[2]
+            dt = _parse_round_datetime(round_date, round_time)
+            if not dt:
+                continue
+            distance = abs(int(dt.timestamp()) - int(lua_unix))
+            if distance <= _LATE_LINK_TOLERANCE_SECONDS:
+                candidates.append((round_id, distance))
+
+        if not candidates:
+            return None
+
+        best_distance = min(d for _, d in candidates)
+        tied = [rid for rid, d in candidates if d == best_distance]
+        if len(tied) > 1:
+            webhook_logger.info(
+                "Lua late link ambiguous: map=%s R%s — %d rounds tied at %ss, "
+                "leaving unlinked rather than guessing",
+                map_name, round_number, len(tied), best_distance,
+            )
+            return None
+
+        round_id = tied[0]
+        # Re-assert BOTH preconditions at write time. The candidate query ran a
+        # moment ago and another linker may have claimed either side since;
+        # there is no UNIQUE index on round_id, so the failure mode is not an
+        # exception but a silent duplicate link — exactly what the linkage
+        # anomaly service counts as `duplicate_lua_round_links`.
+        result = await self.db_adapter.execute(
+            "UPDATE lua_round_teams SET round_id = ? "
+            "WHERE round_id IS NULL AND LOWER(BTRIM(map_name)) = LOWER(BTRIM(?)) "
+            "  AND round_number = ? AND COALESCE(round_end_unix, round_start_unix) = ? "
+            "  AND NOT EXISTS (SELECT 1 FROM lua_round_teams o WHERE o.round_id = ?)",
+            (round_id, map_name, round_number, lua_unix, round_id),
+        )
+        # asyncpg reports "UPDATE <n>"; anything but a positive n means the row
+        # was claimed underneath us, so do not report a link that did not happen.
+        updated = 0
+        if isinstance(result, str) and result.upper().startswith("UPDATE"):
+            parts = result.split()
+            if len(parts) == 2 and parts[1].isdigit():
+                updated = int(parts[1])
+        if updated <= 0:
+            webhook_logger.info(
+                "Lua late link skipped: map=%s R%s round_id=%s was claimed "
+                "between the lookup and the write",
+                map_name, round_number, round_id,
+            )
+            return None
+
+        webhook_logger.info(
+            "🔗 Lua late link: map=%s R%s → round_id=%s (%ss apart)",
+            map_name, round_number, round_id, best_distance,
+        )
+        return round_id
 
     async def _resolve_lua_spawn_team_identity(
         self,
@@ -698,6 +824,23 @@ class _LuaRoundStorageMixin:
                     )
             else:
                 await self.db_adapter.execute(query, params)
+
+            # Late arrival: the round is already in the database, so neither
+            # existing path can still link this row (see _link_late_lua_row).
+            # Only ever runs when the exact path did not produce a link.
+            if round_id is None:
+                try:
+                    round_id = await self._link_late_lua_row(
+                        map_name=map_name,
+                        round_number=fallback_round_number,
+                        lua_unix=int(round_end or exact_start_unix or 0),
+                    )
+                except Exception as late_err:
+                    # Storing the row is the primary job; a failed link retry
+                    # must never lose the capture.
+                    webhook_logger.warning(
+                        "Lua late link attempt failed (non-fatal): %s", late_err
+                    )
 
             corr_match_id, corr_map_name, corr_round_number = (
                 await self._resolve_round_correlation_context(

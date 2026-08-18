@@ -1,4 +1,4 @@
-"""Proximity scoring endpoints: session-scores, leaderboards, prox-scores, prox-scores/formula, weapon-accuracy, revives."""
+"""Proximity scoring endpoints: leaderboards, prox-scores, prox-scores/formula, weapon-accuracy, revives."""
 
 import math
 from bisect import bisect_right
@@ -40,38 +40,6 @@ def _percentile_rank_map(guid_values: dict[str, float]) -> dict[str, float]:
     sorted_vals = sorted(clean.values())
     n = len(sorted_vals)
     return {g: bisect_right(sorted_vals, v) / n for g, v in clean.items()}
-
-
-@router.get("/proximity/session-scores")
-async def get_proximity_session_scores(
-    session_date: str | None = None,
-    db: DatabaseAdapter = Depends(get_db),
-):
-    """Per-session composite proximity combat scores (0-100) across 7 categories."""
-    try:
-        from bot.services.proximity_session_score_service import ProximitySessionScoreService
-        svc = ProximitySessionScoreService(db)
-
-        if not session_date:
-            session_date = await svc.get_latest_session_date()
-        if not session_date:
-            return {"status": "ok", "session_date": None, "players": []}
-
-        # asyncpg needs date object, not string
-        sd = datetime.strptime(session_date, "%Y-%m-%d").date() if isinstance(session_date, str) else session_date  # noqa: DTZ007 date-only parsing, no time component used
-        results = await svc.compute_session_scores(sd)
-        return {
-            "status": "ok", "session_date": session_date, "players": results,
-            # Honest-scope metadata (audit 2026-07-25 S2): the page sends
-            # map_name/round filters that this session-wide composite does
-            # not support — declare what was actually applied instead of
-            # letting FastAPI drop them silently.
-            "scope_applied": {"session_date": str(session_date)},
-            "scope_note": "session-wide composite; map/round filters are not applied",
-        }
-    except Exception:
-        logger.exception("session-scores failed")
-        raise HTTPException(status_code=500, detail="session-scores computation failed")
 
 
 @router.get("/proximity/leaderboards")

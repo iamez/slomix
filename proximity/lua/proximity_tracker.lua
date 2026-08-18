@@ -2493,17 +2493,29 @@ local function scanVehicleEntities()
                 -- fetched y, z and an out-of-bounds 3 → a static/garbage
                 -- position, which made vehicle delta 0 forever and left every
                 -- escort_credit distance at 0 (C4).
+                -- An entity read at map load before it spawns can return a
+                -- garbage origin (production print after the %d fix showed
+                -- 6.5e24 on supply's truck). MAX_SANE_MOVE already keeps such
+                -- values out of total_distance, but start_pos kept the raw
+                -- read forever — and a float beyond 2^63 survives floor/ceil
+                -- as a FLOAT, so %d at the VEHICLE_PROGRESS write would throw
+                -- again. ET map coordinates live within ±65k; anything past
+                -- 1e6 is garbage, not a position.
+                local function sane_coord(v)
+                    v = tonumber(v) or 0
+                    return (v > -1e6 and v < 1e6) and v or 0
+                end
                 local ox, oy, oz = 0, 0, 0
                 local vorigin = safe_gentity_get(i, "r.currentOrigin")
                 if vorigin then
                     if vorigin[1] then
-                        ox = tonumber(vorigin[1]) or 0
-                        oy = tonumber(vorigin[2]) or 0
-                        oz = tonumber(vorigin[3]) or 0
+                        ox = sane_coord(vorigin[1])
+                        oy = sane_coord(vorigin[2])
+                        oz = sane_coord(vorigin[3])
                     elseif vorigin.x then
-                        ox = tonumber(vorigin.x) or 0
-                        oy = tonumber(vorigin.y) or 0
-                        oz = tonumber(vorigin.z) or 0
+                        ox = sane_coord(vorigin.x)
+                        oy = sane_coord(vorigin.y)
+                        oz = sane_coord(vorigin.z)
                     end
                 end
                 local health = tonumber(safe_gentity_get(i, "health")) or 0
@@ -2517,7 +2529,13 @@ local function scanVehicleEntities()
                     last_health = health,
                     destroyed_count = 0,
                 }
-                et.G_Print(string.format("[PROX v6] Vehicle found: ent=%d name=%s pos=(%d,%d,%d) hp=%d\n",
+                -- %.0f, not %d: ox/oy/oz/health come from tonumber() and are
+                -- floats. Lua 5.4 %d THROWS on a non-integral float (LuaJIT
+                -- silently truncated) — this exact line, deployed, killed
+                -- et_InitGame on supply and took scanObjectiveEntities() down
+                -- with it. Console-only output, so %.0f (the file's console
+                -- idiom elsewhere) is enough; nothing parses this line.
+                et.G_Print(string.format("[PROX v6] Vehicle found: ent=%d name=%s pos=(%.0f,%.0f,%.0f) hp=%.0f\n",
                     i, name, ox, oy, oz, health))
             end
         end
@@ -3560,12 +3578,29 @@ local function outputDataInner()
                 "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
                 "total_distance;max_health;final_health;destroyed_count\n"
             et.trap_FS_Write(vp_header, string.len(vp_header), fd)
+            -- Coordinates and health come from tonumber() and are floats;
+            -- Lua 5.4 %d throws on a non-integral float. This is a FILE
+            -- write the parser reads with a bare int(parts[i]) — so no
+            -- %.0f (that rounds half-to-even, where LuaJIT %d truncated
+            -- toward zero: a silent data-contract change). Truncate toward
+            -- zero exactly like SHOT_FIRED above (math.floor alone would
+            -- be off-by-one for negative world coords). Same guard on the
+            -- health fields: integral today, but "integral today" is how
+            -- this class of crash ships.
+            local function trunc(v)
+                local n = v >= 0 and math.floor(v) or math.ceil(v)
+                -- floor/ceil of a float beyond 2^63 stays a FLOAT and %d
+                -- throws on it; such a magnitude is never a real coordinate,
+                -- so write 0 rather than crash the whole section.
+                return math.type(n) == "integer" and n or 0
+            end
             for _, veh in ipairs(vp_items) do
                 local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d\n",
                     veh.name, veh.type,
-                    veh.start_pos.x, veh.start_pos.y, veh.start_pos.z,
-                    veh.last_pos.x, veh.last_pos.y, veh.last_pos.z,
-                    veh.total_distance, veh.max_health, veh.last_health, veh.destroyed_count)
+                    trunc(veh.start_pos.x), trunc(veh.start_pos.y), trunc(veh.start_pos.z),
+                    trunc(veh.last_pos.x), trunc(veh.last_pos.y), trunc(veh.last_pos.z),
+                    veh.total_distance, trunc(veh.max_health), trunc(veh.last_health),
+                    veh.destroyed_count)
                 et.trap_FS_Write(line, string.len(line), fd)
             end
         end
@@ -3858,8 +3893,20 @@ function et_InitGame(levelTime, randomSeed, restart)
     et.G_Print(">>> Spawn timers: Axis=" .. tracker.spawn.axis_interval .. "ms, Allies=" .. tracker.spawn.allies_interval .. "ms\n")
     et.G_Print(">>> Output: " .. config.output_dir .. "\n")
     logObjectiveConfigSummary()
-    scanVehicleEntities()
-    scanObjectiveEntities()
+    -- Each scan in its OWN pcall: these were bare and sequential, so when the
+    -- vehicle scan threw (the %d-on-float crash), the objective scan never ran
+    -- and the whole round lost its objective context. Narrow on purpose — a
+    -- pcall around all of et_InitGame would hide future errors — and LOUD on
+    -- purpose: the etconsole.log error line is the only reason the original
+    -- crash was ever found. Never swallow silently.
+    local sv_ok, sv_err = pcall(scanVehicleEntities)
+    if not sv_ok then
+        et.G_Print("[PROX] scanVehicleEntities FAILED: " .. tostring(sv_err) .. "\n")
+    end
+    local so_ok, so_err = pcall(scanObjectiveEntities)
+    if not so_ok then
+        et.G_Print("[PROX] scanObjectiveEntities FAILED: " .. tostring(so_err) .. "\n")
+    end
 
     -- v5 feature status
     local v5_features = {"spawn_timing", "team_cohesion", "crossfire_opportunities", "focus_fire", "team_push_detection", "trade_kills"}
@@ -3920,6 +3967,13 @@ function et_RunFrame(levelTime)
 
     -- Detect round end
     if last_gamestate == 0 and gamestate == 3 then
+        -- The whole round-end body runs inside one pcall: it sits BEFORE the
+        -- `last_gamestate = gamestate` line below, so an uncaught error here
+        -- means the 0→3 transition is re-detected on EVERY subsequent frame —
+        -- re-closing tracks and engagements into completed_tracks again and
+        -- again (duplicated data), while the error spams the console. Contain
+        -- the failure, print it loudly, and let the state machine advance.
+        local re_ok, re_err = pcall(function()
         round_end_unix = os.time()
 
         -- End all active player tracks
@@ -3963,6 +4017,10 @@ function et_RunFrame(levelTime)
             tracker.output_due_ms = et.trap_Milliseconds() + config.output_delay_ms
         else
             outputData()
+        end
+        end)
+        if not re_ok then
+            et.G_Print("[PROX] round-end handling FAILED: " .. tostring(re_err) .. "\n")
         end
     end
 
@@ -4129,6 +4187,13 @@ function et_Obituary(victim, killer, meansOfDeath)
 
     -- End player track
     local death_pos = getPlayerPos(victim)
+    -- Capture the victim's track BEFORE endPlayerTrack: that call nils
+    -- player_tracks[victim], and the v6.01 denied-run block further down read
+    -- the same entry AFTER it — always nil, so the whole block was dead code
+    -- (0 denied rows in 4.5 months of production; measured 2026-08-17). The
+    -- table itself lives on in completed_tracks, and endPlayerTrack even
+    -- appends the final death sample, which the approach metrics want.
+    local victim_track = tracker.player_tracks[victim]
     endPlayerTrack(victim, death_pos, death_type, killer_name)
 
     -- v4: Engagement tracking
@@ -4222,7 +4287,10 @@ function et_Obituary(victim, killer, meansOfDeath)
 
     -- v6.01: Denied objective run detection
     if isFeatureEnabled("objective_run_tracking") and death_type == "killed" then
-        local orun_track = tracker.player_tracks[victim]
+        -- victim_track was captured before endPlayerTrack cleared the slot —
+        -- re-reading the (now nil) live-tracks entry here is what kept this
+        -- block from ever running.
+        local orun_track = victim_track
         if orun_track and orun_track.class == "ENGINEER" then
             local orun_pos = death_pos or getPlayerPos(victim)
             if orun_pos then

@@ -16,19 +16,20 @@ import { checkLoginStatus, initSearchListeners, setLoadPlayerProfile } from './a
 import { initLivePolling, initLiveStatusPolling, updateLiveSession } from './live-status.js';
 import { loadPlayerProfile, setNavigateTo as setProfileNavigateTo, setLoadMatchDetails } from './player-profile.js?v=20260813-sickleave';
 import { loadLeaderboard, loadQuickLeaders, loadRecentMatches, setNavigateTo as setLeaderboardNavigateTo, initLeaderboardDefaults } from './leaderboard.js';
-import { loadSeasonInfo, loadLastSession, loadSessionsView, loadSessionMVP, toggleSeasonDetails } from './sessions.js?v=20260812-b3';
+import { loadSeasonInfo, loadLastSession, loadSessionsView, toggleSeasonDetails } from './sessions.js?v=20260817-score';
 import { loadHomePulseCards } from './home.js';
 import { loadMatchesView, loadMapsView, loadWeaponsView, loadMatchDetails } from './matches.js?v=20260813-audit-brandslate';
 import { loadFormView } from './form.js';
 
-import { loadRecordsView } from './records.js';
+import { loadRecordsView } from './records.js?v=20260817-match';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260812-b3';
-import { loadStoryView } from './story.js?v=20260813-arc';
+import { loadStoryView } from './story.js?v=20260817-restore';
 import { loadReplayView } from './replay.js';
 import { loadRivalriesView } from './rivalries.js';
+import { loadSystemView } from './system.js?v=20260815-system';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
-import { loadAdminPanelView } from './admin-panel.js';
+import { loadAdminPanelView } from './admin-panel.js?v=20260817-about2';
 import { loadUploadsView, loadUploadDetail } from './uploads.js?v=20260813-resumable';
 import { closeAllMedia } from './media-cleanup.js?v=20260813-mediaplayer';
 import { loadAvailabilityView } from './availability.js?v=20260804-auth-dedupe';
@@ -54,7 +55,7 @@ import { loadRecordBookView } from './record-book.js';
 import { openWrapped } from './wrapped.js';
 import { loadTonightView } from './tonight.js?v=20260812-a1';
 import { loadRetroVizView } from './retro-viz.js?v=20260513-v142-cf-bust';
-import { loadSessions2View } from './sessions2.js?v=20260513-v142-cf-bust';
+import { loadSessions2View } from './sessions2.js?v=20260817-score';
 import { loadSessionDetailView } from './session-detail.js?v=20260720-ssd-gsid';
 import { initMobileNav } from './mobile-nav.js?v=20260804-auth-dedupe';
 
@@ -147,6 +148,7 @@ const legacyRuntime = {
     loadStoryView,
     loadReplayView,
     loadRivalriesView,
+    loadSystemView,
     loadSmartStatsDiagView,
     loadGreatshotView,
     loadGreatshotDemoDetail,

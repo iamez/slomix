@@ -1860,21 +1860,7 @@
 
             <!-- Retro Viz Teaser -->
             <div class="max-w-7xl mx-auto px-6 pb-20 relative z-20">
-                <div class="glass-card rounded-xl p-6 border border-brand-purple/20 hover:border-brand-purple/40 transition-colors group cursor-pointer" data-click-action="navigateTo('retro-viz')">
-                    <div class="flex items-center gap-5">
-                        <div class="w-14 h-14 rounded-xl bg-gradient-to-br from-brand-purple/30 to-brand-cyan/20 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
-                            <i data-lucide="sparkles" class="w-7 h-7 text-brand-purple"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center gap-2 mb-1">
-                                <h3 class="text-base font-bold text-white">Retro Viz Gallery</h3>
-                                <span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-purple/20 text-brand-purple uppercase">New</span>
-                            </div>
-                            <p class="text-sm text-slate-400">Pixel-art visualizations, ASCII stats, and retro-styled match summaries from your gaming sessions.</p>
-                        </div>
-                        <i data-lucide="arrow-right" class="w-5 h-5 text-slate-500 group-hover:text-brand-purple group-hover:translate-x-1 transition-all shrink-0"></i>
-                    </div>
-                </div>
+
             </div>
         </div>
 
@@ -3274,6 +3260,9 @@
               <div class="text-amber-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">&#9889; Smart Stats</div>
               <h2 id="story-title" class="text-3xl font-black text-white mb-2">Loading...</h2>
               <div id="story-subtitle" class="text-slate-400 text-sm"></div>
+              <!-- Coverage: filled only when the session's Kill Impact is incomplete.
+                   The backend has always computed this; the page never asked. -->
+              <div id="story-coverage" class="text-xs text-amber-300/90 mt-2" style="display:none"></div>
               <div id="story-stats-row" class="flex gap-6 mt-4 text-sm text-slate-300"></div>
             </div>
           </div>
@@ -3332,6 +3321,7 @@
           <!-- Advanced Metrics (ET Rating v2 composite stats) -->
           <div class="rounded-2xl border border-cyan-500/20 bg-gradient-to-br from-cyan-500/5 to-blue-500/5 p-6 mt-6">
             <div id="story-advanced-metrics"></div>
+            <div id="story-comp-skill"></div>
           </div>
 
          </div><!-- /max-w-6xl -->
@@ -3392,6 +3382,26 @@
               </div>
             </div>
             <div id="smart-stats-diag-container"></div>
+          </div>
+        </div>
+
+        <!-- SYSTEM VIEW — one page for "is the chain running?" -->
+        <div id="view-system" class="view-section hidden">
+          <div class="max-w-4xl mx-auto px-6 py-8">
+            <div class="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950/40 to-slate-900 p-8 mb-6">
+              <div class="absolute inset-0 bg-gradient-to-r from-slate-500/5 via-transparent to-slate-500/5 pointer-events-none"></div>
+              <div class="relative z-10">
+                <div class="text-slate-400 text-xs font-bold tracking-[0.3em] uppercase mb-2">System</div>
+                <h2 class="text-3xl font-black text-white mb-2">Ali cela veriga teče?</h2>
+                <p class="text-slate-400 text-sm max-w-3xl">
+                  Od igralnega strežnika prek Lua zajema in parserja do Smart Stats in tega API-ja.
+                  Stran loči <span class="text-slate-300 font-bold">nihče ni igral</span> od
+                  <span class="text-amber-400 font-bold">nekaj se je pokvarilo</span> — tiho obdobje ni napaka.
+                  Stanje se osveži samo od sebe vsakih 30 s.
+                </p>
+              </div>
+            </div>
+            <div id="system-content"></div>
           </div>
         </div>
 
@@ -4130,9 +4140,10 @@
                             </div>
                             <h1 class="text-5xl md:text-6xl font-black text-white tracking-tight">Slomix</h1>
                             <p class="text-lg text-slate-300 max-w-2xl leading-relaxed">
-                                A production-grade analytics platform for competitive
-                                <span class="text-amber-400 font-bold">ET:Legacy</span> — Discord bot, web dashboard,
-                                demo highlight scanner, and game-server telemetry, all backed by a single PostgreSQL source of truth.
+                                Slomix records every round played on our <span class="text-amber-400 font-bold">ET:Legacy</span>
+                                server and scores it from raw server data. Who won the round, who did the damage, which
+                                kills changed the outcome — every number on this site is computed from stats files
+                                written by the game server itself, and can be traced back to them.
                             </p>
                         </div>
                         <div class="flex flex-wrap gap-3">
@@ -4180,38 +4191,38 @@
                     </div>
                 </section>
 
-                <!-- What is Slomix -->
+                <!-- What Slomix does -->
                 <section class="glass-card rounded-3xl p-8 lg:p-10 border border-white/10">
-                    <h2 class="text-2xl font-black text-white mb-4">What is this?</h2>
+                    <h2 class="text-2xl font-black text-white mb-4">What Slomix does</h2>
                     <div class="space-y-4 text-slate-300 leading-relaxed max-w-3xl">
                         <p>
-                            Slomix watches an ET:Legacy game server, captures every round's stats the moment they're written,
-                            and turns the raw output into something readable: per-player profiles, session summaries,
-                            leaderboards, kill-impact scoring, team rivalries, and demo highlights.
+                            Slomix is the stats platform for a Slovenian competitive ET:Legacy community: a Discord bot,
+                            this website, and instrumentation running inside the game server itself. When a round ends,
+                            the server's stats output is captured automatically, parsed into per-player records, linked
+                            into matches and gaming sessions, and served — as Discord notifications the moment the round
+                            ends, and as the full history and analysis on this site.
                         </p>
                         <p>
-                            Under the hood: SSH-based file monitoring, an R1/R2 differential parser, real-time Lua webhooks for
-                            timing-critical events (round end, surrender, captures), proximity tracking for crossfire / trade-kill
-                            analytics, and a 6-layer data validation pipeline. Everything lands in a single PostgreSQL 17 database
-                            (90+ tables) shared by the bot and the website.
-                        </p>
-                        <p>
-                            Users see two faces: a Discord bot with 100+ commands across 20 cogs, and this React-fronted website
-                            for the longer-form view. Behind both: 2,800+ tests pinning regressions, conventional-commit history,
-                            and release-please-driven CHANGELOG.
+                            Beyond raw scoreboards, the platform derives context the game does not show: a Lua tracker
+                            in the server records player positions and combat events, so kills are scored by what they
+                            actually meant — crossfires, trades, objective denial, kills undone by a revive. Session
+                            logic assembles a whole gather night into team scores, player tiers and per-map breakdowns.
+                            Where measured coverage is partial, the pages state it explicitly rather than extrapolating.
                         </p>
                     </div>
                 </section>
 
-                <!-- Architecture pipeline -->
+                <!-- How it works -->
                 <section>
-                    <div class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-4 font-bold">Pipeline</div>
+                    <div class="text-xs uppercase tracking-[0.3em] text-slate-500 mb-1 font-bold">How it works</div>
+                    <p class="text-sm text-slate-400 mb-4 max-w-3xl">From a round ending on the game server to a scored
+                        result on Discord and this site — five stages, fully automated:</p>
                     <div class="glass-card rounded-3xl p-6 lg:p-8 border border-white/10">
                         <div class="grid grid-cols-1 md:grid-cols-5 gap-3 items-stretch">
                             <div class="pipeline-step bg-slate-800/40 border border-amber-500/30 rounded-2xl p-4">
                                 <div class="text-amber-400 text-xs font-bold uppercase tracking-wider">1. Source</div>
                                 <div class="text-white font-bold mt-2">Game Server</div>
-                                <div class="text-[11px] text-slate-400 mt-1">ET:Legacy + Lua v6.01 writes raw stats files + webhook events</div>
+                                <div class="text-[11px] text-slate-400 mt-1">ET:Legacy (Lua 5.4) — the proximity tracker and webhook scripts write raw stats + events</div>
                             </div>
                             <div class="pipeline-step bg-slate-800/40 border border-cyan-500/30 rounded-2xl p-4">
                                 <div class="text-cyan-400 text-xs font-bold uppercase tracking-wider">2. Capture</div>
@@ -4226,7 +4237,7 @@
                             <div class="pipeline-step bg-slate-800/40 border border-emerald-500/30 rounded-2xl p-4">
                                 <div class="text-emerald-400 text-xs font-bold uppercase tracking-wider">4. Store</div>
                                 <div class="text-white font-bold mt-2">PostgreSQL 17</div>
-                                <div class="text-[11px] text-slate-400 mt-1">95 tables, committed migrations, partial UNIQUE constraints</div>
+                                <div class="text-[11px] text-slate-400 mt-1">one source of truth: committed migrations, partial UNIQUE constraints</div>
                             </div>
                             <div class="pipeline-step bg-slate-800/40 border border-rose-500/30 rounded-2xl p-4">
                                 <div class="text-rose-400 text-xs font-bold uppercase tracking-wider">5. Surface</div>
@@ -4250,7 +4261,7 @@
                                 </div>
                             </div>
                             <p class="text-xs text-slate-400 leading-relaxed">
-                                100+ commands across 20 cogs. Real-time round notifications, AI match predictions,
+                                100+ commands. Real-time round notifications, AI match predictions,
                                 team management, achievements, retro stats backfill.
                             </p>
                         </div>
@@ -4272,7 +4283,7 @@
                                 <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-xl" aria-hidden="true">⚡</div>
                                 <div>
                                     <div class="text-white font-bold">Lua Webhook</div>
-                                    <div class="text-[11px] text-slate-500">v1.7.0 + retry buffer</div>
+                                    <div class="text-[11px] text-slate-500">surrender-aware + retry buffer</div>
                                 </div>
                             </div>
                             <p class="text-xs text-slate-400 leading-relaxed">
@@ -4316,7 +4327,7 @@
                             </div>
                             <p class="text-xs text-slate-400 leading-relaxed">
                                 Magic-byte file validation, R2 differential reconstruction, round correlation linkage,
-                                canonical round ID, schema drift gates, 2,859 unit tests.
+                                canonical round ID, schema drift gates, and a CI wall of tests — including a Lua 5.4 parse gate.
                             </p>
                         </div>
                     </div>
@@ -4337,7 +4348,7 @@
                         <span class="tech-pill">Tailwind CSS v4</span>
                         <span class="tech-pill">Vite 7</span>
                         <span class="tech-pill">Lucide Icons</span>
-                        <span class="tech-pill">Lua 5.1 (ET:L)</span>
+                        <span class="tech-pill">Lua 5.4 (ET:L)</span>
                         <span class="tech-pill">UDT_json (Quake3 demo parser)</span>
                         <span class="tech-pill">FFmpeg</span>
                     </div>
@@ -4977,6 +4988,7 @@
                     <a href="#" class="hover:text-white transition">Discord</a>
                     <a href="#" class="hover:text-white transition">GitHub</a>
                     <a href="#" class="hover:text-white transition">API Docs</a>
+                    <a href="#/system" class="hover:text-white transition">System</a>
                 </div>
             </div>
         </div>

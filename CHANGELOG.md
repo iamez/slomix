@@ -6,6 +6,83 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.38.1](https://github.com/iamez/slomix/compare/v1.38.0...v1.38.1) (2026-08-17)
+
+
+### Bug Fixes
+
+* **bot:** a stale roster can no longer swallow a session's box score ([#765](https://github.com/iamez/slomix/issues/765)) ([cb423f8](https://github.com/iamez/slomix/commit/cb423f859492b6b9af5111eee22bc2eca2b87302))
+* **db:** flag historical bot rounds and quiet the audit's known-noise ([#762](https://github.com/iamez/slomix/issues/762)) ([735b453](https://github.com/iamez/slomix/commit/735b4535d4e7223c3c59877259eafcae800e042a))
+* **website:** one validity gate for Hall of Fame, season leaders and recent matches ([#764](https://github.com/iamez/slomix/issues/764)) ([a5b6cc4](https://github.com/iamez/slomix/commit/a5b6cc47d10c3ca148b682bc6c69aff3d57b3b60))
+
+## [1.38.0](https://github.com/iamez/slomix/compare/v1.37.0...v1.38.0) (2026-08-17)
+
+
+### Features
+
+* **bot:** read the game server's console — the sensor the RCA said was missing ([#752](https://github.com/iamez/slomix/issues/752)) ([3421c6c](https://github.com/iamez/slomix/commit/3421c6c976bc636934b7d547e1749b52055a0a9f))
+* **ci:** gates the RCA said were missing — runbook runtime step, Lua CI, honest sensor exit ([#753](https://github.com/iamez/slomix/issues/753)) ([c67c23e](https://github.com/iamez/slomix/commit/c67c23e8d2cd7f511c2b9a4503e78f270ab1c799))
+* **db:** permanent data-plausibility audit (Data Trust pillar B) ([#759](https://github.com/iamez/slomix/issues/759)) ([bbae82b](https://github.com/iamez/slomix/commit/bbae82ba5555e9e21a4e204c863a2fe540a82df6))
+* **website:** an About page that actually tells you something ([#756](https://github.com/iamez/slomix/issues/756)) ([eb16e71](https://github.com/iamez/slomix/commit/eb16e719a859f67d732bf7fc8c9fef8c9681d93e))
+* **website:** full-map records alongside single-round records ([#760](https://github.com/iamez/slomix/issues/760)) ([86eb4ff](https://github.com/iamez/slomix/commit/86eb4ff6476132b9673548846655cb93d693d067))
+
+
+### Bug Fixes
+
+* **bot:** stop Smart Stats sessions from silently never being scored ([#748](https://github.com/iamez/slomix/issues/748)) ([b30cbe6](https://github.com/iamez/slomix/commit/b30cbe66890281f1e85bfcb6f1a378377265023a))
+* **db:** heal cumulative R2 rows and gate orphan R2s out of records ([#758](https://github.com/iamez/slomix/issues/758)) ([853460e](https://github.com/iamez/slomix/commit/853460e9ac5931b8092c21f3f25346a3317c7319))
+* **lua:** garbage vehicle origins can no longer resurrect the VP write crash ([#754](https://github.com/iamez/slomix/issues/754)) ([d94e8b0](https://github.com/iamez/slomix/commit/d94e8b0209bce1095883b204b2ef083ab7ce7cca))
+* **lua:** stop losing proximity data silently — Lua 5.4 %d crash + dead denied-run path ([#751](https://github.com/iamez/slomix/issues/751)) ([e107c1b](https://github.com/iamez/slomix/commit/e107c1b6eda2bbf696a59d973e40d1c3ffa93b46))
+* **website:** show the real team score on session lists, not a side tally ([#757](https://github.com/iamez/slomix/issues/757)) ([0b0a9d4](https://github.com/iamez/slomix/commit/0b0a9d47c4c0009871ba4bb6adadae9b96839491))
+* **website:** the accuracy record must stand on a provable sample ([#755](https://github.com/iamez/slomix/issues/755)) ([09f6709](https://github.com/iamez/slomix/commit/09f6709837a1f140d37c14c68036ddd3ca286327))
+
+
+### Reverts
+
+* **website:** Smart Stats back to its pre-redesign look, fixes kept ([#750](https://github.com/iamez/slomix/issues/750)) ([8a585f1](https://github.com/iamez/slomix/commit/8a585f10f2ffafa71fb0b5eb6d4b7d48ac7b25b5))
+
+## [1.37.0](https://github.com/iamez/slomix/compare/v1.36.1...v1.37.0) (2026-08-16)
+
+
+### Features
+
+* **bot:** cross-check supa's stats screenshot against our database ([#731](https://github.com/iamez/slomix/issues/731)) ([8acc73b](https://github.com/iamez/slomix/commit/8acc73ba72ea2bf54ee62c3d30f5c2e68fae8b53))
+* **lua:** deliver the round webhook to every configured bot ([#743](https://github.com/iamez/slomix/issues/743)) ([10b9c7f](https://github.com/iamez/slomix/commit/10b9c7f29d77e2e651d4e4ecdab5579e214a9313))
+* **website:** human-thread narrative slot — story behind the numbers (TOK H Steber B, Val H2) ([#712](https://github.com/iamez/slomix/issues/712)) ([bb4940a](https://github.com/iamez/slomix/commit/bb4940a4e51821134aabba06498553675e182289))
+* **website:** inline upload validation + detected category (Faza 3a) ([#719](https://github.com/iamez/slomix/issues/719)) ([e1f1685](https://github.com/iamez/slomix/commit/e1f1685b53b304c30b3206f2237ef04a203a2d14))
+* **website:** live roster-change (substitution) log on Live HUD (A3) ([#722](https://github.com/iamez/slomix/issues/722)) ([d6b01a9](https://github.com/iamez/slomix/commit/d6b01a9db3b216befcffb9ed53fbcb284d89c9b4))
+* **website:** live-ticking round + session timer on Live HUD (A2) ([#721](https://github.com/iamez/slomix/issues/721)) ([2bd2ebf](https://github.com/iamez/slomix/commit/2bd2ebf2315ec77d1627be85cbe9b40b03b40fd2))
+* **website:** one page that answers "is the whole chain running?" ([#737](https://github.com/iamez/slomix/issues/737)) ([2d2dae1](https://github.com/iamez/slomix/commit/2d2dae1758aee17f00d614cf7f63aa109e85b5ec))
+* **website:** put the result in the story page's first screen, fold the evidence ([#736](https://github.com/iamez/slomix/issues/736)) ([298fba0](https://github.com/iamez/slomix/commit/298fba0c797cdd50c4db078a54d00e38f0ca135e))
+* **website:** put the story back into the story page's existing panels ([#735](https://github.com/iamez/slomix/issues/735)) ([f07194f](https://github.com/iamez/slomix/commit/f07194f6c9e4ccd53e27d6ebb05f139fc039174e))
+* **website:** resumable chunked upload for large clips (Faza 3b) ([#720](https://github.com/iamez/slomix/issues/720)) ([ef6f30f](https://github.com/iamez/slomix/commit/ef6f30fb55162d47bb34fba58aa210e18457f5d9))
+* **website:** session story-arc opener — shape of the night (TOK H Steber B, Val H3) ([#714](https://github.com/iamez/slomix/issues/714)) ([f51b3e5](https://github.com/iamez/slomix/commit/f51b3e5e3dd0505cbc3a3175f2c9ea6ff7d3227b))
+* **website:** session-arc hero badge — visual weight (TOK H Steber B, Val H3) ([#715](https://github.com/iamez/slomix/issues/715)) ([08fb9cc](https://github.com/iamez/slomix/commit/08fb9ccdca8ad295ca1012e2014fa5242ade868d))
+* **website:** uploads gallery poster thumbnails (Faza 2) ([#718](https://github.com/iamez/slomix/issues/718)) ([9636675](https://github.com/iamez/slomix/commit/963667568804a04b8b8919eefb1eb5a937e82028))
+
+
+### Bug Fixes
+
+* **bot:** a date resolves to exactly ONE gaming session, never a blend ([#730](https://github.com/iamez/slomix/issues/730)) ([e98aed1](https://github.com/iamez/slomix/commit/e98aed1b93671de47f11cfbdb34797b443700bde))
+* **bot:** derive round_outcome from winner/defender at the source ([#728](https://github.com/iamez/slomix/issues/728)) ([6a39ed2](https://github.com/iamez/slomix/commit/6a39ed2dd396654e7628a2feafca4ff46349a357))
+* **bot:** link Lua captures that arrive after their round was imported ([#738](https://github.com/iamez/slomix/issues/738)) ([386159a](https://github.com/iamez/slomix/commit/386159ab8ec125fd8c9e31d9ef386c4e54c5da78))
+* **bot:** unify !proximity_session_scores on website v3.0 prox-scores ([#723](https://github.com/iamez/slomix/issues/723)) ([465a749](https://github.com/iamez/slomix/commit/465a74963573180507211829d2054613bd53d14b))
+* **db:** let the sides repair run on a pre-[#728](https://github.com/iamez/slomix/issues/728) checkout ([#733](https://github.com/iamez/slomix/issues/733)) ([5b744af](https://github.com/iamez/slomix/commit/5b744af84f3ebd1f22cec20ff8a90704d3f2298b))
+* **proximity:** exclude bot identities from the prox-scores percentile pool ([#725](https://github.com/iamez/slomix/issues/725)) ([c46421e](https://github.com/iamez/slomix/commit/c46421ed67fa073557557107eb3ab7d78aad57c1))
+* **proximity:** gate bot-test rounds out of /proximity/scopes session list ([#724](https://github.com/iamez/slomix/issues/724)) ([dec9dcf](https://github.com/iamez/slomix/commit/dec9dcf7c20d6201e9f23a64a3b2e5bc2429c58a))
+* the system check must not lie about the game server or Lua drift ([#745](https://github.com/iamez/slomix/issues/745)) ([19914b4](https://github.com/iamez/slomix/commit/19914b46c629e8b2664047833113ccd946d16fa0))
+* **website:** derive BOX fullhold from winner/defender, not the time heuristic ([#727](https://github.com/iamez/slomix/issues/727)) ([2f5936f](https://github.com/iamez/slomix/commit/2f5936fda9f58641dc126601680aea5d8f05d2d9))
+* **website:** gate /skill/composite by round validity, correct three stale issues ([#741](https://github.com/iamez/slomix/issues/741)) ([676c832](https://github.com/iamez/slomix/commit/676c832bbd4d2e9c7700424a50375fdefe698d51))
+* **website:** give the Comp Skill board its own container on the story page ([#734](https://github.com/iamez/slomix/issues/734)) ([41a6439](https://github.com/iamez/slomix/commit/41a6439bb263b8027cd80afcb9323780e8102055))
+* **website:** make each log file mean what its name says ([#742](https://github.com/iamez/slomix/issues/742)) ([de41f51](https://github.com/iamez/slomix/commit/de41f513267f2615e97c346660c2464280a27310))
+* **website:** uploads video lifecycle + modern player (Faza 1) ([#717](https://github.com/iamez/slomix/issues/717)) ([f25a499](https://github.com/iamez/slomix/commit/f25a499776c492a59dd91c0ca00cff7a90c8763e))
+
+
+### Performance Improvements
+
+* **website:** compute the aim summary once, not on every profile view ([#746](https://github.com/iamez/slomix/issues/746)) ([dc52782](https://github.com/iamez/slomix/commit/dc52782bcae452f267bf46d77fa0f7bdcf125d27))
+* **website:** let the profile page paint before its two slowest sections ([#744](https://github.com/iamez/slomix/issues/744)) ([37e34b3](https://github.com/iamez/slomix/commit/37e34b3785dec39280b2db008777d4c7187951c9))
+
 ## [1.36.1](https://github.com/iamez/slomix/compare/v1.36.0...v1.36.1) (2026-08-13)
 
 
