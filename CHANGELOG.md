@@ -6,6 +6,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.39.0](https://github.com/iamez/slomix/compare/v1.38.1...v1.39.0) (2026-08-18)
+
+
+### Features
+
+* **bot:** run the data-plausibility audit daily and alert on live findings ([#767](https://github.com/iamez/slomix/issues/767)) ([78f76c2](https://github.com/iamez/slomix/commit/78f76c222673d5eaa024211ae44e42819dacf79c))
+* **bot:** supastats — reactions, map-points row, QA (noise/logs/!supacheck) ([#771](https://github.com/iamez/slomix/issues/771)) ([23453bf](https://github.com/iamez/slomix/commit/23453bf5c64b1a9b8f0484dda6008fdf733b1021))
+* **lua:** live delivery hardening — one tailer, spool queue, map heartbeat ([#773](https://github.com/iamez/slomix/issues/773)) ([2c02cb0](https://github.com/iamez/slomix/commit/2c02cb0592253d1404fd880ebadc1fb7a87f77dd))
+* **website:** expose how the Smart Stats MVP is actually picked ([#769](https://github.com/iamez/slomix/issues/769)) ([4166314](https://github.com/iamez/slomix/commit/41663148f328fe78d37945b59eb04306a8f22da2))
+* **website:** live ladder — per-player live K/D/DPM, alive dots, timelines ([#778](https://github.com/iamez/slomix/issues/778)) ([0f1a48e](https://github.com/iamez/slomix/commit/0f1a48e2c70e81eba28b0b6808b6889bc0a1b2c4))
+* **website:** player card — rating, archetype, percentile rings, form ([#775](https://github.com/iamez/slomix/issues/775)) ([9720f6d](https://github.com/iamez/slomix/commit/9720f6dc607555ba5c486cc41a25e7eb5b252b5d))
+
+
+### Bug Fixes
+
+* **bot:** round durations come from measurement, not the stopwatch clock ([#770](https://github.com/iamez/slomix/issues/770)) ([7c2e3d2](https://github.com/iamez/slomix/commit/7c2e3d2bed42b297b825c34554885cb0b7766d31))
+* **bot:** timing debug waits for Lua, edits stragglers, skips stale rounds ([#774](https://github.com/iamez/slomix/issues/774)) ([75b7e9d](https://github.com/iamez/slomix/commit/75b7e9dfdfe308fb671894297af47f12a91691bb))
+* **website:** live page — feed truth, one status card, dev mirror ([#772](https://github.com/iamez/slomix/issues/772)) ([67bb59f](https://github.com/iamez/slomix/commit/67bb59f83e1685844d98825092215bd2235670a0))
+
 ## [1.38.1](https://github.com/iamez/slomix/compare/v1.38.0...v1.38.1) (2026-08-17)
 
 
