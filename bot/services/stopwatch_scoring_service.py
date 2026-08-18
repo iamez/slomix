@@ -19,6 +19,7 @@ import logging
 from typing import Any
 
 from shared.round_details import ROUND_DETAILS_VERSION
+from shared.round_time import round_duration_seconds
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +132,94 @@ class StopwatchScoringService:
         except (ValueError, IndexError):
             return 0
 
+    # ── Duration/outcome helpers (RCA 2026-08-18) ────────────────────
+    # rounds.actual_time is the g_nextTimeLimit cvar (stopwatch TARGET),
+    # not a measurement — on surrender it carries the full timelimit /
+    # R1's time. The measured truth is actual_duration_seconds. See
+    # shared/round_time.py for the full contract.
+
+    def _round_duration_secs(self, round_data: dict) -> int:
+        """Measured round duration in seconds (0 = unknown)."""
+        return round_duration_seconds(
+            round_data.get('actual_duration_seconds'),
+            round_data.get('actual_time'),
+        ) or 0
+
+    def _round_duration_str(self, round_data: dict) -> str:
+        """Measured round duration as M:SS ('' = unknown)."""
+        secs = self._round_duration_secs(round_data)
+        return f"{secs // 60}:{secs % 60:02d}" if secs > 0 else ''
+
+    def _round_limit_secs(self, round_data: dict) -> int:
+        """Effective time limit: lua timelimit first (rounds.time_limit is
+        '0' for most modern rounds), header text as fallback."""
+        lua_min = round_data.get('lua_time_limit_minutes')
+        try:
+            if lua_min and float(lua_min) > 0:
+                return int(float(lua_min) * 60)
+        except (TypeError, ValueError):
+            # Unparsable lua value — fall through to the header text below.
+            pass
+        return self.parse_time_to_seconds(round_data.get('time_limit'))
+
+    def _attackers_succeeded(self, round_data: dict) -> bool | None:
+        """Did this round's attackers complete the objective?
+
+        Ground truth is winner vs defender side (same rule BOX uses). A
+        recorded surrender means the attackers gave up regardless of the
+        clock. Only when both signals are missing fall back to the legacy
+        duration-vs-limit heuristic. Returns None when undecidable.
+        """
+        winner = normalize_side(round_data.get('winner_team'))
+        defender = normalize_side(round_data.get('defender_team'))
+        if winner is not None and defender is not None:
+            return winner != defender
+        if normalize_side(round_data.get('surrender_team')) is not None:
+            return False
+        dur = self._round_duration_secs(round_data)
+        limit = self._round_limit_secs(round_data)
+        if dur <= 0:
+            return None
+        if limit <= 0:
+            return True  # legacy: any positive time counts as completion
+        return dur < limit
+
+    def calculate_map_score_from_rounds(
+        self, r1: dict, r2: dict
+    ) -> tuple[int, int, str]:
+        """Map winner from round dicts — outcome from winner/defender sides
+        (surrender-aware), tiebreak by MEASURED durations.
+
+        Replaces direct calculate_map_score(actual_time...) calls, which
+        mis-scored surrendered rounds (inflated actual_time made the
+        surrendering attackers look like they set a time).
+        Returns (r1_attackers_points, r2_attackers_points, description).
+        """
+        r1_succ = self._attackers_succeeded(r1)
+        r2_succ = self._attackers_succeeded(r2)
+        if r1_succ is None or r2_succ is None:
+            # Either round's outcome is undecidable (no winner/defender, no
+            # surrender record, no usable duration) — don't guess "fullhold"
+            # for it; keep the legacy time-based scoring for the whole match
+            # so degenerate rows behave exactly as before this fix.
+            return self.calculate_map_score(
+                r1.get('time_limit'), r1.get('actual_time'),
+                r2.get('actual_time'),
+            )
+        r1_str = self._round_duration_str(r1) or 'fullhold'
+        r2_str = self._round_duration_str(r2) or 'fullhold'
+        if r1_succ and r2_succ:
+            r1_dur = self._round_duration_secs(r1)
+            r2_dur = self._round_duration_secs(r2)
+            if r1_dur <= r2_dur:  # tie -> Team1, as in legacy scoring
+                return 2, 0, f"Map win: R1 attackers {r1_str} vs {r2_str}"
+            return 0, 2, f"Map win: R2 attackers {r2_str} vs {r1_str}"
+        if r1_succ:
+            return 2, 0, f"Map win: R1 attackers set time {r1_str} (R2 fullhold)"
+        if r2_succ:
+            return 0, 2, f"Map win: R2 attackers completed {r2_str} (R1 fullhold)"
+        return 1, 1, "No completion by either team: 1-1 draw"
+
     def calculate_map_score(
         self,
         round1_time_limit: str,
@@ -239,37 +328,48 @@ class StopwatchScoringService:
                     ['$' + str(i+1) for i in range(len(session_ids))]
                 )
                 # nosec B608 - safe: parameterized placeholders ($1, $2...)
+                # lua_round_teams.round_id is UNIQUE — see the note on the
+                # date-variant query below; same join, same reasoning.
                 rounds_query = f"""
-                    SELECT map_name, gaming_session_id, round_number,
-                           defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time, match_id,
-                           round_start_unix, map_play_seq
-                    FROM rounds
-                    WHERE id IN ({placeholders})
-                    AND round_status = 'completed'
-                    AND is_valid
-                    AND round_number IN (1, 2)
-                    ORDER BY gaming_session_id,
-                             round_date,
-                             CAST(REPLACE(round_time, ':', '') AS INTEGER),
-                             round_number
+                    SELECT r.map_name, r.gaming_session_id, r.round_number,
+                           r.defender_team, r.winner_team, r.time_limit, r.actual_time,
+                           r.round_date, r.round_time, r.match_id,
+                           r.round_start_unix, r.map_play_seq,
+                           r.actual_duration_seconds,
+                           l.surrender_team, l.time_limit_minutes
+                    FROM rounds r
+                    LEFT JOIN lua_round_teams l ON l.round_id = r.id
+                    WHERE r.id IN ({placeholders})
+                    AND r.round_status = 'completed'
+                    AND r.is_valid
+                    AND r.round_number IN (1, 2)
+                    ORDER BY r.gaming_session_id,
+                             r.round_date,
+                             CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
+                             r.round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, tuple(session_ids))
             else:
+                # lua_round_teams.round_id is UNIQUE (verified in dev DB:
+                # lua_round_teams_round_id_key), so a plain LEFT JOIN cannot
+                # fan out rows and is cheaper than per-row scalar subqueries.
                 rounds_query = """
-                    SELECT map_name, gaming_session_id, round_number,
-                           defender_team, winner_team, time_limit, actual_time,
-                           round_date, round_time, match_id,
-                           round_start_unix, map_play_seq
-                    FROM rounds
-                    WHERE SUBSTRING(round_date, 1, 10) = $1
-                    AND round_status = 'completed'
-                    AND is_valid
-                    AND round_number IN (1, 2)
-                    ORDER BY gaming_session_id,
-                             round_date,
-                             CAST(REPLACE(round_time, ':', '') AS INTEGER),
-                             round_number
+                    SELECT r.map_name, r.gaming_session_id, r.round_number,
+                           r.defender_team, r.winner_team, r.time_limit, r.actual_time,
+                           r.round_date, r.round_time, r.match_id,
+                           r.round_start_unix, r.map_play_seq,
+                           r.actual_duration_seconds,
+                           l.surrender_team, l.time_limit_minutes
+                    FROM rounds r
+                    LEFT JOIN lua_round_teams l ON l.round_id = r.id
+                    WHERE SUBSTRING(r.round_date, 1, 10) = $1
+                    AND r.round_status = 'completed'
+                    AND r.is_valid
+                    AND r.round_number IN (1, 2)
+                    ORDER BY r.gaming_session_id,
+                             r.round_date,
+                             CAST(REPLACE(r.round_time, ':', '') AS INTEGER),
+                             r.round_number
                 """
                 rows = await self.db.fetch_all(rounds_query, (session_date,))
 
@@ -285,13 +385,20 @@ class StopwatchScoringService:
             for row in rows:
                 (map_name, gaming_session_id, round_num, defender, winner,
                  time_limit, actual_time, round_date, round_time, match_id,
-                 round_start_unix, map_play_seq) = row
+                 round_start_unix, map_play_seq,
+                 actual_duration_seconds, surrender_team,
+                 lua_time_limit_minutes) = row
 
                 round_data = {
                     'defender': defender,
+                    'defender_team': defender,
                     'winner': winner,
+                    'winner_team': winner,
                     'time_limit': time_limit,
                     'actual_time': actual_time,
+                    'actual_duration_seconds': actual_duration_seconds,
+                    'surrender_team': surrender_team,
+                    'lua_time_limit_minutes': lua_time_limit_minutes,
                     'round_date': round_date,
                     'round_time': round_time,
                     'round_start_unix': round_start_unix,
@@ -479,9 +586,8 @@ class StopwatchScoringService:
                 r1 = map_data['round1']
                 r2 = map_data['round2']
 
-                team1_pts, team2_pts, desc = self.calculate_map_score(
-                    r1['time_limit'], r1['actual_time'],
-                    r2['actual_time']
+                team1_pts, team2_pts, desc = self.calculate_map_score_from_rounds(
+                    r1, r2
                 )
 
                 teams[1]['score'] += team1_pts
@@ -791,8 +897,11 @@ class StopwatchScoringService:
                 SELECT r.id, r.map_name, r.gaming_session_id, r.round_number,
                        r.defender_team, r.winner_team, r.time_limit, r.actual_time,
                        r.round_date, r.round_time, r.match_id,
-                       r.round_start_unix, r.map_play_seq
+                       r.round_start_unix, r.map_play_seq,
+                       r.actual_duration_seconds,
+                       l.surrender_team, l.time_limit_minutes
                 FROM rounds r
+                LEFT JOIN lua_round_teams l ON l.round_id = r.id
                 WHERE r.id IN ({placeholders})
                 AND r.round_status = 'completed'
                 AND r.is_valid
@@ -817,7 +926,9 @@ class StopwatchScoringService:
                 (round_id, map_name, gaming_session_id, round_num,
                  defender_team, winner_team, time_limit, actual_time,
                  round_date, round_time, match_id,
-                 round_start_unix, map_play_seq) = row
+                 round_start_unix, map_play_seq,
+                 actual_duration_seconds, surrender_team,
+                 lua_time_limit_minutes) = row
 
                 round_data = {
                     'round_id': round_id,
@@ -825,6 +936,9 @@ class StopwatchScoringService:
                     'winner_team': winner_team,
                     'time_limit': time_limit,
                     'actual_time': actual_time,
+                    'actual_duration_seconds': actual_duration_seconds,
+                    'surrender_team': surrender_team,
+                    'lua_time_limit_minutes': lua_time_limit_minutes,
                     'round_date': round_date,
                     'round_time': round_time,
                     'round_start_unix': round_start_unix,
@@ -901,13 +1015,22 @@ class StopwatchScoringService:
                         ambiguous_team_sides = True
 
                 def _infer_defender_side_from_winner(r1_data):
-                    """Infer defender side using winner_team + time (fallback when header is stale)."""
-                    winner_side = r1_data.get('winner_team')
-                    if winner_side not in (1, 2):
+                    """Infer defender side using winner_team + measured
+                    duration (fallback when the header is stale).
+
+                    Surrender-aware: a recorded surrender means the round did
+                    NOT complete, so the winner defended — even though the
+                    measured duration is below the limit (RCA 2026-08-18).
+                    """
+                    winner_side = normalize_side(r1_data.get('winner_team'))
+                    if winner_side is None:
                         return None
 
-                    limit_sec = self.parse_time_to_seconds(r1_data.get('time_limit'))
-                    actual_sec = self.parse_time_to_seconds(r1_data.get('actual_time'))
+                    if normalize_side(r1_data.get('surrender_team')) is not None:
+                        return winner_side
+
+                    limit_sec = self._round_limit_secs(r1_data)
+                    actual_sec = self._round_duration_secs(r1_data)
                     if limit_sec <= 0 or actual_sec <= 0:
                         return None
 
@@ -938,11 +1061,11 @@ class StopwatchScoringService:
                     # report the map winner BY TIME (R1 attackers vs R2 attackers);
                     # we just can't attribute it to persistent Team A/B, so it does
                     # NOT add to the session map tally. The note makes that explicit.
-                    t1_pts, t2_pts, _time_desc = self.calculate_map_score(
-                        r1.get('time_limit'), r1.get('actual_time'), r2.get('actual_time')
+                    t1_pts, t2_pts, _time_desc = self.calculate_map_score_from_rounds(
+                        r1, r2
                     )
-                    r1_t = r1.get('actual_time') or 'fullhold'
-                    r2_t = r2.get('actual_time') or 'fullhold'
+                    r1_t = self._round_duration_str(r1) or 'fullhold'
+                    r2_t = self._round_duration_str(r2) or 'fullhold'
                     if t1_pts > t2_pts:
                         side_note = f"R1 attackers won ({r1_t})"
                     elif t2_pts > t1_pts:
@@ -1023,9 +1146,9 @@ class StopwatchScoringService:
                         desc = f"Map win: side {winner_side} (R2 winner)"
                     scoring_source = "header"
                 else:
-                    # Fallback to time-based scoring
-                    team1_pts, team2_pts, desc = self.calculate_map_score(
-                        r1['time_limit'], r1['actual_time'], r2['actual_time']
+                    # Fallback to outcome/duration-based scoring
+                    team1_pts, team2_pts, desc = self.calculate_map_score_from_rounds(
+                        r1, r2
                     )
 
                     # team1_pts = R1 attackers' score, team2_pts = R2 attackers' (R1 defenders)
@@ -1043,24 +1166,22 @@ class StopwatchScoringService:
                 team_a_maps += team_a_pts
                 team_b_maps += team_b_pts
 
-                # Format timing for display
-                r1_time = r1['actual_time'] or "fullhold"
-                r2_time = r2['actual_time'] or "fullhold"
-                limit_sec = self.parse_time_to_seconds(r1['time_limit'])
-                r1_sec = self.parse_time_to_seconds(r1_time) if r1_time != "fullhold" else limit_sec
-                r2_sec = self.parse_time_to_seconds(r2_time) if r2_time != "fullhold" else limit_sec
-
-                # Determine if times are fullholds
-                r1_fullhold = (r1_sec >= limit_sec) if limit_sec > 0 else False
-                r2_fullhold = (r2_sec >= limit_sec) if limit_sec > 0 else False
+                # Format timing for display — measured durations, and
+                # "fullhold" whenever the attackers did not complete
+                # (surrender-aware; an inflated actual_time no longer
+                # masquerades as a set time).
+                r1_disp = self._round_duration_str(r1) or r1['actual_time'] or "fullhold"
+                r2_disp = self._round_duration_str(r2) or r2['actual_time'] or "fullhold"
+                r1_shown = "fullhold" if self._attackers_succeeded(r1) is False else r1_disp
+                r2_shown = "fullhold" if self._attackers_succeeded(r2) is False else r2_disp
 
                 # Build timing display
                 if team_a_attacking_r1:
-                    team_a_time = "fullhold" if r1_fullhold else r1['actual_time']
-                    team_b_time = "fullhold" if r2_fullhold else r2['actual_time']
+                    team_a_time = r1_shown
+                    team_b_time = r2_shown
                 else:
-                    team_a_time = "fullhold" if r2_fullhold else r2['actual_time']
-                    team_b_time = "fullhold" if r1_fullhold else r1['actual_time']
+                    team_a_time = r2_shown
+                    team_b_time = r1_shown
 
                 # Determine map winner for emoji
                 if team_a_pts > team_b_pts:

@@ -58,7 +58,8 @@ class WebsiteSessionDataService(SessionDataService):
                 r.id,
                 r.map_name,
                 r.round_number,
-                r.actual_time,
+                -- measured duration first; raw actual_time is inflated on surrenders (RCA 2026-08-18)
+                CASE WHEN COALESCE(r.actual_duration_seconds, 0) > 0 THEN (r.actual_duration_seconds / 60)::text || ':' || lpad((r.actual_duration_seconds % 60)::text, 2, '0') ELSE r.actual_time END AS actual_time,
                 r.winner_team,
                 r.round_outcome,
                 r.round_date,
@@ -87,7 +88,8 @@ class WebsiteSessionDataService(SessionDataService):
                     r.id,
                     r.map_name,
                     r.round_number,
-                    r.actual_time,
+                    -- measured duration first; raw actual_time is inflated on surrenders (RCA 2026-08-18)
+                CASE WHEN COALESCE(r.actual_duration_seconds, 0) > 0 THEN (r.actual_duration_seconds / 60)::text || ':' || lpad((r.actual_duration_seconds % 60)::text, 2, '0') ELSE r.actual_time END AS actual_time,
                     r.winner_team,
                     r.round_outcome,
                     r.round_date,
@@ -272,7 +274,7 @@ class WebsiteSessionDataService(SessionDataService):
         Get all matches for a specific session date.
         """
         query = """
-            SELECT id, map_name, round_number, actual_time, winner_team, round_outcome, round_date
+            SELECT id, map_name, round_number, CASE WHEN COALESCE(actual_duration_seconds, 0) > 0 THEN (actual_duration_seconds / 60)::text || ':' || lpad((actual_duration_seconds % 60)::text, 2, '0') ELSE actual_time END AS actual_time, winner_team, round_outcome, round_date
             FROM rounds
             WHERE round_date = $1
               AND round_number IN (1, 2)
@@ -308,7 +310,7 @@ class WebsiteSessionDataService(SessionDataService):
 
         placeholders = ",".join("?" * len(session_ids))
         query = f"""
-            SELECT id, map_name, round_number, actual_time, winner_team, round_outcome, round_date
+            SELECT id, map_name, round_number, CASE WHEN COALESCE(actual_duration_seconds, 0) > 0 THEN (actual_duration_seconds / 60)::text || ':' || lpad((actual_duration_seconds % 60)::text, 2, '0') ELSE actual_time END AS actual_time, winner_team, round_outcome, round_date
             FROM rounds
             WHERE id IN ({placeholders})
               AND round_number IN (1, 2)
