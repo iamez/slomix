@@ -144,7 +144,7 @@ function _interpHold(elapsedSec) {
 function _mvpApply(ev) {
     switch (ev.type) {
         case 'KILL':
-            if (_liveKillActive) break;  // LIVE_KILL path counts instead
+            if (_liveKillActive()) break;  // LIVE_KILL path counts instead
             if (!ev._teamkill) _mvpAdd(ev.killer_slot, MVP_WEIGHTS.kill);
             _mvpAdd(ev.victim_slot, MVP_WEIGHTS.death);
             break;
@@ -193,7 +193,11 @@ function _pressureApply(ev) {
     }
     else if (ev.type === 'OBJECTIVE_DESTROYED') toAttackers(+18);
     else if (ev.type === 'ANNOUNCE' && /captured|destroyed|secured/i.test(ev.text || '')) toAttackers(+10);
-    else if (ev.type === 'KILL' && !ev._teamkill) {
+    else if ((ev.type === 'KILL' && !ev._teamkill)
+             || (ev.type === 'LIVE_KILL' && ev.killer_slot !== ev.victim_slot)) {
+        // LIVE_KILL is the preferred obituary since the server deduped the
+        // legacy copy (#772) — without this branch the pressure bar went
+        // deaf to kills whenever the LIVEX tailer was healthy (coderabbit).
         const kt = _slotTeam(ev.killer_slot);
         if (kt != null && _defenderSide != null) toAttackers(kt === _defenderSide ? -1.5 : +1.5);
     }
@@ -204,10 +208,15 @@ function _pressureApply(ev) {
 // LIVE_KILL, treat it as the authority and drop legacy KILL rows from the
 // display (they still feed streak/MVP via _combatApply, so state is single-
 // counted below by keying off victim+killer only on LIVE_KILL when active).
-let _liveKillActive = false;
+let _liveKillLastAt = 0;
+// Active only while LIVE_KILLs are actually arriving: a permanent latch made
+// kills vanish from the feed forever if the LIVEX tailer died (2026-08-18).
+function _liveKillActive() {
+    return (Date.now() / 1000 - _liveKillLastAt) < 120;
+}
 
 function _combatApply(ev) {
-    if (ev.type === 'LIVE_KILL') { _liveKillActive = true; }
+    if (ev.type === 'LIVE_KILL') { _liveKillLastAt = ev.received_at || (Date.now() / 1000); }
     if (ev.type === 'KILL') {
         const k = ev.killer_slot, v = ev.victim_slot;
         // Kill lines carry slot AND name for both parties — the densest
@@ -270,20 +279,42 @@ async function _poll() {
         );
         _lastFetchOk = true;
         if (data && Array.isArray(data.events) && data.events.length) {
+            // Dedup by seq: the cursor advances to the max seq we actually
+            // RECEIVED (not the server's global last_seq — that skipped every
+            // event between this page and the ring head, the 2026-08-18
+            // "stuck on quiet then bursts" bug).
+            const fresh = data.events.filter(ev => (ev.seq || 0) > _cursor);
+            // Feed gap (server pages from the newest end): events between our
+            // cursor and oldest_seq were skipped, so per-round derived state
+            // (streaks, MVP tallies) is no longer trustworthy — reset it
+            // rather than display stale numbers (coderabbit, PR #772). The
+            // roster/map recover from /api/live/state on its own poll.
+            if (_cursor > 0 && data.oldest_seq != null && data.oldest_seq > _cursor + 1) {
+                _streak.clear();
+                _mvp.clear();
+                _roundScores = [];
+            }
             // Per-event state (roster/streaks/momentum/MVP) MUST be updated
             // before buffering + render — this loop was lost in a rebase and
             // its absence silently disabled attribution, pressure and MVP.
-            for (const ev of data.events) {
+            for (const ev of fresh) {
                 _rosterApply(ev);
                 _combatApply(ev);
                 _pressureApply(ev);
                 _mvpApply(ev);
             }
-            _events = _events.concat(data.events).slice(-MAX_BUFFER);
-            _cursor = data.last_seq || _cursor;
+            for (const ev of fresh) {
+                if ((ev.seq || 0) > _cursor) _cursor = ev.seq;
+            }
+            // Only renderable rows may occupy the buffer: invisible types
+            // used to crowd out the 200 slots and leave one stale revive on
+            // screen. Age expiry keeps a hidden-tab backlog from re-surfacing.
+            const cutoff = Date.now() / 1000 - 600;
+            _events = _events
+                .concat(fresh.filter(ev => _line(ev) !== ''))
+                .filter(ev => (ev.received_at || 0) >= cutoff)
+                .slice(-MAX_BUFFER);
             renderLiveTicker();
-        } else if (data && data.last_seq != null) {
-            _cursor = data.last_seq;
         }
         _momentum = 50 + (_momentum - 50) * _MOM_DECAY;
     } catch (e) {
@@ -453,7 +484,7 @@ export function renderLiveTicker() {
     }
     const visible = _events.filter(e =>
         _filters[_TYPE_TO_CAT[e.type]] === true
-        && !(e.type === 'KILL' && _liveKillActive));  // LIVE_KILL supersedes legacy
+        && !(e.type === 'KILL' && _liveKillActive()));  // LIVE_KILL supersedes legacy
     const rows = visible.slice(-MAX_SHOWN).reverse().map(_line).filter(Boolean).join('');
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', `
