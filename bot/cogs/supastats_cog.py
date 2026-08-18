@@ -211,9 +211,14 @@ class SupastatsCog(commands.Cog):
 
         all_match = "everything comparable matches" in report_text
         await self._react(sheet_post, "✅" if all_match else "⚠️")
-        await self._dm(lines + ["", report_text])
-        logger.info("supastats: comparison report DMed to owner (%s)",
-                    "all match" if all_match else "differences found")
+        delivered = await self._dm(lines + ["", report_text])
+        if delivered:
+            logger.info("supastats: comparison report DMed to owner (%s)",
+                        "all match" if all_match else "differences found")
+        else:
+            logger.warning("supastats: comparison finished (%s) but the DM "
+                           "was NOT delivered",
+                           "all match" if all_match else "differences found")
 
     async def _compare(self, sheet, date_override) -> str:
         from bot.services.session_data_service import SessionDataService
@@ -284,11 +289,13 @@ class SupastatsCog(commands.Cog):
             )
         return report_text
 
-    async def _dm(self, lines: list[str]):
+    async def _dm(self, lines: list[str]) -> bool:
+        """Send the report; True only when delivery actually happened —
+        callers must not log 'DMed' on a False return (coderabbit, #771)."""
         owner_id = getattr(self.config, "owner_user_id", 0)
         if not owner_id:
             logger.warning("supastats check has no OWNER_USER_ID to report to")
-            return
+            return False
         text = "\n".join(lines)
         try:
             user = self.bot.get_user(owner_id) or await self.bot.fetch_user(owner_id)
@@ -296,6 +303,8 @@ class SupastatsCog(commands.Cog):
                 await user.send(chunk)
         except discord.HTTPException:
             logger.exception("could not DM the supastats report")
+            return False
+        return True
 
 
 async def setup(bot):

@@ -443,20 +443,21 @@ def read_supastats_image(data: bytes) -> ParsedSheet:
         for c in range(n_maps)
     ]
 
-    # The nearest white row ABOVE the first header sometimes carries one
+    # The white row DIRECTLY above the first header sometimes carries one
     # small integer per map (map points, by the observed pattern). It was
     # decoded-and-discarded until 2026-08-18; read it when every map cell
-    # decodes, otherwise leave None — never guess.
+    # decodes, otherwise leave None — never guess. Strictly the adjacent
+    # row only: scanning further up could decode an unrelated table above
+    # the sheet (coderabbit, PR #771).
     map_points: list[int] | None = None
-    for row in range(header_rows[0] - 1, -1, -1):
-        if roles[row] != "WHITE":
-            continue
+    adjacent = header_rows[0] - 1
+    if adjacent >= 0 and roles[adjacent] == "WHITE":
         candidate = [
-            _read_number(_cell(arr, edges, y0, c, row))[0] for c in range(n_maps)
+            _read_number(_cell(arr, edges, y0, c, adjacent))[0]
+            for c in range(n_maps)
         ]
         if all(v is not None for v in candidate):
             map_points = [int(v) for v in candidate]
-        break  # only the row directly adjacent to the header block
 
     # Best effort only: the header row uses a smaller font than the data cells
     # and mixes hyphens into the glyph run, so the date often will not decode.

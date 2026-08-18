@@ -496,6 +496,17 @@ class UltimateETLegacyBot(
         if ctx.channel.id in self.all_allowed_channels:
             return True
 
+        # Narrow exception mirroring the on_message gate: the watched
+        # supastats channel may dispatch commands while the feature is
+        # enabled (the cog's own channel guard still restricts what runs
+        # there). Without this, !supacheck passed on_message but died here
+        # — coderabbit, PR #771.
+        if (
+            getattr(self.config, "supastats_check_enabled", False)
+            and ctx.channel.id == getattr(self.config, "supastats_channel_id", 0)
+        ):
+            return True
+
         # Silently ignore - return False without sending any message
         return False
 

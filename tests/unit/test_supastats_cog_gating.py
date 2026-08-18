@@ -141,3 +141,27 @@ async def test_mismatching_sheet_gets_warning(monkeypatch):
     reactions, _ = await _run_success_path(
         monkeypatch, "kills differ: squaze map 3 sheet=41 ours=38")
     assert reactions == ["⚠️"]
+
+
+# ── bot_check: !supacheck dispatch through the GLOBAL gate (coderabbit) ──
+
+@pytest.mark.asyncio
+async def test_bot_check_admits_supastats_channel_when_enabled():
+    from bot.ultimate_bot import UltimateETLegacyBot
+
+    fake_bot = SimpleNamespace(
+        all_allowed_channels=[111, 222],
+        config=SimpleNamespace(supastats_check_enabled=True,
+                               supastats_channel_id=999),
+    )
+    ctx = SimpleNamespace(channel=SimpleNamespace(id=999))
+    assert await UltimateETLegacyBot.bot_check(fake_bot, ctx) is True
+
+    # disabled feature -> channel stays rejected
+    fake_bot.config.supastats_check_enabled = False
+    assert await UltimateETLegacyBot.bot_check(fake_bot, ctx) is False
+
+    # unrelated channel stays rejected either way
+    ctx_other = SimpleNamespace(channel=SimpleNamespace(id=555))
+    fake_bot.config.supastats_check_enabled = True
+    assert await UltimateETLegacyBot.bot_check(fake_bot, ctx_other) is False
