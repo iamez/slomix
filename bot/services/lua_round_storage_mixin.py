@@ -858,6 +858,17 @@ class _LuaRoundStorageMixin:
                 f"(Axis: {axis_count}, Allies: {allies_count})"
             )
 
+            # A timing-debug embed may already be posted with "No Lua data"
+            # (webhook arrived >90 s after the stats import) — edit it in
+            # place now that the data landed (owner request, 2026-08-18).
+            svc = getattr(self, 'timing_debug_service', None)
+            if svc and getattr(svc, 'enabled', False):
+                try:
+                    await svc.on_lua_data_stored(match_id, round_number)
+                except Exception:
+                    webhook_logger.debug("timing debug late-edit failed (non-critical)",
+                                         exc_info=True)
+
             # 🔗 CORRELATION: notify of lua teams arrival
             if hasattr(self, 'correlation_service') and self.correlation_service:
                 try:
