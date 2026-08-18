@@ -72,10 +72,13 @@ export function renderPlayerCardHTML(card, { live = null } = {}) {
     const p = card.percentiles || {};
     const badges = (card.badges || []).map(b =>
         `<span title="${escapeHtml(b.title || '')}" class="text-lg">${escapeHtml(b.emoji || '🏅')}</span>`).join('');
+    // Coerce to numbers before interpolation — live objects come from
+    // callers, and a stray string here would be an XSS sink (coderabbit).
+    const ln = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
     const liveRow = live ? `
         <div class="mt-2 pt-2 border-t border-white/10 flex items-center justify-between text-xs">
             <span class="uppercase tracking-widest text-rose-300 font-black text-[10px]">● Live tonight</span>
-            <span class="text-slate-200 font-mono">${live.kills ?? 0}K/${live.deaths ?? 0}D · DPM ${live.dpm ?? '—'} ${live.alive === false ? '· <span class="text-slate-500">dead</span>' : ''}</span>
+            <span class="text-slate-200 font-mono">${ln(live.kills)}K/${ln(live.deaths)}D · DPM ${live.dpm != null ? ln(live.dpm) : '—'} ${live.alive === false ? '· <span class="text-slate-500">dead</span>' : ''}</span>
         </div>` : '';
     return `
     <div class="player-card relative overflow-hidden rounded-2xl p-4"
@@ -112,6 +115,7 @@ export function renderPlayerCardHTML(card, { live = null } = {}) {
 }
 
 let _overlay = null;
+let _openSeq = 0;  // supersede guard: only the latest open may render
 
 function _closeModal() {
     if (_overlay) { _overlay.remove(); _overlay = null; }
@@ -122,6 +126,7 @@ function _escClose(e) { if (e.key === 'Escape') _closeModal(); }
 
 /** Fetch + show the card as a centred modal. `identifier` = guid or name. */
 export async function openPlayerCard(identifier, { live = null } = {}) {
+    const seq = ++_openSeq;
     _closeModal();
     _overlay = document.createElement('div');
     _overlay.className = 'fixed inset-0 z-50 flex items-center justify-center';
@@ -135,6 +140,7 @@ export async function openPlayerCard(identifier, { live = null } = {}) {
         const card = await fetchJSON(
             `${API_BASE}/players/${encodeURIComponent(identifier)}/card`,
             { cachePolicy: 'no-store', credentials: 'same-origin' });
+        if (seq !== _openSeq) return;  // a newer card superseded this one
         const slot = _overlay && _overlay.querySelector('[data-card-slot]');
         if (!slot) return;
         slot.textContent = '';

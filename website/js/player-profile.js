@@ -175,9 +175,13 @@ export async function loadPlayerProfile(playerIdentifier) {
         const cardHost = document.getElementById('profile-player-card');
         if (cardHost) {
             cardHost.textContent = '';
+            // Supersede guard: navigating to another profile before this
+            // resolves must not let the old card overwrite the new page.
+            cardHost.dataset.cardFor = resolvedId;
             fetchJSON(`${API_BASE}/players/${encodeURIComponent(resolvedId)}/card`,
                 { cachePolicy: 'no-store', credentials: 'same-origin' })
                 .then(card => {
+                    if (cardHost.dataset.cardFor !== resolvedId) return;
                     cardHost.textContent = '';
                     safeInsertHTML(cardHost, 'beforeend', renderPlayerCardHTML(card));
                 })

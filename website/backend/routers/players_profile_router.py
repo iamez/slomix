@@ -1567,6 +1567,10 @@ async def get_player_memory_card(identifier: str, db: DatabaseAdapter = Depends(
 
 _CARD_WINDOW_DAYS = 90
 _CARD_MIN_POOL_ROUNDS = 30  # a player needs this many rounds to anchor percentiles
+# The card SUBJECT needs fewer rounds than a pool anchor (new players still
+# deserve a card) — but below this, percentiles against a 30-round pool are
+# noise and are withheld (small_sample=true instead).
+_CARD_MIN_SUBJECT_ROUNDS = 10
 
 
 def _percentile(values: list[float], mine: float) -> int | None:
@@ -1617,8 +1621,12 @@ async def get_player_card(identifier: str, db: DatabaseAdapter = Depends(get_db)
           AND r.is_valid IS DISTINCT FROM FALSE
           AND CAST(r.round_date AS DATE) >= CURRENT_DATE - ?::int
         GROUP BY pcs.player_guid
+        -- pool anchors need >= min rounds; the subject's own row always
+        -- returns (coderabbit: don't pull every stray player just to
+        -- filter in Python)
+        HAVING COUNT(*) >= ? OR pcs.player_guid = ?
         """,
-        (_CARD_WINDOW_DAYS,),
+        (_CARD_WINDOW_DAYS, _CARD_MIN_POOL_ROUNDS, guid8),
     )
 
     def _derive(row):
@@ -1647,14 +1655,20 @@ async def get_player_card(identifier: str, db: DatabaseAdapter = Depends(get_db)
     if mine is None:
         raise HTTPException(status_code=404, detail="No recent rounds for player")
 
-    percentiles = {
-        "dpm": _percentile([p["dpm"] for p in pool], mine["dpm"]),
-        "kd": _percentile([p["kd"] for p in pool], mine["kd"]),
-        "revives": _percentile([p["revives"] / max(p["rounds"], 1) for p in pool],
-                               mine["revives"] / max(mine["rounds"], 1)),
-        "survival": _percentile([100 - p["time_dead_pct"] for p in pool],
-                                100 - mine["time_dead_pct"]),
-    }
+    # Percentiles against a >=30-round pool are noise for a tiny subject
+    # sample — withhold them and say so instead (coderabbit).
+    small_sample = mine["rounds"] < _CARD_MIN_SUBJECT_ROUNDS
+    if small_sample:
+        percentiles = {"dpm": None, "kd": None, "revives": None, "survival": None}
+    else:
+        percentiles = {
+            "dpm": _percentile([p["dpm"] for p in pool], mine["dpm"]),
+            "kd": _percentile([p["kd"] for p in pool], mine["kd"]),
+            "revives": _percentile([p["revives"] / max(p["rounds"], 1) for p in pool],
+                                   mine["revives"] / max(mine["rounds"], 1)),
+            "survival": _percentile([100 - p["time_dead_pct"] for p in pool],
+                                    100 - mine["time_dead_pct"]),
+        }
 
     # 3) Relative archetype via the canonical storytelling classifier: the
     # pool averages play the "session average" role. Fields the 90-day
@@ -1734,6 +1748,7 @@ async def get_player_card(identifier: str, db: DatabaseAdapter = Depends(get_db)
         },
         "archetype": archetype,
         "window_days": _CARD_WINDOW_DAYS,
+        "small_sample": small_sample,
         "form": mine,
         "percentiles": percentiles,
         "sparkline_dpm": sparkline,
