@@ -10,6 +10,7 @@ Purpose: Validate that our Lua timing fixes (surrender bug, pause tracking)
 are working correctly by comparing against the "official" stats file timing.
 """
 
+import asyncio
 import logging
 import re
 from datetime import datetime, timedelta
@@ -43,6 +44,11 @@ class TimingDebugService:
         self.bot = bot
         self.db_adapter = db_adapter
         self.config = config
+        # (match_id, round_number) -> sent Discord message awaiting a Lua
+        # edit — the owner-requested queue/edit pattern (2026-08-18): the
+        # embed is posted once, complete; if Lua is genuinely late the
+        # posted message is EDITED in place when the data lands.
+        self._pending_lua_edit: dict[tuple[str, int], tuple[Any, int]] = {}
 
         # Get config values with defaults
         self.enabled = getattr(config, 'timing_debug_enabled', False)
@@ -297,7 +303,10 @@ class TimingDebugService:
         self,
         round_id: int,
         match_id: str | None = None,
-        round_number: int | None = None
+        round_number: int | None = None,
+        *,
+        _attempt: int = 0,
+        edit_message: Any = None,
     ) -> None:
         """
         Compare and post timing debug embed for a single round.
@@ -341,7 +350,33 @@ class TimingDebugService:
             # Unpack results
             _, db_match_id, db_round_num, map_name, round_date, round_time, time_limit, actual_time = row
 
+            # Stale-resolution guard (2026-08-18): the pre-import trigger path
+            # can resolve "the latest round" to YESTERDAY'S round (observed:
+            # today's match 2026-08-18-214422 posted against round 11244 =
+            # yesterday's frostbite R1), producing a duplicate, wrong embed.
+            # If the caller knows which match it means and the row disagrees,
+            # this is that stale resolve — skip loudly.
+            if (match_id and db_match_id
+                    and str(match_id) != str(db_match_id)):
+                logger.warning(
+                    "timing debug: round %s belongs to match %s but caller "
+                    "asked about %s — stale round resolution, skipping",
+                    round_id, db_match_id, match_id)
+                return
+
             lua_data = await self.fetch_lua_data(round_id, map_name, db_round_num, round_date, round_time)
+
+            if lua_data is None and _attempt == 0 and edit_message is None:
+                # Owner call (2026-08-18): don't announce "No Lua data" the
+                # second the stats file lands — the webhook routinely arrives
+                # up to a minute later (51 s measured that night) and the data
+                # WAS stored. Queue instead: wait off-loop and post ONCE,
+                # complete; a >90 s straggler still gets edited in later.
+                asyncio.create_task(self._wait_for_lua_then_post(
+                    round_id, db_match_id, db_round_num))
+                logger.info("timing debug: lua not yet stored for round %s — "
+                            "queued (waiting up to 90 s)", round_id)
+                return
             lua_duration = lua_data.get('lua_duration_seconds') if lua_data else None
             lua_start_unix = lua_data.get('round_start_unix') if lua_data else None
             lua_end_unix = lua_data.get('round_end_unix') if lua_data else None
@@ -429,7 +464,9 @@ class TimingDebugService:
                 if axis_score is not None and allies_score is not None:
                     lua_value += f"\n**Score:** Axis {axis_score} - {allies_score} Allies"
             else:
-                lua_value = "⚠️ **No Lua data available**\n(Webhook may not have triggered)"
+                lua_value = ("⚠️ **No Lua data after 90 s**\n(Webhook late or "
+                             "not triggered — this embed will be edited if "
+                             "the data still lands)")
 
             embed.add_field(
                 name="🔧 Lua Webhook (ours)",
@@ -495,12 +532,50 @@ class TimingDebugService:
             # Footer with IDs for debugging
             embed.set_footer(text=f"match_id: {db_match_id} | round_id: {round_id}")
 
-            # Send embed
-            await channel.send(embed=embed)
-            logger.debug(f"📤 Posted timing debug for {map_name} R{db_round_num}")
+            # Send embed (or edit the earlier post once Lua finally landed)
+            if edit_message is not None:
+                await edit_message.edit(embed=embed)
+                logger.info(f"✏️ Edited timing debug for {map_name} R{db_round_num} with late Lua data")
+            else:
+                sent = await channel.send(embed=embed)
+                if lua_data is None and db_match_id:
+                    self._pending_lua_edit[(str(db_match_id), int(db_round_num))] = (sent, round_id)
+                    while len(self._pending_lua_edit) > 12:
+                        self._pending_lua_edit.pop(next(iter(self._pending_lua_edit)))
+                logger.debug(f"📤 Posted timing debug for {map_name} R{db_round_num}")
 
         except Exception as e:
             logger.error(f"❌ Error posting round timing comparison: {e}", exc_info=True)
+
+    async def _wait_for_lua_then_post(
+        self, round_id: int, match_id: str | None, round_number: int | None,
+        *, wait_seconds: int = 90, poll_seconds: int = 10,
+    ) -> None:
+        """Poll for the Lua row, then post the comparison exactly once."""
+        try:
+            waited = 0
+            while waited < wait_seconds:
+                await asyncio.sleep(poll_seconds)
+                waited += poll_seconds
+                row = await self.db_adapter.fetch_one(
+                    "SELECT 1 FROM lua_round_teams WHERE round_id = $1",
+                    (round_id,))
+                if row:
+                    break
+            await self.post_round_timing_comparison(
+                round_id, match_id, round_number, _attempt=1)
+        except Exception as e:
+            logger.error(f"❌ timing debug wait-for-lua failed: {e}", exc_info=True)
+
+    async def on_lua_data_stored(self, match_id: str, round_number: int) -> None:
+        """Called by the Lua storage path: a straggler webhook landed —
+        edit the already-posted 'No Lua data' embed in place."""
+        pending = self._pending_lua_edit.pop((str(match_id), int(round_number)), None)
+        if not pending:
+            return
+        message, round_id = pending
+        await self.post_round_timing_comparison(
+            round_id, match_id, round_number, _attempt=2, edit_message=message)
 
     async def post_session_timing_comparison(
         self,
