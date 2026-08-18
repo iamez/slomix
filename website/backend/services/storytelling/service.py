@@ -52,6 +52,22 @@ class StorytellingService(
     _PWC_W_TRADE = 0.10       # Trade kills share (avenging teammates)
     _PWC_W_CLUTCH = 0.08      # Clutch kills share (low HP / outnumbered)
 
+    @classmethod
+    def pwc_weights(cls) -> dict[str, float]:
+        """Public read-only view of the PWC component weights, for the
+        transparency endpoint — keeps external readers off the private
+        class attributes while staying drift-proof (same source values)."""
+        return {
+            "kills": cls._PWC_W_KILLS,
+            "objectives": cls._PWC_W_OBJECTIVES,
+            "revives": cls._PWC_W_REVIVES,
+            "damage": cls._PWC_W_DAMAGE,
+            "crossfire": cls._PWC_W_CROSSFIRE,
+            "trade": cls._PWC_W_TRADE,
+            "survival": cls._PWC_W_SURVIVAL,
+            "clutch": cls._PWC_W_CLUTCH,
+        }
+
     def __init__(self, db):
         self.db = db
         # Per-instance memo for `_build_player_groups(sd)`. Story page
