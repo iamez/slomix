@@ -442,6 +442,10 @@ class PendingDispatchContext:
     caller_instruction_offset: int
     ordered_target_entity_indices: tuple[int, ...]
     target_cursor: int
+    # Added during S4: distinguishes repeated executions of the same static
+    # dispatch cursor (see the S4 log below) — without it a new caller could
+    # mark or reject an OLDER continuation whose static identity is equal.
+    occurrence_id: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,8 +505,10 @@ Required properties:
 
 The canonical state key must include `pending_dispatch`, `resume_mode` and typed
 boundary state. Collision tests must differ only in parent dispatch, caller cursor,
-target cursor, selected target order, boundary action or resume mode and prove that
-none of those states are merged.
+target cursor, selected target order, occurrence identity, invocation ancestry,
+caller completion/abandonment disposition, boundary action or resume mode and prove
+that none of those states are merged (the last three were added by the S4 contract —
+see the shared-suspended-dispatch-group rule in the S4 log below).
 
 `wake_constraint` must initially be a small enum or typed relation such as
 `AFTER_BOUNDARY_COMPLETION`, not a free-form timestamp. If S0 cannot distinguish two
@@ -1534,6 +1540,9 @@ At every substantive commit, append:
 - the next incomplete checklist item;
 - any owner-gated operation prepared but not executed.
 
-The next agent must begin at the first unchecked implementation wave and re-run every
-source verification relevant to that wave. Chat history is not a substitute for the
-pinned source, tests and measured artifacts recorded here.
+The next agent must FIRST complete the pending S4 documentation-head gate recorded
+above (exact-head local tests, CI, reviews, thread state and a fresh quiet window —
+S4 is not formally closed until all of them pass again), and only then begin the
+first unchecked implementation wave (S5), re-running every source verification
+relevant to that wave. Chat history is not a substitute for the pinned source,
+tests and measured artifacts recorded here.
