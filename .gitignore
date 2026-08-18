@@ -719,3 +719,6 @@ proximity/map_rotation.txt
 # ============================================
 gemini-website/
 .audit-venv/
+
+# User-uploaded content (community upload library) — never in git
+website/data/uploads/
