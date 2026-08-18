@@ -120,6 +120,7 @@ let _defenderSide = null;   // engine team defending this round (1/2) if known
 let _roundStartRecv = null; // server received_at of the live ROUND_START
                             // (wall-clock: consistent across legacy level-ms and LIVEX epoch-ms)
 let _momentum = 50;         // 0..100, 100 = attackers dominating
+let _samples = [];          // [{t elapsed-s, m momentum, h hold%}] this round
 const _MOM_DECAY = 0.985;   // eases back toward 50 each poll
 
 /** tonight.js hands the ticker the round context each refresh. */
@@ -317,6 +318,16 @@ async function _poll() {
             renderLiveTicker();
         }
         _momentum = 50 + (_momentum - 50) * _MOM_DECAY;
+        // Momentum/hold TIMELINE samples (Sofascore pattern, Val A): one
+        // point per poll while a round is live, capped to ~15 min of 3 s
+        // polls. ROUND_START clears via _roundStartRecv going null->set.
+        if (_roundStartRecv != null) {
+            const el = Date.now() / 1000 - _roundStartRecv;
+            _samples.push({ t: el, m: _momentum, h: _interpHold(el) });
+            if (_samples.length > 300) _samples = _samples.slice(-300);
+        } else if (_samples.length) {
+            _samples = [];
+        }
     } catch (e) {
         _lastFetchOk = false;
         console.warn('live ticker poll failed', e);
@@ -432,6 +443,51 @@ function _filterChips() {
     }).join('');
 }
 
+/** Momentum timeline (Sofascore-style): amber above the midline =
+ * attackers pushing, blue below = defence holding; a faint hold% guide. */
+function _momentumTimeline() {
+    if (_samples.length < 4) return '';
+    const w = 560, h = 40, mid = h / 2;
+    const tMax = Math.max(_samples[_samples.length - 1].t, 60);
+    const pts = _samples.map(sm => {
+        const x = (sm.t / tMax) * w;
+        const y = mid - ((sm.m - 50) / 50) * (mid - 3);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const hold = _samples.filter(sm => sm.h != null).map(sm => {
+        const x = (sm.t / tMax) * w;
+        const y = h - 2 - (sm.h / 100) * (h - 4);
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    return `<div class="mt-2"><svg viewBox="0 0 ${w} ${h}" class="w-full" height="${h}" preserveAspectRatio="none" aria-label="momentum timeline">
+        <line x1="0" y1="${mid}" x2="${w}" y2="${mid}" stroke="#ffffff14" stroke-width="1"/>
+        ${hold.length > 1 ? `<polyline points="${hold.join(' ')}" fill="none" stroke="#64748b55" stroke-width="1"/>` : ''}
+        <polyline points="${pts.join(' ')}" fill="none" stroke="#f59e0b" stroke-width="1.5"/>
+    </svg><div class="text-[9px] text-slate-600 -mt-1">momentum timeline · grey = historical hold%</div></div>`;
+}
+
+/** Objective dots on the round's time axis (0 -> now): plants, defuses,
+ * steals, returns, announces — the round's story at a glance. */
+function _roundObjectiveStrip(elapsed) {
+    if (_roundStartRecv == null || !elapsed || elapsed < 20) return '';
+    const marks = _events.filter(e =>
+        (e.type === 'DYNAMITE' || e.type === 'POPUP' || e.type === 'FLAG_PICKUP'
+         || e.type === 'OBJECTIVE_DESTROYED')
+        && (e.received_at || 0) >= _roundStartRecv);
+    if (!marks.length) return '';
+    const w = 560;
+    const dots = marks.map(e => {
+        const x = Math.min(1, ((e.received_at - _roundStartRecv) / elapsed)) * w;
+        const glyph = e.type === 'DYNAMITE' ? (e.action === 'defuse' ? '🧨' : '💣')
+            : e.type === 'FLAG_PICKUP' ? '🚩'
+            : e.type === 'OBJECTIVE_DESTROYED' ? '💥' : '⚑';
+        return `<text x="${x.toFixed(1)}" y="11" font-size="10" text-anchor="middle">${glyph}</text>`;
+    }).join('');
+    return `<div class="mt-1"><svg viewBox="0 0 ${w} 14" class="w-full" height="14" preserveAspectRatio="none" aria-label="round objectives">
+        <line x1="0" y1="13" x2="${w}" y2="13" stroke="#ffffff10" stroke-width="1"/>${dots}
+    </svg></div>`;
+}
+
 /** Re-render into the #live-ticker shell if present (idempotent). */
 export function renderLiveTicker() {
     const host = document.getElementById('live-ticker');
@@ -480,6 +536,8 @@ export function renderLiveTicker() {
                 ${holdTxt}
                 <span class="text-blue-400 font-bold">Defence ${100 - momA}%</span>
             </div>
+            ${_momentumTimeline()}
+            ${_roundObjectiveStrip(elapsed)}
         </div>`;
     }
     const visible = _events.filter(e =>
