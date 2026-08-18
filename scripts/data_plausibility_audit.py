@@ -365,9 +365,42 @@ RULES: list[Rule] = [
         predicate=(
             f"r.actual_time IS NULL OR NOT ({_ACTUAL_TIME_LOOKS_VALID}) OR {_ACTUAL_TIME_SECONDS} <= 0"
         ),
-        note="A completed, valid round must have a parseable, positive actual_time — it's the round's own duration.",
+        note=(
+            "A completed, valid round must have a parseable, positive actual_time. "
+            "NB: actual_time is the stopwatch clock (g_nextTimeLimit header field), "
+            "NOT a measured duration — the measured value is actual_duration_seconds."
+        ),
         extra_cols=("r.actual_time", "r.round_status", "r.is_valid"),
         order_by="r.id DESC",
+    ),
+    Rule(
+        name="rounds_actual_time_diverges_without_surrender",
+        table="rounds",
+        tier="T1",
+        severity="high",
+        predicate=(
+            f"{_ACTUAL_TIME_LOOKS_VALID} "
+            # Measured duration is demo-verified from 2026-05-15 on; before
+            # that, 7 known rounds carry a pre-v1.7 webhook warmup artifact
+            # (duration > clock on completed R1s) — bounded and documented
+            # in the RCA, not an active sensor to alarm on daily.
+            "AND r.round_date >= '2026-05-15' "
+            "AND COALESCE(r.actual_duration_seconds, 0) > 0 "
+            f"AND ABS({_ACTUAL_TIME_SECONDS} - r.actual_duration_seconds) > 5 "
+            "AND NOT EXISTS (SELECT 1 FROM lua_round_teams l "
+            "WHERE l.round_id = r.id AND COALESCE(l.surrender_team, 0) > 0)"
+        ),
+        note=(
+            "actual_time (the stopwatch target written by c0rnp0rn8's header) may "
+            "diverge >5s from the MEASURED actual_duration_seconds only on surrender "
+            "rounds, where the attackers never set a time and the Lua fallback writes "
+            "the full timelimit (RCA 2026-08-18: 67/67 inflated rounds in the last 3 "
+            "months were surrender+Fullhold; 0/370 non-surrender rounds diverged). A "
+            "live hit here means a NEW way the two time sources disagree — the exact "
+            "class of silent bug that inflated 15% of round durations for months."
+        ),
+        extra_cols=("r.actual_time", "r.actual_duration_seconds", "r.round_outcome"),
+        order_by=f"ABS({_ACTUAL_TIME_SECONDS} - r.actual_duration_seconds) DESC",
     ),
     Rule(
         name="rounds_winner_team_invalid",
