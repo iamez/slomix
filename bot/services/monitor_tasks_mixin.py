@@ -31,6 +31,7 @@ import json
 import re
 import time
 from datetime import datetime
+from pathlib import Path
 
 from discord.ext import tasks
 
@@ -1034,4 +1035,87 @@ class _MonitorTasksMixin:
 
     @lua_console_sentinel.before_loop
     async def before_lua_console_sentinel(self):
+        await self.wait_until_ready()
+
+    # ── Daily data-plausibility sentinel (Data Trust pillar B, permanent) ────
+    #
+    # scripts/data_plausibility_audit.py exits with the number of rules that
+    # fired on LIVE rows (backfill noise excluded by design). Green (exit 0)
+    # is the steady state since 2026-08-18; any live finding means the CURRENT
+    # pipeline wrote an impossible row and someone should look today, not at
+    # the next manual run. Same sensor family as lua_console_sentinel: quiet
+    # when healthy, loud in the admin channel when not.
+
+    @staticmethod
+    def _summarize_audit_payload(payload) -> str | None:
+        """Return an alert body for live violations, or None when clean.
+
+        Accepts the script's --json output (a list of rule dicts, possibly
+        wrapped in {"rules": [...]}). Tolerant of shape drift: anything it
+        cannot read is reported as such rather than swallowed.
+        """
+        rules = payload.get("rules") if isinstance(payload, dict) else payload
+        if not isinstance(rules, list):
+            return "audit --json vrnil nepričakovano obliko — preveri skript"
+        live = [(r.get("name", "?"), int(r.get("live", 0) or 0))
+                for r in rules if isinstance(r, dict) and (r.get("live") or 0) > 0]
+        if not live:
+            return None
+        lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
+        more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
+        return (f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n"
+                f"{lines}{more}\n"
+                f"Podrobnosti: `python scripts/data_plausibility_audit.py`")
+
+    @staticmethod
+    def _run_audit_in_thread():
+        """Load the audit tool from scripts/ and run its rules synchronously.
+
+        In-process (no subprocess): the tool opens its own READ-ONLY psycopg2
+        connection, so running it in a worker thread is safe next to the
+        bot's asyncpg pool. Loaded by path because scripts/ is not a package.
+        """
+        import importlib.util
+        import sys
+
+        script = Path(__file__).resolve().parents[2] / "scripts" / "data_plausibility_audit.py"
+        spec = importlib.util.spec_from_file_location("data_plausibility_audit", script)
+        mod = importlib.util.module_from_spec(spec)
+        # dataclass machinery looks the module up in sys.modules during class
+        # creation — register it first or exec_module dies on @dataclass.
+        sys.modules["data_plausibility_audit"] = mod
+        spec.loader.exec_module(mod)
+        conn = mod.get_connection()
+        try:
+            results = mod.run_audit(conn, mod.RULES, top_n=0)
+        finally:
+            conn.close()
+        return [r.to_dict() for r in results]
+
+    @tasks.loop(hours=24)
+    async def data_plausibility_sentinel(self):
+        cfg = self.config
+        if not getattr(cfg, "data_audit_sentinel_enabled", True):
+            return
+        try:
+            payload = await asyncio.wait_for(
+                asyncio.to_thread(self._run_audit_in_thread), timeout=300)
+        except TimeoutError:
+            logger.error("[DATA-AUDIT] audit run timed out after 300s")
+            return
+        except Exception:
+            logger.error("[DATA-AUDIT] audit run failed", exc_info=True)
+            return
+        body = self._summarize_audit_payload(payload)
+        if body is None:
+            logger.info("[DATA-AUDIT] daily audit clean — no live violations")
+            return
+        logger.error("[DATA-AUDIT] %s", body.replace("\n", " | "))
+        try:
+            await self.alert_admins("Data-plausibility audit: žive kršitve", body)
+        except Exception:
+            logger.error("[DATA-AUDIT] alert failed", exc_info=True)
+
+    @data_plausibility_sentinel.before_loop
+    async def before_data_plausibility_sentinel(self):
         await self.wait_until_ready()
