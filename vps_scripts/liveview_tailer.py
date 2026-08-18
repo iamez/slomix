@@ -118,9 +118,18 @@ def _config() -> tuple[bool, str, str]:
     return enabled, url, secret
 
 
+def _url_allowed(url: str) -> bool:
+    """https only — the internal secret rides in a header. Plain http is
+    allowed solely toward loopback (local testing), never over the wire
+    (coderabbit, PR #773)."""
+    if url.startswith("https://"):
+        return True
+    return url.startswith(("http://127.0.0.1", "http://localhost"))
+
+
 def _post_once(url: str, secret: str, batch: list[dict], source: str) -> bool:
     """One delivery attempt; retries are the queue's job, not this function's."""
-    if not url.startswith(("http://", "https://")):
+    if not _url_allowed(url):
         return False
     req = urllib.request.Request(  # noqa: S310 # nosec B310 — https-only, scheme checked above
         url,
@@ -167,7 +176,7 @@ class _Delivery:
         while len(self._queue) > QUEUE_MAX_BATCHES:
             victim = None
             for i in range(len(self._queue) - 1, -1, -1):
-                if not any(e["type"] in _CONTROL_TYPES for e in self._queue[i]):
+                if not any(e.get("type") in _CONTROL_TYPES for e in self._queue[i]):
                     victim = i
                     break
             if victim is None:
@@ -175,7 +184,7 @@ class _Delivery:
             dropped = self._queue[victim]
             del self._queue[victim]
             print(f"[liveview_tailer] queue full — evicted {len(dropped)} "
-                  f"events (control={any(e['type'] in _CONTROL_TYPES for e in dropped)})",
+                  f"events (control={any(e.get('type') in _CONTROL_TYPES for e in dropped)})",
                   flush=True)
 
     def pump(self) -> None:

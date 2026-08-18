@@ -10,7 +10,14 @@ from __future__ import annotations
 
 
 def _delivery(monkeypatch, results):
+    import socket
+
     from vps_scripts import liveview_tailer as lt
+
+    # Importing the module monkeypatches socket.getaddrinfo (IPv4-only for
+    # the game box) — restore it so the side-effect can't leak into other
+    # tests in the same process (coderabbit, PR #773).
+    monkeypatch.setattr(socket, "getaddrinfo", lt._orig_getaddrinfo)
 
     calls = []
 
