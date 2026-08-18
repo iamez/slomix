@@ -76,6 +76,11 @@ class LiveStateReducer:
         # Recent roster changes (joined / left / switched side) — the "menjave"
         # (substitutions) a spectator wants to see, newest last, capped small.
         self._roster_changes: list[dict[str, Any]] = []
+        # Live per-round tallies (Val A "Live Ladder"): slot -> kills/deaths/
+        # damage sums from LIVE_AGGREGATE deltas (10-s cadence, reset each
+        # flush at the source) + an instant alive flag from LIVE_KILL (dead)
+        # and LIVE_MOVEMENT (moving = alive). Reset on round/map boundaries.
+        self._live_stats: dict[int, dict[str, Any]] = {}
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -96,6 +101,11 @@ class LiveStateReducer:
             return None
         entry = self._roster.get(slot)
         return entry["name"] if entry else None
+
+    def _live_stat(self, slot: int) -> dict[str, Any]:
+        return self._live_stats.setdefault(
+            slot, {"kills": 0, "deaths": 0,
+                   "damage_given": 0, "damage_received": 0, "alive": True})
 
     def _push_objective(self, entry: dict[str, Any]) -> None:
         """Append a recent-objective action, capped at the last 10."""
@@ -133,6 +143,7 @@ class LiveStateReducer:
             self._roster.clear()
             self._objectives.clear()
             self._roster_changes.clear()
+            self._live_stats.clear()
             self._round_number = None
             self._round_started_at = None
 
@@ -199,6 +210,7 @@ class LiveStateReducer:
                 self._game_state = "mapchange"
                 self._round_number = None
                 self._objectives = []
+                self._live_stats.clear()
 
         elif etype == "INIT_GAME":
             if self._game_state != "live":
@@ -207,6 +219,7 @@ class LiveStateReducer:
         elif etype == "ROUND_START":
             self._game_state = "live"
             self._round_started_at = at
+            self._live_stats.clear()  # the ladder is per-round, like HLTV's
             # Stopwatch has exactly R1/R2. A third ROUND_START without a MAP
             # in between means the MAP event was lost (dropped batch) — treat
             # it as a fresh map's R1 instead of counting "R5" forever.
@@ -237,6 +250,28 @@ class LiveStateReducer:
                 "player": actor, "objective": ev.get("flag"), "at": at,
             })
 
+        elif etype == "LIVE_AGGREGATE":
+            slot = self._slot(ev)
+            if slot is not None:
+                st = self._live_stat(slot)
+                # Source flushes-and-resets every ~10 s, so these are DELTAS.
+                st["kills"] += int(ev.get("kills") or 0)
+                st["deaths"] += int(ev.get("deaths") or 0)
+                st["damage_given"] += int(ev.get("damage_given") or 0)
+                st["damage_received"] += int(ev.get("damage_received") or 0)
+
+        elif etype == "LIVE_KILL":
+            victim = self._slot(ev, "victim_slot")
+            if victim is not None:
+                self._live_stat(victim)["alive"] = False
+
+        elif etype == "LIVE_MOVEMENT":
+            for entry in ev.get("players") or []:
+                slot = entry.get("slot") if isinstance(entry, dict) else None
+                if isinstance(slot, int):
+                    # A moving player is alive (corpses don't emit positions).
+                    self._live_stat(slot)["alive"] = True
+
         elif etype == "DYNAMITE":
             actor = self._name_for_slot(self._slot(ev))
             self._push_objective({
@@ -262,6 +297,18 @@ class LiveStateReducer:
                 "on_server_seconds": int(now - e["connected_at"]),
                 "on_side_seconds": int(now - e["team_since"]),
             }
+            live = self._live_stats.get(slot)
+            if live is not None:
+                elapsed = (now - self._round_started_at
+                           if self._round_started_at else None)
+                member["live"] = {
+                    "kills": live["kills"],
+                    "deaths": live["deaths"],
+                    "damage": live["damage_given"],
+                    "dpm": (round(live["damage_given"] * 60 / elapsed)
+                            if elapsed and elapsed >= 30 else None),
+                    "alive": live["alive"],
+                }
             if e.get("team") == 1:
                 axis.append(member)
             elif e.get("team") == 2:

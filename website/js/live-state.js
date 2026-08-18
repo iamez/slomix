@@ -13,6 +13,7 @@
  * @module live-state
  */
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML } from './utils.js';
+import { openPlayerCard } from './player-card.js?v=20260819-card';
 
 const POLL_MS = 4000;
 const AXIS_COLOR = '#ef4444', ALLIES_COLOR = '#3b82f6';
@@ -127,12 +128,27 @@ function _member(m, alignRight) {
     }
     const sub = times.length
         ? `<span class="text-slate-500 text-[10px] ml-1">${times.join(' · ')}</span>` : '';
-    return `<div class="text-sm text-slate-200 truncate ${alignRight ? 'text-right' : ''}">${escapeHtml(m.name)}${sub}</div>`;
+    // Live Ladder (Val A): per-round K/D + DPM from LIVEX aggregates and an
+    // alive dot (instant, from LIVE_KILL/LIVE_MOVEMENT). Absent while the
+    // LIVEX tailer is quiet — the row falls back to the roster-only look.
+    const lv = m.live;
+    const liveBits = lv
+        ? `<span class="font-mono text-[11px] ml-1 ${lv.alive === false ? 'text-slate-500' : 'text-slate-300'}">`
+          + `${lv.alive === false ? '○' : '<span class="text-emerald-400">●</span>'} `
+          + `${lv.kills ?? 0}/${lv.deaths ?? 0}${lv.dpm != null ? ` · ${lv.dpm}` : (lv.damage ? ` · ${lv.damage}dmg` : '')}</span>`
+        : '';
+    return `<div class="text-sm text-slate-200 truncate ${alignRight ? 'text-right' : ''}">`
+        + `<button type="button" data-player-card="${escapeHtml(m.name)}" `
+        + `class="hover:underline decoration-dotted underline-offset-2">${escapeHtml(m.name)}</button>`
+        + `${liveBits}${sub}</div>`;
 }
 
 function _column(icon, label, color, members, alignRight) {
-    const rows = members.length
-        ? members.map(m => _member(m, alignRight)).join('')
+    // Ladder order: hottest first (live DPM desc), roster order otherwise.
+    const sorted = [...members].sort((a, b) =>
+        ((b.live && b.live.dpm) || -1) - ((a.live && a.live.dpm) || -1));
+    const rows = sorted.length
+        ? sorted.map(m => _member(m, alignRight)).join('')
         : '<div class="text-sm text-slate-400">—</div>';
     return `<div class="flex-1 min-w-0 ${alignRight ? 'text-right' : ''}">
         <div class="text-[10px] uppercase tracking-widest font-black mb-1.5" style="color:${color}">
@@ -219,6 +235,20 @@ export function renderLiveState() {
     const staleWarn = _lastOk === false
         ? '<span class="text-rose-400 text-xs">state unavailable</span>' : '';
 
+    if (!host.dataset.cardBound) {
+        host.dataset.cardBound = '1';
+        host.addEventListener('click', (e) => {
+            const btn = e.target.closest('[data-player-card]');
+            if (!btn) return;
+            const name = btn.getAttribute('data-player-card');
+            const snap = _snapshot || {};
+            const all = [].concat(
+                (snap.roster && snap.roster.axis) || [],
+                (snap.roster && snap.roster.allies) || []);
+            const me = all.find(m => m.name === name);
+            openPlayerCard(name, { live: me && me.live ? me.live : null });
+        });
+    }
     host.textContent = '';
     safeInsertHTML(host, 'beforeend', `
         <div class="glass-panel rounded-xl p-5 ${r.has_bots ? 'opacity-90' : ''}">
