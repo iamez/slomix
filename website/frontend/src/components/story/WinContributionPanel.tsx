@@ -36,7 +36,14 @@ export function WinContributionPanel({ data }: Props) {
       <div className="flex items-center gap-3 mb-3">
         <h3 className="text-xs text-slate-500 uppercase tracking-wider font-bold">Win Contribution</h3>
         {mvp && (
-          <span className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-300">
+          <span
+            className="rounded-full border border-amber-400/30 bg-amber-400/10 px-2.5 py-0.5 text-[10px] font-bold text-amber-300"
+            title={
+              mvp.selected_by === 'total_pwc_fallback'
+                ? 'Highest total PWC (no player met the win-avg eligibility)'
+                : `Best win-adjusted avg per round${mvp.waa_bayes != null ? ` (${mvp.waa_bayes.toFixed(3)})` : ''} — list below sorts by total PWC`
+            }
+          >
             MVP: {mvp.name}
           </span>
         )}
@@ -55,7 +62,7 @@ export function WinContributionPanel({ data }: Props) {
             >
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-amber-400 font-bold text-lg tabular-nums w-14">
-                  {(p.total_pwc * 100).toFixed(0)}%
+                  {p.total_pwc.toFixed(2)}
                 </span>
                 <span className="text-sm text-white font-medium flex-1 truncate">
                   {p.name}

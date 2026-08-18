@@ -384,11 +384,18 @@ class _WinContributionMixin:
             else:
                 # Fallback: best total_pwc (list already sorted)
                 mvp_player = players_list[0]
+            # Expose the deciding metric: MVP is picked by waa_bayes (win-
+            # adjusted avg with Bayesian shrink), NOT by total_pwc — the
+            # leaderboard sorts by total_pwc, so in sessions where the two
+            # disagree the UI must be able to say why (Discord debate,
+            # 2026-08-18: "immoo MVP je bug").
             mvp = {
                 "guid": mvp_player["guid"],
                 "name": mvp_player["name"],
                 "total_pwc": mvp_player["total_pwc"],
                 "wis": mvp_player["wis"],
+                "waa_bayes": mvp_player.get("waa_bayes", 0.0),
+                "selected_by": "waa_bayes" if mvp_candidates else "total_pwc_fallback",
             }
 
         return {
