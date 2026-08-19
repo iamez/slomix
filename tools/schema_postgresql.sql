@@ -3917,6 +3917,39 @@ ALTER SEQUENCE public.server_status_history_id_seq OWNED BY public.server_status
 
 
 --
+-- Name: player_match_stats; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.player_match_stats AS
+ SELECT r.match_id,
+    pcs.player_guid,
+    max(pcs.player_name) AS player_name,
+    max(pcs.map_name) AS map_name,
+    min(pcs.round_date) AS round_date,
+    max(r.gaming_session_id) AS gaming_session_id,
+    count(*) AS halves,
+    sum(pcs.kills) AS kills,
+    sum(pcs.deaths) AS deaths,
+    sum(pcs.damage_given) AS damage_given,
+    sum(pcs.damage_received) AS damage_received,
+    sum(pcs.headshots) AS headshots,
+    sum(pcs.headshot_kills) AS headshot_kills,
+    sum(pcs.xp) AS xp,
+    sum(pcs.gibs) AS gibs,
+    sum(pcs.revives_given) AS revives_given,
+    sum(pcs.times_revived) AS times_revived,
+    sum(pcs.time_played_seconds) AS time_played_seconds,
+        CASE
+            WHEN sum(pcs.time_played_seconds) > 0 THEN round(sum(pcs.damage_given)::numeric * 60.0 / sum(pcs.time_played_seconds)::numeric, 1)
+            ELSE NULL::numeric
+        END AS dpm
+   FROM public.player_comprehensive_stats pcs
+     JOIN public.rounds r ON r.id = pcs.round_id
+  WHERE (pcs.round_number = ANY (ARRAY[1, 2])) AND pcs.time_played_seconds > 0 AND r.match_id IS NOT NULL AND r.is_valid IS DISTINCT FROM false AND r.round_status::text IS DISTINCT FROM 'orphan_r2'::text
+  GROUP BY r.match_id, pcs.player_guid;
+
+
+--
 -- Name: session_engagement_summary; Type: VIEW; Schema: public; Owner: -
 --
 
