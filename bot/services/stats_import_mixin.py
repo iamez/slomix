@@ -399,15 +399,18 @@ class _StatsImportMixin:
                     except Exception as _e:
                         logger.debug(f"canonical_id dual-write skipped (non-fatal): {_e}")
 
-                    # Insert match summary player stats
-                    for player in match_summary.get("players", []):
-                        await self._insert_player_stats(
-                            match_summary_id, date_part, match_summary, player
-                        )
-
+                    # No player rows for the summary. They used to be written
+                    # here — a copy of the parsed R2 file stamped
+                    # round_number = 0 — and nothing has read them since 2025,
+                    # when consumers moved to `round_number IN (1, 2)` because
+                    # the copy's playtime was wrong (commit ee500692). Match
+                    # totals now come from the player_match_stats view
+                    # (migration 078), which sums the stored halves and so
+                    # cannot drift. The rounds row above stays: it carries the
+                    # match's winner/outcome metadata, which IS read.
                     logger.info(
-                        f"✅ Imported match summary (ID: {match_summary_id}) with "
-                        f"{len(match_summary.get('players', []))} players"
+                        f"✅ Imported match summary round (ID: {match_summary_id}); "
+                        f"player totals come from player_match_stats"
                     )
                 else:
                     match_summary_id = existing_summary[0]
