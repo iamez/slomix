@@ -171,4 +171,3 @@ def test_readability_check_pins_the_locale():
         "the readability check lost its locale pin — a localised stat message "
         "would slip past the grep and the guard would pass silently"
     )
-
