@@ -438,7 +438,14 @@ fi
 #     (Production is NOT sparse today — verified 2026-08-19: core.sparseCheckout
 #     unset, no .git/info/sparse-checkout, 0 skip-worktree entries — but the
 #     filter costs nothing and survives someone enabling it later.)
-UNREADABLE=$($SSH "cd $VM_PATH && git ls-files -z | xargs -0 -r stat -c '' 2>&1 >/dev/null | grep -i 'permission denied' | head -10" || true)
+#     LC_ALL=C is load-bearing, not decoration: `stat` translates its
+#     diagnostics, and ssh forwards LC_* from the CLIENT when the server
+#     accepts them, so a deploy launched from a localised desktop could turn
+#     "Permission denied" into a string this grep never matches — and the
+#     guard would pass in silence, which is worse than not having it.
+#     (Production answers in English today: LANG=C over ssh, verified
+#     2026-08-19. That is the client's mercy, not our guarantee.)
+UNREADABLE=$($SSH "cd $VM_PATH && export LC_ALL=C && git ls-files -z | xargs -0 -r stat -c '' 2>&1 >/dev/null | grep -i 'permission denied' | head -10" || true)
 if [ -n "$UNREADABLE" ]; then
   echo "$UNREADABLE" >&2
   fail "$VM_USER cannot stat some tracked files (listed above). \

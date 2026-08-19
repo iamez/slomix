@@ -24,14 +24,34 @@ import pytest
 
 DEPLOY_SCRIPT = Path("scripts/deploy_release.sh")
 
-# The two shell predicates the pre-flight runs on the VM, verbatim in spirit:
-# one asks the index whether runtime data is tracked, the other asks the
-# filesystem whether a tracked path is readable by THIS user.
-TRACKED_DATA_CMD = "git ls-files -- 'website/data/'"
-UNREADABLE_CMD = (
-    "git ls-files -z | xargs -0 -r stat -c '' 2>&1 >/dev/null "
-    "| grep -i 'permission denied' | head -10"
-)
+
+def _preflight_block() -> str:
+    src = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    return src[src.index("1b/8 Pre-flight"):src.index("2/8  Backup DB")]
+
+
+def _predicate(starts_with: str) -> str:
+    """Pull a pre-flight predicate OUT of the deployed script.
+
+    The tests used to hold their own copies of these commands, which meant
+    they would happily keep passing after the real ones regressed (coderabbit,
+    PR #784). Extracting them means a rename, a dropped filter or a deleted
+    check breaks this file instead of going unnoticed.
+
+    The script wraps each predicate in `$SSH "cd $VM_PATH && ... "`; only the
+    part from the git command to the closing quote is runnable locally.
+    """
+    block = _preflight_block()
+    start = block.index(starts_with)
+    end = block.index('"', start)
+    predicate = block[start:end].strip()
+    assert predicate, f"no predicate starting with {starts_with!r} in step 1b"
+    return predicate
+
+
+# Run them the way the script does — see the LC_ALL rationale in the script.
+TRACKED_DATA_CMD = _predicate("git ls-files -- ")
+UNREADABLE_CMD = "export LC_ALL=C && " + _predicate("git ls-files -z")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -79,8 +99,7 @@ def test_preflight_runs_before_the_database_backup():
 def test_preflight_runs_as_the_deploy_user():
     """Checking as root would prove nothing: the whole failure mode is that
     the DEPLOY user cannot stat a file the checkout must touch."""
-    src = DEPLOY_SCRIPT.read_text(encoding="utf-8")
-    block = src[src.index("1b/8 Pre-flight"):src.index("2/8  Backup DB")]
+    block = _preflight_block()
     assert "sudo_run" not in block, "pre-flight escalated — it must run as $VM_USER"
     assert "$SSH " in block
 
@@ -133,3 +152,23 @@ def test_absent_tracked_file_is_not_a_false_alarm(repo: Path):
     raw = _sh(repo, "git ls-files -z | xargs -0 -r stat -c '' 2>&1 >/dev/null")
     assert "o such file" in raw, "fixture did not produce the ENOENT case"
     assert _sh(repo, UNREADABLE_CMD).strip() == "", "ENOENT leaked through as a failure"
+
+
+def test_readability_check_pins_the_locale():
+    """`stat` translates its diagnostics and ssh forwards LC_* from the
+    client, so a deploy launched from a localised desktop could turn
+    "Permission denied" into a string the grep never matches — the guard
+    would then pass in silence, which is worse than not having it.
+
+    Asserted rather than exercised: proving it end-to-end needs a second
+    locale installed, which neither CI nor the deploy host is guaranteed to
+    have. What can be pinned is that the export is there and inside the same
+    remote command as the pipeline it protects.
+    """
+    block = _preflight_block()
+    line = next(ln for ln in block.splitlines() if "grep -i 'permission denied'" in ln)
+    assert "LC_ALL=C" in line, (
+        "the readability check lost its locale pin — a localised stat message "
+        "would slip past the grep and the guard would pass silently"
+    )
+
