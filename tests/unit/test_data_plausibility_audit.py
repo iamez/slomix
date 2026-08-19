@@ -149,10 +149,16 @@ def test_tps_rule_measures_duration_through_shared_round_time():
     """
     predicate = _rule("pcs_tps_exceeds_round_duration").predicate
     assert "actual_duration_seconds" in predicate, "rule ignores the Lua measurement"
-    assert predicate.count("actual_time") == round_duration_sql("r").count("actual_time"), (
+    # Strip every occurrence of the shared expression (the predicate names it
+    # twice: once to require a known duration, once to compare against it) —
+    # whatever is left must not touch actual_time on its own.
+    assert "actual_time" not in predicate.replace(round_duration_sql("r"), ""), (
         "rule references actual_time outside the shared round_duration_sql fallback"
     )
     assert round_duration_sql("r") in predicate, "rule does not use shared.round_time SQL"
+    assert f'{round_duration_sql("r")} > 0' in predicate, (
+        "rule must skip rounds of unknown duration instead of treating 0s as a real round"
+    )
 
 
 def test_actual_time_rules_still_target_actual_time_itself():

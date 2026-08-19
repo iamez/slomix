@@ -248,18 +248,21 @@ def sibling_seconds(cur, match_id: str, guid: str, repaired: dict) -> int | None
     earlier in this same run so a dry-run and an --apply run agree."""
     cur.execute(  # nosemgrep: fixed column list, %s params
         """
-        SELECT p.round_id, p.time_played_seconds
+        SELECT p.round_id, r.round_number, p.time_played_seconds
         FROM player_comprehensive_stats p
         JOIN rounds r ON r.id = p.round_id
-        WHERE r.match_id = %s AND p.player_guid = %s AND p.round_number IN (1, 2)
+        WHERE r.match_id = %s AND p.player_guid = %s AND r.round_number IN (1, 2)
         """,
         (match_id, guid),
     )
     parts = cur.fetchall()
-    if not parts or len(parts) > 2:
-        return None  # more than one R1/R2 pair under this match_id — refuse to sum
+    # Exactly one R1 and one R2, or the sum is not the match: a player who
+    # only appears in R2 would otherwise get that half written into their
+    # match aggregate as if it were the whole game (coderabbit, PR #779).
+    if sorted(n for _, n, _ in parts) != [1, 2]:
+        return None
     total = 0
-    for round_id, seconds in parts:
+    for round_id, _number, seconds in parts:
         seconds = repaired.get((round_id, guid), seconds)
         if seconds is None or seconds <= 0 or seconds > MS_THRESHOLD:
             return None  # a component is still unknown — refuse to guess
@@ -299,6 +302,17 @@ class Repair:
         return (f"    {self.name:<12} tps {self.old[0]:>7} -> {self.new[0]:<6}"
                 f" tpm {self.old[1]:>9.2f} -> {self.new[1]:<7.2f}"
                 f" dpm {self.old[2]:>8.3f} -> {self.new[2]:<7.1f} [{self.basis}]")
+
+
+def _write_artifact(path: Path, statements: list[str]) -> Path:
+    """Write an artifact and force it to disk. fsync, not just close: the
+    backup is the only way back from an --apply run, so "the OS will get to
+    it" is not good enough."""
+    with path.open("w", encoding="utf-8") as fh:
+        fh.write("\n".join(statements) + "\n")
+        fh.flush()
+        os.fsync(fh.fileno())
+    return path
 
 
 def main() -> int:
@@ -396,6 +410,15 @@ def main() -> int:
             print(f"Rows to repair: {len(repairs)} in "
                   f"{len({r.round_id for r in repairs})} rounds")
 
+            # The backup is written and flushed to disk BEFORE any row moves:
+            # a repair that commits without its pre-repair snapshot is not
+            # reversible, and an artifact-dir failure must abort the write
+            # rather than surface after it (coderabbit, PR #779).
+            backup_path = _write_artifact(artifact_dir / f"backup-{stamp}.sql",
+                                          [r.backup_sql() for r in repairs])
+            repair_path = _write_artifact(artifact_dir / f"repair-{stamp}.sql",
+                                          [r.repair_sql() for r in repairs])
+
             if args.apply:
                 for rep in repairs:
                     seconds, minutes, dpm = rep.new
@@ -409,10 +432,6 @@ def main() -> int:
     finally:
         conn.close()
 
-    backup_path = artifact_dir / f"backup-{stamp}.sql"
-    repair_path = artifact_dir / f"repair-{stamp}.sql"
-    backup_path.write_text("\n".join(r.backup_sql() for r in repairs) + "\n", encoding="utf-8")
-    repair_path.write_text("\n".join(r.repair_sql() for r in repairs) + "\n", encoding="utf-8")
     print(f"Backup of pre-repair rows: {backup_path}")
     print(f"Portable repair SQL:       {repair_path}")
     if not args.apply:
