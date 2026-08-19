@@ -722,3 +722,7 @@ gemini-website/
 
 # User-uploaded content (community upload library) — never in git
 website/data/uploads/
+
+# Repair-script artifacts (row backups + generated SQL) — data, never in git
+/playtime_repair_artifacts/
+/r2_repair_artifacts/
