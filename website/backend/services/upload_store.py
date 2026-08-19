@@ -29,7 +29,19 @@ from website.backend.services.upload_validators import (
 
 logger = get_app_logger("upload.store")
 
-UPLOAD_STORAGE_ROOT_DEFAULT = "data/uploads"
+# Where uploads live. The historical default was the RELATIVE path
+# "data/uploads", which only ever landed in website/data/uploads because the
+# service happens to run with WorkingDirectory=<repo>/website — start the app
+# any other way and user uploads move somewhere else. Anchoring the default to
+# this package keeps the exact same directory while making it independent of
+# how the process was started.
+#
+# UPLOAD_STORAGE_ROOT overrides it, and production SHOULD point it outside the
+# git tree (see .env.example): on 2026-08-19 the v1.39.0 deploy aborted with
+# exit 128 because a git checkout tried to touch a user upload inside the work
+# tree. Code and writable user data do not belong in the same directory.
+_WEBSITE_DIR = Path(__file__).resolve().parents[2]
+UPLOAD_STORAGE_ROOT_DEFAULT = _WEBSITE_DIR / "data" / "uploads"
 UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 
 # Poster thumbnails (Faza 2): a client captures the first frame of a clip as a
@@ -620,18 +632,38 @@ class UploadStorageService:
 _storage: UploadStorageService | None = None
 
 
+def resolve_storage_root() -> Path:
+    """The configured storage root, as an absolute path.
+
+    An UPLOAD_STORAGE_ROOT that is relative is resolved against the website
+    package — the same anchor as the default — rather than against the current
+    working directory, so the location of user data never depends on how the
+    process was started.
+    """
+    configured = os.getenv("UPLOAD_STORAGE_ROOT", "").strip()
+    if not configured:
+        return UPLOAD_STORAGE_ROOT_DEFAULT
+    root = Path(configured)
+    if root.is_absolute():
+        return root
+    logger.warning(
+        "UPLOAD_STORAGE_ROOT is relative (%s); resolving it against %s. "
+        "Prefer an absolute path outside the git tree.", configured, _WEBSITE_DIR
+    )
+    return (_WEBSITE_DIR / root).resolve()
+
+
 def get_upload_storage() -> UploadStorageService:
     """
     Get global upload storage service singleton.
 
-    Storage root is configured via UPLOAD_STORAGE_ROOT environment variable,
-    or defaults to 'data/uploads'.
+    Storage root is configured via the UPLOAD_STORAGE_ROOT environment
+    variable, or defaults to <repo>/website/data/uploads.
 
     Returns:
         UploadStorageService instance
     """
     global _storage
     if _storage is None:
-        root = Path(os.getenv("UPLOAD_STORAGE_ROOT", UPLOAD_STORAGE_ROOT_DEFAULT))
-        _storage = UploadStorageService(storage_root=root)
+        _storage = UploadStorageService(storage_root=resolve_storage_root())
     return _storage

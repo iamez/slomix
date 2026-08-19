@@ -20,6 +20,7 @@ from website.backend.services.upload_store import (
     UPLOAD_STORAGE_ROOT_DEFAULT,
     SavedUpload,
     UploadStorageService,
+    resolve_storage_root,
 )
 
 
@@ -309,5 +310,36 @@ def test_saved_upload_fields_pinned():
 
 def test_storage_root_default_constant():
     """A regression that bumps the default to a different path would
-    silently re-locate every upload."""
-    assert UPLOAD_STORAGE_ROOT_DEFAULT == "data/uploads"
+    silently re-locate every upload. The default must also be ABSOLUTE:
+    the old relative "data/uploads" only landed in website/data/uploads
+    because the service happens to run with WorkingDirectory=<repo>/website."""
+    assert UPLOAD_STORAGE_ROOT_DEFAULT.is_absolute()
+    assert UPLOAD_STORAGE_ROOT_DEFAULT.parts[-3:] == ("website", "data", "uploads")
+
+
+def test_storage_root_ignores_the_working_directory(tmp_path, monkeypatch):
+    """Starting the app from anywhere must not move user data."""
+    monkeypatch.delenv("UPLOAD_STORAGE_ROOT", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert resolve_storage_root() == UPLOAD_STORAGE_ROOT_DEFAULT
+
+
+def test_absolute_override_is_taken_as_given(tmp_path, monkeypatch):
+    """Production points this outside the git tree; nothing may rewrite it."""
+    monkeypatch.setenv("UPLOAD_STORAGE_ROOT", str(tmp_path / "var" / "uploads"))
+    assert resolve_storage_root() == tmp_path / "var" / "uploads"
+
+
+def test_relative_override_anchors_to_the_package_not_the_cwd(tmp_path, monkeypatch):
+    monkeypatch.setenv("UPLOAD_STORAGE_ROOT", "somewhere/else")
+    monkeypatch.chdir(tmp_path)
+    resolved = resolve_storage_root()
+    assert resolved.is_absolute()
+    assert tmp_path not in resolved.parents
+    assert resolved.parts[-2:] == ("somewhere", "else")
+
+
+def test_blank_override_falls_back_to_the_default(monkeypatch):
+    """An empty value in .env is 'unset', not 'store uploads in the CWD'."""
+    monkeypatch.setenv("UPLOAD_STORAGE_ROOT", "   ")
+    assert resolve_storage_root() == UPLOAD_STORAGE_ROOT_DEFAULT
