@@ -393,6 +393,60 @@ $SSH "cd $VM_PATH && grep -q '^BOT_ENVIRONMENT=' .env" \
 $SSH "cd $VM_PATH && grep -q '^BOT_ENVIRONMENT=' website/.env" \
   || fail "BOT_ENVIRONMENT is not set in $VM_PATH/website/.env on the VM. Add BOT_ENVIRONMENT=production there before deploying this release — see docs/research/ENVIRONMENT_IDENTITY_RCA_2026-08-08.md."
 
+# ─── 1b. Checkout pre-flight (fail in seconds, not after a 240 MB dump) ───────
+# 2026-08-19: the v1.39.0 deploy died at step 3 with exit 128 —
+#   error: Entry 'website/data/uploads/clip/.../original.mp4' not uptodate.
+# Two user uploads had been committed long ago; the tag being deployed no
+# longer tracks them, so `git checkout` had to inspect them, and the uploads
+# directory is drwx------ owned by slomix_web — $VM_USER cannot even stat
+# inside it. Nothing was wrong with the release; the deploy simply learned it
+# too late, AFTER step 2 had spent minutes dumping the database.
+#
+# Both checks below run as $VM_USER — the same user that will run the
+# checkout — because that identity is the whole point. Running them as root
+# would prove nothing.
+log "1b/8 Pre-flight: nothing in the way of the checkout"
+
+# (a) Runtime data must not be tracked. This is the root cause, not the
+#     symptom: code the deploy replaces and data it must never touch do not
+#     belong in the same tree. Since #781 the uploads path is gitignored and
+#     UPLOAD_STORAGE_ROOT can move it out of the tree entirely, so a non-zero
+#     count here means someone re-added user data to git.
+TRACKED_DATA=$($SSH "cd $VM_PATH && git ls-files -- 'website/data/' | head -20" || true)
+if [ -n "$TRACKED_DATA" ]; then
+  echo "$TRACKED_DATA" >&2
+  fail "User data is tracked in git on the VM (listed above). A checkout has to \
+stat these and will abort if their directory is not readable by $VM_USER — this \
+is what killed the v1.39.0 deploy. Untrack them on the VM first: \
+  git rm -r --cached --sparse website/data/uploads
+(Add --sparse if the checkout is ever made sparse or the entries carry the \
+skip-worktree bit — without it git silently skips them, which is how this was \
+missed once already.)"
+fi
+
+# (b) Every tracked path that EXISTS must be stat-able by $VM_USER. Catches
+#     the same class anywhere else in the tree — a directory someone chmod'ed,
+#     a file owned by another service user — before the backup rather than
+#     after. `git ls-files | xargs stat` is the cheapest honest proxy for what
+#     checkout does: it touches every tracked path.
+#
+#     Filtered to "Permission denied" on purpose. `git ls-files` reads the
+#     INDEX, which can legitimately list paths that are absent from disk — a
+#     sparse checkout, or an entry marked skip-worktree. Those answer "No such
+#     file or directory" and must not abort a deploy. EACCES is the signal:
+#     it is the error the checkout itself hit on 2026-08-19.
+#     (Production is NOT sparse today — verified 2026-08-19: core.sparseCheckout
+#     unset, no .git/info/sparse-checkout, 0 skip-worktree entries — but the
+#     filter costs nothing and survives someone enabling it later.)
+UNREADABLE=$($SSH "cd $VM_PATH && git ls-files -z | xargs -0 -r stat -c '' 2>&1 >/dev/null | grep -i 'permission denied' | head -10" || true)
+if [ -n "$UNREADABLE" ]; then
+  echo "$UNREADABLE" >&2
+  fail "$VM_USER cannot stat some tracked files (listed above). \
+\`git checkout\` will abort on them with 'not uptodate'. Fix the ownership or \
+permissions of the directories involved, or untrack the files, then re-run."
+fi
+log "Pre-flight OK: no tracked runtime data, all tracked paths readable by $VM_USER"
+
 # ─── 2. DB backup pre-migration ───────────────────────────────────────────────
 # Password is read *inside* the remote shell so it never enters our local
 # transcript. Both DB_PASSWORD and POSTGRES_PASSWORD prefixes are supported,
