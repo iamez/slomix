@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import time
 import uuid
 from dataclasses import dataclass
@@ -97,13 +98,30 @@ class UploadStorageService:
 
     def ensure_storage_tree(self) -> None:
         """
-        Ensure storage directory exists with secure permissions.
+        Ensure storage directory exists and is not world-accessible.
 
-        Creates root directory with 0o700 permissions (owner read/write/execute only).
+        A root this service CREATES gets 0o700. An existing root keeps the
+        mode its operator gave it, minus any world bits: the app's security
+        interest is "no other user can read uploads", and re-imposing 0o700 on
+        every upload would silently undo a deliberate 2750 (the mode a server
+        wants when the storage lives outside the work tree and a group needs
+        read access for backups). Fighting the operator on every call is how a
+        provisioning script and the app end up disagreeing forever.
         """
+        created = not self.root.exists()
         self.root.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(self.root, 0o700)
+            if created:
+                os.chmod(self.root, 0o700)
+                return
+            mode = stat.S_IMODE(self.root.stat().st_mode)
+            if mode & 0o007:
+                os.chmod(self.root, mode & ~0o007)
+                logger.warning(
+                    "Upload storage root %s was world-accessible (%o); "
+                    "stripped the world bits (now %o).",
+                    self.root, mode, mode & ~0o007,
+                )
         except OSError as e:
             logger.warning(f"Could not set storage root permissions: {e}")
 

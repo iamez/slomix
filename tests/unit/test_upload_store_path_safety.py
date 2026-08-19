@@ -11,6 +11,7 @@ must remain wired up.
 """
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 import pytest
@@ -343,3 +344,32 @@ def test_blank_override_falls_back_to_the_default(monkeypatch):
     """An empty value in .env is 'unset', not 'store uploads in the CWD'."""
     monkeypatch.setenv("UPLOAD_STORAGE_ROOT", "   ")
     assert resolve_storage_root() == UPLOAD_STORAGE_ROOT_DEFAULT
+
+
+def test_created_root_is_owner_only(tmp_path):
+    """A root this service creates must not be readable by anyone else."""
+    root = tmp_path / "fresh"
+    UploadStorageService(storage_root=root).ensure_storage_tree()
+    assert stat.S_IMODE(root.stat().st_mode) == 0o700
+
+
+def test_existing_root_keeps_the_operators_mode(tmp_path):
+    """2750 is what a server wants when storage lives outside the work tree and
+    a group needs read access. Re-imposing 0700 on every upload would undo it
+    silently, and the provisioning script and the app would disagree forever."""
+    root = tmp_path / "provisioned"
+    root.mkdir()
+    root.chmod(0o2750)
+    svc = UploadStorageService(storage_root=root)
+    svc.ensure_storage_tree()
+    svc.ensure_storage_tree()  # every upload calls this
+    assert stat.S_IMODE(root.stat().st_mode) == 0o2750
+
+
+def test_world_accessible_root_is_tightened(tmp_path):
+    """Respecting the operator stops at 'other': uploads are never world-readable."""
+    root = tmp_path / "loose"
+    root.mkdir()
+    root.chmod(0o755)
+    UploadStorageService(storage_root=root).ensure_storage_tree()
+    assert stat.S_IMODE(root.stat().st_mode) == 0o750
