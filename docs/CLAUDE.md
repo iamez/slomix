@@ -36,14 +36,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ALWAYS use 60-minute gap threshold for sessions (NOT 30!)
 - ALWAYS use async database calls via `database_adapter.py` in Cogs
 - NEVER recalculate R2 differential (parser handles it correctly)
-- ALWAYS filter `round_number IN (1, 2)`. `round_number = 0` rows are the
-  importer's match-summary convenience copy, **never a data source**: they are
-  written from the raw cumulative R2 file rather than derived from the stored
-  halves, so they drift from `R1 + R2` (measured 2026-08-19 over 3,253
-  player-matches: kills agree 99.4%, damage 99.3%, xp 92.8%, but
-  `time_played_seconds` only 61%). Nothing reads them today — the bot's
-  `_post_match_summary` has no caller and every website surface filters them
-  out — and no repair is planned; if you need match totals, sum R1 and R2.
+- ALWAYS filter `round_number IN (1, 2)`; for a match's totals use the
+  **`player_match_stats` view** (migration 078), which sums the two halves.
+  `round_number = 0` rows were the original "map summary" idea, but the
+  implementation copied the parsed R2 file wholesale (`match_summary =
+  round_2_cumulative_result.copy()`, commit `ee500692`, 2025-11-07): its kills
+  and damage really are cumulative, its playtime is not, so DPM read off R0
+  came out doubled and every consumer moved to the halves instead. The importer
+  stopped writing new R0 player rows in 2026-08; the historical ones stay,
+  unread. A view cannot drift the way that copy did — it IS the sum.
 - ALWAYS take round DURATION from `shared/round_time.py`
   (`round_duration_seconds` / `round_duration_sql`). `rounds.actual_time` is
   the stopwatch TARGET (`g_nextTimeLimit`), not a measurement — it overstates
