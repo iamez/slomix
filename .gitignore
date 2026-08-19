@@ -724,5 +724,5 @@ gemini-website/
 website/data/uploads/
 
 # Repair-script artifacts (row backups + generated SQL) — data, never in git
-/ms_playtime_repair_artifacts/
+/playtime_repair_artifacts/
 /r2_repair_artifacts/
