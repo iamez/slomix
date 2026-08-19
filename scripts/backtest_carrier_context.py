@@ -90,6 +90,9 @@ SELECT hr.round_id AS rid, hr.event_time, hr.attacker_guid, hr.victim_guid, hr.d
 FROM proximity_hit_region hr
 JOIN rounds r ON r.id = hr.round_id AND r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
 WHERE hr.damage > 0
+  -- only rounds that contain a carry: the unrestricted form pulled all 376k
+  -- damage rows into memory to use a fraction of them (CodeRabbit)
+  AND EXISTS (SELECT 1 FROM proximity_carrier_event ce WHERE ce.round_id = hr.round_id)
 """
 
 SHOTS_SQL = """
@@ -185,16 +188,21 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
 
     cats: dict[str, list] = defaultdict(list)
     for k in kills:
-        car = idx.active(k["rid"], k["kill_time"])
-        if car is None:
+        # Resolve OUR carry and THEIRS separately. active() without a team
+        # returns whichever interval comes first in query order, so on a map
+        # where both sides carry at once the classification was decided by row
+        # order rather than by who was carrying (CodeRabbit). Re-measured after
+        # the fix: every §11 figure is unchanged — the bug was latent here.
+        mine = idx.active(k["rid"], k["kill_time"], _side(k))
+        theirs = idx.active(k["rid"], k["kill_time"],
+                            "ALLIES" if _side(k) == "AXIS" else "AXIS")
+        if mine is None and theirs is None:
             cats["no carry active"].append(k)
-            continue
-        own = (car["carrier_team"] or "").upper() == _side(k)
-        if k["victim_guid"] == car["carrier_guid"]:
+        elif theirs is not None and k["victim_guid"] == theirs["carrier_guid"]:
             cats["killed the carrier"].append(k)
-        elif k["killer_guid"] == car["carrier_guid"]:
+        elif mine is not None and k["killer_guid"] == mine["carrier_guid"]:
             cats["the carrier's own kill"].append(k)
-        elif own:
+        elif mine is not None:
             cats["escort kill (we carry)"].append(k)
         else:
             cats["stopper kill (they carry)"].append(k)
@@ -256,7 +264,7 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
         if car is None or k["kill_distance"] is None:
             continue
         pos = idx.position(k["rid"], car["carrier_guid"], k["kill_time"])
-        if pos is None or k["killer_x"] is None:
+        if pos is None or None in (k["killer_x"], k["killer_y"], k["killer_z"]):
             missing += 1
             continue
         escort_d.append((k, _dist((k["killer_x"], k["killer_y"], k["killer_z"]), pos), car))
@@ -454,6 +462,9 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
                 boots.append(_logit_fit(X[ii], y[ii], iters=25))
             except np.linalg.LinAlgError:
                 continue
+        if not boots:
+            print(f"\n  --- {role}: every bootstrap fit failed — no CIs to report")
+            continue
         B = np.array(boots)
         print(f"\n  --- {role}  (n={len(sub)} kills, {len(uniq)} rounds, "
               f"baseline {_pct(y.mean())})")

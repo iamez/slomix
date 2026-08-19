@@ -399,6 +399,8 @@ uboj izven carry okna*: napadalec 68,64 %, branilec **33,92 %**.
 ⛔ In izid carry-ja je endogen: escort uboji med carry-jem, ki se je končal
 `secured`, napovedo zmago v **99,8 %** — ker je bil objektiv zavarovan, zato je
 bila runda dobljena. Izid carry-ja **ni nikoli vhod**, le diagnostika.
+⚠️ Ta diagnostika šteje **escort uboje** po izidu carry-ja (564 / 575 / 443), ne
+carry-jev samih (secured 342 / dropped 1.383 / killed 822) — enot ne mešaj.
 
 ### 11.2 Učinki po vlogi, na treh nivojih kontrole
 

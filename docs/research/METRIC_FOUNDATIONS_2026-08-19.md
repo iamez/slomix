@@ -126,6 +126,9 @@ igralce ene strani, −1 za drugo, izid = ali je zmagala prva. 14 igralcev ima
 
 Obe poti do WOWY se ujemata (+0,78), torej APM ni artefakt.
 
+⚠️ Korelacije so na **13** igralcih, ne 14: eden od štirinajstih z ≥100
+rundami nima vrstic v `storytelling_kill_impact`, zato odpade iz presečne množice.
+
 ⚠️ n = 13 igralcev — beri predznak in vrstni red, ne tretje decimalke. In
 možna je obratna vzročnost: dobra ekipa ti daje uboje. Ridge nadzoruje za
 soigralce, kar je najboljše, kar vzorec dopušča.

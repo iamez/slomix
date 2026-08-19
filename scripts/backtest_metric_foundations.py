@@ -416,10 +416,17 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
         kis_mean[g8] = sum(float(k["total_impact"]) for k in v) / len(v)
         kpr[g8] = len(v) / max(len({k["rid"] for k in v}), 1)
     shown = sorted(apm, key=lambda g: -apm[g])
+
+    # pcs stores the 8-char guid; kis_mean/kpr are keyed by that same fold, so
+    # apply it on the LOOKUP side too instead of relying on the roster already
+    # being uppercase (CodeRabbit).
+    def _g8(g):
+        return g[:8].upper()
+
     for g in shown:
         print(f"  {g[:8]:<12}{played[g]:>8}{apm[g]:>11.4f}{100*raw.get(g, float('nan')):>9.1f}%"
-              f"{kis_mean.get(g, float('nan')):>10.2f}{kpr.get(g, float('nan')):>10.2f}")
-    common = [g for g in shown if g in kis_mean]
+              f"{kis_mean.get(_g8(g), float('nan')):>10.2f}{kpr.get(_g8(g), float('nan')):>10.2f}")
+    common = [g for g in shown if _g8(g) in kis_mean]
     if len(common) >= 5:
         def corr(a, b):
             ma, mb = sum(a) / len(a), sum(b) / len(b)
@@ -427,11 +434,13 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
             den = math.sqrt(sum((x - ma) ** 2 for x in a) * sum((yv - mb) ** 2 for yv in b))
             return num / den if den else float("nan")
         ap = [apm[g] for g in common]
-        print(f"\n  r(ridge APM, KIS per kill) .... {corr(ap, [kis_mean[g] for g in common]):+.3f}")
-        print(f"  r(ridge APM, kills per round) . {corr(ap, [kpr[g] for g in common]):+.3f}")
+        nan = float("nan")
+        raw_vals = [raw.get(g, nan) for g in common]   # raw[g] could KeyError
+        print(f"\n  r(ridge APM, KIS per kill) .... {corr(ap, [kis_mean[_g8(g)] for g in common]):+.3f}")
+        print(f"  r(ridge APM, kills per round) . {corr(ap, [kpr[_g8(g)] for g in common]):+.3f}")
         print(f"  r(ridge APM, raw win%) ........ "
-              f"{corr(ap, [raw[g] for g in common]):+.3f}   (the two WOWY paths agree?)")
-        print(f"  n = {len(common)} players — with this many, only a very large")
+              f"{corr(ap, raw_vals):+.3f}   (the two WOWY paths agree?)")
+        print(f"  n = {len(common)} of {len(shown)} players matched — with this many, only a very large")
         print("  correlation is distinguishable from zero. Read the sign, not the digit.")
 
     # ---- E. the floor -------------------------------------------------------
