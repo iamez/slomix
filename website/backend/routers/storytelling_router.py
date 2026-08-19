@@ -556,7 +556,11 @@ async def get_kis_formula():
                 "Every kill-derived feature we have, combined and evaluated "
                 "with cross-validation over held-out rounds, predicts the round "
                 "winner 75.7% of the time; simply counting kills gets 73.2%. "
-                "The entire budget for all context weighting is ~2.5 points."
+                "Both sit on top of a 64.1% floor — the attacking side does not "
+                "win half the rounds, so a model that always picked the more "
+                "common winner would already score that. The entire budget for "
+                "all context weighting is the ~2.5 points between those two, "
+                "not the distance from 50%."
             ),
             "known_defect_in_v5": (
                 "spawn_multiplier and reinf_multiplier are the SAME Lua "

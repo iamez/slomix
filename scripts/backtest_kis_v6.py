@@ -39,7 +39,11 @@ Sections:
     F  v6 scoring + distribution
     G  reliability: v5 vs v6 vs each axis        <- PRIMARY acceptance test
     H  round-level winner prediction (secondary, underpowered by construction)
-    I  acceptance verdict against the pre-registered thresholds
+    J  robustness: bootstrap CI, leave-one-map-out, defender-side stability
+    K  escort sanity: does one 4.6% axis reorder the board?
+    L  leave-one-map-out on the composite score
+    I  acceptance verdict against the pre-registered thresholds (printed LAST,
+       after J/K/L, because it reads them)
 
 Usage:
     PGPASSWORD=... venv/bin/python3 scripts/backtest_kis_v6.py
@@ -60,8 +64,11 @@ from collections import defaultdict
 import asyncpg
 import numpy as np
 
+# The formula version these scripts AUDIT. It is deliberately the old one:
+# every measurement here compares a candidate against what production stores.
+# ⚠️ When kis-v6 ships, change this — otherwise the audit silently keeps
+# reading the superseded rows and reports them as current.
 V5_VERSION = "kis-v5"
-CANDIDATE_VERSION = "kis-v6-candidate"
 
 # Pre-registered acceptance thresholds (plan, 2026-08-19). Written down BEFORE
 # the numbers were seen so the verdict cannot drift to fit the result.

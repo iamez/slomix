@@ -3,14 +3,14 @@
 **Datum:** 19. 8. 2026 · **Povod:** superboyyjeva vprašanja na Discordu +
 ownerjeva definicija KIS-a · **Status:** meritev, nič spremenjeno
 **Skript:** `scripts/backtest_kis_v6.py` (READ-ONLY, `SET default_transaction_read_only = on`)
-**Vzorec:** 34.955 ubojev / 638 rund (od 40.613 vrstic `kis-v5`, 86,1 %)
+**Vzorec:** 34.597 ubojev / 638 rund (od 40.613 vrstic `kis-v5`, 85,2 %)
 
 ---
 
 ## 0. Povzetek v petih vrsticah
 
 1. **`spawn` in `reinf` sta ista številka** — obe izhajata iz Luaovega
-   `time_to_next`. 37,9 % razpona KIS-a je ena količina, všteta dvakrat.
+   `time_to_next`. 37,7 % razpona KIS-a je ena količina, všteta dvakrat.
 2. **Trije multiplikatorji merijo nasprotno od tega, kar plačujejo**
    (`health`, `alive`/clutch, `class`), eden pa **nasprotno po vlogi**
    (`objective`: napadalec −5,2 o. t., branilec +6,6 o. t.).
@@ -35,8 +35,11 @@ z `JOIN proximity_kill_outcome` → `rounds`, in:
 
 - `rounds.is_valid`, `NOT is_bot_round`, `winner_team IN (1,2)`, `defender_team IN (1,2)`
 - brez botov na obeh straneh (`OMNIBOT%`, `[BOT]%`)
-- stran ubijalca iz `proximity_spawn_timing.killer_team` (edina per-kill tabela
-  s stranjo); pokritost 86,1 %
+- stran ubijalca iz `proximity_combat_position.attacker_team` (join nosi tudi
+  `victim_guid`, sicer dva uboja z istim `event_time` razpihneta vrstice);
+  pokritost 85,2 %. ⚠️ Prva različica te raziskave je brala
+  `proximity_spawn_timing.killer_team` (86,1 %, 34.955 ubojev) — commitana
+  skripta tega ne počne več, zato so vse številke tu iz `combat_position` poti.
 - `defender_team` se **bere**, nikoli ne kodira: `etl_ice` je edina mapa v bazi,
   kjer branijo Allies
 
@@ -73,7 +76,7 @@ local victim_reinf_ms = time_to_next           -- -> victim_reinf (sekunde)
 | var(ln total_impact) | 0,2844 |
 | var brez `spawn` | 0,2004 |
 | var brez `spawn` in `reinf` | 0,1767 |
-| **delež razpona KIS-a iz spawn ure** | **37,9 %** |
+| **delež razpona KIS-a iz spawn ure** | **37,7 %** |
 
 Druga pot (aditivna dekompozicija variance po multiplikatorjih, celotna baza,
 40.613 ubojev): `spawn` 0,0364 + `reinf` 0,0406 + 2·kovarianca 0,0557 = 0,133
@@ -115,6 +118,13 @@ Razlika je bila sestava vlog, ne vrednost medica.
 ---
 
 ## 4. Ali utež sploh kaj kupi? (odločilni test)
+
+⚠️ **Merilo:** ta razdelek in ves §9–§11 uporabljajo **parni test po rundah**
+(seštej stran, razlika AXIS−ALLIES, centriraj po mapi, ali predznak imenuje
+zmagovalca). Razdelek 2 dokumenta `METRIC_FOUNDATIONS_2026-08-19.md` uporablja
+**drugo merilo** — klasifikacijsko točnost s CV in lutkami za mapo, kjer sam
+večinski razred da 64,1 %. Številk med meriloma **ni mogoče primerjati**;
+primerjajo se lahko samo razlike znotraj istega merila.
 
 Parna primerjava po rundah: seštej kandidata za vsako stran, vzemi razliko
 AXIS−ALLIES, odštej povprečno razliko **te mape** (izloči stran/mapo), in
@@ -284,7 +294,8 @@ Ownerjeve odločitve (19. 8.): **samo bonusi ≥ 1,0** (napadalčev `objective`
 | meritev | v5 | v6 |
 |---|---:|---:|
 | razpon ocene (mediana / p90 / max) | 2,10 / 4,14 / 13,04 | 1,19 / 1,53 / 2,19 |
-| zanesljivost (kontrola po vlogi) | **0,260** [−2,08, 0,81] | **0,729** [0,02, 0,93] |
+| ⚠️ zanesljivost je iz **končnega** teka; vmesni tek je dal 0,729 — razlika je posledica determinizma (`ORDER BY` v poizvedbi, 200 ponovitev namesto 20) | | |
+| zanesljivost (kontrola po vlogi) | **0,260** [−2,08, 0,81] | **0,755** [0,07, 0,93] |
 | zanesljivost samo napadalec | 0,508 | **0,716** |
 | zanesljivost samo branilec | −0,119 | 0,429 |
 | napoved zmagovalca runde | 67,71 % | **69,12 %** |
