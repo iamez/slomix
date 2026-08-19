@@ -1604,10 +1604,10 @@ function renderWinContribution(data) {
             _el('div', null,
                 _el('div', 'text-xs text-amber-400 font-bold tracking-[0.2em] uppercase', 'Session MVP'),
                 _el('div', 'text-lg font-black text-white', mvpName),
-                _el('div', 'text-[9px] text-slate-500 mt-0.5',
+                _el('div', 'text-[11px] text-slate-400 mt-0.5',
                     mvp.selected_by === 'total_pwc_fallback'
                         ? 'Highest total PWC (no player met the win-avg eligibility)'
-                        : 'Best win-adjusted avg per round — leaderboard below sorts by total PWC')
+                        : 'Picked by WIN-AVG (PWC per round in wins). The list below sorts by total PWC, which is a sum — so the top of the list and the MVP can be different players, and both are right.')
             )
         );
 
@@ -1643,6 +1643,13 @@ function renderWinContribution(data) {
     header.appendChild(_el('div', 'w-24 text-right', 'Player'));
     header.appendChild(_el('div', 'flex-1', 'Contribution'));
     header.appendChild(_el('div', 'w-12 text-right', 'PWC'));
+    // The list is sorted by PWC (a SUM, so it rewards volume) but the MVP is
+    // picked by win-avg (a per-round average with Bayesian shrink, so it
+    // rewards efficiency). Showing only the sort key is what made the two look
+    // contradictory in Discord — both columns are now visible side by side.
+    const winAvgHead = _el('div', 'w-14 text-right', 'WIN-AVG');
+    winAvgHead.title = 'Bayesian win-adjusted average per round — this is the metric that decides the MVP';
+    header.appendChild(winAvgHead);
     header.appendChild(_el('div', 'w-16 text-right', 'WIS'));
     header.appendChild(_el('div', 'w-10 text-right', 'W/L'));
     container.appendChild(header);
@@ -1698,6 +1705,19 @@ function renderWinContribution(data) {
         row.appendChild(barContainer);
 
         row.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', p.total_pwc.toFixed(2)));
+
+        // win-avg: the MVP metric. Highlighted on the player who actually won
+        // MVP, so a reader can see at a glance why #1 on the list is not
+        // always the MVP.
+        const isMvp = mvp && p.guid === mvp.guid;
+        const waaVal = typeof p.waa_bayes === 'number' ? p.waa_bayes.toFixed(3) : '\u2014';
+        const waaEl = _el('div',
+            `w-14 text-[10px] text-right font-mono ${isMvp ? 'text-amber-400 font-bold' : 'text-slate-500'}`,
+            isMvp ? `\u2605 ${waaVal}` : waaVal);
+        waaEl.title = isMvp
+            ? 'Session MVP — highest win-adjusted average per round'
+            : 'Win-adjusted average per round (Bayesian shrink); the MVP is the highest here, not the highest PWC';
+        row.appendChild(waaEl);
 
         // WIS with round count for context
         const wisText = `${wisSign}${p.wis.toFixed(3)}`;

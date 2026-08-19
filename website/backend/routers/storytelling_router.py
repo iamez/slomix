@@ -539,6 +539,35 @@ async def get_kis_formula():
             "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
         },
         "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
+        # What this score does NOT claim. Measured 2026-08-19 and reproducible
+        # with scripts/backtest_kis_v6.py and scripts/backtest_metric_foundations.py
+        # (both READ-ONLY). Published here because a transparency endpoint that
+        # only lists multipliers invites readers to believe more than the
+        # numbers support.
+        "validity": {
+            "measures": (
+                "the quality of a single kill — NOT how good a player is. "
+                "Across players, KIS per kill tracks a ridge-APM with-or-"
+                "without-you estimate at r=0.35, while plain kills per round "
+                "tracks it at r=0.92 (1,938 rounds, 36 players). Whoever helps "
+                "the team win is visible in VOLUME, not in per-kill quality."
+            ),
+            "context_ceiling": (
+                "Every kill-derived feature we have, combined and evaluated "
+                "with cross-validation over held-out rounds, predicts the round "
+                "winner 75.7% of the time; simply counting kills gets 73.2%. "
+                "The entire budget for all context weighting is ~2.5 points."
+            ),
+            "known_defect_in_v5": (
+                "spawn_multiplier and reinf_multiplier are the SAME Lua "
+                "quantity (time_to_next from calculateSpawnTimingScore) stored "
+                "twice, so the enemy spawn clock is counted twice and owns ~38% "
+                "of the score's spread (r=0.85 between the two). Several other "
+                "multipliers do not survive a within-role test with a "
+                "man-advantage control. Both are addressed in the v6 candidate."
+            ),
+            "sample": "34,597 kills over 638 rounds; 15 players with >=200 kills",
+        },
     }
 
 
