@@ -197,17 +197,26 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
     print("=" * 78)
     print(f"  players with >= {MIN_KILLS_FOR_PLAYER} kills: {len(players)}   "
           f"kills {sum(len(v) for _, v in players)}   rounds {len({k['rid'] for k in kills})}")
-    print("  residual = value minus its (map, side) cell mean AND its role mean,")
-    print("  so neither the side's spawn clock nor the role can fake stability.")
+    print("  residual = value minus its (map, side) cell mean. That cell IS the")
+    print("  role here (Axis defends on every map but etl_ice), so neither the")
+    print("  side's spawn clock nor the role can fake stability.")
 
     def residualiser(fn):
-        cell, role = defaultdict(list), defaultdict(list)
+        """Centre each value on its (map, side) cell.
+
+        The cell subtraction ALREADY removes the role: every (map, side) cell in
+        this database belongs to exactly one role (Axis defends everywhere but
+        etl_ice). An earlier version subtracted the role mean as well, which
+        only added a per-role constant back in — measured effect on the
+        reliabilities: wave_z 0.000, escort 0.000, clean_pick -0.001,
+        stood +0.008, objective -0.013, isolation +0.053. Real but immaterial;
+        removed for correctness of the description, not to change a verdict.
+        """
+        cell = defaultdict(list)
         for k in kills:
             cell[(k["rmap"], _side(k))].append(fn(k))
-            role[_role(k)].append(fn(k))
         cm = {a: sum(b) / len(b) for a, b in cell.items()}
-        rm = {a: sum(b) / len(b) for a, b in role.items()}
-        return lambda k: fn(k) - cm[(k["rmap"], _side(k))] - rm[_role(k)]
+        return lambda k: fn(k) - cm[(k["rmap"], _side(k))]
 
     print()
     print(f"  {'axis':<14}{'reliability':>12}{'95% CI':>18}{'between sd':>12}"
