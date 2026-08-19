@@ -410,9 +410,14 @@ log "1b/8 Pre-flight: nothing in the way of the checkout"
 # (a) Runtime data must not be tracked. This is the root cause, not the
 #     symptom: code the deploy replaces and data it must never touch do not
 #     belong in the same tree. Since #781 the uploads path is gitignored and
-#     UPLOAD_STORAGE_ROOT can move it out of the tree entirely, so a non-zero
-#     count here means someone re-added user data to git.
-TRACKED_DATA=$($SSH "cd $VM_PATH && git ls-files -- 'website/data/' | head -20" || true)
+#     UPLOAD_STORAGE_ROOT can move it out of the tree entirely, so a hit here
+#     means someone re-added user data to git.
+#
+#     The list is every writable directory slomix_vm_setup.sh provisions, not
+#     just the one that bit us: a check narrower than its own error message is
+#     how you end up trusting a guard that never looked. (All five are clean on
+#     production, verified 2026-08-19 — this is a tripwire, not a cleanup.)
+TRACKED_DATA=$($SSH "cd $VM_PATH && git ls-files -- 'website/data/' 'local_stats/' 'logs/' 'processed_stats/' 'backups/' | head -20" || true)
 if [ -n "$TRACKED_DATA" ]; then
   echo "$TRACKED_DATA" >&2
   fail "User data is tracked in git on the VM (listed above). A checkout has to \
