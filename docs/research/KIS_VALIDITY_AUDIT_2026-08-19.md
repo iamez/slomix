@@ -296,6 +296,7 @@ Ownerjeve odločitve (19. 8.): **samo bonusi ≥ 1,0** (napadalčev `objective`
 | razpon ocene (mediana / p90 / max) | 2,10 / 4,14 / 13,04 | 1,19 / 1,53 / 2,19 |
 | ⚠️ zanesljivost je iz **končnega** teka; vmesni tek je dal 0,729 — razlika je posledica determinizma (`ORDER BY` v poizvedbi, 200 ponovitev namesto 20) | | |
 | zanesljivost (kontrola po vlogi) | **0,260** [−2,08, 0,81] | **0,755** [0,07, 0,93] |
+| ⚠️ intervali so **Spearman-Brown transformirani**, zato lahko sežejo pod −1: transformacija `2r/(1+r)` pri r blizu −1 divergira. Beri jih kot »ni merljivega signala«, ne kot velikost. | | |
 | zanesljivost samo napadalec | 0,508 | **0,716** |
 | zanesljivost samo branilec | −0,119 | 0,429 |
 | napoved zmagovalca runde | 67,71 % | **69,12 %** |

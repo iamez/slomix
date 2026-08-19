@@ -69,7 +69,9 @@ MIN_KILLS_FOR_PLAYER = 200
 CV_FOLDS = 5
 BOOTSTRAP = 300
 PERMUTATIONS = 20
-RIDGE_LAMBDA = 25.0        # APM-style shrink; 36 players over ~2900 rounds
+RIDGE_LAMBDA = 25.0        # APM-style shrink; 36 players over ~1,940 paired
+                           # rounds (2,935 valid rounds exist, but only 1,938
+                           # carry PCS rows for both sides — see section D)
 MIN_ROUNDS_FOR_WOWY = 100
 
 # Rosters for WOWY — one row per (round, player, team). round_number IN (1,2)
