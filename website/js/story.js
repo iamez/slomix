@@ -1718,7 +1718,9 @@ function renderWinContribution(data) {
             ? (mvp.selected_by === 'total_pwc_fallback'
                 ? 'Session MVP — chosen by total PWC; nobody met the win-avg eligibility'
                 : 'Session MVP — highest win-adjusted average per round')
-            : 'Win-adjusted average per round (Bayesian shrink); the MVP is the highest here, not the highest PWC';
+            : (mvp && mvp.selected_by === 'total_pwc_fallback'
+                ? 'Win-adjusted average per round (Bayesian shrink). This session had no eligible player, so the MVP was taken from total PWC instead.'
+                : 'Win-adjusted average per round (Bayesian shrink); the MVP is the highest here, not the highest PWC');
         row.appendChild(waaEl);
 
         // WIS with round count for context

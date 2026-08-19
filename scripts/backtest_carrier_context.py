@@ -18,7 +18,7 @@ What this script measures, and the traps it is built to avoid:
   count. Only the third number is quotable.
 
   THE ENDOGENOUS OUTCOME. Escort kills during a carry that ended `secured`
-  predict the round at 99.9% — the objective was secured, so the round was won.
+  predict the round at 99.8% — the objective was secured, so the round was won.
   The carry's outcome is NEVER an input; it appears only as a diagnostic.
 
   ROLE. Attacker and defender have different baselines (~65% / ~41%) and several
@@ -277,7 +277,11 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
               f"p75 {ds[3*len(ds)//4]:.0f}u  ({ds[len(ds)//2]*UNITS_TO_M:.0f} m median)")
         print(f"\n  {'band':<22}{'n':>6}{'wins':>8}{'vs ref':>9}{'even n':>8}{'even':>8}{'vs ref':>9}")
         for lo, hi, nm in DIST_BANDS:
-            sel = [e[0] for e in escort_d if lo <= e[1] < hi]
+            # Filter to ATT explicitly: the row is compared against ref['ATT'],
+            # and relying on "escort kills happen to be attacker kills" is an
+            # assumption, not a filter (CodeRabbit).
+            sel = [e[0] for e in escort_d
+                   if lo <= e[1] < hi and _role(e[0]) == "ATT"]
             if len(sel) < 40:
                 print(f"  {nm:<22}{len(sel):>6}   (too few)")
                 continue
