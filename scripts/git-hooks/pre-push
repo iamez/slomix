@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# Refuse to publish what nobody meant to publish.
+#
+# WHY THIS EXISTS (2026-08-19). `git add -A docs/research scripts website`
+# swept ~55 files belonging to other sessions into a commit — including a
+# 23.8 MB spreadsheet of another player's data — and pushed them to a PUBLIC
+# repository. A force-push removed them from the branch, but the orphaned
+# commit stayed reachable by SHA, and the SHA is printed in the PR timeline.
+#
+# The guard that would have stopped it already existed: .pre-commit-config.yaml
+# carries check-added-large-files --maxkb=500. It was never installed —
+# .git/hooks held nothing but .sample files. And repo-hygiene.yml DID catch it
+# in CI, but CI runs after the push, which for a public repo is after exposure.
+#
+# So the check belongs at the irreversible step: the push. This hook is
+# deliberately NOT pre-commit — the pre-commit suite rewrites files
+# (end-of-file-fixer, ruff --fix) and that friction lands on every commit the
+# owner makes by hand. This one only reads, and only when something leaves the
+# machine.
+#
+# Escape hatch, on purpose: git push --no-verify. If you mean it, say so.
+set -uo pipefail
+
+MAX_BYTES=512000          # same 500 kB threshold as CI and .pre-commit-config
+MAX_FILES=25              # a push touching more than this is probably a sweep
+ZERO=0000000000000000000000000000000000000000
+# NOTE: no `csv`. .gitignore documents that this repo DELIBERATELY tracks
+# research CSV artefacts (docs/research/FULL_PROJECT_AUDIT_COVERAGE_2026-07-14.csv),
+# so blocking the extension would stop anyone editing a file the repo asked
+# for. Oversized CSVs still die on the size check above (CodeRabbit).
+RAW_DATA_EXT='xlsx|xls|sqlite|sqlite3|db|dump|bak|zip|tar|gz|tgz|7z|rar|xz'
+SECRET_VALUE_RE='(PGPASSWORD|POSTGRES_PASSWORD|DISCORD_BOT_TOKEN|RCON_PASSWORD|API_KEY|SECRET)[[:space:]]*=[[:space:]]*['\''"]?[A-Za-z0-9_/+.-]{8,}'
+# Placeholders are not credentials. Without this, `DISCORD_BOT_TOKEN=your_token_here`
+# in install.sh's help text trips the guard — which it did, on this hook's own
+# first push. A guard that cries wolf gets --no-verify'd into uselessness.
+PLACEHOLDER_RE='your_|_here|changeme|change_me|xxxxx|REDACTED|example|placeholder|<[a-z_]+>|\$\{?[A-Z_]+\}?'
+
+red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
+note() { printf '  %s\n' "$*" >&2; }
+
+problems=0
+
+while read -r _local_ref local_sha _remote_ref remote_sha; do
+    [ "$local_sha" = "$ZERO" ] && continue        # branch deletion, nothing to inspect
+
+    if [ "$remote_sha" = "$ZERO" ]; then
+        # New branch: compare against whatever it forked from, not the whole history.
+        base=$(git merge-base "$local_sha" origin/main 2>/dev/null || true)
+    else
+        base="$remote_sha"
+    fi
+
+    if [ -n "${base:-}" ]; then
+        mapfile -t files < <(git diff --name-only --diff-filter=d "$base..$local_sha" 2>/dev/null)
+    else
+        mapfile -t files < <(git ls-tree -r --name-only "$local_sha" 2>/dev/null)
+    fi
+    [ "${#files[@]}" -eq 0 ] && continue
+
+    # 1. Breadth. This is the check that catches FOREIGN files, which size and
+    #    extension checks cannot: a push nobody deliberately assembled is wide.
+    if [ "${#files[@]}" -gt "$MAX_FILES" ]; then
+        red "pre-push: this push touches ${#files[@]} files (limit $MAX_FILES)."
+        note "Did a 'git add -A' or 'git add .' pick up files you did not write?"
+        note "First 10:"
+        printf '    %s\n' "${files[@]:0:10}" >&2
+        problems=$((problems + 1))
+    fi
+
+    for f in "${files[@]}"; do
+        # 2. Size — the 23.8 MB spreadsheet would have died here.
+        blob=$(git rev-parse "$local_sha:$f" 2>/dev/null) || continue
+        size=$(git cat-file -s "$blob" 2>/dev/null || echo 0)
+        if [ "$size" -gt "$MAX_BYTES" ]; then
+            red "pre-push: $f is $((size / 1024)) kB (limit $((MAX_BYTES / 1024)) kB)."
+            problems=$((problems + 1))
+        fi
+
+        # 3. Raw data corpora do not belong in the repository at any size.
+        #    Lower-cased first: the match is case-sensitive by default, so
+        #    stats.XLSX and archive.ZIP walked straight through (CodeRabbit).
+        f_lower=$(printf '%s' "$f" | tr '[:upper:]' '[:lower:]')
+        if [[ "$f_lower" =~ \.($RAW_DATA_EXT)$ ]]; then
+            red "pre-push: $f looks like raw data (.${f##*.})."
+            note "Spreadsheets, dumps and archives stay local. See docs/research in .gitignore."
+            problems=$((problems + 1))
+        fi
+
+        # 4. Secret VALUES (not names) — a WARNING, not a block.
+        #
+        # This is the weakest of the four checks: it cannot tell a real token
+        # from a placeholder, and .pre-commit-config's detect-secrets plus the
+        # repo-hygiene workflow already cover the same ground (the workflow
+        # also treats it as a warning). The three checks above are the ones
+        # that would have stopped today's incident, and those do block.
+        hits=$(git cat-file blob "$blob" 2>/dev/null \
+                 | grep -EI "$SECRET_VALUE_RE" 2>/dev/null \
+                 | grep -EvI "$PLACEHOLDER_RE" | head -3)
+        if [ -n "$hits" ]; then
+            printf '\033[33mpre-push: %s may contain a credential value — review:\033[0m\n' "$f" >&2
+            printf '    %s\n' "$hits" >&2
+        fi
+    done
+done
+
+if [ "$problems" -gt 0 ]; then
+    red ""
+    red "pre-push: refusing to publish ($problems problem(s))."
+    note "A public repository does not forget: a force-push leaves the orphaned"
+    note "commit reachable by SHA, and the SHA shows up in the PR timeline."
+    note ""
+    note "Fix the commit, or if this is deliberate:  git push --no-verify"
+    exit 1
+fi
+
+exit 0
