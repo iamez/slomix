@@ -1715,7 +1715,9 @@ function renderWinContribution(data) {
             `w-14 text-[10px] text-right font-mono ${isMvp ? 'text-amber-400 font-bold' : 'text-slate-500'}`,
             isMvp ? `\u2605 ${waaVal}` : waaVal);
         waaEl.title = isMvp
-            ? 'Session MVP — highest win-adjusted average per round'
+            ? (mvp.selected_by === 'total_pwc_fallback'
+                ? 'Session MVP — chosen by total PWC; nobody met the win-avg eligibility'
+                : 'Session MVP — highest win-adjusted average per round')
             : 'Win-adjusted average per round (Bayesian shrink); the MVP is the highest here, not the highest PWC';
         row.appendChild(waaEl);
 

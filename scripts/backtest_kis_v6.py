@@ -487,9 +487,11 @@ class Axes:
 def _v6_scorer(axes: Axes, weights: dict[str, dict[str, float]]):
     """Build the v6 scorer from the FITTED weights.
 
-    weights[role][axis] is an odds ratio the model measured, already floored at
-    1.0 (owner decision 2: bonuses only). An axis whose CI covered zero never
-    reaches this dict and therefore contributes exactly nothing.
+    weights[role][axis] is exp(coefficient) — an odds ratio — for the flag axes,
+    while "wave_beta" is the raw COEFFICIENT, applied as exp(beta * z). Mixing
+    the two names in one comment was confusing (CodeRabbit). Both are floored at
+    1.0 (owner decision: bonuses only), and an axis whose CI covered zero never
+    reaches this dict, so it contributes exactly nothing.
     """
     flags = {
         "stood": axes.stood,
@@ -575,14 +577,17 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
         database=os.environ.get("POSTGRES_DATABASE", "etlegacy"),
         user=os.environ.get("POSTGRES_USER", "etlegacy_user"),
         password=os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", ""))
-    await conn.execute("SET default_transaction_read_only = on")
-    rows = await conn.fetch(KILLS_SQL, V5_VERSION)
-    total_v5 = await conn.fetchval(
-        "SELECT COUNT(*) FROM storytelling_kill_impact WHERE formula_version = $1", V5_VERSION)
-    revenge_rows = await conn.fetch(REVENGE_SQL)
-    reaction_rows = await conn.fetch(REACTION_SQL)
-    carry_rows = await conn.fetch(CARRY_SQL)
-    await conn.close()
+    try:
+        await conn.execute("SET default_transaction_read_only = on")
+        rows = await conn.fetch(KILLS_SQL, V5_VERSION)
+        total_v5 = await conn.fetchval(
+            "SELECT COUNT(*) FROM storytelling_kill_impact WHERE formula_version = $1",
+            V5_VERSION)
+        revenge_rows = await conn.fetch(REVENGE_SQL)
+        reaction_rows = await conn.fetch(REACTION_SQL)
+        carry_rows = await conn.fetch(CARRY_SQL)
+    finally:
+        await conn.close()   # a raised query used to leak the connection
 
     rows = [r for r in rows if r["attacker_team"]]
     axes = Axes(rows)
@@ -616,10 +621,17 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
     print("=" * 78)
     print("B. DOUBLE COUNT: v5 spawn_multiplier vs reinf_multiplier")
     print("=" * 78)
-    ls = [math.log(r["spawn_multiplier"]) for r in rows if r["spawn_multiplier"] > 0]
-    lr = [math.log(r["reinf_multiplier"]) for r in rows if r["reinf_multiplier"] > 0]
-    print(f"  r(log spawn, log reinf) ...... {_pearson(ls, lr):.3f}  "
-          "(one Lua time_to_next, stored twice)")
+    # ONE filter, one pass: two independent comprehensions were zipped by
+    # _pearson, so a row passing one test and failing the other shifted every
+    # later pair by one and quietly mispaired the series (CodeRabbit). Measured
+    # before and after: both select all 34,597 rows, so r stays 0.852 — the bug
+    # was latent, not active.
+    pairs = [(math.log(r["spawn_multiplier"]), math.log(r["reinf_multiplier"]))
+             for r in rows
+             if r["spawn_multiplier"] > 0 and r["reinf_multiplier"] > 0]
+    print(f"  r(log spawn, log reinf) ...... "
+          f"{_pearson([a for a, _ in pairs], [b for _, b in pairs]):.3f}  "
+          f"(one Lua time_to_next, stored twice; n={len(pairs)})")
 
     def logsum(r, skip=()):
         parts = {
