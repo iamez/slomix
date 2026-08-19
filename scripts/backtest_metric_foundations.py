@@ -294,7 +294,12 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
     yr = np.array(yr, dtype=float)
     dummies = np.column_stack([(np.array(mr) == i).astype(float)
                                for i in range(len(maps) - 1)])
-    print(f"  rounds usable .................. {len(yr)}   features {len(feat_names)}")
+    n_paired_rounds = len(yr)   # captured HERE: section C rebinds `yr` to the
+    # kill-level outcome array, so reading len(yr) in section E would report
+    # 20,252 "rounds". Same shape as every other bug today: the name stopped
+    # pointing at the set I meant.
+    print(f"  rounds usable .................. {n_paired_rounds}   "
+          f"features {len(feat_names)}")
 
     def cv_accuracy(cols, y=yr, seed=7):
         """k-fold accuracy over ROUNDS for a model built from `cols`."""
@@ -434,8 +439,13 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
     print("=" * 78)
     print("E. THE FLOOR — what this sample can and cannot show")
     print("=" * 78)
-    n_rounds = len({k["rid"] for k in kills})
-    print(f"  paired rounds .................. {n_rounds}")
+    # The McNemar threshold below describes the PAIRED round test, so it must
+    # use that test's population (rounds with both sides and a known winner,
+    # built in section B), not every round that happens to contain a kill.
+    # They coincide today; they would not after a filter change (CodeRabbit).
+    n_rounds = n_paired_rounds
+    print(f"  paired rounds .................. {n_rounds}"
+          f"   (rounds with any kill: {len({k['rid'] for k in kills})})")
     print(f"  players with >= {MIN_KILLS_FOR_PLAYER} kills ....... {len(players)}")
     print(f"  players with >= {MIN_ROUNDS_FOR_WOWY} rounds ...... {len(apm)}")
     disc = 0.19  # observed share of discordant pairs in today's McNemar tests

@@ -519,10 +519,19 @@ def _v6_scorer(axes: Axes, weights: dict[str, dict[str, float]]):
 
 
 def _split_halves(players, value_of, cell_mean, rng):
-    """One random split of every player's kills into two halves."""
+    """One random split of every player's kills into two halves.
+
+    A metric may return None for a kill it cannot measure (no position, no
+    denied time). Those kills are SKIPPED, not counted as zero: zero-filling
+    would drag the mean of whichever player has more missing data and call it
+    a difference in play (CodeRabbit, and it is right).
+    """
     first, second = [], []
     for _guid, kills in players:
-        vals = [value_of(r) - (cell_mean(r) if cell_mean else 0.0) for r in kills]
+        vals = [value_of(r) - (cell_mean(r) if cell_mean else 0.0)
+                for r in kills if value_of(r) is not None]
+        if len(vals) < 4:
+            continue
         rng.shuffle(vals)
         half = len(vals) // 2
         first.append(sum(vals[:half]) / half)
@@ -793,29 +802,35 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
     def cell_mean_of(fn):
         buckets = defaultdict(list)
         for r in rows:
-            buckets[(r["rmap"], _side(r))].append(fn(r))
+            v = fn(r)
+            if v is not None:
+                buckets[(r["rmap"], _side(r))].append(v)
         means = {k: sum(v) / len(v) for k, v in buckets.items()}
-        return lambda r: means[(r["rmap"], _side(r))]
+        return lambda r: means.get((r["rmap"], _side(r)), 0.0)
 
     def role_mean_of(fn):
         buckets = defaultdict(list)
         for r in rows:
-            buckets[_role(r)].append(fn(r))
+            v = fn(r)
+            if v is not None:
+                buckets[_role(r)].append(v)
         means = {k: sum(v) / len(v) for k, v in buckets.items()}
-        return lambda r: means[_role(r)]
+        return lambda r: means.get(_role(r), 0.0)
 
     metrics = {
         "KIS v5 (total)": lambda r: float(r["total_impact"]),
         "KIS v6 (with escort)": score_v6,
         "KIS v6 (no escort)": score_v6_ne,
-        "wave phase (reinf)": lambda r: float(r["victim_reinf"] or 0.0),
+        "wave phase (reinf)": lambda r: (None if r["victim_reinf"] is None
+                                        else float(r["victim_reinf"])),
         "answered rate": axes.answered,
         "isolation rate": axes.isolation,
         "escort rate": axes.escort,
         "revenge rate": axes.revenge,
         "clean-pick rate": axes.clean_pick,
-        "denied seconds": lambda r: _denied_seconds(r) or 0.0,
-        "kill distance": lambda r: float(r["kill_distance"] or 0.0),
+        "denied seconds": _denied_seconds,
+        "kill distance": lambda r: (None if r["kill_distance"] is None
+                                    else float(r["kill_distance"])),
     }
     print(f"  {'metric':<22}{'raw':>7}{'role-resid (95% CI)':>26}{'(map,side)':>12}")
     reliability, reliability_cell, reliability_ci = {}, {}, {}
@@ -959,14 +974,16 @@ async def main() -> int:  # noqa: PLR0915 - a report, read top to bottom
         shares = sorted((with_esc.get(g, 0) / len(v)) for g, v in players)
         print(f"  per-player escort share .......... {100*shares[0]:.1f}% - "
               f"{100*shares[-1]:.1f}%  (median {100*shares[len(shares)//2]:.1f}%)")
+        # Compare the same kills scored WITHOUT the escort bonus — dropping the
+        # escort kills instead would conflate "lost the bonus" with "lost 4.6%
+        # of the sample" (CodeRabbit). score_v6_ne is exactly that scorer.
         rank_no_esc = sorted(
-            players, key=lambda kv: -sum(score_v6(r) for r in kv[1] if not axes.escort(r))
-            / max(sum(1 for r in kv[1] if not axes.escort(r)), 1))
+            players, key=lambda kv: -sum(score_v6_ne(r) for r in kv[1]) / len(kv[1]))
         rank_all = sorted(players, key=lambda kv: -sum(score_v6(r) for r in kv[1]) / len(kv[1]))
         pos_a = {g: i for i, (g, _) in enumerate(rank_all)}
         pos_n = {g: i for i, (g, _) in enumerate(rank_no_esc)}
         movers = sum(1 for g, _ in players if abs(pos_a[g] - pos_n[g]) >= 3)
-        print(f"  players moving >=3 ranks if escort kills are dropped: {movers} "
+        print(f"  players moving >=3 ranks if the escort BONUS is removed: {movers} "
               f"of {len(players)}")
         print("  -> if a 4.6% axis reorders the board, that is a warning, not a win.")
 
