@@ -11,6 +11,7 @@ must remain wired up.
 """
 from __future__ import annotations
 
+import stat
 from pathlib import Path
 
 import pytest
@@ -20,6 +21,7 @@ from website.backend.services.upload_store import (
     UPLOAD_STORAGE_ROOT_DEFAULT,
     SavedUpload,
     UploadStorageService,
+    resolve_storage_root,
 )
 
 
@@ -309,5 +311,65 @@ def test_saved_upload_fields_pinned():
 
 def test_storage_root_default_constant():
     """A regression that bumps the default to a different path would
-    silently re-locate every upload."""
-    assert UPLOAD_STORAGE_ROOT_DEFAULT == "data/uploads"
+    silently re-locate every upload. The default must also be ABSOLUTE:
+    the old relative "data/uploads" only landed in website/data/uploads
+    because the service happens to run with WorkingDirectory=<repo>/website."""
+    assert UPLOAD_STORAGE_ROOT_DEFAULT.is_absolute()
+    assert UPLOAD_STORAGE_ROOT_DEFAULT.parts[-3:] == ("website", "data", "uploads")
+
+
+def test_storage_root_ignores_the_working_directory(tmp_path, monkeypatch):
+    """Starting the app from anywhere must not move user data."""
+    monkeypatch.delenv("UPLOAD_STORAGE_ROOT", raising=False)
+    monkeypatch.chdir(tmp_path)
+    assert resolve_storage_root() == UPLOAD_STORAGE_ROOT_DEFAULT
+
+
+def test_absolute_override_is_taken_as_given(tmp_path, monkeypatch):
+    """Production points this outside the git tree; nothing may rewrite it."""
+    monkeypatch.setenv("UPLOAD_STORAGE_ROOT", str(tmp_path / "var" / "uploads"))
+    assert resolve_storage_root() == tmp_path / "var" / "uploads"
+
+
+def test_relative_override_anchors_to_the_package_not_the_cwd(tmp_path, monkeypatch):
+    monkeypatch.setenv("UPLOAD_STORAGE_ROOT", "somewhere/else")
+    monkeypatch.chdir(tmp_path)
+    resolved = resolve_storage_root()
+    assert resolved.is_absolute()
+    assert tmp_path not in resolved.parents
+    assert resolved.parts[-2:] == ("somewhere", "else")
+
+
+def test_blank_override_falls_back_to_the_default(monkeypatch):
+    """An empty value in .env is 'unset', not 'store uploads in the CWD'."""
+    monkeypatch.setenv("UPLOAD_STORAGE_ROOT", "   ")
+    assert resolve_storage_root() == UPLOAD_STORAGE_ROOT_DEFAULT
+
+
+def test_created_root_is_owner_only(tmp_path):
+    """A root this service creates must not be readable by anyone else."""
+    root = tmp_path / "fresh"
+    UploadStorageService(storage_root=root).ensure_storage_tree()
+    assert stat.S_IMODE(root.stat().st_mode) == 0o700
+
+
+def test_existing_root_keeps_the_operators_mode(tmp_path):
+    """2750 is what a server wants when storage lives outside the work tree and
+    a group needs read access. Re-imposing 0700 on every upload would undo it
+    silently, and the provisioning script and the app would disagree forever."""
+    root = tmp_path / "provisioned"
+    root.mkdir()
+    root.chmod(0o2750)
+    svc = UploadStorageService(storage_root=root)
+    svc.ensure_storage_tree()
+    svc.ensure_storage_tree()  # every upload calls this
+    assert stat.S_IMODE(root.stat().st_mode) == 0o2750
+
+
+def test_world_accessible_root_is_tightened(tmp_path):
+    """Respecting the operator stops at 'other': uploads are never world-readable."""
+    root = tmp_path / "loose"
+    root.mkdir()
+    root.chmod(0o755)
+    UploadStorageService(storage_root=root).ensure_storage_tree()
+    assert stat.S_IMODE(root.stat().st_mode) == 0o750
