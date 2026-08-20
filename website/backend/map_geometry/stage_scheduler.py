@@ -565,14 +565,44 @@ def _validate_accumulator_domain(domain: SymbolicIntegerDomain, *, label: str) -
 
 def _canonical_accumulator_domain(domain: SymbolicIntegerDomain, *, label: str) -> SymbolicIntegerDomain:
     _validate_accumulator_domain(domain, label=label)
+    unsigned_segments = (
+        ((domain.lower + (1 << 32), domain.upper + (1 << 32)),)
+        if domain.upper < 0
+        else (
+            ((domain.lower, domain.upper),)
+            if domain.lower >= 0
+            else ((domain.lower + (1 << 32), (1 << 32) - 1), (0, domain.upper))
+        )
+    )
+
+    def interval_implies(mask: int, *, expected_set: bool) -> bool:
+        bit = mask.bit_length() - 1
+        return all(
+            lower >> bit == upper >> bit and bool(lower & mask) is expected_set
+            for lower, upper in unsigned_segments
+        )
+
+    required_set_bits = domain.required_set_bits
+    required_clear_bits = domain.required_clear_bits
+    for bit in range(32):
+        mask = 1 << bit
+        if required_set_bits & mask and interval_implies(mask, expected_set=True):
+            required_set_bits &= ~mask
+        if required_clear_bits & mask and interval_implies(mask, expected_set=False):
+            required_clear_bits &= ~mask
     relevant_exclusions = frozenset(
         value
         for value in domain.excluded
         if domain.lower <= value <= domain.upper
-        and value & domain.required_set_bits == domain.required_set_bits
-        and not value & domain.required_clear_bits
+        and value & required_set_bits == required_set_bits
+        and not value & required_clear_bits
     )
-    return replace(domain, excluded=relevant_exclusions)
+    return replace(
+        domain,
+        excluded=relevant_exclusions,
+        required_set_bits=required_set_bits,
+        required_clear_bits=required_clear_bits,
+    )
 
 
 def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAccumulatorState:
@@ -1036,6 +1066,7 @@ def _rebuild_schedule_state(
     suspended: tuple[SuspendedContinuation, ...] | None = None,
     async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...] | None = None,
     effects: tuple[SymbolicEffectRecord, ...] | None = None,
+    tag_parent_states: tuple[SymbolicTagParentState, ...] | None = None,
     provenance: tuple[str, ...] | None = None,
     ordering_decisions: tuple[str, ...] | None = None,
     unknown_reasons: tuple[str, ...] | None = None,
@@ -1052,7 +1083,9 @@ def _rebuild_schedule_state(
             state.async_lifecycles if async_lifecycles is None else async_lifecycles
         ),
         event_owners=tuple(SymbolicEventOwner.from_frame(frame) for frame in active_frames),
-        tag_parent_states=state.tag_parent_states,
+        tag_parent_states=(
+            state.tag_parent_states if tag_parent_states is None else tag_parent_states
+        ),
         effects=state.effects if effects is None else effects,
         provenance=state.provenance if provenance is None else provenance,
         ordering_decisions=(
@@ -1196,6 +1229,21 @@ def _path_async_lifecycles(
     return tuple(next_lifecycles)
 
 
+def _path_tag_parent_states(
+    current: tuple[SymbolicTagParentState, ...],
+    path: SymbolicEventPath,
+) -> tuple[SymbolicTagParentState, ...]:
+    if not path.tag_parent_mutation_entity_indices:
+        return current
+    by_child = {item.child_entity_index: item for item in current}
+    for entity_index in path.tag_parent_mutation_entity_indices:
+        by_child[entity_index] = SymbolicTagParentState(
+            entity_index,
+            SymbolicTagParentDisposition.UNKNOWN,
+        )
+    return tuple(sorted(by_child.values()))
+
+
 def _async_start_sequence_is_feasible(
     path: SymbolicEventPath,
     existing: tuple[SymbolicAsyncMovementLifecycle, ...],
@@ -1253,12 +1301,12 @@ def _path_frontier_offset(
 
 
 def _tag_parent_wake_constraint(
-    state: SymbolicScheduleState,
+    tag_parent_states: tuple[SymbolicTagParentState, ...],
     *,
     caller_entity_index: int,
     target_entity_index: int,
 ) -> tuple[SymbolicWakeConstraint, str | None]:
-    by_child = {item.child_entity_index: item for item in state.tag_parent_states}
+    by_child = {item.child_entity_index: item for item in tag_parent_states}
     current = caller_entity_index
     visited: set[int] = set()
     while current not in visited:
@@ -1295,13 +1343,13 @@ def _tag_parent_wake_constraint(
 
 def _suspended_boundary(
     index: OrderedStageProgramIndex,
-    state: SymbolicScheduleState,
     *,
     target_frame: SymbolicFrame,
     caller_entity_index: int,
     temporal_state: SymbolicTemporalBoundaryState,
     boundary_line: int,
     effects: tuple[SymbolicEffectRecord, ...],
+    tag_parent_states: tuple[SymbolicTagParentState, ...],
 ) -> tuple[SuspendedContinuation, str | None]:
     program = index.program(target_frame.cursor.node_id)
     boundary_offset = index.instruction_offset(program, boundary_line)
@@ -1316,7 +1364,7 @@ def _suspended_boundary(
         if instruction.action.command == "wait":
             boundary_state: SymbolicBoundaryState = SymbolicWaitBoundaryState(instruction.action.arguments)
             wake_constraint, wake_reason = _tag_parent_wake_constraint(
-                state,
+                tag_parent_states,
                 caller_entity_index=caller_entity_index,
                 target_entity_index=target_frame.cursor.entity_index,
             )
@@ -1586,6 +1634,7 @@ def _finish_s3_target_group(
     suspended: tuple[SuspendedContinuation, ...],
     async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
     effects: tuple[SymbolicEffectRecord, ...],
+    tag_parent_states: tuple[SymbolicTagParentState, ...],
     caller_abandoned: bool,
     provenance: tuple[str, ...],
     ordering_decisions: tuple[str, ...],
@@ -1611,6 +1660,7 @@ def _finish_s3_target_group(
             suspended=retained,
             async_lifecycles=async_lifecycles,
             effects=effects,
+            tag_parent_states=tag_parent_states,
             provenance=provenance + ("same_entity_caller_abandoned",),
             ordering_decisions=ordering_decisions + ("remaining_targets_before_caller_abandonment",),
             unknown_reasons=unknown_reasons,
@@ -1634,6 +1684,7 @@ def _finish_s3_target_group(
             suspended=retained,
             async_lifecycles=async_lifecycles,
             effects=effects,
+            tag_parent_states=tag_parent_states,
             provenance=provenance + ("caller_suffix_completed",),
             ordering_decisions=ordering_decisions + ("caller_suffix_completed_before_target_resume",),
             unknown_reasons=unknown_reasons,
@@ -1656,6 +1707,7 @@ def _finish_s3_target_group(
         suspended=suspended,
         async_lifecycles=async_lifecycles,
         effects=effects,
+        tag_parent_states=tag_parent_states,
         provenance=provenance,
         ordering_decisions=ordering_decisions + ("target_group_completed_before_caller_suffix",),
         unknown_reasons=unknown_reasons,
@@ -1690,48 +1742,33 @@ def _blocked_s3_target_frames(
         else None
     )
     blocker_identity_unresolved = blocker_offset is None
-    for ordinal in range(target_cursor, len(dispatch.ordered_target_entity_indices)):
-        pending = replace(
-            dispatch,
-            target_cursor=ordinal,
-            displaced_continuation=(
-                displaced_continuation if ordinal == target_cursor else None
+    pending = replace(
+        dispatch,
+        target_cursor=target_cursor,
+        displaced_continuation=displaced_continuation,
+    )
+    entity_index = pending.ordered_target_entity_indices[target_cursor]
+    invocation = SymbolicInvocationStep(
+        pending.dispatch_cursor,
+        pending.target_node_id,
+        target_cursor,
+    )
+    frames.append(
+        SymbolicFrame(
+            SymbolicProgramCursor(
+                pending.target_node_id,
+                entity_index,
+                0 if blocker_offset is None else blocker_offset,
+            ),
+            invocation_path=caller_frame.invocation_path + (invocation,),
+            pending_dispatch=pending,
+            origin=(
+                SymbolicFrameOrigin.EVENT_REPLACEMENT
+                if entity_index == caller_frame.cursor.entity_index
+                else SymbolicFrameOrigin.NESTED_DISPATCH
             ),
         )
-        entity_index = pending.ordered_target_entity_indices[ordinal]
-        # A later same-entity target has not replaced the caller yet. Keep it
-        # encoded in the active target's pending group and retain the caller
-        # itself until that target ordinal actually executes.
-        if (
-            preserve_caller
-            and ordinal > target_cursor
-            and entity_index == caller_frame.cursor.entity_index
-        ):
-            continue
-        offset = 0
-        if ordinal == target_cursor and blocker_offset is not None:
-            offset = blocker_offset
-        invocation = SymbolicInvocationStep(
-            pending.dispatch_cursor,
-            pending.target_node_id,
-            ordinal,
-        )
-        frames.append(
-            SymbolicFrame(
-                SymbolicProgramCursor(pending.target_node_id, entity_index, offset),
-                invocation_path=caller_frame.invocation_path + (invocation,),
-                pending_dispatch=pending,
-                origin=(
-                    SymbolicFrameOrigin.EVENT_REPLACEMENT
-                    if entity_index == caller_frame.cursor.entity_index
-                    else (
-                        SymbolicFrameOrigin.NESTED_DISPATCH
-                        if ordinal == target_cursor
-                        else SymbolicFrameOrigin.TARGET_GROUP_RESUME
-                    )
-                ),
-            )
-        )
+    )
 
     active_entities = {frame.cursor.entity_index for frame in frames}
     if (
@@ -1760,6 +1797,7 @@ def _run_s3_target_group(
     suspended: tuple[SuspendedContinuation, ...],
     async_lifecycles: tuple[SymbolicAsyncMovementLifecycle, ...],
     effects: tuple[SymbolicEffectRecord, ...],
+    tag_parent_states: tuple[SymbolicTagParentState, ...],
     caller_abandoned: bool,
     provenance: tuple[str, ...],
     ordering_decisions: tuple[str, ...],
@@ -1812,6 +1850,7 @@ def _run_s3_target_group(
             effects=next_effects,
             existing=async_lifecycles,
         )
+        next_tag_parent_states = _path_tag_parent_states(tag_parent_states, path)
         next_provenance = provenance + (f"dispatch_target_{target_cursor}_executed",)
         next_ordering = ordering_decisions + (f"dispatch_target_{target_cursor}_in_entity_order",)
         if path.completion in {
@@ -1830,6 +1869,7 @@ def _run_s3_target_group(
                         suspended=next_suspended,
                         async_lifecycles=next_lifecycles,
                         effects=next_effects,
+                        tag_parent_states=next_tag_parent_states,
                         caller_abandoned=caller_abandoned,
                         provenance=next_provenance + ("synchronous_target_state_returned",),
                         ordering_decisions=next_ordering,
@@ -1848,6 +1888,7 @@ def _run_s3_target_group(
                         suspended=next_suspended,
                         async_lifecycles=next_lifecycles,
                         effects=next_effects,
+                        tag_parent_states=next_tag_parent_states,
                         caller_abandoned=caller_abandoned,
                         provenance=next_provenance + ("synchronous_target_state_returned",),
                         ordering_decisions=next_ordering,
@@ -1875,12 +1916,12 @@ def _run_s3_target_group(
                     continue
                 continuation, wake_reason = _suspended_boundary(
                     index,
-                    state,
                     target_frame=target_frame,
                     caller_entity_index=caller_frame.cursor.entity_index,
                     temporal_state=path.temporal_boundary_states[0],
                     boundary_line=path.temporal_boundary_lines[0],
                     effects=next_effects,
+                    tag_parent_states=next_tag_parent_states,
                 )
                 if same_entity:
                     continuation = replace(continuation, caller_suffix_abandoned=True)
@@ -1901,6 +1942,7 @@ def _run_s3_target_group(
                             suspended=next_suspended,
                             async_lifecycles=next_lifecycles,
                             effects=next_effects,
+                            tag_parent_states=next_tag_parent_states,
                             caller_abandoned=caller_abandoned or same_entity,
                             provenance=next_provenance + ("dispatch_target_suspended",),
                             ordering_decisions=next_ordering,
@@ -1919,6 +1961,7 @@ def _run_s3_target_group(
                             suspended=next_suspended,
                             async_lifecycles=next_lifecycles,
                             effects=next_effects,
+                            tag_parent_states=next_tag_parent_states,
                             caller_abandoned=caller_abandoned or same_entity,
                             provenance=next_provenance + ("dispatch_target_suspended",),
                             ordering_decisions=next_ordering,
@@ -1950,6 +1993,7 @@ def _run_s3_target_group(
             suspended=retained,
             async_lifecycles=next_lifecycles,
             effects=next_effects,
+            tag_parent_states=next_tag_parent_states,
             provenance=next_provenance,
             ordering_decisions=next_ordering,
             unknown_reasons=next_unknown_reasons,
@@ -2070,6 +2114,7 @@ def _start_s3_dispatch(
                     suspended=state.suspended,
                     async_lifecycles=state.async_lifecycles,
                     effects=effects,
+                    tag_parent_states=state.tag_parent_states,
                     caller_abandoned=False,
                     provenance=state.provenance + ("dispatch_group_started",),
                     ordering_decisions=state.ordering_decisions,
@@ -2148,6 +2193,7 @@ def _complete_s3_caller_suffix(
     for path in paths:
         if not _async_start_sequence_is_feasible(path, state.async_lifecycles):
             continue
+        next_tag_parent_states = _path_tag_parent_states(state.tag_parent_states, path)
         if path.completion not in {
             SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
             SymbolicPathCompletion.ABORTED_BY_GUARD,
@@ -2194,6 +2240,7 @@ def _complete_s3_caller_suffix(
                 runnable=(frontier_frame,),
                 async_lifecycles=next_lifecycles,
                 effects=next_effects,
+                tag_parent_states=next_tag_parent_states,
                 unknown_reasons=state.unknown_reasons + (reason,),
             )
             decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
@@ -2225,6 +2272,7 @@ def _complete_s3_caller_suffix(
                 runnable=(dispatch_frame,),
                 async_lifecycles=next_lifecycles,
                 effects=next_effects,
+                tag_parent_states=next_tag_parent_states,
                 provenance=state.provenance + ("caller_suffix_reached_nested_dispatch",),
             )
             decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, next_state))
@@ -2247,6 +2295,7 @@ def _complete_s3_caller_suffix(
             suspended=completed_suspended,
             async_lifecycles=next_lifecycles,
             effects=next_effects,
+            tag_parent_states=next_tag_parent_states,
             provenance=state.provenance + ("caller_suffix_completed",),
             ordering_decisions=state.ordering_decisions + ("caller_suffix_completed_before_target_resume",),
         )
@@ -2330,6 +2379,7 @@ def _resume_s3_continuation(
     for path in paths:
         if not _async_start_sequence_is_feasible(path, state.async_lifecycles):
             continue
+        next_tag_parent_states = _path_tag_parent_states(state.tag_parent_states, path)
         if path.completion not in {
             SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
             SymbolicPathCompletion.ABORTED_BY_GUARD,
@@ -2364,6 +2414,7 @@ def _resume_s3_continuation(
                 suspended=(),
                 async_lifecycles=next_lifecycles,
                 effects=next_effects,
+                tag_parent_states=next_tag_parent_states,
                 provenance=state.provenance + ("target_boundary_reentered",),
                 ordering_decisions=state.ordering_decisions + (ordering_reason,),
                 unknown_reasons=state.unknown_reasons + (reason,),
@@ -2392,6 +2443,7 @@ def _resume_s3_continuation(
             suspended=(),
             async_lifecycles=next_lifecycles,
             effects=next_effects,
+            tag_parent_states=next_tag_parent_states,
             provenance=state.provenance + ("target_boundary_reentered", "target_suffix_completed"),
             ordering_decisions=state.ordering_decisions + (ordering_reason,),
         )
