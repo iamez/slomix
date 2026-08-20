@@ -1913,3 +1913,60 @@ the dirty local protocol-v2 patch or any later commit.
   replies/resolutions, fresh reviewers, five-minute quiet period, final remote refresh,
   and merge are all unfinished.
 - Post-deploy runtime evidence is owner-gated and was not attempted.
+
+## 2026-08-20 transfer completed and S5 evidence published
+
+The receiving agent is a Claude session, not the author of the checkpoint above.
+Transfer state, for the record:
+
+- The 530 uncommitted lines the checkpoint describes were recovered and committed
+  as `ef574ddb` before anything else; they had existed in one copy, in a
+  gitignored separate clone that no snapshot layer on the machine could see.
+- `5fdf6a7a` fixed the `work_limit=1` P1: an optional-death kill consumed the only
+  decision slot and `_run_s3_target_group` raised `ValueError` instead of naming a
+  frontier. Reproduced both ways before and after.
+- `ef48ab83` fixed the last open P1, movement mutation order across `halt`. Two
+  sites, not one: `_async_start_sequence_is_feasible` ignored stops entirely and
+  pruned every halt-then-restart path *before* `_path_async_lifecycles` could run,
+  so fixing the reconstruction alone changed nothing observable. The stop channel
+  gained `SymbolicAsyncMovementStop(source_entity_index, starts_before)`; a line
+  number could not serve, because `_merge_symbolic_segment` concatenates segments
+  from different programs and `ScriptAction.line` is not monotone across a nested
+  dispatch.
+- `.codacy.yaml` gained a bandit-scoped exclusion for `stage_measurement.py`. The
+  15 findings are B404/B603/B607 on seven hardcoded `git` argument lists; all are
+  Low, and the repository's own gate (`-c pyproject.toml -ll`) exits 0 on the file.
+- `5b1dbe45` bumped the fixture to protocol v2 and added two assertions binding it
+  to `MEASUREMENT_PROTOCOL` and `POST_S0A_CROSS_FRONTIERS`. The fixture had carried
+  `…-v1` since the code moved to v2 because only four of its eight keys were ever
+  read.
+
+### Measured evidence at `5b1dbe45`
+
+Two runs, no `--reuse-from`, clean tree, `full_installed_corpus`:
+
+```
+run A  4e4246fc16cc4e96951e3a0a7bd0deb2a6fff0cedcd3351f40897e06e88b12f1  82.14 s  630,296 KiB
+run B  4e4246fc16cc4e96951e3a0a7bd0deb2a6fff0cedcd3351f40897e06e88b12f1  89.84 s  630,620 KiB
+```
+
+452 cross frontiers (301/244 pre-correction), 136 unique roots, 118 unique
+scheduler seeds; outcomes resolved 1 / still blocked 247 / adaptation blocked 170
+/ skipped empty-complete 24 / budget exhausted 10; residual
+`cross_entity_temporal_interleaving_not_modeled` 64. Manifest `86ddd0ec…b220d`,
+ET source `732518ef…`, Python 3.13.15.
+
+**The ordering fix does not move these denominators.** It corrects a merged path
+shape the installed twenty maps do not produce. Every count is identical to the
+pre-fix measurement; the fix stands on the engine source, not on a moved number.
+
+**Still not convergence.** The `decay_sw` seed grows 322 → 642 → 1282 states
+across B64/B128/B256 and disproves the apparent top-level plateau. It remains a
+named frontier.
+
+### Open, and deliberately not done here
+
+- `abortmove` performs the same motion-cancelling mutations as `halt`
+  (`g_script_actions.c:958`) but is not modelled; it falls to `UNCLASSIFIED` and
+  therefore fails closed. Modelling it would reduce blockers. Not a defect.
+- S6 (Phase 5 static graph gate) is untouched.
