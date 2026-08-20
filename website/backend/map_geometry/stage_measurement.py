@@ -168,11 +168,22 @@ def git_provenance(repo_root: Path) -> tuple[str, bool, str | None]:
     for encoded_path in sorted(path for path in untracked if path):
         relative_path = encoded_path.decode("utf-8", errors="surrogateescape")
         path = repo_root / relative_path
-        payload = (
-            b"symlink:\0" + str(path.readlink()).encode("utf-8", errors="surrogateescape")
-            if path.is_symlink()
-            else path.read_bytes()
-        )
+        if path.is_symlink():
+            payload = b"symlink:\0" + str(path.readlink()).encode(
+                "utf-8", errors="surrogateescape"
+            )
+        else:
+            try:
+                payload = path.read_bytes()
+            except OSError as exc:
+                # `git ls-files --others` can name a path that is unreadable, is
+                # not a regular file, or vanished between the listing and this
+                # read. Raising here throws away the whole measurement AFTER the
+                # corpus work is done — 82 seconds on the installed corpus.
+                # Reproduced with a mode-000 untracked file: PermissionError.
+                # The marker keeps the digest deterministic for the same
+                # condition without pretending the bytes were read.
+                payload = f"unreadable:{type(exc).__name__}".encode("ascii")
         digest.update(len(encoded_path).to_bytes(8, "big"))
         digest.update(encoded_path)
         digest.update(len(payload).to_bytes(8, "big"))
@@ -275,7 +286,20 @@ def prepare_scout_reuse(
 
 
 class MeasurementCheckpoint:
-    """SQLite checkpoint that refuses cross-protocol or cross-input resume."""
+    """SQLite checkpoint that refuses cross-protocol or cross-input resume.
+
+    ⚠️ This is a **run-local resume artifact**, not a database the project
+    reads. It exists so an interrupted corpus measurement can continue instead
+    of repeating ~82 seconds of work, and it is deleted with the run's output.
+
+    It is deliberately not the shared PostgreSQL store, and deliberately not
+    reached through `database_adapter`: nothing outside one measurement ever
+    reads it, it must survive the analysed repository being at any commit, and
+    it has to work on a machine with no database configured at all. Anyone
+    treating this file as a PostgreSQL access path has misread it — the repo's
+    rule about the async adapter is about the statistics database, and this is
+    a scratch file that happens to use SQL.
+    """
 
     def __init__(self, path: Path, metadata: Mapping[str, object]) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -322,7 +346,8 @@ class MeasurementCheckpoint:
     def put_seed_result(self, seed_id: str, payload: Mapping[str, object]) -> None:
         with self._connection:
             self._connection.execute(
-                "INSERT OR REPLACE INTO seed_results (seed_id, payload) VALUES (?, ?)",
+                "INSERT INTO seed_results (seed_id, payload) VALUES (?, ?) "
+                "ON CONFLICT(seed_id) DO UPDATE SET payload = excluded.payload",
                 (seed_id, canonical_json(dict(payload))),
             )
 
@@ -336,7 +361,8 @@ class MeasurementCheckpoint:
     def put_occurrence(self, occurrence_id: str, payload: Mapping[str, object]) -> None:
         with self._connection:
             self._connection.execute(
-                "INSERT OR REPLACE INTO occurrences (occurrence_id, payload) VALUES (?, ?)",
+                "INSERT INTO occurrences (occurrence_id, payload) VALUES (?, ?) "
+                "ON CONFLICT(occurrence_id) DO UPDATE SET payload = excluded.payload",
                 (occurrence_id, canonical_json(dict(payload))),
             )
 
