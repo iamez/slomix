@@ -189,7 +189,11 @@ def test_unreadable_file_is_detected_under_a_foreign_locale(repo: Path):
     )
 
 
-@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permissions")
+# No root skip here on purpose: this one never touches a permission bit. It
+# runs printf | xargs | printenv, so it is exactly as valid under root — and
+# skipping it there dropped the primary regression coverage in container
+# environments that run tests as root (Codex review, #789). Only the
+# unreadable-file test needs the skip, because root ignores file permissions.
 def test_the_locale_pin_reaches_the_process_that_reports_the_error():
     """`stat` runs inside xargs, two processes down from the export.
 
