@@ -44,6 +44,15 @@ PROMOTED_RESEARCH = {
     # agent needs them in the repository, not on one machine.
     "docs/research/W5B_SUSPENDED_SCHEDULER_TAKEOFF_HANDOFF_2026-08-11.md",
     "docs/research/W5B_SEMANTIC_MAPPING_TAKEOFF_HANDOFF_2026-08-10.md",
+    # The rest of the specification chain those two rest on. `map_geometry/`
+    # implements W3 → W4a → W4a2 → W5a → W5b, and all of it is on main now; a
+    # repository carrying 11,741 lines of that code but not the document that
+    # says what W5 *is* would be worse off than before this cleanup. Reached by
+    # following citations out of the two handoffs, not by taste.
+    "docs/research/MAP_ENTITY_GEOMETRY_W3_2026-07-31.md",
+    "docs/research/MAP_COLLISION_TRACE_W4A1_2026-08-04.md",
+    "docs/research/MAP_PATCH_COLLISION_W4A2_2026-08-04.md",
+    "docs/research/W5A_STATIC_STAGE_ASSET_FOUNDATION_2026-08-08.md",
     "docs/archive/FEATURE_ROADMAP_2026.md",
     "docs/archive/PLANNING_ROOM.md",
     "docs/archive/SYSTEM_ARCHITECTURE.md",
