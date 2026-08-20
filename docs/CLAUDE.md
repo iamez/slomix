@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.38.1 <!-- x-release-please-version --> | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
+**Version**: 1.39.0 <!-- x-release-please-version --> | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
 **Database**: PostgreSQL 17 (production) / 14 (dev) | **Status**: Production-Ready
 
 ---
@@ -36,6 +36,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - ALWAYS use 60-minute gap threshold for sessions (NOT 30!)
 - ALWAYS use async database calls via `database_adapter.py` in Cogs
 - NEVER recalculate R2 differential (parser handles it correctly)
+- ALWAYS filter `round_number IN (1, 2)`; for a match's totals use the
+  **`player_match_stats` view** (migration 078), which sums the two halves.
+  `round_number = 0` rows were the original "map summary" idea, but the
+  implementation copied the parsed R2 file wholesale (`match_summary =
+  round_2_cumulative_result.copy()`, commit `ee500692`, 2025-11-07): its kills
+  and damage really are cumulative, its playtime is not, so DPM read off R0
+  came out doubled and every consumer moved to the halves instead. The importer
+  stopped writing new R0 player rows in 2026-08; the historical ones stay,
+  unread. A view cannot drift the way that copy did — it IS the sum.
+- ALWAYS take round DURATION from `shared/round_time.py`
+  (`round_duration_seconds` / `round_duration_sql`). `rounds.actual_time` is
+  the stopwatch TARGET (`g_nextTimeLimit`), not a measurement — it overstates
+  ~15% of rounds (RCA 2026-08-18, PR #770).
 
 ### Terminology
 
@@ -208,7 +221,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-## System Status (Version 1.38.1) <!-- x-release-please-version -->
+## System Status (Version 1.39.0) <!-- x-release-please-version -->
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
 - Database: PostgreSQL (101 tables), no corruption
@@ -221,4 +234,4 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-**Version**: 1.38.1 <!-- x-release-please-version --> | **Last Updated**: 2026-07-29 | **Schema Version**: 2.2
+**Version**: 1.39.0 <!-- x-release-please-version --> | **Last Updated**: 2026-07-29 | **Schema Version**: 2.2

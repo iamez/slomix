@@ -11,6 +11,7 @@ makes the stamp effective on the records surface.
 from __future__ import annotations
 
 import inspect
+from pathlib import Path
 
 from website.backend.routers import records_awards
 
@@ -23,4 +24,28 @@ def test_records_gate_excludes_orphan_r2_rounds():
     assert "OR r.round_status = 'orphan_r2'" in src, (
         "records base_where lost the orphan_r2 exclusion — cumulative R2 rows "
         "would re-enter the record book"
+    )
+
+
+def test_match_records_gate_lives_in_the_view():
+    """The six per-match record categories no longer spell the gate out — they
+    read player_match_stats (migration 078). The gate must therefore exist in
+    the view, or moving the query there would have quietly dropped it.
+    """
+    src = inspect.getsource(records_awards.get_records)
+    assert "player_match_stats" in src, (
+        "match records stopped using the view — check where their gate went"
+    )
+
+    migration = (
+        Path(__file__).resolve().parents[2]
+        / "migrations"
+        / "078_player_match_stats_view.sql"
+    ).read_text(encoding="utf-8")
+    assert "r.round_status IS DISTINCT FROM 'orphan_r2'" in migration, (
+        "player_match_stats lost the orphan_r2 exclusion — cumulative R2 rows "
+        "would re-enter the match record book"
+    )
+    assert "r.is_valid IS DISTINCT FROM FALSE" in migration, (
+        "player_match_stats lost the is_valid gate — bot rounds would re-enter"
     )

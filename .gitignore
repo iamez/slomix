@@ -441,6 +441,18 @@ docs/reports/
 docs/instructions/
 docs/research/inbox/
 
+# Raw data corpora never belong in the repository, at any size. A 23.8 MB
+# spreadsheet of another player's stats reached the public repo on 2026-08-19
+# because nothing said no. The pre-push guard (scripts/git-hooks/pre-push)
+# refuses these too — this is the second net, not the first.
+# Only spreadsheets: the repo DOES deliberately track some research .json and
+# .csv artefacts (DEEP_AUDIT_2026-06-27/_wave1_raw.json,
+# FULL_PROJECT_AUDIT_COVERAGE_2026-07-14.csv), so a blanket rule for those
+# would contradict what is already versioned. Size is handled by the pre-push
+# guard instead, which is where the real risk was.
+*.xlsx
+*.xls
+
 # ============================================
 # DOCS — INTERNAL DEV ARTIFACTS (gitignore)
 # ============================================
@@ -719,3 +731,10 @@ proximity/map_rotation.txt
 # ============================================
 gemini-website/
 .audit-venv/
+
+# User-uploaded content (community upload library) — never in git
+website/data/uploads/
+
+# Repair-script artifacts (row backups + generated SQL) — data, never in git
+/playtime_repair_artifacts/
+/r2_repair_artifacts/

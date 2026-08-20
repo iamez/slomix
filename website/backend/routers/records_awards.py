@@ -111,42 +111,47 @@ async def get_records(
         q_params = (map_name, limit) if map_name else (limit,)
         plans.append((key, query, q_params))
 
-    # Match-level records: both rounds of one map, summed per player. Summing
-    # the (already differential) R1+R2 rows by match_id is the trustworthy
-    # path — R0 "match summary" rows are a known-unreliable aggregate and are
-    # deliberately not used. Only summable counters get a match category
-    # (ratios like accuracy do not survive summation). A match missing its R2
-    # simply sums lower — it can never fake-inflate a record.
-    match_categories = {
-        "match_damage": "damage_given",
-        "match_kills": "kills",
-        "match_headshots": "headshots",
-        "match_xp": "xp",
-        "match_revives": "revives_given",
-        "match_gibs": "gibs",
-    }
-    match_map_filter = " AND pcs.map_name = $1" if map_name else ""
+    # Match-level records: both rounds of one map, summed per player. The sum
+    # lives in the player_match_stats VIEW (migration 078), not in six copies
+    # of the same GROUP BY here — and not in the round_number = 0 rows, which
+    # are a stored copy of the R2 capture that nothing reads (docs/CLAUDE.md).
+    # The view carries the structural gates (valid round, played half); the
+    # human/bot policy stays here, where it belongs. Only summable counters get
+    # a match category (ratios like accuracy do not survive summation). A match
+    # missing its R2 simply sums lower — it can never fake-inflate a record.
+    match_categories = (
+        ("match_damage", "damage_given"),
+        ("match_kills", "kills"),
+        ("match_headshots", "headshots"),
+        ("match_xp", "xp"),
+        ("match_revives", "revives_given"),
+        ("match_gibs", "gibs"),
+    )
+    # Ties are real here (two players with 72 headshots in a match, three with
+    # 298 xp) and a bare `ORDER BY value DESC` leaves which one is shown to
+    # whatever order the plan produces. That was stable in practice but never
+    # specified — and it did change when this query moved to the view. The
+    # tiebreak makes it explainable instead of incidental: most recent
+    # achievement first, then name. Values are unaffected, only which of several
+    # equal rows is displayed.
+    match_where = (
+        "WHERE player_name NOT LIKE '[BOT]%' "
+        "AND player_guid IS NOT NULL "
+        "AND player_guid NOT LIKE 'OMNIBOT%'"
+    )
+    if map_name:
+        match_where += " AND map_name = $1"
     match_limit_placeholder = "$2" if map_name else "$1"
-    for key, col in match_categories.items():
+    for key, col in match_categories:
         query = f"""
             SELECT
-                MAX(pcs.player_name) as player_name,
-                SUM(pcs.{col}) as value,
-                MAX(pcs.map_name) as map_name,
-                MIN(pcs.round_date) as round_date
-            FROM player_comprehensive_stats pcs
-            JOIN rounds r ON r.id = pcs.round_id
-            WHERE pcs.round_number IN (1, 2)
-              AND pcs.time_played_seconds > 0
-              AND pcs.player_name NOT LIKE '[BOT]%'
-              AND pcs.player_guid IS NOT NULL
-              AND pcs.player_guid NOT LIKE 'OMNIBOT%'
-              AND r.is_valid IS DISTINCT FROM FALSE
-              AND r.round_status IS DISTINCT FROM 'orphan_r2'
-              AND r.match_id IS NOT NULL
-              {match_map_filter}
-            GROUP BY r.match_id, pcs.player_guid
-            ORDER BY value DESC
+                player_name,
+                {col} as value,
+                map_name,
+                round_date
+            FROM player_match_stats
+            {match_where}
+            ORDER BY value DESC, round_date DESC, player_name ASC
             LIMIT {match_limit_placeholder}
         """
         q_params = (map_name, limit) if map_name else (limit,)

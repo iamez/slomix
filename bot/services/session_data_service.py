@@ -102,7 +102,13 @@ class SessionDataService:
         # Include 'completed', 'cancelled', and 'substitution' rounds (all have valid player stats)
         sessions = await self.db_adapter.fetch_all(
             """
-            SELECT id, map_name, round_number, actual_time
+            SELECT id, map_name, round_number,
+                   -- measured duration first; raw actual_time is the stopwatch
+                   -- target, inflated on surrenders (RCA 2026-08-18)
+                   CASE WHEN COALESCE(actual_duration_seconds, 0) > 0
+                        THEN (actual_duration_seconds / 60)::text || ':' ||
+                             lpad((actual_duration_seconds % 60)::text, 2, '0')
+                        ELSE actual_time END AS actual_time
             FROM rounds
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)
@@ -205,7 +211,13 @@ class SessionDataService:
 
         sessions = await self.db_adapter.fetch_all(
             """
-            SELECT id, map_name, round_number, actual_time
+            SELECT id, map_name, round_number,
+                   -- measured duration first; raw actual_time is the stopwatch
+                   -- target, inflated on surrenders (RCA 2026-08-18)
+                   CASE WHEN COALESCE(actual_duration_seconds, 0) > 0
+                        THEN (actual_duration_seconds / 60)::text || ':' ||
+                             lpad((actual_duration_seconds % 60)::text, 2, '0')
+                        ELSE actual_time END AS actual_time
             FROM rounds
             WHERE gaming_session_id = ?
               AND round_number IN (1, 2)

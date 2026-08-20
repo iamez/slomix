@@ -31,7 +31,18 @@ from typing import Any
 
 # A session is considered live only if an event landed within this window;
 # past that the snapshot reads idle so a stale ring can't look "on".
-_LIVE_WINDOW_SECONDS = 90
+# 180 s (was 90): tailer delivery gaps of a minute-plus are a measured
+# reality (Cloudflare 403/530 windows, 2026-08-18) and every crossing of
+# this edge used to blank the whole card — leave slowly, enter instantly.
+_LIVE_WINDOW_SECONDS = 180
+# The roster outlives is_live: through a delivery gap the line-up is still
+# the best truth we have, so keep showing it (with roster_age_seconds so the
+# UI can dim it) until the gap is long enough to be a session boundary.
+_ROSTER_LINGER_SECONDS = 600
+# A map change that reverts to the previous map this soon after the last
+# change is a dueling-sources ping-pong (legacy3 MAP vs LIVEX LIVE_MAP), not
+# a real remap — ignore it.
+_MAP_FLIPBACK_SECONDS = 60
 # How long a recent objective action stays surfaced in the snapshot.
 _OBJECTIVE_WINDOW_SECONDS = 20
 # A gap this long between events is a session boundary (server down + restart),
@@ -55,6 +66,7 @@ class LiveStateReducer:
         self._roster: dict[int, dict[str, Any]] = {}
         self._current_map: str | None = None
         self._previous_map: str | None = None
+        self._map_changed_at: float | None = None
         self._game_state: str = "unknown"  # warmup|live|between|mapchange|unknown
         self._round_number: int | None = None
         self._round_started_at: float | None = None
@@ -64,6 +76,11 @@ class LiveStateReducer:
         # Recent roster changes (joined / left / switched side) — the "menjave"
         # (substitutions) a spectator wants to see, newest last, capped small.
         self._roster_changes: list[dict[str, Any]] = []
+        # Live per-round tallies (Val A "Live Ladder"): slot -> kills/deaths/
+        # damage sums from LIVE_AGGREGATE deltas (10-s cadence, reset each
+        # flush at the source) + an instant alive flag from LIVE_KILL (dead)
+        # and LIVE_MOVEMENT (moving = alive). Reset on round/map boundaries.
+        self._live_stats: dict[int, dict[str, Any]] = {}
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -84,6 +101,11 @@ class LiveStateReducer:
             return None
         entry = self._roster.get(slot)
         return entry["name"] if entry else None
+
+    def _live_stat(self, slot: int) -> dict[str, Any]:
+        return self._live_stats.setdefault(
+            slot, {"kills": 0, "deaths": 0,
+                   "damage_given": 0, "damage_received": 0, "alive": True})
 
     def _push_objective(self, entry: dict[str, Any]) -> None:
         """Append a recent-objective action, capped at the last 10."""
@@ -121,6 +143,7 @@ class LiveStateReducer:
             self._roster.clear()
             self._objectives.clear()
             self._roster_changes.clear()
+            self._live_stats.clear()
             self._round_number = None
             self._round_started_at = None
 
@@ -170,13 +193,24 @@ class LiveStateReducer:
                     self._record_change(entry["name"], "left", entry.get("team"), at)
 
         elif etype in ("MAP", "LIVE_MAP"):
-            new_map = ev.get("map_name")
+            new_map = (ev.get("map_name") or "").strip()
             if new_map and new_map != self._current_map:
+                # Anti ping-pong: two sources report the map (legacy3 `MAP`,
+                # LIVEX `LIVE_MAP`). A "change" straight back to the previous
+                # map moments after the last change is the lagging source
+                # re-asserting stale truth — each hop used to wipe
+                # round_number and objectives (2026-08-18 flapping).
+                if (new_map == self._previous_map
+                        and self._map_changed_at is not None
+                        and (at - self._map_changed_at) < _MAP_FLIPBACK_SECONDS):
+                    return
                 self._previous_map = self._current_map
                 self._current_map = new_map
+                self._map_changed_at = at
                 self._game_state = "mapchange"
                 self._round_number = None
                 self._objectives = []
+                self._live_stats.clear()
 
         elif etype == "INIT_GAME":
             if self._game_state != "live":
@@ -185,7 +219,12 @@ class LiveStateReducer:
         elif etype == "ROUND_START":
             self._game_state = "live"
             self._round_started_at = at
-            self._round_number = (self._round_number or 0) + 1
+            self._live_stats.clear()  # the ladder is per-round, like HLTV's
+            # Stopwatch has exactly R1/R2. A third ROUND_START without a MAP
+            # in between means the MAP event was lost (dropped batch) — treat
+            # it as a fresh map's R1 instead of counting "R5" forever.
+            nxt = (self._round_number or 0) + 1
+            self._round_number = 1 if nxt > 2 else nxt
 
         elif etype in ("ROUND_END", "STATS_SAVED"):
             if self._game_state == "live":
@@ -210,6 +249,28 @@ class LiveStateReducer:
                 "type": "flag", "team": None, "verb": "grabbed",
                 "player": actor, "objective": ev.get("flag"), "at": at,
             })
+
+        elif etype == "LIVE_AGGREGATE":
+            slot = self._slot(ev)
+            if slot is not None:
+                st = self._live_stat(slot)
+                # Source flushes-and-resets every ~10 s, so these are DELTAS.
+                st["kills"] += int(ev.get("kills") or 0)
+                st["deaths"] += int(ev.get("deaths") or 0)
+                st["damage_given"] += int(ev.get("damage_given") or 0)
+                st["damage_received"] += int(ev.get("damage_received") or 0)
+
+        elif etype == "LIVE_KILL":
+            victim = self._slot(ev, "victim_slot")
+            if victim is not None:
+                self._live_stat(victim)["alive"] = False
+
+        elif etype == "LIVE_MOVEMENT":
+            for entry in ev.get("players") or []:
+                slot = entry.get("slot") if isinstance(entry, dict) else None
+                if isinstance(slot, int):
+                    # A moving player is alive (corpses don't emit positions).
+                    self._live_stat(slot)["alive"] = True
 
         elif etype == "DYNAMITE":
             actor = self._name_for_slot(self._slot(ev))
@@ -236,6 +297,18 @@ class LiveStateReducer:
                 "on_server_seconds": int(now - e["connected_at"]),
                 "on_side_seconds": int(now - e["team_since"]),
             }
+            live = self._live_stats.get(slot)
+            if live is not None:
+                elapsed = (now - self._round_started_at
+                           if self._round_started_at else None)
+                member["live"] = {
+                    "kills": live["kills"],
+                    "deaths": live["deaths"],
+                    "damage": live["damage_given"],
+                    "dpm": (round(live["damage_given"] * 60 / elapsed)
+                            if elapsed and elapsed >= 30 else None),
+                    "alive": live["alive"],
+                }
             if e.get("team") == 1:
                 axis.append(member)
             elif e.get("team") == 2:
@@ -243,11 +316,15 @@ class LiveStateReducer:
             else:
                 spectators.append(member)
 
-        # A quiet stream (no event within the live window) means the game ended
-        # or the server went away. Disconnects don't arrive on a server restart,
-        # so the roster would otherwise freeze the final line-up on screen — an
-        # idle snapshot must show no players, matching game_state=idle.
-        if not is_live:
+        # The roster used to be blanked the moment is_live flipped false,
+        # which made the card oscillate full↔empty across every tailer
+        # delivery gap. Now it LINGERS (with roster_age_seconds so the UI
+        # can dim it) and only empties once the gap is long enough to be a
+        # session boundary — at which point a server restart without
+        # DISCONNECTs can no longer freeze a dead line-up on screen either.
+        event_age = (now - self._last_event_at) if self._last_event_at else None
+        roster_stale = event_age is None or event_age > _ROSTER_LINGER_SECONDS
+        if roster_stale:
             axis, allies, spectators = [], [], []
             session_start = None
 
@@ -280,13 +357,19 @@ class LiveStateReducer:
                 "allies": allies,
                 "spectators": spectators,
                 "player_count": len(axis) + len(allies),
+                # Age of the roster's supporting evidence — 0-ish while events
+                # flow, grows through a delivery gap so the UI can dim the
+                # line-up instead of flapping it away.
+                "roster_age_seconds": (int(event_age)
+                                       if (event_age is not None
+                                           and not roster_stale) else None),
                 "has_bots": any(
                     str(m["name"]).startswith("[BOT]")
                     for m in (axis + allies + spectators)
                 ),
             },
             "session_start_seconds": (int(now - session_start)
-                                      if (is_live and session_start) else None),
+                                      if session_start else None),
             "recent_objectives": recent_objectives,
             "recent_roster_changes": recent_roster_changes,
             "last_event_age_seconds": (int(now - self._last_event_at)

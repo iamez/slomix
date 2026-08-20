@@ -169,7 +169,12 @@ local configuration = {
     enabled = true,
     send_delay_seconds = 0,  -- No delay (Lua reloads during map transitions)
     gametimes_enabled = true,
-    gametimes_dir = "/home/et/.etlegacy/legacy/gametimes",
+    -- Leave empty: the module derives the directory from the engine's own
+    -- fs_homepath. An absolute value here is honoured verbatim as a
+    -- deliberate override, so on a machine running two instances it sends
+    -- both of them to the first server's directory — which is the bug this
+    -- default was changed to prevent.
+    gametimes_dir = "",
     spawn_tracking_enabled = true,
     spawn_check_interval_ms = 500,
     curl_retry = 3, curl_retry_delay = 1, curl_retry_max_time = 15

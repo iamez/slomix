@@ -38,6 +38,11 @@ set -euo pipefail
 # Directory under which the application will live
 APP_DIR="/opt/slomix"
 
+# Community uploads (clips, configs, HUDs) — deliberately OUTSIDE $APP_DIR so a
+# deploy checkout can never collide with user data. The web app reads this from
+# UPLOAD_STORAGE_ROOT in .env; keep the two in step.
+UPLOADS_DIR="/var/lib/slomix/uploads"
+
 # Git repository to clone
 REPO_URL="https://github.com/iamez/slomix.git"
 REPO_BRANCH="main"
@@ -684,13 +689,22 @@ chmod -R g+rX "$APP_DIR"
 # WEB_LOG_DIR is unset on both hosts), so provisioning it only created an
 # empty directory that logrotate then had to glob (removed 2026-08-15 —
 # it was still empty on production, and 76 MB of fossils on dev).
-for dir in local_stats logs processed_stats website/data website/data/uploads; do
+for dir in local_stats logs processed_stats website/data; do
   mkdir -p "$APP_DIR/$dir"
 done
 chown -R "$BOT_USER:$SLX_GROUP" "$APP_DIR/local_stats" "$APP_DIR/logs" "$APP_DIR/processed_stats"
 chown -R "$WEB_USER:$SLX_GROUP" "$APP_DIR/website/data"
 chmod -R g+rwX "$APP_DIR/local_stats" "$APP_DIR/logs" "$APP_DIR/processed_stats" \
                "$APP_DIR/website/data"
+
+# Community uploads live OUTSIDE the git work tree. On 2026-08-19 the v1.39.0
+# deploy aborted with exit 128 because git could not stat a user's .mp4 inside
+# website/data/uploads (mode 0700, owned by the web user), and a checkout has
+# to inspect every path it might touch. Code the deploy replaces and data it
+# must never touch do not belong in the same directory.
+mkdir -p "$UPLOADS_DIR"
+chown -R "$WEB_USER:$SLX_GROUP" "$UPLOADS_DIR"
+chmod 2750 "$UPLOADS_DIR"
 
 # Create SSH key directory for the bot user (for game server polling later)
 mkdir -p "$BOT_SSH_DIR"
@@ -897,6 +911,11 @@ POSTGRES_MAX_POOL=10
 WEBSITE_HOST=127.0.0.1
 WEBSITE_PORT=${WEBSITE_PORT}
 WEBSITE_RELOAD=false
+
+# ---- Community uploads ----
+# OUTSIDE the git work tree on purpose: a deploy checkout must never have to
+# stat user data (that is what aborted the v1.39.0 deploy with exit 128).
+UPLOAD_STORAGE_ROOT=${UPLOADS_DIR}
 
 # ---- Session & Security ----
 SESSION_SECRET=${SESSION_SECRET}

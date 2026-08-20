@@ -1492,7 +1492,8 @@ async def get_stats_session_detail(
     # 1. Get all rounds for this session (R1 and R2 only, exclude R0 summaries)
     rounds_query = """
         SELECT r.id, r.map_name, r.round_number, r.winner_team,
-               r.round_date, r.round_time, r.actual_time, r.round_start_unix
+               r.round_date, r.round_time, r.actual_time, r.round_start_unix,
+               r.actual_duration_seconds
         FROM rounds r
         WHERE r.gaming_session_id = $1
           AND r.round_number IN (1, 2)
@@ -1539,7 +1540,9 @@ async def get_stats_session_detail(
         round_time = str(rr[5]) if rr[5] else None
 
         lua = lua_by_round.get(round_id, {})
-        # Parse actual_time (MM:SS string) as fallback if lua duration missing
+        # Measured duration first (lua table, then the rounds mirror);
+        # actual_time text is a LAST resort — it is the stopwatch target
+        # and inflated on surrender rounds (RCA 2026-08-18).
         actual_time_raw = rr[6]
         actual_time_seconds = None
         if actual_time_raw:
@@ -1549,7 +1552,8 @@ async def get_stats_session_detail(
                     actual_time_seconds = int(parts[0]) * 60 + int(parts[1])
             except (ValueError, IndexError):
                 pass  # actual_time format not M:SS — use default 0
-        duration = lua.get("duration_seconds") or actual_time_seconds
+        duration = (lua.get("duration_seconds") or rr[8]
+                    or actual_time_seconds)
 
         round_obj = {
             "round_id": round_id,

@@ -19,6 +19,9 @@ from website.backend.services.session_scope import (
     resolve_gaming_session_scope,
 )
 from website.backend.services.storytelling.kis import FORMULA_VERSION
+from website.backend.services.storytelling.win_contribution import (
+    FORMULA_VERSION as PWC_FORMULA_VERSION,
+)
 from website.backend.services.storytelling_service import (
     CARRIER_CHAIN_MULTIPLIER,
     CARRIER_KILL_MULTIPLIER,
@@ -536,6 +539,108 @@ async def get_kis_formula():
             "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5",
         },
         "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
+        # What this score does NOT claim. Measured 2026-08-19 and reproducible
+        # with scripts/backtest_kis_v6.py and scripts/backtest_metric_foundations.py
+        # (both READ-ONLY). Published here because a transparency endpoint that
+        # only lists multipliers invites readers to believe more than the
+        # numbers support.
+        "validity": {
+            "measures": (
+                "the quality of a single kill — NOT how good a player is. "
+                "Across players, KIS per kill tracks a ridge-APM with-or-"
+                "without-you estimate at r=0.35, while plain kills per round "
+                "tracks it at r=0.92 (1,938 rounds, 36 players). Whoever helps "
+                "the team win is visible in VOLUME, not in per-kill quality."
+            ),
+            "context_ceiling": (
+                "Every kill-derived feature we have, combined and evaluated "
+                "with cross-validation over held-out rounds, predicts the round "
+                "winner 75.7% of the time; simply counting kills gets 73.2%. "
+                "Both sit on top of a 64.1% floor — the attacking side does not "
+                "win half the rounds, so a model that always picked the more "
+                "common winner would already score that. The entire budget for "
+                "all context weighting is the ~2.5 points between those two, "
+                "not the distance from 50%."
+            ),
+            "known_defect_in_v5": (
+                "spawn_multiplier and reinf_multiplier are the SAME Lua "
+                "quantity (time_to_next from calculateSpawnTimingScore) stored "
+                "twice, so the enemy spawn clock is counted twice and owns ~38% "
+                "of the score's spread (r=0.85 between the two). Several other "
+                "multipliers do not survive a within-role test with a "
+                "man-advantage control. Both are addressed in the v6 candidate."
+            ),
+            "sample": "34,597 kills over 638 rounds; 15 players with >=200 kills",
+        },
+    }
+
+
+@router.get("/storytelling/win-contribution/formula")
+async def get_pwc_formula():
+    """Return PWC weight definitions (transparency endpoint).
+
+    Same pattern as /storytelling/formula (KIS): public, values imported
+    from the owning module so this endpoint cannot drift from what is
+    actually computed.
+    """
+    weights = StorytellingService.pwc_weights()
+    descriptions = {
+        "kills": "Share of team kills in the round",
+        "objectives": (
+            "Share of team objective actions: completed/destroyed/stolen/"
+            "returned objectives, dynamite plants+defuses, constructions "
+            "(incl. MG repairs)"
+        ),
+        "revives": "Share of team revives given",
+        "damage": "Share of team damage given",
+        "crossfire": "Share of team crossfire kills",
+        "trade": "Share of team trade kills (avenging a teammate within "
+                 "the trade window)",
+        "survival": "Time alive vs team average, capped at 2.0x",
+        "clutch": "Share of team clutch kills (below 30 HP or outnumbered)",
+    }
+    return {
+        "status": "ok",
+        "version": PWC_FORMULA_VERSION,
+        "name": "Player Win Contribution (PWC)",
+        "description": (
+            "Per-round weighted sum of each player's SHARE of their own "
+            "team's output. A share is player_value / team_total for that "
+            "round, so scarce actions (a lone dynamite plant) can be worth "
+            "a full weight while kills are split across the team. Session "
+            "total_pwc is the sum over all valid rounds."
+        ),
+        "weights": {
+            k: {"value": v, "description": descriptions[k]}
+            for k, v in weights.items()
+        },
+        "zero_objective_rounds": {
+            "description": (
+                "When NO player in the round scored any objective action, "
+                "the 0.20 objectives weight is redistributed: kills +0.06, "
+                "damage +0.03, revives +0.03, survival +0.02, crossfire "
+                "+0.03, trade +0.03"
+            ),
+        },
+        "mvp": {
+            "metric": "waa_bayes",
+            "description": (
+                "MVP is NOT the leaderboard #1. Leaderboard sorts by "
+                "total_pwc (sum over all rounds); MVP is picked by "
+                "waa_bayes: PWC earned in WON rounds divided by all rounds "
+                "played, shrunk toward the session average with 2 phantom "
+                "rounds so short-sample players cannot spike it."
+            ),
+            # NB: floor division, exactly as computed in win_contribution.py
+            # (5-round session -> threshold 2). Changing the rule to a
+            # ceiling would move published MVPs and therefore requires a
+            # pwc-v3 FORMULA_VERSION bump — out of scope for this
+            # transparency-only change.
+            "eligibility": "won at least 1 round AND played >= max(2, "
+                           "floor(max rounds played in session / 2))",
+            "tiebreakers": ["total_pwc", "rounds_won"],
+            "fallback": "if nobody qualifies, leaderboard #1 by total_pwc",
+        },
     }
 
 
