@@ -6,14 +6,18 @@ local src = assert(io.open(path)):read("a")
 local fn = src:match("(local function get_gametimes_dir%(%).-\nend)")
 if not fn then io.stderr:write("get_gametimes_dir not found\n") os.exit(2) end
 
+-- "NIL" means "the cvar/key is absent"; "" means "present but empty", which is
+-- the shipped default for gametimes_dir and behaves differently in Lua (an
+-- empty string is truthy). The two cases must stay distinguishable here.
+local function arg_or_nil(v) if v == "NIL" then return nil end return v end
 local cvars = {
-    fs_homepath = (want_home ~= "" and want_home or nil),
-    fs_basepath = (want_base ~= "" and want_base or nil),
-    fs_game     = want_game,
+    fs_homepath = arg_or_nil(want_home),
+    fs_basepath = arg_or_nil(want_base),
+    fs_game     = arg_or_nil(want_game),
 }
 local env = {
     string = string,
-    configuration = { gametimes_dir = (want_cfg ~= "" and want_cfg or nil) },
+    configuration = { gametimes_dir = arg_or_nil(want_cfg) },
     et = { trap_Cvar_Get = function(n) return cvars[n] end },
 }
 io.write(load(fn .. "\nreturn get_gametimes_dir", "probe", "t", env)()())

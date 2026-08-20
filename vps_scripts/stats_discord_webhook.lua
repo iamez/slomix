@@ -115,12 +115,18 @@ local configuration = {
 
     -- Optional local gametimes output (for fallback + auditing)
     gametimes_enabled = true,
-    -- Left unset on purpose: get_gametimes_dir() derives it from the engine's
-    -- own fs_homepath, the same way resolve_config_path() finds this module's
+    -- Empty, NOT nil: apply_config_overrides() rejects any key missing from
+    -- this table as a typo ("unknown key ... ignored"), and a nil value makes
+    -- the key missing in Lua — which would silently disable the very override
+    -- documented below (#788 review). "" means "derive it".
+    --
+    -- get_gametimes_dir() derives the directory from the engine's own
+    -- fs_homepath, the same way resolve_config_path() finds this module's
     -- config. A hardcoded absolute path here makes every instance on the box
-    -- write into the FIRST instance's directory — set one only to override
-    -- deliberately, and only when there is a single instance.
-    gametimes_dir = nil,
+    -- write into the FIRST instance's directory — set one in
+    -- stats_discord_webhook_config.lua only to override deliberately, and only
+    -- when there is a single instance.
+    gametimes_dir = "",
     gametimes_write_on_failure_only = false,
 
     -- Spawn/death tracking (Oksii-inspired validation)
@@ -449,7 +455,11 @@ local function get_gametimes_dir()
     if dir and dir:sub(1, 1) == "/" then
         return dir
     end
-    dir = dir or "gametimes"
+    -- "" is the "not set" default and is TRUTHY in Lua, so `or` does not catch
+    -- it — without this the path would end in a bare slash.
+    if not dir or dir == "" then
+        dir = "gametimes"
+    end
 
     local fs_game = et.trap_Cvar_Get("fs_game")
     if not fs_game or fs_game == "" then
