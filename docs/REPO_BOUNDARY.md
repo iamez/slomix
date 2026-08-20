@@ -87,9 +87,46 @@ These should never be committed "by accident". If we keep them in git, it must b
 - `website/static/modern/`
   Current question: are built frontend artifacts part of deployment, or should deploy build them from source?
 - `docs/reports/`
-  Some are useful decision records, some are temporary research dumps.
+  Settled on 2026-08-20 — see "Documents" below.
 - root-level one-off files
   Examples: screenshots, throwaway Lua copies, debug scripts, temporary markdown plans.
+
+## Documents: which ones the repo publishes
+
+Settled 2026-08-20, when `docs/` held 217 tracked files and 121 of them were
+working notes nobody could reach from the code.
+
+**The test is inbound reference, not age.** A dated audit that a router comment
+cites is documentation — it is the answer to "why is this number 45 and not 60".
+The same audit with nothing pointing at it is sediment: it describes a state of
+the system that no longer exists, and every reader who opens it pays for that
+before finding out.
+
+Published:
+- documents that explain the system as it runs now — architecture, runbooks,
+  setup guides, command references, data pipeline, known issues
+- decision records a reader arrives at from somewhere else: an ADR, or a dated
+  audit that code, tests, workflows or a living document cite by name
+
+Local only (`docs/research/`, `docs/archive/`, and the retired root documents
+listed in `.gitignore`):
+- audits, RCAs, sprint and session reports, handoffs, plans, triage notes
+- anything written to coordinate the work rather than to describe the product
+
+**Nothing was deleted.** Every retired document remains in git history:
+
+```bash
+git show 1c9e100e:docs/research/FULL_REVIEW_2026-07-03.md > /tmp/out.md
+```
+
+`1c9e100e` is the commit before the cleanup; `git log --diff-filter=D --name-only`
+lists what left. A local copy of all 121 also sits outside the repo, in
+`slomix-archive/docs-retired-2026-08-20/`.
+
+**Writing a new one?** Put it in `docs/research/` and leave it there. It is
+gitignored, so it stays on the machine that needs it. Promote it (`git add -f`)
+only when something in the codebase starts pointing at it — at which point it
+has stopped being a note and become documentation.
 
 ## Top-Level Mental Map
 
