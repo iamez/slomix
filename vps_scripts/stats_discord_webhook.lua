@@ -1723,21 +1723,36 @@ function et_ClientUserinfoChanged(clientNum)
     return 0
 end
 
+-- NOTHING here may `return` a VALUE, 0 included. G_LuaHook_Obituary walks the
+-- loaded modules and stops at the first one whose return passes
+-- lua_isstring(L, -1) — and in the Lua C API that test is true for NUMBERS as
+-- well as strings. A bare `return 0` therefore reads as "handled, stop", and
+-- every module loaded after this one is silently skipped.
+--
+-- That is not theory: this module sits ahead of live_events.lua in lua_modules,
+-- so live_events never received a single obituary from the day it shipped
+-- (2026-08-12). Measured on the local server 2026-08-20: engine 28 kills, K
+-- lines 0; with this fix in place the two match 1:1. The live ladder's K/D
+-- columns and alive dots were dead the whole time — damage and DPM kept
+-- working, which is why it looked healthy.
+--
+-- The engine ignores this hook's return value otherwise (the documented
+-- et_Obituary contract has none), so returning nothing loses us nothing.
 function et_Obituary(target, attacker, meansOfDeath)
     if not configuration.spawn_tracking_enabled then
-        return 0
+        return
     end
     local connected = safe_gentity_get(target, "pers.connected")
     if connected ~= CON_CONNECTED then
-        return 0
+        return
     end
     local team = tonumber(safe_gentity_get(target, "sess.sessionTeam")) or 0
     if team ~= TEAM_AXIS and team ~= TEAM_ALLIES then
-        return 0
+        return
     end
     local guid = client_guid_cache[target] or get_client_guid(target)
     if not guid or guid == "" then
-        return 0
+        return
     end
     client_guid_cache[target] = guid
     local name = client_name_cache[target] or get_client_name(target)
@@ -1750,7 +1765,6 @@ function et_Obituary(target, attacker, meansOfDeath)
             entry.last_death_ms = death_ms
         end
     end
-    return 0
 end
 
 -- ============================================================================

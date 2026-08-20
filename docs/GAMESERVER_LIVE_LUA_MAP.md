@@ -34,11 +34,37 @@ The actual loaded modules are confirmed by `etconsole.log`, not just by static c
 
 Active modules:
 
-- `luascripts/team-lock`
+- `luascripts/team-lock.lua`
 - `c0rnp0rn8.lua`
 - `endstats.lua`
 - `luascripts/proximity_tracker.lua`
 - `luascripts/stats_discord_webhook.lua`
+- `luascripts/live_events.lua`
+
+In `lua_modules` order, which is the order the hooks are dispatched in — see
+the dispatch table below. All six lists in this document describe the same six
+modules; if one of them is short, it is stale.
+
+## Hook dispatch: one module can starve the ones behind it
+
+ET:Legacy calls a hook on every loaded module in `lua_modules` order, but some
+hooks stop the walk when a module returns. Which value stops it differs per
+hook, and that difference has already cost us a shipped feature:
+
+| group | hooks | what stops the walk |
+|---|---|---|
+| **any value** | `et_Obituary`, `et_ClientConnect` | `lua_isstring(L,-1)` — true for **numbers too**, so even `return 0` stops it |
+| one number | `et_ClientCommand`, `et_ConsoleCommand`, `et_Damage`, `et_Revive`, `et_WeaponFire`, `et_*Fire` (`==1`); `et_SetPlayerSkill`, `et_UpgradeSkill` (`==-1`) | only that exact number; `return 0` is safe |
+| never | `et_InitGame`, `et_ShutdownGame`, `et_RunFrame`, `et_ClientBegin`, `et_ClientSpawn`, `et_ClientDisconnect`, `et_ClientUserinfoChanged`, `et_Print`, `et_IPCReceive` | return value ignored |
+
+**What this cost us**: `stats_discord_webhook.lua` ended its `et_Obituary` with
+`return 0` and loads before `live_events.lua`, so live_events received **zero**
+obituaries from the day it shipped (2026-08-12). The Live page's K/D columns and
+alive dots were dead for eight days while damage and DPM kept working — which is
+precisely why it looked healthy. Measured on the local server 2026-08-20 with the
+module order unchanged: 28 engine kills → 0 `K` lines before the fix, 14 → 14
+after. `tests/unit/test_lua_hook_return_contract.py` now fails the build if any
+of our modules returns a value from `et_Obituary`.
 
 ## Important Mismatch
 
@@ -46,8 +72,10 @@ Static config and live runtime do not fully agree.
 
 - `/home/et/etlegacy-v2.83.1-x86_64/etmain/legacy.cfg` still contains:
   - `set lua_modules "luascripts/team-lock c0rnp0rn7.lua endstats.lua luascripts/stats_discord_webhook.lua"`
-- But live `etconsole.log` shows:
-  - `setl lua_modules luascripts/team-lock c0rnp0rn8.lua endstats.lua luascripts/proximity_tracker.lua luascripts/stats_discord_webhook.lua`
+- But live `etconsole.log` shows (verified on puran 2026-08-20 — note that
+  `live_events.lua` joined the list on 2026-08-12 and this doc did not):
+  - `setl lua_modules "luascripts/team-lock.lua c0rnp0rn8.lua endstats.lua luascripts/proximity_tracker.lua luascripts/stats_discord_webhook.lua luascripts/live_events.lua"`
+  - The order is not cosmetic — see the dispatch table above.
 
 Rule:
 - Treat `etconsole.log` as the source of truth for what is actually loaded.
@@ -58,12 +86,18 @@ Rule:
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/c0rnp0rn8.lua`
 - `endstats.lua`
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/endstats.lua`
-- `stats_discord_webhook.lua`
-  - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/stats_discord_webhook.lua`
+- `stats_discord_webhook.lua` — ⚠️ **two copies exist; the homepath one runs**
+  - `/home/et/.etlegacy/legacy/luascripts/stats_discord_webhook.lua` ← **live**
+  - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/stats_discord_webhook.lua` (ignored)
+  - `fs_homepath` overrides `fs_basepath` for module loading. Both files were
+    present on puran on 2026-08-20 (verified). Deploying a fix to the basepath
+    copy changes nothing and looks exactly like a fix that did not work.
 - `proximity_tracker.lua`
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/proximity_tracker.lua`
 - `team-lock.lua`
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/team-lock.lua`
+- `live_events.lua`
+  - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/live_events.lua`
 
 ## Repo Mapping
 
@@ -76,6 +110,7 @@ Keep these mirrored locally:
   - [endstats.lua](/vps_scripts/endstats.lua)
   - [stats_discord_webhook.lua](/vps_scripts/stats_discord_webhook.lua)
   - [team-lock.lua](/vps_scripts/team-lock.lua)
+  - [live_events.lua](/vps_scripts/live_events.lua)
 
 ## Hashes Captured On 2026-03-11
 
