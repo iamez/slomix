@@ -351,6 +351,7 @@ class SymbolicFrontierRelevance:
     unknown_domain_relevance: bool
     unknown_reasons: tuple[str, ...]
     continuations: tuple[SymbolicFrontierContinuation, ...]
+    mutates_accumulator_state: bool = False
 
 
 OrderedEventInstruction: TypeAlias = (
@@ -850,6 +851,47 @@ class SymbolicGuardDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class SymbolicTemporalFrontierSnapshot:
+    """Exact construction-time inputs retained for one temporal scheduler seed."""
+
+    active_frames: tuple[tuple[int, str], ...]
+    caller_node_id: str
+    caller_entity_index: int
+    caller_instruction_offset: int
+    target_node_id: str
+    target_entity_indices: tuple[int, ...]
+    target_offset: int
+    dispatch_line: int
+    boundary_line: int
+    boundary_entity_index: int
+    boundary_state: SymbolicTemporalBoundaryState
+    entry_state: SymbolicAccumulatorState
+    entry_effects: tuple[StageEffectProjection, ...] = ()
+    entry_effect_entity_indices: tuple[int, ...] = ()
+    entry_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    boundary_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    entry_tag_parent_mutation_entity_indices: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.active_frames:
+            raise ValueError("temporal frontier snapshot requires its active invocation ancestry")
+        if self.active_frames[-1] != (self.caller_entity_index, self.caller_node_id):
+            raise ValueError("temporal frontier caller does not match its active invocation ancestry")
+        if self.caller_entity_index < 0 or self.boundary_entity_index < 0:
+            raise ValueError("temporal frontier snapshot entity indices must be non-negative")
+        if self.caller_instruction_offset < 1:
+            raise ValueError("temporal frontier caller offset must follow its dispatch instruction")
+        if not self.target_entity_indices:
+            raise ValueError("temporal frontier snapshot requires its concrete target group")
+        if not 0 <= self.target_offset < len(self.target_entity_indices):
+            raise ValueError("temporal frontier target offset is outside its concrete target group")
+        if self.dispatch_line <= 0 or self.boundary_line <= 0:
+            raise ValueError("temporal frontier source lines must be positive")
+        if len(self.entry_effects) != len(self.entry_effect_entity_indices):
+            raise ValueError("temporal frontier entry effect provenance is inconsistent")
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolicAsyncMovementStart:
     source_entity_index: int
     command: str
@@ -902,6 +944,7 @@ class SymbolicEventPath:
     blocker_line: int | None = None
     blocker_entity_index: int | None = None
     frontier_relevance: SymbolicFrontierRelevance | None = None
+    temporal_frontier_snapshot: SymbolicTemporalFrontierSnapshot | None = None
 
 
 def _write_refined_domain(
@@ -1554,20 +1597,26 @@ def _temporal_nested_outcome(
     target_entity_index: int,
     last_target: bool,
     dispatch_line: int,
+    snapshot: SymbolicTemporalFrontierSnapshot | None = None,
 ) -> SymbolicEventPath:
-    if target_entity_index == caller_entity_index and last_target:
-        return _record_caller_replacement(
+    if target_entity_index == caller_entity_index:
+        if last_target:
+            return _record_caller_replacement(
+                path,
+                line=dispatch_line,
+                entity_index=target_entity_index,
+            )
+        return _blocked_symbolic_path(
             path,
+            reason="same_entity_temporal_group_order_not_modeled",
             line=dispatch_line,
             entity_index=target_entity_index,
         )
+    if snapshot is None:
+        raise RuntimeError("cross-entity temporal frontier lost its construction-time snapshot")
     return _blocked_symbolic_path(
-        path,
-        reason=(
-            "same_entity_temporal_group_order_not_modeled"
-            if target_entity_index == caller_entity_index
-            else "cross_entity_temporal_interleaving_not_modeled"
-        ),
+        replace(path, temporal_frontier_snapshot=snapshot),
+        reason="cross_entity_temporal_interleaving_not_modeled",
         line=dispatch_line,
         entity_index=target_entity_index,
     )
@@ -2004,6 +2053,32 @@ def _walk_symbolic_target_group(
     outcomes: list[SymbolicEventPath] = []
     for path in target_results:
         target_paused = len(path.temporal_boundary_lines) > temporal_count
+        snapshot = (
+            SymbolicTemporalFrontierSnapshot(
+                active_frames=active_frames,
+                caller_node_id=caller_program.node.node_id,
+                caller_entity_index=caller_entity_index,
+                caller_instruction_offset=caller_instruction_offset,
+                target_node_id=target_program.node.node_id,
+                target_entity_indices=target_entity_indices,
+                target_offset=target_offset,
+                dispatch_line=dispatch_line,
+                boundary_line=path.temporal_boundary_lines[temporal_count],
+                boundary_entity_index=path.temporal_boundary_entity_indices[temporal_count],
+                boundary_state=path.temporal_boundary_states[temporal_count],
+                entry_state=prefix.state,
+                entry_effects=prefix.effects,
+                entry_effect_entity_indices=prefix.effect_entity_indices,
+                entry_async_movement_starts=prefix.async_movement_starts,
+                boundary_async_movement_starts=path.async_movement_starts,
+                entry_tag_parent_mutation_entity_indices=(
+                    prefix.tag_parent_mutation_entity_indices
+                ),
+            )
+            if target_paused and target_entity_index != caller_entity_index
+            else None
+        )
+
         if path.completion is SymbolicPathCompletion.BLOCKED:
             caller_is_replaced = target_paused and target_entity_index == caller_entity_index and last_target
             blocked_path = (
@@ -2046,6 +2121,7 @@ def _walk_symbolic_target_group(
                     target_entity_index=target_entity_index,
                     last_target=last_target,
                     dispatch_line=dispatch_line,
+                    snapshot=snapshot,
                 )
             )
             continue
@@ -2057,6 +2133,7 @@ def _walk_symbolic_target_group(
                     target_entity_index=target_entity_index,
                     last_target=last_target,
                     dispatch_line=dispatch_line,
+                    snapshot=snapshot,
                 )
             )
             continue
@@ -2821,21 +2898,26 @@ def classify_symbolic_frontier(
         relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
     if relevance_memo is None:
         relevance_memo = {}
+    mutates_accumulator_state = False
     for continuation in continuations:
+        mutation_observer = [False]
         continuation_domains, continuation_unknown_reasons = _collect_continuation_relevance(
             index,
             continuation,
             state=path.state,
             budget=relevance_budget,
             memo=relevance_memo,
+            mutation_observer=mutation_observer,
         )
         domains.update(continuation_domains)
         unknown_reasons.update(continuation_unknown_reasons)
+        mutates_accumulator_state |= mutation_observer[0]
     return SymbolicFrontierRelevance(
         tuple(sorted(domains, key=str)),
         bool(unknown_reasons),
         tuple(sorted(unknown_reasons)),
         tuple(continuations),
+        mutates_accumulator_state,
     )
 
 

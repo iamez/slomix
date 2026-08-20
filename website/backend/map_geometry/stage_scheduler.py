@@ -27,6 +27,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
     SymbolicTemporalBoundaryState,
+    SymbolicTemporalFrontierSnapshot,
     TriggerInstruction,
     followspline_waits_for_completion,
     gotomarker_waits_for_completion,
@@ -40,6 +41,8 @@ _STATE_CREATION_TOKEN = object()
 _ET_SIGNED_INT_MIN = -(1 << 31)
 _ET_SIGNED_INT_MAX = (1 << 31) - 1
 _ET_ACCUMULATOR_BIT_MASK = (1 << 32) - 1
+_DEFAULT_SCHEDULE_DECISION_LIMIT = 4096
+_MAX_SEARCH_TRANSITION_DECISIONS = 64
 
 
 def _dispatch_target_group(
@@ -155,6 +158,7 @@ class SymbolicScheduleDecisionKind(StrEnum):
 
 class SymbolicScheduleExhaustion(StrEnum):
     WORK_BUDGET_EXHAUSTED = "symbolic_schedule_work_budget_exhausted"
+    STATE_BUDGET_EXHAUSTED = "symbolic_schedule_state_budget_exhausted"
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -809,6 +813,22 @@ class SymbolicScheduleState:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class SymbolicFrontierScheduleAdaptation:
+    initial_state: SymbolicScheduleState | None = None
+    blocker_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if (self.initial_state is None) == (self.blocker_reason is None):
+            raise ValueError("frontier schedule adaptation requires exactly one state or blocker")
+        if self.blocker_reason == "":
+            raise ValueError("frontier schedule adaptation blocker must not be empty")
+
+    @property
+    def ready(self) -> bool:
+        return self.initial_state is not None
+
+
 def _continuation_sort_key(continuation: SuspendedContinuation) -> tuple[object, ...]:
     frame = continuation.frame
     invocation_path = tuple(
@@ -1038,9 +1058,10 @@ class SymbolicScheduleSearchResult:
         ):
             raise ValueError("symbolic schedule search cycle metric does not match its decisions")
         if self.exhaustion is not None:
-            if self.exhaustion is not SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED:
-                raise ValueError("symbolic schedule search has an unknown exhaustion reason")
-            if self.metrics.transitions_evaluated != self.work_limit:
+            if (
+                self.exhaustion is SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
+                and self.metrics.transitions_evaluated != self.work_limit
+            ):
                 raise ValueError("symbolic schedule search can exhaust only at its work limit")
             if any(
                 decision.reason != self.exhaustion.value
@@ -1110,6 +1131,20 @@ def _blocked_transition(
         1,
         1,
     )
+
+
+def _state_budget_transition(
+    index: OrderedStageProgramIndex,
+    state: SymbolicScheduleState,
+) -> SymbolicScheduleResult:
+    reason = SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED
+    decision = _terminal_frontier_decision(
+        index,
+        state,
+        SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+        reason.value,
+    )
+    return SymbolicScheduleResult((decision,), 1, 1, reason)
 
 
 def _program_suffix(program: OrderedEventProgram, instruction_offset: int) -> OrderedEventProgram:
@@ -1242,6 +1277,138 @@ def _path_tag_parent_states(
             SymbolicTagParentDisposition.UNKNOWN,
         )
     return tuple(sorted(by_child.values()))
+
+
+def adapt_symbolic_temporal_frontier(
+    index: OrderedStageProgramIndex,
+    path: SymbolicEventPath,
+) -> SymbolicFrontierScheduleAdaptation:
+    """Convert one construction-time cross frontier into an exact scheduler seed.
+
+    The legacy path is intentionally insufficient on its own. Only the typed snapshot
+    retained while the recursive walker still owns the invocation context is accepted.
+    Unsupported ancestry or lifecycle identity remains a stable adaptation blocker.
+    """
+
+    if path.blocker_reason != "cross_entity_temporal_interleaving_not_modeled":
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_not_cross_entity_temporal",
+        )
+    snapshot: SymbolicTemporalFrontierSnapshot | None = path.temporal_frontier_snapshot
+    if snapshot is None:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_snapshot_missing",
+        )
+    if len(snapshot.active_frames) != 1:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_outer_dispatch_context_unresolved",
+        )
+
+    caller_program = index.program(snapshot.caller_node_id)
+    dispatch_offset = snapshot.caller_instruction_offset - 1
+    if not 0 <= dispatch_offset < len(caller_program.instructions):
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_dispatch_cursor_unresolved",
+        )
+    caller_cursor = SymbolicProgramCursor(
+        snapshot.caller_node_id,
+        snapshot.caller_entity_index,
+        dispatch_offset,
+    )
+    try:
+        caller_cursor.validate(index)
+        expected_targets = _dispatch_target_group(index, caller_cursor, snapshot.target_node_id)
+    except ValueError:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_dispatch_identity_unresolved",
+        )
+    if caller_program.event.actions[dispatch_offset].line != snapshot.dispatch_line:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_dispatch_line_mismatch",
+        )
+    if expected_targets != snapshot.target_entity_indices:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_target_group_mismatch",
+        )
+    if snapshot.target_entity_indices[snapshot.target_offset] != snapshot.boundary_entity_index:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_boundary_target_mismatch",
+        )
+    entry_effects = list(
+        zip(snapshot.entry_effects, snapshot.entry_effect_entity_indices, strict=True)
+    )
+    dispatch_instruction = caller_program.instructions[dispatch_offset]
+    if isinstance(dispatch_instruction, StageEffectInstruction):
+        expected_effect = (dispatch_instruction.projection, snapshot.caller_entity_index)
+        if not entry_effects or entry_effects[-1] != expected_effect:
+            return SymbolicFrontierScheduleAdaptation(
+                blocker_reason="frontier_schedule_dispatch_effect_prefix_mismatch",
+            )
+        entry_effects.pop()
+
+    entry_path = SymbolicEventPath(
+        snapshot.caller_entity_index,
+        snapshot.entry_state,
+        effects=tuple(effect for effect, _ in entry_effects),
+        effect_entity_indices=tuple(entity_index for _, entity_index in entry_effects),
+        async_movement_starts=snapshot.entry_async_movement_starts,
+        tag_parent_mutation_entity_indices=(
+            snapshot.entry_tag_parent_mutation_entity_indices
+        ),
+    )
+    try:
+        effects = _nested_path_effect_records(
+            index,
+            projections=entry_path.effects,
+            effect_entity_indices=entry_path.effect_entity_indices,
+        )
+    except RuntimeError:
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_entry_effect_identity_unresolved",
+        )
+    try:
+        lifecycles = _path_async_lifecycles(
+            index,
+            path=entry_path,
+            effects=effects,
+            existing=(),
+        )
+    except (RuntimeError, ValueError):
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_entry_async_lifecycle_unresolved",
+        )
+    if (
+        snapshot.boundary_state is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
+        and not any(
+            start.source_entity_index == snapshot.boundary_entity_index
+            for start in snapshot.boundary_async_movement_starts
+        )
+    ):
+        return SymbolicFrontierScheduleAdaptation(
+            blocker_reason="frontier_schedule_prior_lifecycle_identity_unresolved",
+        )
+
+    caller_frame = SymbolicFrame(caller_cursor)
+    tag_parent_entities = {
+        snapshot.caller_entity_index,
+        *snapshot.target_entity_indices,
+        *snapshot.entry_tag_parent_mutation_entity_indices,
+    }
+    tag_parent_states = tuple(
+        SymbolicTagParentState(entity_index, SymbolicTagParentDisposition.UNKNOWN)
+        for entity_index in sorted(tag_parent_entities)
+    )
+    initial_state = SymbolicScheduleState.create(
+        index,
+        accumulator_state=snapshot.entry_state,
+        runnable=(caller_frame,),
+        async_lifecycles=lifecycles,
+        event_owners=(SymbolicEventOwner.from_frame(caller_frame),),
+        tag_parent_states=tag_parent_states,
+        effects=effects,
+        provenance=("frontier_snapshot_adapter",),
+    )
+    return SymbolicFrontierScheduleAdaptation(initial_state=initial_state)
 
 
 def _async_start_sequence_is_feasible(
@@ -1802,7 +1969,21 @@ def _run_s3_target_group(
     provenance: tuple[str, ...],
     ordering_decisions: tuple[str, ...],
     unknown_reasons: tuple[str, ...],
+    decision_limit: int,
 ) -> list[SymbolicScheduleDecision]:
+    if decision_limit < 1:
+        raise ValueError("symbolic schedule decision limit must be positive")
+
+    def state_budget_frontier() -> list[SymbolicScheduleDecision]:
+        return [
+            _terminal_frontier_decision(
+                index,
+                state,
+                SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
+                SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED.value,
+            )
+        ]
+
     pending = replace(dispatch, target_cursor=target_cursor)
     target_entity_index = pending.ordered_target_entity_indices[target_cursor]
     target_program = index.program(pending.target_node_id)
@@ -1823,6 +2004,7 @@ def _run_s3_target_group(
         target_program,
         source_entity_index=target_entity_index,
         initial_state=accumulator_state,
+        max_paths=decision_limit,
         stop_at_temporal_boundary=True,
     )
     decisions: list[SymbolicScheduleDecision] = []
@@ -1835,7 +2017,9 @@ def _run_s3_target_group(
     )
     last_target = target_cursor == len(pending.ordered_target_entity_indices) - 1
 
-    for path in target_paths:
+    for path_index, path in enumerate(target_paths):
+        if len(decisions) >= decision_limit:
+            return state_budget_frontier()
         if not _async_start_sequence_is_feasible(path, async_lifecycles):
             continue
         added_effects = _nested_path_effect_records(
@@ -1877,8 +2061,7 @@ def _run_s3_target_group(
                     )
                 )
             else:
-                decisions.extend(
-                    _run_s3_target_group(
+                child_decisions = _run_s3_target_group(
                         index,
                         state,
                         caller_frame,
@@ -1893,8 +2076,14 @@ def _run_s3_target_group(
                         provenance=next_provenance + ("synchronous_target_state_returned",),
                         ordering_decisions=next_ordering,
                         unknown_reasons=unknown_reasons,
+                        decision_limit=decision_limit - len(decisions),
                     )
-                )
+                if any(
+                    decision.reason == SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED.value
+                    for decision in child_decisions
+                ):
+                    return child_decisions
+                decisions.extend(child_decisions)
             continue
 
         if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED:
@@ -1950,8 +2139,7 @@ def _run_s3_target_group(
                         )
                     )
                 else:
-                    decisions.extend(
-                        _run_s3_target_group(
+                    child_decisions = _run_s3_target_group(
                             index,
                             state,
                             caller_frame,
@@ -1966,8 +2154,14 @@ def _run_s3_target_group(
                             provenance=next_provenance + ("dispatch_target_suspended",),
                             ordering_decisions=next_ordering,
                             unknown_reasons=next_unknowns,
+                            decision_limit=decision_limit - len(decisions),
                         )
-                    )
+                    if any(
+                        decision.reason == SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED.value
+                        for decision in child_decisions
+                    ):
+                        return child_decisions
+                    decisions.extend(child_decisions)
                 continue
 
         reason = path.blocker_reason or "s3_nested_temporal_replacement_not_modeled"
@@ -1999,6 +2193,8 @@ def _run_s3_target_group(
             unknown_reasons=next_unknown_reasons,
         )
         decisions.append(SymbolicScheduleDecision(SymbolicScheduleDecisionKind.BLOCKED, blocked, reason))
+        if len(decisions) >= decision_limit and path_index + 1 < len(target_paths):
+            return state_budget_frontier()
     return decisions
 
 
@@ -2006,6 +2202,8 @@ def _start_s3_dispatch(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     caller_frame: SymbolicFrame,
+    *,
+    decision_limit: int,
 ) -> SymbolicScheduleResult:
     caller_cursor = caller_frame.cursor
     caller_program = index.program(caller_cursor.node_id)
@@ -2020,10 +2218,13 @@ def _start_s3_dispatch(
         segment,
         source_entity_index=caller_cursor.entity_index,
         initial_state=state.accumulator_state,
+        max_paths=decision_limit,
         stop_at_temporal_boundary=True,
     )
     decisions: list[SymbolicScheduleDecision] = []
     for path in entry_paths:
+        if len(decisions) >= decision_limit:
+            return _state_budget_transition(index, state)
         added_effects = _path_effect_records(
             caller_program,
             instruction_offset=caller_cursor.instruction_offset,
@@ -2119,8 +2320,14 @@ def _start_s3_dispatch(
                     provenance=state.provenance + ("dispatch_group_started",),
                     ordering_decisions=state.ordering_decisions,
                     unknown_reasons=state.unknown_reasons,
+                    decision_limit=decision_limit - len(decisions),
                 )
             )
+            if any(
+                decision.reason == SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED.value
+                for decision in decisions
+            ):
+                return _state_budget_transition(index, state)
             continue
         if path.completion in {
             SymbolicPathCompletion.SYNCHRONOUS_COMPLETE,
@@ -2153,6 +2360,8 @@ def _complete_s3_caller_suffix(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     caller_frame: SymbolicFrame,
+    *,
+    decision_limit: int,
 ) -> SymbolicScheduleResult:
     dispatches = caller_frame.caller_dispatches
     group_continuations = tuple(
@@ -2187,10 +2396,13 @@ def _complete_s3_caller_suffix(
         segment,
         source_entity_index=caller_frame.cursor.entity_index,
         initial_state=state.accumulator_state,
+        max_paths=decision_limit,
         stop_at_temporal_boundary=True,
     )
     decisions: list[SymbolicScheduleDecision] = []
     for path in paths:
+        if len(decisions) >= decision_limit:
+            return _state_budget_transition(index, state)
         if not _async_start_sequence_is_feasible(path, state.async_lifecycles):
             continue
         next_tag_parent_states = _path_tag_parent_states(state.tag_parent_states, path)
@@ -2312,6 +2524,8 @@ def _resume_s3_continuation(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     continuation: SuspendedContinuation,
+    *,
+    decision_limit: int,
 ) -> SymbolicScheduleResult:
     if continuation.frame.pending_dispatch is None or not (
         continuation.caller_suffix_completed or continuation.caller_suffix_abandoned
@@ -2373,10 +2587,13 @@ def _resume_s3_continuation(
         _program_suffix(program, suffix_offset),
         source_entity_index=frame.cursor.entity_index,
         initial_state=state.accumulator_state,
+        max_paths=decision_limit,
         stop_at_temporal_boundary=True,
     )
     decisions: list[SymbolicScheduleDecision] = []
     for path in paths:
+        if len(decisions) >= decision_limit:
+            return _state_budget_transition(index, state)
         if not _async_start_sequence_is_feasible(path, state.async_lifecycles):
             continue
         next_tag_parent_states = _path_tag_parent_states(state.tag_parent_states, path)
@@ -2454,6 +2671,8 @@ def _resume_s3_continuation(
 def step_symbolic_schedule(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
+    *,
+    decision_limit: int = _DEFAULT_SCHEDULE_DECISION_LIMIT,
 ) -> SymbolicScheduleResult:
     """Execute one source-ordered S3 scheduler transition.
 
@@ -2463,18 +2682,35 @@ def step_symbolic_schedule(
     """
 
     _state_for_index(index, state)
+    if decision_limit < 1:
+        raise ValueError("symbolic schedule decision limit must be positive")
     if len(state.runnable) > 1:
         return _blocked_transition(index, state, "s2_multiple_runnable_frames_deferred_to_s4")
     if state.runnable:
         frame = state.runnable[0]
         instruction = index.program(frame.cursor.node_id).instructions[frame.cursor.instruction_offset]
         if _dispatch_blocker_reason(instruction) is not None:
-            return _start_s3_dispatch(index, state, frame)
+            return _start_s3_dispatch(
+                index,
+                state,
+                frame,
+                decision_limit=decision_limit,
+            )
         if frame.origin is SymbolicFrameOrigin.CALLER_SUFFIX:
-            return _complete_s3_caller_suffix(index, state, frame)
+            return _complete_s3_caller_suffix(
+                index,
+                state,
+                frame,
+                decision_limit=decision_limit,
+            )
         return _blocked_transition(index, state, "s3_runnable_transition_not_modeled")
     if len(state.suspended) == 1:
-        return _resume_s3_continuation(index, state, state.suspended[0])
+        return _resume_s3_continuation(
+            index,
+            state,
+            state.suspended[0],
+            decision_limit=decision_limit,
+        )
     if not state.suspended:
         return SymbolicScheduleResult(
             (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.COMPLETE, state),),
@@ -2535,6 +2771,8 @@ def _step_selected_suspended_continuation(
     index: OrderedStageProgramIndex,
     state: SymbolicScheduleState,
     selected_index: int,
+    *,
+    decision_limit: int,
 ) -> SymbolicScheduleResult:
     if state.runnable:
         raise ValueError("a suspended task cannot be selected while runnable work exists")
@@ -2543,7 +2781,14 @@ def _step_selected_suspended_continuation(
 
     selected = state.suspended[selected_index]
     retained = state.suspended[:selected_index] + state.suspended[selected_index + 1 :]
-    raw = _resume_s3_continuation(index, state, selected)
+    raw = _resume_s3_continuation(
+        index,
+        state,
+        selected,
+        decision_limit=decision_limit,
+    )
+    if raw.exhaustion is not None:
+        return raw
     decisions: list[SymbolicScheduleDecision] = []
     for decision in raw.decisions:
         result_state = decision.state
@@ -2721,6 +2966,8 @@ def search_symbolic_schedule(
     maximum_suspended_tasks = len(initial_state.suspended)
     maximum_frame_depth = _schedule_state_frame_depth(initial_state)
     exhausted = False
+    exhaustion_reason: SymbolicScheduleExhaustion | None = None
+    state_limit = work_limit * 8
 
     def observe(state: SymbolicScheduleState) -> None:
         nonlocal maximum_runnable_tasks, maximum_suspended_tasks, maximum_frame_depth
@@ -2728,8 +2975,11 @@ def search_symbolic_schedule(
         maximum_suspended_tasks = max(maximum_suspended_tasks, len(state.suspended))
         maximum_frame_depth = max(maximum_frame_depth, _schedule_state_frame_depth(state))
 
-    def exhaust(frontier_state: SymbolicScheduleState) -> None:
-        nonlocal states_created, exhausted
+    def exhaust(
+        frontier_state: SymbolicScheduleState,
+        reason: SymbolicScheduleExhaustion,
+    ) -> None:
+        nonlocal states_created, exhausted, exhaustion_reason
         pending = (frontier_state,) + tuple(item[0] for item in queue)
         queue.clear()
         for pending_state in pending:
@@ -2737,12 +2987,13 @@ def search_symbolic_schedule(
                 index,
                 pending_state,
                 SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED,
-                SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED.value,
+                reason.value,
             )
             terminal.append(decision)
             states_created += 1
             observe(decision.state)
         exhausted = True
+        exhaustion_reason = reason
 
     while queue and not exhausted:
         state, ancestry = queue.popleft()
@@ -2764,7 +3015,7 @@ def search_symbolic_schedule(
         for selected_index in selected_suspended_indices:
             exhaustion = budget.consume()
             if exhaustion is not None:
-                exhaust(state)
+                exhaust(state, exhaustion)
                 break
             if unproven_task_order:
                 transition = _blocked_transition(
@@ -2773,7 +3024,18 @@ def search_symbolic_schedule(
                     "schedule_independence_unproven",
                 )
             elif state.runnable:
-                transition = step_symbolic_schedule(index, state)
+                transition = step_symbolic_schedule(
+                    index,
+                    state,
+                    decision_limit=max(
+                        1,
+                        min(
+                            _MAX_SEARCH_TRANSITION_DECISIONS,
+                            work_limit,
+                            state_limit - states_created,
+                        ),
+                    ),
+                )
             else:
                 if selected_index is None:
                     raise AssertionError("suspended scheduler task selection was lost")
@@ -2781,7 +3043,21 @@ def search_symbolic_schedule(
                     index,
                     state,
                     selected_index,
+                    decision_limit=max(
+                        1,
+                        min(
+                            _MAX_SEARCH_TRANSITION_DECISIONS,
+                            work_limit,
+                            state_limit - states_created,
+                        ),
+                    ),
                 )
+            if transition.exhaustion is not None:
+                exhaust(state, transition.exhaustion)
+                break
+            if states_created + len(transition.decisions) > state_limit:
+                exhaust(state, SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED)
+                break
 
             for decision in transition.decisions:
                 successor = decision.state
@@ -2839,9 +3115,5 @@ def search_symbolic_schedule(
         ordered_terminal,
         work_limit,
         metrics,
-        (
-            SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
-            if budget_frontiers
-            else None
-        ),
+        exhaustion_reason,
     )

@@ -1425,6 +1425,20 @@ def test_stage_walker_blocks_cross_entity_temporal_interleaving_but_keeps_the_im
     assert blocked.blocker_entity_index == 2
     assert _effect_states(blocked) == ("default",)
     assert blocked.temporal_boundary_entity_indices == (2,)
+    snapshot = blocked.temporal_frontier_snapshot
+    assert snapshot is not None
+    assert snapshot.active_frames == ((0, index.programs[0].node.node_id),)
+    assert snapshot.caller_node_id == index.programs[0].node.node_id
+    assert snapshot.caller_entity_index == 0
+    assert snapshot.caller_instruction_offset == 1
+    assert snapshot.target_node_id == index.programs[1].node.node_id
+    assert snapshot.target_entity_indices == (2,)
+    assert snapshot.target_offset == 0
+    assert snapshot.dispatch_line == index.programs[0].event.actions[0].line
+    assert snapshot.boundary_line == index.programs[1].event.actions[1].line
+    assert snapshot.boundary_entity_index == 2
+    assert snapshot.boundary_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+    assert snapshot.entry_state == SymbolicAccumulatorState.zeroed()
 
 
 @pytest.mark.parametrize(
@@ -1909,6 +1923,7 @@ def test_frontier_classifier_marks_nested_accumulator_state_flow_unknown():
     assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
     assert relevance.unknown_domain_relevance is True
     assert relevance.unknown_reasons == ("frontier_relevance_nested_accumulator_state_unpropagated",)
+    assert relevance.mutates_accumulator_state is True
 
 
 def test_frontier_classifier_bounds_nested_relevance_work():

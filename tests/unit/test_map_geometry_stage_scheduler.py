@@ -21,6 +21,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicIntegerDomain,
     SymbolicTemporalBoundaryState,
     build_ordered_stage_program_index,
+    walk_symbolic_stage_program,
 )
 from website.backend.map_geometry.stage_scheduler import (
     PendingDispatchContext,
@@ -50,6 +51,7 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWaitBoundaryState,
     SymbolicWaitBranch,
     SymbolicWakeConstraint,
+    adapt_symbolic_temporal_frontier,
     search_symbolic_schedule,
     step_symbolic_schedule,
 )
@@ -1233,6 +1235,155 @@ def _decision_with_suspended(result, kind):
         for decision in result.decisions
         if decision.kind is kind and decision.state is not None and decision.state.suspended
     )
+
+
+def test_frontier_adapter_builds_an_exact_top_level_seed_and_searches_it():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target run
+                setstate caller_marker invisible
+            }
+        }
+        target
+        {
+            trigger run
+            {
+                resetscript
+                setstate target_marker invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "func_door", "targetname": "caller_marker"},
+            {"classname": "func_door", "targetname": "target_marker"},
+        ),
+    )
+    caller = _program(index, "caller")
+    path = next(
+        path
+        for path in walk_symbolic_stage_program(
+            index,
+            caller,
+            source_entity_index=0,
+            initial_state=SymbolicAccumulatorState.zeroed(),
+        )
+        if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+    )
+
+    adaptation = adapt_symbolic_temporal_frontier(index, path)
+
+    assert adaptation.ready is True
+    assert adaptation.blocker_reason is None
+    assert adaptation.initial_state is not None
+    assert adaptation.initial_state.runnable[0].cursor == SymbolicProgramCursor(
+        caller.node.node_id,
+        0,
+        0,
+    )
+    result = search_symbolic_schedule(index, adaptation.initial_state, work_limit=16)
+    assert result.exhaustion is None
+    assert {decision.kind for decision in result.decisions} == {
+        SymbolicScheduleDecisionKind.COMPLETE,
+    }
+
+
+def test_frontier_adapter_retains_nested_ancestry_as_a_named_blocker():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger middle run
+            }
+        }
+        middle
+        {
+            trigger run
+            {
+                trigger target run
+            }
+        }
+        target
+        {
+            trigger run
+            {
+                resetscript
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "middle"},
+            {"classname": "script_mover", "scriptname": "target"},
+        ),
+    )
+    caller = _program(index, "caller")
+    path = next(
+        path
+        for path in walk_symbolic_stage_program(
+            index,
+            caller,
+            source_entity_index=0,
+            initial_state=SymbolicAccumulatorState.zeroed(),
+        )
+        if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+    )
+
+    adaptation = adapt_symbolic_temporal_frontier(index, path)
+
+    assert adaptation.ready is False
+    assert adaptation.blocker_reason == "frontier_schedule_outer_dispatch_context_unresolved"
+
+
+def test_frontier_adapter_does_not_invent_a_prior_movement_lifecycle():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target run
+            }
+        }
+        target
+        {
+            trigger run
+            {
+                gotomarker destination 100 wait
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "path_corner", "targetname": "destination"},
+        ),
+    )
+    caller = _program(index, "caller")
+    prior = next(
+        path
+        for path in walk_symbolic_stage_program(
+            index,
+            caller,
+            source_entity_index=0,
+            initial_state=SymbolicAccumulatorState.zeroed(),
+        )
+        if path.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+        and path.temporal_boundary_states[-1]
+        is SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE
+    )
+
+    adaptation = adapt_symbolic_temporal_frontier(index, prior)
+
+    assert adaptation.ready is False
+    assert adaptation.blocker_reason == "frontier_schedule_prior_lifecycle_identity_unresolved"
 
 
 def test_s2_cross_entity_boundary_runs_caller_suffix_before_target_resume():
@@ -2782,7 +2933,7 @@ def test_s4_global_budget_retains_the_unexpanded_frontier():
 def test_s4_exact_repeated_schedule_state_becomes_a_cycle_frontier(monkeypatch):
     index, initial, _, _ = _s2_program_index()
 
-    def repeat_state(_index, state):
+    def repeat_state(_index, state, **_kwargs):
         return SymbolicScheduleResult(
             (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, state),),
             1,
@@ -2803,7 +2954,7 @@ def test_s4_exact_repeated_schedule_state_becomes_a_cycle_frontier(monkeypatch):
 def test_s4_same_frame_with_different_state_is_not_a_cycle(monkeypatch):
     index, initial, _, _ = _s2_program_index()
 
-    def advance_state(_index, state):
+    def advance_state(_index, state, **_kwargs):
         if not state.provenance:
             advanced = SymbolicScheduleState.create(
                 index,
@@ -2866,7 +3017,7 @@ def test_s4_convergent_state_preserves_distinct_cycle_ancestry(monkeypatch):
             unknown_reasons=state.unknown_reasons,
         )
 
-    def converge(_index, state):
+    def converge(_index, state, **_kwargs):
         if not state.provenance:
             branches = tuple(
                 SymbolicScheduleDecision(
@@ -3233,7 +3384,7 @@ def test_s4_shared_dispatch_with_mixed_wake_phases_remains_unproven():
 def test_s4_exponential_branching_truncates_deterministically(monkeypatch):
     index, initial, _, _ = _s2_program_index()
 
-    def branch(_index, state):
+    def branch(_index, state, **_kwargs):
         if len(state.provenance) == 3:
             completed = SymbolicScheduleState.create(
                 index,
@@ -3273,6 +3424,66 @@ def test_s4_exponential_branching_truncates_deterministically(monkeypatch):
     assert limited_left.exhaustion is SymbolicScheduleExhaustion.WORK_BUDGET_EXHAUSTED
     assert limited_left.metrics.transitions_evaluated == 4
     assert limited_left.metrics.budget_frontiers > 0
+
+
+def test_s4_search_caps_one_transition_successor_fanout(monkeypatch):
+    index, initial, _, _ = _s2_program_index()
+
+    def fan_out(_index, state, **_kwargs):
+        decisions = tuple(
+            SymbolicScheduleDecision(
+                SymbolicScheduleDecisionKind.RUNNABLE,
+                SymbolicScheduleState.create(
+                    index,
+                    accumulator_state=state.accumulator_state,
+                    runnable=state.runnable,
+                    event_owners=state.event_owners,
+                    tag_parent_states=state.tag_parent_states,
+                    provenance=(f"branch:{branch}",),
+                ),
+            )
+            for branch in range(128)
+        )
+        return SymbolicScheduleResult(decisions, 1, 1)
+
+    monkeypatch.setattr(scheduler_module, "step_symbolic_schedule", fan_out)
+
+    result = search_symbolic_schedule(index, initial, work_limit=4)
+
+    assert result.exhaustion is SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED
+    assert result.metrics.transitions_evaluated == 1
+    assert result.metrics.states_created == 2
+    assert result.metrics.budget_frontiers == 1
+    assert len(result.decisions) == 1
+    assert result.decisions[0].reason == SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED.value
+    assert result.decisions[0].state is not None
+    assert result.decisions[0].state.runnable == initial.runnable
+
+
+def test_s4_search_caps_internal_transition_path_materialization(monkeypatch):
+    index, initial, _, _ = _s2_program_index()
+    observed_limits = []
+
+    def bounded(_index, state, *, decision_limit):
+        observed_limits.append(decision_limit)
+        return SymbolicScheduleResult(
+            (
+                SymbolicScheduleDecision(
+                    SymbolicScheduleDecisionKind.BLOCKED,
+                    state,
+                    "measured",
+                ),
+            ),
+            1,
+            1,
+        )
+
+    monkeypatch.setattr(scheduler_module, "step_symbolic_schedule", bounded)
+
+    result = search_symbolic_schedule(index, initial, work_limit=128)
+
+    assert result.exhaustion is None
+    assert observed_limits == [64]
 
 
 def test_s4_search_result_rejects_nonterminal_or_mismatched_metrics():
