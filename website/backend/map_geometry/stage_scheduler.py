@@ -1,4 +1,16 @@
-"""Immutable state and bounded-search contracts for ET script scheduling."""
+"""Immutable state and bounded-search contracts for ET script scheduling.
+
+The contract this module implements is too large to restate here and lives in
+``docs/research/W5B_SUSPENDED_SCHEDULER_TAKEOFF_HANDOFF_2026-08-11.md``: the
+suspended-continuation model, the S0-S6 waves, the frontier vocabulary, the
+measured budgets behind ``_MAX_SEARCH_TRANSITION_DECISIONS``, and the rule that
+no unknown may disappear by being filtered out of a denominator. Read it before
+changing behaviour here; three thousand lines of scheduler with a one-line
+docstring is how that document became load-bearing.
+
+Its predecessor, ``W5B_SEMANTIC_MAPPING_TAKEOFF_HANDOFF_2026-08-10.md``, holds
+the identity rules this module assumes.
+"""
 
 from __future__ import annotations
 
