@@ -52,26 +52,6 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
 
     if [ -n "${base:-}" ]; then
         mapfile -t files < <(git diff --name-only --diff-filter=d "$base..$local_sha" 2>/dev/null)
-        # Drop whatever the branch merely inherited by merging origin/main. The
-        # check below hunts FOREIGN files — another session's work swept in by a
-        # wildcard add — and a file that arrived from main is the opposite of
-        # that: already public, already reviewed, not written here.
-        #
-        # Without this, merging main into a long-lived branch counts every file
-        # main gained meanwhile. Measured on chore/repo-docs-cleanup: 42 files
-        # against the old branch tip, 6 actually changed relative to main. A
-        # guard that fires on an ordinary merge teaches people to reach for
-        # --no-verify, which is how a guard stops guarding.
-        if git rev-parse --verify -q origin/main >/dev/null; then
-            mapfile -t against_main < <(git diff --name-only --diff-filter=d "origin/main...$local_sha" 2>/dev/null)
-            if [ "${#against_main[@]}" -gt 0 ]; then
-                mapfile -t files < <(
-                    comm -12 \
-                        <(printf '%s\n' "${files[@]}" | sort -u) \
-                        <(printf '%s\n' "${against_main[@]}" | sort -u)
-                )
-            fi
-        fi
     else
         mapfile -t files < <(git ls-tree -r --name-only "$local_sha" 2>/dev/null)
     fi
