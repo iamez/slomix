@@ -23,6 +23,7 @@ These cases run the shipped function itself against stubbed cvars.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -35,7 +36,28 @@ _PROBE = _REPO_ROOT / "tests" / "fixtures" / "lua" / "gametimes_dir_probe.lua"
 _CFG_PROBE = _REPO_ROOT / "tests" / "fixtures" / "lua" / "config_table_probe.lua"
 
 _LUA = shutil.which("lua5.4") or shutil.which("lua")
-pytestmark = pytest.mark.skipif(_LUA is None, reason="lua interpreter not installed")
+_ON_CI = os.environ.get("CI", "").lower() == "true"
+
+# Skipping is fine on a laptop without Lua. On CI it is not: a skipped guard
+# looks green while checking nothing, which is how the bug below could come
+# back through a required check. The workflow installs lua5.4 in the Python
+# job for exactly this reason, and test_ci_actually_has_lua below fails if
+# that step is ever dropped.
+pytestmark = pytest.mark.skipif(
+    _LUA is None and not _ON_CI,
+    reason="no lua interpreter (local run; CI installs one and must have it)",
+)
+
+
+def test_ci_actually_has_lua():
+    """The step that makes every other test here real."""
+    if not _ON_CI:
+        pytest.skip("only meaningful on CI")
+    assert _LUA is not None, (
+        "CI has no lua interpreter, so every test in this module would have "
+        "skipped and the cross-instance path guard would be inert. Restore the "
+        "'Install Lua' step in .github/workflows/tests.yml (python job)."
+    )
 
 
 #: what the probe reads as "this key/cvar is absent"
