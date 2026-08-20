@@ -3338,6 +3338,44 @@ def test_alertentity_preserves_unknown_callback_blocker_from_use_chain():
     assert len(paths[0].effects) == 1
 
 
+def test_alertentity_preserves_cycle_blocker_from_use_chain():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity relay
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "target_relay", "targetname": "relay", "target": "relay"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert (
+        instruction.alert_targets[0].disposition
+        is AlertTargetDisposition.USE_CHAIN_CYCLE_NOT_MODELED
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_chain_cycle_not_modeled"
+    assert len(paths[0].effects) == 1
+
+
 @pytest.mark.parametrize("command", ("resetscript", "halt"))
 def test_first_pass_barriers_only_preserve_the_eventual_continuation(command):
     program = _programs(

@@ -1676,6 +1676,12 @@ def _blocked_s3_target_frames(
 ) -> tuple[tuple[SymbolicFrame, ...], bool]:
     target_program = index.program(dispatch.target_node_id)
     frames: list[SymbolicFrame] = []
+    caller_program = index.program(caller_frame.cursor.node_id)
+    resume = dispatch.caller_resume_cursor
+    preserve_caller = (
+        not caller_abandoned
+        and resume.instruction_offset < len(caller_program.instructions)
+    )
     active_target_entity_index = dispatch.ordered_target_entity_indices[target_cursor]
     blocker_offset = (
         index.instruction_offset(target_program, blocker_line)
@@ -1693,6 +1699,15 @@ def _blocked_s3_target_frames(
             ),
         )
         entity_index = pending.ordered_target_entity_indices[ordinal]
+        # A later same-entity target has not replaced the caller yet. Keep it
+        # encoded in the active target's pending group and retain the caller
+        # itself until that target ordinal actually executes.
+        if (
+            preserve_caller
+            and ordinal > target_cursor
+            and entity_index == caller_frame.cursor.entity_index
+        ):
+            continue
         offset = 0
         if ordinal == target_cursor and blocker_offset is not None:
             offset = blocker_offset
@@ -1718,12 +1733,9 @@ def _blocked_s3_target_frames(
             )
         )
 
-    caller_program = index.program(caller_frame.cursor.node_id)
-    resume = dispatch.caller_resume_cursor
     active_entities = {frame.cursor.entity_index for frame in frames}
     if (
-        not caller_abandoned
-        and resume.instruction_offset < len(caller_program.instructions)
+        preserve_caller
         and resume.entity_index not in active_entities
     ):
         frames.append(
@@ -2648,7 +2660,8 @@ def search_symbolic_schedule(
             frozenset[tuple[object, ...]],
         ]
     ] = deque(((initial_state, frozenset((initial_key,))),))
-    visited = {initial_key}
+    initial_ancestry = frozenset((initial_key,))
+    visited = {(initial_key, initial_ancestry)}
     terminal: list[SymbolicScheduleDecision] = []
     states_created = 1
     deduplicated_states = 0
@@ -2742,11 +2755,13 @@ def search_symbolic_schedule(
                     states_created += 1
                     observe(cycle.state)
                     continue
-                if successor_key in visited:
+                successor_ancestry = ancestry | {successor_key}
+                visit_context = (successor_key, successor_ancestry)
+                if visit_context in visited:
                     deduplicated_states += 1
                     continue
-                visited.add(successor_key)
-                queue.append((successor, ancestry | {successor_key}))
+                visited.add(visit_context)
+                queue.append((successor, successor_ancestry))
 
     ordered_terminal = tuple(sorted(set(terminal), key=_decision_sort_key))
     budget_frontiers = sum(
