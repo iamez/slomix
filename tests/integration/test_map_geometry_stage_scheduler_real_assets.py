@@ -1,5 +1,6 @@
 """Opt-in S5 contracts against the exact installed ET asset corpus."""
 
+import json
 import os
 from collections import Counter
 from pathlib import Path
@@ -14,7 +15,12 @@ from website.backend.map_geometry.stage_measurement import (
 
 ETMAIN = Path(os.environ.get("SLOMIX_ETMAIN_DIR", "/home/samba/share/etmain"))
 RUN_REAL_ASSET_TESTS = os.environ.get("SLOMIX_RUN_REAL_ASSET_TESTS") == "1"
-PINNED_MANIFEST = "86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d"
+EXPECTED = json.loads(
+    (
+        Path(__file__).resolve().parents[1]
+        / "fixtures/map_geometry/w5b_s5_expected.json"
+    ).read_text(encoding="utf-8")
+)
 
 pytestmark = [
     pytest.mark.timeout(120),
@@ -30,7 +36,8 @@ def test_s5_every_cross_frontier_has_an_exact_seed_or_named_adaptation_blocker()
     geometry_index = Pk3GeometryIndex.scan(ETMAIN)
     map_names = tuple(sorted(geometry_index.map_names))
     manifest = asset_manifest_sha256(geometry_index, map_names)
-    assert manifest == PINNED_MANIFEST
+    assert list(map_names) == EXPECTED["map_names"]
+    assert manifest == EXPECTED["asset_manifest_sha256"]
 
     occurrences = list(
         iter_cross_frontiers(
@@ -41,18 +48,15 @@ def test_s5_every_cross_frontier_has_an_exact_seed_or_named_adaptation_blocker()
         )
     )
 
-    assert len(occurrences) == 452
-    assert len({occurrence.occurrence_id for occurrence in occurrences}) == 452
+    expected_count = EXPECTED["summary"]["measured_cross_frontiers"]
+    assert len(occurrences) == expected_count
+    assert len({occurrence.occurrence_id for occurrence in occurrences}) == expected_count
     assert all(occurrence.path.temporal_frontier_snapshot is not None for occurrence in occurrences)
     outcomes = Counter(
         "ready" if occurrence.adaptation.ready else occurrence.adaptation.blocker_reason
         for occurrence in occurrences
     )
-    assert outcomes == {
-        "ready": 278,
-        "frontier_schedule_outer_dispatch_context_unresolved": 99,
-        "frontier_schedule_prior_lifecycle_identity_unresolved": 75,
-    }
+    assert outcomes == EXPECTED["raw_adaptation_inventory"]
 
 
 def test_s5_occurrence_identity_is_deterministic_for_one_installed_map():
