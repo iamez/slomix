@@ -22,6 +22,7 @@ from website.backend.map_geometry.stage_possibilities import (
     OrderedStageProgramIndex,
     StageEffectInstruction,
     SymbolicAccumulatorState,
+    SymbolicAsyncMovementStop,
     SymbolicDispatchResolution,
     SymbolicEventPath,
     SymbolicIntegerDomain,
@@ -1240,7 +1241,28 @@ def _path_async_lifecycles(
     existing: tuple[SymbolicAsyncMovementLifecycle, ...],
 ) -> tuple[SymbolicAsyncMovementLifecycle, ...]:
     next_lifecycles = list(existing)
-    for start in path.async_movement_starts:
+    # Starts and stops are applied in source order, not starts-then-stops. The
+    # engine cancels and restarts within one block: G_ScriptAction_Halt
+    # (g_script_actions.c:3198) clears SCFL_GOING_TO_MARKER on its first call,
+    # and a later gotomarker/followspline then passes both guards at
+    # g_script_actions.c:1384-1390 and installs a NEW trajectory. Applying every
+    # stop last deleted that newer lifecycle and reported no active movement.
+    stops_by_position: dict[int, list[SymbolicAsyncMovementStop]] = {}
+    for stop in path.async_movement_stops:
+        stops_by_position.setdefault(stop.starts_before, []).append(stop)
+
+    def _apply_stops(position: int) -> None:
+        nonlocal next_lifecycles
+        stopped = {stop.source_entity_index for stop in stops_by_position.get(position, ())}
+        if stopped:
+            next_lifecycles = [
+                lifecycle
+                for lifecycle in next_lifecycles
+                if lifecycle.source_cursor.entity_index not in stopped
+            ]
+
+    for start_position, start in enumerate(path.async_movement_starts):
+        _apply_stops(start_position)
         matches = tuple(
             SymbolicProgramCursor(program.node.node_id, start.source_entity_index, offset)
             for program in index.programs_for_instruction_line(start.line)
@@ -1278,13 +1300,7 @@ def _path_async_lifecycles(
             if item.source_cursor.entity_index != start.source_entity_index
         ]
         next_lifecycles.append(lifecycle)
-    stopped_entities = set(path.async_movement_stop_entity_indices)
-    if stopped_entities:
-        next_lifecycles = [
-            lifecycle
-            for lifecycle in next_lifecycles
-            if lifecycle.source_cursor.entity_index not in stopped_entities
-        ]
+    _apply_stops(len(path.async_movement_starts))
     return tuple(next_lifecycles)
 
 
@@ -1381,8 +1397,8 @@ def adapt_symbolic_temporal_frontier(
         effects=tuple(effect for effect, _ in entry_effects),
         effect_entity_indices=tuple(entity_index for _, entity_index in entry_effects),
         async_movement_starts=snapshot.entry_async_movement_starts,
-        async_movement_stop_entity_indices=(
-            snapshot.entry_async_movement_stop_entity_indices
+        async_movement_stops=(
+            snapshot.entry_async_movement_stops
         ),
         tag_parent_mutation_entity_indices=(
             snapshot.entry_tag_parent_mutation_entity_indices
@@ -1448,7 +1464,17 @@ def _async_start_sequence_is_feasible(
     existing: tuple[SymbolicAsyncMovementLifecycle, ...],
 ) -> bool:
     active_entities = {item.source_cursor.entity_index for item in existing}
-    for start in path.async_movement_starts:
+    stops_by_position: dict[int, set[int]] = {}
+    for stop in path.async_movement_stops:
+        stops_by_position.setdefault(stop.starts_before, set()).add(stop.source_entity_index)
+
+    for start_position, start in enumerate(path.async_movement_starts):
+        # A stop frees the entity, exactly as the engine does: without an
+        # intervening halt a second gotomarker returns qfalse and the block
+        # stalls (g_script_actions.c:1384-1387), but halt clears the flag and
+        # the next movement is allowed. Ignoring stops here pruned every
+        # halt-then-restart path before the reconstruction above could run.
+        active_entities -= stops_by_position.get(start_position, set())
         if start.source_entity_index in active_entities:
             return False
         active_entities.add(start.source_entity_index)

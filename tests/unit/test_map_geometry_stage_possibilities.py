@@ -3506,9 +3506,9 @@ def test_first_pass_barriers_only_preserve_the_eventual_continuation(command):
     assert paths[0].completion is SymbolicPathCompletion.EVENTUAL_COMPLETE
     assert len(paths[0].effects) == 1
     assert paths[0].temporal_boundary_lines
-    assert paths[0].async_movement_stop_entity_indices == (
-        (0,) if command == "halt" else ()
-    )
+    assert tuple(
+        stop.source_entity_index for stop in paths[0].async_movement_stops
+    ) == ((0,) if command == "halt" else ())
 
 
 def test_nonwaiting_spline_preserves_immediate_and_prior_motion_pause_paths():
