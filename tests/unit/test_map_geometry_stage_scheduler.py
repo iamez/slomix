@@ -1827,6 +1827,50 @@ def test_s3_blocked_target_retains_target_group_and_caller_frontiers():
     assert "s3_blocker_frontier_identity_unresolved" not in blocked.state.unknown_reasons
 
 
+def test_s3_blocked_target_retains_caller_before_future_same_entity_target():
+    index = _scheduler_program_index(
+        """
+        shared
+        {
+            spawn
+            {
+                trigger shared outer
+                setstate caller_done invisible
+            }
+            trigger outer
+            {
+                trigger missing inner
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "shared")
+    target = _program(index, "shared", "outer")
+    initial = _state(index, _frame(caller.node.node_id, 1, 0))
+
+    blocked = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+
+    assert blocked.reason == "nested_dispatch_missing_handler"
+    assert blocked.state is not None
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (0, 1)
+    blocked_target, retained_caller = blocked.state.runnable
+    assert blocked_target.cursor.node_id == target.node.node_id
+    assert blocked_target.pending_dispatch is not None
+    assert blocked_target.pending_dispatch.ordered_target_entity_indices == (0, 1)
+    assert blocked_target.pending_dispatch.target_cursor == 0
+    assert retained_caller.cursor == SymbolicProgramCursor(caller.node.node_id, 1, 1)
+    assert retained_caller.pending_dispatch is None
+    assert retained_caller.origin is SymbolicFrameOrigin.CALLER_SUFFIX
+
+
 def test_s3_final_trigger_marks_suspended_target_caller_suffix_complete():
     index = _scheduler_program_index(
         """
@@ -2659,7 +2703,7 @@ def test_s4_same_frame_with_different_state_is_not_a_cycle(monkeypatch):
     assert result.decisions[0].kind is SymbolicScheduleDecisionKind.COMPLETE
 
 
-def test_s4_canonical_visited_state_deduplicates_convergent_branches(monkeypatch):
+def test_s4_convergent_state_preserves_distinct_cycle_ancestry(monkeypatch):
     index, initial, _, _ = _s2_program_index()
 
     def with_provenance(state, provenance, *, complete=False):
@@ -2685,13 +2729,20 @@ def test_s4_canonical_visited_state_deduplicates_convergent_branches(monkeypatch
                     SymbolicScheduleDecisionKind.RUNNABLE,
                     with_provenance(state, (branch,)),
                 )
-                for branch in ("left", "right")
+                for branch in ("ancestor", "bypass")
             )
             return SymbolicScheduleResult(branches, 1, 1)
-        if state.provenance != ("joined",):
+        if state.provenance in {("ancestor",), ("bypass",)}:
             joined = with_provenance(state, ("joined",))
             return SymbolicScheduleResult(
                 (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, joined),),
+                1,
+                1,
+            )
+        if state.provenance == ("joined",):
+            ancestor = with_provenance(state, ("ancestor",))
+            return SymbolicScheduleResult(
+                (SymbolicScheduleDecision(SymbolicScheduleDecisionKind.RUNNABLE, ancestor),),
                 1,
                 1,
             )
@@ -2703,14 +2754,22 @@ def test_s4_canonical_visited_state_deduplicates_convergent_branches(monkeypatch
         )
 
     monkeypatch.setattr(scheduler_module, "step_symbolic_schedule", converge)
-    result = search_symbolic_schedule(index, initial, work_limit=4)
+    result = search_symbolic_schedule(index, initial, work_limit=8)
 
     assert result.exhaustion is None
-    assert result.metrics.transitions_evaluated == 4
-    assert result.metrics.deduplicated_states == 1
-    assert result.metrics.cycle_frontiers == 0
-    assert len(result.decisions) == 1
-    assert result.decisions[0].kind is SymbolicScheduleDecisionKind.COMPLETE
+    assert result.metrics.transitions_evaluated == 6
+    assert result.metrics.deduplicated_states == 0
+    assert result.metrics.cycle_frontiers == 2
+    assert len(result.decisions) == 2
+    assert {decision.kind for decision in result.decisions} == {
+        SymbolicScheduleDecisionKind.BLOCKED
+    }
+    assert {decision.reason for decision in result.decisions} == {"symbolic_schedule_cycle"}
+    assert {
+        decision.state.provenance
+        for decision in result.decisions
+        if decision.state is not None
+    } == {("ancestor",), ("joined",)}
 
 
 def test_s4_multiple_runnable_frames_retain_unproven_independence():

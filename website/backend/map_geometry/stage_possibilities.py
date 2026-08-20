@@ -93,6 +93,7 @@ class AlertTargetDisposition(StrEnum):
     STATIC_PROPERTY_INVALID = "static_property_invalid"
     USE_CALLBACK_MISSING = "use_callback_missing"
     USE_CALLBACK_NOT_MODELED = "use_callback_not_modeled"
+    USE_CHAIN_CYCLE_NOT_MODELED = "use_chain_cycle_not_modeled"
     USE_CHAIN_SCRIPT_EVENT_NOT_MODELED = "use_chain_script_event_not_modeled"
     USE_LIFECYCLE_NOT_MODELED = "use_lifecycle_not_modeled"
     USE_PARENT_SCRIPT_EVENT_NOT_MODELED = "use_parent_script_event_not_modeled"
@@ -3161,15 +3162,19 @@ def _project_alert_targets(
             else None
         )
         if chain_blocker is not None:
-            # Preserve the specific blocker reason: an unknown use callback
-            # in the chain is a different (weaker) claim than a script event
-            # we deliberately do not model, and flattening both to the chain
-            # constant misclassified the callback case (Copilot, PR #649).
-            disposition = (
-                AlertTargetDisposition.USE_CALLBACK_NOT_MODELED
-                if chain_blocker == "alertentity_use_callback_not_modeled"
-                else AlertTargetDisposition.USE_CHAIN_SCRIPT_EVENT_NOT_MODELED
-            )
+            # Preserve the exact callback, recursive-cycle, or script-event
+            # blocker instead of flattening distinct frontier evidence.
+            disposition = {
+                "alertentity_use_callback_not_modeled": (
+                    AlertTargetDisposition.USE_CALLBACK_NOT_MODELED
+                ),
+                "alertentity_use_chain_cycle_not_modeled": (
+                    AlertTargetDisposition.USE_CHAIN_CYCLE_NOT_MODELED
+                ),
+                "alertentity_use_chain_script_event_not_modeled": (
+                    AlertTargetDisposition.USE_CHAIN_SCRIPT_EVENT_NOT_MODELED
+                ),
+            }[chain_blocker]
             targets.append(
                 AlertTargetProjection(
                     entity_index,
