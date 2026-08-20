@@ -32,13 +32,19 @@ import pytest
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _MODULE = _REPO_ROOT / "vps_scripts" / "stats_discord_webhook.lua"
 _PROBE = _REPO_ROOT / "tests" / "fixtures" / "lua" / "gametimes_dir_probe.lua"
+_CFG_PROBE = _REPO_ROOT / "tests" / "fixtures" / "lua" / "config_table_probe.lua"
 
 _LUA = shutil.which("lua5.4") or shutil.which("lua")
 pytestmark = pytest.mark.skipif(_LUA is None, reason="lua interpreter not installed")
 
 
-def resolve(homepath: str = "", basepath: str = "", fs_game: str = "legacy",
+#: what the probe reads as "this key/cvar is absent"
+ABSENT = "NIL"
+
+
+def resolve(homepath: str = ABSENT, basepath: str = ABSENT, fs_game: str = "legacy",
             configured: str = "") -> str:
+    """`configured=""` is the shipped default: present, empty, meaning derive."""
     out = subprocess.run(
         [_LUA, str(_PROBE), str(_MODULE), homepath, basepath, fs_game, configured],
         capture_output=True, text=True, check=True,
@@ -66,7 +72,7 @@ def test_a_second_instance_gets_its_own_directory():
 
 def test_basepath_is_not_used_when_it_is_relative():
     """fs_basepath is "." in production — deriving from it escapes the tree."""
-    got = resolve(homepath="", basepath=".", fs_game="legacy")
+    got = resolve(homepath=ABSENT, basepath=".", fs_game="legacy")
     assert not got.startswith("./"), f"resolved to a CWD-relative path: {got}"
     assert got.startswith("/")
 
@@ -92,3 +98,51 @@ def test_the_hardcoded_path_is_not_the_default_any_more():
         "gametimes_dir is hardcoded again in the configuration block; that makes "
         "every instance on the machine write into the first one's directory."
     )
+
+
+def config_defaults() -> dict[str, tuple[str, str]]:
+    """The module's own `configuration` table, loaded as Lua, not regexed."""
+    out = subprocess.run(
+        [_LUA, str(_CFG_PROBE), str(_MODULE)],
+        capture_output=True, text=True, check=True,
+    )
+    parsed: dict[str, tuple[str, str]] = {}
+    for line in out.stdout.splitlines():
+        key, kind, value = line.split("\t", 2)
+        parsed[key] = (kind, value)
+    return parsed
+
+
+def test_gametimes_dir_stays_visible_to_the_override_loader():
+    """A nil default would silently disable the documented escape hatch.
+
+    `apply_config_overrides()` rejects any key that is not already present in
+    `configuration` — "unknown key '<k>' ignored" — and in Lua a nil value IS
+    absence. The first version of this change set `gametimes_dir = nil`, which
+    left the config-file override unreachable while every path test still
+    passed, because the probe injects `configuration` directly instead of going
+    through the loader (Codex review on #788). The default is "" instead:
+    present, type string, and read as "derive it".
+    """
+    defaults = config_defaults()
+    assert "gametimes_dir" in defaults, (
+        "gametimes_dir is absent from the configuration table, so "
+        "apply_config_overrides() will reject an operator's setting as an "
+        "unknown key and the documented override cannot be used at all."
+    )
+    kind, value = defaults["gametimes_dir"]
+    assert kind == "string", (
+        f"gametimes_dir defaults to a {kind}; the loader also requires the "
+        "override's type to match, so only a string default accepts a path."
+    )
+    assert not value.startswith("/"), (
+        f"gametimes_dir is pinned to {value!r} again — every instance on the "
+        "machine would write into the first one's directory."
+    )
+
+
+def test_the_empty_default_still_resolves_somewhere_sane():
+    """"" is truthy in Lua, so `dir or "gametimes"` does not catch it."""
+    got = resolve(homepath="/home/et/.etlegacy", configured="")
+    assert got == "/home/et/.etlegacy/legacy/gametimes"
+    assert not got.endswith("/")
