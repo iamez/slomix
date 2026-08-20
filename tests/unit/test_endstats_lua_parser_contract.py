@@ -89,3 +89,32 @@ def test_stats_path_uses_a_forward_slash():
         + "\nOn the game server that writes a single file literally named "
         "'gamestats\\...' instead of one inside gamestats/."
     )
+
+
+def test_maxclients_is_read_through_the_helper():
+    """A raw cvar read in et_Damage throws on every hit if the cvar is empty.
+
+    `read_sv_maxclients()` accepts both the sv_maxclients and sv_maxClients
+    spellings and falls back to 64, and every loop in the file uses the cached
+    value it produces. One line did not: the client-bound check in et_Damage
+    called the cvar directly, so an empty cvar made it compare a number with
+    nil — inside a hook that runs on every damage event. Reproduced against the
+    pre-fix file with a stubbed engine:
+
+        endstats.lua:220: attempt to compare nil with number
+
+    (CodeRabbit review, #787.)
+    """
+    raw = [
+        (i, line.strip())
+        for i, line in enumerate(_lua().split("\n"), 1)
+        if 'trap_Cvar_Get("sv_maxclients")' in line or 'trap_Cvar_Get("sv_maxClients")' in line
+    ]
+    # The reader helper is the one legitimate place; it guards its own result.
+    outside_helper = [(i, t) for i, t in raw if "or tonumber(" not in t]
+    assert not outside_helper, (
+        "sv_maxclients is read straight from the cvar at "
+        + ", ".join(f"line {i}" for i, _ in outside_helper)
+        + " — use ensure_sv_maxclients(), which handles the alternate spelling "
+        "and falls back to 64 instead of yielding nil."
+    )

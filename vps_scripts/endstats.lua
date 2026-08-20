@@ -217,7 +217,14 @@ end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
 	if gamestate == 0 then
-		if target ~= attacker and attacker ~= 1022 and attacker ~= 1023 and not (tonumber(target) < 0) and not (tonumber(target) >= tonumber(et.trap_Cvar_Get("sv_maxclients"))) then
+		-- ensure_sv_maxclients(), not a raw cvar read: this is the only place
+		-- in the file that bypassed the helper, and it runs on EVERY damage
+		-- event. read_sv_maxclients() also accepts the sv_maxClients
+		-- spelling and falls back to 64, so a server where the cvar reads
+		-- empty gives a number here instead of nil — comparing a number
+		-- with nil would throw inside et_Damage (CodeRabbit, #787).
+		local max_clients = ensure_sv_maxclients()
+		if target ~= attacker and attacker ~= 1022 and attacker ~= 1023 and not (tonumber(target) < 0) and not (tonumber(target) >= max_clients) then
 			if has_value(light_weapons, meansOfDeath) or has_value(explosives, meansOfDeath) then
 				local v_team = et.gentity_get(target, "sess.sessionTeam")
 				local k_team = et.gentity_get(attacker, "sess.sessionTeam")
