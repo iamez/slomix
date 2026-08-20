@@ -32,7 +32,8 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
         # It's a round ID
         round_query = """
             SELECT id, map_name, round_number, round_date, winner_team,
-                   actual_time, round_outcome, gaming_session_id, time_limit
+                   actual_time, round_outcome, gaming_session_id, time_limit,
+                   actual_duration_seconds
             FROM rounds
             WHERE id = $1
         """
@@ -41,7 +42,8 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
         # It's a date - get latest round for that date
         round_query = """
             SELECT id, map_name, round_number, round_date, winner_team,
-                   actual_time, round_outcome, gaming_session_id, time_limit
+                   actual_time, round_outcome, gaming_session_id, time_limit,
+                   actual_duration_seconds
             FROM rounds
             WHERE round_date = $1
             ORDER BY CAST(REPLACE(round_time, ':', '') AS INTEGER) DESC
@@ -60,6 +62,11 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     actual_time = round_row[5]
     round_outcome = round_row[6]
     gaming_session_id = round_row[7]
+    # Measured duration first; actual_time text is the stopwatch target and
+    # inflated on surrender rounds (RCA 2026-08-18).
+    _dur = round_row[9] if len(round_row) > 9 else None
+    if _dur:
+        actual_time = f"{int(_dur) // 60}:{int(_dur) % 60:02d}"
     time_limit = round_row[8] if len(round_row) > 8 else None
 
     # Convert winner_team int to string

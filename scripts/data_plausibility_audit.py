@@ -51,6 +51,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from shared.round_time import round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
+
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
 # every row on/after it was captured live by the current pipeline. No
@@ -129,6 +131,11 @@ _ACTUAL_TIME_SECONDS = (
     "THEN split_part(r.actual_time, ':', 1)::int * 60 + split_part(r.actual_time, ':', 2)::int "
     "END)"
 )
+# The DURATION of a round is NOT actual_time (that is the stopwatch TARGET,
+# g_nextTimeLimit — inflated on ~15% of rounds, RCA 2026-08-18 / PR #770).
+# Any rule that means "how long did this round last" must go through the one
+# shared helper, exactly like the bot and the website do.
+_ROUND_DURATION_SECONDS = round_duration_sql("r")
 
 
 @dataclass(frozen=True)
@@ -321,15 +328,30 @@ RULES: list[Rule] = [
         tier="T1",
         severity="high",
         predicate=(
-            f"{_ACTUAL_TIME_LOOKS_VALID} AND pcs.time_played_seconds > ({_ACTUAL_TIME_SECONDS} + 60)"
+            f"{_ROUND_DURATION_SECONDS} > 0 "
+            f"AND pcs.time_played_seconds > ({_ROUND_DURATION_SECONDS} + 60)"
         ),
         note=(
-            "time_played_seconds cannot exceed the round's own actual_time duration by more than a 60s "
-            "slack (covers halftime/pause quirks). Rows whose actual_time doesn't parse as M:SS are "
-            "excluded here (they're independently caught by the rounds-table actual_time rule)."
+            "time_played_seconds cannot exceed the round's own MEASURED duration "
+            "(shared.round_time: lua actual_duration_seconds, falling back to parsed "
+            "actual_time) by more than a 60s slack (covers halftime/pause quirks). A round "
+            "whose duration is unknown — no measurement and an absent or zero actual_time — "
+            "is skipped: 'played 720s in a 0s round' says the CLOCK is missing, which the "
+            "rounds-table actual_time rule already reports, and counting it here would bill "
+            "one broken round to two sensors (measured 2026-08-19: every backfill hit of this "
+            "rule was exactly such a 0:00 round)."
         ),
         needs_round_join=True,
-        extra_cols=("pcs.time_played_seconds", "r.actual_time", "pcs.player_guid"),
+        extra_cols=(
+            "pcs.time_played_seconds",
+            # The duration the predicate actually used, spelled out: with only
+            # the two raw sources on show, a reader has to redo the COALESCE in
+            # their head to see which one decided the row (coderabbit, PR #779).
+            f"{_ROUND_DURATION_SECONDS} AS round_duration_seconds",
+            "r.actual_duration_seconds",
+            "r.actual_time",
+            "pcs.player_guid",
+        ),
         order_by="pcs.time_played_seconds DESC",
     ),
     # ── Internal consistency: two fields that should agree ─────────────────
@@ -365,9 +387,42 @@ RULES: list[Rule] = [
         predicate=(
             f"r.actual_time IS NULL OR NOT ({_ACTUAL_TIME_LOOKS_VALID}) OR {_ACTUAL_TIME_SECONDS} <= 0"
         ),
-        note="A completed, valid round must have a parseable, positive actual_time — it's the round's own duration.",
+        note=(
+            "A completed, valid round must have a parseable, positive actual_time. "
+            "NB: actual_time is the stopwatch clock (g_nextTimeLimit header field), "
+            "NOT a measured duration — the measured value is actual_duration_seconds."
+        ),
         extra_cols=("r.actual_time", "r.round_status", "r.is_valid"),
         order_by="r.id DESC",
+    ),
+    Rule(
+        name="rounds_actual_time_diverges_without_surrender",
+        table="rounds",
+        tier="T1",
+        severity="high",
+        predicate=(
+            f"{_ACTUAL_TIME_LOOKS_VALID} "
+            # Measured duration is demo-verified from 2026-05-15 on; before
+            # that, 7 known rounds carry a pre-v1.7 webhook warmup artifact
+            # (duration > clock on completed R1s) — bounded and documented
+            # in the RCA, not an active sensor to alarm on daily.
+            "AND r.round_date >= '2026-05-15' "
+            "AND COALESCE(r.actual_duration_seconds, 0) > 0 "
+            f"AND ABS({_ACTUAL_TIME_SECONDS} - r.actual_duration_seconds) > 5 "
+            "AND NOT EXISTS (SELECT 1 FROM lua_round_teams l "
+            "WHERE l.round_id = r.id AND COALESCE(l.surrender_team, 0) > 0)"
+        ),
+        note=(
+            "actual_time (the stopwatch target written by c0rnp0rn8's header) may "
+            "diverge >5s from the MEASURED actual_duration_seconds only on surrender "
+            "rounds, where the attackers never set a time and the Lua fallback writes "
+            "the full timelimit (RCA 2026-08-18: 67/67 inflated rounds in the last 3 "
+            "months were surrender+Fullhold; 0/370 non-surrender rounds diverged). A "
+            "live hit here means a NEW way the two time sources disagree — the exact "
+            "class of silent bug that inflated 15% of round durations for months."
+        ),
+        extra_cols=("r.actual_time", "r.actual_duration_seconds", "r.round_outcome"),
+        order_by=f"ABS({_ACTUAL_TIME_SECONDS} - r.actual_duration_seconds) DESC",
     ),
     Rule(
         name="rounds_winner_team_invalid",
@@ -539,7 +594,13 @@ def build_top_rows_sql(rule: Rule, limit: int) -> tuple[str, list[str]]:
     else:
         identity = "r.id, r.round_date, r.map_name, r.round_number"
         id_labels = ["round_id", "round_date", "map", "round_number"]
-    extra_labels = [c.split(".", 1)[1] for c in rule.extra_cols]
+    # `table.column` -> `column`, but an aliased expression names itself: a
+    # rule may show a computed value (e.g. the duration the predicate used),
+    # and splitting that on the first dot would label it with SQL fragments.
+    extra_labels = [
+        c.rsplit(" AS ", 1)[1].strip() if " AS " in c else c.split(".", 1)[1]
+        for c in rule.extra_cols
+    ]
     cols = identity + ("," if rule.extra_cols else "") + ", ".join(rule.extra_cols)
     order_by = rule.order_by or ("pcs.id DESC" if rule.table == "player_comprehensive_stats" else "r.id DESC")
     sql = f"SELECT {cols} FROM {from_clause} WHERE {base_gate} AND ({rule.predicate}) ORDER BY {order_by} LIMIT {int(limit)}"  # noqa: S608 # nosec B608 - rules are hardcoded literals validated at import

@@ -1604,13 +1604,21 @@ function renderWinContribution(data) {
             _el('div', null,
                 _el('div', 'text-xs text-amber-400 font-bold tracking-[0.2em] uppercase', 'Session MVP'),
                 _el('div', 'text-lg font-black text-white', mvpName),
-                _el('div', 'text-[9px] text-slate-500 mt-0.5', 'Highest avg contribution in winning rounds')
+                _el('div', 'text-[11px] text-slate-400 mt-0.5',
+                    mvp.selected_by === 'total_pwc_fallback'
+                        ? 'Highest total PWC (no player met the win-avg eligibility)'
+                        : 'Picked by WIN-AVG (PWC per round in wins). The list below sorts by total PWC, which is a sum — so the top of the list and the MVP can be different players, and both are right.')
             )
         );
 
         const mvpRight = _el('div', 'text-right',
             _el('div', 'text-2xl font-black text-amber-400', mvp.total_pwc.toFixed(2)),
-            _el('div', 'text-[10px] text-slate-400', `PWC \u00B7 WIS ${wisSign}${mvp.wis.toFixed(3)}`)
+            _el('div', 'text-[10px] text-slate-400',
+                `PWC \u00B7 WIS ${wisSign}${mvp.wis.toFixed(3)}`
+                // win-avg only when it actually decided the MVP \u2014 showing it
+                // on the total_pwc fallback would contradict the subtitle
+                + (mvp.selected_by !== 'total_pwc_fallback' && typeof mvp.waa_bayes === 'number'
+                    ? ` \u00B7 win-avg ${mvp.waa_bayes.toFixed(3)}` : ''))
         );
 
         mvpRow.appendChild(mvpLeft);
@@ -1635,6 +1643,13 @@ function renderWinContribution(data) {
     header.appendChild(_el('div', 'w-24 text-right', 'Player'));
     header.appendChild(_el('div', 'flex-1', 'Contribution'));
     header.appendChild(_el('div', 'w-12 text-right', 'PWC'));
+    // The list is sorted by PWC (a SUM, so it rewards volume) but the MVP is
+    // picked by win-avg (a per-round average with Bayesian shrink, so it
+    // rewards efficiency). Showing only the sort key is what made the two look
+    // contradictory in Discord — both columns are now visible side by side.
+    const winAvgHead = _el('div', 'w-14 text-right', 'WIN-AVG');
+    winAvgHead.title = 'Bayesian win-adjusted average per round — this is the metric that decides the MVP';
+    header.appendChild(winAvgHead);
     header.appendChild(_el('div', 'w-16 text-right', 'WIS'));
     header.appendChild(_el('div', 'w-10 text-right', 'W/L'));
     container.appendChild(header);
@@ -1690,6 +1705,23 @@ function renderWinContribution(data) {
         row.appendChild(barContainer);
 
         row.appendChild(_el('div', 'w-12 text-xs text-slate-400 text-right font-mono', p.total_pwc.toFixed(2)));
+
+        // win-avg: the MVP metric. Highlighted on the player who actually won
+        // MVP, so a reader can see at a glance why #1 on the list is not
+        // always the MVP.
+        const isMvp = mvp && p.guid === mvp.guid;
+        const waaVal = typeof p.waa_bayes === 'number' ? p.waa_bayes.toFixed(3) : '\u2014';
+        const waaEl = _el('div',
+            `w-14 text-[10px] text-right font-mono ${isMvp ? 'text-amber-400 font-bold' : 'text-slate-500'}`,
+            isMvp ? `\u2605 ${waaVal}` : waaVal);
+        waaEl.title = isMvp
+            ? (mvp.selected_by === 'total_pwc_fallback'
+                ? 'Session MVP — chosen by total PWC; nobody met the win-avg eligibility'
+                : 'Session MVP — highest win-adjusted average per round')
+            : (mvp && mvp.selected_by === 'total_pwc_fallback'
+                ? 'Win-adjusted average per round (Bayesian shrink). This session had no eligible player, so the MVP was taken from total PWC instead.'
+                : 'Win-adjusted average per round (Bayesian shrink); the MVP is the highest here, not the highest PWC');
+        row.appendChild(waaEl);
 
         // WIS with round count for context
         const wisText = `${wisSign}${p.wis.toFixed(3)}`;

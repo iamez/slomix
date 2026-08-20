@@ -269,16 +269,18 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     """Per-map kills, DPM and round durations for one gaming session.
 
     Maps are numbered by first-round time so the order matches the sheet's
-    left-to-right columns. Durations come from ``actual_time`` (the stats-file
-    header) rather than ``actual_duration_seconds``: the latter is Lua-sourced
-    and simply missing for most of session 144, while the former matched the
-    sheet to the second.
+    left-to-right columns. Durations prefer ``actual_duration_seconds``
+    (measured; verified 100% against demo times, RCA 2026-08-18) and fall
+    back to the ``actual_time`` header text only where the Lua measurement
+    is missing — the header value is the stopwatch TARGET and is inflated
+    on surrender rounds, which made this reconciler lie on R2.
     """
     rows = await db_adapter.fetch_all(
         f"""
         WITH mapno AS ({_MAP_ORDER_SQL})
-        SELECT mn.map_no, MAX(p.player_name) AS player_name,
+        SELECT mn.map_no, p.player_guid, MAX(p.player_name) AS player_name,
                SUM(p.kills) AS kills,
+               SUM(p.deaths) AS deaths,
                SUM(p.damage_given) AS damage,
                SUM(p.time_played_seconds) AS seconds
         FROM rounds r
@@ -294,17 +296,39 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
         (gaming_session_id, gaming_session_id),
     )
 
-    kills: dict[str, dict[int, int]] = {}
-    dpm: dict[str, dict[int, int]] = {}
-    for map_no, name, k, damage, seconds in rows or []:
-        kills.setdefault(name, {})[int(map_no)] = int(k or 0)
+    # Aggregate per GUID first: MAX(player_name) is per (map_no, guid), so a
+    # mid-session rename would otherwise split one player into two partial
+    # vectors keyed by two names (coderabbit, PR #771 — our own GROUP BY
+    # GUID rule). A single display name per guid is resolved afterwards.
+    per_guid: dict[str, dict[str, Any]] = {}
+    for map_no, guid, name, k, d, damage, seconds in rows or []:
+        entry = per_guid.setdefault(
+            guid, {"names": [], "kills": {}, "deaths": {}, "dpm": {}}
+        )
+        if name:
+            entry["names"].append(str(name))
+        entry["kills"][int(map_no)] = int(k or 0)
+        entry["deaths"][int(map_no)] = int(d or 0)
         per_minute = (float(damage or 0) * 60.0 / float(seconds)) if seconds else 0.0
-        dpm.setdefault(name, {})[int(map_no)] = int(round(per_minute))
+        entry["dpm"][int(map_no)] = int(round(per_minute))
+
+    kills: dict[str, dict[int, int]] = {}
+    deaths: dict[str, dict[int, int]] = {}
+    dpm: dict[str, dict[int, int]] = {}
+    for guid, entry in per_guid.items():
+        display = max(entry["names"], key=len) if entry["names"] else guid[:8]
+        if display in kills:
+            # Two guids sharing a display name would merge — disambiguate.
+            display = f"{display} [{guid[:4]}]"
+        kills[display] = entry["kills"]
+        deaths[display] = entry["deaths"]
+        dpm[display] = entry["dpm"]
 
     duration_rows = await db_adapter.fetch_all(
         f"""
         WITH mapno AS ({_MAP_ORDER_SQL})
-        SELECT mn.map_no, r.round_number, r.actual_time
+        SELECT mn.map_no, r.round_number, r.actual_time,
+               r.actual_duration_seconds
         FROM rounds r JOIN mapno mn ON mn.match_id = r.match_id
         WHERE r.gaming_session_id = ? AND r.round_number IN (1, 2) AND r.is_valid
         ORDER BY mn.map_no, r.round_number
@@ -313,9 +337,15 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     )
     r1: dict[int, int | None] = {}
     r2: dict[int, int | None] = {}
-    for map_no, round_number, actual in duration_rows or []:
+    from shared.round_time import round_duration_seconds
+
+    for map_no, round_number, actual, dur_secs in duration_rows or []:
         target = r1 if int(round_number) == 1 else r2
-        target[int(map_no)] = _to_seconds(actual)
+        # round_duration_seconds enforces the full contract (positive
+        # measurement first, parsed header text fallback) — an ad-hoc
+        # truthiness check here accepted negative corrupt measurements.
+        secs = round_duration_seconds(dur_secs, actual)
+        target[int(map_no)] = secs if secs is not None else _to_seconds(actual)
 
     # Explicit list build: the conditional expression binds looser than "+",
     # so the terser form evaluated max() on an empty r1 and raised.
@@ -328,6 +358,10 @@ async def load_our_session(db_adapter, gaming_session_id: int) -> dict[str, Any]
     order = list(range(1, map_count + 1))
     return {
         "kills": {n: [v.get(i, 0) for i in order] for n, v in kills.items()},
+        # Ready for the day supa's sheet carries a Deaths block (his workbook
+        # already tracks K/A/D) — the comparison side lights up without a
+        # schema change here.
+        "deaths": {n: [v.get(i, 0) for i in order] for n, v in deaths.items()},
         "dpm": {n: [v.get(i, 0) for i in order] for n, v in dpm.items()},
         "durations": ([r1.get(i) for i in order], [r2.get(i) for i in order]),
         "map_count": map_count,

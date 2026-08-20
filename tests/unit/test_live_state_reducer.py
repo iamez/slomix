@@ -196,3 +196,70 @@ def test_roster_changes_cleared_on_idle_reset():
     r.apply(_ev("TEAM_CHANGE", now, slot=2, name="new", team=1))  # long gap → reset first
     changes = r.snapshot()["recent_roster_changes"]
     assert [c["name"] for c in changes] == ["new"]  # pre-gap join did not survive
+
+
+def test_map_flipback_pingpong_is_damped():
+    """Dueling sources (legacy3 MAP vs LIVEX LIVE_MAP): a lagging source
+    re-asserting the PREVIOUS map right after a change must not flip the
+    state back (each hop wiped round_number/objectives — 2026-08-18)."""
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply({"type": "MAP", "map_name": "supply", "received_at": now})
+    r.apply({"type": "MAP", "map_name": "etl_adlernest", "received_at": now + 10})
+    # stale source still believes supply
+    r.apply({"type": "LIVE_MAP", "map_name": "supply", "received_at": now + 15})
+    assert r.snapshot()["current_map"] == "etl_adlernest"
+    # a genuine later change back is honoured once the damper window passes
+    r.apply({"type": "MAP", "map_name": "supply", "received_at": now + 120})
+    assert r.snapshot()["current_map"] == "supply"
+
+
+def test_roster_lingers_through_delivery_gap():
+    """A tailer delivery gap (CF 403/530) must dim the roster, not blank it —
+    the card used to flap full<->empty across the is_live edge."""
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply({"type": "TEAM_CHANGE", "slot": 1, "name": "vid", "team": 2,
+             "received_at": now - 300})  # last event 5 min ago
+    snap = r.snapshot()
+    assert snap["is_live"] is False
+    assert [m["name"] for m in snap["roster"]["allies"]] == ["vid"]
+    assert snap["roster"]["roster_age_seconds"] >= 299
+
+
+def test_third_round_start_wraps_to_r1():
+    """Stopwatch has only R1/R2 — a third ROUND_START without a MAP means
+    the MAP event was dropped; treat it as the next map's R1, not 'R3'."""
+    now = time.time()
+    r = LiveStateReducer()
+    for i in range(3):
+        r.apply({"type": "ROUND_START", "received_at": now + i})
+    assert r.snapshot()["round_number"] == 1
+
+
+def test_live_ladder_folds_aggregate_deltas_and_alive():
+    """Val A: LIVE_AGGREGATE deltas sum per round, LIVE_KILL flips the victim
+    dead, LIVE_MOVEMENT revives, ROUND_START resets the ladder."""
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply({"type": "TEAM_CHANGE", "slot": 3, "name": "vid", "team": 2,
+             "received_at": now - 120})
+    r.apply({"type": "ROUND_START", "received_at": now - 100})
+    r.apply({"type": "LIVE_AGGREGATE", "slot": 3, "kills": 2, "deaths": 1,
+             "damage_given": 600, "damage_received": 100, "received_at": now - 60})
+    r.apply({"type": "LIVE_AGGREGATE", "slot": 3, "kills": 1, "deaths": 0,
+             "damage_given": 400, "damage_received": 0, "received_at": now - 30})
+    r.apply({"type": "LIVE_KILL", "killer_slot": 5, "victim_slot": 3,
+             "received_at": now - 10})
+    snap = r.snapshot()
+    live = snap["roster"]["allies"][0]["live"]
+    assert live["kills"] == 3 and live["deaths"] == 1
+    assert live["alive"] is False
+    assert live["dpm"] is not None and live["dpm"] > 0
+
+    # movement marks him alive again; a new round wipes the tallies
+    r.apply({"type": "LIVE_MOVEMENT",
+             "players": [{"slot": 3, "x": 1, "y": 2}], "received_at": now - 5})
+    assert r.snapshot()["roster"]["allies"][0]["live"]["alive"] is True
+    r.apply({"type": "ROUND_START", "received_at": now})
+    assert "live" not in (r.snapshot()["roster"]["allies"][0])

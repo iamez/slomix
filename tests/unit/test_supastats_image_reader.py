@@ -103,3 +103,17 @@ def test_rejects_a_different_zoom_level():
 def test_rejects_garbage_bytes():
     with pytest.raises(UnsupportedScreenshot):
         read_supastats_image(b"not an image at all")
+
+
+def test_map_points_row_reads_on_seven_map_sheet():
+    """The unlabeled white row above the DPM header (decoded-and-discarded
+    until 2026-08-18) carries one small integer per map — pattern matches
+    map points on the BOX scale. Experimental until supa confirms."""
+    sheet = _read(SHEET_7)
+    assert sheet.map_points == [1, 2, 1, 1, 1, 2, 1]
+
+
+def test_map_points_absent_on_cropped_sheet():
+    # The 8-map fixture is cropped above the DPM header — no guessing.
+    sheet = _read(SHEET_8)
+    assert sheet.map_points is None

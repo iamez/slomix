@@ -4,6 +4,7 @@
  */
 
 import { API_BASE, fetchJSON, escapeHtml, safeInsertHTML, sparklineSVG } from './utils.js';
+import { renderPlayerCardHTML } from './player-card.js?v=20260819-card';
 
 // Chart instances
 let sessionChartInstance = null;
@@ -168,6 +169,24 @@ export async function loadPlayerProfile(playerIdentifier) {
         if (profileDpm) profileDpm.textContent = stats.dpm;
 
         _renderAchievements(data.achievements);
+
+        // Player Card (Val C): fail-soft — a missing card must never break
+        // the profile (new players have no 90-day window yet).
+        const cardHost = document.getElementById('profile-player-card');
+        if (cardHost) {
+            cardHost.textContent = '';
+            // Supersede guard: navigating to another profile before this
+            // resolves must not let the old card overwrite the new page.
+            cardHost.dataset.cardFor = resolvedId;
+            fetchJSON(`${API_BASE}/players/${encodeURIComponent(resolvedId)}/card`,
+                { cachePolicy: 'no-store', credentials: 'same-origin' })
+                .then(card => {
+                    if (cardHost.dataset.cardFor !== resolvedId) return;
+                    cardHost.textContent = '';
+                    safeInsertHTML(cardHost, 'beforeend', renderPlayerCardHTML(card));
+                })
+                .catch(() => { /* no card — profile stands on its own */ });
+        }
 
         // Update Cards
         const profileKd = document.getElementById('profile-kd');
