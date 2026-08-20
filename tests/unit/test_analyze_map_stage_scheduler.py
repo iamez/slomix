@@ -251,3 +251,35 @@ def test_scout_reuse_keeps_only_non_exhausted_seed_results():
     publication["semantic_sha256"] = "0" * 64
     with pytest.raises(ValueError, match="hash does not match"):
         prepare_scout_reuse(publication, _metadata(work_limit=128))
+
+
+def test_unreadable_untracked_file_does_not_abort_provenance(tmp_path):
+    """An unreadable file must not throw away a finished corpus measurement.
+
+    `git ls-files --others` names paths that may be unreadable, may not be
+    regular files, or may vanish before the hash reads them. `read_bytes()`
+    then raises, and it raises *after* the ~82 seconds of corpus work — the
+    same shape that killed the v1.39.0 deploy, where one drwx------ directory
+    aborted a checkout at the last step.
+
+    Reproduced before the guard existed:
+        PermissionError: [Errno 13] Permission denied: '…/secret.txt'
+    """
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.email", "t@example.invalid"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "config", "user.name", "test"], check=True)
+    (tmp_path / "a.py").write_text("x = 1\n")
+    subprocess.run(["git", "-C", str(tmp_path), "add", "a.py"], check=True)
+    subprocess.run(["git", "-C", str(tmp_path), "commit", "-qm", "initial"], check=True)
+
+    secret = tmp_path / "secret.txt"
+    secret.write_text("x")
+    secret.chmod(0o000)
+    try:
+        head, clean, digest = git_provenance(tmp_path)
+    finally:
+        secret.chmod(0o600)
+
+    assert head
+    assert clean is False
+    assert digest
