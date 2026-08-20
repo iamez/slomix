@@ -26,6 +26,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicEventPath,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
+    SymbolicPathEffect,
     SymbolicTemporalBoundaryState,
     SymbolicTemporalFrontierSnapshot,
     TriggerInstruction,
@@ -35,7 +36,7 @@ from website.backend.map_geometry.stage_possibilities import (
     walk_symbolic_event_program,
     walk_symbolic_stage_program,
 )
-from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger, StageEffectProjection
+from website.backend.map_geometry.stage_semantics import AccumulatorConditionalTrigger
 
 _STATE_CREATION_TOKEN = object()
 _ET_SIGNED_INT_MIN = -(1 << 31)
@@ -541,16 +542,19 @@ class SymbolicTagParentState:
 
 @dataclass(frozen=True, slots=True)
 class SymbolicEffectRecord:
-    projection: StageEffectProjection
+    projection: SymbolicPathEffect
     source_cursor: SymbolicProgramCursor
 
     def validate(self, index: OrderedStageProgramIndex) -> None:
         self.source_cursor.validate(index)
         program = index.program(self.source_cursor.node_id)
         instruction = program.instructions[self.source_cursor.instruction_offset]
-        if not isinstance(instruction, StageEffectInstruction):
+        if isinstance(self.projection, KillInstruction):
+            if instruction != self.projection:
+                raise ValueError("symbolic kill effect does not match its source cursor")
+        elif not isinstance(instruction, StageEffectInstruction):
             raise ValueError("symbolic effect source cursor does not identify a stage effect")
-        if instruction.projection != self.projection:
+        elif instruction.projection != self.projection:
             raise ValueError("symbolic effect projection does not match its source cursor")
 
 
@@ -601,12 +605,14 @@ def _canonical_accumulator_domain(domain: SymbolicIntegerDomain, *, label: str) 
         and value & required_set_bits == required_set_bits
         and not value & required_clear_bits
     )
-    return replace(
+    canonical = replace(
         domain,
         excluded=relevant_exclusions,
         required_set_bits=required_set_bits,
         required_clear_bits=required_clear_bits,
     )
+    exact = canonical.exact_value
+    return SymbolicIntegerDomain.exact(exact) if exact is not None else canonical
 
 
 def _canonical_accumulator_state(state: SymbolicAccumulatorState) -> SymbolicAccumulatorState:
@@ -1156,7 +1162,7 @@ def _path_effect_records(
     *,
     instruction_offset: int,
     source_entity_index: int,
-    projections: tuple[StageEffectProjection, ...],
+    projections: tuple[SymbolicPathEffect, ...],
     effect_entity_indices: tuple[int, ...],
 ) -> tuple[SymbolicEffectRecord, ...]:
     if len(projections) != len(effect_entity_indices):
@@ -1170,8 +1176,15 @@ def _path_effect_records(
             (
                 offset
                 for offset in range(search_offset, len(program.instructions))
-                if isinstance(program.instructions[offset], StageEffectInstruction)
-                and program.instructions[offset].projection == projection
+                if (
+                    isinstance(projection, KillInstruction)
+                    and program.instructions[offset] == projection
+                )
+                or (
+                    not isinstance(projection, KillInstruction)
+                    and isinstance(program.instructions[offset], StageEffectInstruction)
+                    and program.instructions[offset].projection == projection
+                )
             ),
             None,
         )
@@ -1190,14 +1203,14 @@ def _path_effect_records(
 def _nested_path_effect_records(
     index: OrderedStageProgramIndex,
     *,
-    projections: tuple[StageEffectProjection, ...],
+    projections: tuple[SymbolicPathEffect, ...],
     effect_entity_indices: tuple[int, ...],
 ) -> tuple[SymbolicEffectRecord, ...]:
     if len(projections) != len(effect_entity_indices):
         raise RuntimeError("symbolic path effect provenance is internally inconsistent")
     records: list[SymbolicEffectRecord] = []
     for projection, entity_index in zip(projections, effect_entity_indices, strict=True):
-        line = projection.effect.line
+        line = projection.action.line if isinstance(projection, KillInstruction) else projection.effect.line
         matches = tuple(
             SymbolicEffectRecord(
                 projection,
@@ -1206,8 +1219,12 @@ def _nested_path_effect_records(
             for program in index.programs_for_instruction_line(line)
             if entity_index in program.source.lookup.selected_entity_indices
             for offset, instruction in enumerate(program.instructions)
-            if isinstance(instruction, StageEffectInstruction)
-            and instruction.projection == projection
+            if (isinstance(projection, KillInstruction) and instruction == projection)
+            or (
+                not isinstance(projection, KillInstruction)
+                and isinstance(instruction, StageEffectInstruction)
+                and instruction.projection == projection
+            )
         )
         if len(matches) != 1:
             raise RuntimeError("nested symbolic effect does not resolve to one source instruction")
@@ -1345,8 +1362,13 @@ def adapt_symbolic_temporal_frontier(
         zip(snapshot.entry_effects, snapshot.entry_effect_entity_indices, strict=True)
     )
     dispatch_instruction = caller_program.instructions[dispatch_offset]
-    if isinstance(dispatch_instruction, StageEffectInstruction):
-        expected_effect = (dispatch_instruction.projection, snapshot.caller_entity_index)
+    if isinstance(dispatch_instruction, (StageEffectInstruction, KillInstruction)):
+        expected_effect = (
+            dispatch_instruction.projection
+            if isinstance(dispatch_instruction, StageEffectInstruction)
+            else dispatch_instruction,
+            snapshot.caller_entity_index,
+        )
         if not entry_effects or entry_effects[-1] != expected_effect:
             return SymbolicFrontierScheduleAdaptation(
                 blocker_reason="frontier_schedule_dispatch_effect_prefix_mismatch",

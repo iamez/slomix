@@ -322,6 +322,7 @@ def test_stage_walker_preserves_optional_script_mover_death_dispatch_and_caller_
 
     assert len(paths) == 2
     assert all(path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE for path in paths)
+    assert all(path.effects[0] == instruction for path in paths)
     assert all(_effect_states(path) == ("invisible",) for path in paths)
     no_event = next(path for path in paths if not path.death_dispatches)
     death_event = next(path for path in paths if path.death_dispatches)
@@ -369,6 +370,7 @@ def test_kill_does_not_invent_a_death_dispatch_for_direct_remove_classes():
 
     assert len(paths) == 1
     assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert paths[0].effects[0] == instruction
     assert _effect_states(paths[0]) == ("invisible",)
     assert paths[0].death_dispatches == ()
     assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0

@@ -36,11 +36,13 @@ from website.backend.map_geometry.stage_semantics import (
     link_w3_entity_catalog,
 )
 
-MEASUREMENT_PROTOCOL = "w5b-s5-installed-corpus-v1"
+MEASUREMENT_PROTOCOL = "w5b-s5-installed-corpus-v2"
 CROSS_TEMPORAL_REASON = "cross_entity_temporal_interleaving_not_modeled"
 ORIGINAL_CROSS_FRONTIERS = 301
 ORIGINAL_RELEVANT_CROSS_FRONTIERS = 244
 POST_S0A_CROSS_FRONTIERS = 452
+FULL_CORPUS_SCOPE = "full_installed_corpus"
+FILTERED_CORPUS_SCOPE = "filtered"
 
 
 def canonical_json(value: object) -> str:
@@ -81,6 +83,54 @@ def _semantic_value(value: Any) -> Any:
 def asset_manifest_sha256(index: Pk3GeometryIndex, map_names: tuple[str, ...]) -> str:
     manifest = index.manifest(map_names)
     return content_hash(manifest["maps"])
+
+
+def validate_generated_artifact_paths(repo_root: Path, paths: tuple[Path, ...]) -> None:
+    """Allow generated files only outside Git or under fully ignored paths."""
+
+    root = repo_root.resolve()
+    git_dir_raw = subprocess.run(
+        ["git", "rev-parse", "--git-dir"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    git_dir = (
+        (root / git_dir_raw).resolve()
+        if not Path(git_dir_raw).is_absolute()
+        else Path(git_dir_raw).resolve()
+    )
+    for supplied in paths:
+        candidate = supplied.resolve()
+        try:
+            candidate.relative_to(git_dir)
+        except ValueError:
+            pass
+        else:
+            raise ValueError(f"generated S5 artifact must not be inside Git metadata: {supplied}")
+        try:
+            relative = candidate.relative_to(root)
+        except ValueError:
+            continue
+        relative_text = relative.as_posix()
+        tracked = subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "--", relative_text],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q", "--", relative_text],
+            cwd=root,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        ).returncode == 0
+        if tracked or not ignored:
+            raise ValueError(
+                "generated S5 artifacts inside the repository must be untracked and Git-ignored: "
+                f"{supplied}"
+            )
 
 
 def git_provenance(repo_root: Path) -> tuple[str, bool, str | None]:
@@ -137,12 +187,15 @@ def checkpoint_metadata(
     worktree_state_sha256: str | None,
     asset_manifest: str,
     map_names: tuple[str, ...],
+    measurement_scope: str,
     et_source_commit: str,
     work_limit: int,
     max_paths: int,
 ) -> dict[str, object]:
     if work_limit < 1 or max_paths < 1:
         raise ValueError("S5 work and path limits must be positive")
+    if measurement_scope not in {FULL_CORPUS_SCOPE, FILTERED_CORPUS_SCOPE}:
+        raise ValueError("S5 measurement scope is invalid")
     return {
         "protocol": MEASUREMENT_PROTOCOL,
         "git_head": git_head,
@@ -150,6 +203,7 @@ def checkpoint_metadata(
         "worktree_state_sha256": worktree_state_sha256,
         "asset_manifest_sha256": asset_manifest,
         "map_names": list(map_names),
+        "measurement_scope": measurement_scope,
         "et_source_commit": et_source_commit,
         "work_limit": work_limit,
         "max_paths": max_paths,
@@ -170,6 +224,7 @@ def reusable_seed_results(
         "worktree_state_sha256",
         "asset_manifest_sha256",
         "map_names",
+        "measurement_scope",
         "et_source_commit",
         "max_paths",
     }
@@ -606,3 +661,14 @@ def summarize_occurrences(records: list[dict[str, object]]) -> dict[str, object]
         "adaptation_reasons": dict(sorted(adaptation_reasons.items())),
         "remaining_scheduler_reasons": dict(sorted(remaining_reasons.items())),
     }
+
+
+def validate_measured_denominator(measured: int, *, measurement_scope: str) -> None:
+    if measured < 0:
+        raise ValueError("S5 measured denominator must be non-negative")
+    if measurement_scope == FULL_CORPUS_SCOPE and measured != POST_S0A_CROSS_FRONTIERS:
+        raise RuntimeError(
+            f"S5 installed-corpus denominator drifted from {POST_S0A_CROSS_FRONTIERS}"
+        )
+    if measurement_scope not in {FULL_CORPUS_SCOPE, FILTERED_CORPUS_SCOPE}:
+        raise ValueError("S5 measurement scope is invalid")

@@ -1,18 +1,24 @@
 """S5 deterministic measurement and checkpoint contracts."""
 
+import subprocess
 from pathlib import Path
 
 import pytest
 
 from website.backend.map_geometry.stage_measurement import (
+    FILTERED_CORPUS_SCOPE,
+    FULL_CORPUS_SCOPE,
     MEASUREMENT_PROTOCOL,
     MeasurementCheckpoint,
     _semantic_value,
     checkpoint_metadata,
     content_hash,
+    git_provenance,
     prepare_scout_reuse,
     reusable_seed_results,
     summarize_occurrences,
+    validate_generated_artifact_paths,
+    validate_measured_denominator,
 )
 
 
@@ -23,6 +29,7 @@ def _metadata(**changes):
         "worktree_state_sha256": None,
         "asset_manifest": "b" * 64,
         "map_names": ("alpha", "beta"),
+        "measurement_scope": FULL_CORPUS_SCOPE,
         "et_source_commit": "c" * 40,
         "work_limit": 64,
         "max_paths": 16,
@@ -41,12 +48,79 @@ def test_checkpoint_metadata_is_explicit_and_rejects_invalid_budgets():
         "worktree_state_sha256": None,
         "asset_manifest_sha256": "b" * 64,
         "map_names": ["alpha", "beta"],
+        "measurement_scope": FULL_CORPUS_SCOPE,
         "et_source_commit": "c" * 40,
         "work_limit": 64,
         "max_paths": 16,
     }
     with pytest.raises(ValueError, match="must be positive"):
         _metadata(work_limit=0)
+
+
+def _git(repo: Path, *arguments: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *arguments], cwd=repo, check=True, capture_output=True, text=True
+    )
+
+
+def _git_repo(tmp_path: Path) -> Path:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _git(repo, "init")
+    _git(repo, "config", "user.email", "tests@example.invalid")
+    _git(repo, "config", "user.name", "Tests")
+    (repo / "tracked.txt").write_text("tracked\n", encoding="utf-8")
+    _git(repo, "add", "tracked.txt")
+    _git(repo, "commit", "-m", "initial")
+    return repo
+
+
+def test_generated_artifacts_must_be_outside_repo_or_fully_ignored(tmp_path):
+    repo = _git_repo(tmp_path)
+    validate_generated_artifact_paths(repo, (tmp_path / "outside.sqlite3",))
+    ignored = repo / "tmp" / "checkpoint.sqlite3"
+    (repo / ".gitignore").write_text("/tmp/\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-m", "ignore measurement artifacts")
+    validate_generated_artifact_paths(
+        repo,
+        tuple(Path(f"{ignored}{suffix}") for suffix in ("", "-wal", "-shm", "-journal")),
+    )
+    with pytest.raises(ValueError, match="untracked and Git-ignored"):
+        validate_generated_artifact_paths(repo, (repo / "unignored.json",))
+    with pytest.raises(ValueError, match="untracked and Git-ignored"):
+        validate_generated_artifact_paths(repo, (repo / "tracked.txt",))
+
+
+def test_partial_checkpoint_ignore_does_not_hide_unignored_sidecars(tmp_path):
+    repo = _git_repo(tmp_path)
+    checkpoint = repo / "checkpoint.sqlite3"
+    (repo / ".gitignore").write_text("/checkpoint.sqlite3\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-m", "ignore only checkpoint base")
+    with pytest.raises(ValueError, match="untracked and Git-ignored"):
+        validate_generated_artifact_paths(repo, (checkpoint, Path(f"{checkpoint}-wal")))
+
+
+def test_ignored_open_checkpoint_does_not_change_git_provenance(tmp_path):
+    repo = _git_repo(tmp_path)
+    (repo / ".gitignore").write_text("/tmp/\n", encoding="utf-8")
+    _git(repo, "add", ".gitignore")
+    _git(repo, "commit", "-m", "ignore measurement artifacts")
+    checkpoint_path = repo / "tmp" / "checkpoint.sqlite3"
+    before = git_provenance(repo)
+    with MeasurementCheckpoint(checkpoint_path, _metadata()) as checkpoint:
+        checkpoint.put_seed_result("seed", {"outcome": "resolved"})
+        assert git_provenance(repo) == before
+    with MeasurementCheckpoint(checkpoint_path, _metadata()) as checkpoint:
+        assert checkpoint.seed_result("seed") == {"outcome": "resolved"}
+
+
+def test_full_denominator_is_frozen_but_filtered_scope_accepts_subset():
+    validate_measured_denominator(7, measurement_scope=FILTERED_CORPUS_SCOPE)
+    validate_measured_denominator(452, measurement_scope=FULL_CORPUS_SCOPE)
+    with pytest.raises(RuntimeError, match="drifted from 452"):
+        validate_measured_denominator(451, measurement_scope=FULL_CORPUS_SCOPE)
 
 
 def test_checkpoint_round_trips_results_and_refuses_metadata_drift(tmp_path):

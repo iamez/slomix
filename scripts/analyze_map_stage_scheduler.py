@@ -11,6 +11,8 @@ from pathlib import Path
 
 from website.backend.map_geometry.pk3_index import Pk3GeometryIndex
 from website.backend.map_geometry.stage_measurement import (
+    FILTERED_CORPUS_SCOPE,
+    FULL_CORPUS_SCOPE,
     MeasurementCheckpoint,
     asset_manifest_sha256,
     checkpoint_metadata,
@@ -21,6 +23,8 @@ from website.backend.map_geometry.stage_measurement import (
     occurrence_payload,
     prepare_scout_reuse,
     summarize_occurrences,
+    validate_generated_artifact_paths,
+    validate_measured_denominator,
 )
 
 PINNED_ET_SOURCE_COMMIT = "732518efb1c479dcd29b13361f30a2e92df1cf2a"
@@ -47,12 +51,25 @@ def main() -> None:
     args = _parse_args()
     started = time.perf_counter()
     repo_root = Path(__file__).resolve().parents[1]
+    checkpoint_sidecars = tuple(
+        Path(f"{args.checkpoint}{suffix}") for suffix in ("", "-wal", "-shm", "-journal")
+    )
+    try:
+        validate_generated_artifact_paths(repo_root, (args.output, *checkpoint_sidecars))
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
     git_head, clean_tree, worktree_state_sha256 = git_provenance(repo_root)
     if not clean_tree and not args.allow_dirty:
         raise SystemExit("refusing S5 evidence run from a dirty worktree; pass --allow-dirty only for scouting")
 
     geometry_index = Pk3GeometryIndex.scan(args.etmain_dir)
-    map_names = tuple(sorted(args.maps or geometry_index.map_names))
+    map_names = tuple(
+        resolution.map_name
+        for resolution in geometry_index.resolve_many(args.maps or geometry_index.map_names)
+    )
+    measurement_scope = (
+        FULL_CORPUS_SCOPE if map_names == geometry_index.map_names else FILTERED_CORPUS_SCOPE
+    )
     manifest = asset_manifest_sha256(geometry_index, map_names)
     metadata = checkpoint_metadata(
         git_head=git_head,
@@ -60,6 +77,7 @@ def main() -> None:
         worktree_state_sha256=worktree_state_sha256,
         asset_manifest=manifest,
         map_names=map_names,
+        measurement_scope=measurement_scope,
         et_source_commit=PINNED_ET_SOURCE_COMMIT,
         work_limit=args.work_limit,
         max_paths=args.max_paths,
@@ -110,8 +128,10 @@ def main() -> None:
         "summary": summarize_occurrences(records),
         "occurrences": records,
     }
-    if semantic["summary"]["measured_cross_frontiers"] != 452:
-        raise RuntimeError("S5 installed-corpus denominator drifted from 452")
+    validate_measured_denominator(
+        int(semantic["summary"]["measured_cross_frontiers"]),
+        measurement_scope=measurement_scope,
+    )
     publication = {
         "semantic": semantic,
         "semantic_sha256": content_hash(semantic),

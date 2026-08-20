@@ -16,6 +16,7 @@ from website.backend.map_geometry.stage import (
     parse_map_script,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    KillInstruction,
     StageEffectInstruction,
     SymbolicAccumulatorState,
     SymbolicIntegerDomain,
@@ -1036,6 +1037,36 @@ def test_accumulator_bits_implied_by_interval_canonicalize_away(plain, redundant
     )
 
     assert left.canonical_key == right.canonical_key
+
+
+@pytest.mark.parametrize(
+    "constrained",
+    (
+        SymbolicIntegerDomain(0, 1, required_set_bits=1),
+        SymbolicIntegerDomain(0, 1, excluded=frozenset({0})),
+        SymbolicIntegerDomain(-2, -1, required_clear_bits=1),
+        SymbolicIntegerDomain(0, 3, excluded=frozenset({1}), required_set_bits=1),
+    ),
+)
+def test_combined_singleton_accumulator_constraints_canonicalize_to_exact(constrained):
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frame = _frame(target.node.node_id, 1, 0)
+    exact = SymbolicIntegerDomain.exact(constrained.exact_value)
+    left = _state(
+        index, frame, accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, constrained),))
+    )
+    right = _state(
+        index, frame, accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, exact),))
+    )
+    assert left.canonical_key == right.canonical_key
+
+
+def test_multi_candidate_accumulator_constraints_remain_symbolic():
+    domain = SymbolicIntegerDomain(0, 3, required_clear_bits=1)
+    assert domain.exact_value is None
+    assert domain.contains(0)
+    assert domain.contains(2)
 
 
 def test_accumulator_bit_not_implied_by_interval_remains_identity():
@@ -2447,6 +2478,11 @@ def test_s3_optional_death_dispatch_keeps_event_and_no_event_branches():
         ).exact_value
         for branch in branches
     } == {0, 7}
+    assert all(isinstance(branch.effects[0].projection, KillInstruction) for branch in branches)
+    assert all(
+        branch.effects[0].source_cursor == SymbolicProgramCursor(caller.node.node_id, 0, 0)
+        for branch in branches
+    )
 
 
 def test_s3_optional_death_no_event_branch_cannot_bypass_fatal_sibling_target():

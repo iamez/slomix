@@ -318,6 +318,9 @@ class KillInstruction:
     targets: tuple[KillTargetProjection, ...]
 
 
+SymbolicPathEffect: TypeAlias = StageEffectProjection | KillInstruction
+
+
 @dataclass(frozen=True, slots=True)
 class SymbolicDeathDispatch:
     source_node_id: str
@@ -696,9 +699,8 @@ class SymbolicIntegerDomain:
 
     @property
     def exact_value(self) -> int | None:
-        if self.lower == self.upper and self.contains(self.lower):
-            return self.lower
-        return None
+        candidates = self._first_candidates(2)
+        return candidates[0] if len(candidates) == 1 else None
 
     def contains(self, value: int) -> bool:
         return (
@@ -718,10 +720,13 @@ class SymbolicIntegerDomain:
             (0, self.upper),
         )
 
-    def has_candidate(self) -> bool:
+    def _first_candidates(self, limit: int) -> tuple[int, ...]:
+        if limit < 1:
+            raise ValueError("symbolic candidate limit must be positive")
         if self.lower > self.upper or self.required_set_bits & self.required_clear_bits:
-            return False
+            return ()
         excluded_unsigned = {value % _UNSIGNED_MODULUS for value in self.excluded}
+        candidates: list[int] = []
         for segment_lower, segment_upper in self._unsigned_segments():
             lower = segment_lower
             while lower <= segment_upper:
@@ -734,16 +739,25 @@ class SymbolicIntegerDomain:
                 if candidate is None:
                     break
                 if candidate not in excluded_unsigned:
-                    return True
+                    candidates.append(
+                        candidate if candidate <= _SIGNED_INT_MAX else candidate - _UNSIGNED_MODULUS
+                    )
+                    if len(candidates) == limit:
+                        return tuple(candidates)
                 lower = candidate + 1
-        return False
+        return tuple(candidates)
+
+    def has_candidate(self) -> bool:
+        return bool(self._first_candidates(1))
 
     def _validated(self, **changes) -> SymbolicIntegerDomain | None:
         candidate = replace(self, **changes)
+        exact = candidate.exact_value
+        if exact is not None:
+            return SymbolicIntegerDomain.exact(exact)
         if not candidate.has_candidate():
             return None
-        exact = candidate.exact_value
-        return SymbolicIntegerDomain.exact(exact) if exact is not None else candidate
+        return candidate
 
     def refine_guard(
         self,
@@ -867,7 +881,7 @@ class SymbolicTemporalFrontierSnapshot:
     boundary_entity_index: int
     boundary_state: SymbolicTemporalBoundaryState
     entry_state: SymbolicAccumulatorState
-    entry_effects: tuple[StageEffectProjection, ...] = ()
+    entry_effects: tuple[SymbolicPathEffect, ...] = ()
     entry_effect_entity_indices: tuple[int, ...] = ()
     entry_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
     entry_async_movement_stop_entity_indices: tuple[int, ...] = ()
@@ -927,7 +941,7 @@ class SymbolicAsyncMovementStart:
 class SymbolicEventPath:
     source_entity_index: int
     state: SymbolicAccumulatorState
-    effects: tuple[StageEffectProjection, ...] = ()
+    effects: tuple[SymbolicPathEffect, ...] = ()
     effect_entity_indices: tuple[int, ...] = ()
     async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
     async_movement_stop_entity_indices: tuple[int, ...] = ()
@@ -990,6 +1004,19 @@ def _with_stage_effect(
     return replace(
         path,
         effects=path.effects + (instruction.projection,),
+        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+    )
+
+
+def _with_kill_effect(
+    path: SymbolicEventPath,
+    instruction: KillInstruction,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        effects=path.effects + (instruction,),
         effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
     )
 
@@ -1379,13 +1406,18 @@ def walk_symbolic_event_program(
                 )
                 continue
             if isinstance(instruction, KillInstruction):
+                effected = _with_kill_effect(
+                    path,
+                    instruction,
+                    source_entity_index=source_entity_index,
+                )
                 blocker_reason = _kill_instruction_blocker_reason(instruction)
                 if blocker_reason is None:
-                    continuing.append(path)
+                    continuing.append(effected)
                 else:
                     finished.append(
                         replace(
-                            path,
+                            effected,
                             completion=SymbolicPathCompletion.BLOCKED,
                             blocker_reason=blocker_reason,
                             blocker_line=instruction.action.line,
@@ -2273,10 +2305,17 @@ def _exact_et_decimal(value: str) -> int | None:
 
 def _projection_domain_relevance(
     index: OrderedStageProgramIndex,
-    projection: StageEffectProjection,
+    projection: SymbolicPathEffect,
     *,
     source_entity_index: int,
 ) -> tuple[set[StageSemanticDomain], set[str]]:
+    if isinstance(projection, KillInstruction):
+        return {
+            domain
+            for target in projection.targets
+            for kind in index.w3_kinds(target.entity_index)
+            for domain in _W3_STAGE_DOMAINS[kind]
+        }, set()
     if isinstance(projection, (ObjectiveStatusEffectProjection, MainObjectiveEffectProjection)):
         return {StageSemanticDomain.OBJECTIVE}, set()
     if isinstance(projection, AutoSpawnEffectProjection):
