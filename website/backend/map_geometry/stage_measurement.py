@@ -1,4 +1,9 @@
-"""Deterministic, resumable W5b S5 installed-corpus measurement."""
+"""Deterministic, resumable W5b S5 installed-corpus measurement.
+
+The Definition of Done this feeds — which evidence must be published, and the
+acceptance rules that go with it — is in
+``docs/research/W5B_SUSPENDED_SCHEDULER_TAKEOFF_HANDOFF_2026-08-11.md``.
+"""
 
 from __future__ import annotations
 
