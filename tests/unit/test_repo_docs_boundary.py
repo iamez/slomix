@@ -37,6 +37,13 @@ PROMOTED_RESEARCH = {
     "docs/research/MEGA_AUDIT_V6_2026-05-10.md",
     "docs/research/PROXIMITY_IDEAS_2026-07.md",
     "docs/research/WEBSITE_APP_AUDIT_2026-08-05.md",
+    # The W5b contract. `stage_scheduler.py` is 3,100 lines behind a one-line
+    # docstring and `stage_measurement.py` implements that document's Definition
+    # of Done, so both module docstrings now name it — which is what earns these
+    # two their place here rather than an exception. S6 is still open; the next
+    # agent needs them in the repository, not on one machine.
+    "docs/research/W5B_SUSPENDED_SCHEDULER_TAKEOFF_HANDOFF_2026-08-11.md",
+    "docs/research/W5B_SEMANTIC_MAPPING_TAKEOFF_HANDOFF_2026-08-10.md",
     "docs/archive/FEATURE_ROADMAP_2026.md",
     "docs/archive/PLANNING_ROOM.md",
     "docs/archive/SYSTEM_ARCHITECTURE.md",

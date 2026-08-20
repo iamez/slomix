@@ -16,6 +16,7 @@ from website.backend.map_geometry.stage import (
     parse_map_script,
 )
 from website.backend.map_geometry.stage_possibilities import (
+    AlertTargetDisposition,
     ControlBarrierInstruction,
     ControlBarrierKind,
     KillInstruction,
@@ -29,6 +30,7 @@ from website.backend.map_geometry.stage_possibilities import (
     SymbolicFrontierContinuation,
     SymbolicIntegerDomain,
     SymbolicPathCompletion,
+    SymbolicTemporalBoundaryState,
     TriggerInstruction,
     _collect_continuation_relevance,
     _projection_domain_relevance,
@@ -47,7 +49,9 @@ from website.backend.map_geometry.stage_semantics import (
     AccumulatorScope,
     EntitySourceKind,
     EntityTargetEffectProjection,
+    GotoMarkerEffectProjection,
     W3EntityIndexLinkDisposition,
+    W3EntityKind,
     build_entity_identity_index,
     link_w3_entity_catalog,
 )
@@ -145,6 +149,36 @@ def _effect_states(path):
     return tuple(
         projection.effect.state for projection in path.effects if isinstance(projection, EntityTargetEffectProjection)
     )
+
+
+def _catalog_with_reference(entity_index, classname, kind):
+    groups = {
+        W3EntityKind.SPAWN_POINT: "spawn_points",
+        W3EntityKind.OBJECTIVE_VOLUME: "objective_volumes",
+        W3EntityKind.OBJECTIVE_MARKER: "objective_markers",
+        W3EntityKind.COLLISION_ENTITY: "collision_entities",
+    }
+    values = {
+        "spawn_points": (),
+        "objective_volumes": (),
+        "objective_markers": (),
+        "collision_entities": (),
+    }
+    values[groups[kind]] = (SimpleNamespace(entity_index=entity_index, classname=classname),)
+    return MapEntityCatalog("test", "maps/test.bsp", **values)
+
+
+def _missing_dispatch_suffix_relevance(raw_script, *, raw_entities, catalog=None):
+    index = _program_index(raw_script, raw_entities=raw_entities, catalog=catalog)
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=index.programs[0].source.lookup.selected_entity_indices[0],
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+    blocked = next(path for path in paths if path.blocker_reason == "nested_dispatch_missing_handler")
+    assert blocked.frontier_relevance is not None
+    return blocked.frontier_relevance
 
 
 def test_projects_event_actions_in_source_order_without_executing_paths():
@@ -288,6 +322,7 @@ def test_stage_walker_preserves_optional_script_mover_death_dispatch_and_caller_
 
     assert len(paths) == 2
     assert all(path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE for path in paths)
+    assert all(path.effects[0] == instruction for path in paths)
     assert all(_effect_states(path) == ("invisible",) for path in paths)
     no_event = next(path for path in paths if not path.death_dispatches)
     death_event = next(path for path in paths if path.death_dispatches)
@@ -335,6 +370,7 @@ def test_kill_does_not_invent_a_death_dispatch_for_direct_remove_classes():
 
     assert len(paths) == 1
     assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert paths[0].effects[0] == instruction
     assert _effect_states(paths[0]) == ("invisible",)
     assert paths[0].death_dispatches == ()
     assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
@@ -1391,6 +1427,304 @@ def test_stage_walker_blocks_cross_entity_temporal_interleaving_but_keeps_the_im
     assert blocked.blocker_entity_index == 2
     assert _effect_states(blocked) == ("default",)
     assert blocked.temporal_boundary_entity_indices == (2,)
+    snapshot = blocked.temporal_frontier_snapshot
+    assert snapshot is not None
+    assert snapshot.active_frames == ((0, index.programs[0].node.node_id),)
+    assert snapshot.caller_node_id == index.programs[0].node.node_id
+    assert snapshot.caller_entity_index == 0
+    assert snapshot.caller_instruction_offset == 1
+    assert snapshot.target_node_id == index.programs[1].node.node_id
+    assert snapshot.target_entity_indices == (2,)
+    assert snapshot.target_offset == 0
+    assert snapshot.dispatch_line == index.programs[0].event.actions[0].line
+    assert snapshot.boundary_line == index.programs[1].event.actions[1].line
+    assert snapshot.boundary_entity_index == 2
+    assert snapshot.boundary_state is SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+    assert snapshot.entry_state == SymbolicAccumulatorState.zeroed()
+
+
+@pytest.mark.parametrize(
+    ("classname", "kind", "expected_domains"),
+    (
+        ("team_CTF_redspawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
+        ("trigger_objective_info", W3EntityKind.OBJECTIVE_VOLUME, {StageSemanticDomain.OBJECTIVE}),
+        (
+            "team_WOLF_objective",
+            W3EntityKind.OBJECTIVE_MARKER,
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN},
+        ),
+        ("func_door", W3EntityKind.COLLISION_ENTITY, {StageSemanticDomain.DYNAMIC_ROUTE}),
+    ),
+)
+def test_frontier_classifier_maps_hidden_setstate_targets_to_their_w3_domains(
+    classname,
+    kind,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                setstate target invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": classname, "targetname": "target"},
+        ),
+        catalog=_catalog_with_reference(1, classname, kind),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("classname", "kind", "expected_domains"),
+    (
+        ("team_CTF_redspawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
+        ("trigger_objective_info", W3EntityKind.OBJECTIVE_VOLUME, {StageSemanticDomain.OBJECTIVE}),
+        (
+            "team_WOLF_objective",
+            W3EntityKind.OBJECTIVE_MARKER,
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN},
+        ),
+        ("func_door", W3EntityKind.COLLISION_ENTITY, {StageSemanticDomain.DYNAMIC_ROUTE}),
+    ),
+)
+def test_frontier_classifier_maps_hidden_kill_targets_to_their_w3_domains(
+    classname,
+    kind,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                kill target
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": classname, "targetname": "target"},
+        ),
+        catalog=_catalog_with_reference(1, classname, kind),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("classname", "kind", "expected_domains"),
+    (
+        ("team_CTF_bluespawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
+        (
+            "team_WOLF_objective",
+            W3EntityKind.OBJECTIVE_MARKER,
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN},
+        ),
+        ("func_static", W3EntityKind.COLLISION_ENTITY, {StageSemanticDomain.DYNAMIC_ROUTE}),
+    ),
+)
+def test_frontier_classifier_keeps_alertentity_domain_effects_without_a_script_event(
+    classname,
+    kind,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                alertentity target
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": classname, "targetname": "target"},
+        ),
+        catalog=_catalog_with_reference(1, classname, kind),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+def test_frontier_classifier_keeps_downstream_alert_use_chain_topology():
+    catalog = _catalog_with_reference(2, "team_CTF_redspawn", W3EntityKind.SPAWN_POINT)
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                alertentity relay
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "target_relay", "targetname": "relay", "target": "spawn"},
+            {"classname": "team_CTF_redspawn", "targetname": "spawn"},
+        ),
+        catalog=catalog,
+    )
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                alertentity relay
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "target_relay", "targetname": "relay", "target": "spawn"},
+            {"classname": "team_CTF_redspawn", "targetname": "spawn"},
+        ),
+        catalog=catalog,
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert tuple(
+        reference.entity_index
+        for reference in instruction.alert_targets[0].downstream_w3_references
+    ) == (2,)
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("command", "expected_domains"),
+    (
+        ("setchargetimefactor 0 engineer 0.5", {StageSemanticDomain.DYNAMIC_ROUTE}),
+        ("setchargetimefactor 0 soldier 0.5", set()),
+        ("wm_axis_respawntime 20", {StageSemanticDomain.SPAWN}),
+        ("wm_allied_respawntime 20", {StageSemanticDomain.SPAWN}),
+        ("wm_number_of_objectives 3", {StageSemanticDomain.OBJECTIVE}),
+        ("wm_set_defending_team 0", set()),
+        ("wm_set_round_timelimit 30", set()),
+        ("wm_announce ready", set()),
+    ),
+)
+def test_frontier_classifier_assigns_only_source_proven_global_runtime_domains(
+    command,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                trigger absent missing
+                {command}
+            }}
+        }}
+        """.encode(),
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize("linked", (False, True))
+def test_frontier_classifier_marks_constructible_charge_requirement_as_route_relevant(linked):
+    classname = "func_constructible" if linked else "script_multiplayer"
+    script_name = "constructible" if linked else "game_manager"
+    raw_entities = (
+        {"classname": classname, **({"scriptname": script_name} if linked else {})},
+    )
+    catalog = (
+        _catalog_with_reference(0, classname, W3EntityKind.COLLISION_ENTITY)
+        if linked
+        else None
+    )
+    relevance = _missing_dispatch_suffix_relevance(
+        f"""
+        {script_name}
+        {{
+            spawn
+            {{
+                trigger absent missing
+                constructible_chargebarreq 0.5
+            }}
+        }}
+        """.encode(),
+        raw_entities=raw_entities,
+        catalog=catalog,
+    )
+
+    assert relevance.domains == (StageSemanticDomain.DYNAMIC_ROUTE,)
+    assert relevance.unknown_reasons == (
+        () if linked else ("runtime_route_source_not_w3_linked:constructible_chargebarreq",)
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_reasons"),
+    (
+        ("4", ()),
+        ("5", ("runtime_constructxpbonus_omnibot_event_unverified",)),
+        ("5_0", ("runtime_constructxpbonus_value_unclassified",)),
+    ),
+)
+def test_frontier_classifier_retains_constructxpbonus_omnibot_event_uncertainty(
+    value,
+    expected_reasons,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                trigger absent missing
+                constructible_constructxpbonus {value}
+            }}
+        }}
+        """.encode(),
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    assert relevance.domains == ()
+    assert relevance.unknown_reasons == expected_reasons
+
+
+def test_frontier_classifier_rejects_missing_setchargetimefactor_class_as_unknown():
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                setchargetimefactor 0
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    assert relevance.domains == ()
+    assert relevance.unknown_reasons == ("runtime_setchargetimefactor_class_unclassified",)
 
 
 def test_frontier_classifier_finds_each_domain_hidden_by_cross_entity_temporal_ordering():
@@ -1679,6 +2013,7 @@ def test_frontier_classifier_marks_nested_accumulator_state_flow_unknown():
     assert relevance.domains == (StageSemanticDomain.OBJECTIVE,)
     assert relevance.unknown_domain_relevance is True
     assert relevance.unknown_reasons == ("frontier_relevance_nested_accumulator_state_unpropagated",)
+    assert relevance.mutates_accumulator_state is True
 
 
 def test_frontier_classifier_bounds_nested_relevance_work():
@@ -2359,6 +2694,793 @@ def test_event_walker_can_stop_before_actions_after_a_temporal_boundary():
     assert suspended.temporal_boundary_entity_indices == (0,)
 
 
+def test_gotomarker_projection_keeps_one_instruction_with_effect_and_control():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "path_corner_2", "targetname": "destination"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    program = index.programs[0]
+    instruction = program.instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert isinstance(instruction.projection, GotoMarkerEffectProjection)
+    assert instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+    assert instruction.waits_for_completion is True
+    assert index.instruction_offset(program, instruction.projection.effect.line) == 0
+    assert index.programs_for_instruction_line(instruction.projection.effect.line) == (program,)
+
+
+def test_gotomarker_instruction_rejects_a_control_contract_that_disagrees_with_source():
+    instruction = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+            }
+        }
+        """
+    )[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    with pytest.raises(ValueError, match="control disposition"):
+        replace(
+            instruction,
+            control_disposition=RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE,
+        )
+    with pytest.raises(ValueError, match="wait contract"):
+        replace(instruction, waits_for_completion=False)
+
+
+@pytest.mark.parametrize(
+    ("arguments", "waits_for_completion"),
+    (
+        ("destination 100 relative wait", False),
+        ("destination 100 relative anchor wait", True),
+    ),
+)
+def test_gotomarker_only_reads_wait_as_an_option(arguments, waits_for_completion):
+    program = _programs(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                gotomarker {arguments}
+            }}
+        }}
+        """.encode()
+    )[0]
+    instruction = program.instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.waits_for_completion is waits_for_completion
+
+
+def test_waiting_gotomarker_distinguishes_prior_motion_from_started_effect():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    by_state = {path.temporal_boundary_states[-1]: path for path in paths}
+    prior_motion = by_state[SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE]
+    current_wait = by_state[SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING]
+    assert prior_motion.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED
+    assert prior_motion.effects == ()
+    assert current_wait.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED
+    assert len(current_wait.effects) == 1
+    assert isinstance(current_wait.effects[0], GotoMarkerEffectProjection)
+    assert _effect_states(current_wait) == ()
+
+
+def test_waiting_gotomarker_does_not_start_after_a_prior_movement_finishes():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100 wait
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    prior_motion = next(
+        path
+        for path in paths
+        if path.temporal_boundary_states == (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,)
+    )
+    started_wait = next(
+        path
+        for path in paths
+        if path.temporal_boundary_states == (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,)
+    )
+    assert prior_motion.effects and all(
+        not isinstance(effect, GotoMarkerEffectProjection) for effect in prior_motion.effects
+    )
+    assert _effect_states(prior_motion) == ("invisible",)
+    assert isinstance(started_wait.effects[0], GotoMarkerEffectProjection)
+    assert _effect_states(started_wait) == ("invisible",)
+
+
+def test_nonwaiting_gotomarker_advances_only_after_the_action_starts():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                gotomarker destination 100
+                setstate gate invisible
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    immediate = next(path for path in paths if path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE)
+    prior_motion = next(
+        path for path in paths if path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED
+    )
+    assert isinstance(immediate.effects[0], GotoMarkerEffectProjection)
+    assert _effect_states(immediate) == ("invisible",)
+    assert prior_motion.effects == ()
+    assert prior_motion.temporal_boundary_states == (
+        SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+    )
+
+    eventual_paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+    delayed = next(
+        path
+        for path in eventual_paths
+        if path.temporal_boundary_states == (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,)
+    )
+    assert all(not isinstance(effect, GotoMarkerEffectProjection) for effect in delayed.effects)
+    assert _effect_states(delayed) == ("invisible",)
+
+
+def test_waiting_followspline_distinguishes_prior_motion_from_current_wait():
+    program = _programs(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                followspline 0 route 100 wait
+            }
+        }
+        """
+    )[0]
+
+    paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+        stop_at_temporal_boundary=True,
+    )
+
+    assert len(paths) == 2
+    assert {path.temporal_boundary_states for path in paths} == {
+        (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,),
+        (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,),
+    }
+    assert all(path.completion is SymbolicPathCompletion.TEMPORALLY_SUSPENDED for path in paths)
+
+    eventual_paths = walk_symbolic_event_program(
+        program,
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+    assert {path.temporal_boundary_states for path in eventual_paths} == {
+        (SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,),
+        (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,),
+    }
+
+
+def test_nested_waiting_gotomarker_is_a_typed_cross_entity_frontier():
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger helper move
+                setstate gate invisible
+            }
+        }
+        helper
+        {
+            trigger move
+            {
+                gotomarker destination 100 wait
+                setstate gate default
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "helper"},
+            {"classname": "path_corner_2", "targetname": "destination"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    assert {path.blocker_reason for path in paths} == {"cross_entity_temporal_interleaving_not_modeled"}
+    assert {path.temporal_boundary_states[-1] for path in paths} == {
+        SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+        SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+    }
+    assert sorted(len(path.effects) for path in paths) == [0, 1]
+    assert all(path.frontier_relevance is not None for path in paths)
+
+
+def test_alertentity_projects_and_runs_a_source_proven_death_handler():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death ignored_parameters
+            {
+                accum 1 set 9
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+                "spawnflags": "4",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert tuple(target.disposition for target in instruction.alert_targets) == (
+        AlertTargetDisposition.SCRIPT_EVENT_DISPATCH,
+    )
+    assert instruction.alert_targets[0].event_name == "death"
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    path = paths[0]
+    assert path.completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert path.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 9
+    assert len(path.runtime_event_dispatches) == 1
+    assert path.runtime_event_dispatches[0].event_name == "death"
+    assert path.runtime_event_dispatches[0].target_entity_index == 1
+    assert len(path.effects) == 2
+
+
+def test_alertentity_missing_event_handler_is_a_proven_no_op_for_script_status():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity victim_target
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+                "spawnflags": "4",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].completion is SymbolicPathCompletion.SYNCHRONOUS_COMPLETE
+    assert paths[0].runtime_event_dispatches == ()
+    assert len(paths[0].effects) == 2
+
+
+def test_alertentity_waiting_rebirth_creates_a_real_cross_entity_frontier():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity vehicle
+                setstate gate invisible
+            }
+        }
+        vehicle
+        {
+            rebirth
+            {
+                wait 100
+                accum 1 set 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "script_mover",
+                "scriptname": "vehicle",
+                "targetname": "vehicle",
+                "spawnflags": "8",
+                "health": "100",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+    assert instruction.alert_targets[0].event_name == "rebirth"
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 2
+    completed = next(path for path in paths if path.blocker_reason is None)
+    blocked = next(path for path in paths if path.blocker_reason is not None)
+    assert completed.state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 7
+    assert blocked.blocker_reason == "cross_entity_temporal_interleaving_not_modeled"
+    assert blocked.temporal_boundary_states == (SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,)
+    assert all(path.runtime_event_dispatches[0].event_name == "rebirth" for path in paths)
+    assert blocked.frontier_relevance is not None
+
+
+def test_alertentity_trigger_spawn_script_mover_cannot_rebirth_from_static_health():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity vehicle
+                setstate gate invisible
+            }
+        }
+        vehicle
+        {
+            rebirth
+            {
+                accum 1 set 7
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "script_mover",
+                "scriptname": "vehicle",
+                "targetname": "vehicle",
+                "spawnflags": "9",
+                "health": "100",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].runtime_event_dispatches == ()
+    assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+    assert len(paths[0].effects) == 2
+
+
+@pytest.mark.parametrize(
+    ("raw_target", "expected_reason"),
+    (
+        (
+            {"classname": "unknown_use", "targetname": "alert_target"},
+            "alertentity_use_callback_not_modeled",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "1"},
+            "alertentity_use_lifecycle_not_modeled",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "invalid"},
+            "alertentity_static_property_invalid",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "1_0"},
+            "alertentity_static_property_invalid",
+        ),
+        (
+            {"classname": "func_explosive", "targetname": "alert_target", "spawnflags": "2147483648"},
+            "alertentity_static_property_invalid",
+        ),
+        (
+            {
+                "classname": "script_mover",
+                "targetname": "alert_target",
+                "spawnflags": "8",
+                "health": "invalid",
+            },
+            "alertentity_static_property_invalid",
+        ),
+        (
+            {
+                "classname": "script_mover",
+                "targetname": "alert_target",
+                "spawnflags": "0",
+                "health": "100",
+            },
+            "alertentity_use_callback_missing",
+        ),
+    ),
+)
+def test_alertentity_fails_closed_for_unmodeled_target_callbacks(raw_target, expected_reason):
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity alert_target
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            raw_target,
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == expected_reason
+    assert len(paths[0].effects) == 1
+    assert paths[0].frontier_relevance is not None
+
+
+def test_alertentity_fails_closed_for_func_explosive_parent_death_dispatch():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                accum 1 set 9
+            }
+        }
+        objective_parent
+        {
+            death
+            {
+                wait 100
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim",
+                "targetname": "victim_target",
+                "spawnflags": "4",
+            },
+            {
+                "classname": "trigger_objective_info",
+                "scriptname": "objective_parent",
+                "target": "victim_target",
+                "spawnflags": "1",
+            },
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert (
+        instruction.alert_targets[0].disposition
+        is AlertTargetDisposition.USE_PARENT_SCRIPT_EVENT_NOT_MODELED
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_parent_script_event_not_modeled"
+    assert paths[0].state.read(AccumulatorScope.ENTITY, 1, source_entity_index=1).exact_value == 0
+    assert len(paths[0].effects) == 1
+
+
+def test_alertentity_preserves_target_order_and_fails_closed_for_multiple_event_dispatches():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity shared_target
+            }
+        }
+        victim_a
+        {
+            death
+            {
+                accum 1 set 1
+            }
+        }
+        victim_b
+        {
+            death
+            {
+                accum 1 set 2
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim_a",
+                "targetname": "shared_target",
+                "spawnflags": "4",
+            },
+            {
+                "classname": "func_explosive",
+                "scriptname": "victim_b",
+                "targetname": "shared_target",
+                "spawnflags": "4",
+            },
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert tuple(target.entity_index for target in instruction.alert_targets) == (1, 2)
+    assert all(
+        target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+        for target in instruction.alert_targets
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_multi_event_dispatch_not_modeled"
+    assert paths[0].runtime_event_dispatches == ()
+    assert len(paths[0].effects) == 1
+
+
+def test_alertentity_fails_closed_when_a_use_chain_can_deliver_a_script_event():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity relay
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "target_relay", "targetname": "relay", "target": "script_target"},
+            {"classname": "target_script_trigger", "targetname": "script_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_chain_script_event_not_modeled"
+    assert len(paths[0].effects) == 1
+
+
+def test_alertentity_preserves_unknown_callback_blocker_from_use_chain():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity relay
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "target_relay", "targetname": "relay", "target": "unknown_callback"},
+            {"classname": "target_position", "targetname": "unknown_callback"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert instruction.alert_targets[0].disposition is AlertTargetDisposition.USE_CALLBACK_NOT_MODELED
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_callback_not_modeled"
+    assert len(paths[0].effects) == 1
+
+
+def test_alertentity_preserves_cycle_blocker_from_use_chain():
+    index = _program_index(
+        b"""
+        caller
+        {
+            spawn
+            {
+                alertentity relay
+                setstate gate invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "target_relay", "targetname": "relay", "target": "relay"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert (
+        instruction.alert_targets[0].disposition
+        is AlertTargetDisposition.USE_CHAIN_CYCLE_NOT_MODELED
+    )
+
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=0,
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+
+    assert len(paths) == 1
+    assert paths[0].blocker_reason == "alertentity_use_chain_cycle_not_modeled"
+    assert len(paths[0].effects) == 1
+
+
 @pytest.mark.parametrize("command", ("resetscript", "halt"))
 def test_first_pass_barriers_only_preserve_the_eventual_continuation(command):
     program = _programs(
@@ -2384,6 +3506,9 @@ def test_first_pass_barriers_only_preserve_the_eventual_continuation(command):
     assert paths[0].completion is SymbolicPathCompletion.EVENTUAL_COMPLETE
     assert len(paths[0].effects) == 1
     assert paths[0].temporal_boundary_lines
+    assert tuple(
+        stop.source_entity_index for stop in paths[0].async_movement_stops
+    ) == ((0,) if command == "halt" else ())
 
 
 def test_nonwaiting_spline_preserves_immediate_and_prior_motion_pause_paths():

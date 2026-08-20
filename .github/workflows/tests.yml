@@ -115,6 +115,14 @@ jobs:
             exit 1
           fi
 
+      - name: Install Lua (for the Lua-behaviour unit tests)
+        # tests/unit/test_lua_gametimes_path.py runs the shipped Lua function
+        # against stubbed engine cvars. Without an interpreter here it does not
+        # fail — it SKIPS, which is worse: the guard looks green while checking
+        # nothing, and the cross-instance path bug it exists for could come
+        # back through a required check (Codex review, #788).
+        run: sudo apt-get update && sudo apt-get install -y lua5.4
+
       - name: Run tests
         env:
           POSTGRES_TEST_HOST: localhost
