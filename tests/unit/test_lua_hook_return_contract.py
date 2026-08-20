@@ -101,3 +101,60 @@ def test_the_guard_knows_what_it_is_guarding():
         f"expected several modules to define et_Obituary, found {definers} — "
         "if the hook was renamed engine-side this test is now checking nothing"
     )
+
+
+# ── the map of the live server must not disagree with itself ──────────────────
+_LUA_MAP = _REPO_ROOT / "docs" / "GAMESERVER_LIVE_LUA_MAP.md"
+
+
+def _section(title: str) -> str:
+    """The body of one `## <title>` section of the live Lua map."""
+    text = _LUA_MAP.read_text(encoding="utf-8")
+    start = text.index(f"## {title}")
+    nxt = text.find("\n## ", start + 1)
+    return text[start:nxt if nxt != -1 else len(text)]
+
+
+def _modules_named_in(section: str) -> set[str]:
+    return set(re.findall(r"([\w-]+\.lua)", section))
+
+
+def test_the_live_module_lists_agree_with_each_other():
+    """One list gaining a module and the others not is how the doc goes stale.
+
+    live_events.lua joined lua_modules on 2026-08-12 and reached only the
+    runtime line here; the Active modules list and the file mappings still
+    omitted it eight days later, which is precisely the kind of gap an audit
+    reads as "that module does not exist" (CodeRabbit review, #785).
+    """
+    active = _modules_named_in(_section("Live Lua Modules"))
+    paths = _modules_named_in(_section("Live File Paths"))
+    repo = _modules_named_in(_section("Repo Mapping"))
+    assert active, "the Active modules list is empty — the section moved"
+
+    missing_paths = sorted(active - paths)
+    missing_repo = sorted(active - repo)
+    assert not missing_paths, (
+        "modules listed as active have no entry under Live File Paths: "
+        + ", ".join(missing_paths)
+    )
+    assert not missing_repo, (
+        "modules listed as active have no entry under Repo Mapping: "
+        + ", ".join(missing_repo)
+    )
+
+
+def test_the_webhook_module_is_documented_at_the_path_that_runs():
+    """fs_homepath overrides fs_basepath, and both copies exist on the server.
+
+    A fix deployed to the basepath copy changes nothing and looks exactly like
+    a fix that did not work — which is how an afternoon went on 2026-08-20.
+    """
+    paths = _section("Live File Paths")
+    webhook = paths[paths.index("stats_discord_webhook.lua"):]
+    webhook = webhook[:webhook.index("proximity_tracker.lua")]
+    assert "/home/et/.etlegacy/legacy/luascripts/stats_discord_webhook.lua" in webhook, (
+        "the live copy of stats_discord_webhook.lua is the one under "
+        "fs_homepath; this document must name it, or the next deploy goes to "
+        "the copy the engine ignores."
+    )

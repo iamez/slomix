@@ -34,11 +34,16 @@ The actual loaded modules are confirmed by `etconsole.log`, not just by static c
 
 Active modules:
 
-- `luascripts/team-lock`
+- `luascripts/team-lock.lua`
 - `c0rnp0rn8.lua`
 - `endstats.lua`
 - `luascripts/proximity_tracker.lua`
 - `luascripts/stats_discord_webhook.lua`
+- `luascripts/live_events.lua`
+
+In `lua_modules` order, which is the order the hooks are dispatched in — see
+the dispatch table below. All six lists in this document describe the same six
+modules; if one of them is short, it is stale.
 
 ## Hook dispatch: one module can starve the ones behind it
 
@@ -81,12 +86,18 @@ Rule:
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/c0rnp0rn8.lua`
 - `endstats.lua`
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/endstats.lua`
-- `stats_discord_webhook.lua`
-  - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/stats_discord_webhook.lua`
+- `stats_discord_webhook.lua` — ⚠️ **two copies exist; the homepath one runs**
+  - `/home/et/.etlegacy/legacy/luascripts/stats_discord_webhook.lua` ← **live**
+  - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/stats_discord_webhook.lua` (ignored)
+  - `fs_homepath` overrides `fs_basepath` for module loading. Both files were
+    present on puran on 2026-08-20 (verified). Deploying a fix to the basepath
+    copy changes nothing and looks exactly like a fix that did not work.
 - `proximity_tracker.lua`
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/proximity_tracker.lua`
 - `team-lock.lua`
   - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/team-lock.lua`
+- `live_events.lua`
+  - `/home/et/etlegacy-v2.83.1-x86_64/legacy/luascripts/live_events.lua`
 
 ## Repo Mapping
 
@@ -99,6 +110,7 @@ Keep these mirrored locally:
   - [endstats.lua](/vps_scripts/endstats.lua)
   - [stats_discord_webhook.lua](/vps_scripts/stats_discord_webhook.lua)
   - [team-lock.lua](/vps_scripts/team-lock.lua)
+  - [live_events.lua](/vps_scripts/live_events.lua)
 
 ## Hashes Captured On 2026-03-11
 
