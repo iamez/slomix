@@ -4,8 +4,9 @@ Date: 2026-08-11
 
 Last reverified: 2026-08-20
 
-Status: S4 implementation and evidence are complete at `82a4b27a`; closure is
-pending the exact-head gate for this documentation checkpoint; S5 is blocked
+Status: S4 is formally closed at `bd8f17b2`. S5 implementation and scout evidence
+exist at `d29c64af`; the final exact-head repeated measurement and PR gate are pending.
+S6 remains blocked.
 
 Current base: `origin/main` at `c7374aba17824f209da4f01e2ced77e074a9b818`
 
@@ -1588,6 +1589,75 @@ retained.
   the new scheduler. No production write, deploy, service restart, Python replacement,
   Lua change or other owner-gated operation was performed.
 
+### 2026-08-20 - S5 exact frontier adapter and bounded corpus scout
+
+- The S4 documentation head `bd8f17b2` passed exact-head local verification, GitHub
+  CI, zero unresolved-thread refresh and the required quiet window before S5 began.
+  S5 work stayed in the isolated checkout
+  `/home/samba/share/slomix_discord/tmp/codex-pr649`; no shared development checkout or
+  other agent branch was modified.
+- Commit `1a39df35` adds a typed `SymbolicTemporalFrontierSnapshot` at the exact point
+  where the recursive walker still owns invocation, dispatch, target, boundary,
+  accumulator, effect, lifecycle and tag-parent context. The scheduler accepts only
+  that snapshot. Nested outer ancestry remains
+  `frontier_schedule_outer_dispatch_context_unresolved`; a prior active movement with
+  no exact lifecycle source remains
+  `frontier_schedule_prior_lifecycle_identity_unresolved`. No post-hoc line-number or
+  target-name reconstruction is permitted.
+- Empty-domain paths are skipped only when domain classification is complete and the
+  continuation cannot mutate accumulator state. This leaves 24 measured
+  `skipped_empty_complete` occurrences. Four raw prior-lifecycle adapter blockers are
+  in that skipped set, so raw adapter inventory is 278 ready / 99 outer-context / 75
+  prior-lifecycle, while measured outcome inventory reports 170 adapter blockers
+  (99 + 71).
+- The bounded search now caps both total created states and the number of paths that
+  one transition may materialize. The latter is fixed at 64 decisions: increasing the
+  global work budget may deepen the search, but may not let one transition allocate
+  an unbounded intermediate path tuple. State or work exhaustion remains a terminal,
+  named semantic result and is never counted as resolved.
+- This resource guard came from measured failure, not a theoretical concern. Before
+  the inner cap, a dirty B128 scout reached 1,115,664 KiB peak RSS after 206.73 s and
+  was terminated without producing evidence. With the cap, clean B64/B128/B256 scouts
+  completed at 446,460 / 447,056 / 632,928 KiB peak RSS and 62.48 / 49.08 / 49.50 s
+  wall time. The higher scouts reused only 113 cryptographically checked,
+  non-exhausted lower-budget seed results; reuse provenance is part of the checkpoint
+  identity and semantic JSON.
+- Commit `d29c64af` adds `stage_measurement.py`, the
+  `scripts/analyze_map_stage_scheduler.py` CLI, a synchronous FULL/WAL SQLite
+  checkpoint, semantic content hashing, exact git/asset/ET-source provenance and
+  opt-in installed-asset contracts. Dirty scouts additionally hash the full tracked
+  diff plus untracked file contents, preventing reuse across two different dirty
+  implementations that happen to share a git HEAD.
+- The exact manifest still contains 20 maps and 452 cross temporal occurrences from
+  136 roots. `te_escape2` contributes zero cross frontiers and therefore does not
+  appear in the per-map occurrence table; it remains in the hashed map scope. The
+  measured domain sets are 281 route, 52 route+objective, 23 all three, 18
+  route+spawn, 63 none, 13 objective and 2 objective+spawn. There are 118 unique
+  scheduler seeds.
+- Scout outcomes are stable at B64, B128 and B256: 170 adapter-blocked, 10
+  budget-exhausted, 1 resolved, 24 skipped empty/complete and 247 still blocked. Four
+  `sw_goldrush_te` seeds hit the identical 64-decision transition cap at all three
+  budgets. One `decay_sw` seed hits the global work budget at 64/128/256 transitions
+  and creates 322/642/1,282 states. Its frontier counts continue to grow, so it is
+  explicitly non-converged even though the top-level outcome partition plateaued.
+- Clean B64 semantic hash at `d29c64af` is
+  `e3ebd8b3ce58ee1c8d67d573f7be87771118013f73999c0de77c8ce4240f5983`.
+  Reuse-audited B128 and B256 hashes are respectively
+  `0f107a673e704a95ec383daa4979edd16dfce8e27363125ddaf3cd807d4acecd`
+  and `18b0a5dc2639f37ac775ffe2ea5920782cd2f3b35964a680ae9735bca86e5478`.
+  These are scout artifacts, not the final no-reuse exact-head pair.
+- Local verification before this evidence update: 386 map-geometry unit tests passed;
+  Ruff, compileall and `git diff --check` passed. The opt-in exact installed-asset
+  contract passed 2/2 in 36.59 s at 478,940 KiB peak RSS. The final S5 gate still
+  requires two fresh B256 runs without reuse on the post-documentation clean HEAD,
+  identical semantic hashes, the full repository suite, push, all CI/reviews/threads
+  and the five-minute final quiet refresh.
+- S6 must not start from these results. The 170 adapter blockers, 10 explicit budget
+  exhaustions and 247 other named scheduler blockers mean the Phase 5 graph gate must
+  remain partial/unknown for affected map-domain surfaces. No production write,
+  deploy, service restart, Python replacement, Lua change or other owner-gated action
+  was performed.
+
 At every substantive commit, append:
 
 - commit SHA and whether it changes contract, code, tests or evidence;
@@ -1598,9 +1668,9 @@ At every substantive commit, append:
 - the next incomplete checklist item;
 - any owner-gated operation prepared but not executed.
 
-The next agent must FIRST complete the pending S4 documentation-head gate recorded
-above (exact-head local tests, CI, reviews, thread state and a fresh quiet window —
-S4 is not formally closed until all of them pass again), and only then begin the
-first unchecked implementation wave (S5), re-running every source verification
-relevant to that wave. Chat history is not a substitute for the pinned source,
-tests and measured artifacts recorded here.
+The next agent must complete S5 only: commit the sanitized expected fixture and this
+handoff update, run two fresh no-reuse B256 measurements at that exact clean HEAD,
+require equal semantic hashes, run the complete repository verification and close the
+GitHub CI/review/thread/quiet-window gate. Do not begin S6 while any S5 gate remains
+open. Chat history is not a substitute for the pinned source, tests and measured
+artifacts recorded here.
