@@ -19,6 +19,9 @@ from website.backend.map_geometry.stage_possibilities import (
     KillInstruction,
     StageEffectInstruction,
     SymbolicAccumulatorState,
+    SymbolicAsyncMovementStart,
+    SymbolicAsyncMovementStop,
+    SymbolicEventPath,
     SymbolicIntegerDomain,
     SymbolicTemporalBoundaryState,
     build_ordered_stage_program_index,
@@ -52,6 +55,8 @@ from website.backend.map_geometry.stage_scheduler import (
     SymbolicWaitBoundaryState,
     SymbolicWaitBranch,
     SymbolicWakeConstraint,
+    _async_start_sequence_is_feasible,
+    _path_async_lifecycles,
     adapt_symbolic_temporal_frontier,
     search_symbolic_schedule,
     step_symbolic_schedule,
@@ -2787,6 +2792,77 @@ def test_s3_halt_clears_a_non_waiting_movement_lifecycle():
     assert halted is not None
     assert halted.async_lifecycles == ()
     assert halted.suspended[0].frame.cursor.entity_index == 1
+
+
+def test_s3_movement_restarted_after_halt_survives_the_stop():
+    """A stop must not delete a start that came after it in source order.
+
+    `_merge_symbolic_segment` concatenates the halted prefix with the resumed
+    segment, so one path can hold `start(route) · halt · start(route2)` for the
+    same entity. The reconstruction applied every start and only then every
+    stop, so the halt deleted the *newer* lifecycle and the seed claimed no
+    active movement. Measured against this exact merged path:
+
+        stops applied last:      0 lifecycles, and the path was pruned as
+                                 infeasible before reconstruction even ran
+        stops applied in order:  1 lifecycle, route2
+
+    The engine agrees with the ordered reading. `G_ScriptAction_Halt`
+    (g_script_actions.c:3198) clears `SCFL_GOING_TO_MARKER` on its first call,
+    and the next `followspline`/`gotomarker` then passes both guards at
+    g_script_actions.c:1384-1390 and installs a new trajectory. Note this is
+    "last wins *after a cancel*", not "last wins": without the halt, a second
+    movement returns qfalse and the block stalls instead.
+    """
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target move
+            }
+        }
+        target
+        {
+            trigger move
+            {
+                followspline 0 route 100
+                halt
+                followspline 0 route2 100
+                setstate target_done invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "path_corner_2", "targetname": "route"},
+            {"classname": "path_corner_2", "targetname": "route2"},
+            {"classname": "func_door", "targetname": "target_done"},
+        ),
+    )
+    target = next(
+        program for program in index.programs if program.node.entity_name == "target"
+    )
+    actions = target.event.actions
+    merged = SymbolicEventPath(
+        source_entity_index=1,
+        state=SymbolicAccumulatorState(),
+        async_movement_starts=(
+            SymbolicAsyncMovementStart(1, "followspline", ("0", "route", "100"), actions[0].line),
+            SymbolicAsyncMovementStart(1, "followspline", ("0", "route2", "100"), actions[2].line),
+        ),
+        async_movement_stops=(SymbolicAsyncMovementStop(1, 1),),
+    )
+
+    assert _async_start_sequence_is_feasible(merged, ())
+
+    lifecycles = _path_async_lifecycles(index, path=merged, effects=(), existing=())
+
+    assert len(lifecycles) == 1
+    assert lifecycles[0].arguments == ("0", "route2", "100")
+    assert lifecycles[0].source_cursor.entity_index == 1
 
 
 def test_s3_waiting_gotomarker_without_active_movement_keeps_only_started_branch():

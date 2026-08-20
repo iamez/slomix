@@ -389,9 +389,7 @@ def _path_semantics(
         "effects": _semantic_value(path.effects),
         "effect_entity_indices": list(path.effect_entity_indices),
         "async_movement_starts": _semantic_value(path.async_movement_starts),
-        "async_movement_stop_entity_indices": list(
-            path.async_movement_stop_entity_indices
-        ),
+        "async_movement_stops": _semantic_value(path.async_movement_stops),
         "tag_parent_mutation_entity_indices": list(path.tag_parent_mutation_entity_indices),
         "guard_decisions": _semantic_value(path.guard_decisions),
         "temporal_boundary_lines": list(path.temporal_boundary_lines),

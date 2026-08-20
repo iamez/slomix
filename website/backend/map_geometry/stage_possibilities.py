@@ -884,7 +884,7 @@ class SymbolicTemporalFrontierSnapshot:
     entry_effects: tuple[SymbolicPathEffect, ...] = ()
     entry_effect_entity_indices: tuple[int, ...] = ()
     entry_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
-    entry_async_movement_stop_entity_indices: tuple[int, ...] = ()
+    entry_async_movement_stops: tuple[SymbolicAsyncMovementStop, ...] = ()
     boundary_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
     entry_tag_parent_mutation_entity_indices: tuple[int, ...] = ()
 
@@ -938,13 +938,40 @@ class SymbolicAsyncMovementStart:
 
 
 @dataclass(frozen=True, slots=True)
+class SymbolicAsyncMovementStop:
+    """One `halt` that cancelled movement, positioned against the start stream.
+
+    `starts_before` is how many asynchronous movement starts the path had already
+    recorded when this stop happened. It is what makes the two channels
+    interleavable: `halt; gotomarker` and `gotomarker; halt` produce the same
+    membership but opposite outcomes, and the engine agrees only with the
+    ordered reading.
+
+    A wall-clock or line number would not do. `_merge_symbolic_segment`
+    concatenates segments from different programs, so `ScriptAction.line` is not
+    monotone across a nested dispatch, while a count of preceding starts stays
+    correct under concatenation once the segment's stops are offset by the
+    prefix's start count.
+    """
+
+    source_entity_index: int
+    starts_before: int
+
+    def __post_init__(self) -> None:
+        if self.source_entity_index < 0:
+            raise ValueError("symbolic asynchronous movement stop entity index must be non-negative")
+        if self.starts_before < 0:
+            raise ValueError("symbolic asynchronous movement stop start count must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolicEventPath:
     source_entity_index: int
     state: SymbolicAccumulatorState
     effects: tuple[SymbolicPathEffect, ...] = ()
     effect_entity_indices: tuple[int, ...] = ()
     async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
-    async_movement_stop_entity_indices: tuple[int, ...] = ()
+    async_movement_stops: tuple[SymbolicAsyncMovementStop, ...] = ()
     tag_parent_mutation_entity_indices: tuple[int, ...] = ()
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
@@ -1043,8 +1070,14 @@ def _with_async_movement_stop(
 ) -> SymbolicEventPath:
     return replace(
         path,
-        async_movement_stop_entity_indices=(
-            path.async_movement_stop_entity_indices + (source_entity_index,)
+        async_movement_stops=(
+            path.async_movement_stops
+            + (
+                SymbolicAsyncMovementStop(
+                    source_entity_index,
+                    len(path.async_movement_starts),
+                ),
+            )
         ),
     )
 
@@ -1566,9 +1599,15 @@ def _merge_symbolic_segment(
         effects=prefix.effects + segment.effects,
         effect_entity_indices=prefix.effect_entity_indices + segment.effect_entity_indices,
         async_movement_starts=prefix.async_movement_starts + segment.async_movement_starts,
-        async_movement_stop_entity_indices=(
-            prefix.async_movement_stop_entity_indices
-            + segment.async_movement_stop_entity_indices
+        async_movement_stops=(
+            prefix.async_movement_stops
+            + tuple(
+                # The segment counted its own starts from zero; after
+                # concatenation they sit behind the prefix's, so every stop
+                # moves with them or the interleaving silently reorders.
+                replace(stop, starts_before=stop.starts_before + len(prefix.async_movement_starts))
+                for stop in segment.async_movement_stops
+            )
         ),
         tag_parent_mutation_entity_indices=(
             prefix.tag_parent_mutation_entity_indices
@@ -2127,8 +2166,8 @@ def _walk_symbolic_target_group(
                 entry_effects=prefix.effects,
                 entry_effect_entity_indices=prefix.effect_entity_indices,
                 entry_async_movement_starts=prefix.async_movement_starts,
-                entry_async_movement_stop_entity_indices=(
-                    prefix.async_movement_stop_entity_indices
+                entry_async_movement_stops=(
+                    prefix.async_movement_stops
                 ),
                 boundary_async_movement_starts=path.async_movement_starts,
                 entry_tag_parent_mutation_entity_indices=(
