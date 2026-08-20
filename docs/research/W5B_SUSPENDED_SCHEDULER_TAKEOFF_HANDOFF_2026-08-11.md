@@ -1674,3 +1674,242 @@ require equal semantic hashes, run the complete repository verification and clos
 GitHub CI/review/thread/quiet-window gate. Do not begin S6 while any S5 gate remains
 open. Chat history is not a substitute for the pinned source, tests and measured
 artifacts recorded here.
+
+## 2026-08-20 emergency transfer checkpoint (11:58 UTC)
+
+This section supersedes the closing instructions immediately above. The work stopped
+because the active agent was approaching its usage limit, not because S5 was ready.
+Continue only in the isolated checkout
+`/home/samba/share/slomix_discord/tmp/codex-pr649` on branch
+`agent/map-geometry-w5b-suspended-scheduler`. Do not touch another worktree or PR.
+
+### Exact repository and GitHub state
+
+- Local and remote PR head are both
+  `05015651a02d5aa9b3aa3a021813bfb19174646c`.
+- PR `#649` targets frozen main
+  `c7374aba17824f209da4f01e2ced77e074a9b818`. Claude is intentionally holding
+  `#780` and `#786`; main must remain frozen until `#649` lands or its entire
+  exact-main gate is deliberately reset.
+- Remote CI for `05015651` is green except **Codacy Static Code Analysis**, which is
+  red. Do not waive it. All GitHub Actions, CodeQL, Docker, CodeRabbit, Python 3.11
+  and 3.13, JS, React, Lua, security, ShellCheck and file checks passed.
+- There are **eight unresolved review threads**. The first two P1 fixes are already
+  present in `05015651` but still need evidence replies and GraphQL resolution. Four
+  P2 fixes exist only in the dirty local worktree. The last two P1 findings arrived
+  at 11:54 UTC and are not implemented.
+- No reply, resolution, quiet window or merge gate may begin from the current dirty
+  state. No owner-only operation was performed.
+
+Unresolved thread inventory:
+
+| Thread | Severity | Status at transfer |
+|---|---:|---|
+| `PRRT_kwDOP4ZX3s6axTa3` | P1 | `halt` stop evidence fixed in remote `05015651`; reply/resolve pending |
+| `PRRT_kwDOP4ZX3s6axTa4` | P1 | downstream alert W3 topology fixed in remote `05015651`; reply/resolve pending |
+| `PRRT_kwDOP4ZX3s6aypoF` | P2 | constrained singleton canonicalization implemented locally; not committed |
+| `PRRT_kwDOP4ZX3s6aypoK` | P2 | filtered corpus scope/denominator implemented locally; not committed |
+| `PRRT_kwDOP4ZX3s6aypoN` | P2 | ordered source-bound `kill` effect implemented locally; not committed |
+| `PRRT_kwDOP4ZX3s6aypoR` | P2 | generated artifact path guard implemented locally; not committed |
+| `PRRT_kwDOP4ZX3s6ay8xF` | P1 | **OPEN CODE BUG:** stop/start lifecycle mutations lose source order |
+| `PRRT_kwDOP4ZX3s6ay8xS` | P1 | **OPEN CODE BUG:** optional kill can call target group with zero decision budget |
+
+There is also a conversation-level Codex P1 about killed W3 spawn/objective entities.
+It has no GraphQL thread. Its domain classification was fixed in `05015651`; post a
+normal PR conversation reply with exact evidence before closure.
+
+### Dirty local patch: preserve, audit, do not push yet
+
+Eight files are modified: the seven code/test files below plus this handoff. The
+semantic patch before this handoff was 291 insertions and 32 deletions. A mistaken
+whole-file `ruff format` run was fully removed before recreating the small semantic
+patch; do not re-run `ruff format` on these legacy-formatted modules.
+
+- `stage_possibilities.py`: bounded two-candidate enumeration makes combined masks,
+  bounds and exclusions expose a singleton; `SymbolicPathEffect` becomes the ordered
+  union `StageEffectProjection | KillInstruction`; every executed kill is appended
+  before continue/block and contributes W3 domains.
+- `stage_scheduler.py`: canonical domains collapse to exact singletons; effect record
+  validation/reconstruction accepts exact `KillInstruction`; temporal adaptation
+  strips both stage-effect and kill dispatch prefixes so the scheduler re-executes and
+  records the dispatch exactly once.
+- `stage_measurement.py`: protocol is bumped to
+  `w5b-s5-installed-corpus-v2`; metadata includes
+  `measurement_scope`; the full frozen denominator applies only to
+  `full_installed_corpus`; generated files must be outside Git or every base/WAL/SHM/
+  journal path must be untracked and Git-ignored.
+- `analyze_map_stage_scheduler.py`: map arguments normalize through
+  `resolve_many()`, explicit-all maps still count as full corpus, filtered runs retain
+  their actual denominator, and artifact paths are validated before provenance.
+- Focused regression tests cover the above contracts, including an open ignored WAL
+  checkpoint whose presence leaves Git provenance unchanged.
+
+Focused verification on this recreated, non-formatted patch:
+
+```text
+pytest test_map_geometry_stage_scheduler.py +
+       test_map_geometry_stage_possibilities.py +
+       test_analyze_map_stage_scheduler.py
+261 passed in 2.18s
+Ruff: passed
+git diff --check: passed
+```
+
+This is only focused evidence. No wider map suite, exact assets, full repository suite,
+new fixture, B256 pair, compileall or clean-head test exists for the local patch.
+
+### First work for the receiving agent
+
+1. Fix `PRRT_kwDOP4ZX3s6ay8xF` by retaining one ordered lifecycle-mutation stream (or
+   another source-order-equivalent representation). Current `_path_async_lifecycles()`
+   applies all starts and then all stops, so `halt; <next frame>; gotomarker/followspline`
+   incorrectly deletes the newer start. Add direct entry-path, nested target, adapter
+   and canonical-identity tests. Preserve the already-fixed ordinary start-then-halt
+   behavior.
+2. Fix `PRRT_kwDOP4ZX3s6ay8xS`: after adding the optional-death nondelivery branch,
+   check remaining decision capacity before `_run_s3_target_group()`. A positive
+   `decision_limit=1` must return a named state-budget frontier, never call a helper
+   with zero and never raise `ValueError`. Test both direct step and bounded search.
+3. Complete the kill-effect regression matrix requested by the source audit: ordered
+   `kill -> setstate` versus reversed history, direct/no-event kills in caller and
+   resumed target suffixes, fatal multi-target retention, temporal snapshot prefix
+   stripping, and measurement serialization. The pinned ET:L evidence is
+   `G_ScriptAction_Kill` plus `G_KillEnts`; a kill record means the command ran over
+   its static target projection, not that every target was proven permanently removed.
+4. Review the artifact-path guard against symlinked parents, actual worktree Git dirs,
+   tracked ignored paths and partially ignored sidecars. Keep generated absolute paths
+   out of semantic JSON/hash.
+5. Update `tests/fixtures/map_geometry/w5b_s5_expected.json` for protocol v2 and actual
+   new corpus results. **All previous `05015651` B256 hashes are invalid after this
+   semantic patch.** Do not reuse old checkpoints/publications.
+6. Run focused tests, all map-geometry units, all exact installed-asset tests, two fresh
+   no-reuse B256 runs with identical semantic hashes, Ruff, compileall, `git diff
+   --check`, and full `pytest tests/ -q`. Capture time/RSS and honest exhaustion counts.
+7. Commit and push only after those gates pass. Then reply to every thread with exact
+   head evidence, resolve by GraphQL thread ID, post the conversation-level kill-domain
+   disposition, investigate/fix Codacy, trigger fresh CodeRabbit/Codex/Copilot reviews,
+   and inspect all conversation comments and review bodies.
+8. Start the five-minute quiet period only after all CI is green and zero actionable
+   comments/threads remain. Final-refresh remote head, frozen main, checks and all review
+   surfaces before merging. Do not start S6 or another PR first.
+
+Previously valid evidence for remote `05015651` remains historical only: two no-reuse
+B256 runs matched semantic hash
+`71c754432fb2a55ad9308885af7899fae04e029b98f491304ba7e43ab2540ff1`, exact assets
+passed 18 tests, map units passed 392, focused tests passed 252, and the full suite
+passed `5059 passed, 91 skipped, 30 warnings`. It must not be presented as proof for
+the dirty local protocol-v2 patch or any later commit.
+
+### Context that cannot be reconstructed from Git alone
+
+#### Why these limits and budgets exist
+
+- `_MAX_SEARCH_TRANSITION_DECISIONS = 64` is an engineering resource guard, not an
+  ET semantic constant or a statistically fitted threshold. Before the inner cap, a
+  dirty B128 scout reached 1,115,664 KiB peak RSS after 206.73 seconds and was
+  terminated without usable evidence. The power-of-two value 64 matched the first
+  scout budget and prevents one transition from materializing an unbounded tuple.
+- B64/B128/B256 are deterministic, power-of-two scout work budgets. They were chosen
+  to expose scaling and convergence behavior by doubling, not because the corpus
+  supplied natural cutoffs. The search state guard is likewise pragmatic at
+  `work_limit * 8`; neither guard proves completeness.
+- After adding the fanout cap, clean scouts measured B64 at 62.48 seconds / 446,460
+  KiB, B128 at 49.08 seconds / 447,056 KiB, and B256 at 49.50 seconds / 632,928 KiB.
+  B128/B256 reused 113 cryptographically verified, non-exhausted lower-budget seeds;
+  reuse was only a scout optimization and is forbidden for final publication runs.
+- Top-level outcomes plateaued at every budget: 170 `adapter_blocked`, 10
+  `budget_exhausted`, 1 `resolved`, 24 skipped empty-complete, and 247 still blocked.
+  This is not convergence: four `sw_goldrush_te` seeds hit the same 64-decision
+  per-transition cap at every budget, while the one `decay_sw` seed grew from
+  64/322 transitions/states at B64 to 128/642 at B128 and 256/1282 at B256. It is
+  singled out because its growing frontier disproves the apparent aggregate plateau.
+
+#### Approaches tried and rejected
+
+- Reconstructing a scheduler state after the fact from `SymbolicEventPath` was
+  rejected. The path has already lost invocation ancestry, dispatch occurrence and
+  target ordinal, caller disposition, outer contexts, exact cursor, tag-parent entry
+  state, and prior lifecycle identity. Exact construction-time
+  `SymbolicTemporalFrontierSnapshot` records plus named blockers replaced it.
+- Scheduling only apparently pure/relevant roots was rejected because mixed roots
+  contain relevant, unknown, and empty paths; filtering them biases the frozen 452
+  occurrence denominator. Scheduling all 2,790 roots was also rejected for S5 because
+  non-dispatch root transitions, standalone temporal resumes, and prior lifecycles are
+  not yet modeled. That would add S6 scheduler semantics, not merely analyze S5.
+- Heuristic adaptation by source line or target name was rejected as ambiguous. A
+  seed that cannot be adapted exactly must retain a named unknown/blocker result.
+- Treating an empty domain as skippable was rejected unless classification is complete
+  and the event cannot mutate accumulator state. The resulting honest skip count is 24.
+- Unbounded per-transition fanout was rejected after the 1.115 GiB failed scout.
+  Declaring convergence from stable top-level counts, or repeatedly raising B until
+  the counts look stable, was rejected because `decay_sw` grows linearly underneath
+  those counts.
+- Reusing checkpoints in the final evidence pair was rejected: cache reuse can validate
+  a scout but cannot prove two fresh executions are deterministic. Artifacts from the
+  old protocol/head are also invalid after the local protocol-v2 semantic changes.
+
+#### What the final B256 pair must prove
+
+- The historical no-reuse pair was
+  `/tmp/w5b-s5-final-05015651-b256-a.json` and
+  `/tmp/w5b-s5-final-05015651-b256-b.json`, with checkpoints at the same base names
+  ending in `.sqlite3`. Each JSON was 635,881 bytes and each SQLite file 684,032
+  bytes. Run A measured 88.81 seconds / 632,088 KiB; run B measured 74.26 seconds /
+  627,892 KiB. Their semantic hashes were identical:
+  `71c754432fb2a55ad9308885af7899fae04e029b98f491304ba7e43ab2540ff1`.
+- That pair was intended to prove deterministic semantic results and serialization for
+  the same clean head, corpus, and budget with no reuse. It did **not** prove
+  convergence, completeness, or runtime behavior. It is historical evidence only now.
+- S5 is complete only after the receiving agent fixes every known review issue, creates
+  an exact clean head, updates the protocol-v2 fixture, and runs all 452 occurrences
+  twice at B256 from fresh no-reuse checkpoints with identical semantic payload/hash.
+  Every occurrence must be accounted for; exhausted work must remain explicitly
+  `budget_exhausted`, never be promoted to `resolved`. Zero exhaustion is not required
+  if the published conclusion remains explicitly partial/unknown, but S6 must not use
+  unresolved or exhausted surfaces as proven input. Tests, CI, Codacy, all review
+  surfaces, and the five-minute final-refresh gate must also close.
+
+#### Reproducible inputs and artifact locations
+
+- Installed asset corpus: `/home/samba/share/etmain` (the analyzer CLI default). It
+  currently contains 22 PK3 files. Resolution selects the frozen 20-map corpus recorded
+  by `tests/fixtures/map_geometry/w5b_s5_expected.json`, with manifest hash
+  `86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`.
+- The 22 files on disk are `Frostbite.pk3`, `adlernest.pk3`, `braundorf_b4.pk3`,
+  `bremen_b3.pk3`, `decay_sw.pk3`, `erdenberg_t2.pk3`, `et_brewdog_b6.pk3`,
+  `etl_adlernest_v4.pk3`, `etl_base_v3.pk3`, `etl_beach_v2.pk3`,
+  `etl_braundorf_v2.pk3`, `etl_ice_v12.pk3`, `etl_sp_delivery_v5.pk3`,
+  `missile_b3.pk3`, `missile_b4.pk3`, `supply_sp.pk3`, `sw_battery.pk3`,
+  `sw_goldrush_te.pk3`, `sw_oasis_b3.pk3`, `te_escape2_fixed.pk3`,
+  `te_escape2_fixed2.pk3`, and `te_escape2_fixed3.pk3`.
+- There is no verified local ET:L source checkout. Source evidence in this document is
+  pinned to remote commit `732518efb1c479dcd29b13361f30a2e92df1cf2a`; do not invent
+  a local source path. Future generated outputs/checkpoints must be outside the repo or
+  pass the protocol-v2 ignored/untracked base-and-sidecar guard.
+
+#### Evidence classification
+
+- **Measured locally:** 22 PK3s, the selected 20-map manifest/hash, 452 cross-temporal
+  occurrences, 136 roots, 118 scheduler seeds, and raw adapter inventory 278 ready /
+  99 outer-context / 75 prior-lifecycle. Domain counts were dynamic-route 281,
+  route+objective 52, all-three 23, route+spawn 18, none 63, objective 13, and
+  objective+spawn 2. Scout/final time, RSS, outcome, hash, four capped Goldrush seeds,
+  and `decay_sw` growth above were also measured.
+- **Source-proven only:** engine behavior cited from pinned ET:L commit `732518ef`.
+  Equivalence with the live 2.83.1 source tree and compile flags is not proven.
+- **Inferred or chosen, not proven:** cap 64 is safe enough; B256 is sufficient as a
+  publication budget; this local `/home/samba/share/etmain` snapshot matches live game
+  server VFS precedence; named adapter blockers are impossible rather than unknown; or
+  the exact PR head works at runtime. None of those claims may be upgraded without new
+  evidence. The old B256 pair proves repeatability only.
+
+#### Explicitly unfinished at transfer
+
+- Two new P1 defects remain: lifecycle mutation source order and optional-kill zero
+  decision capacity. The broader kill-effect matrix and artifact-path edge audit remain.
+- No protocol-v2 fixture/corpus pair, wider map suite, exact-assets run, compileall, full
+  repository suite, or runtime proof exists for the dirty local patch.
+- Codacy is still failing. Nothing after `05015651` is committed or pushed. Review
+  replies/resolutions, fresh reviewers, five-minute quiet period, final remote refresh,
+  and merge are all unfinished.
+- Post-deploy runtime evidence is owner-gated and was not attempted.
