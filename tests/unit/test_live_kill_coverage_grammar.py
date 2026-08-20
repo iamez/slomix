@@ -82,3 +82,38 @@ def test_the_sample_covers_both_answers():
 def test_malformed_kills_are_not_counted(bad: bytes):
     """These are the lines that would mask a missing kill."""
     assert not canary.is_usable_live_kill(bad)
+
+
+# ── the exit codes the script documents ──────────────────────────────────────
+def test_unreadable_log_exits_two_not_a_traceback(tmp_path, monkeypatch):
+    """A log can rotate or lose permissions between the check and the read.
+
+    `Path.is_file()` proves the path existed a moment ago. slomix-live.log is
+    truncated on map load, so losing the read mid-check is ordinary here — and
+    the script's own docstring promises exit 2 for unreadable input, not a
+    stack trace (CodeRabbit review, #785).
+    """
+    console = tmp_path / "etconsole.log"
+    live = tmp_path / "slomix-live.log"
+    console.write_bytes(b"  1 Kill: 3 6 8: a killed b by MOD_MP40\n")
+    live.write_bytes(b"K 1 3 6 8 0,0,0 0,0,0 100 0\n")
+
+    def explode(path):
+        raise OSError(13, "Permission denied")
+
+    monkeypatch.setattr(canary, "count_engine_kills", explode)
+    monkeypatch.setattr(sys, "argv",
+                        ["check", "--console", str(console), "--live", str(live)])
+    assert canary.main() == 2
+
+
+@pytest.mark.parametrize("flag", ["--tolerance", "--min-kills"])
+def test_negative_thresholds_are_rejected(flag: str, tmp_path, monkeypatch):
+    """`--tolerance -1` fails a run where the counts agree exactly."""
+    f = tmp_path / "x.log"
+    f.write_bytes(b"")
+    monkeypatch.setattr(sys, "argv",
+                        ["check", "--console", str(f), "--live", str(f), flag, "-1"])
+    with pytest.raises(SystemExit) as exc:
+        canary.main()
+    assert exc.value.code == 2

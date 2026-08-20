@@ -115,8 +115,17 @@ def main() -> int:
             print(f"not a readable file: {p}", file=sys.stderr)
             return 2
 
-    engine = count_engine_kills(args.console)
-    live = count_live_kills(args.live)
+    # is_file() proves the path existed a moment ago, not that the read will
+    # succeed. This runs against logs that rotate under it — slomix-live.log is
+    # truncated on map load — so an OSError here is an ordinary Tuesday, and the
+    # docstring already promises exit 2 for unreadable input rather than a
+    # traceback (CodeRabbit review, #785).
+    try:
+        engine = count_engine_kills(args.console)
+        live = count_live_kills(args.live)
+    except OSError as exc:
+        print(f"could not read the logs: {exc}", file=sys.stderr)
+        return 2
 
     if engine < args.min_kills:
         print(f"engine kills {engine} < --min-kills {args.min_kills}: too early to judge")
