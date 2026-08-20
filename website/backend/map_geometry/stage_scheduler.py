@@ -1261,6 +1261,13 @@ def _path_async_lifecycles(
             if item.source_cursor.entity_index != start.source_entity_index
         ]
         next_lifecycles.append(lifecycle)
+    stopped_entities = set(path.async_movement_stop_entity_indices)
+    if stopped_entities:
+        next_lifecycles = [
+            lifecycle
+            for lifecycle in next_lifecycles
+            if lifecycle.source_cursor.entity_index not in stopped_entities
+        ]
     return tuple(next_lifecycles)
 
 
@@ -1352,6 +1359,9 @@ def adapt_symbolic_temporal_frontier(
         effects=tuple(effect for effect, _ in entry_effects),
         effect_entity_indices=tuple(entity_index for _, entity_index in entry_effects),
         async_movement_starts=snapshot.entry_async_movement_starts,
+        async_movement_stop_entity_indices=(
+            snapshot.entry_async_movement_stop_entity_indices
+        ),
         tag_parent_mutation_entity_indices=(
             snapshot.entry_tag_parent_mutation_entity_indices
         ),

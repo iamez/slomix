@@ -293,6 +293,7 @@ class AlertTargetProjection:
     event_name: str | None
     disposition: AlertTargetDisposition
     event_handler_node_id: str | None = None
+    downstream_w3_references: tuple[W3EntityReference, ...] = ()
 
     def __post_init__(self) -> None:
         has_dispatch = self.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
@@ -869,6 +870,7 @@ class SymbolicTemporalFrontierSnapshot:
     entry_effects: tuple[StageEffectProjection, ...] = ()
     entry_effect_entity_indices: tuple[int, ...] = ()
     entry_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    entry_async_movement_stop_entity_indices: tuple[int, ...] = ()
     boundary_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
     entry_tag_parent_mutation_entity_indices: tuple[int, ...] = ()
 
@@ -928,6 +930,7 @@ class SymbolicEventPath:
     effects: tuple[StageEffectProjection, ...] = ()
     effect_entity_indices: tuple[int, ...] = ()
     async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    async_movement_stop_entity_indices: tuple[int, ...] = ()
     tag_parent_mutation_entity_indices: tuple[int, ...] = ()
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
@@ -1003,6 +1006,19 @@ def _with_async_movement_start(
         path,
         async_movement_starts=path.async_movement_starts
         + (SymbolicAsyncMovementStart(source_entity_index, command, arguments, line),),
+    )
+
+
+def _with_async_movement_stop(
+    path: SymbolicEventPath,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        async_movement_stop_entity_indices=(
+            path.async_movement_stop_entity_indices + (source_entity_index,)
+        ),
     )
 
 
@@ -1327,6 +1343,11 @@ def walk_symbolic_event_program(
                         continuing.append(prior_motion)
                 continue
             if isinstance(instruction, ControlBarrierInstruction):
+                if instruction.kind is ControlBarrierKind.HALT:
+                    path = _with_async_movement_stop(
+                        path,
+                        source_entity_index=source_entity_index,
+                    )
                 if instruction.kind is ControlBarrierKind.WAIT:
                     # ET:Legacy skips waits during sudden death, so retain both
                     # the immediate and ordinary delayed continuations.
@@ -1513,6 +1534,10 @@ def _merge_symbolic_segment(
         effects=prefix.effects + segment.effects,
         effect_entity_indices=prefix.effect_entity_indices + segment.effect_entity_indices,
         async_movement_starts=prefix.async_movement_starts + segment.async_movement_starts,
+        async_movement_stop_entity_indices=(
+            prefix.async_movement_stop_entity_indices
+            + segment.async_movement_stop_entity_indices
+        ),
         tag_parent_mutation_entity_indices=(
             prefix.tag_parent_mutation_entity_indices
             + segment.tag_parent_mutation_entity_indices
@@ -2070,6 +2095,9 @@ def _walk_symbolic_target_group(
                 entry_effects=prefix.effects,
                 entry_effect_entity_indices=prefix.effect_entity_indices,
                 entry_async_movement_starts=prefix.async_movement_starts,
+                entry_async_movement_stop_entity_indices=(
+                    prefix.async_movement_stop_entity_indices
+                ),
                 boundary_async_movement_starts=path.async_movement_starts,
                 entry_tag_parent_mutation_entity_indices=(
                     prefix.tag_parent_mutation_entity_indices
@@ -2531,6 +2559,7 @@ def _collect_continuation_relevance(
             domains.update(effect_domains)
             unknown_reasons.update(effect_unknown_reasons)
             for target in instruction.alert_targets:
+                domains.update(_w3_reference_domains(target.downstream_w3_references))
                 if (
                     target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
                     and target.event_handler_node_id is not None
@@ -2580,8 +2609,8 @@ def _collect_continuation_relevance(
             if not instruction.targets:
                 unknown_reasons.add("kill_target_identity_missing")
             for target in instruction.targets:
-                if W3EntityKind.COLLISION_ENTITY in index.w3_kinds(target.entity_index):
-                    domains.add(StageSemanticDomain.DYNAMIC_ROUTE)
+                for kind in index.w3_kinds(target.entity_index):
+                    domains.update(_W3_STAGE_DOMAINS[kind])
                 if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE:
                     unknown_reasons.add("kill_script_identity_opaque")
                 if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE:
@@ -3195,6 +3224,36 @@ def _alert_use_chain_blocker(
     return None
 
 
+def _alert_use_chain_w3_references(
+    linked: W3LinkedIdentityIndex,
+    target_name: str | None,
+    *,
+    active: frozenset[int] = frozenset(),
+) -> tuple[W3EntityReference, ...]:
+    if not target_name:
+        return ()
+    lookup = linked.identities.lookup_all(EntityIdentityNamespace.TARGET_NAME, target_name)
+    references: list[W3EntityReference] = []
+    for entity_index in lookup.selected_entity_indices:
+        if entity_index in active:
+            continue
+        references.extend(
+            reference
+            for reference in linked.references
+            if reference.entity_index == entity_index
+        )
+        identity = linked.identities.entities[entity_index]
+        if _ascii_fold(identity.classname) in _ALERT_CHAIN_USE_CLASSES:
+            references.extend(
+                _alert_use_chain_w3_references(
+                    linked,
+                    identity.target,
+                    active=active | {entity_index},
+                )
+            )
+    return tuple(dict.fromkeys(references))
+
+
 def _alert_event_target(
     *,
     model: StaticStageModel,
@@ -3395,7 +3454,20 @@ def _project_alert_targets(
                 AlertTargetDisposition.USE_CALLBACK_NOT_MODELED,
             )
         )
-    return tuple(targets)
+    return tuple(
+        replace(
+            target,
+            downstream_w3_references=_alert_use_chain_w3_references(
+                linked,
+                linked.identities.entities[target.entity_index].target,
+                active=frozenset({target.entity_index}),
+            ),
+        )
+        if _ascii_fold(linked.identities.entities[target.entity_index].classname)
+        in _ALERT_CHAIN_USE_CLASSES | {"func_explosive"}
+        else target
+        for target in targets
+    )
 
 
 def project_ordered_stage_programs(
