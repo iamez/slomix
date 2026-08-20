@@ -1004,6 +1004,59 @@ def test_redundant_accumulator_exclusions_canonicalize_away():
     assert left.canonical_key == right.canonical_key
 
 
+@pytest.mark.parametrize(
+    ("plain", "redundant"),
+    (
+        (
+            SymbolicIntegerDomain(0, 15),
+            SymbolicIntegerDomain(0, 15, required_clear_bits=1 << 5),
+        ),
+        (
+            SymbolicIntegerDomain(-16, -1),
+            SymbolicIntegerDomain(-16, -1, required_set_bits=1 << 31),
+        ),
+    ),
+)
+def test_accumulator_bits_implied_by_interval_canonicalize_away(plain, redundant):
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frame = _frame(target.node.node_id, 1, 0)
+
+    left = _state(
+        index,
+        frame,
+        accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, plain),)),
+    )
+    right = _state(
+        index,
+        frame,
+        accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, redundant),)),
+    )
+
+    assert left.canonical_key == right.canonical_key
+
+
+def test_accumulator_bit_not_implied_by_interval_remains_identity():
+    index = _program_index()
+    target = _program(index, "target", "long")
+    frame = _frame(target.node.node_id, 1, 0)
+    plain = SymbolicIntegerDomain(0, 63)
+    constrained = SymbolicIntegerDomain(0, 63, required_clear_bits=1 << 5)
+
+    left = _state(
+        index,
+        frame,
+        accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, plain),)),
+    )
+    right = _state(
+        index,
+        frame,
+        accumulator_state=SymbolicAccumulatorState(entity_values=((1, 0, constrained),)),
+    )
+
+    assert left.canonical_key != right.canonical_key
+
+
 def test_global_work_budget_reports_named_exhaustion_without_overconsumption():
     index = _program_index()
     target = _program(index, "target", "long")
@@ -1281,6 +1334,30 @@ def test_s2_wait_wake_uses_proven_ordinary_entity_pass_order(caller_first, expec
         )
 
 
+def test_s2_attachtotag_prefix_invalidates_static_wake_order():
+    index, initial, _, target_entity_index = _s2_program_index(
+        boundary_command="attachtotag parent tag\nwait 100",
+    )
+
+    dispatched = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.RUNNABLE,
+    ).state
+
+    assert dispatched is not None
+    target_relation = next(
+        item
+        for item in dispatched.tag_parent_states
+        if item.child_entity_index == target_entity_index
+    )
+    assert target_relation.disposition is SymbolicTagParentDisposition.UNKNOWN
+    assert (
+        dispatched.suspended[0].wake_constraint
+        is SymbolicWakeConstraint.TAG_PARENT_ORDER_UNKNOWN
+    )
+    assert "tag_parent_state_unknown" in dispatched.unknown_reasons
+
+
 def test_s2_unknown_tag_parent_order_retains_named_wake_frontier():
     index, initial, caller_entity_index, target_entity_index = _s2_program_index(
         boundary_command="wait 100"
@@ -1488,7 +1565,10 @@ def test_s3_nested_blocker_retains_group_with_named_inexact_active_frontier():
     )
     assert blocked.reason == "nested_dispatch_missing_handler"
     assert blocked.state is not None
-    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 2, 0)
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 0)
+    pending = blocked.state.runnable[0].pending_dispatch
+    assert pending is not None
+    assert pending.ordered_target_entity_indices == (1, 2)
     assert "s3_blocker_frontier_identity_unresolved" in blocked.state.unknown_reasons
     assert (
         blocked.state.accumulator_state.read(
@@ -1767,7 +1847,7 @@ def test_s3_shared_target_group_retains_concrete_order_and_every_suspension():
     assert tuple(record.projection.effect.target for record in caller_completed.effects) == ("caller_done",)
 
 
-def test_s3_blocked_target_retains_target_group_and_caller_frontiers():
+def test_s3_blocked_target_retains_pending_group_and_caller_frontier():
     index = _scheduler_program_index(
         """
         caller
@@ -1806,16 +1886,14 @@ def test_s3_blocked_target_retains_target_group_and_caller_frontiers():
     )
     assert blocked.reason == "nested_dispatch_missing_handler"
     assert blocked.state is not None
-    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 2, 0)
-    assert tuple(frame.cursor.instruction_offset for frame in blocked.state.runnable) == (1, 0, 1)
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 0)
+    assert tuple(frame.cursor.instruction_offset for frame in blocked.state.runnable) == (1, 1)
     assert blocked.state.runnable[0].cursor.node_id == target.node.node_id
-    assert blocked.state.runnable[1].cursor.node_id == target.node.node_id
-    assert blocked.state.runnable[2].cursor.node_id == caller.node.node_id
-    assert tuple(
-        frame.pending_dispatch.target_cursor
-        for frame in blocked.state.runnable[:2]
-        if frame.pending_dispatch is not None
-    ) == (0, 1)
+    assert blocked.state.runnable[1].cursor.node_id == caller.node.node_id
+    pending = blocked.state.runnable[0].pending_dispatch
+    assert pending is not None
+    assert pending.target_cursor == 0
+    assert pending.ordered_target_entity_indices == (1, 2)
     assert (
         blocked.state.accumulator_state.read(
             AccumulatorScope.ENTITY,
@@ -1869,6 +1947,72 @@ def test_s3_blocked_target_retains_caller_before_future_same_entity_target():
     assert retained_caller.cursor == SymbolicProgramCursor(caller.node.node_id, 1, 1)
     assert retained_caller.pending_dispatch is None
     assert retained_caller.origin is SymbolicFrameOrigin.CALLER_SUFFIX
+
+
+def test_s3_blocked_target_does_not_duplicate_future_suspended_owner():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger shared outer
+                setstate caller_done invisible
+            }
+        }
+        shared
+        {
+            trigger outer
+            {
+                trigger missing inner
+            }
+            trigger idle
+            {
+                wait 100
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "script_mover", "scriptname": "shared"},
+            {"classname": "func_door", "targetname": "caller_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    outer = _program(index, "shared", "outer")
+    idle = _program(index, "shared", "idle")
+    caller_frame = _frame(caller.node.node_id, 0, 0)
+    future_frame = _frame(idle.node.node_id, 2, 0)
+    future_owner = SuspendedContinuation(
+        future_frame,
+        boundary_line=idle.event.actions[0].line,
+        resume_mode=SymbolicResumeMode.REENTER_BOUNDARY_ACTION,
+        boundary_state=SymbolicWaitBoundaryState(("100",)),
+        wake_constraint=SymbolicWakeConstraint.NEXT_FRAME,
+    )
+    initial = _state(
+        index,
+        caller_frame,
+        suspended=(future_owner,),
+        event_owners=(
+            SymbolicEventOwner.from_frame(caller_frame),
+            SymbolicEventOwner.from_frame(future_frame),
+        ),
+    )
+
+    blocked = _decision(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.BLOCKED,
+    )
+
+    assert blocked.state is not None
+    assert tuple(frame.cursor.entity_index for frame in blocked.state.runnable) == (1, 0)
+    active_target = blocked.state.runnable[0]
+    assert active_target.cursor.node_id == outer.node.node_id
+    assert active_target.pending_dispatch is not None
+    assert active_target.pending_dispatch.ordered_target_entity_indices == (1, 2)
+    assert blocked.state.suspended == (future_owner,)
 
 
 def test_s3_final_trigger_marks_suspended_target_caller_suffix_complete():

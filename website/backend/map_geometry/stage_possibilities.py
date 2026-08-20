@@ -886,6 +886,7 @@ class SymbolicEventPath:
     effects: tuple[StageEffectProjection, ...] = ()
     effect_entity_indices: tuple[int, ...] = ()
     async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    tag_parent_mutation_entity_indices: tuple[int, ...] = ()
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
     temporal_boundary_entity_indices: tuple[int, ...] = ()
@@ -959,6 +960,19 @@ def _with_async_movement_start(
         path,
         async_movement_starts=path.async_movement_starts
         + (SymbolicAsyncMovementStart(source_entity_index, command, arguments, line),),
+    )
+
+
+def _with_tag_parent_mutation(
+    path: SymbolicEventPath,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        tag_parent_mutation_entity_indices=(
+            path.tag_parent_mutation_entity_indices + (source_entity_index,)
+        ),
     )
 
 
@@ -1326,6 +1340,11 @@ def walk_symbolic_event_program(
                     )
                 )
                 continue
+            if instruction.action.command == "attachtotag":
+                path = _with_tag_parent_mutation(
+                    path,
+                    source_entity_index=source_entity_index,
+                )
             if instruction.control_disposition is RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE:
                 continuing.append(path)
                 finished.append(
@@ -1451,6 +1470,10 @@ def _merge_symbolic_segment(
         effects=prefix.effects + segment.effects,
         effect_entity_indices=prefix.effect_entity_indices + segment.effect_entity_indices,
         async_movement_starts=prefix.async_movement_starts + segment.async_movement_starts,
+        tag_parent_mutation_entity_indices=(
+            prefix.tag_parent_mutation_entity_indices
+            + segment.tag_parent_mutation_entity_indices
+        ),
         guard_decisions=prefix.guard_decisions + segment.guard_decisions,
         temporal_boundary_lines=temporal_lines,
         temporal_boundary_entity_indices=(
