@@ -51,6 +51,7 @@ from website.backend.map_geometry.stage_semantics import (
     StageEffectProjection,
     W3EntityIndexLinkDisposition,
     W3EntityKind,
+    W3EntityReference,
     W3LinkedIdentityIndex,
     project_accumulator_action,
     project_stage_effect,
@@ -2101,6 +2102,45 @@ _DYNAMIC_ROUTE_RUNTIME_ACTIONS = frozenset(
     }
 )
 
+_W3_STAGE_DOMAINS: Mapping[W3EntityKind, frozenset[StageSemanticDomain]] = MappingProxyType(
+    {
+        W3EntityKind.SPAWN_POINT: frozenset({StageSemanticDomain.SPAWN}),
+        W3EntityKind.OBJECTIVE_VOLUME: frozenset({StageSemanticDomain.OBJECTIVE}),
+        W3EntityKind.OBJECTIVE_MARKER: frozenset(
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN}
+        ),
+        W3EntityKind.COLLISION_ENTITY: frozenset({StageSemanticDomain.DYNAMIC_ROUTE}),
+    }
+)
+
+_GLOBAL_RUNTIME_STAGE_DOMAINS: Mapping[str, frozenset[StageSemanticDomain]] = MappingProxyType(
+    {
+        "wm_allied_respawntime": frozenset({StageSemanticDomain.SPAWN}),
+        "wm_axis_respawntime": frozenset({StageSemanticDomain.SPAWN}),
+        "wm_number_of_objectives": frozenset({StageSemanticDomain.OBJECTIVE}),
+    }
+)
+
+
+def _w3_reference_domains(references: tuple[W3EntityReference, ...]) -> set[StageSemanticDomain]:
+    return {
+        domain
+        for reference in references
+        for domain in _W3_STAGE_DOMAINS[reference.kind]
+    }
+
+
+def _exact_et_decimal(value: str) -> int | None:
+    token = value.strip(" \t\r\n\v\f")
+    digits = token[1:] if token[:1] in {"+", "-"} else token
+    if not digits or any(character < "0" or character > "9" for character in digits):
+        return None
+    try:
+        parsed = int(token, 10)
+    except ValueError:
+        return None
+    return parsed if _SIGNED_INT_MIN <= parsed <= _SIGNED_INT_MAX else None
+
 
 def _projection_domain_relevance(
     index: OrderedStageProgramIndex,
@@ -2113,11 +2153,7 @@ def _projection_domain_relevance(
     if isinstance(projection, AutoSpawnEffectProjection):
         return {StageSemanticDomain.SPAWN}, set()
     if isinstance(projection, EntityTargetEffectProjection):
-        domains = {
-            StageSemanticDomain.DYNAMIC_ROUTE
-            for reference in projection.selected_w3_references
-            if reference.kind is W3EntityKind.COLLISION_ENTITY
-        }
+        domains = _w3_reference_domains(projection.selected_w3_references)
         reasons = {"effect_target_identity_missing"} if not projection.target_lookup.candidate_entity_indices else set()
         if projection.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE:
             reasons.add("effect_target_w3_link_unproven_identity_override")
@@ -2149,6 +2185,38 @@ def _runtime_instruction_domain_relevance(
     command = instruction.action.command
     if command == "create":
         return {StageSemanticDomain.DYNAMIC_ROUTE}, set()
+    if command in _GLOBAL_RUNTIME_STAGE_DOMAINS:
+        return set(_GLOBAL_RUNTIME_STAGE_DOMAINS[command]), set()
+    if command == "setchargetimefactor":
+        if len(instruction.action.arguments) < 2:
+            return set(), {"runtime_setchargetimefactor_class_unclassified"}
+        player_class = _ascii_fold(instruction.action.arguments[1])
+        return (
+            ({StageSemanticDomain.DYNAMIC_ROUTE}, set())
+            if player_class == "engineer"
+            else (set(), set())
+        )
+    if command == "constructible_chargebarreq":
+        source_is_route = W3EntityKind.COLLISION_ENTITY in index.w3_kinds(source_entity_index)
+        reasons = (
+            set()
+            if source_is_route
+            else {"runtime_route_source_not_w3_linked:constructible_chargebarreq"}
+        )
+        return {StageSemanticDomain.DYNAMIC_ROUTE}, reasons
+    if command == "constructible_constructxpbonus":
+        value = (
+            _exact_et_decimal(instruction.action.arguments[0])
+            if instruction.action.arguments
+            else None
+        )
+        if value is None:
+            reasons = {"runtime_constructxpbonus_value_unclassified"}
+        elif value == 5:
+            reasons = {"runtime_constructxpbonus_omnibot_event_unverified"}
+        else:
+            reasons = set()
+        return set(), reasons
     if command not in _DYNAMIC_ROUTE_RUNTIME_ACTIONS:
         reasons = (
             {f"runtime_action_semantics_unclassified:{command}"}
@@ -2961,15 +3029,7 @@ def _identity_int_property(identity, name: str, default: int = 0) -> int | None:
         return default
     # Q_atoi uses base-10 strtol. Require the complete property to be decimal;
     # accepting only its prefix would not prove the static value is exact.
-    token = value.strip(" \t\r\n\v\f")
-    digits = token[1:] if token[:1] in {"+", "-"} else token
-    if not digits or any(character < "0" or character > "9" for character in digits):
-        return None
-    try:
-        parsed = int(token, 10)
-    except ValueError:
-        return None
-    return parsed if _SIGNED_INT_MIN <= parsed <= _SIGNED_INT_MAX else None
+    return _exact_et_decimal(value)
 
 
 def _func_explosive_has_possible_script_parent(
