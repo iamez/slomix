@@ -115,7 +115,18 @@ local configuration = {
 
     -- Optional local gametimes output (for fallback + auditing)
     gametimes_enabled = true,
-    gametimes_dir = "/home/et/.etlegacy/legacy/gametimes",  -- absolute path to align with bot
+    -- Empty, NOT nil: apply_config_overrides() rejects any key missing from
+    -- this table as a typo ("unknown key ... ignored"), and a nil value makes
+    -- the key missing in Lua — which would silently disable the very override
+    -- documented below (#788 review). "" means "derive it".
+    --
+    -- get_gametimes_dir() derives the directory from the engine's own
+    -- fs_homepath, the same way resolve_config_path() finds this module's
+    -- config. A hardcoded absolute path here makes every instance on the box
+    -- write into the FIRST instance's directory — set one in
+    -- stats_discord_webhook_config.lua only to override deliberately, and only
+    -- when there is a single instance.
+    gametimes_dir = "",
     gametimes_write_on_failure_only = false,
 
     -- Spawn/death tracking (Oksii-inspired validation)
@@ -423,17 +434,52 @@ local function json_escape(str)
     return s
 end
 
+-- Where this instance writes its gametime JSON.
+--
+-- fs_homepath, not fs_basepath: the engine writes gamestats/, proximity/ and
+-- gametimes/ under the homepath, and on the production server fs_basepath is
+-- the bare string "." — it is started with `cd <gamedir> && ./etlded.x86_64`,
+-- so a basepath-derived path lands wherever the process happened to be
+-- launched from. Measured on puran 2026-08-20:
+--     fs_basepath=.  fs_homepath=/home/et/.etlegacy  fs_game=legacy
+--     actual output: /home/et/.etlegacy/legacy/gametimes  (33 files)
+--     under basepath: no such directory
+--
+-- Deriving it also keeps two instances apart. A second server with its own
+-- fs_homepath (the 2.85 test box, /home/et/.etlegacy-v2.85.0) would otherwise
+-- write its rounds into the 2.84 instance's directory, where the bot ingests
+-- them as if they were the first server's.
 local function get_gametimes_dir()
-    local dir = configuration.gametimes_dir or "gametimes"
-    if dir:sub(1, 1) == "/" then
+    local dir = configuration.gametimes_dir
+    -- An explicit absolute path is a deliberate override; honour it.
+    if dir and dir:sub(1, 1) == "/" then
         return dir
     end
-    local fs_basepath = et.trap_Cvar_Get("fs_basepath")
-    local fs_game = et.trap_Cvar_Get("fs_game")
-    if fs_basepath and fs_game then
-        return string.format("%s/%s/%s", fs_basepath, fs_game, dir)
+    -- "" is the "not set" default and is TRUTHY in Lua, so `or` does not catch
+    -- it — without this the path would end in a bare slash.
+    if not dir or dir == "" then
+        dir = "gametimes"
     end
-    return dir
+
+    local fs_game = et.trap_Cvar_Get("fs_game")
+    if not fs_game or fs_game == "" then
+        fs_game = "legacy"
+    end
+
+    local homepath = et.trap_Cvar_Get("fs_homepath")
+    if homepath and homepath:sub(1, 1) == "/" then
+        return string.format("%s/%s/%s", homepath, fs_game, dir)
+    end
+
+    -- basepath only if the engine gave an absolute one — see the note above.
+    local basepath = et.trap_Cvar_Get("fs_basepath")
+    if basepath and basepath:sub(1, 1) == "/" then
+        return string.format("%s/%s/%s", basepath, fs_game, dir)
+    end
+
+    -- Same last-resort rule as resolve_config_path: hardcoded only when the
+    -- engine gave us nothing usable at all.
+    return "/home/et/.etlegacy/legacy/" .. dir
 end
 
 local function ensure_dir(path)
