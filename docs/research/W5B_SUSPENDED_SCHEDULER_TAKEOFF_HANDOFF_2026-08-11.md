@@ -2,12 +2,12 @@
 
 Date: 2026-08-11
 
-Last reverified: 2026-08-13
+Last reverified: 2026-08-20
 
-Status: S4 implementation and local verification complete at `986c506b`; closure is
-pending a renewed exact-head gate after the current-main merge; S5 is blocked
+Status: S4 implementation and evidence are complete at `82a4b27a`; closure is
+pending the exact-head gate for this documentation checkpoint; S5 is blocked
 
-Current base: `origin/main` at `d6b01a9db3b216befcffb9ed53fbcb284d89c9b4`
+Current base: `origin/main` at `c7374aba17824f209da4f01e2ced77e074a9b818`
 
 Original branch base: `origin/main` at `d6136cdd994870fddf4e4d0ff1968eb91418e497`
 
@@ -1062,7 +1062,7 @@ retained.
 - [x] Complete S1 immutable state/canonicalization.
 - [x] Complete S2 single suspended continuation.
 - [x] Complete S3 nested state/shared-target handling.
-- [x] Complete S4 bounded search/reduction (`986c506b` implementation/evidence head;
+- [x] Complete S4 bounded search/reduction (`82a4b27a` implementation/evidence head;
   documentation-head gate pending).
 - [ ] Complete S5 exact corpus evidence.
 - [ ] Complete S6 Phase 5 static graph gate, or split it into a successor PR with an
@@ -1529,6 +1529,64 @@ retained.
 - Discovery at the final refresh correctly prevented S4 closure. Exact-head local
   tests, CI, reviews, thread state and a new quiet window must all pass again before
   S4 is formally closed. S5 remains blocked and no S5 corpus traversal was started.
+
+### 2026-08-20 - recovered S4 closure and source-domain gate
+
+- Recovery used the persistent isolated checkout
+  `/home/samba/share/slomix_discord/tmp/codex-pr649`; the shared development checkout
+  and other agents' branches were not modified. Commit `be5df73f` normally merged the
+  intervening main history. The implementation head `82a4b27a` contains current
+  `origin/main` `c7374aba` as an ancestor. Local and remote PR heads match and the
+  worktree was clean before this documentation-only checkpoint. No rebase,
+  force-push or history rewrite occurred.
+- Pinned ET:Legacy source at `732518ef` proved that the original domain projection was
+  too narrow. `G_SetEntState` changes spawn eligibility and collision/link state;
+  objective-marker state changes call `G_UpdateSpawnPointState`; the alertentity use
+  callbacks for team spawn/objective entities mutate spawn activation or ownership;
+  engineer charge-time and constructible charge-bar settings gate construction.
+  `constructible_constructxpbonus 5` remains a named unknown because its later
+  `exploded` dispatch depends on `FEATURE_OMNIBOT` and the live build flags are not
+  proven.
+- Commit `e8733052` maps source-proven W3/runtime effects to the frozen topological
+  domains: spawn points to SPAWN, objective volumes to OBJECTIVE, objective markers
+  to OBJECTIVE+SPAWN and collision entities to DYNAMIC_ROUTE. Respawn-time commands,
+  objective count, engineer charge factors and constructible charge requirements are
+  classified without broadening announcement/score-only commands. The guarded
+  Omnibot case remains `runtime_constructxpbonus_omnibot_event_unverified`.
+- The same installed-asset manifest remained
+  `86ddd0ec23b3c6120136195af34aa633ad249eb358ea0fb6cd6e490dd81b220d`.
+  The bounded executor still walks 2,790 concrete entries and 5,174 paths, including
+  452 regenerated cross-entity temporal frontiers. Domain classification changed as
+  intended, not the denominator:
+  all blocked frontiers are 351 empty, 488 route, 210 route+objective, 137 all three,
+  20 route+spawn, 28 objective and 18 objective+spawn; cross frontiers are 63 empty,
+  281 route, 52 route+objective, 23 all three, 18 route+spawn, 13 objective and 2
+  objective+spawn. The complete/unknown split remains 264/188.
+- Late Codex review then found six valid S4 identity/canonicalization defects. Commit
+  `6142349d` preserves a distinct alert use-chain cycle reason, retains the caller
+  before a future same-entity target and makes visited-state deduplication sensitive
+  to path-local cycle ancestry. Commit `82a4b27a` materializes only the currently
+  executing target in blocked frontiers while retaining future ordinals in the exact
+  pending group, preserves future suspended owners, removes only interval-implied bit
+  masks from accumulator identity and degrades an executed `attachtotag` relation to
+  UNKNOWN before wake classification and every resulting state rebuild.
+- Exact implementation-tree evidence: 236 possibilities/scheduler tests passed; Ruff,
+  compileall and `git diff --check` passed. The installed 20-map bounded-executor smoke
+  passed in 36.24 seconds and retained every locked denominator above. GitHub Python
+  lint/tests passed on 3.11 and 3.13; JavaScript/React, ShellCheck, Lua, security,
+  Docker, workflow lint and CodeQL checks passed. Codacy was still pending when this
+  documentation checkpoint was written, so the PR was deliberately not merged.
+- Each of the six findings has a pushed fix, a named regression and a reply. Raw
+  GraphQL reported zero unresolved review threads at 12:10:42 Europe/Ljubljana.
+  This documentation commit still needs its own complete CI/review refresh and five
+  quiet minutes followed by a final raw-thread/head/main refresh. It must not
+  self-attest. S5 remains blocked until that external gate passes.
+- Read-only dev baseline after the implementation push found `etlegacy-web` and
+  `etlegacy-bot` active with zero restarts, no new error/warning/5xx journal pattern,
+  and HTTP 200 from `/api/status` and `/health`. The dev services run the shared
+  checkout, not PR head `82a4b27a`; this is baseline health only, not runtime proof of
+  the new scheduler. No production write, deploy, service restart, Python replacement,
+  Lua change or other owner-gated operation was performed.
 
 At every substantive commit, append:
 
