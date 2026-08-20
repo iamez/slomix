@@ -51,6 +51,7 @@ from website.backend.map_geometry.stage_semantics import (
     EntityTargetEffectProjection,
     GotoMarkerEffectProjection,
     W3EntityIndexLinkDisposition,
+    W3EntityKind,
     build_entity_identity_index,
     link_w3_entity_catalog,
 )
@@ -148,6 +149,36 @@ def _effect_states(path):
     return tuple(
         projection.effect.state for projection in path.effects if isinstance(projection, EntityTargetEffectProjection)
     )
+
+
+def _catalog_with_reference(entity_index, classname, kind):
+    groups = {
+        W3EntityKind.SPAWN_POINT: "spawn_points",
+        W3EntityKind.OBJECTIVE_VOLUME: "objective_volumes",
+        W3EntityKind.OBJECTIVE_MARKER: "objective_markers",
+        W3EntityKind.COLLISION_ENTITY: "collision_entities",
+    }
+    values = {
+        "spawn_points": (),
+        "objective_volumes": (),
+        "objective_markers": (),
+        "collision_entities": (),
+    }
+    values[groups[kind]] = (SimpleNamespace(entity_index=entity_index, classname=classname),)
+    return MapEntityCatalog("test", "maps/test.bsp", **values)
+
+
+def _missing_dispatch_suffix_relevance(raw_script, *, raw_entities, catalog=None):
+    index = _program_index(raw_script, raw_entities=raw_entities, catalog=catalog)
+    paths = walk_symbolic_stage_program(
+        index,
+        index.programs[0],
+        source_entity_index=index.programs[0].source.lookup.selected_entity_indices[0],
+        initial_state=SymbolicAccumulatorState.zeroed(),
+    )
+    blocked = next(path for path in paths if path.blocker_reason == "nested_dispatch_missing_handler")
+    assert blocked.frontier_relevance is not None
+    return blocked.frontier_relevance
 
 
 def test_projects_event_actions_in_source_order_without_executing_paths():
@@ -1394,6 +1425,202 @@ def test_stage_walker_blocks_cross_entity_temporal_interleaving_but_keeps_the_im
     assert blocked.blocker_entity_index == 2
     assert _effect_states(blocked) == ("default",)
     assert blocked.temporal_boundary_entity_indices == (2,)
+
+
+@pytest.mark.parametrize(
+    ("classname", "kind", "expected_domains"),
+    (
+        ("team_CTF_redspawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
+        ("trigger_objective_info", W3EntityKind.OBJECTIVE_VOLUME, {StageSemanticDomain.OBJECTIVE}),
+        (
+            "team_WOLF_objective",
+            W3EntityKind.OBJECTIVE_MARKER,
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN},
+        ),
+        ("func_door", W3EntityKind.COLLISION_ENTITY, {StageSemanticDomain.DYNAMIC_ROUTE}),
+    ),
+)
+def test_frontier_classifier_maps_hidden_setstate_targets_to_their_w3_domains(
+    classname,
+    kind,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                setstate target invisible
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": classname, "targetname": "target"},
+        ),
+        catalog=_catalog_with_reference(1, classname, kind),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("classname", "kind", "expected_domains"),
+    (
+        ("team_CTF_bluespawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
+        (
+            "team_WOLF_objective",
+            W3EntityKind.OBJECTIVE_MARKER,
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN},
+        ),
+        ("func_static", W3EntityKind.COLLISION_ENTITY, {StageSemanticDomain.DYNAMIC_ROUTE}),
+    ),
+)
+def test_frontier_classifier_keeps_alertentity_domain_effects_without_a_script_event(
+    classname,
+    kind,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                alertentity target
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": classname, "targetname": "target"},
+        ),
+        catalog=_catalog_with_reference(1, classname, kind),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("command", "expected_domains"),
+    (
+        ("setchargetimefactor 0 engineer 0.5", {StageSemanticDomain.DYNAMIC_ROUTE}),
+        ("setchargetimefactor 0 soldier 0.5", set()),
+        ("wm_axis_respawntime 20", {StageSemanticDomain.SPAWN}),
+        ("wm_allied_respawntime 20", {StageSemanticDomain.SPAWN}),
+        ("wm_number_of_objectives 3", {StageSemanticDomain.OBJECTIVE}),
+        ("wm_set_defending_team 0", set()),
+        ("wm_set_round_timelimit 30", set()),
+        ("wm_announce ready", set()),
+    ),
+)
+def test_frontier_classifier_assigns_only_source_proven_global_runtime_domains(
+    command,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                trigger absent missing
+                {command}
+            }}
+        }}
+        """.encode(),
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize("linked", (False, True))
+def test_frontier_classifier_marks_constructible_charge_requirement_as_route_relevant(linked):
+    classname = "func_constructible" if linked else "script_multiplayer"
+    script_name = "constructible" if linked else "game_manager"
+    raw_entities = (
+        {"classname": classname, **({"scriptname": script_name} if linked else {})},
+    )
+    catalog = (
+        _catalog_with_reference(0, classname, W3EntityKind.COLLISION_ENTITY)
+        if linked
+        else None
+    )
+    relevance = _missing_dispatch_suffix_relevance(
+        f"""
+        {script_name}
+        {{
+            spawn
+            {{
+                trigger absent missing
+                constructible_chargebarreq 0.5
+            }}
+        }}
+        """.encode(),
+        raw_entities=raw_entities,
+        catalog=catalog,
+    )
+
+    assert relevance.domains == (StageSemanticDomain.DYNAMIC_ROUTE,)
+    assert relevance.unknown_reasons == (
+        () if linked else ("runtime_route_source_not_w3_linked:constructible_chargebarreq",)
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "expected_reasons"),
+    (
+        ("4", ()),
+        ("5", ("runtime_constructxpbonus_omnibot_event_unverified",)),
+        ("5_0", ("runtime_constructxpbonus_value_unclassified",)),
+    ),
+)
+def test_frontier_classifier_retains_constructxpbonus_omnibot_event_uncertainty(
+    value,
+    expected_reasons,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        f"""
+        game_manager
+        {{
+            spawn
+            {{
+                trigger absent missing
+                constructible_constructxpbonus {value}
+            }}
+        }}
+        """.encode(),
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    assert relevance.domains == ()
+    assert relevance.unknown_reasons == expected_reasons
+
+
+def test_frontier_classifier_rejects_missing_setchargetimefactor_class_as_unknown():
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                setchargetimefactor 0
+            }
+        }
+        """,
+        raw_entities=({"classname": "script_multiplayer"},),
+    )
+
+    assert relevance.domains == ()
+    assert relevance.unknown_reasons == ("runtime_setchargetimefactor_class_unclassified",)
 
 
 def test_frontier_classifier_finds_each_domain_hidden_by_cross_entity_temporal_ordering():
