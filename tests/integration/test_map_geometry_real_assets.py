@@ -15,6 +15,7 @@ from website.backend.map_geometry import (
     AccumulatorConditionalTrigger,
     AccumulatorMutation,
     AlertEntityEffect,
+    AlertTargetDisposition,
     AutoSpawnEffectProjection,
     BspPointTracer,
     ControlBarrierInstruction,
@@ -39,6 +40,7 @@ from website.backend.map_geometry import (
     PlayerStance,
     RuntimeActionControlDisposition,
     RuntimeActionInstruction,
+    StageEffectInstruction,
     StageLoadStatus,
     SurfaceType,
     SymbolicAccumulatorState,
@@ -115,6 +117,11 @@ def geometry_index() -> Pk3GeometryIndex:
 def _has_temporal_control(instructions) -> bool:
     return any(
         isinstance(instruction, ControlBarrierInstruction)
+        or (
+            isinstance(instruction, StageEffectInstruction)
+            and instruction.control_disposition
+            is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+        )
         or (
             isinstance(instruction, RuntimeActionInstruction)
             and instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
@@ -597,6 +604,8 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
     barriers = Counter()
     runtime_commands = Counter()
     runtime_controls = Counter()
+    gotomarker_controls = Counter()
+    alert_controls = Counter()
     kill_dispositions = Counter()
 
     for map_name in geometry_index.map_names:
@@ -621,6 +630,28 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
                     runtime_controls[instruction.control_disposition.value] += 1
                 elif isinstance(instruction, KillInstruction):
                     kill_dispositions.update(target.disposition for target in instruction.targets)
+                elif isinstance(instruction, StageEffectInstruction) and isinstance(
+                    instruction.projection,
+                    GotoMarkerEffectProjection,
+                ):
+                    gotomarker_controls["wait" if instruction.waits_for_completion else "nonwait"] += 1
+                    gotomarker_controls[instruction.control_disposition.value] += 1
+                elif isinstance(instruction, StageEffectInstruction) and isinstance(
+                    instruction.projection.effect,
+                    AlertEntityEffect,
+                ):
+                    alert_controls["instructions"] += 1
+                    if any(target.event_name for target in instruction.alert_targets):
+                        alert_controls["instructions_with_script_event"] += 1
+                    if any(
+                        target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+                        for target in instruction.alert_targets
+                    ):
+                        alert_controls["instructions_with_resolved_dispatch"] += 1
+                    for target in instruction.alert_targets:
+                        alert_controls[("disposition", target.disposition.value)] += 1
+                        if target.event_name:
+                            alert_controls[("event", target.event_name)] += 1
 
     assert counts == {
         "programs": 2153,
@@ -635,6 +666,21 @@ def test_w5b_projects_every_eligible_action_into_an_ordered_nonexecuted_program(
         "AccumulatorConditionalTrigger": 299,
     }
     assert barriers == {"wait": 745, "resetscript": 25, "halt": 24}
+    assert gotomarker_controls == {
+        "wait": 139,
+        "nonwait": 33,
+        RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE.value: 172,
+    }
+    assert alert_controls == {
+        "instructions": 136,
+        "instructions_with_script_event": 9,
+        "instructions_with_resolved_dispatch": 2,
+        ("disposition", AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT.value): 1675,
+        ("disposition", AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING.value): 11,
+        ("disposition", AlertTargetDisposition.SCRIPT_EVENT_DISPATCH.value): 2,
+        ("event", "death"): 12,
+        ("event", "rebirth"): 1,
+    }
     assert runtime_commands == {
         "wm_teamvoiceannounce": 589,
         "setchargetimefactor": 420,
@@ -695,6 +741,7 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
     same_entity_pairs = Counter()
     program_shapes = Counter()
     resolved_pair_shapes = Counter()
+    waiting_gotomarker_pairs = Counter()
 
     for map_name in geometry_index.map_names:
         bsp = geometry_index.load_bsp(map_name)
@@ -731,6 +778,12 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
                         assert dispatch.target_node_id is not None
                         target_program = index.program(dispatch.target_node_id)
                         target_temporal = _has_temporal_control(target_program.instructions)
+                        target_has_waiting_gotomarker = any(
+                            isinstance(target_instruction, StageEffectInstruction)
+                            and isinstance(target_instruction.projection, GotoMarkerEffectProjection)
+                            and target_instruction.waits_for_completion
+                            for target_instruction in target_program.instructions
+                        )
                         target_nested = bool(_nested_instructions(target_program.instructions))
                         target_group_sizes[(kind, len(dispatch.target_entity_indices))] += 1
                         resolved_pairs[kind] += len(dispatch.target_entity_indices)
@@ -738,6 +791,10 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
                             target_index == source_index for target_index in dispatch.target_entity_indices
                         )
                         for target_index in dispatch.target_entity_indices:
+                            if target_has_waiting_gotomarker:
+                                waiting_gotomarker_pairs[
+                                    "same" if target_index == source_index else "other"
+                                ] += 1
                             resolved_pair_shapes[
                                 (
                                     "same" if target_index == source_index else "other",
@@ -773,21 +830,22 @@ def test_w5b_resolves_nested_dispatch_to_concrete_static_targets(geometry_index)
     }
     assert resolved_pairs == {"plain": 1937, "conditional": 299}
     assert same_entity_pairs == {"plain": 669, "conditional": 289}
+    assert waiting_gotomarker_pairs == {"other": 133, "same": 28}
     assert program_shapes == {
-        (False, False): 926,
-        (False, True): 304,
-        (True, False): 459,
-        (True, True): 464,
+        (False, False): 878,
+        (False, True): 294,
+        (True, False): 507,
+        (True, True): 474,
     }
     assert resolved_pair_shapes == {
-        ("other", "immediate", "leaf"): 899,
-        ("other", "immediate", "nested"): 85,
-        ("other", "temporal", "leaf"): 214,
-        ("other", "temporal", "nested"): 80,
-        ("same", "immediate", "leaf"): 235,
-        ("same", "immediate", "nested"): 278,
-        ("same", "temporal", "leaf"): 28,
-        ("same", "temporal", "nested"): 417,
+        ("other", "immediate", "leaf"): 843,
+        ("other", "immediate", "nested"): 76,
+        ("other", "temporal", "leaf"): 270,
+        ("other", "temporal", "nested"): 89,
+        ("same", "immediate", "leaf"): 234,
+        ("same", "immediate", "nested"): 277,
+        ("same", "temporal", "leaf"): 29,
+        ("same", "temporal", "nested"): 418,
     }
 
 
@@ -826,6 +884,9 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
                     len(path.temporal_boundary_lines) == len(path.temporal_boundary_entity_indices) for path in paths
                 )
                 assert all(
+                    len(path.temporal_boundary_lines) == len(path.temporal_boundary_states) for path in paths
+                )
+                assert all(
                     len(path.caller_replacement_lines) == len(path.caller_replacement_entity_indices) for path in paths
                 )
                 assert sum(path.blocker_reason == "symbolic_path_budget_exhausted" for path in paths) <= 1
@@ -837,7 +898,12 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
                     counts["guard_decisions"] += len(path.guard_decisions)
                     counts["nested_dispatches"] += len(path.nested_dispatches)
                     counts["death_dispatches"] += len(path.death_dispatches)
+                    counts["runtime_event_dispatches"] += len(path.runtime_event_dispatches)
+                    for dispatch in path.runtime_event_dispatches:
+                        counts[("runtime_event_dispatch", dispatch.origin, dispatch.event_name)] += 1
                     counts["temporal_boundaries"] += len(path.temporal_boundary_lines)
+                    for boundary_state in path.temporal_boundary_states:
+                        counts[("temporal_boundary_state", boundary_state.value)] += 1
                     counts["caller_replacements"] += len(path.caller_replacement_lines)
                     counts[("completion", path.completion.value)] += 1
                     if path.blocker_reason:
@@ -860,66 +926,72 @@ def test_w5b_bounded_nested_executor_smokes_every_concrete_event_entry(geometry_
     assert counts == {
         "entries_walked": 2790,
         "entries_missing_identity": 48,
-        "paths": 4645,
-        "effects": 7911,
-        "guard_decisions": 2187,
-        "nested_dispatches": 2782,
+        "paths": 5174,
+        "effects": 7755,
+        "guard_decisions": 2303,
+        "nested_dispatches": 2849,
         "death_dispatches": 4,
-        "temporal_boundaries": 2695,
-        "caller_replacements": 360,
-        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 2084,
-        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1157,
-        ("completion", SymbolicPathCompletion.ABORTED_BY_GUARD.value): 314,
-        ("completion", SymbolicPathCompletion.BLOCKED.value): 1090,
-        ("blocker", "cross_entity_temporal_interleaving_not_modeled"): 301,
-        ("blocker", "nested_dispatch_cycle"): 200,
+        "runtime_event_dispatches": 2,
+        ("runtime_event_dispatch", "alertentity_use_callback", "death"): 1,
+        ("runtime_event_dispatch", "alertentity_use_callback", "rebirth"): 1,
+        "temporal_boundaries": 4011,
+        "caller_replacements": 473,
+        ("temporal_boundary_state", "current_action_waiting"): 3065,
+        ("temporal_boundary_state", "prior_movement_active"): 701,
+        ("temporal_boundary_state", "next_frame_reentry"): 245,
+        ("completion", SymbolicPathCompletion.SYNCHRONOUS_COMPLETE.value): 1941,
+        ("completion", SymbolicPathCompletion.EVENTUAL_COMPLETE.value): 1670,
+        ("completion", SymbolicPathCompletion.ABORTED_BY_GUARD.value): 311,
+        ("completion", SymbolicPathCompletion.BLOCKED.value): 1252,
+        ("blocker", "cross_entity_temporal_interleaving_not_modeled"): 452,
+        ("blocker", "nested_dispatch_cycle"): 208,
         ("blocker", "nested_dispatch_missing_handler"): 28,
         ("blocker", "nested_dispatch_target_identity_missing"): 3,
-        ("blocker", "non_exact_accumulator_mutation"): 451,
+        ("blocker", "non_exact_accumulator_mutation"): 453,
         ("blocker", "spawn_failure_frontier"): 4,
-        ("blocker", "symbolic_path_budget_exhausted"): 103,
+        ("blocker", "symbolic_path_budget_exhausted"): 104,
     }
     assert frontier_counts == {
-        ("domain_set", ()): 370,
-        ("domain_set", ("dynamic_route",)): 372,
-        ("domain_set", ("dynamic_route", "objective")): 211,
-        ("domain_set", ("dynamic_route", "objective", "spawn")): 98,
-        ("domain_set", ("dynamic_route", "spawn")): 22,
-        ("domain_set", ("objective",)): 15,
-        ("domain_set", ("objective", "spawn")): 1,
-        ("domain_set", ("spawn",)): 1,
-        ("unknown", False): 310,
-        ("unknown", True): 780,
-        ("unknown_reason", "effect_target_identity_missing"): 101,
+        ("domain_set", ()): 351,
+        ("domain_set", ("dynamic_route",)): 488,
+        ("domain_set", ("dynamic_route", "objective")): 210,
+        ("domain_set", ("dynamic_route", "objective", "spawn")): 137,
+        ("domain_set", ("dynamic_route", "spawn")): 20,
+        ("domain_set", ("objective",)): 28,
+        ("domain_set", ("objective", "spawn")): 18,
+        ("unknown", False): 400,
+        ("unknown", True): 852,
+        ("unknown_reason", "effect_target_identity_missing"): 105,
         ("unknown_reason", "frontier:nested_dispatch_target_identity_missing"): 3,
-        ("unknown_reason", "frontier:symbolic_path_budget_exhausted"): 103,
-        ("unknown_reason", "frontier_relevance_nested_accumulator_state_unpropagated"): 435,
-        ("unknown_reason", "frontier_relevance_stateful_cycle_cut"): 337,
-        ("unknown_reason", "gotomarker_route_identity_unproven"): 4,
+        ("unknown_reason", "frontier:symbolic_path_budget_exhausted"): 104,
+        ("unknown_reason", "frontier_relevance_nested_accumulator_state_unpropagated"): 500,
+        ("unknown_reason", "frontier_relevance_stateful_cycle_cut"): 353,
+        ("unknown_reason", "gotomarker_route_identity_unproven"): 8,
         ("unknown_reason", "nested_dispatch_target_identity_missing"): 2,
-        ("unknown_reason", "runtime_route_source_not_w3_linked:attachtotag"): 110,
-        ("unknown_reason", "runtime_route_source_not_w3_linked:faceangles"): 303,
-        ("unknown_reason", "runtime_route_source_not_w3_linked:remove"): 136,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:attachtotag"): 111,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:faceangles"): 304,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:remove"): 152,
         ("unknown_reason", "runtime_route_source_not_w3_linked:setrotation"): 14,
         ("unknown_reason", "runtime_route_source_not_w3_linked:setspeed"): 24,
         ("unknown_reason", "runtime_route_source_not_w3_linked:stoprotation"): 236,
     }
     assert cross_frontier_counts == {
-        ("domain_set", ()): 57,
-        ("domain_set", ("dynamic_route",)): 171,
-        ("domain_set", ("dynamic_route", "objective")): 49,
-        ("domain_set", ("dynamic_route", "objective", "spawn")): 4,
+        ("domain_set", ()): 63,
+        ("domain_set", ("dynamic_route",)): 281,
+        ("domain_set", ("dynamic_route", "objective")): 52,
+        ("domain_set", ("dynamic_route", "objective", "spawn")): 23,
         ("domain_set", ("dynamic_route", "spawn")): 18,
-        ("domain_set", ("objective",)): 2,
-        ("unknown", False): 175,
-        ("unknown", True): 126,
-        ("unknown_reason", "effect_target_identity_missing"): 5,
-        ("unknown_reason", "frontier_relevance_nested_accumulator_state_unpropagated"): 50,
-        ("unknown_reason", "frontier_relevance_stateful_cycle_cut"): 9,
-        ("unknown_reason", "gotomarker_route_identity_unproven"): 4,
-        ("unknown_reason", "runtime_route_source_not_w3_linked:attachtotag"): 11,
-        ("unknown_reason", "runtime_route_source_not_w3_linked:faceangles"): 37,
-        ("unknown_reason", "runtime_route_source_not_w3_linked:remove"): 41,
+        ("domain_set", ("objective",)): 13,
+        ("domain_set", ("objective", "spawn")): 2,
+        ("unknown", False): 264,
+        ("unknown", True): 188,
+        ("unknown_reason", "effect_target_identity_missing"): 9,
+        ("unknown_reason", "frontier_relevance_nested_accumulator_state_unpropagated"): 101,
+        ("unknown_reason", "frontier_relevance_stateful_cycle_cut"): 11,
+        ("unknown_reason", "gotomarker_route_identity_unproven"): 8,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:attachtotag"): 13,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:faceangles"): 39,
+        ("unknown_reason", "runtime_route_source_not_w3_linked:remove"): 61,
         ("unknown_reason", "runtime_route_source_not_w3_linked:setrotation"): 1,
         ("unknown_reason", "runtime_route_source_not_w3_linked:setspeed"): 22,
         ("unknown_reason", "runtime_route_source_not_w3_linked:stoprotation"): 1,
