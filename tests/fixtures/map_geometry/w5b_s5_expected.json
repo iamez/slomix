@@ -25,7 +25,7 @@
     "te_escape2"
   ],
   "max_paths": 16,
-  "protocol": "w5b-s5-installed-corpus-v1",
+  "protocol": "w5b-s5-installed-corpus-v2",
   "raw_adaptation_inventory": {
     "frontier_schedule_outer_dispatch_context_unresolved": 99,
     "frontier_schedule_prior_lifecycle_identity_unresolved": 75,

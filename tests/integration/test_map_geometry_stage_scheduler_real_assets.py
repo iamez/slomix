@@ -9,6 +9,8 @@ import pytest
 
 from website.backend.map_geometry.pk3_index import Pk3GeometryIndex
 from website.backend.map_geometry.stage_measurement import (
+    MEASUREMENT_PROTOCOL,
+    POST_S0A_CROSS_FRONTIERS,
     asset_manifest_sha256,
     iter_cross_frontiers,
 )
@@ -57,6 +59,14 @@ def test_s5_every_cross_frontier_has_an_exact_seed_or_named_adaptation_blocker()
         for occurrence in occurrences
     )
     assert outcomes == EXPECTED["raw_adaptation_inventory"]
+
+    # The fixture carried "…-v1" for a while after the code moved to v2, and
+    # nothing noticed, because only four of its keys were ever asserted. A
+    # frozen expectation that no test reads is not an expectation — it is a
+    # comment that looks authoritative. These pin the rest of what the fixture
+    # claims, so the next protocol bump either updates it or fails here.
+    assert EXPECTED["protocol"] == MEASUREMENT_PROTOCOL
+    assert EXPECTED["summary"]["measured_cross_frontiers"] == POST_S0A_CROSS_FRONTIERS
 
 
 def test_s5_occurrence_identity_is_deterministic_for_one_installed_map():
