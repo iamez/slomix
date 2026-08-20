@@ -2485,6 +2485,54 @@ def test_s3_optional_death_dispatch_keeps_event_and_no_event_branches():
     )
 
 
+def test_s3_optional_death_reports_exhaustion_instead_of_crashing_at_budget_one():
+    """A positive work limit must never raise; it must name its frontier.
+
+    The optional-death branch appends its nondelivery alternative before the
+    target group runs. At ``work_limit=1`` that alternative takes the only
+    decision slot, so the remaining budget reaches zero and
+    ``_run_s3_target_group``'s entry contract raised
+    ``ValueError: symbolic schedule decision limit must be positive`` —
+    measured against this exact scenario before the guard existed. A caller
+    asking for one unit of work got a crash instead of the honest answer that
+    one unit was not enough (P1 review thread on PR #649).
+    """
+    index = _scheduler_program_index(
+        """
+        game_manager
+        {
+            spawn
+            {
+                kill victim_target
+                setstate gate invisible
+            }
+        }
+        victim
+        {
+            death
+            {
+                globalaccum 0 set 7
+            }
+        }
+        """,
+        (
+            {"classname": "script_multiplayer"},
+            {"classname": "script_mover", "scriptname": "victim", "targetname": "victim_target"},
+            {"classname": "func_door", "targetname": "gate"},
+        ),
+    )
+    caller = _program(index, "game_manager")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    result = search_symbolic_schedule(index, initial, work_limit=1)
+
+    assert result.exhaustion is SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED
+    assert len(result.decisions) == 1
+    decision = result.decisions[0]
+    assert decision.kind is SymbolicScheduleDecisionKind.WORK_BUDGET_EXHAUSTED
+    assert decision.reason == SymbolicScheduleExhaustion.STATE_BUDGET_EXHAUSTED.value
+
+
 def test_s3_optional_death_no_event_branch_cannot_bypass_fatal_sibling_target():
     index = _scheduler_program_index(
         """

@@ -2336,6 +2336,15 @@ def _start_s3_dispatch(
                 0,
                 occurrence_id=_next_dispatch_occurrence_id(state, caller_frame),
             )
+            # An optional-death kill appends its nondelivery alternative above.
+            # With decision_limit=1 that alternative takes the only slot, so the
+            # subtraction below reaches zero and _run_s3_target_group's entry
+            # contract raises ValueError: a valid positive work limit crashes the
+            # scheduler instead of reporting exhaustion. Report the named
+            # state-budget frontier before entering the target group — the same
+            # answer the post-call check below already gives.
+            if decision_limit - len(decisions) < 1:
+                return _state_budget_transition(index, state)
             decisions.extend(
                 _run_s3_target_group(
                     index,
