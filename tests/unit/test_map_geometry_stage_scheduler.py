@@ -2665,6 +2665,46 @@ def test_s3_non_waiting_movement_advances_script_and_retains_async_lifecycle(
     ) == ("target_done",)
 
 
+def test_s3_halt_clears_a_non_waiting_movement_lifecycle():
+    index = _scheduler_program_index(
+        """
+        caller
+        {
+            spawn
+            {
+                trigger target move
+            }
+        }
+        target
+        {
+            trigger move
+            {
+                followspline 0 route 100
+                halt
+                setstate target_done invisible
+            }
+        }
+        """,
+        (
+            {"classname": "script_mover", "scriptname": "caller"},
+            {"classname": "script_mover", "scriptname": "target"},
+            {"classname": "path_corner_2", "targetname": "route"},
+            {"classname": "func_door", "targetname": "target_done"},
+        ),
+    )
+    caller = _program(index, "caller")
+    initial = _state(index, _frame(caller.node.node_id, 0, 0))
+
+    halted = _decision_with_suspended(
+        step_symbolic_schedule(index, initial),
+        SymbolicScheduleDecisionKind.SUSPENDED,
+    ).state
+
+    assert halted is not None
+    assert halted.async_lifecycles == ()
+    assert halted.suspended[0].frame.cursor.entity_index == 1
+
+
 def test_s3_waiting_gotomarker_without_active_movement_keeps_only_started_branch():
     index = _scheduler_program_index(
         """

@@ -1484,6 +1484,46 @@ def test_frontier_classifier_maps_hidden_setstate_targets_to_their_w3_domains(
 @pytest.mark.parametrize(
     ("classname", "kind", "expected_domains"),
     (
+        ("team_CTF_redspawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
+        ("trigger_objective_info", W3EntityKind.OBJECTIVE_VOLUME, {StageSemanticDomain.OBJECTIVE}),
+        (
+            "team_WOLF_objective",
+            W3EntityKind.OBJECTIVE_MARKER,
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN},
+        ),
+        ("func_door", W3EntityKind.COLLISION_ENTITY, {StageSemanticDomain.DYNAMIC_ROUTE}),
+    ),
+)
+def test_frontier_classifier_maps_hidden_kill_targets_to_their_w3_domains(
+    classname,
+    kind,
+    expected_domains,
+):
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                kill target
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": classname, "targetname": "target"},
+        ),
+        catalog=_catalog_with_reference(1, classname, kind),
+    )
+
+    assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+@pytest.mark.parametrize(
+    ("classname", "kind", "expected_domains"),
+    (
         ("team_CTF_bluespawn", W3EntityKind.SPAWN_POINT, {StageSemanticDomain.SPAWN}),
         (
             "team_WOLF_objective",
@@ -1517,6 +1557,54 @@ def test_frontier_classifier_keeps_alertentity_domain_effects_without_a_script_e
     )
 
     assert set(relevance.domains) == expected_domains
+    assert relevance.unknown_reasons == ()
+
+
+def test_frontier_classifier_keeps_downstream_alert_use_chain_topology():
+    catalog = _catalog_with_reference(2, "team_CTF_redspawn", W3EntityKind.SPAWN_POINT)
+    relevance = _missing_dispatch_suffix_relevance(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                trigger absent missing
+                alertentity relay
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "target_relay", "targetname": "relay", "target": "spawn"},
+            {"classname": "team_CTF_redspawn", "targetname": "spawn"},
+        ),
+        catalog=catalog,
+    )
+    index = _program_index(
+        b"""
+        game_manager
+        {
+            spawn
+            {
+                alertentity relay
+            }
+        }
+        """,
+        raw_entities=(
+            {"classname": "script_multiplayer"},
+            {"classname": "target_relay", "targetname": "relay", "target": "spawn"},
+            {"classname": "team_CTF_redspawn", "targetname": "spawn"},
+        ),
+        catalog=catalog,
+    )
+    instruction = index.programs[0].instructions[0]
+
+    assert isinstance(instruction, StageEffectInstruction)
+    assert tuple(
+        reference.entity_index
+        for reference in instruction.alert_targets[0].downstream_w3_references
+    ) == (2,)
+    assert relevance.domains == (StageSemanticDomain.SPAWN,)
     assert relevance.unknown_reasons == ()
 
 
@@ -3416,6 +3504,9 @@ def test_first_pass_barriers_only_preserve_the_eventual_continuation(command):
     assert paths[0].completion is SymbolicPathCompletion.EVENTUAL_COMPLETE
     assert len(paths[0].effects) == 1
     assert paths[0].temporal_boundary_lines
+    assert paths[0].async_movement_stop_entity_indices == (
+        (0,) if command == "halt" else ()
+    )
 
 
 def test_nonwaiting_spline_preserves_immediate_and_prior_motion_pause_paths():
