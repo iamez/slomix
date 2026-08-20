@@ -6,6 +6,25 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.40.0](https://github.com/iamez/slomix/compare/v1.39.0...v1.40.0) (2026-08-20)
+
+
+### Features
+
+* **db:** match totals come from a view, not a stored copy ([#782](https://github.com/iamez/slomix/issues/782)) ([ffa1d62](https://github.com/iamez/slomix/commit/ffa1d622b1846ff5b18ad90efc91b8541ae32a63))
+* **map-geometry:** model W5b suspended script control ([#649](https://github.com/iamez/slomix/issues/649)) ([c4a076c](https://github.com/iamez/slomix/commit/c4a076c47147ffdcdd32d1ec6a1d165214668a30))
+* **website:** uploads live outside the git work tree ([#781](https://github.com/iamez/slomix/issues/781)) ([2f7101d](https://github.com/iamez/slomix/commit/2f7101d0c1db6f6fd64234da2663b035afcdf43a))
+
+
+### Bug Fixes
+
+* **ci:** deploy fails in seconds, not after a 240 MB dump ([#784](https://github.com/iamez/slomix/issues/784)) ([4a69dc8](https://github.com/iamez/slomix/commit/4a69dc8d9c8b43a737fcd93a09687b586bc78bcf))
+* **db:** audit measures round duration, not the stopwatch target ([#779](https://github.com/iamez/slomix/issues/779)) ([2ca99f0](https://github.com/iamez/slomix/commit/2ca99f08164933294f66bb044f08ca554b28f2e2))
+* **lua:** give each server instance its own gametimes directory ([#788](https://github.com/iamez/slomix/issues/788)) ([09648c3](https://github.com/iamez/slomix/commit/09648c3fc7bb744254c66b3c19c6990eed0ba85a))
+* **lua:** stop swallowing every obituary after the webhook module ([#785](https://github.com/iamez/slomix/issues/785)) ([db20759](https://github.com/iamez/slomix/commit/db20759c5bc61d3ee19be218b01facd0875d5b3a))
+* **lua:** sync endstats.lua to the copy that actually runs, and gate the contract ([#787](https://github.com/iamez/slomix/issues/787)) ([9033b66](https://github.com/iamez/slomix/commit/9033b6626c16ccce3b1976d30e0d6aa7c966e63a))
+* **website:** show the metric that picks the MVP, and the harness behind it ([#783](https://github.com/iamez/slomix/issues/783)) ([1c9e100](https://github.com/iamez/slomix/commit/1c9e100edcfc51096274844038bf14eb4fe9c757))
+
 ## [1.39.0](https://github.com/iamez/slomix/compare/v1.38.1...v1.39.0) (2026-08-18)
 
 
