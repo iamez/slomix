@@ -168,3 +168,27 @@ def test_the_empty_default_still_resolves_somewhere_sane():
     got = resolve(homepath="/home/et/.etlegacy", configured="")
     assert got == "/home/et/.etlegacy/legacy/gametimes"
     assert not got.endswith("/")
+
+
+def test_no_document_hands_out_a_hardcoded_gametimes_dir():
+    """An example an operator copies is as binding as the default.
+
+    docs/ET_LEGACY_SERVER_RESEARCH.md carried a config sample that set
+    gametimes_dir to the absolute path. get_gametimes_dir() honours an absolute
+    setting verbatim — deliberately, it is the override — so following that
+    example put both instances back in the first server's directory and undid
+    the fix silently (Codex review, #788).
+    """
+    offenders = []
+    for doc in _REPO_ROOT.glob("docs/**/*.md"):
+        for i, line in enumerate(doc.read_text(encoding="utf-8", errors="replace").split("\n"), 1):
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("--"):
+                continue  # prose or a Lua comment explaining the rule
+            if "gametimes_dir" in stripped and '= "/' in stripped:
+                offenders.append(f"{doc.relative_to(_REPO_ROOT)}:{i}: {stripped}")
+    assert not offenders, (
+        "these examples pin gametimes_dir to an absolute path, which overrides "
+        "the per-instance default when an operator copies them:\n  "
+        + "\n  ".join(offenders)
+    )
