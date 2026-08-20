@@ -42,6 +42,13 @@ def _predicate(starts_with: str) -> str:
     part from the git command to the closing quote is runnable locally.
     """
     block = _preflight_block()
+    if starts_with not in block:
+        raise AssertionError(
+            f"step 1b of {DEPLOY_SCRIPT} no longer contains {starts_with!r}. "
+            "If the check was renamed, update this extractor; if it was "
+            "removed, the guard it protects is gone — a bare ValueError at "
+            "collection time would not have said either."
+        )
     start = block.index(starts_with)
     end = block.index('"', start)
     predicate = block[start:end].strip()
@@ -51,7 +58,13 @@ def _predicate(starts_with: str) -> str:
 
 # Run them the way the script does — see the LC_ALL rationale in the script.
 TRACKED_DATA_CMD = _predicate("git ls-files -- ")
-UNREADABLE_CMD = "export LC_ALL=C && " + _predicate("git ls-files -z")
+# From `export LC_ALL=C`, not from the git command with the pin pasted back on
+# in front. The earlier version prepended "export LC_ALL=C && " here, which
+# meant deleting the pin from deploy_release.sh left every behavioural test
+# passing — the tests carried the very thing they were meant to be checking.
+# Measured 2026-08-20: with the pin removed from the script, only the static
+# assertion noticed.
+UNREADABLE_CMD = _predicate("export LC_ALL=C")
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -60,9 +73,10 @@ def _git(repo: Path, *args: str) -> str:
     ).stdout
 
 
-def _sh(repo: Path, cmd: str) -> str:
+def _sh(repo: Path, cmd: str, env: dict[str, str] | None = None) -> str:
+    run_env = {**os.environ, **(env or {})}
     return subprocess.run(
-        ["bash", "-c", cmd], cwd=repo, capture_output=True, text=True
+        ["bash", "-c", cmd], cwd=repo, capture_output=True, text=True, env=run_env
     ).stdout
 
 
@@ -137,6 +151,63 @@ def test_unreadable_tracked_file_is_detected(repo: Path):
     finally:
         secret.chmod(0o700)  # let tmp_path cleanup succeed
     assert "ermission denied" in out
+
+
+# A localised desktop is the realistic case: ssh forwards LC_* from the CLIENT
+# when the server accepts them (AcceptEnv LANG LC_* is the Debian default), so
+# the deploy runs under whatever locale the operator happens to use. If `stat`
+# then answers in that language, the grep for "Permission denied" matches
+# nothing and the guard passes in silence — worse than not having it.
+#
+# The script pins LC_ALL=C for the pipeline. This asserts the pin actually
+# wins over an inherited environment, rather than trusting that it reads that
+# way (asked for in the CodeRabbit review of #784).
+HOSTILE_LOCALE_ENV = {
+    "LC_ALL": "en_US.UTF-8",
+    "LC_MESSAGES": "en_US.UTF-8",
+    "LANG": "en_US.UTF-8",
+    "LANGUAGE": "de:fr",  # GNU gettext override — ignored only under C/POSIX
+}
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permissions")
+def test_unreadable_file_is_detected_under_a_foreign_locale(repo: Path):
+    """The same detection, with the operator's locale forced into the env."""
+    secret = repo / "website" / "data" / "uploads"
+    secret.mkdir(parents=True)
+    (secret / "original.cfg").write_text("seta x 1\n")
+    _git(repo, "add", "-f", "website/data/uploads/original.cfg")
+    _git(repo, "commit", "-qm", "tracked upload")
+    secret.chmod(0o000)
+    try:
+        out = _sh(repo, UNREADABLE_CMD, env=HOSTILE_LOCALE_ENV)
+    finally:
+        secret.chmod(0o700)
+    assert "ermission denied" in out, (
+        "the readability guard stopped matching once the caller's locale was "
+        "forwarded — LC_ALL=C is no longer reaching the pipeline"
+    )
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root ignores file permissions")
+def test_the_locale_pin_reaches_the_process_that_reports_the_error():
+    """`stat` runs inside xargs, two processes down from the export.
+
+    Shell precedence puts the pipeline after `cd ... && export LC_ALL=C &&`,
+    so the exported value is inherited rather than scoped to one command — but
+    "should be inherited" is exactly the kind of claim worth measuring, since
+    the whole guard rests on it.
+    """
+    cmd = UNREADABLE_CMD.split("git ls-files")[0] + \
+        'printf "x\\0" | xargs -0 -r sh -c "printenv LC_ALL"'
+    out = subprocess.run(
+        ["bash", "-c", cmd], capture_output=True, text=True,
+        env={**os.environ, **HOSTILE_LOCALE_ENV},
+    ).stdout.strip()
+    assert out == "C", (
+        f"the process that actually runs stat sees LC_ALL={out!r}, not 'C' — "
+        "the pin does not survive into the pipeline"
+    )
 
 
 def test_absent_tracked_file_is_not_a_false_alarm(repo: Path):
