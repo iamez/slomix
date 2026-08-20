@@ -52,9 +52,49 @@ def count_engine_kills(path: Path) -> int:
     return kills
 
 
+def is_usable_live_kill(raw: bytes) -> bool:
+    """The minimum grammar `vps_scripts/liveview_parser.py` accepts for a K.
+
+    Counting every line that merely starts with "K " overstates the live side:
+    the parser drops a record whose timestamp is not a number, that has fewer
+    than nine fields, or whose killer/victim slots are unparseable (a None slot
+    would misattribute the kill). A malformed line would then stand in for a
+    genuinely missing one and this check would answer OK — the exact silence it
+    exists to break (CodeRabbit review, #785).
+
+    Deliberately duplicated rather than imported: this script is meant to run
+    on the game server, where the website package is not deployed. The
+    duplication is held to the parser by
+    tests/unit/test_live_kill_coverage_grammar.py, which feeds both the same
+    lines and fails when they disagree.
+    """
+    tok = raw.split()
+    return (
+        len(tok) >= 9
+        and tok[0] == b"K"
+        and tok[1].isdigit()
+        and tok[2].lstrip(b"-").isdigit()
+        and tok[3].lstrip(b"-").isdigit()
+    )
+
+
 def count_live_kills(path: Path) -> int:
     with path.open("rb") as fh:
-        return sum(1 for raw in fh if _LIVE_KILL.match(raw))
+        return sum(1 for raw in fh if is_usable_live_kill(raw))
+
+
+def _non_negative(value: str) -> int:
+    """A negative threshold quietly inverts the check.
+
+    `--tolerance -1` fails a run where the two sides agree exactly;
+    `--min-kills -1` disables the "too early to judge" guard, so a round with
+    two kills reports a verdict. Both are argument errors, not opinions
+    (CodeRabbit review, #785).
+    """
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError(f"must be zero or more, got {number}")
+    return number
 
 
 def main() -> int:
@@ -62,10 +102,10 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--console", required=True, type=Path, help="etconsole.log")
     ap.add_argument("--live", required=True, type=Path, help="slomix-live.log")
-    ap.add_argument("--tolerance", type=int, default=2,
+    ap.add_argument("--tolerance", type=_non_negative, default=2,
                     help="kills the live stream may miss before this fails "
                          "(default 2 — covers a kill landing across a rotation)")
-    ap.add_argument("--min-kills", type=int, default=5,
+    ap.add_argument("--min-kills", type=_non_negative, default=5,
                     help="below this many engine kills the comparison is noise "
                          "and the check reports nothing (default 5)")
     args = ap.parse_args()
