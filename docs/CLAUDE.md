@@ -179,9 +179,11 @@ AUTOMATION_ENABLED=true
 Feb-Mar 2026 feature notes (round correlation, proximity v5, website redesign,
 skill rating, RCA audits, Oksii adoption) were removed from this file on
 2026-07-29 — they were stale weight every session paid to read. `docs/archive/`
-is gitignored (not pushed to GitHub), so the full text isn't duplicated there;
-see this file's git history (or `git show <pre-2026-07-29-commit>:docs/CLAUDE.md`)
-for the removed section verbatim.
+is gitignored and, since 2026-08-20, no longer tracked either (the rule had been
+added while the files were already in the index, which gitignore does not undo),
+so the full text isn't duplicated there; see this file's git history (or
+`git show <pre-2026-07-29-commit>:docs/CLAUDE.md`) for the removed section
+verbatim.
 
 ---
 
@@ -213,7 +215,8 @@ for the removed section verbatim.
 - `docs/CHANGELOG.md` - Detailed change history and fix log
 - `docs/KNOWN_ISSUES.md` - Known issues and investigations
 - `docs/reference/TIMING_DATA_SOURCES.md` - Timing documentation
-- `docs/archive/` - Historical bug fixes and audits
+- `docs/REPO_BOUNDARY.md` - what the repo tracks, and what stays local
+- `docs/archive/`, `docs/research/` - local only, not in the repo (see REPO_BOUNDARY.md for how to restore one from history)
 
 ## Related Projects
 
