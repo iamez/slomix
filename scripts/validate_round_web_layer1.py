@@ -93,6 +93,8 @@ async def main() -> int:
     future_violations = 0
     velocity_reasons: Counter[str] = Counter()
     velocity_ok = 0
+    gaps_total = 0
+    gap_reasons: Counter[str] = Counter()
     durations: list[float] = []
     player_counts: list[int] = []
 
@@ -129,6 +131,9 @@ async def main() -> int:
             durations.append((time.perf_counter() - started) * 1000.0)
             player_counts.append(len(snap.players))
             conflicts_total += snap.overlap_conflicts
+            gaps_total += len(snap.gaps)
+            for reason in snap.gaps.values():
+                gap_reasons[reason.split("_ms")[0]] += 1
 
             # 2. floor invariant — nothing may come from after t
             for guid, st in snap.players.items():
@@ -155,6 +160,11 @@ async def main() -> int:
           f"  ({100.0 * disagreements / max(compared, 1):.2f} %)")
     print(f"    zaznanih prekrivanj (overlap_conflict): {conflicts_total}")
 
+    print("\n  === LUKNJE (imenovane, ne tihe) ===")
+    print(f"    izpuščenih igralcev skupaj: {gaps_total}")
+    for reason, n in gap_reasons.most_common():
+        print(f"      [{reason}]: {n}")
+
     print("\n  === 2. FLOOR INVARIANTA ===")
     print(f"    kršitev (stanje iz prihodnosti): {future_violations}")
 
@@ -177,7 +187,7 @@ async def main() -> int:
     print("\n  === floor proti nearest (sintetično) ===")
     path = [{"time": 0, "x": 0}, {"time": 1000, "x": 1}, {"time": 2000, "x": 2}]
     for target in (900, 1100, 1999):
-        f_sample, stale = find_position_floor(path, target)
+        f_sample, stale, _idx = find_position_floor(path, target)
         # Reaching into the private helper on purpose: the whole point of this
         # block is to show what the function Layer 1 replaces would answer.
         n_sample = replay_service._find_position_at_time(path, target)  # noqa: SLF001
