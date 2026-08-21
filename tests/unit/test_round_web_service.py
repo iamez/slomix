@@ -126,7 +126,7 @@ class TestDeriveVelocity:
 
     def test_teleport_is_refused_not_clamped(self):
         far = VELOCITY_SANITY_CAP_UPS * 10
-        path = [{"time": 0, "x": 0, "y": 0}, {"time": 100, "x": far, "y": 0}]
+        path = [{"time": 0, "x": 0, "y": 0, "z": 0}, {"time": 100, "x": far, "y": 0, "z": 0}]
         vx, _, _, _, reason = derive_velocity(path, 1, None)
         assert vx is None
         assert reason.startswith("exceeds_sanity_cap")
@@ -144,9 +144,9 @@ class TestDeriveVelocity:
         a perfectly derivable velocity for a bookkeeping artefact.
         """
         path = [
-            {"time": 0, "x": 0, "y": 0},
-            {"time": 1000, "x": 50, "y": 0},
-            {"time": 1000, "x": 100, "y": 0},   # duplicate of the one before
+            {"time": 0, "x": 0, "y": 0, "z": 0},
+            {"time": 1000, "x": 50, "y": 0, "z": 0},
+            {"time": 1000, "x": 100, "y": 0, "z": 0},   # duplicate of the one before
         ]
         vx, _, _, dt, reason = derive_velocity(path, 2, None)
         assert reason is None
@@ -166,6 +166,14 @@ class TestDeriveVelocity:
     def test_incomplete_coordinates(self):
         path = [{"time": 0, "x": 0}, {"time": 1000, "y": 1}]
         *_, reason = derive_velocity(path, 1, None)
+        assert reason == "incomplete_coordinates"
+
+    def test_missing_height_does_not_fabricate_vertical_velocity(self):
+        """`z` is required, not defaulted to 0 — the same substitution that was
+        removed from build_edges and missed here on the first pass."""
+        path = [{"time": 0, "x": 0, "y": 0, "z": 0}, {"time": 1000, "x": 10, "y": 0}]
+        vx, _, vz, _, reason = derive_velocity(path, 1, None)
+        assert vx is None and vz is None
         assert reason == "incomplete_coordinates"
 
 
