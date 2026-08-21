@@ -14,12 +14,14 @@ see and a relational layer cannot survive, so none of them is taken on trust:
    may carry a source timestamp greater than `t`. This is a one-line invariant
    and the single most important difference between the two modules.
 
-3. **Velocity.** The agreement check itself lives in `derive_velocity`, which
-   refuses when the derived magnitude disagrees with the stored scalar speed by
-   more than the measured tolerance. What this script reports is the OUTCOME of
-   that check — how many were derived and, per reason, how many were refused —
-   not a second independent comparison. Said plainly because an earlier version
-   of this docstring claimed more than the code did.
+3. **Velocity.** Two things, kept apart on purpose. The script reports the
+   OUTCOME of `derive_velocity`'s own check (how many were derived, and per
+   reason how many were refused), and it then runs that comparison AGAIN here,
+   independently: every published velocity must still agree with the stored
+   scalar speed within the measured tolerance. A validator that only repeats
+   the subject's self-assessment validates nothing — this second pass is what
+   would catch `derive_velocity` accepting something it should have refused,
+   and it fails the run rather than printing a note (CodeRabbit, PR #792).
 
 Also measures cost per snapshot, against the 27 ms / 51 ms baseline the spec
 recorded for `get_player_positions`.
@@ -29,6 +31,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import math
 import random
 import sys
 import time
@@ -42,6 +45,7 @@ if str(ROOT) not in sys.path:
 from website.backend.dependencies import get_db_pool, init_db_pool  # noqa: E402
 from website.backend.services import replay_service  # noqa: E402
 from website.backend.services.round_web_service import (  # noqa: E402
+    VELOCITY_SPEED_TOLERANCE,
     build_snapshot,
     find_position_floor,
     load_round_engagements,
@@ -97,6 +101,7 @@ async def main() -> int:
     future_violations = 0
     velocity_reasons: Counter[str] = Counter()
     velocity_ok = 0
+    velocity_mismatches = 0
     gaps_total = 0
     gap_reasons: Counter[str] = Counter()
     durations: list[float] = []
@@ -147,14 +152,23 @@ async def main() -> int:
                     future_violations += 1
                     print(f"    ⚠️ negativna zastarelost: round={round_id} t={t_ms} {guid}")
 
-            # 3. velocity
+            # 3. velocity — outcome, then an INDEPENDENT recheck
             for st in snap.players.values():
                 if not st.alive:
                     continue
                 if st.velocity_reason:
                     velocity_reasons[st.velocity_reason] += 1
-                else:
-                    velocity_ok += 1
+                    continue
+                velocity_ok += 1
+                if st.vx is None or st.vy is None or not st.speed or st.speed <= 0:
+                    continue
+                derived = math.hypot(st.vx, st.vy)
+                if abs(derived - st.speed) > VELOCITY_SPEED_TOLERANCE * max(st.speed, 1.0):
+                    velocity_mismatches += 1
+                    if velocity_mismatches <= 3:
+                        print(f"    ⚠️ objavljena hitrost mimo tolerance: "
+                              f"round={round_id} t={t_ms} {st.guid[:8]} "
+                              f"izpeljana {derived:.0f} proti shranjeni {st.speed:.0f}")
 
             _ = nearest_teammate_separation(snap)
 
@@ -174,6 +188,8 @@ async def main() -> int:
 
     print("\n  === 3. HITROST ===")
     print(f"    izpeljanih: {velocity_ok}")
+    print(f"    ⭐ neodvisna preverba objavljenih proti shranjeni hitrosti: "
+          f"{velocity_mismatches} mimo tolerance")
     for reason, n in velocity_reasons.most_common():
         print(f"    zavrnjenih [{reason}]: {n}")
 
@@ -199,7 +215,7 @@ async def main() -> int:
         print(f"    t={target:5d}  floor={f_sample['time']:5d} (stale {stale:4d})"
               f"   nearest={n_sample['time']:5d} {flag}")
 
-    return 0 if future_violations == 0 else 1
+    return 0 if (future_violations == 0 and velocity_mismatches == 0) else 1
 
 
 if __name__ == "__main__":

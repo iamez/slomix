@@ -60,10 +60,15 @@ async def get_player_paths(
 async def get_round_web(
     round_id: int,
     request: Request,
-    t: int = Query(..., description="Time in milliseconds"),
+    # ge=0 on both: a negative `t` cannot select a sample, and a negative
+    # `max_stale_ms` excludes every state with non-negative staleness — i.e. all
+    # of them — which looks like an empty round rather than a bad argument
+    # (CodeRabbit, PR #792).
+    t: int = Query(..., ge=0, description="Time in milliseconds"),
     max_stale_ms: int | None = Query(
-        None, description="Drop states older than this; omit to get everything "
-                          "with its staleness stated"),
+        None, ge=0,
+        description="Exclude states older than this; omit to get everything "
+                    "with its staleness stated"),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Layer 1: the relational reconstruction of one moment.
