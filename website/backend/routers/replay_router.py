@@ -4,6 +4,7 @@ Round Replay Timeline Router
 GET /api/replay/round/{round_id}/timeline
 GET /api/replay/round/{round_id}/positions?t={time_ms}
 GET /api/replay/round/{round_id}/paths?from={from_ms}&to={to_ms}
+GET /api/replay/round/{round_id}/web?t={time_ms}
 """
 from fastapi import APIRouter, Depends, Query, Request
 
@@ -11,7 +12,7 @@ from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 from website.backend.rate_limit import limiter
-from website.backend.services import replay_service
+from website.backend.services import replay_service, round_web_service
 
 logger = get_app_logger("api.replay")
 router = APIRouter()
@@ -52,3 +53,29 @@ async def get_player_paths(
 ):
     """Get player movement paths for a time window (for trail rendering)."""
     return await replay_service.get_player_paths(db, round_id, from_ms, to_ms)
+
+
+@router.get("/replay/round/{round_id}/web")
+@limiter.limit("10/minute")
+async def get_round_web(
+    round_id: int,
+    request: Request,
+    t: int = Query(..., description="Time in milliseconds"),
+    max_stale_ms: int | None = Query(
+        None, description="Drop states older than this; omit to get everything "
+                          "with its staleness stated"),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Layer 1: the relational reconstruction of one moment.
+
+    Distinct from `/positions`, which serves the replay slider. This one picks
+    the LATEST overlapping life rather than the earliest, never answers with a
+    sample from after `t`, and carries `stale_ms`, `overlap_conflict` and
+    `velocity_reason` alongside the values they qualify.
+
+    ⛔ Reconstruction only — no score, no ranking (spec §4.6). Line-of-sight is
+    deliberately absent: it stays unvalidated until W6.
+    """
+    return await round_web_service.get_round_snapshot(
+        db, round_id, t, max_stale_ms=max_stale_ms
+    )
