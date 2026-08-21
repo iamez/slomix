@@ -158,6 +158,14 @@ class Pk3GeometryIndex:
         unreadable: dict[str, str] = {}
 
         for pk3_path in archives:
+            # Staged per archive and merged only once the whole archive has been
+            # read. An earlier version appended straight into `discovered`, so a
+            # failure part-way through left the members read before it indexed —
+            # a map could then resolve from a PARTIALLY scanned archive, which is
+            # worse than either clean outcome. `_hash_member` decompresses every
+            # member, so a mid-archive decompression error is the likely failure,
+            # not a hypothetical one (CodeRabbit, PR #793).
+            staged: list[tuple[tuple[str, MapAssetKind], MapAssetProvider]] = []
             try:
                 with zipfile.ZipFile(pk3_path) as archive:
                     for member_index, info in enumerate(archive.infolist()):
@@ -167,7 +175,8 @@ class Pk3GeometryIndex:
                         if identity is None:
                             continue
                         map_name, asset_kind = identity
-                        discovered[(map_name, asset_kind)].append(
+                        staged.append((
+                            (map_name, asset_kind),
                             MapAssetProvider(
                                 map_name=map_name,
                                 asset_kind=asset_kind,
@@ -177,8 +186,8 @@ class Pk3GeometryIndex:
                                 size=info.file_size,
                                 crc32=info.CRC,
                                 sha256=_hash_member(archive, info),
-                            )
-                        )
+                            ),
+                        ))
             except (OSError, EOFError, zipfile.BadZipFile, RuntimeError, zlib.error, lzma.LZMAError) as exc:
                 # One bad archive used to abort the whole corpus. `CTF_Multi.pk3`
                 # ships as 0 bytes — on the game server as well as here, so the
@@ -197,6 +206,11 @@ class Pk3GeometryIndex:
                 # worth more than a line in a file nobody reads.
                 unreadable[str(pk3_path)] = f"{type(exc).__name__}: {exc}"
                 continue
+
+            # Only now, with the archive read end to end, does anything from it
+            # become visible to the index.
+            for identity, provider in staged:
+                discovered[identity].append(provider)
 
         # The engine asks the virtual filesystem for maps/<map>.ent before it
         # falls back to the BSP entity lump. Include a directly installed loose
