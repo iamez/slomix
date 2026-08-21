@@ -6,7 +6,7 @@ GET /api/replay/round/{round_id}/positions?t={time_ms}
 GET /api/replay/round/{round_id}/paths?from={from_ms}&to={to_ms}
 GET /api/replay/round/{round_id}/web?t={time_ms}
 """
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -76,6 +76,13 @@ async def get_round_web(
     ⛔ Reconstruction only — no score, no ranking (spec §4.6). Line-of-sight is
     deliberately absent: it stays unvalidated until W6.
     """
+    # A round that does not exist is 404; a round that exists but has no linked
+    # tracks is 200 with `unavailable` set. Collapsing the two would tell a
+    # caller "no such round" when the round is real and the data is thin — a
+    # different problem with a different fix (CodeRabbit, PR #792).
+    exists = await db.fetch_all("SELECT 1 FROM rounds WHERE id = $1", (round_id,))
+    if not exists:
+        raise HTTPException(status_code=404, detail=f"round {round_id} not found")
     return await round_web_service.get_round_snapshot(
         db, round_id, t, max_stale_ms=max_stale_ms
     )

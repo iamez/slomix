@@ -260,9 +260,13 @@ def derive_velocity(
 
     dt_s = dt_ms / 1000.0
     try:
+        # `z` is required, not defaulted. Substituting 0 for a missing height
+        # fabricates a vertical velocity out of nothing — the same substitution
+        # that was removed from build_edges, missed here on the first pass
+        # (CodeRabbit, PR #792).
         vx = (float(cur["x"]) - float(prev["x"])) / dt_s
         vy = (float(cur["y"]) - float(prev["y"])) / dt_s
-        vz = (float(cur.get("z", 0)) - float(prev.get("z", 0))) / dt_s
+        vz = (float(cur["z"]) - float(prev["z"])) / dt_s
     except (KeyError, TypeError, ValueError):
         return None, None, None, None, "incomplete_coordinates"
 
@@ -318,14 +322,19 @@ def build_snapshot(
         conflicts += 1 if conflict else 0
 
         path = _ensure_path_list(track[6])
-        # A dead player is shown at the position they died in, which is a state
-        # from their death time and is labelled with that staleness — not
-        # silently presented as current.
+        # A dead player is shown at the position they died in. The LOOKUP uses
+        # their death time, but the STALENESS is always measured against t_ms —
+        # an earlier version reported it against the death time, so someone who
+        # died five minutes ago came back with stale_ms near zero and the
+        # caller's max_stale_ms could never exclude them. Staleness has to mean
+        # "how old is this state at the moment being asked about", or the
+        # tolerance is decorative (CodeRabbit, PR #792).
         lookup_ms = t_ms if alive else int(track[5] or t_ms)
-        sample, stale_ms, sample_idx = find_position_floor(path, lookup_ms)
+        sample, _lookup_stale, sample_idx = find_position_floor(path, lookup_ms)
         if sample is None:
             gaps[guid] = "no_sample_at_or_before_t"
             continue
+        stale_ms = int(t_ms - (sample.get("time", 0) or 0))
         if max_stale_ms is not None and stale_ms > max_stale_ms:
             gaps[guid] = f"exceeds_max_stale_{stale_ms}ms"
             continue
@@ -417,10 +426,7 @@ def build_edges(players: dict[str, PlayerState], t_ms: int, engagements: list) -
     # Never fired on real data (0 of 416,531 samples carry a null coordinate),
     # but a module whose whole promise is that it invents nothing cannot carry
     # a substitution in it. No complete position, no edge.
-    alive = [
-        p for p in players.values()
-        if p.alive and p.x is not None and p.y is not None and p.z is not None
-    ]
+    alive = [p for p in players.values() if p.alive and _has_position(p)]
     return [
         Edge(
             a_guid=a.guid,
@@ -434,15 +440,28 @@ def build_edges(players: dict[str, PlayerState], t_ms: int, engagements: list) -
     ]
 
 
+def _has_position(p: PlayerState) -> bool:
+    """One definition of "placeable", used everywhere.
+
+    `build_edges` and this function disagreed once: edges required all three
+    coordinates while separation checked only `x`, so a player missing `y` or
+    `z` silently became "no living teammate" instead of "no position"
+    (CodeRabbit, PR #792).
+    """
+    return p.x is not None and p.y is not None and p.z is not None
+
+
 def nearest_teammate_separation(snapshot: Snapshot) -> dict[str, float | None]:
     """Straight-line distance to the nearest living teammate, per player.
 
     None when a player has no living teammate — a real state (last man standing),
-    not a distance of zero.
+    not a distance of zero. Players without a complete position are absent from
+    the result entirely rather than reported as None, because None here has one
+    meaning and it is not "we could not place them".
     """
     out: dict[str, float | None] = {}
     for guid, p in snapshot.players.items():
-        if not p.alive or p.x is None:
+        if not p.alive or not _has_position(p):
             continue
         mates = [
             e.distance for e in snapshot.edges
@@ -525,19 +544,19 @@ async def get_round_snapshot(
     fallback for evidence about the file.
     """
     tracks = await load_round_tracks(db, round_id)
-    if not tracks:
-        return {
-            "round_id": round_id, "t_ms": t_ms, "players": [], "edges": [],
-            "unavailable": "no linked player_track rows for this round",
-        }
-    engagements = await load_round_engagements(db, round_id)
+    # An empty round takes the SAME path, not a shortcut with a different shape.
+    # The early return used to omit capture_policy, player_count, gaps and the
+    # rest, so a consumer reading any of them hit a KeyError exactly when the
+    # data was thinnest — the worst possible moment to change the contract
+    # (CodeRabbit, PR #792). `unavailable` is added alongside, never instead.
+    engagements = await load_round_engagements(db, round_id) if tracks else []
     snap = build_snapshot(
         tracks, t_ms, engagements=engagements,
         max_stale_ms=max_stale_ms, velocity_max_dt_ms=velocity_max_dt_ms,
     )
     separation = nearest_teammate_separation(snap)
     policy = CapturePolicy()
-    return {
+    payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
         "capture_policy": {
@@ -556,13 +575,20 @@ async def get_round_snapshot(
              "recently_contested": e.recently_contested}
             for e in snap.edges
         ],
+        # Each multi-line note is wrapped in its own parentheses. Inside a list
+        # of strings, an implicit concatenation is indistinguishable from a
+        # forgotten comma — which is exactly what CodeQL flags — so the intent
+        # is written out rather than left to the reader (or the next linter).
         "notes": [
-            "line-of-sight is NOT included: it is an oracle upper bound and stays "
-            "unvalidated until W6 (spec §6, §12)",
-            "recently_contested means an engagement was open, which the tracker "
-            "holds for up to 15s after the last hit — not 'under attack'",
+            ("line-of-sight is NOT included: it is an oracle upper bound and "
+             "stays unvalidated until W6 (spec §6, §12)"),
+            ("recently_contested means an engagement was open, which the tracker "
+             "holds for up to 15s after the last hit — not 'under attack'"),
             "distances are geometric separation, not tactical support distance",
-            "`gaps` names every player without a state here and why; a player is "
-            "never simply absent",
+            ("`gaps` names every player without a state here and why; a player "
+             "is never simply absent"),
         ],
     }
+    if not tracks:
+        payload["unavailable"] = "no linked player_track rows for this round"
+    return payload

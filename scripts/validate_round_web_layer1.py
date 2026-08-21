@@ -14,8 +14,12 @@ see and a relational layer cannot survive, so none of them is taken on trust:
    may carry a source timestamp greater than `t`. This is a one-line invariant
    and the single most important difference between the two modules.
 
-3. **Velocity.** Derived directions must agree with the scalar speed the tracker
-   actually stored, and every refusal must carry a reason rather than a number.
+3. **Velocity.** The agreement check itself lives in `derive_velocity`, which
+   refuses when the derived magnitude disagrees with the stored scalar speed by
+   more than the measured tolerance. What this script reports is the OUTCOME of
+   that check — how many were derived and, per reason, how many were refused —
+   not a second independent comparison. Said plainly because an earlier version
+   of this docstring claimed more than the code did.
 
 Also measures cost per snapshot, against the 27 ms / 51 ms baseline the spec
 recorded for `get_player_positions`.
