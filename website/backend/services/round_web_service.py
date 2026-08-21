@@ -151,11 +151,16 @@ class Snapshot:
     t_ms: int
     players: dict[str, PlayerState]
     edges: list[Edge]
+    # Number of players whose life was ambiguous at this moment (more than one
+    # overlapping candidate), NOT the number of overlapping pairs.
     overlap_conflicts: int
+    # guid -> why this player has no state here. Never empty by omission: a
+    # player is either in `players` or in `gaps`, never in neither.
+    gaps: dict[str, str] = field(default_factory=dict)
 
 
-def find_position_floor(path: list, target_ms: int) -> tuple[dict | None, int]:
-    """The last sample at or before `target_ms`, and how stale it is.
+def find_position_floor(path: list, target_ms: int) -> tuple[dict | None, int, int]:
+    """The last sample at or before `target_ms`, how stale it is, and its index.
 
     FLOOR, never nearest. `replay_service._find_position_at_time` compares the
     two neighbours and returns the closer one, which for a target between
@@ -165,18 +170,25 @@ def find_position_floor(path: list, target_ms: int) -> tuple[dict | None, int]:
     the existing one: the replay page depends on the current behaviour and §4.4
     forbids changing it underneath.
 
-    Returns (sample, stale_ms). No sample at or before `target_ms` yields
-    (None, -1) — the player has no causal state yet, which is a gap to report,
-    not a zero to invent.
+    ⚠️ Duplicate timestamps are real: 392 of 4,000 sampled tracks carry at least
+    two samples with the same `time` (measured 2026-08-21). `bisect_right` lands
+    after the whole run, so this returns the LAST sample of a duplicate group —
+    the most recently written state for that instant. That is a choice, so it is
+    written down rather than left to be rediscovered.
+
+    Returns (sample, stale_ms, index). No sample at or before `target_ms` yields
+    (None, -1, -1) — the player has no causal state yet, which is a gap to
+    report, not a zero to invent. The index is returned because the caller needs
+    it for velocity and recomputing it means walking the path a second time.
     """
     if not path:
-        return None, -1
+        return None, -1, -1
     times = [s.get("time", 0) for s in path]
     idx = bisect_right(times, target_ms)
     if idx == 0:
-        return None, -1
+        return None, -1, -1
     sample = path[idx - 1]
-    return sample, int(target_ms - (sample.get("time", 0) or 0))
+    return sample, int(target_ms - (sample.get("time", 0) or 0)), idx - 1
 
 
 def select_life(track_list: list, t_ms: int) -> tuple[Any | None, bool, bool]:
@@ -224,8 +236,23 @@ def derive_velocity(
     """
     if sample_index <= 0:
         return None, None, None, None, "no_causal_predecessor"
-    cur, prev = path[sample_index], path[sample_index - 1]
-    dt_ms = int((cur.get("time", 0) or 0) - (prev.get("time", 0) or 0))
+    cur = path[sample_index]
+    cur_time = cur.get("time", 0) or 0
+
+    # Step back over a run of identical timestamps rather than refusing on the
+    # first one. 9.8% of tracks carry duplicate times, and the sample directly
+    # behind the chosen one is often its own twin — dt would be 0 and a real,
+    # derivable velocity would be thrown away for a bookkeeping artefact. What
+    # is NOT allowed is bridging a gap or a life boundary, which the max_dt
+    # check below still enforces.
+    prev_index = sample_index - 1
+    while prev_index >= 0 and (path[prev_index].get("time", 0) or 0) >= cur_time:
+        prev_index -= 1
+    if prev_index < 0:
+        return None, None, None, None, "no_strictly_earlier_sample"
+
+    prev = path[prev_index]
+    dt_ms = int(cur_time - (prev.get("time", 0) or 0))
     if dt_ms <= 0:
         return None, None, None, None, "non_monotonic_samples"
     if max_dt_ms is not None and dt_ms > max_dt_ms:
@@ -256,11 +283,6 @@ def derive_velocity(
     return vx, vy, vz, dt_ms, None
 
 
-def _sample_index(path: list, sample: dict) -> int:
-    times = [s.get("time", 0) for s in path]
-    return bisect_right(times, sample.get("time", 0)) - 1
-
-
 def build_snapshot(
     tracks_by_guid: dict[str, list],
     t_ms: int,
@@ -269,19 +291,29 @@ def build_snapshot(
     max_stale_ms: int | None = None,
     velocity_max_dt_ms: int | None = None,
 ) -> Snapshot:
-    """One moment: who was where, and how they related.
+    """One moment: who was where, how they related, and who is missing and why.
 
     `max_stale_ms` is the caller's tolerance, not ours. With capture policy
     unknown for every historical round (see module docstring) there is no
     default the data can justify, so None means "return everything and state its
-    staleness" and a value means "drop states older than this".
+    staleness" and a value means "exclude states older than this".
+
+    ⭐ EXCLUDED IS NOT ABSENT. Every player who does not make it into `players`
+    lands in `gaps` with a reason. An earlier version of this function simply
+    `continue`d, which made a player vanish — and a caller could not tell "was
+    not in this round" from "was filtered out by the tolerance I passed". Spec
+    §1: "It never fills a missing active player with silence." Dropping someone
+    silently IS that silence, and the tolerance path makes it the caller's own
+    parameter that erases them.
     """
     players: dict[str, PlayerState] = {}
+    gaps: dict[str, str] = {}
     conflicts = 0
 
     for guid, track_list in tracks_by_guid.items():
         track, alive, conflict = select_life(track_list, t_ms)
         if track is None:
+            gaps[guid] = "no_life_at_or_before_t"
             continue
         conflicts += 1 if conflict else 0
 
@@ -290,17 +322,19 @@ def build_snapshot(
         # from their death time and is labelled with that staleness — not
         # silently presented as current.
         lookup_ms = t_ms if alive else int(track[5] or t_ms)
-        sample, stale_ms = find_position_floor(path, lookup_ms)
+        sample, stale_ms, sample_idx = find_position_floor(path, lookup_ms)
         if sample is None:
+            gaps[guid] = "no_sample_at_or_before_t"
             continue
         if max_stale_ms is not None and stale_ms > max_stale_ms:
+            gaps[guid] = f"exceeds_max_stale_{stale_ms}ms"
             continue
 
         vx = vy = vz = None
         v_dt = v_reason = None
         if alive:
             vx, vy, vz, v_dt, v_reason = derive_velocity(
-                path, _sample_index(path, sample), velocity_max_dt_ms
+                path, sample_idx, velocity_max_dt_ms
             )
         else:
             v_reason = "not_alive"
@@ -331,6 +365,7 @@ def build_snapshot(
         players=players,
         edges=build_edges(players, t_ms, engagements or []),
         overlap_conflicts=conflicts,
+        gaps=gaps,
     )
 
 
@@ -376,20 +411,27 @@ def build_edges(players: dict[str, PlayerState], t_ms: int, engagements: list) -
     isolation keeps that honest until W4b (navigable topology) exists.
     """
     contested = _contested_guids(engagements, t_ms)
-    alive = [p for p in players.values() if p.alive and p.x is not None]
-    edges: list[Edge] = []
-    for i, a in enumerate(alive):
-        for b in alive[i + 1:]:
-            if b.x is None:
-                continue
-            edges.append(Edge(
-                a_guid=a.guid,
-                b_guid=b.guid,
-                kind="teammate" if a.team == b.team else "opponent",
-                distance=math.dist((a.x, a.y, a.z or 0.0), (b.x, b.y, b.z or 0.0)),
-                recently_contested=(a.guid in contested or b.guid in contested),
-            ))
-    return edges
+    # All three coordinates, checked once. An earlier version guarded only `x`
+    # and then wrote `a.z or 0.0`, which put a player with no height at ground
+    # level — two people on different floors would have come out as neighbours.
+    # Never fired on real data (0 of 416,531 samples carry a null coordinate),
+    # but a module whose whole promise is that it invents nothing cannot carry
+    # a substitution in it. No complete position, no edge.
+    alive = [
+        p for p in players.values()
+        if p.alive and p.x is not None and p.y is not None and p.z is not None
+    ]
+    return [
+        Edge(
+            a_guid=a.guid,
+            b_guid=b.guid,
+            kind="teammate" if a.team == b.team else "opponent",
+            distance=math.dist((a.x, a.y, a.z), (b.x, b.y, b.z)),
+            recently_contested=(a.guid in contested or b.guid in contested),
+        )
+        for i, a in enumerate(alive)
+        for b in alive[i + 1:]
+    ]
 
 
 def nearest_teammate_separation(snapshot: Snapshot) -> dict[str, float | None]:
@@ -429,10 +471,13 @@ async def load_round_tracks(db, round_id: int) -> dict[str, list]:
         WHERE r.id = $1
         ORDER BY pt.player_guid, pt.spawn_time_ms
     """, (round_id,))
+    # A plain dict, not the defaultdict used to build it: a caller reaching for
+    # a guid that was not in the round should get a KeyError, not a silently
+    # created empty life list that reads as "this player had no lives".
     grouped: dict[str, list] = defaultdict(list)
     for row in rows:
         grouped[row[0]].append(row)
-    return grouped
+    return dict(grouped)
 
 
 async def load_round_engagements(db, round_id: int) -> list:
@@ -502,6 +547,7 @@ async def get_round_snapshot(
         },
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,
+        "gaps": snap.gaps,
         "players": [_player_to_dict(p) for p in snap.players.values()],
         "nearest_teammate_separation": separation,
         "edges": [
@@ -516,5 +562,7 @@ async def get_round_snapshot(
             "recently_contested means an engagement was open, which the tracker "
             "holds for up to 15s after the last hit — not 'under attack'",
             "distances are geometric separation, not tactical support distance",
+            "`gaps` names every player without a state here and why; a player is "
+            "never simply absent",
         ],
     }

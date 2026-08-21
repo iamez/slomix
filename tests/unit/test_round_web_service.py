@@ -18,6 +18,7 @@ from website.backend.services.round_web_service import (
     Snapshot,
     _contested_guids,
     build_edges,
+    build_snapshot,
     derive_velocity,
     find_position_floor,
     nearest_teammate_separation,
@@ -85,23 +86,24 @@ class TestFindPositionFloor:
 
     @pytest.mark.parametrize("target", [900, 1100, 1999, 2000, 5000])
     def test_never_returns_a_sample_from_the_future(self, target):
-        sample, stale = find_position_floor(self.PATH, target)
+        sample, stale, idx = find_position_floor(self.PATH, target)
         assert sample["time"] <= target
         assert stale >= 0
+        assert self.PATH[idx] is sample
 
     def test_disagrees_with_nearest_exactly_where_it_matters(self):
         """Pins the behavioural difference, so nobody "simplifies" one into the other."""
-        floor_sample, _ = find_position_floor(self.PATH, 900)
+        floor_sample, _, _ = find_position_floor(self.PATH, 900)
         nearest = replay_service._find_position_at_time(self.PATH, 900)  # noqa: SLF001
         assert floor_sample["time"] == 0
         assert nearest["time"] == 1000  # from AFTER the moment asked about
 
     def test_no_state_before_the_first_sample(self):
-        sample, stale = find_position_floor(self.PATH, -1)
-        assert sample is None and stale == -1
+        sample, stale, idx = find_position_floor(self.PATH, -1)
+        assert sample is None and stale == -1 and idx == -1
 
     def test_empty_path(self):
-        assert find_position_floor([], 100) == (None, -1)
+        assert find_position_floor([], 100) == (None, -1, -1)
 
 
 class TestDeriveVelocity:
@@ -129,10 +131,37 @@ class TestDeriveVelocity:
         assert vx is None
         assert reason.startswith("exceeds_sanity_cap")
 
-    def test_non_monotonic_samples(self):
+    def test_duplicate_timestamps_with_nothing_earlier(self):
+        """Both samples share a time and there is nothing behind them."""
         path = [{"time": 1000, "x": 0, "y": 0}, {"time": 1000, "x": 1, "y": 0}]
         *_, reason = derive_velocity(path, 1, None)
-        assert reason == "non_monotonic_samples"
+        assert reason == "no_strictly_earlier_sample"
+
+    def test_steps_back_over_duplicate_timestamps(self):
+        """9.8% of tracks carry duplicate times (measured 2026-08-21).
+
+        Refusing on the twin directly behind the chosen sample would throw away
+        a perfectly derivable velocity for a bookkeeping artefact.
+        """
+        path = [
+            {"time": 0, "x": 0, "y": 0},
+            {"time": 1000, "x": 50, "y": 0},
+            {"time": 1000, "x": 100, "y": 0},   # duplicate of the one before
+        ]
+        vx, _, _, dt, reason = derive_velocity(path, 2, None)
+        assert reason is None
+        assert dt == 1000
+        assert vx == pytest.approx(100.0)
+
+    def test_step_back_still_respects_max_dt(self):
+        """Stepping over duplicates must not become a licence to bridge a gap."""
+        path = [
+            {"time": 0, "x": 0, "y": 0},
+            {"time": 9000, "x": 50, "y": 0},
+            {"time": 9000, "x": 60, "y": 0},
+        ]
+        *_, reason = derive_velocity(path, 2, 400)
+        assert reason.startswith("gap_exceeds_max_dt")
 
     def test_incomplete_coordinates(self):
         path = [{"time": 0, "x": 0}, {"time": 1000, "y": 1}]
@@ -217,6 +246,65 @@ class TestContestedGuids:
         the start of time" (§4.5)."""
         no_provenance = (1000, 9000, "victim", [{"guid": "x", "first_hit_ms": None}])
         assert _contested_guids([no_provenance], 2000) == set()
+
+
+class TestGapsAreNamedNotSilent:
+    """§1: "It never fills a missing active player with silence."
+
+    The first version of build_snapshot `continue`d past every player it could
+    not place, so a caller could not tell "was not in this round" from "was
+    filtered out by the tolerance I passed". These tests exist to make that
+    regression impossible to reintroduce quietly.
+    """
+
+    @staticmethod
+    def _tracks(path, spawn=0, death=None):
+        return {"G1": [("G1", "p", "AXIS", "soldier", spawn, death, path, "supply", 1)]}
+
+    def test_player_with_no_life_yet_is_named(self):
+        snap = build_snapshot(self._tracks([{"time": 0, "x": 0, "y": 0, "z": 0}], spawn=5000), 100)
+        assert snap.players == {}
+        assert snap.gaps == {"G1": "no_life_at_or_before_t"}
+
+    def test_player_with_no_sample_before_t_is_named(self):
+        # Life starts at 0 but the first sample only arrives at 9000.
+        snap = build_snapshot(self._tracks([{"time": 9000, "x": 0, "y": 0, "z": 0}]), 1000)
+        assert snap.players == {}
+        assert snap.gaps == {"G1": "no_sample_at_or_before_t"}
+
+    def test_tolerance_exclusion_states_the_staleness(self):
+        """The caller's own parameter must not make someone disappear."""
+        snap = build_snapshot(
+            self._tracks([{"time": 0, "x": 0, "y": 0, "z": 0}]), 5000, max_stale_ms=100
+        )
+        assert snap.players == {}
+        assert snap.gaps["G1"].startswith("exceeds_max_stale_")
+        assert "5000" in snap.gaps["G1"]
+
+    def test_placed_player_is_not_also_a_gap(self):
+        snap = build_snapshot(self._tracks([{"time": 0, "x": 1.0, "y": 2.0, "z": 3.0}]), 100)
+        assert set(snap.players) == {"G1"}
+        assert snap.gaps == {}
+
+
+class TestEdgesNeverInventACoordinate:
+    @staticmethod
+    def _state(guid, z):
+        return PlayerState(
+            guid=guid, name=guid, team="AXIS", player_class=None,
+            x=0.0, y=0.0, z=z, health=100, weapon=None, stance=None,
+            speed=None, alive=True, track_id=1, stale_ms=0, overlap_conflict=False,
+        )
+
+    def test_missing_height_yields_no_edge_rather_than_ground_level(self):
+        """`z or 0.0` would have put a player with no height on the floor, so two
+        people on different storeys came out as neighbours."""
+        players = {"a": self._state("a", None), "b": self._state("b", 500.0)}
+        assert build_edges(players, 0, []) == []
+
+    def test_zero_height_is_a_real_coordinate_not_a_missing_one(self):
+        players = {"a": self._state("a", 0.0), "b": self._state("b", 0.0)}
+        assert len(build_edges(players, 0, [])) == 1
 
 
 def test_edge_dataclass_defaults_to_not_contested():
