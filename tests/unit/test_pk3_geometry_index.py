@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import zipfile
+import zlib
 
 import pytest
 
+from website.backend.map_geometry import pk3_index
 from website.backend.map_geometry.pk3_index import (
     AssetContentChangedError,
     MapAssetKind,
@@ -233,6 +235,45 @@ def test_bad_pk3_is_named_not_silently_skipped(tmp_path):
     broken = str(tmp_path / "broken.pk3")
     assert broken in index.unreadable_archives
     assert "BadZipFile" in index.unreadable_archives[broken]
+
+
+def test_a_half_read_archive_contributes_nothing(tmp_path, monkeypatch):
+    """A failure part-way through must not leave the earlier members indexed.
+
+    Providers used to be appended as each member was read, so an archive that
+    failed on its third member still handed the index whatever it had managed to
+    hash first. A map resolving from a PARTIALLY scanned archive is worse than
+    either clean outcome — it looks complete and is not. `_hash_member`
+    decompresses every member, so a mid-archive failure is the expected shape of
+    the problem, not an invented one (CodeRabbit, PR #793).
+    """
+    _write_pk3(tmp_path / "half.pk3", {
+        "maps/adlernest.bsp": b"first member reads fine",
+        "maps/adlernest.script": b"second member explodes",
+    })
+    _write_pk3(tmp_path / "good.pk3", {"maps/supply.bsp": b"IBSP-ish"})
+
+    # Reaching for the private hasher on purpose: it is the only point inside
+    # the archive loop that can fail per-member, which is exactly the failure
+    # this test needs to simulate.
+    real_hash = pk3_index._hash_member  # noqa: SLF001
+    seen: list[str] = []
+
+    def exploding_hash(archive, info):
+        seen.append(info.filename)
+        if info.filename.endswith(".script"):
+            raise zlib.error("simulated decompression failure")
+        return real_hash(archive, info)
+
+    monkeypatch.setattr(pk3_index, "_hash_member", exploding_hash)
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    # The failure happened AFTER a member had already been read successfully ...
+    assert any(name.endswith(".bsp") for name in seen)
+    # ... and yet nothing from that archive is indexed.
+    assert index.map_names == ("supply",)
+    assert index.resolve("adlernest").status != "geometry"
+    assert str(tmp_path / "half.pk3") in index.unreadable_archives
 
 
 def test_unreadable_archives_is_empty_when_everything_reads(tmp_path):
