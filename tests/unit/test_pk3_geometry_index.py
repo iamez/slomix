@@ -208,10 +208,36 @@ def test_assets_without_bsp_are_in_asset_inventory_but_not_w2_default(tmp_path):
     assert index.resolve_asset("duel_lms", "script").status == "resolved"
 
 
-def test_bad_pk3_is_not_silently_skipped(tmp_path):
+def test_bad_pk3_is_named_not_silently_skipped(tmp_path):
+    """An unreadable archive must be REPORTED. It must not take the corpus down.
+
+    This test used to require a hard `Pk3IndexError`, which guaranteed the
+    "not silent" half of its own name by making the whole scan fail. That is a
+    stronger claim than the data supports and the opposite of what W1 asks for
+    ("an explicit missing/ambiguous geometry result", uncovered maps "named
+    rather than silently absent"): one bad file took every other map with it.
+
+    Measured on the real corpus 2026-08-21: `CTF_Multi.pk3` ships as 0 bytes —
+    on the game server as well, so the copy is faithful — and it made all 42
+    maps unavailable. The engine ignores an archive it cannot read; so do we,
+    but we write down which one and why.
+    """
     (tmp_path / "broken.pk3").write_bytes(b"not a zip")
-    with pytest.raises(Pk3IndexError, match="cannot index PK3 archive"):
-        Pk3GeometryIndex.scan(tmp_path)
+    _write_pk3(tmp_path / "good.pk3", {"maps/adlernest.bsp": b"IBSP-ish"})
+
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    # The readable archive still indexes ...
+    assert index.map_names == ("adlernest",)
+    # ... and the broken one is named, with a reason, not swallowed.
+    broken = str(tmp_path / "broken.pk3")
+    assert broken in index.unreadable_archives
+    assert "BadZipFile" in index.unreadable_archives[broken]
+
+
+def test_unreadable_archives_is_empty_when_everything_reads(tmp_path):
+    _write_pk3(tmp_path / "one.pk3", {"maps/adlernest.bsp": b"IBSP-ish"})
+    assert Pk3GeometryIndex.scan(tmp_path).unreadable_archives == {}
 
 
 def test_read_provider_returns_the_exact_hashed_non_bsp_member(tmp_path):

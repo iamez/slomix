@@ -133,9 +133,16 @@ class Pk3GeometryIndex:
         self,
         etmain_dir: Path,
         providers: Mapping[tuple[str, MapAssetKind], tuple[MapAssetProvider, ...]],
+        unreadable_archives: Mapping[str, str] | None = None,
     ) -> None:
         self.etmain_dir = etmain_dir
         self._providers = MappingProxyType(dict(providers))
+        # Archives the scan could not open, by path, with the reason. Named
+        # rather than silently skipped — W1 requires "an explicit
+        # missing/ambiguous geometry result" and that uncovered maps are "named
+        # rather than silently absent". An empty mapping means every archive in
+        # the directory was read.
+        self.unreadable_archives = MappingProxyType(dict(unreadable_archives or {}))
 
     @classmethod
     def scan(cls, etmain_dir: str | Path) -> Pk3GeometryIndex:
@@ -148,6 +155,7 @@ class Pk3GeometryIndex:
             key=lambda path: str(path.relative_to(root)).casefold(),
         )
         discovered: dict[tuple[str, MapAssetKind], list[MapAssetProvider]] = defaultdict(list)
+        unreadable: dict[str, str] = {}
 
         for pk3_path in archives:
             try:
@@ -172,7 +180,23 @@ class Pk3GeometryIndex:
                             )
                         )
             except (OSError, EOFError, zipfile.BadZipFile, RuntimeError, zlib.error, lzma.LZMAError) as exc:
-                raise Pk3IndexError(f"cannot index PK3 archive {pk3_path}: {exc}") from exc
+                # One bad archive used to abort the whole corpus. `CTF_Multi.pk3`
+                # ships as 0 bytes — on the game server as well as here, so the
+                # copy is faithful — and it took all 42 maps down with it, which
+                # is how it was found. The engine ignores an archive it cannot
+                # read and carries on; refusing everything is a stronger claim
+                # than the data supports, and it is the opposite of what W1 asks
+                # for: name what is missing, do not go dark over it.
+                #
+                # The archive is recorded, not swallowed. A caller that cares can
+                # read `unreadable_archives`; a map whose only provider lived in
+                # that archive simply has no provider and is already reported as
+                # missing geometry through the normal path.
+                # Recorded, not logged: this package deliberately carries no
+                # logging, and a structured field a caller can assert on is
+                # worth more than a line in a file nobody reads.
+                unreadable[str(pk3_path)] = f"{type(exc).__name__}: {exc}"
+                continue
 
         # The engine asks the virtual filesystem for maps/<map>.ent before it
         # falls back to the BSP entity lump. Include a directly installed loose
@@ -213,7 +237,7 @@ class Pk3GeometryIndex:
         ):
             providers[identity] = tuple(sorted(candidates, key=_provider_key))
 
-        return cls(root, providers)
+        return cls(root, providers, unreadable)
 
     @property
     def map_names(self) -> tuple[str, ...]:
