@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import zipfile
+import zlib
 
 import pytest
 
+from website.backend.map_geometry import pk3_index
 from website.backend.map_geometry.pk3_index import (
     AssetContentChangedError,
     MapAssetKind,
@@ -208,10 +210,75 @@ def test_assets_without_bsp_are_in_asset_inventory_but_not_w2_default(tmp_path):
     assert index.resolve_asset("duel_lms", "script").status == "resolved"
 
 
-def test_bad_pk3_is_not_silently_skipped(tmp_path):
+def test_bad_pk3_is_named_not_silently_skipped(tmp_path):
+    """An unreadable archive must be REPORTED. It must not take the corpus down.
+
+    This test used to require a hard `Pk3IndexError`, which guaranteed the
+    "not silent" half of its own name by making the whole scan fail. That is a
+    stronger claim than the data supports and the opposite of what W1 asks for
+    ("an explicit missing/ambiguous geometry result", uncovered maps "named
+    rather than silently absent"): one bad file took every other map with it.
+
+    Measured on the real corpus 2026-08-21: `CTF_Multi.pk3` ships as 0 bytes —
+    on the game server as well, so the copy is faithful — and it made all 42
+    maps unavailable. The engine ignores an archive it cannot read; so do we,
+    but we write down which one and why.
+    """
     (tmp_path / "broken.pk3").write_bytes(b"not a zip")
-    with pytest.raises(Pk3IndexError, match="cannot index PK3 archive"):
-        Pk3GeometryIndex.scan(tmp_path)
+    _write_pk3(tmp_path / "good.pk3", {"maps/adlernest.bsp": b"IBSP-ish"})
+
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    # The readable archive still indexes ...
+    assert index.map_names == ("adlernest",)
+    # ... and the broken one is named, with a reason, not swallowed.
+    broken = str(tmp_path / "broken.pk3")
+    assert broken in index.unreadable_archives
+    assert "BadZipFile" in index.unreadable_archives[broken]
+
+
+def test_a_half_read_archive_contributes_nothing(tmp_path, monkeypatch):
+    """A failure part-way through must not leave the earlier members indexed.
+
+    Providers used to be appended as each member was read, so an archive that
+    failed on its third member still handed the index whatever it had managed to
+    hash first. A map resolving from a PARTIALLY scanned archive is worse than
+    either clean outcome — it looks complete and is not. `_hash_member`
+    decompresses every member, so a mid-archive failure is the expected shape of
+    the problem, not an invented one (CodeRabbit, PR #793).
+    """
+    _write_pk3(tmp_path / "half.pk3", {
+        "maps/adlernest.bsp": b"first member reads fine",
+        "maps/adlernest.script": b"second member explodes",
+    })
+    _write_pk3(tmp_path / "good.pk3", {"maps/supply.bsp": b"IBSP-ish"})
+
+    # Reaching for the private hasher on purpose: it is the only point inside
+    # the archive loop that can fail per-member, which is exactly the failure
+    # this test needs to simulate.
+    real_hash = pk3_index._hash_member  # noqa: SLF001
+    seen: list[str] = []
+
+    def exploding_hash(archive, info):
+        seen.append(info.filename)
+        if info.filename.endswith(".script"):
+            raise zlib.error("simulated decompression failure")
+        return real_hash(archive, info)
+
+    monkeypatch.setattr(pk3_index, "_hash_member", exploding_hash)
+    index = Pk3GeometryIndex.scan(tmp_path)
+
+    # The failure happened AFTER a member had already been read successfully ...
+    assert any(name.endswith(".bsp") for name in seen)
+    # ... and yet nothing from that archive is indexed.
+    assert index.map_names == ("supply",)
+    assert index.resolve("adlernest").status != "geometry"
+    assert str(tmp_path / "half.pk3") in index.unreadable_archives
+
+
+def test_unreadable_archives_is_empty_when_everything_reads(tmp_path):
+    _write_pk3(tmp_path / "one.pk3", {"maps/adlernest.bsp": b"IBSP-ish"})
+    assert Pk3GeometryIndex.scan(tmp_path).unreadable_archives == {}
 
 
 def test_read_provider_returns_the_exact_hashed_non_bsp_member(tmp_path):
