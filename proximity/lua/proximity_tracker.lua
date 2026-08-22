@@ -236,6 +236,28 @@ local config = {
     },
 
     -- Test mode (v4.1)
+    -- ===== W6 TRACE FIXTURE PROBE (dormant) =====
+    -- Deliberately NOT a `features` entry: isFeatureEnabled() returns false
+    -- whenever config.test_mode.enabled is set, and the whole point of this
+    -- probe is that it must be usable on a bot-populated test server.
+    --
+    -- ⛔ LOCAL TEST SERVER ONLY. Never enabled on puran.
+    --
+    -- What it establishes, before any fixture pipeline is built on top of it:
+    -- that `entNum = -2` really does give a WORLD-ONLY trace. The engine
+    -- (src/server/sv_world.c:749, commit 732518ef) returns straight after
+    -- CM_BoxTrace against model 0 when passEntityNum == -2, skipping
+    -- SV_ClipMoveToEntities entirely, and the Lua binding passes entNum through
+    -- without a bounds check (src/game/g_lua.c:2367). If that reading is wrong,
+    -- every W6 comparison built on it would be comparing engine-with-entities
+    -- against offline-world — so it is tested first and cheaply.
+    trace_fixture = {
+        enabled = false,
+        probe_delay_ms = 5000,   -- let entities finish spawning before -1 traces
+        batch = 250,             -- traces per frame; a map load already hitches
+                                 -- on its own, so the work is spread out
+    },
+
     test_mode = {
         enabled = false,
         lifecycle_log = true,
@@ -4010,11 +4032,363 @@ end
 
 local last_gamestate = -1
 
+
+
+-- ===== W6 PAIRED-FIXTURE CAPTURE =====
+-- ⛔ Local test server only. Dormant unless config.trace_fixture.enabled.
+--
+-- Reads w6/<mapname>.txt (one segment per line, built offline by
+-- scripts/build_w6_trace_fixtures.py) and asks the engine the SAME question the
+-- offline tracer was asked: a world-only, point, CONTENTS_SOLID trace. Writes
+-- w6/out/<mapname>.txt for the comparison to join on idx.
+--
+-- entNum = -2 is the whole point: sv_world.c:749 returns straight after the
+-- world trace for that value, skipping SV_ClipMoveToEntities. Confirmed on this
+-- engine 2026-08-21 (a team_WOLF_checkpoint blocked -1 and not -2), so the
+-- offline tracer's world-only model is the right thing to compare against.
+--
+-- Batched across frames on purpose. A map load already produces
+-- "Hitch warning: 1132 msec" on its own; several thousand traces in one frame
+-- would be worse, and the per-batch timing is also the cost half of §10 C4,
+-- which has to exist before production enablement is even discussed.
+local w6 = {
+    segments = nil,   -- parsed input, or nil when there is nothing to do
+    cursor = 0,
+    out_lines = nil,
+    map = nil,
+    total_us = 0,
+    batches = 0,
+}
+
+local function w6Load(mapname)
+    local path = "w6/" .. mapname .. ".txt"
+    local fd, len = et.trap_FS_FOpenFile(path, et.FS_READ)
+    if not fd or fd == -1 or fd == 0 or not len or len <= 0 then
+        return nil
+    end
+    local data = et.trap_FS_Read(fd, len)
+    et.trap_FS_FCloseFile(fd)
+    if type(data) ~= "string" or #data == 0 then
+        return nil
+    end
+
+    local segs = {}
+    for line in data:gmatch("[^\r\n]+") do
+        if line:sub(1, 1) ~= "#" then
+            local idx, kind, ax, ay, az, bx, by, bz =
+                line:match("^(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)")
+            -- Every field must parse. A half-read line is a truncated file, and
+            -- a truncated file must not quietly become a shorter measurement.
+            --
+            -- ⛔ This used to SKIP the bad line and keep going, which is the
+            -- opposite of what the sentence above says: the load returned a
+            -- shorter table, the capture wrote fewer rows, and the shortfall
+            -- had to be caught two layers later — if at all (CodeRabbit, #797).
+            if not (idx and tonumber(ax) and tonumber(ay) and tonumber(az)
+                    and tonumber(bx) and tonumber(by) and tonumber(bz)) then
+                et.G_Print(string.format(
+                    "[PROX-W6] REFUSED %s: unparseable line %d. A truncated "
+                    .. "fixture must not become a shorter measurement.\n",
+                    path, #segs + 1))
+                return nil
+            end
+            segs[#segs + 1] = {
+                idx = idx, kind = kind,
+                a = {tonumber(ax), tonumber(ay), tonumber(az)},
+                b = {tonumber(bx), tonumber(by), tonumber(bz)},
+            }
+        end
+    end
+    return segs
+end
+
+local function w6Flush()
+    if not w6.out_lines or #w6.out_lines == 0 then return end
+    local path = "w6/out/" .. tostring(w6.map) .. ".txt"
+    local fd = et.trap_FS_FOpenFile(path, et.FS_WRITE)
+    if not fd or fd == -1 or fd == 0 then
+        et.G_Print("[PROX-W6] ERROR: cannot open " .. path .. " for write\n")
+        return
+    end
+    local per_us = (w6.batches > 0) and (w6.total_us / math.max(#w6.out_lines, 1)) or -1
+    local header = table.concat({
+        "# w6 engine capture map=" .. tostring(w6.map),
+        "# engine_call=et.trap_Trace(a,{0,0,0},{0,0,0},b,-2,1)",
+        "# tracker=" .. tostring(modname) .. " " .. tostring(version),
+        string.format("# segments=%d batches=%d total_ms=%.1f us_per_trace=%.2f",
+                      #w6.out_lines, w6.batches, w6.total_us / 1000.0, per_us),
+        "# idx fraction startsolid allsolid entityNum surfaceFlags contents",
+        "",
+    }, "\n")
+    et.trap_FS_Write(header, string.len(header), fd)
+    for _, l in ipairs(w6.out_lines) do
+        local line = l .. "\n"
+        et.trap_FS_Write(line, string.len(line), fd)
+    end
+    et.trap_FS_FCloseFile(fd)
+    et.G_Print(string.format(
+        "[PROX-W6] wrote %s  segments=%d  %.2f us/trace\n", path, #w6.out_lines, per_us))
+end
+
+local function w6Step(budget)
+    local started = et.trap_Milliseconds()
+    local n = 0
+    while w6.cursor < #w6.segments and n < budget do
+        w6.cursor = w6.cursor + 1
+        n = n + 1
+        local seg = w6.segments[w6.cursor]
+        local ok, tr = pcall(et.trap_Trace, seg.a, {0, 0, 0}, {0, 0, 0}, seg.b, -2, 1)
+        if ok and type(tr) == "table" then
+            w6.out_lines[#w6.out_lines + 1] = string.format(
+                "%s %.9g %d %d %d %d %d",
+                seg.idx,
+                tonumber(tr.fraction) or -1,
+                (tr.startsolid and 1) or 0,
+                (tr.allsolid and 1) or 0,
+                tonumber(tr.entityNum) or -1,
+                tonumber(tr.surfaceFlags) or 0,
+                tonumber(tr.contents) or 0)
+        else
+            -- Recorded, never skipped: a missing idx in the output would look
+            -- like a shorter run rather than a failed trace.
+            w6.out_lines[#w6.out_lines + 1] = seg.idx .. " ERROR 0 0 -1 0 0"
+        end
+    end
+    w6.total_us = w6.total_us + (et.trap_Milliseconds() - started) * 1000
+    w6.batches = w6.batches + 1
+    if w6.cursor >= #w6.segments then
+        w6Flush()
+        w6.segments = nil
+    end
+end
+
+-- ===== W6 TRACE FIXTURE PROBE =====
+-- ⛔ Local test server only. Dormant unless config.trace_fixture.enabled.
+--
+-- Establishes ONE thing: that et.trap_Trace with entNum = -2 is a world-only
+-- trace, matching what the offline BspPointTracer models. Everything W6 wants
+-- to measure rests on that, so it is proven here before anything is built on
+-- it -- and it is proven with segments whose answer is known in advance, so a
+-- broken probe cannot look like a passing one.
+--
+-- The two controls need no map knowledge, which is why they work anywhere:
+--   DOWN  -- straight down 10000 units from a standing player. The player is
+--            standing ON something, so this MUST be blocked by the world.
+--   TINY  -- one unit sideways from a standing player, inside the space they
+--            already occupy. This MUST be clear.
+-- A probe that reports DOWN clear or TINY blocked is broken, and says so
+-- without any reference to the geometry under test.
+local trace_probe_done = false
+local trace_probe_last = 0
+-- ⛔ The capture waits for this, not for trace_probe_done. "The probe ran" and
+-- "the probe proved its preconditions" are different facts, and W6's entire
+-- verdict rests on the second: if entNum = -2 does NOT skip entity clipping,
+-- every fixture segment is measuring something other than the world.
+local trace_probe_validated = false
+
+local function traceProbeOne(label, a, b)
+    local res = {}
+    for _, ent in ipairs({-2, -1}) do
+        local ok, tr = pcall(et.trap_Trace, a, {0, 0, 0}, {0, 0, 0}, b, ent, 1)
+        if not ok or type(tr) ~= "table" then
+            res[ent] = {err = tostring(tr)}
+        else
+            res[ent] = {
+                frac = tonumber(tr.fraction) or -1,
+                ent  = tonumber(tr.entityNum) or -1,
+                ss   = tostring(tr.startsolid),
+            }
+        end
+    end
+    local w, e = res[-2], res[-1]
+    if w.err or e.err then
+        et.G_Print(string.format("[PROX-W6] %-8s ERROR w=%s e=%s\n",
+            label, tostring(w.err), tostring(e.err)))
+        return nil
+    end
+    et.G_Print(string.format(
+        "[PROX-W6] %-8s world(-2): frac=%.4f ent=%d ss=%s | ents(-1): frac=%.4f ent=%d ss=%s%s\n",
+        label, w.frac, w.ent, w.ss, e.frac, e.ent, e.ss,
+        (w.frac ~= e.frac) and "   <<< DIFFER" or ""))
+    return w, e
+end
+
+-- A real, standing client. `r.currentOrigin` answers {0,0,0} for a slot that is
+-- not in the world yet, and in Lua 0 is TRUTHY — so a naive `if o and o[1]`
+-- accepts the world origin as a player position and every control below then
+-- "passes" on garbage. That is the same shape of false green this project has
+-- been bitten by elsewhere, so the check is explicit.
+local function firstRealClientOrigin()
+    local found = {}
+    for i = 0, get_max_clients() - 1 do
+        local o = safe_gentity_get(i, "r.currentOrigin")
+        if o and type(o) == "table" and o[1] and o[2] and o[3]
+           and not (o[1] == 0 and o[2] == 0 and o[3] == 0) then
+            found[#found + 1] = {slot = i, o = o}
+        end
+    end
+    return found
+end
+
+local function runTraceProbe()
+    local clients = firstRealClientOrigin()
+    if #clients < 2 then
+        et.G_Print(string.format(
+            "[PROX-W6] probe deferred: %d client(s) with a real origin, need 2\n", #clients))
+        return false
+    end
+
+    local seed = clients[1].o
+    local eye  = {seed[1], seed[2], seed[3] + 56}
+    et.G_Print(string.format("[PROX-W6] map=%s clients=%d seed=%.1f,%.1f,%.1f\n",
+        tostring(et.trap_Cvar_Get("mapname")), #clients, seed[1], seed[2], seed[3]))
+
+    -- Controls whose answer is known without knowing the map. Their results
+    -- used to be printed and dropped; a wrong one now stops the probe, because
+    -- a probe that answers a known question wrong cannot be trusted with an
+    -- unknown one.
+    local down_w = traceProbeOne("DOWN", eye, {seed[1], seed[2], seed[3] - 10000})
+    local tiny_w = traceProbeOne("TINY", eye, {seed[1] + 1, seed[2], seed[3] + 56})
+    if not down_w or not tiny_w then
+        et.G_Print("[PROX-W6] REFUSED: a control trace errored\n")
+        return true
+    end
+    if down_w.frac >= 1.0 then
+        et.G_Print(string.format(
+            "[PROX-W6] REFUSED: DOWN did not block (frac=%.4f). 10,000 units "
+            .. "down from a standing position must hit something.\n", down_w.frac))
+        return true
+    end
+    if tiny_w.frac < 1.0 then
+        et.G_Print(string.format(
+            "[PROX-W6] REFUSED: TINY was blocked (frac=%.4f). One unit sideways "
+            .. "inside the space the player already filled must be clear.\n", tiny_w.frac))
+        return true
+    end
+
+    -- The decisive test. Controls above prove the probe works; they do NOT
+    -- prove that -2 skips entity clipping, because nothing in them is blocked
+    -- by an entity. Only a segment where the two disagree can show that, so
+    -- sweep every client pair and count.
+    local pairs_n, differ = 0, 0
+    for i = 1, #clients do
+        for j = i + 1, #clients do
+            local a = clients[i].o
+            local b = clients[j].o
+            local w, e = traceProbeOne(
+                string.format("PAIR%d-%d", clients[i].slot, clients[j].slot),
+                {a[1], a[2], a[3] + 56}, {b[1], b[2], b[3] + 56})
+            if w and e then
+                pairs_n = pairs_n + 1
+                if w.frac ~= e.frac then differ = differ + 1 end
+            end
+        end
+    end
+    et.G_Print(string.format(
+        "[PROX-W6] pairs=%d differ(-2 vs -1)=%d\n", pairs_n, differ))
+
+    -- Client pairs agreeing proves nothing: if no ENTITY sits on the segment,
+    -- -2 and -1 must agree whether or not -2 skips entity clipping. The only
+    -- discriminating case is a segment an entity blocks, so go and find one:
+    -- walk the non-client entities, take those with a real bounding volume, and
+    -- trace straight through the middle of each. A solid brush entity (a door,
+    -- a mover) is clipped by -1 and invisible to -2, and the moment one of them
+    -- shows frac<1 for -1 and frac=1 for -2, the reading of sv_world.c:749 is
+    -- confirmed by the running engine rather than by me.
+    local ent_tested, ent_differ, first_proof = 0, 0, nil
+    for n = get_max_clients(), 1021 do
+        local inuse = safe_gentity_get(n, "inuse")
+        if inuse then
+            local lo = safe_gentity_get(n, "r.absmin")
+            local hi = safe_gentity_get(n, "r.absmax")
+            if lo and hi and lo[1] and hi[1]
+               and (hi[1] - lo[1]) > 8 and (hi[2] - lo[2]) > 8 and (hi[3] - lo[3]) > 8 then
+                local cx = (lo[1] + hi[1]) * 0.5
+                local cy = (lo[2] + hi[2]) * 0.5
+                local cz = (lo[3] + hi[3]) * 0.5
+                local span = (hi[1] - lo[1]) * 0.5 + 32
+                local a = {cx - span, cy, cz}
+                local b = {cx + span, cy, cz}
+                local okw, tw = pcall(et.trap_Trace, a, {0,0,0}, {0,0,0}, b, -2, 1)
+                local oke, te = pcall(et.trap_Trace, a, {0,0,0}, {0,0,0}, b, -1, 1)
+                if okw and oke and type(tw) == "table" and type(te) == "table" then
+                    ent_tested = ent_tested + 1
+                    local fw = tonumber(tw.fraction) or -1
+                    local fe = tonumber(te.fraction) or -1
+                    if fw ~= fe then
+                        ent_differ = ent_differ + 1
+                        if not first_proof then
+                            first_proof = string.format(
+                                "ent=%d class=%s model=%s  world(-2) frac=%.4f ent=%s | ents(-1) frac=%.4f ent=%s",
+                                n, tostring(safe_gentity_get(n, "classname")),
+                                tostring(safe_gentity_get(n, "model")),
+                                fw, tostring(tw.entityNum), fe, tostring(te.entityNum))
+                        end
+                    end
+                end
+            end
+        end
+    end
+    et.G_Print(string.format("[PROX-W6] entities tested=%d differ=%d\n", ent_tested, ent_differ))
+    if first_proof then
+        et.G_Print("[PROX-W6] PROOF " .. first_proof .. "\n")
+    end
+    et.G_Print(string.format(
+        "[PROX-W6] VERDICT entNum=-2 skips entity clipping: %s\n",
+        (ent_differ > 0) and "CONFIRMED by the running engine"
+                          or "NOT SHOWN -- no entity blocked any probe segment"))
+
+    -- ⭐ NOT SHOWN is not the same as false, and it is not good enough either.
+    -- Client pairs agreeing proves nothing: with no entity on the segment, -2
+    -- and -1 must agree whether or not -2 skips entity clipping. Only a segment
+    -- an entity blocks discriminates, so without one the premise is untested and
+    -- the capture stays shut. Returning true here ends the probe; it is
+    -- `trace_probe_validated` that opens the gate.
+    trace_probe_validated = (ent_differ > 0)
+    if not trace_probe_validated then
+        et.G_Print("[PROX-W6] CAPTURE DISABLED: premise untested. Load a map with "
+            .. "solid brush entities (a door, a mover) and probe again.\n")
+    end
+    return true
+end
+
 function et_RunFrame(levelTime)
     if not config.enabled then return end
     frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
+
+    if config.trace_fixture and config.trace_fixture.enabled and not trace_probe_done
+       and levelTime > (config.trace_fixture.probe_delay_ms or 5000)
+       and levelTime - (trace_probe_last or 0) > 5000 then
+        trace_probe_last = levelTime
+        local ok, done = pcall(runTraceProbe)
+        if not ok then
+            et.G_Print("[PROX-W6] probe failed: " .. tostring(done) .. "\n")
+            trace_probe_done = true
+        elseif done then
+            trace_probe_done = true
+        end
+    end
+
+    -- ⛔ trace_probe_validated, not .enabled: the fixture capture may only run
+    -- once the probe has SHOWN, on this running engine, that entNum = -2
+    -- excludes entity clipping. Before that, every traced segment would be
+    -- answering a different question than the offline tracer.
+    if config.trace_fixture and config.trace_fixture.enabled and trace_probe_validated then
+        if w6.segments == nil and w6.map ~= tracker.round.map_name then
+            w6.map = tracker.round.map_name
+            w6.segments = w6Load(tostring(w6.map))
+            w6.cursor, w6.out_lines, w6.total_us, w6.batches = 0, {}, 0, 0
+            if w6.segments then
+                et.G_Print(string.format("[PROX-W6] loaded %d segments for %s\n",
+                    #w6.segments, tostring(w6.map)))
+            end
+        end
+        if w6.segments then
+            w6Step(config.trace_fixture.batch or 250)
+        end
+    end
 
     -- Detect round start
     if gamestate == 0 and last_gamestate ~= 0 then
