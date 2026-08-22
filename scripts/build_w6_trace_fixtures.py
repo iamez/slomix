@@ -280,6 +280,18 @@ def main() -> int:
             writer.add("control_down", eye, (p[0], p[1], p[2] - 10000.0))
             writer.add("control_tiny", eye, (p[0] + 1.0, p[1], p[2] + EYE_Z))
 
+        # ⛔ A fixture without controls has no falsifier. `track_points` can
+        # return nothing (a map with no recorded tracks), and the control loop
+        # then samples an empty list and writes none — leaving a file that looks
+        # complete and proves nothing (CodeRabbit, #797).
+        if not writer.counts["control_down"] or not writer.counts["control_tiny"]:
+            raise SystemExit(
+                f"{map_name}: no controls were written "
+                f"(down={writer.counts['control_down']}, "
+                f"tiny={writer.counts['control_tiny']}). A fixture with no "
+                f"control cannot fail, so it is not written at all."
+            )
+
         out = args.out_dir / f"{map_name}.txt"
         header = [
             f"# w6 trace fixture map={map_name}",

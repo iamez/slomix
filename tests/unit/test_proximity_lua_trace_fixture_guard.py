@@ -16,6 +16,8 @@ so the intent is pinned here rather than left in a comment.
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -131,3 +133,65 @@ def test_a_wrong_control_stops_the_probe(control: str) -> None:
     # The refusal must come before the entity sweep, or the probe does the
     # expensive work anyway and reports a verdict it should not have reached.
     assert body.index("REFUSED") < body.index("ent_tested")
+
+
+# --- a truncated fixture must not load at all -------------------------------
+
+LUA = shutil.which("lua5.4") or shutil.which("lua")
+
+_W6LOAD_HARNESS = """
+local src = io.open(%r):read('a')
+local block = src:match('(local function w6Load.-\\nend)')
+assert(block, 'w6Load not found')
+local payload = %s
+local et = {
+  FS_READ = 0,
+  trap_FS_FOpenFile = function() return 7, #payload end,
+  trap_FS_Read = function() return payload end,
+  trap_FS_FCloseFile = function() end,
+  G_Print = function(s) io.stderr:write(s) end,
+}
+local chunk = assert(load('local et = ... \\n' .. block .. '\\nreturn w6Load'))
+local w6Load = chunk(et)
+local segs = w6Load('test')
+if segs == nil then print('NIL') else print(#segs) end
+"""
+
+
+def _run_w6load(payload: str) -> str:
+    script = _W6LOAD_HARNESS % (str(TRACKER), "[==[" + payload + "]==]")
+    result = subprocess.run(
+        [LUA, "-"], input=script, capture_output=True, text=True, timeout=30, check=True
+    )
+    return result.stdout.strip()
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_a_complete_fixture_loads_every_segment() -> None:
+    payload = (
+        "# header\n"
+        "0 blocked 0 0 0 100 0 0 blocked 0\n"
+        "1 clear 0 0 0 100 0 0 clear 0\n"
+        "2 control_down 0 0 56 0 0 -9944 blocked 0\n"
+    )
+    assert _run_w6load(payload) == "3"
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_a_truncated_line_refuses_the_whole_fixture() -> None:
+    """⛔ It used to SKIP the bad line and keep going — the exact opposite of
+    the comment above it, which says a truncated file must not quietly become a
+    shorter measurement. The load returned a shorter table, the capture wrote
+    fewer rows, and the shortfall had to be caught two layers later."""
+    payload = (
+        "# header\n"
+        "0 blocked 0 0 0 100 0 0 blocked 0\n"
+        "1 clear 0 0 0 100 0\n"           # cut mid-line, as a truncation does
+    )
+    assert _run_w6load(payload) == "NIL"
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_a_non_numeric_coordinate_refuses_the_fixture() -> None:
+    payload = "# header\n0 blocked 0 0 0 1e0 nan-ish 0 blocked 0\n"
+    assert _run_w6load(payload) == "NIL"
