@@ -632,12 +632,20 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     }
     interval = intervals.pop() if len(intervals) == 1 else None
     sources = {m.get("source") for m in manifests if m.get("source")}
+    # Same rule for every scalar, `manifest_version` included: one answer or
+    # none. Taking this one from `head` while the others fell back to unknown
+    # would leave a single field describing one file and the rest describing
+    # the round (CodeRabbit, PR #795).
+    versions = {
+        str(m.get("manifest_version")) for m in manifests
+        if m.get("manifest_version") is not None
+    }
 
     return CapturePolicy(
         mode="fixed" if interval else "unknown",
         observation_interval_ms=interval,
         capabilities=capabilities,
-        policy_version=str(head.get("manifest_version") or "") or None,
+        policy_version=versions.pop() if len(versions) == 1 else None,
         source=(sources.pop() if len(sources) == 1 else "conflicting"),
         manifest_count=len(manifests),
         conflicting_flags=conflicting_flags,
