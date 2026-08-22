@@ -8,6 +8,8 @@ spec §4.3–4.5 rather than against the current output, so a future refactor th
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from website.backend.services import replay_service
@@ -21,6 +23,8 @@ from website.backend.services.round_web_service import (
     build_snapshot,
     derive_velocity,
     find_position_floor,
+    load_capture_policy,
+    load_round_clock,
     nearest_teammate_separation,
     select_life,
 )
@@ -317,3 +321,263 @@ class TestEdgesNeverInventACoordinate:
 
 def test_edge_dataclass_defaults_to_not_contested():
     assert Edge("a", "b", "teammate", 1.0).recently_contested is False
+
+
+class _StubDb:
+    """Returns one fixed result set; the query text is irrelevant here."""
+
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def fetch_all(self, _sql, _params=None):
+        return self.rows
+
+
+class TestLoadCapturePolicy:
+    """What the round says it was able to record — and what it refuses to say."""
+
+    @staticmethod
+    def _manifest(source="sections_observed", **caps):
+        base = {"shot_fired": "unknown", "aim_lock": "enabled"}
+        base.update(caps)
+        return {
+            "manifest_version": 1,
+            "source": source,
+            "capabilities": base,
+            "position_sample_interval_ms": 200,
+        }
+
+    @pytest.mark.asyncio
+    async def test_no_manifest_stays_unknown(self):
+        policy = await load_capture_policy(_StubDb([]), 1)
+        assert policy.mode == "unknown"
+        assert policy.source == "absent"
+        assert policy.observation_interval_ms is None
+        assert policy.capabilities == {}
+
+    @pytest.mark.asyncio
+    async def test_cadence_comes_from_the_manifest(self):
+        policy = await load_capture_policy(_StubDb([(self._manifest(),)]), 1)
+        assert policy.mode == "fixed"
+        assert policy.observation_interval_ms == 200
+        assert policy.source == "sections_observed"
+
+    @pytest.mark.asyncio
+    async def test_missing_capture_is_unknown_not_false(self):
+        """The whole reason the manifest exists. A consumer reading `unknown`
+        as `false` would report "no gunfire this round" about a round where
+        gunfire was simply never recorded."""
+        policy = await load_capture_policy(_StubDb([(self._manifest(),)]), 1)
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.capabilities["shot_fired"] is not False
+
+    @pytest.mark.asyncio
+    async def test_json_string_rows_are_accepted(self):
+        """Some adapters hand jsonb back as text rather than a dict."""
+        policy = await load_capture_policy(
+            _StubDb([(json.dumps(self._manifest()),)]), 1
+        )
+        assert policy.capabilities["aim_lock"] == "enabled"
+
+    @pytest.mark.asyncio
+    async def test_disagreeing_files_collapse_to_unknown(self):
+        """One round, two files, two answers: we cannot tell which file the
+        rows came from, so the disputed flag is unknown and the disagreement is
+        counted rather than hidden behind whichever row sorted first."""
+        rows = [
+            (self._manifest(shot_fired="enabled"),),
+            (self._manifest(shot_fired="disabled"),),
+        ]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.conflicting_flags == 1
+        assert policy.manifest_count == 2
+        # Flags they agree on survive intact.
+        assert policy.capabilities["aim_lock"] == "enabled"
+
+    @pytest.mark.asyncio
+    async def test_agreeing_files_are_not_a_conflict(self):
+        rows = [(self._manifest(),), (self._manifest(),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.conflicting_flags == 0
+        assert policy.manifest_count == 2
+        assert policy.capabilities["aim_lock"] == "enabled"
+
+    @pytest.mark.asyncio
+    async def test_malformed_manifest_is_ignored_not_crashed(self):
+        policy = await load_capture_policy(_StubDb([("not a manifest",), (None,)]), 1)
+        assert policy.source == "absent"
+
+
+class TestCapturePolicyWithSeveralManifests:
+    """One round, more than one processed file. Rare, and every branch here is
+    a place where picking a winner would be a guess (CodeRabbit, PR #795)."""
+
+    @staticmethod
+    def _m(source="sections_observed", interval=200, **caps):
+        base = {"shot_fired": "unknown", "aim_lock": "enabled"}
+        base.update(caps)
+        return {
+            "manifest_version": 1,
+            "source": source,
+            "capabilities": base,
+            "position_sample_interval_ms": interval,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_declared_manifest_leads_regardless_of_order(self):
+        """Exact beats inferred, whichever row the database returned first."""
+        inferred = self._m(source="sections_observed", shot_fired="unknown")
+        declared = self._m(source="declared", shot_fired="disabled")
+        for rows in ([(inferred,), (declared,)], [(declared,), (inferred,)]):
+            policy = await load_capture_policy(_StubDb(rows), 1)
+            assert policy.capabilities["shot_fired"] == "unknown"  # they disagree
+            assert policy.policy_version == "1"  # both are manifest_version 1
+            assert policy.source == "conflicting"
+
+    @pytest.mark.asyncio
+    async def test_disagreeing_manifest_version_is_dropped_too(self):
+        """Every scalar follows one rule: one answer or none. Reporting this one
+        from an arbitrary file while the rest fall back would leave a single
+        field describing one file and the others describing the round."""
+        a = self._m()
+        b = dict(self._m(), manifest_version=2)
+        policy = await load_capture_policy(_StubDb([(a,), (b,)]), 1)
+        assert policy.policy_version is None
+
+    @pytest.mark.asyncio
+    async def test_disagreeing_cadence_is_unknown(self):
+        """The cadence is a fact about the file. Two answers means we have none."""
+        rows = [(self._m(interval=200),), (self._m(interval=50),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_agreeing_cadence_survives(self):
+        rows = [(self._m(interval=200),), (self._m(interval=200),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.observation_interval_ms == 200
+        assert policy.mode == "fixed"
+
+    @pytest.mark.asyncio
+    async def test_a_flag_only_one_file_knows_is_kept(self):
+        rows = [(self._m(),), (self._m(comm_events="enabled"),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.capabilities["comm_events"] == "enabled"
+        assert policy.conflicting_flags == 0
+
+    @pytest.mark.asyncio
+    async def test_a_flag_disputed_by_three_files_counts_once(self):
+        """Once unknown, a flag stays unknown; further disagreement about the
+        same flag is the same conflict, not a new one."""
+        rows = [
+            (self._m(shot_fired="enabled"),),
+            (self._m(shot_fired="disabled"),),
+            (self._m(shot_fired="unknown"),),
+        ]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.conflicting_flags == 1
+        assert policy.manifest_count == 3
+
+
+class _ClockStubDb:
+    """Answers `fetch_timing_observations`, then tracks, then revives."""
+
+    def __init__(self, timing, tracks=(), revives=()):
+        self._queue = [list(timing), list(tracks), list(revives)]
+
+    async def fetch_all(self, _sql, _params=None):
+        return self._queue.pop(0) if self._queue else []
+
+
+#: Fixtures are written in terms of LANDINGS, the thing that physically
+#: happens, and the offset is derived from them — never the other way round.
+#: `offset_ms` is the negated phase (a landing L satisfies
+#: `(L + offset) % interval == 0`), and building a fixture from a guessed offset
+#: is how a wrong convention gets baked into both the code and its test.
+def _offset_for(landing_ms: int, interval: int) -> int:
+    return (-landing_ms) % interval
+
+
+def _wave_kills(team: str, interval: int, landing: int, n: int = 12):
+    """Kills whose `time_to_next_spawn` points at the next real landing.
+
+    Column order matches `fetch_timing_observations`: victim_team, kill_time,
+    enemy_spawn_interval, time_to_next_spawn, score, killer_guid, killer_name.
+    """
+    rows = []
+    for i in range(n):
+        kill_time = landing + i * 1700 + 300
+        time_to_next = (landing - kill_time) % interval or interval
+        rows.append((team, kill_time, interval, time_to_next,
+                     0.5, f"GUID{i}", f"player{i}"))
+    return rows
+
+
+def _wave_lives(team: str, interval: int, landing: int, waves: int = 6):
+    """Two players landing on every wave, so clusters can form.
+
+    Column order matches `fetch_clock_lives_and_revives`.
+    """
+    rows = []
+    row_id = 0
+    for wave in range(waves):
+        spawn = landing + wave * interval
+        for player in range(2):
+            row_id += 1
+            rows.append((row_id, f"P{player}", f"player{player}", team,
+                         spawn, spawn + 900, "killed"))
+    return rows
+
+
+class TestLoadRoundClock:
+    """§5's clock, as the snapshot publishes it."""
+
+    @pytest.mark.asyncio
+    async def test_both_teams_always_appear(self):
+        """A missing key would read as "no clock here" when the truth is "we
+        could not verify one" — the distinction §5.2 exists to draw."""
+        clock = await load_round_clock(_ClockStubDb([]), 1, 0)
+        assert set(clock) == {"AXIS", "ALLIES"}
+        assert all(entry["status"] == "unavailable" for entry in clock.values())
+        assert all(entry["reason"] for entry in clock.values())
+
+    @pytest.mark.asyncio
+    async def test_a_validated_clock_carries_the_moment(self):
+        interval, landing = 20_000, 5_000
+        db = _ClockStubDb(
+            _wave_kills("AXIS", interval, landing),
+            _wave_lives("AXIS", interval, landing),
+        )
+        clock = await load_round_clock(db, 1, landing + 12_000)
+        axis = clock["AXIS"]
+        assert axis["status"] == "validated"
+        assert axis["offset_ms"] == _offset_for(landing, interval)
+        # 12 s past a landing on a 20 s wheel: 8 s until the next one.
+        assert axis["phase_ms"] == 12_000
+        assert axis["time_to_next_wave_ms"] == 8_000
+
+    @pytest.mark.asyncio
+    async def test_a_team_without_observations_is_unavailable_not_absent(self):
+        interval, landing = 20_000, 5_000
+        db = _ClockStubDb(
+            _wave_kills("AXIS", interval, landing),
+            _wave_lives("AXIS", interval, landing),
+        )
+        clock = await load_round_clock(db, 1, 0)
+        assert clock["ALLIES"]["status"] == "unavailable"
+        assert "ALLIES" in clock
+
+    @pytest.mark.asyncio
+    async def test_an_unvalidated_clock_publishes_no_phase(self):
+        """`phase_ms` is computed from the offset, and an unvalidated offset is
+        one the protocol refuses to stand behind — so the moment cannot be
+        derived from it either."""
+        db = _ClockStubDb(_wave_kills("AXIS", 20_000, 5_000), [])
+        axis = (await load_round_clock(db, 1, 9_000))["AXIS"]
+        assert axis["status"] != "validated"
+        assert axis["offset_ms"] is None
+        assert "phase_ms" not in axis
+        assert "time_to_next_wave_ms" not in axis

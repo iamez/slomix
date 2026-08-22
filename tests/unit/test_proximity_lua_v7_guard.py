@@ -8,6 +8,7 @@ isFeatureEnabled gates, and the comm callback must not intercept commands.
 the proximity-quick-wins branch); it is still feature-gated and still has a
 section header, but it ships ON. The other three remain dormant.
 """
+import re
 from pathlib import Path
 
 import pytest
@@ -71,4 +72,15 @@ def test_comm_callback_never_intercepts_commands() -> None:
 
 
 def test_version_is_v7_draft() -> None:
-    assert 'local version = "6.10"' in _lua_source()
+    """Still on the v7 draft line — the series, not one point on it.
+
+    This asserted `6.10` exactly, which made every patch bump edit a test that
+    is not about the patch. What this file guards is dormancy, so pin the
+    series: a move off 6.1x means the v7 draft ended and these guards need
+    revisiting, while 6.10 -> 6.11 does not.
+    """
+    match = re.search(r'^local version = "(\d+\.\d+)"', _lua_source(), re.M)
+    assert match, "tracker has no version string"
+    assert match.group(1).startswith("6.1"), (
+        f"version {match.group(1)} is off the v7 draft line; revisit these guards"
+    )

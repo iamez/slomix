@@ -51,7 +51,14 @@ local modname = "proximity_tracker"
 -- + pers.lastSpawnTime), SKILL_SNAPSHOT (sess.skill at round end), COMM_EVENTS
 -- (vsay/voice-macro frequency via et_ClientCommand). ALL default OFF; see
 -- docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md. Production unchanged until enabled.
-local version = "6.10"
+-- 6.11: additive capability declaration in the header (tracker_version_full,
+-- test_mode, capabilities). No section, no sampling and no cost changed — three
+-- header lines per round. It exists because an absent section is ambiguous by
+-- construction: `if isFeatureEnabled(x) and #rows > 0` writes nothing both when
+-- the capture is off and when it is on with nothing to report. Consumers were
+-- resolving that ambiguity by assuming, which turns missing telemetry into a
+-- claim about the match.
+local version = "6.11"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -283,7 +290,22 @@ local config = {
         objective_run_tracking = true,
         -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
         -- high frequency; opt-in only. Production unchanged until enabled.
-        shot_fired = false,
+        -- ⭐ TRUE IN THE REPOSITORY ON PURPOSE (2026-08-22). It was true on the
+        -- live server and false here, so the next deploy of this file silently
+        -- turned the capture off: shot rows stop dead on 2026-08-11 and every
+        -- session since has no gunfire data. §10.3 warned about exactly this
+        -- ("never blind-copy the repo file over the live one") — the durable fix
+        -- is for the repository to agree with the server, not for someone to
+        -- remember to re-edit the live copy after every deploy.
+        --
+        -- `aim_lock` is the control that proves the mechanism: it is true HERE,
+        -- and it survived the same deploy with 92% August coverage.
+        --
+        -- Measured cost on the local test server (6 bots, 690 s round):
+        -- 1.73 KB per player-minute, 26 shots per player-minute, ~207 KB for a
+        -- 12-player 10-minute round. Server CPU could not resolve a difference
+        -- at all (0.06% vs 0.12%, both rounding to 0-1%).
+        shot_fired = true,
         -- v7 draft (6.10): enable individually after the gated testmode probe
         -- (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
         aim_lock = true,          -- crosshair-on-enemy lock events (activated 2026-06-22)
@@ -3113,6 +3135,62 @@ local function outputDataInner()
         tracker.spawn.axis_interval, tracker.spawn.allies_interval)
     et.trap_FS_Write(header, string.len(header), fd)
 
+    -- ===== CAPABILITY DECLARATION (6.11) =====
+    -- Says outright which captures were on, because the file cannot show it.
+    -- Every gated section is written as `if isFeatureEnabled(x) and #rows > 0`,
+    -- so a capture that was ON but had nothing to report produces a file that
+    -- is byte-identical to one where the capture was OFF. A reader looking at
+    -- an empty round therefore cannot tell "no gunfire happened" from "gunfire
+    -- was never recorded" — and guessing turns a gap in telemetry into a claim
+    -- about the game. This line removes the guess for every round written from
+    -- here on; older files fall back to what their sections prove, which is
+    -- `enabled` or `unknown`, never `disabled`.
+    --
+    -- The value reports isFeatureEnabled(), NOT config.features[]: test mode
+    -- forces every flag false (line 338), and the declaration has to match what
+    -- was actually written rather than what was configured. test_mode is
+    -- declared alongside so the two cases stay distinguishable.
+    --
+    -- `name:0|1` joined by commas, and deliberately no `=` in the value: the
+    -- parser reads header lines with line.split('=')[1], so an `=` here would
+    -- silently truncate the declaration.
+    local cap_order = {
+        "engagement_tracking", "crossfire_detection", "escape_detection",
+        "heatmap_generation", "reaction_tracking", "spawn_timing",
+        "team_cohesion", "crossfire_opportunities", "focus_fire",
+        "team_push_detection", "trade_kills", "kill_outcome_tracking",
+        "hit_region_tracking", "combat_positions", "carrier_tracking",
+        "carrier_returns", "vehicle_tracking", "construction_tracking",
+        "objective_run_tracking", "shot_fired", "aim_lock", "spawn_select",
+        "skill_snapshot", "comm_events",
+    }
+    local cap_parts, cap_seen = {}, {}
+    for _, name in ipairs(cap_order) do
+        cap_seen[name] = true
+        cap_parts[#cap_parts + 1] = name .. ":" .. (isFeatureEnabled(name) and "1" or "0")
+    end
+    -- A flag added to config.features without being added to cap_order would
+    -- otherwise vanish from the declaration, and a missing name reads as
+    -- "unknown" rather than as the bug it is. Collect the strays, sorted so the
+    -- line stays byte-stable across rounds (pairs() order is not defined).
+    local cap_extra = {}
+    for name, _ in pairs(config.features) do
+        if not cap_seen[name] then cap_extra[#cap_extra + 1] = name end
+    end
+    table.sort(cap_extra)
+    for _, name in ipairs(cap_extra) do
+        cap_parts[#cap_parts + 1] = name .. ":" .. (isFeatureEnabled(name) and "1" or "0")
+    end
+
+    local cap_header = string.format(
+        "# tracker_version_full=%s\n" ..
+        "# test_mode=%d\n" ..
+        "# capabilities=%s\n",
+        version,
+        config.test_mode.enabled and 1 or 0,
+        table.concat(cap_parts, ","))
+    et.trap_FS_Write(cap_header, string.len(cap_header), fd)
+
     -- ===== ENGAGEMENTS (v4) =====
     local fmt_header = "# ENGAGEMENTS\n" ..
         "# id;start_time;end_time;duration;target_guid;target_name;target_team;" ..
@@ -4806,12 +4884,20 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     end
     createPlayerTrack(clientNum)
 
-    -- v7 (6.10, dormant): which spawn point did the player pick?
-    -- sess.spawnObjectiveIndex + pers.lastSpawnTime are documented fields
-    -- (LUA_V7_CAPTURE_RESEARCH_2026-06.md, candidate 4). Real spawns only —
-    -- the revived==1 path returned above.
+    -- v7: which spawn point did the player pick? Real spawns only — the
+    -- revived==1 path returned above.
+    --
+    -- ⚠️ This read `sess.spawnObjectiveIndex` until 2026-08-22, on the strength
+    -- of LUA_V7_CAPTURE_RESEARCH_2026-06.md calling it a documented field. It is
+    -- not: the name appears ZERO times in the whole ET:Legacy source tree
+    -- (checked against commit 732518ef). Every capture it ever made was -1.
+    --
+    -- `sess.userSpawnPointValue` is the real one — 12 occurrences in the engine
+    -- and exposed to Lua as FIELD_INT (src/game/g_lua.c:1313). It has existed
+    -- since 2.83, so nothing about the live build blocked this.
+    -- `pers.lastSpawnTime` was always fine (g_lua.c:1270).
     if isFeatureEnabled("spawn_select") then
-        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.spawnObjectiveIndex"))
+        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.userSpawnPointValue"))
         local last_spawn = tonumber(safe_gentity_get(clientNum, "pers.lastSpawnTime"))
         tracker.spawn_selects[#tracker.spawn_selects + 1] = {
             time = gameTime(),
