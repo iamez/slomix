@@ -38,16 +38,49 @@ def test_trace_fixture_ships_disabled() -> None:
     )
 
 
-def test_every_probe_entry_point_is_gated() -> None:
+#: The runtime entry points, by the names the tracker actually uses.
+#:
+#: ⚠️ This list was `("w6Load", "w6RunBatch")`. `w6RunBatch` does not exist —
+#: the batch function is `w6Step` — and `w6Load` is called as
+#: `w6.segments = w6Load(...)`, which a start-of-line pattern never matched. So
+#: the test iterated over an empty set and asserted nothing, while passing. That
+#: is the failure this repository's own CI comments warn about: a guard that
+#: skips looks identical to a guard that holds.
+PROBE_ENTRY_POINTS = ("w6Load", "w6Step", "runTraceProbe")
+
+
+@pytest.mark.parametrize("marker", PROBE_ENTRY_POINTS)
+def test_the_entry_point_exists_before_anything_is_asserted_about_it(marker: str) -> None:
+    """First prove there is something to guard.
+
+    Without this, renaming a function turns its guard into a no-op that still
+    reports green — which is exactly what happened to `w6RunBatch`.
+    """
+    # Bare name, not `name(`: `runTraceProbe` is handed to `pcall` as a value,
+    # so a call-shaped pattern misses it — the same class of near-miss that let
+    # the previous version of this file assert nothing.
+    uses = [
+        m for m in re.finditer(rf"\b{marker}\b", _source())
+        if not _source()[:m.start()].rstrip().endswith("local function")
+    ]
+    assert uses, f"{marker} is never used; the guard below would assert nothing"
+
+
+@pytest.mark.parametrize("marker", PROBE_ENTRY_POINTS)
+def test_every_probe_entry_point_is_gated(marker: str) -> None:
     """A single ungated call site is enough to hitch a production frame."""
     source = _source()
-    for marker in ("w6Load", "w6RunBatch"):
-        for match in re.finditer(rf"^\s*{marker}\(", source, re.M):
-            line_start = source.rfind("\n", 0, match.start())
-            preceding = source[max(0, line_start - 600):match.start()]
-            assert "config.trace_fixture" in preceding, (
-                f"{marker} is called without a nearby trace_fixture gate"
-            )
+    # Call sites only — skip the definition, which is `local function w6Step(`.
+    calls = [
+        m for m in re.finditer(rf"\b{marker}\b", source)
+        if not source[:m.start()].rstrip().endswith("local function")
+    ]
+    assert calls, f"{marker}: no call sites found"
+    for match in calls:
+        preceding = source[max(0, match.start() - 900):match.start()]
+        assert "config.trace_fixture" in preceding or "trace_probe" in preceding, (
+            f"{marker} is called without a nearby trace_fixture / probe gate"
+        )
 
 
 def test_the_probe_says_where_it_may_run() -> None:

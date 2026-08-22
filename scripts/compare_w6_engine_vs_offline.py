@@ -16,12 +16,15 @@ The engine's own answer carries the diagnosis with it: `surfaceFlags` and
 `contents` say WHAT stopped the trace, which separates a brush-reader bug
 (bsp.py) from a patch-tessellation bug (patch.py) without further guessing.
 
-Three things fail the run outright rather than being averaged away:
+Four things fail the run outright rather than being averaged away:
   * a control answering wrong (DOWN must block, TINY must be clear) — the
     capture is broken and no other number in it means anything;
   * an entityNum that is not 1022/1023 — entNum=-2 did not do what
     sv_world.c:749 says, so the comparison is not world-against-world;
-  * an ERROR row — a trace that did not run must not read as a shorter sample.
+  * an ERROR row — a trace that did not run must not read as a shorter sample;
+  * a capture whose row set differs from the fixture's — a missing row is
+    dropped from the denominator, and the controls are written last so that a
+    truncation loses them first.
 """
 
 from __future__ import annotations
@@ -101,6 +104,14 @@ def main() -> int:
     extra = set(capture) - set(fixture)
     if missing or extra:
         print(f"  ⚠️ manjka v zajemu: {len(missing)}   odveč: {len(extra)}")
+        # ⛔ These fail the run rather than being noted. A missing row is simply
+        # dropped from `total_n`, so a truncated capture reports a clean rate
+        # over whatever survived — and the controls are written LAST precisely
+        # so that a truncation loses them. That combination turns the one thing
+        # designed to catch a broken capture into the first casualty of one
+        # (CodeRabbit, PR #797).
+        for idx in sorted(missing, key=int)[:5]:
+            print(f"      manjka idx={idx} ({fixture[idx][0]})")
 
     hard_fail: list[str] = []
     by_kind: dict[str, Counter[str]] = {}
@@ -181,8 +192,13 @@ def main() -> int:
             print(f"    idx={idx:5s} {kind:8s} offline={off:8s} motor={eng:8s} "
                   f"frac={frac:12s} surf={surf} contents={contents}")
 
+    print("\n  === celovitost zajema ===")
+    print(f"    manjka v zajemu:              {len(missing)}")
+    print(f"    odveč v zajemu:               {len(extra)}")
+
     ok = (errors == 0 and entnum_bad == 0 and not hard_fail
-          and total_agree == total_n)
+          and total_agree == total_n
+          and not missing and not extra)
     return 0 if ok else 1
 
 

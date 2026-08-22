@@ -114,3 +114,34 @@ def test_an_expectation_exists_for_every_control_kind() -> None:
         f"builder writes {written - set(module.CONTROL_EXPECTATIONS)}, "
         f"which the comparator would not enforce"
     )
+
+
+# --- a truncated capture must not report a clean rate over the survivors ----
+
+
+def test_a_truncated_capture_fails_the_run(tmp_path: Path) -> None:
+    """⭐ The controls are written LAST so a truncation loses them — which made
+    the one thing designed to catch a broken capture the first casualty of one.
+
+    Missing rows were only printed, and they drop out of the denominator, so the
+    run reported 100% agreement over whatever survived and exited 0.
+    """
+    capture = "\n".join(_capture("0.5", "1.0").splitlines()[:3]) + "\n"
+    result = run_compare(tmp_path, _fixture("blocked", "clear"), capture)
+    assert result.returncode == 1, result.stdout
+    assert "manjka" in result.stdout
+    assert "control_down" in result.stdout, "the report must name what went missing"
+
+
+def test_an_unexpected_extra_row_fails_the_run(tmp_path: Path) -> None:
+    """A capture carrying rows the fixture never asked for is not the capture we
+    asked for, whatever the rows say."""
+    capture = _capture("0.5", "1.0") + "99 1.0 0 0 1023 0 0\n"
+    result = run_compare(tmp_path, _fixture("blocked", "clear"), capture)
+    assert result.returncode == 1, result.stdout
+
+
+def test_a_complete_capture_still_passes(tmp_path: Path) -> None:
+    """The half that keeps the guard usable."""
+    result = run_compare(tmp_path, _fixture("blocked", "clear"), _capture("0.5", "1.0"))
+    assert result.returncode == 0, result.stdout
