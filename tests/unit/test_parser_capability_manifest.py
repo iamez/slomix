@@ -138,6 +138,14 @@ SHAPES = {
         + "# capabilities=shot_fired:0,aim_lock:1\n"
         + TRACK_ROW
     ),
+    # A file whose header never states the cadence. The parser carries a 1000 ms
+    # software fallback for its own use; the manifest must still say `unknown`.
+    "no_cadence": HEADER.replace("# position_sample_interval=200\n", "") + TRACK_ROW,
+    # A section this parser has never heard of, immediately followed by rows.
+    # Its rows must not be credited to the section before it.
+    "unknown_section": (
+        HEADER + TRACK_ROW + "# FUTURE_SENSOR\n# a;b\n1;2\n"
+    ),
     "declared_test_mode": (
         HEADER
         + "# tracker_version_full=6.11\n# test_mode=1\n"
@@ -188,3 +196,20 @@ def test_scan_file_agrees_with_the_parser_on_real_files(index: int) -> None:
     that have the corpus, never the only place the guard lives."""
     path = str(REAL_FILES[index])
     assert _via_scan(path) == _via_parser(path)
+
+
+def test_absent_cadence_is_unknown_not_the_software_default(tmp_path: Path) -> None:
+    """`_metadata_defaults` carries 1000 ms for the parser's own use. Publishing
+    that as the round's cadence would be our setting masquerading as evidence."""
+    body = HEADER.replace("# position_sample_interval=200\n", "") + TRACK_ROW
+    assert _manifest(tmp_path, body)["position_sample_interval_ms"] is None
+
+
+def test_unknown_section_does_not_credit_the_previous_one(tmp_path: Path) -> None:
+    """A section header we do not recognise clears the label; otherwise its rows
+    are attributed to whatever came before, proving that capability on someone
+    else's data (CodeRabbit, PR #795)."""
+    body = HEADER + "# SHOT_FIRED\n# time;guid\n" + "# FUTURE_SENSOR\n# a;b\n1;2\n"
+    manifest = _manifest(tmp_path, body)
+    assert "SHOT_FIRED" not in manifest["sections_with_rows"]
+    assert manifest["capabilities"]["shot_fired"] == UNKNOWN

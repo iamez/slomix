@@ -389,7 +389,8 @@ class TestLoadCapturePolicy:
         ]
         policy = await load_capture_policy(_StubDb(rows), 1)
         assert policy.capabilities["shot_fired"] == "unknown"
-        assert policy.conflicting_files == 1
+        assert policy.conflicting_flags == 1
+        assert policy.manifest_count == 2
         # Flags they agree on survive intact.
         assert policy.capabilities["aim_lock"] == "enabled"
 
@@ -397,10 +398,74 @@ class TestLoadCapturePolicy:
     async def test_agreeing_files_are_not_a_conflict(self):
         rows = [(self._manifest(),), (self._manifest(),)]
         policy = await load_capture_policy(_StubDb(rows), 1)
-        assert policy.conflicting_files == 0
+        assert policy.conflicting_flags == 0
+        assert policy.manifest_count == 2
         assert policy.capabilities["aim_lock"] == "enabled"
 
     @pytest.mark.asyncio
     async def test_malformed_manifest_is_ignored_not_crashed(self):
         policy = await load_capture_policy(_StubDb([("not a manifest",), (None,)]), 1)
         assert policy.source == "absent"
+
+
+class TestCapturePolicyWithSeveralManifests:
+    """One round, more than one processed file. Rare, and every branch here is
+    a place where picking a winner would be a guess (CodeRabbit, PR #795)."""
+
+    @staticmethod
+    def _m(source="sections_observed", interval=200, **caps):
+        base = {"shot_fired": "unknown", "aim_lock": "enabled"}
+        base.update(caps)
+        return {
+            "manifest_version": 1,
+            "source": source,
+            "capabilities": base,
+            "position_sample_interval_ms": interval,
+        }
+
+    @pytest.mark.asyncio
+    async def test_a_declared_manifest_leads_regardless_of_order(self):
+        """Exact beats inferred, whichever row the database returned first."""
+        inferred = self._m(source="sections_observed", shot_fired="unknown")
+        declared = self._m(source="declared", shot_fired="disabled")
+        for rows in ([(inferred,), (declared,)], [(declared,), (inferred,)]):
+            policy = await load_capture_policy(_StubDb(rows), 1)
+            assert policy.capabilities["shot_fired"] == "unknown"  # they disagree
+            assert policy.policy_version == "1"
+            assert policy.source == "conflicting"
+
+    @pytest.mark.asyncio
+    async def test_disagreeing_cadence_is_unknown(self):
+        """The cadence is a fact about the file. Two answers means we have none."""
+        rows = [(self._m(interval=200),), (self._m(interval=50),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_agreeing_cadence_survives(self):
+        rows = [(self._m(interval=200),), (self._m(interval=200),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.observation_interval_ms == 200
+        assert policy.mode == "fixed"
+
+    @pytest.mark.asyncio
+    async def test_a_flag_only_one_file_knows_is_kept(self):
+        rows = [(self._m(),), (self._m(comm_events="enabled"),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.capabilities["comm_events"] == "enabled"
+        assert policy.conflicting_flags == 0
+
+    @pytest.mark.asyncio
+    async def test_a_flag_disputed_by_three_files_counts_once(self):
+        """Once unknown, a flag stays unknown; further disagreement about the
+        same flag is the same conflict, not a new one."""
+        rows = [
+            (self._m(shot_fired="enabled"),),
+            (self._m(shot_fired="disabled"),),
+            (self._m(shot_fired="unknown"),),
+        ]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.conflicting_flags == 1
+        assert policy.manifest_count == 3

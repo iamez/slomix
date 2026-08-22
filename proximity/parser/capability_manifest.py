@@ -33,7 +33,19 @@ with the capture disabled. The declaration records the effective value and
 
 from __future__ import annotations
 
+import re
+
 MANIFEST_VERSION = 1
+
+#: A section header is `# NAME` and nothing else. Column-description lines
+#: (`# guid;name;...`) and the version banner do not qualify as sections we
+#: track rows for.
+#:
+#: ⚠️ Recognising a header we do NOT know is as important as recognising one we
+#: do: without it, the rows of an unfamiliar section are attributed to whichever
+#: section came before, which would report that section's capability as
+#: `enabled` on someone else's data (CodeRabbit, PR #795).
+SECTION_HEADER_RE = re.compile(r"^# ([A-Z][A-Z0-9_]*)$")
 
 ENABLED = "enabled"
 DISABLED = "disabled"
@@ -236,8 +248,13 @@ def scan_file(path: str) -> dict:
                         interval = int(line.split("=", 1)[1])
                     except ValueError:
                         interval = None
-                elif line.startswith("# ") and line[2:] in SECTION_GATES:
-                    current = line[2:]
+                else:
+                    header = SECTION_HEADER_RE.match(line)
+                    if header:
+                        name = header.group(1)
+                        # An unknown section clears the label rather than
+                        # leaving the previous one in place.
+                        current = name if name in SECTION_GATES else ""
                 continue
             if current:
                 sections_with_rows.add(current)

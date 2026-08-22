@@ -31,8 +31,8 @@ from pathlib import Path
 
 from proximity.parser.capability_manifest import (
     SECTION_GATES,
+    SECTION_HEADER_RE,
     build_manifest,
-    is_declared,
     parse_declaration,
 )
 
@@ -641,6 +641,12 @@ class ProximityParserV4:
             'escape_time': 5000,
             'escape_distance': 300,
             'position_sample_interval': 1000,  # v4: track sample rate
+            # ⚠️ Kept apart from the value above on purpose. That one is a
+            # software fallback the rest of the parser needs; this one is None
+            # until a file actually states its cadence, so the manifest can
+            # report `unknown` instead of publishing 1000 ms as if it had been
+            # measured (spec §4.2, CodeRabbit PR #795).
+            'position_sample_interval_declared': None,
             'round_start_unix': 0,
             'round_end_unix': 0,
             'axis_spawn_interval': 0,
@@ -841,6 +847,9 @@ class ProximityParserV4:
                         continue
                     if line.startswith('# position_sample_interval='):
                         self.metadata['position_sample_interval'] = int(line.split('=')[1])
+                        self.metadata['position_sample_interval_declared'] = (
+                            self.metadata['position_sample_interval']
+                        )
                         continue
                     if line.startswith('# round_start_unix='):
                         try:
@@ -866,8 +875,14 @@ class ProximityParserV4:
                     # already consumed its line with `continue`, so nothing was
                     # ever recorded — the unit tests still passed and only
                     # parsing a real file showed it.
-                    if line.startswith('# ') and line[2:] in SECTION_GATES:
-                        section_label = line[2:]
+                    section_header = SECTION_HEADER_RE.match(line)
+                    if section_header:
+                        name = section_header.group(1)
+                        # ⚠️ An unrecognised section CLEARS the label. Leaving
+                        # the previous one would attribute a stranger's rows to
+                        # it, and report its capability as proven on data that
+                        # is not its own (CodeRabbit, PR #795).
+                        section_label = name if name in SECTION_GATES else ''
 
                     # Section detection
                     if line.startswith('# ENGAGEMENTS'):
@@ -1673,7 +1688,9 @@ class ProximityParserV4:
             declared=self.metadata.get('capabilities_declared'),
             test_mode=self.metadata.get('test_mode'),
             tracker_version_full=self.metadata.get('tracker_version_full'),
-            position_sample_interval_ms=self.metadata.get('position_sample_interval'),
+            position_sample_interval_ms=self.metadata.get(
+                'position_sample_interval_declared'
+            ),
         )
 
     async def _mark_file_processed(self, filename: str, session_date: str | None = None) -> None:

@@ -101,7 +101,11 @@ def _read_header(path: Path) -> dict:
                     try:
                         out[key] = cast(text[len(prefix):])
                     except ValueError:
-                        pass
+                        # A malformed value leaves the key absent, which makes
+                        # `_round_key` return None and the row keep whatever key
+                        # it already had. Guessing a round identity from a header
+                        # we could not read is the one outcome worth avoiding.
+                        continue
             if len(out) == 3:
                 break
     return out
@@ -140,8 +144,15 @@ def main() -> int:
     per_flag: Counter[str] = Counter()
     sources: Counter[str] = Counter()
     key_filled = 0
+    #: Rows never examined because --limit stopped the loop. Without this the
+    #: report's `already` and `missing_file` counts describe only the prefix
+    #: that was walked, while reading as totals (CodeRabbit, PR #795).
+    not_examined = 0
 
-    for filename, round_key, existing in rows:
+    for index, (filename, round_key, existing) in enumerate(rows):
+        if args.limit and len(planned) >= args.limit:
+            not_examined = len(rows) - index
+            break
         if existing is not None:
             already += 1
             continue
@@ -162,9 +173,17 @@ def main() -> int:
         # An inferred manifest must never claim a capture was off. This is the
         # script's central promise, so it is asserted per row rather than
         # trusted from the helper.
-        if manifest["source"] == "sections_observed":
-            assert DISABLED not in manifest["capabilities"].values(), (
-                f"{filename}: inference produced `disabled`, which it cannot prove"
+        if (
+            manifest["source"] == "sections_observed"
+            and DISABLED in manifest["capabilities"].values()
+        ):
+            # Not an `assert`: `python -O` strips those, and this is the one
+            # invariant the whole script exists to keep. It has to hold in every
+            # interpreter mode, so it raises (CodeRabbit, PR #795).
+            raise RuntimeError(
+                f"{filename}: inference produced `disabled`, which it cannot "
+                f"prove. Refusing to write a claim about capture that no file "
+                f"can support."
             )
 
         new_key = round_key
@@ -181,14 +200,15 @@ def main() -> int:
         for flag, state in manifest["capabilities"].items():
             if state == ENABLED:
                 per_flag[flag] += 1
-        if args.limit and len(planned) >= args.limit:
-            break
 
     print(f"  vrstic skupaj:            {len(rows)}")
     print(f"  že imajo manifest:        {already}")
     print(f"  ⭐ za zapis:               {len(planned)}")
     print(f"  brez surove datoteke:     {missing_file}  (ostanejo NULL — pravilno)")
     print(f"  round_key na novo:        {key_filled}")
+    if not_examined:
+        print(f"  ⚠️ nepregledanih (--limit): {not_examined}  "
+              f"— zgornji števci NISO celote")
     print(f"  viri: {dict(sources)}")
     print("\n  dokazano VKLOPLJENO (nikoli 'disabled' po tej poti):")
     for flag, count in per_flag.most_common():
