@@ -178,6 +178,17 @@ def main() -> int:
     print(f"    {'SKUPAJ':8s} n={total_n:5d}  ⭐ ujemanje "
           f"{100.0 * total_agree / max(total_n, 1):6.2f} %")
 
+    # ⭐ Presence, not only value. Both sides now enforce what a control must
+    # ANSWER, but nothing required a control to BE THERE — so a run with zero
+    # controls passed at exit 0 with no falsifier at all (CodeRabbit, #797).
+    # Recorded before the report below, so a missing control is printed as the
+    # hard failure it is rather than only changing the exit code.
+    hard_fail.extend(
+        f"{kind}: no rows compared — the run has no falsifier"
+        for kind in CONTROL_EXPECTATIONS
+        if not by_kind.get(kind, {}).get("n")
+    )
+
     print("\n  === trde napake (vsaka razveljavi tek) ===")
     print(f"    ERROR vrstic:                 {errors}")
     print(f"    entityNum ni 1022/1023:       {entnum_bad}")

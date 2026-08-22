@@ -4079,14 +4079,24 @@ local function w6Load(mapname)
                 line:match("^(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)%s+(%S+)")
             -- Every field must parse. A half-read line is a truncated file, and
             -- a truncated file must not quietly become a shorter measurement.
-            if idx and tonumber(ax) and tonumber(ay) and tonumber(az)
-               and tonumber(bx) and tonumber(by) and tonumber(bz) then
-                segs[#segs + 1] = {
-                    idx = idx, kind = kind,
-                    a = {tonumber(ax), tonumber(ay), tonumber(az)},
-                    b = {tonumber(bx), tonumber(by), tonumber(bz)},
-                }
+            --
+            -- ⛔ This used to SKIP the bad line and keep going, which is the
+            -- opposite of what the sentence above says: the load returned a
+            -- shorter table, the capture wrote fewer rows, and the shortfall
+            -- had to be caught two layers later — if at all (CodeRabbit, #797).
+            if not (idx and tonumber(ax) and tonumber(ay) and tonumber(az)
+                    and tonumber(bx) and tonumber(by) and tonumber(bz)) then
+                et.G_Print(string.format(
+                    "[PROX-W6] REFUSED %s: unparseable line %d. A truncated "
+                    .. "fixture must not become a shorter measurement.\n",
+                    path, #segs + 1))
+                return nil
             end
+            segs[#segs + 1] = {
+                idx = idx, kind = kind,
+                a = {tonumber(ax), tonumber(ay), tonumber(az)},
+                b = {tonumber(bx), tonumber(by), tonumber(bz)},
+            }
         end
     end
     return segs

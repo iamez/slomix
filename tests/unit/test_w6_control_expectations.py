@@ -145,3 +145,33 @@ def test_a_complete_capture_still_passes(tmp_path: Path) -> None:
     """The half that keeps the guard usable."""
     result = run_compare(tmp_path, _fixture("blocked", "clear"), _capture("0.5", "1.0"))
     assert result.returncode == 0, result.stdout
+
+
+# --- presence, not only value ----------------------------------------------
+
+
+def test_a_run_with_no_controls_has_no_falsifier_and_fails(tmp_path: Path) -> None:
+    """⭐ Both sides enforce what a control must ANSWER. Nothing required one to
+    BE THERE — so a fixture built from a map with no recorded tracks produced a
+    file that looked complete, agreed with itself perfectly, and proved nothing.
+    """
+    fixture = FIXTURE_HEADER + (
+        "0 blocked 0 0 0 100 0 0 blocked 0\n"
+        "1 clear 0 0 0 100 0 0 clear 0\n"
+    )
+    capture = "# us_per_trace=11\n0 0.5 0 0 1022 0 1\n1 1.0 0 0 1023 0 0\n"
+    result = run_compare(tmp_path, fixture, capture)
+    assert result.returncode == 1, result.stdout
+    assert "no falsifier" in result.stdout
+    for kind in ("control_down", "control_tiny"):
+        assert kind in result.stdout, "the report must name which control is absent"
+
+
+def test_one_control_present_is_still_not_enough(tmp_path: Path) -> None:
+    """DOWN alone cannot show the probe reports `clear` correctly, and TINY
+    alone cannot show it reports `blocked`. Both or neither."""
+    fixture = FIXTURE_HEADER + "2 control_down 0 0 56 0 0 -9944 blocked 0\n"
+    capture = "# us_per_trace=11\n2 0.5 0 0 1022 0 1\n"
+    result = run_compare(tmp_path, fixture, capture)
+    assert result.returncode == 1, result.stdout
+    assert "control_tiny" in result.stdout
