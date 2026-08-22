@@ -34,6 +34,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Iterable
 
+from website.backend.services.clock_inputs import wave_position as _wave_position
+
 #: How long a positional belief stays worth acting on, per source, in seconds.
 #:
 #: ⛔ CHOSEN FROM THE GAME, FROZEN BEFORE ANY MEASUREMENT. §6.3 is explicit that
@@ -137,6 +139,20 @@ def resolves_a_subject(weapon_ids: Iterable[int]) -> bool:
     return bool(ids) and not any(w in INDIRECT_WEAPON_IDS for w in ids)
 
 
+#: Longest reinforcement interval this project has ever recorded, in ms.
+#:
+#: Used only when a round's interval is unknown, as the outer bound on how long
+#: "he is down" can still be true. ⚠️ Not a guess: the intervals present in
+#: `proximity_spawn_timing` are 15, 20, 25, 30 and 35 seconds. Picking 30 —
+#: which is what "everyone knows" ET uses — would be wrong for four rounds.
+MAX_OBSERVED_REINFORCE_MS = 35_000
+
+#: How an obituary belief's end was established. Carried into the payload so a
+#: reader can tell an exact wave from a bound.
+EXPIRY_VALIDATED_WAVE = "validated_wave"   # interval AND phase known: a step
+EXPIRY_INTERVAL_ONLY = "interval_only"     # period known, phase not: linear
+EXPIRY_BOUND = "bound"                     # neither: linear over the outer bound
+
 #: Roster states a holder can hold about someone else.
 OBSERVED_OUT_OF_ACTION = "observed_out_of_action"
 UNCERTAIN_AFTER_DOWN = "uncertain_after_down"
@@ -174,7 +190,6 @@ class BeliefItem:
     """One thing one player could have known, and how it decays. §6.3."""
 
     holder_guid: str
-    kind: str                  # position_region | roster_state | nonspatial_contact
     source: str                # gunfire | contact_hit | incoming_damage |
                                # public_obituary | aim_lock
     t_observed: int
@@ -184,25 +199,66 @@ class BeliefItem:
     #: Manifest evidence for the optional capture this came from. "core" for
     #: sources that need no feature flag.
     capability: str = "core"
-    #: Set when the belief does not decay smoothly — a roster fact holds until
-    #: the subject's team can reinforce, which the validated Layer 2 clock knows.
+    #: When this belief stops being true, and on what authority.
+    #:
+    #: ⛔ A roster belief with neither used to fall through to `tau is None` and
+    #: return 1.0 for the rest of the round — "he is down" held at FULL
+    #: confidence for ten minutes (CodeRabbit, PR #799). There is now always an
+    #: end; only its basis varies.
     expires_at_ms: int | None = None
+    expiry_basis: str | None = None
+
+    @property
+    def kind(self) -> str:
+        """What this item actually is, read off what it carries.
+
+        ⛔ This used to be passed in, and two call sites labelled a belief
+        `position_region` while leaving `region` as None — neither input row has
+        coordinates. A consumer branching on `kind` then read a missing region,
+        and `nearest_known_enemy_distance` skipped the item while
+        `known_enemy_count` included it (CodeRabbit, PR #799).
+
+        Derived, the label cannot disagree with the contents.
+        """
+        if self.roster_state is not None:
+            return "roster_state"
+        if self.region is not None:
+            return "subject_position" if self.subject_guid else "position_region"
+        return "subject_contact" if self.subject_guid else "nonspatial_contact"
 
     def confidence(self, t_ms: int) -> float:
         """How much of this is still worth acting on at `t_ms`.
 
-        Positional beliefs fade exponentially. Roster facts do not: "he is down"
-        is true until his team's next wave, and then it is not — a step, not a
-        curve. Modelling that as decay would have a player half-believing a
-        corpse.
+        Three shapes, because three different things are known:
+
+        * **Positional** beliefs fade exponentially — a location goes stale.
+        * **Roster with a validated wave** is a STEP. "He is down" is true until
+          his team can spawn and then it is not; a curve would leave everyone
+          half-believing a corpse.
+        * ⭐ **Roster without a validated phase** falls LINEARLY across one
+          interval. That is what is actually known: he returns somewhere inside
+          the next cycle, and with no phase every point in it is equally likely.
+          A step here would claim a wave time we do not have.
         """
         if t_ms < self.t_observed:
             return 0.0
         if self.expires_at_ms is not None:
-            return 1.0 if t_ms < self.expires_at_ms else 0.0
+            if t_ms >= self.expires_at_ms:
+                return 0.0
+            if self.expiry_basis == EXPIRY_VALIDATED_WAVE:
+                return 1.0
+            span = self.expires_at_ms - self.t_observed
+            if span <= 0:
+                return 0.0
+            return 1.0 - (t_ms - self.t_observed) / span
         tau = DECAY_TAU_S.get(self.source)
         if tau is None:
-            return 1.0
+            # ⛔ No decay law and no expiry means the belief would be permanent.
+            # Nothing a player knows about another player is permanent.
+            raise AssertionError(
+                f"belief from {self.source!r} has neither a decay constant nor "
+                f"an expiry; it would be believed forever"
+            )
         return math.exp(-(t_ms - self.t_observed) / 1000.0 / tau)
 
 
@@ -250,7 +306,6 @@ def gunfire_beliefs(
                 continue
             out.append(BeliefItem(
                 holder_guid=holder,
-                kind="position_region",
                 source="gunfire",
                 t_observed=int(t_ms),
                 region=Region(float(sx), float(sy), float(sz), GUNFIRE_REGION_RADIUS),
@@ -279,19 +334,15 @@ def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENC
     return len(subjects)
 
 
-def nearest_known_enemy_distance(
+def _nearest(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
-    *, floor: float = CONFIDENCE_FLOOR,
+    *, resolved: bool, floor: float,
 ) -> dict | None:
-    """How close the nearest believed enemy could be — as an interval.
-
-    Returns None when nothing is believed. A distribution is not collapsed to a
-    scalar: a region 400 units wide seen from 900 away is "between 500 and
-    1,300", and reporting 900 would be a number the holder never had.
-    """
     best: tuple[float, float] | None = None
     for belief in state.beliefs:
         if belief.region is None or belief.confidence(t_ms) < floor:
+            continue
+        if bool(belief.subject_guid) is not resolved:
             continue
         lo, hi = belief.region.distance_interval(*holder_pos)
         if best is None or lo < best[0]:
@@ -299,6 +350,38 @@ def nearest_known_enemy_distance(
     if best is None:
         return None
     return {"min": round(best[0], 1), "max": round(best[1], 1)}
+
+
+def nearest_known_enemy_distance(
+    state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
+    *, floor: float = CONFIDENCE_FLOOR,
+) -> dict | None:
+    """How close the nearest enemy the holder could NAME might be.
+
+    ⛔ Only beliefs that resolve a subject. Gunfire carries a region and no
+    subject, and `known_enemy_count` excludes it on purpose — so counting it
+    here produced a holder with `known_enemy_count: 0` and a populated enemy
+    distance in the same payload. Two numbers on one panel, contradicting each
+    other (CodeRabbit, PR #799).
+
+    Returns None when nothing is believed. The value is an interval, never a
+    scalar: a region 400 units wide seen from 900 away is "between 500 and
+    1,300", and reporting 900 would be a number the holder never had.
+    """
+    return _nearest(state, t_ms, holder_pos, resolved=True, floor=floor)
+
+
+def nearest_heard_activity_distance(
+    state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
+    *, floor: float = CONFIDENCE_FLOOR,
+) -> dict | None:
+    """How close the nearest unattributed noise was.
+
+    ⭐ Hearing shots 900 units away IS information — it is simply not "an
+    enemy". Giving it its own name lets the panel show both without the two
+    contradicting each other.
+    """
+    return _nearest(state, t_ms, holder_pos, resolved=False, floor=floor)
 
 
 def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float] | None) -> dict:
@@ -309,6 +392,10 @@ def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float
         "known_enemy_count": known_enemy_count(state, t_ms),
         "nearest_known_enemy_distance": (
             nearest_known_enemy_distance(state, t_ms, holder_pos) if holder_pos else None
+        ),
+        "nearest_heard_activity_distance": (
+            nearest_heard_activity_distance(state, t_ms, holder_pos)
+            if holder_pos else None
         ),
         "beliefs": [
             {
@@ -323,6 +410,7 @@ def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float
                 # something the count has already discarded.
                 "counts_as_known": b.confidence(t_ms) >= CONFIDENCE_FLOOR,
                 "capability": b.capability,
+                "expiry_basis": b.expiry_basis,
                 "region": (
                     {"x": b.region.x, "y": b.region.y, "z": b.region.z,
                      "radius": b.region.radius}
@@ -358,38 +446,57 @@ def group_by_holder(beliefs: Iterable[BeliefItem]) -> dict[str, HolderState]:
 # --- building a round's beliefs from what was recorded -----------------------
 
 
+def resolve_expiry(team_clock: dict | None, death_ms: int) -> tuple[int, str]:
+    """When "he is down" stops being true, and on what authority.
+
+    `team_clock` is that team's entry from `load_round_clock`.
+
+    ⛔ Computed PER DEATH. The first version took one absolute timestamp per
+    team, but reinforcement waves repeat all round: a death at 30 s given the
+    25 s wave got an expiry in its own past, so `confidence` returned 0.0 at the
+    moment of death — the belief was dead on arrival (CodeRabbit, PR #799).
+    """
+    interval = (team_clock or {}).get("interval_ms")
+    offset = (team_clock or {}).get("offset_ms")
+    if interval and offset is not None:
+        # Validated: the exact next landing after this death.
+        _since, until = _wave_position(death_ms, int(interval), int(offset))
+        return death_ms + until, EXPIRY_VALIDATED_WAVE
+    if interval:
+        # Period known, phase not: he is back somewhere inside one interval.
+        return death_ms + int(interval), EXPIRY_INTERVAL_ONLY
+    return death_ms + MAX_OBSERVED_REINFORCE_MS, EXPIRY_BOUND
+
+
 def obituary_beliefs(
     deaths: Iterable[tuple],
     holders: Iterable[str],
     *,
-    wave_expiry: dict[str, int] | None = None,
+    clock: dict | None = None,
 ) -> list[BeliefItem]:
     """A death is announced to everyone — that is what makes it public.
 
     `deaths` rows are (victim_guid, victim_team, death_time_ms).
+    `clock` is `load_round_clock`'s per-team mapping.
 
-    ⭐ The belief expires at the victim's team's next reinforcement wave, not on
-    a decay curve. "He is down" is true until his team can spawn and then it is
-    not — a step, not a fade. Modelling it as decay would leave every player
-    half-believing a corpse forever.
-    ⚠️ At the wave it becomes `uncertain_after_down`, never server truth: a wave
-    says someone COULD be back, not that this GUID spawned.
+    ⚠️ At the expiry the subject becomes `uncertain_after_down`, never server
+    truth: a wave says someone COULD be back, not that this GUID spawned.
     """
     out: list[BeliefItem] = []
-    holders = list(holders)
+    holders = tuple(holders)
     for victim, team, t_ms in deaths:
-        expiry = (wave_expiry or {}).get(str(team or ""))
+        expiry, basis = resolve_expiry((clock or {}).get(str(team or "")), int(t_ms))
         for holder in holders:
             if holder == victim:
                 continue
             out.append(BeliefItem(
                 holder_guid=holder,
-                kind="roster_state",
                 source="public_obituary",
                 t_observed=int(t_ms),
                 subject_guid=str(victim),
                 roster_state=OBSERVED_OUT_OF_ACTION,
                 expires_at_ms=expiry,
+                expiry_basis=basis,
             ))
     return out
 
@@ -421,7 +528,6 @@ def contact_beliefs(engagements: Iterable[tuple]) -> list[BeliefItem]:
             if resolves_a_subject(weapons):
                 out.append(BeliefItem(
                     holder_guid=str(guid),
-                    kind="position_region",
                     source="contact_hit",
                     t_observed=int(first),
                     subject_guid=str(target),
@@ -429,7 +535,6 @@ def contact_beliefs(engagements: Iterable[tuple]) -> list[BeliefItem]:
             # The victim learns they are being hit, and only that.
             out.append(BeliefItem(
                 holder_guid=str(target),
-                kind="nonspatial_contact",
                 source="incoming_damage",
                 t_observed=int(first),
                 subject_guid=None,
@@ -449,7 +554,6 @@ def aim_lock_beliefs(locks: Iterable[tuple]) -> list[BeliefItem]:
     return [
         BeliefItem(
             holder_guid=str(holder),
-            kind="position_region",
             source="aim_lock",
             t_observed=int(start_ms),
             subject_guid=str(target),
@@ -471,6 +575,11 @@ def apply_capability(
     channel — and no right to say the players learned nothing from it. The
     channel is named in `unavailable`; it never becomes silence.
     """
+    # ⛔ Materialised: the loop below walks `holders` once per gated source, and
+    # a generator is exhausted by the first. That left the second channel
+    # untouched — no reason recorded, no beliefs dropped — and the payload then
+    # looked like a proven capture (CodeRabbit, PR #799).
+    holders = tuple(holders)
     gated = {"gunfire": "shot_fired", "aim_lock": "aim_lock"}
     for source, flag in gated.items():
         state = _capability_state(manifest, flag)
