@@ -51,7 +51,14 @@ local modname = "proximity_tracker"
 -- + pers.lastSpawnTime), SKILL_SNAPSHOT (sess.skill at round end), COMM_EVENTS
 -- (vsay/voice-macro frequency via et_ClientCommand). ALL default OFF; see
 -- docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md. Production unchanged until enabled.
-local version = "6.10"
+-- 6.11: additive capability declaration in the header (tracker_version_full,
+-- test_mode, capabilities). No section, no sampling and no cost changed — three
+-- header lines per round. It exists because an absent section is ambiguous by
+-- construction: `if isFeatureEnabled(x) and #rows > 0` writes nothing both when
+-- the capture is off and when it is on with nothing to report. Consumers were
+-- resolving that ambiguity by assuming, which turns missing telemetry into a
+-- claim about the match.
+local version = "6.11"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -3105,6 +3112,62 @@ local function outputDataInner()
         config.position_sample_interval, round_start_unix, round_end_unix,
         tracker.spawn.axis_interval, tracker.spawn.allies_interval)
     et.trap_FS_Write(header, string.len(header), fd)
+
+    -- ===== CAPABILITY DECLARATION (6.11) =====
+    -- Says outright which captures were on, because the file cannot show it.
+    -- Every gated section is written as `if isFeatureEnabled(x) and #rows > 0`,
+    -- so a capture that was ON but had nothing to report produces a file that
+    -- is byte-identical to one where the capture was OFF. A reader looking at
+    -- an empty round therefore cannot tell "no gunfire happened" from "gunfire
+    -- was never recorded" — and guessing turns a gap in telemetry into a claim
+    -- about the game. This line removes the guess for every round written from
+    -- here on; older files fall back to what their sections prove, which is
+    -- `enabled` or `unknown`, never `disabled`.
+    --
+    -- The value reports isFeatureEnabled(), NOT config.features[]: test mode
+    -- forces every flag false (line 338), and the declaration has to match what
+    -- was actually written rather than what was configured. test_mode is
+    -- declared alongside so the two cases stay distinguishable.
+    --
+    -- `name:0|1` joined by commas, and deliberately no `=` in the value: the
+    -- parser reads header lines with line.split('=')[1], so an `=` here would
+    -- silently truncate the declaration.
+    local cap_order = {
+        "engagement_tracking", "crossfire_detection", "escape_detection",
+        "heatmap_generation", "reaction_tracking", "spawn_timing",
+        "team_cohesion", "crossfire_opportunities", "focus_fire",
+        "team_push_detection", "trade_kills", "kill_outcome_tracking",
+        "hit_region_tracking", "combat_positions", "carrier_tracking",
+        "carrier_returns", "vehicle_tracking", "construction_tracking",
+        "objective_run_tracking", "shot_fired", "aim_lock", "spawn_select",
+        "skill_snapshot", "comm_events",
+    }
+    local cap_parts, cap_seen = {}, {}
+    for _, name in ipairs(cap_order) do
+        cap_seen[name] = true
+        cap_parts[#cap_parts + 1] = name .. ":" .. (isFeatureEnabled(name) and "1" or "0")
+    end
+    -- A flag added to config.features without being added to cap_order would
+    -- otherwise vanish from the declaration, and a missing name reads as
+    -- "unknown" rather than as the bug it is. Collect the strays, sorted so the
+    -- line stays byte-stable across rounds (pairs() order is not defined).
+    local cap_extra = {}
+    for name, _ in pairs(config.features) do
+        if not cap_seen[name] then cap_extra[#cap_extra + 1] = name end
+    end
+    table.sort(cap_extra)
+    for _, name in ipairs(cap_extra) do
+        cap_parts[#cap_parts + 1] = name .. ":" .. (isFeatureEnabled(name) and "1" or "0")
+    end
+
+    local cap_header = string.format(
+        "# tracker_version_full=%s\n" ..
+        "# test_mode=%d\n" ..
+        "# capabilities=%s\n",
+        version,
+        config.test_mode.enabled and 1 or 0,
+        table.concat(cap_parts, ","))
+    et.trap_FS_Write(cap_header, string.len(cap_header), fd)
 
     -- ===== ENGAGEMENTS (v4) =====
     local fmt_header = "# ENGAGEMENTS\n" ..
