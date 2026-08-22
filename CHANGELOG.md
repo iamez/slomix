@@ -6,6 +6,22 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.41.0](https://github.com/iamez/slomix/compare/v1.40.0...v1.41.0) (2026-08-22)
+
+
+### Features
+
+* **proximity:** let a round say what it was able to record ([#795](https://github.com/iamez/slomix/issues/795)) ([a18c5b2](https://github.com/iamez/slomix/commit/a18c5b21588f49bc4da40b994036e12e3700cd76))
+* **proximity:** reconstruct a round moment by moment, without inventing any of it ([#792](https://github.com/iamez/slomix/issues/792)) ([1fb5060](https://github.com/iamez/slomix/commit/1fb506035b7c6908d13880a79e0c865f1548df99))
+* **proximity:** the page states its own error, and the clock joins the web ([#796](https://github.com/iamez/slomix/issues/796)) ([9bf6b56](https://github.com/iamez/slomix/commit/9bf6b566d8580809f1336c27a87989ba34f434db))
+
+
+### Bug Fixes
+
+* **ci:** stop the pre-push guard from counting files inherited from main ([#790](https://github.com/iamez/slomix/issues/790)) ([66eafb3](https://github.com/iamez/slomix/commit/66eafb38ea540b75d8c67009804fa60f05304545))
+* **lua:** capture what we thought we were capturing ([#794](https://github.com/iamez/slomix/issues/794)) ([0cb4d52](https://github.com/iamez/slomix/commit/0cb4d5251f5773ebeea77e87aa94bd71b574b4f2))
+* **proximity:** name what cannot be read instead of going dark over it ([#793](https://github.com/iamez/slomix/issues/793)) ([f5c2d36](https://github.com/iamez/slomix/commit/f5c2d361af4f2fe30b54f6f6540649dc5e50555d))
+
 ## [1.40.0](https://github.com/iamez/slomix/compare/v1.39.0...v1.40.0) (2026-08-20)
 
 
