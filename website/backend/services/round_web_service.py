@@ -68,6 +68,16 @@ from website.backend.services.clock_inputs import (
     fetch_timing_observations,
     wave_position,
 )
+from website.backend.services.information_state import (
+    HolderState,
+    aim_lock_beliefs,
+    apply_capability,
+    contact_beliefs,
+    group_by_holder,
+    gunfire_beliefs,
+    obituary_beliefs,
+)
+from website.backend.services.information_state import to_dict as belief_payload
 from website.backend.services.reconstruction_accuracy import (
     MEASUREMENT as ACCURACY_MEASUREMENT,
 )
@@ -719,9 +729,97 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
     return clock
 
 
+#: How far a shot carries, in game units. A named model parameter, not a
+#: measurement: §6.3 requires the radius and localisation error to be stated
+#: rather than buried. Roughly a large courtyard — beyond it a player is not
+#: reliably placing the noise at all.
+AUDIBLE_GUNFIRE_RADIUS = 1500.0
+
+
+async def load_round_information_state(
+    db, round_id: int, t_ms: int, snapshot: Snapshot, clock: dict,
+    capture_policy: CapturePolicy,
+) -> dict:
+    """§6 Layer 3: what each player in this round could plausibly have known.
+
+    Built from four channels whose coverage differs wildly — obituary and
+    contact reach nearly the whole corpus, gunfire and aim_lock only the rounds
+    whose manifest proves the capture was on. `apply_capability` names the ones
+    this round cannot support; they never become silence.
+
+    ⛔ Line-of-sight is deliberately NOT a channel. It is an oracle upper bound
+    on what could have been seen, not an observation, and §6.1 forbids inserting
+    a belief merely because a ray was clear.
+    """
+    holders = [p.guid for p in snapshot.players.values()]
+    if not holders:
+        return {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
+
+    positions = {
+        p.guid: (p.x, p.y, p.z)
+        for p in snapshot.players.values() if _has_position(p)
+    }
+
+    deaths = await db.fetch_all("""
+        SELECT player_guid, team, death_time_ms
+        FROM player_track
+        WHERE round_id = $1 AND death_time_ms IS NOT NULL AND death_time_ms <= $2
+          AND path -> -1 ->> 'event' IN
+              ('killed', 'selfkill', 'fallen', 'world', 'teamkill')
+    """, (round_id, t_ms))
+    engagements = await db.fetch_all("""
+        SELECT target_guid, attackers FROM combat_engagement
+        WHERE round_id = $1 AND start_time_ms IS NOT NULL AND start_time_ms <= $2
+    """, (round_id, t_ms))
+    shots = await db.fetch_all("""
+        SELECT guid, event_time, origin_x, origin_y, origin_z
+        FROM proximity_shot_fired
+        WHERE round_id = $1 AND event_time <= $2 AND origin_x IS NOT NULL
+    """, (round_id, t_ms))
+    locks = await db.fetch_all("""
+        SELECT guid, target_guid, start_time FROM proximity_aim_lock
+        WHERE round_id = $1 AND start_time <= $2 AND target_guid IS NOT NULL
+    """, (round_id, t_ms))
+
+    beliefs = obituary_beliefs(
+        [(r[0], r[1], r[2]) for r in (deaths or [])], holders, clock=clock)
+    beliefs += contact_beliefs(
+        [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])])
+    beliefs += gunfire_beliefs(
+        [(r[0], r[1], float(r[2]), float(r[3]), float(r[4])) for r in (shots or [])],
+        positions, audible_radius=AUDIBLE_GUNFIRE_RADIUS)
+    beliefs += aim_lock_beliefs([(r[0], r[1], r[2]) for r in (locks or [])])
+
+    states = group_by_holder(beliefs)
+    # ⛔ Every player gets an entry, including one with no beliefs: otherwise a
+    # player who learned nothing and a player we could not model look identical.
+    for guid in holders:
+        states.setdefault(guid, HolderState(holder_guid=guid))
+    apply_capability(
+        states, {"capabilities": capture_policy.capabilities}, holders)
+
+    return {
+        "holders": {
+            guid: belief_payload(state, t_ms, positions.get(guid))
+            for guid, state in states.items()
+        },
+        "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS,
+    }
+
+
+def _ensure_attackers(value) -> list:
+    """`attackers` comes back as a list from asyncpg and as text from others."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return []
+    return value or []
+
+
 async def get_round_snapshot(
     db, round_id: int, t_ms: int, *, max_stale_ms: int | None = None,
-    velocity_max_dt_ms: int | None = None,
+    velocity_max_dt_ms: int | None = None, pov: str | None = None,
 ) -> dict[str, Any]:
     """One reconstructed moment of a round, as a plain dict.
 
@@ -748,6 +846,32 @@ async def get_round_snapshot(
     )
     separation = nearest_teammate_separation(snap)
     policy = await load_capture_policy(db, round_id)
+    clock = await load_round_clock(db, round_id, t_ms)
+    information = await load_round_information_state(
+        db, round_id, t_ms, snap, clock, policy
+    ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
+
+    # ⭐ `pov` selects WHOSE picture is returned, the interaction VALORANT's
+    # replay tool settled on: switch between a player and the omniscient view.
+    # Their known limitation is that the minimap cannot be restricted; ours can,
+    # because the information state is data rather than a rendering choice.
+    #
+    # ⛔ `world` is the oracle. It is a named diagnostic (§6.4) and never a
+    # belief source — which is why it is spelled out rather than being the
+    # silent default.
+    if pov and pov != "world":
+        holders = information.get("holders", {})
+        information = {
+            **information,
+            "holders": {pov: holders[pov]} if pov in holders else {},
+            "pov": pov,
+            "pov_unavailable": (
+                None if pov in holders
+                else f"{pov} has no reconstructed state in this round at t={t_ms}"
+            ),
+        }
+    else:
+        information = {**information, "pov": pov or "world"}
     payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
@@ -760,7 +884,8 @@ async def get_round_snapshot(
             "manifest_count": policy.manifest_count,
             "conflicting_flags": policy.conflicting_flags,
         },
-        "clock": await load_round_clock(db, round_id, t_ms),
+        "clock": clock,
+        "information_state": information,
         "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,
