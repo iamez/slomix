@@ -24,6 +24,7 @@ from website.backend.services.round_web_service import (
     derive_velocity,
     find_position_floor,
     load_capture_policy,
+    load_round_clock,
     nearest_teammate_separation,
     select_life,
 )
@@ -479,3 +480,104 @@ class TestCapturePolicyWithSeveralManifests:
         assert policy.capabilities["shot_fired"] == "unknown"
         assert policy.conflicting_flags == 1
         assert policy.manifest_count == 3
+
+
+class _ClockStubDb:
+    """Answers `fetch_timing_observations`, then tracks, then revives."""
+
+    def __init__(self, timing, tracks=(), revives=()):
+        self._queue = [list(timing), list(tracks), list(revives)]
+
+    async def fetch_all(self, _sql, _params=None):
+        return self._queue.pop(0) if self._queue else []
+
+
+#: Fixtures are written in terms of LANDINGS, the thing that physically
+#: happens, and the offset is derived from them — never the other way round.
+#: `offset_ms` is the negated phase (a landing L satisfies
+#: `(L + offset) % interval == 0`), and building a fixture from a guessed offset
+#: is how a wrong convention gets baked into both the code and its test.
+def _offset_for(landing_ms: int, interval: int) -> int:
+    return (-landing_ms) % interval
+
+
+def _wave_kills(team: str, interval: int, landing: int, n: int = 12):
+    """Kills whose `time_to_next_spawn` points at the next real landing.
+
+    Column order matches `fetch_timing_observations`: victim_team, kill_time,
+    enemy_spawn_interval, time_to_next_spawn, score, killer_guid, killer_name.
+    """
+    rows = []
+    for i in range(n):
+        kill_time = landing + i * 1700 + 300
+        time_to_next = (landing - kill_time) % interval or interval
+        rows.append((team, kill_time, interval, time_to_next,
+                     0.5, f"GUID{i}", f"player{i}"))
+    return rows
+
+
+def _wave_lives(team: str, interval: int, landing: int, waves: int = 6):
+    """Two players landing on every wave, so clusters can form.
+
+    Column order matches `fetch_clock_lives_and_revives`.
+    """
+    rows = []
+    row_id = 0
+    for wave in range(waves):
+        spawn = landing + wave * interval
+        for player in range(2):
+            row_id += 1
+            rows.append((row_id, f"P{player}", f"player{player}", team,
+                         spawn, spawn + 900, "killed"))
+    return rows
+
+
+class TestLoadRoundClock:
+    """§5's clock, as the snapshot publishes it."""
+
+    @pytest.mark.asyncio
+    async def test_both_teams_always_appear(self):
+        """A missing key would read as "no clock here" when the truth is "we
+        could not verify one" — the distinction §5.2 exists to draw."""
+        clock = await load_round_clock(_ClockStubDb([]), 1, 0)
+        assert set(clock) == {"AXIS", "ALLIES"}
+        assert all(entry["status"] == "unavailable" for entry in clock.values())
+        assert all(entry["reason"] for entry in clock.values())
+
+    @pytest.mark.asyncio
+    async def test_a_validated_clock_carries_the_moment(self):
+        interval, landing = 20_000, 5_000
+        db = _ClockStubDb(
+            _wave_kills("AXIS", interval, landing),
+            _wave_lives("AXIS", interval, landing),
+        )
+        clock = await load_round_clock(db, 1, landing + 12_000)
+        axis = clock["AXIS"]
+        assert axis["status"] == "validated"
+        assert axis["offset_ms"] == _offset_for(landing, interval)
+        # 12 s past a landing on a 20 s wheel: 8 s until the next one.
+        assert axis["phase_ms"] == 12_000
+        assert axis["time_to_next_wave_ms"] == 8_000
+
+    @pytest.mark.asyncio
+    async def test_a_team_without_observations_is_unavailable_not_absent(self):
+        interval, landing = 20_000, 5_000
+        db = _ClockStubDb(
+            _wave_kills("AXIS", interval, landing),
+            _wave_lives("AXIS", interval, landing),
+        )
+        clock = await load_round_clock(db, 1, 0)
+        assert clock["ALLIES"]["status"] == "unavailable"
+        assert "ALLIES" in clock
+
+    @pytest.mark.asyncio
+    async def test_an_unvalidated_clock_publishes_no_phase(self):
+        """`phase_ms` is computed from the offset, and an unvalidated offset is
+        one the protocol refuses to stand behind — so the moment cannot be
+        derived from it either."""
+        db = _ClockStubDb(_wave_kills("AXIS", 20_000, 5_000), [])
+        axis = (await load_round_clock(db, 1, 9_000))["AXIS"]
+        assert axis["status"] != "validated"
+        assert axis["offset_ms"] is None
+        assert "phase_ms" not in axis
+        assert "time_to_next_wave_ms" not in axis
