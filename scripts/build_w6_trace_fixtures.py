@@ -29,7 +29,8 @@ FOUR KINDS OF SEGMENT, and the first is the valuable one:
   random   random pairs of recorded player positions. Kill segments are a
            biased sample — a kill succeeded there — so without these we would
            only ever measure the parts of a map people shoot across.
-  control  answers known before the engine is asked: DOWN (10,000 units down
+  control_down / control_tiny
+           answers known before the engine is asked: DOWN (10,000 units down
            from a position a player occupied — they were standing on something,
            so it must block) and TINY (one unit sideways, inside the space they
            already filled, so it must be clear). If a control fails, the capture
@@ -183,7 +184,8 @@ class FixtureWriter:
     def __init__(self, tracer: BspPointTracer) -> None:
         self.tracer = tracer
         self.rows: list[str] = []
-        self.counts = {"blocked": 0, "clear": 0, "random": 0, "control": 0}
+        self.counts = {"blocked": 0, "clear": 0, "random": 0,
+                       "control_down": 0, "control_tiny": 0}
 
     def add(self, kind: str, a: tuple, b: tuple) -> None:
         a = tuple(_f32(c) for c in a)
@@ -270,8 +272,13 @@ def main() -> int:
         # rather than quietly skipping its own falsifier.
         for p in random.sample(pts, min(8, len(pts))):
             eye = (p[0], p[1], p[2] + EYE_Z)
-            writer.add("control", eye, (p[0], p[1], p[2] - 10000.0))      # DOWN: must block
-            writer.add("control", eye, (p[0] + 1.0, p[1], p[2] + EYE_Z))  # TINY: must be clear
+            # ⭐ The expected answer is in the KIND, not in a comment. Both
+            # controls used to be written as plain "control", so the comparator
+            # could only check that the two sides agreed — and two sides that
+            # agree DOWN is clear pass a check that was supposed to catch
+            # exactly that (CodeRabbit, PR #797).
+            writer.add("control_down", eye, (p[0], p[1], p[2] - 10000.0))
+            writer.add("control_tiny", eye, (p[0] + 1.0, p[1], p[2] + EYE_Z))
 
         out = args.out_dir / f"{map_name}.txt"
         header = [
@@ -286,7 +293,8 @@ def main() -> int:
         c = writer.counts
         print(f"  {map_name:16s} {len(writer.rows):6d} daljic  "
               f"blocked={c['blocked']} clear={c['clear']} "
-              f"random={c['random']} control={c['control']}  "
+              f"random={c['random']} "
+              f"control={c['control_down'] + c['control_tiny']}  "
               f"-> {out.name} ({out.stat().st_size // 1024} KB)")
         print(f"                   pk3={provider.pk3_path.name if provider else '?'} "
               f"sha={provider.sha256[:12] if provider else '?'}")

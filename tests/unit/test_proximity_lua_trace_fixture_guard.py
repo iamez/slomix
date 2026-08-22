@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+import pytest
+
 TRACKER = (
     Path(__file__).resolve().parents[2] / "proximity" / "lua" / "proximity_tracker.lua"
 )
@@ -52,3 +54,47 @@ def test_the_probe_says_where_it_may_run() -> None:
     """Prose, deliberately: the next person to read this needs the constraint
     where the code is, not only in a research document."""
     assert _source().count("Local test server only") >= 2
+
+
+# --- the probe must prove its premise before the capture runs ---------------
+
+
+def test_capture_waits_for_the_probe_to_validate_not_merely_to_run() -> None:
+    """⭐ "the probe ran" and "the probe proved its preconditions" differ.
+
+    W6's whole verdict rests on `entNum = -2` excluding entity clipping. If it
+    does not, every fixture segment measures something other than the world and
+    the 99.92% is about nothing. The capture gate must therefore test the
+    validated flag, not the config flag and not "the probe finished".
+    """
+    source = _source()
+    gate = re.search(
+        r"if config\.trace_fixture and config\.trace_fixture\.enabled"
+        r"(.*?)then\s*\n\s*if w6\.segments == nil",
+        source, re.S,
+    )
+    assert gate, "the fixture capture gate was not found"
+    assert "trace_probe_validated" in gate.group(1), (
+        "the capture runs on the config flag alone; it must require the probe's "
+        "verdict"
+    )
+
+
+def test_the_premise_is_only_validated_by_a_discriminating_entity() -> None:
+    """Client pairs agreeing proves nothing — with no entity on the segment, -2
+    and -1 must agree either way. Only `ent_differ > 0` discriminates."""
+    assert re.search(r"trace_probe_validated\s*=\s*\(ent_differ > 0\)", _source())
+
+
+@pytest.mark.parametrize("control", ["DOWN", "TINY"])
+def test_a_wrong_control_stops_the_probe(control: str) -> None:
+    """Their results used to be printed and dropped. A probe that answers a
+    known question wrong cannot be trusted with an unknown one."""
+    source = _source()
+    body = source[source.index("local function runTraceProbe"):]
+    body = body[: body.index("\nfunction et_RunFrame")]
+    assert f'traceProbeOne("{control}"' in body
+    assert "REFUSED" in body, "no control refusal path"
+    # The refusal must come before the entity sweep, or the probe does the
+    # expensive work anyway and reports a verdict it should not have reached.
+    assert body.index("REFUSED") < body.index("ent_tested")
