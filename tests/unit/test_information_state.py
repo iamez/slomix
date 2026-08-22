@@ -16,8 +16,12 @@ import pytest
 from website.backend.services.information_state import (
     CONFIDENCE_FLOOR,
     DECAY_TAU_S,
+    EXPIRY_BOUND,
+    EXPIRY_INTERVAL_ONLY,
+    EXPIRY_VALIDATED_WAVE,
     GUNFIRE_REGION_RADIUS,
     INDIRECT_WEAPON_IDS,
+    MAX_OBSERVED_REINFORCE_MS,
     OBSERVED_OUT_OF_ACTION,
     BeliefItem,
     HolderState,
@@ -28,8 +32,10 @@ from website.backend.services.information_state import (
     group_by_holder,
     gunfire_beliefs,
     known_enemy_count,
+    nearest_heard_activity_distance,
     nearest_known_enemy_distance,
     obituary_beliefs,
+    resolve_expiry,
     resolves_a_subject,
     to_dict,
 )
@@ -41,7 +47,14 @@ class TestGunfireResolvesNoOne:
     @staticmethod
     def _burst(n: int) -> list[BeliefItem]:
         shots = [("SHOOTER", 1000 + i * 100, 100.0, 0.0, 0.0) for i in range(n)]
-        return gunfire_beliefs(shots, {"H": (200.0, 0.0, 0.0)}, audible_radius=1500)
+        # ⚠️ The shooter is a candidate holder ON PURPOSE. Without them here the
+        # `holder == guid` guard is never exercised and this whole class would
+        # pass with that branch deleted (CodeRabbit, PR #799).
+        return gunfire_beliefs(
+            shots,
+            {"H": (200.0, 0.0, 0.0), "SHOOTER": (100.0, 0.0, 0.0)},
+            audible_radius=1500,
+        )
 
     def test_a_burst_is_not_a_squad(self):
         """`proximity_shot_fired` emits one row per shot. Counting belief items
@@ -81,9 +94,11 @@ class TestDistanceIsAnInterval:
 
     def test_nearest_reports_the_interval(self):
         state = HolderState("H", [BeliefItem(
-            holder_guid="H", kind="position_region", source="gunfire", t_observed=0,
+            holder_guid="H", source="gunfire", t_observed=0,
             region=Region(1000.0, 0.0, 0.0, 400.0))])
-        assert nearest_known_enemy_distance(state, 0, (0.0, 0.0, 0.0)) == {
+        # A region with a subject is a known enemy; one without is heard noise.
+        assert nearest_known_enemy_distance(state, 0, (0.0, 0.0, 0.0)) is None
+        assert nearest_heard_activity_distance(state, 0, (0.0, 0.0, 0.0)) == {
             "min": 600.0, "max": 1400.0
         }
 
@@ -94,13 +109,13 @@ class TestDistanceIsAnInterval:
 
 class TestDecay:
     def test_one_time_constant_is_one_over_e(self):
-        b = BeliefItem(holder_guid="H", kind="position_region", source="gunfire",
+        b = BeliefItem(holder_guid="H", source="gunfire",
                        t_observed=0)
         tau_ms = DECAY_TAU_S["gunfire"] * 1000
         assert b.confidence(int(tau_ms)) == pytest.approx(math.exp(-1), abs=1e-6)
 
     def test_nothing_is_known_before_it_happened(self):
-        b = BeliefItem(holder_guid="H", kind="position_region", source="gunfire",
+        b = BeliefItem(holder_guid="H", source="gunfire",
                        t_observed=5000)
         assert b.confidence(4999) == 0.0
 
@@ -117,36 +132,79 @@ class TestDecay:
             assert name in preamble or name in block[:400]
 
 
-class TestRosterStateIsAStepNotACurve:
-    """⭐ Where the validated Layer 2 clock earns its place."""
+class TestRosterStateExpiry:
+    """⭐ Where the validated Layer 2 clock earns its place — and where its
+    absence must be admitted rather than papered over."""
 
     @staticmethod
-    def _down(expiry: int | None) -> BeliefItem:
+    def _down(expiry: int, basis: str) -> BeliefItem:
         return BeliefItem(
-            holder_guid="H", kind="roster_state", source="public_obituary",
-            t_observed=5000, subject_guid="E1",
-            roster_state=OBSERVED_OUT_OF_ACTION, expires_at_ms=expiry,
+            holder_guid="H", source="public_obituary", t_observed=5000,
+            subject_guid="E1", roster_state=OBSERVED_OUT_OF_ACTION,
+            expires_at_ms=expiry, expiry_basis=basis,
         )
 
     @pytest.mark.parametrize("t,expected", [
         (5000, 1.0), (15000, 1.0), (24999, 1.0), (25000, 0.0), (60000, 0.0),
     ])
-    def test_it_holds_until_the_wave_then_stops(self, t: int, expected: float):
-        """"He is down" is true until his team can spawn, and then it is not.
-        A decay curve would leave everyone half-believing a corpse."""
-        assert self._down(25000).confidence(t) == expected
+    def test_a_validated_wave_is_a_step(self, t: int, expected: float):
+        """"He is down" is true until his team can spawn, and then it is not."""
+        assert self._down(25000, EXPIRY_VALIDATED_WAVE).confidence(t) == expected
+
+    @pytest.mark.parametrize("basis", [EXPIRY_INTERVAL_ONLY, EXPIRY_BOUND])
+    def test_without_a_phase_it_falls_linearly(self, basis: str):
+        """⭐ With the period known but not the phase, he returns SOMEWHERE
+        inside the next cycle and every point in it is equally likely. A step
+        would claim a wave time we do not have."""
+        b = self._down(25000, basis)
+        assert b.confidence(5000) == 1.0
+        assert b.confidence(15000) == pytest.approx(0.5)
+        assert b.confidence(25000) == 0.0
+
+    def test_a_roster_belief_can_never_be_permanent(self):
+        """⛔ `public_obituary` has no decay constant. Before the fix, a belief
+        with no expiry fell through to `tau is None` and returned 1.0 for the
+        rest of the round — everyone fully believing a corpse for ten minutes."""
+        orphan = BeliefItem(holder_guid="H", source="public_obituary",
+                            t_observed=0, roster_state=OBSERVED_OUT_OF_ACTION)
+        with pytest.raises(AssertionError, match="believed forever"):
+            orphan.confidence(600_000)
+
+    @pytest.mark.parametrize("clock,basis,span", [
+        ({"interval_ms": 20000, "offset_ms": 15000}, EXPIRY_VALIDATED_WAVE, None),
+        ({"interval_ms": 20000, "offset_ms": None}, EXPIRY_INTERVAL_ONLY, 20000),
+        ({}, EXPIRY_BOUND, MAX_OBSERVED_REINFORCE_MS),
+        (None, EXPIRY_BOUND, MAX_OBSERVED_REINFORCE_MS),
+    ])
+    def test_every_clock_state_yields_a_named_basis(self, clock, basis, span):
+        expiry, got = resolve_expiry(clock, 30_000)
+        assert got == basis
+        assert expiry > 30_000, "an expiry must never fall before the death"
+        if span is not None:
+            assert expiry - 30_000 == span
+
+    def test_expiry_is_computed_per_death_not_per_team(self):
+        """⛔ One timestamp per team cannot be the next wave for deaths at
+        different times: waves repeat all round. A death at 30 s given a 25 s
+        wave got an expiry in its own past and was dead on arrival."""
+        clock = {"AXIS": {"interval_ms": 20000, "offset_ms": 15000}}
+        early = obituary_beliefs([("V1", "AXIS", 5000)], ["H"], clock=clock)[0]
+        late = obituary_beliefs([("V2", "AXIS", 30000)], ["H"], clock=clock)[0]
+        assert early.expires_at_ms != late.expires_at_ms
+        for belief in (early, late):
+            assert belief.confidence(belief.t_observed) == 1.0
 
     def test_a_death_is_public(self):
         beliefs = obituary_beliefs(
-            [("V", "AXIS", 5000)], ["A", "B", "V"], wave_expiry={"AXIS": 25000})
+            [("V", "AXIS", 5000)], ["A", "B", "V"],
+            clock={"AXIS": {"interval_ms": 20000, "offset_ms": 15000}})
         assert {b.holder_guid for b in beliefs} == {"A", "B"}
-        assert all(b.expires_at_ms == 25000 for b in beliefs)
+        assert all(b.expiry_basis == EXPIRY_VALIDATED_WAVE for b in beliefs)
 
-    def test_without_a_validated_clock_there_is_no_expiry(self):
-        """No clock means no known wave, so the belief cannot be given a
-        principled end — it must not be given an invented one either."""
-        beliefs = obituary_beliefs([("V", "AXIS", 5000)], ["A"], wave_expiry={})
-        assert beliefs[0].expires_at_ms is None
+    def test_the_bound_is_the_longest_interval_this_project_has_seen(self):
+        """⚠️ 35 s, not the 30 s "everyone knows" ET uses: the intervals present
+        in proximity_spawn_timing are 15, 20, 25, 30 AND 35."""
+        assert MAX_OBSERVED_REINFORCE_MS == 35_000
 
 
 class TestContactIsAsymmetric:
@@ -272,7 +330,7 @@ class TestPayloadTellsTheTruth:
 
     def test_faded_beliefs_leave_the_payload(self):
         state = HolderState("H", [BeliefItem(
-            holder_guid="H", kind="position_region", source="gunfire",
+            holder_guid="H", source="gunfire",
             t_observed=0, region=Region(0.0, 0.0, 0.0, 400.0))])
         assert to_dict(state, 0, (0.0, 0.0, 0.0))["beliefs"]
         assert to_dict(state, 60_000, (0.0, 0.0, 0.0))["beliefs"] == [], (
@@ -289,7 +347,7 @@ class TestPayloadTellsTheTruth:
         and the two numbers on screen would contradict each other.
         """
         belief = BeliefItem(
-            holder_guid="H", kind="position_region", source="aim_lock",
+            holder_guid="H", source="aim_lock",
             t_observed=0, subject_guid="E1")
         state = HolderState("H", [belief])
         tau_ms = int(DECAY_TAU_S["aim_lock"] * 1000)
@@ -321,3 +379,117 @@ class TestPayloadTellsTheTruth:
                 f"an affirmative claim of seeing: {match.group(0).strip()!r}"
             )
         assert "never saw" in source, "the model must still say what it refuses"
+
+
+class TestTheTwoNumbersNeverContradict:
+    """⛔ [5]: a holder who only heard shots used to get `known_enemy_count: 0`
+    and a populated enemy distance in the same payload."""
+
+    @staticmethod
+    def _heard_only() -> HolderState:
+        shots = gunfire_beliefs(
+            [("S", 1000, 1000.0, 0.0, 0.0)], {"H": (0.0, 0.0, 0.0)},
+            audible_radius=5000)
+        return group_by_holder(shots)["H"]
+
+    def test_noise_is_not_an_enemy_distance(self):
+        payload = to_dict(self._heard_only(), 1000, (0.0, 0.0, 0.0))
+        assert payload["known_enemy_count"] == 0
+        assert payload["nearest_known_enemy_distance"] is None
+
+    def test_but_the_noise_is_still_reported(self):
+        """⭐ Hearing shots 900 units away IS information — just not an enemy.
+        Dropping it would lose real evidence to avoid a contradiction."""
+        payload = to_dict(self._heard_only(), 1000, (0.0, 0.0, 0.0))
+        assert payload["nearest_heard_activity_distance"] == {"min": 600.0, "max": 1400.0}
+
+    def test_a_named_enemy_appears_in_the_enemy_distance(self):
+        state = HolderState("H", [BeliefItem(
+            holder_guid="H", source="aim_lock", t_observed=0, subject_guid="E1",
+            region=Region(1000.0, 0.0, 0.0, 400.0))])
+        payload = to_dict(state, 0, (0.0, 0.0, 0.0))
+        assert payload["known_enemy_count"] == 1
+        assert payload["nearest_known_enemy_distance"] == {"min": 600.0, "max": 1400.0}
+        assert payload["nearest_heard_activity_distance"] is None
+
+    def test_the_count_and_the_distance_agree_on_every_channel(self):
+        """The property, rather than three examples: a resolved subject appears
+        in both, an unresolved region in neither."""
+        for source, subject in [("gunfire", None), ("aim_lock", "E1"),
+                                ("contact_hit", "E2")]:
+            state = HolderState("H", [BeliefItem(
+                holder_guid="H", source=source, t_observed=0, subject_guid=subject,
+                region=Region(500.0, 0.0, 0.0, 100.0))])
+            payload = to_dict(state, 0, (0.0, 0.0, 0.0))
+            counted = payload["known_enemy_count"] > 0
+            has_distance = payload["nearest_known_enemy_distance"] is not None
+            assert counted == has_distance, (
+                f"{source}: counted={counted} but distance={has_distance}"
+            )
+
+
+class TestKindCannotLie:
+    """⛔ [7]: two call sites labelled a belief `position_region` and left
+    `region` as None, because neither input row carries coordinates."""
+
+    @pytest.mark.parametrize("region,subject,expected", [
+        (Region(0.0, 0.0, 0.0, 10.0), "E1", "subject_position"),
+        (Region(0.0, 0.0, 0.0, 10.0), None, "position_region"),
+        (None, "E1", "subject_contact"),
+        (None, None, "nonspatial_contact"),
+    ])
+    def test_the_label_is_read_off_the_contents(self, region, subject, expected):
+        belief = BeliefItem(holder_guid="H", source="gunfire", t_observed=0,
+                            region=region, subject_guid=subject)
+        assert belief.kind == expected
+
+    def test_a_roster_fact_is_a_roster_fact(self):
+        belief = BeliefItem(holder_guid="H", source="public_obituary", t_observed=0,
+                            subject_guid="E1", roster_state=OBSERVED_OUT_OF_ACTION,
+                            expires_at_ms=1000, expiry_basis=EXPIRY_BOUND)
+        assert belief.kind == "roster_state"
+
+    def test_no_builder_promises_a_region_it_does_not_carry(self):
+        """The property across every producer in the module."""
+        produced = (
+            contact_beliefs([("V", [{"guid": "A", "weapons": {"3": 1},
+                                     "first_hit_ms": 1000}])])
+            + aim_lock_beliefs([("H", "E1", 1000)])
+            + gunfire_beliefs([("S", 1, 0.0, 0.0, 0.0)], {"H": (1.0, 0.0, 0.0)},
+                              audible_radius=999)
+            + obituary_beliefs([("V", "AXIS", 5000)], ["H"], clock={})
+        )
+        assert produced
+        for belief in produced:
+            if "position" in belief.kind or belief.kind == "position_region":
+                assert belief.region is not None, f"{belief.kind} without a region"
+            if "subject" in belief.kind:
+                assert belief.subject_guid is not None
+
+
+class TestHoldersMayBeAnyIterable:
+    """⛔ [8]: `apply_capability` walks `holders` once per gated source, and a
+    generator is exhausted by the first — leaving the second channel untouched
+    and the payload looking like a proven capture."""
+
+    @staticmethod
+    def _states() -> dict[str, HolderState]:
+        beliefs = gunfire_beliefs([("S", 1000, 0.0, 0.0, 0.0)],
+                                  {"H": (10.0, 0.0, 0.0)}, audible_radius=1500)
+        beliefs += aim_lock_beliefs([("H", "E1", 2000)])
+        return group_by_holder(beliefs)
+
+    @pytest.mark.parametrize("make", [
+        pytest.param(lambda: ["H"], id="list"),
+        pytest.param(lambda: (h for h in ["H"]), id="generator"),
+        pytest.param(lambda: iter(["H"]), id="iterator"),
+    ])
+    def test_both_gated_channels_are_handled(self, make):
+        states = self._states()
+        apply_capability(
+            states, {"capabilities": {"shot_fired": "unknown", "aim_lock": "unknown"}},
+            make())
+        assert set(states["H"].unavailable) == {"gunfire", "aim_lock"}, (
+            "the second gated source was skipped"
+        )
+        assert states["H"].beliefs == [], "gated beliefs survived"
