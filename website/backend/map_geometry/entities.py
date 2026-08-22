@@ -299,8 +299,23 @@ def _inline_model(
     local_bounds = Bounds3D(model.mins, model.maxs)
     if any(not math.isfinite(value) for value in (*local_bounds.mins, *local_bounds.maxs)):
         raise _error(bsp, entity_index, classname, "inline model bounds are not finite")
-    if any(local_bounds.mins[index] >= local_bounds.maxs[index] for index in range(3)):
-        raise _error(bsp, entity_index, classname, "inline model has empty or inverted bounds")
+    # "Empty or inverted" named two different things and the check treated them
+    # as one. `>=` rejects a bounding box that is merely FLAT on an axis, and a
+    # zero-thickness axis-aligned brush is ordinary BSP geometry — clip planes
+    # are routinely built that way.
+    #
+    # Found on `etl_frostbite`, entity 191: a `func_static` named `TJ_clip`
+    # (trickjump clip) whose model *37 has mins.x == maxs.x == -2880 and
+    # num_brushes == 0. One entity out of 329 cost the map its entire catalog,
+    # and with it 1,549 recorded kills that had no geometry to check against.
+    #
+    # Inverted is `mins > maxs` — that is corruption and still fails. Degenerate
+    # on ALL THREE axes is a point, which carries no volume and is equally
+    # meaningless. Flat on one or two axes is a real surface and is allowed.
+    if any(local_bounds.mins[index] > local_bounds.maxs[index] for index in range(3)):
+        raise _error(bsp, entity_index, classname, "inline model has inverted bounds")
+    if all(local_bounds.mins[index] == local_bounds.maxs[index] for index in range(3)):
+        raise _error(bsp, entity_index, classname, "inline model bounds are a single point")
 
     return InlineModelGeometry(
         model_index=model_index,
