@@ -52,6 +52,7 @@ staleness stated. Absence of a capability is `unavailable`, never zero (§6.2).
 
 from __future__ import annotations
 
+import json
 import math
 from bisect import bisect_right
 from collections import defaultdict
@@ -111,6 +112,17 @@ class CapturePolicy:
     enabled_capabilities: dict[str, Any] = field(default_factory=dict)
     policy_version: str | None = None
     source: str = "absent"
+    #: flag -> "enabled" | "disabled" | "unknown". THREE states, never two: a
+    #: round whose tracker predates the capability declaration can prove a
+    #: capture was on (its section carried rows) but can never prove one was
+    #: off, and collapsing that to a boolean turns missing telemetry into a
+    #: claim about the match.
+    capabilities: dict[str, str] = field(default_factory=dict)
+    #: >0 when several files map to this round and disagree. Their disputed
+    #: flags are `unknown`, because we cannot tell which file the rows came
+    #: from. Rare (1 round in 776) but real, and silently picking one would be
+    #: a guess wearing a fact's clothes.
+    conflicting_files: int = 0
 
 
 @dataclass(slots=True)
@@ -530,6 +542,80 @@ def _player_to_dict(st: PlayerState) -> dict[str, Any]:
     }
 
 
+async def load_capture_policy(db, round_id: int) -> CapturePolicy:
+    """What the round's source file says it was able to record.
+
+    `proximity_processed_files` has no round_id, so the bridge is `round_key`
+    (migration 062): `date|map|round|start_unix`. Only its LAST field is used.
+
+    ⭐ Matching the whole key would be wrong. The round number in it comes from
+    the parser's own normalisation, and two of the 184 keys written so far
+    disagree with what re-parsing the same file produces today — so a whole-key
+    match would silently drop those rounds. `round_start_unix` alone identifies
+    950 of 951 rounds; the single colliding pair returns two manifests and takes
+    the disagreement path below, which is the honest outcome rather than a
+    coin flip. 828 rows make the unindexed cast free.
+
+    A round with no manifest keeps the default, which is `unknown` on every
+    field. That is not a placeholder to be improved away: 30 processed files
+    have no raw file left to read, and a round we cannot characterise must say
+    so rather than inherit the software's current defaults (§4.2).
+    """
+    rows = await db.fetch_all("""
+        SELECT f.capabilities
+        FROM rounds r
+        JOIN proximity_processed_files f
+          ON split_part(f.round_key, '|', 4) = r.round_start_unix::text
+        WHERE r.id = $1
+          AND f.capabilities IS NOT NULL
+          AND r.round_start_unix IS NOT NULL
+          AND r.round_start_unix > 0
+    """, (round_id,))
+    manifests: list[dict] = []
+    for row in rows:
+        value = row[0]
+        if isinstance(value, str):
+            # A value that will not parse is not a manifest. Dropping it leaves
+            # the round `unknown`, which is the truth about a round we cannot
+            # characterise; raising here would turn one corrupt row into a 500
+            # for a page whose entire job is to keep working while saying what
+            # it does not know.
+            try:
+                value = json.loads(value)
+            except ValueError:
+                logger.warning(
+                    "round %s: unparseable capabilities manifest, ignoring", round_id
+                )
+                continue
+        if isinstance(value, dict):
+            manifests.append(value)
+    if not manifests:
+        return CapturePolicy()
+
+    head = manifests[0]
+    capabilities: dict[str, str] = dict(head.get("capabilities") or {})
+    conflicts = 0
+    for other in manifests[1:]:
+        for flag, state in (other.get("capabilities") or {}).items():
+            if capabilities.get(flag, state) != state:
+                capabilities[flag] = "unknown"
+                conflicts += 1
+            else:
+                capabilities.setdefault(flag, state)
+
+    interval = head.get("position_sample_interval_ms")
+    return CapturePolicy(
+        # The cadence is a fixed interval written in the file header; `unknown`
+        # stays whenever no manifest carried one.
+        mode="fixed" if interval else "unknown",
+        observation_interval_ms=interval,
+        capabilities=capabilities,
+        policy_version=str(head.get("manifest_version") or "") or None,
+        source=head.get("source") or "absent",
+        conflicting_files=conflicts,
+    )
+
+
 async def get_round_snapshot(
     db, round_id: int, t_ms: int, *, max_stale_ms: int | None = None,
     velocity_max_dt_ms: int | None = None,
@@ -538,10 +624,13 @@ async def get_round_snapshot(
 
     ⛔ Reconstruction only (§4.6). Nothing here ranks anyone.
 
-    `capture_policy` is reported as `unknown` because it is: no round in the
-    database carries a persisted cadence or capability manifest today. That is
-    published rather than defaulted, so a consumer cannot mistake our software
-    fallback for evidence about the file.
+    `capture_policy` carries the round's capability manifest where one exists
+    and `unknown` where it does not — published rather than defaulted, so a
+    consumer cannot mistake our software's current settings for evidence about
+    the file. Its `capabilities` map has three states and `unknown` must never
+    be read as `disabled`: for every round captured before the tracker began
+    declaring its flags, an absent section is equally consistent with the
+    capture being off and with it being on and having nothing to report.
     """
     tracks = await load_round_tracks(db, round_id)
     # An empty round takes the SAME path, not a shortcut with a different shape.
@@ -555,7 +644,7 @@ async def get_round_snapshot(
         max_stale_ms=max_stale_ms, velocity_max_dt_ms=velocity_max_dt_ms,
     )
     separation = nearest_teammate_separation(snap)
-    policy = CapturePolicy()
+    policy = await load_capture_policy(db, round_id)
     payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
@@ -563,6 +652,9 @@ async def get_round_snapshot(
             "mode": policy.mode,
             "observation_interval_ms": policy.observation_interval_ms,
             "source": policy.source,
+            "manifest_version": policy.policy_version,
+            "capabilities": policy.capabilities,
+            "conflicting_files": policy.conflicting_files,
         },
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,

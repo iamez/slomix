@@ -8,6 +8,8 @@ spec §4.3–4.5 rather than against the current output, so a future refactor th
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from website.backend.services import replay_service
@@ -21,6 +23,7 @@ from website.backend.services.round_web_service import (
     build_snapshot,
     derive_velocity,
     find_position_floor,
+    load_capture_policy,
     nearest_teammate_separation,
     select_life,
 )
@@ -317,3 +320,87 @@ class TestEdgesNeverInventACoordinate:
 
 def test_edge_dataclass_defaults_to_not_contested():
     assert Edge("a", "b", "teammate", 1.0).recently_contested is False
+
+
+class _StubDb:
+    """Returns one fixed result set; the query text is irrelevant here."""
+
+    def __init__(self, rows):
+        self.rows = rows
+
+    async def fetch_all(self, _sql, _params=None):
+        return self.rows
+
+
+class TestLoadCapturePolicy:
+    """What the round says it was able to record — and what it refuses to say."""
+
+    @staticmethod
+    def _manifest(source="sections_observed", **caps):
+        base = {"shot_fired": "unknown", "aim_lock": "enabled"}
+        base.update(caps)
+        return {
+            "manifest_version": 1,
+            "source": source,
+            "capabilities": base,
+            "position_sample_interval_ms": 200,
+        }
+
+    @pytest.mark.asyncio
+    async def test_no_manifest_stays_unknown(self):
+        policy = await load_capture_policy(_StubDb([]), 1)
+        assert policy.mode == "unknown"
+        assert policy.source == "absent"
+        assert policy.observation_interval_ms is None
+        assert policy.capabilities == {}
+
+    @pytest.mark.asyncio
+    async def test_cadence_comes_from_the_manifest(self):
+        policy = await load_capture_policy(_StubDb([(self._manifest(),)]), 1)
+        assert policy.mode == "fixed"
+        assert policy.observation_interval_ms == 200
+        assert policy.source == "sections_observed"
+
+    @pytest.mark.asyncio
+    async def test_missing_capture_is_unknown_not_false(self):
+        """The whole reason the manifest exists. A consumer reading `unknown`
+        as `false` would report "no gunfire this round" about a round where
+        gunfire was simply never recorded."""
+        policy = await load_capture_policy(_StubDb([(self._manifest(),)]), 1)
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.capabilities["shot_fired"] is not False
+
+    @pytest.mark.asyncio
+    async def test_json_string_rows_are_accepted(self):
+        """Some adapters hand jsonb back as text rather than a dict."""
+        policy = await load_capture_policy(
+            _StubDb([(json.dumps(self._manifest()),)]), 1
+        )
+        assert policy.capabilities["aim_lock"] == "enabled"
+
+    @pytest.mark.asyncio
+    async def test_disagreeing_files_collapse_to_unknown(self):
+        """One round, two files, two answers: we cannot tell which file the
+        rows came from, so the disputed flag is unknown and the disagreement is
+        counted rather than hidden behind whichever row sorted first."""
+        rows = [
+            (self._manifest(shot_fired="enabled"),),
+            (self._manifest(shot_fired="disabled"),),
+        ]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.conflicting_files == 1
+        # Flags they agree on survive intact.
+        assert policy.capabilities["aim_lock"] == "enabled"
+
+    @pytest.mark.asyncio
+    async def test_agreeing_files_are_not_a_conflict(self):
+        rows = [(self._manifest(),), (self._manifest(),)]
+        policy = await load_capture_policy(_StubDb(rows), 1)
+        assert policy.conflicting_files == 0
+        assert policy.capabilities["aim_lock"] == "enabled"
+
+    @pytest.mark.asyncio
+    async def test_malformed_manifest_is_ignored_not_crashed(self):
+        policy = await load_capture_policy(_StubDb([("not a manifest",), (None,)]), 1)
+        assert policy.source == "absent"
