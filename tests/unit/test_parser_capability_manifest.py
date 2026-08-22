@@ -122,34 +122,69 @@ def test_empty_declaration_still_counts_as_declared(tmp_path: Path, declared: st
 
 # --- the standalone scanner must not drift from the parser -----------------
 
+#: Shapes that have actually caused a wrong answer, or could. Written out here
+#: rather than taken from disk so the guard RUNS in CI: a check that silently
+#: skips looks green while testing nothing, which is how the cross-instance path
+#: bug came back through a required check (#788).
+SHAPES = {
+    "bare": HEADER + TRACK_ROW,
+    "header_without_rows": HEADER + "# SHOT_FIRED\n# time;guid\n" + TRACK_ROW,
+    "section_with_rows": (
+        HEADER + TRACK_ROW + "# SHOT_FIRED\n# time;guid\n100;AAAA;1;0;0;0;0.0;0.0\n"
+    ),
+    "declared": (
+        HEADER
+        + "# tracker_version_full=6.11\n# test_mode=0\n"
+        + "# capabilities=shot_fired:0,aim_lock:1\n"
+        + TRACK_ROW
+    ),
+    "declared_test_mode": (
+        HEADER
+        + "# tracker_version_full=6.11\n# test_mode=1\n"
+        + "# capabilities=shot_fired:0\n"
+        + TRACK_ROW
+    ),
+}
+
 REAL_FILES = sorted(
     Path("/home/samba/share/slomix_discord/local_proximity").glob("*_engagements.txt")
 )
 
 
-@pytest.mark.skipif(not REAL_FILES, reason="no raw proximity files on this host")
-@pytest.mark.parametrize("index", [0, len(REAL_FILES) // 2, -1])
-def test_scan_file_agrees_with_the_parser(index: int) -> None:
-    """One answer, two code paths — this is what keeps them one answer.
-
-    `scan_file` exists so the backfill need not run a full parse over 800
-    rounds. That saving is only safe while the two agree, so the check runs on
-    real files from three points in the corpus rather than on a fixture whose
-    shape we chose.
-    """
+def _via_scan(path: str) -> dict:
     from proximity.parser.capability_manifest import build_manifest, scan_file
 
-    path = str(REAL_FILES[index])
-    parser = ProximityParserV4()
-    parser.parse_file(path)
-    from_parser = parser.build_capability_manifest()
-
     scanned = scan_file(path)
-    from_scan = build_manifest(
+    return build_manifest(
         sections_with_rows=scanned["sections_with_rows"],
         declared=scanned["declared"],
         test_mode=scanned["test_mode"],
         tracker_version_full=scanned["tracker_version_full"],
         position_sample_interval_ms=scanned["position_sample_interval_ms"],
     )
-    assert from_scan == from_parser
+
+
+def _via_parser(path: str) -> dict:
+    parser = ProximityParserV4()
+    parser.parse_file(path)
+    return parser.build_capability_manifest()
+
+
+@pytest.mark.parametrize("shape", sorted(SHAPES))
+def test_scan_file_agrees_with_the_parser(tmp_path: Path, shape: str) -> None:
+    """One answer, two code paths — this is what keeps them one answer.
+
+    `scan_file` exists so the backfill need not run a full parse over 800
+    rounds. That saving is only safe while the two agree.
+    """
+    path = _write(tmp_path, SHAPES[shape])
+    assert _via_scan(path) == _via_parser(path)
+
+
+@pytest.mark.skipif(not REAL_FILES, reason="no raw proximity files on this host")
+@pytest.mark.parametrize("index", [0, len(REAL_FILES) // 2, -1])
+def test_scan_file_agrees_with_the_parser_on_real_files(index: int) -> None:
+    """The same check against files nobody designed for it — an extra on hosts
+    that have the corpus, never the only place the guard lives."""
+    path = str(REAL_FILES[index])
+    assert _via_scan(path) == _via_parser(path)

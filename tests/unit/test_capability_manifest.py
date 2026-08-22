@@ -20,6 +20,8 @@
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -273,3 +275,116 @@ def test_lua_declaration_uses_the_wire_format_the_parser_reads() -> None:
     block = block[: block.index("et.trap_FS_Write(cap_header")]
     assert 'name .. ":" .. (isFeatureEnabled(name) and "1" or "0")' in block
     assert 'table.concat(cap_parts, ",")' in block
+
+
+# --- executing the declaration, not just reading it ------------------------
+
+LUA = shutil.which("lua5.4") or shutil.which("lua")
+
+LUA_HARNESS = """
+local src = io.open(%r):read('a')
+local block = src:match('(local cap_order = {.-et%%.trap_FS_Write%%(cap_header, string%%.len%%(cap_header%%), fd%%))')
+assert(block, 'declaration block not found')
+local config = { test_mode = { enabled = %s }, features = { %s } }
+local function isFeatureEnabled(n)
+  if config.test_mode.enabled then return false end
+  return config.features[n]
+end
+local out = {}
+local et = { trap_FS_Write = function(s) out[#out+1] = s end }
+local chunk = assert(load('local config, isFeatureEnabled, et, version, fd = ... \\n' .. block))
+chunk(config, isFeatureEnabled, et, '6.11', 1)
+io.write(table.concat(out))
+"""
+
+
+def _run_declaration(test_mode: bool, features: dict[str, bool]) -> str:
+    body = ", ".join(
+        f"{name}={'true' if value else 'false'}" for name, value in features.items()
+    )
+    script = LUA_HARNESS % (str(TRACKER), "true" if test_mode else "false", body)
+    result = subprocess.run(
+        [LUA, "-"], input=script, capture_output=True, text=True, timeout=30, check=True
+    )
+    return result.stdout
+
+
+def _header_value(text: str, key: str) -> str:
+    for line in text.splitlines():
+        if line.startswith(f"# {key}="):
+            return line.split("=", 1)[1]
+    raise AssertionError(f"no `{key}` line in:\n{text}")
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_declaration_reports_what_the_flags_actually_are() -> None:
+    """Runs the tracker's own declaration block under a real interpreter.
+
+    Reading the source proves the code says the right thing; running it proves
+    the code DOES the right thing, and those are different claims.
+    """
+    features = dict.fromkeys(FEATURE_FLAGS, True)
+    features["shot_fired"] = False
+    text = _run_declaration(test_mode=False, features=features)
+
+    assert _header_value(text, "tracker_version_full") == "6.11"
+    assert _header_value(text, "test_mode") == "0"
+    declared = parse_declaration(_header_value(text, "capabilities"))
+    assert declared["shot_fired"] is False
+    assert declared["aim_lock"] is True
+    assert set(declared) == set(FEATURE_FLAGS)
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_test_mode_declares_every_flag_off_and_says_so() -> None:
+    """⚠️ The trap this line exists for.
+
+    `isFeatureEnabled` returns false for everything while test mode is on, so a
+    test-mode round writes almost nothing and is indistinguishable from a
+    server with the capture switched off — unless the file says which it was.
+    """
+    text = _run_declaration(test_mode=True, features=dict.fromkeys(FEATURE_FLAGS, True))
+    assert _header_value(text, "test_mode") == "1"
+    declared = parse_declaration(_header_value(text, "capabilities"))
+    assert set(declared.values()) == {False}
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_a_flag_missing_from_cap_order_is_still_declared() -> None:
+    """A flag added to config.features but not to cap_order would otherwise
+    vanish from the declaration, and a missing name reads downstream as
+    `unknown` — hiding the omission instead of surfacing it."""
+    features = dict.fromkeys(FEATURE_FLAGS, True)
+    features["a_brand_new_capture"] = True
+    text = _run_declaration(test_mode=False, features=features)
+    declared = parse_declaration(_header_value(text, "capabilities"))
+    assert declared["a_brand_new_capture"] is True
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_declaration_is_byte_stable_across_rounds() -> None:
+    """`pairs()` has no defined order, so an unsorted extras list would make the
+    same server write a different line every round."""
+    features = dict.fromkeys(FEATURE_FLAGS, True)
+    features.update({"zzz_late": True, "aaa_early": False})
+    runs = {_run_declaration(test_mode=False, features=features) for _ in range(3)}
+    assert len(runs) == 1
+
+
+@pytest.mark.skipif(not LUA, reason="no lua interpreter on this host")
+def test_what_lua_writes_is_what_the_parser_reads() -> None:
+    """The round trip, end to end, with no hand-written fixture in between."""
+    features = dict.fromkeys(FEATURE_FLAGS, True)
+    features["comm_events"] = False
+    text = _run_declaration(test_mode=False, features=features)
+
+    manifest = build_manifest(
+        sections_with_rows=set(),
+        declared=parse_declaration(_header_value(text, "capabilities")),
+        test_mode=_header_value(text, "test_mode") == "1",
+        tracker_version_full=_header_value(text, "tracker_version_full"),
+    )
+    assert manifest["source"] == "declared"
+    assert manifest["capabilities"]["comm_events"] == DISABLED
+    assert manifest["capabilities"]["shot_fired"] == ENABLED
+    assert UNKNOWN not in manifest["capabilities"].values()
