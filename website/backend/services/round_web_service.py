@@ -62,6 +62,22 @@ from typing import Any
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
 from proximity.parser.capability_manifest import is_declared
 from website.backend.logging_config import get_app_logger
+from website.backend.services.clock_inputs import (
+    clock_validation_payload,
+    fetch_clock_lives_and_revives,
+    fetch_timing_observations,
+    wave_position,
+)
+from website.backend.services.reconstruction_accuracy import (
+    MEASUREMENT as ACCURACY_MEASUREMENT,
+)
+from website.backend.services.reconstruction_accuracy import (
+    position_error,
+)
+from website.backend.services.reconstruction_accuracy import (
+    to_dict as accuracy_to_dict,
+)
+from website.backend.services.reinforcement_clock import validate_round_clocks
 from website.backend.services.replay_service import (
     _TRACK_ROUND_JOIN,
     _ensure_path_list,
@@ -546,6 +562,13 @@ def _player_to_dict(st: PlayerState) -> dict[str, Any]:
         "track_id": st.track_id,
         "stale_ms": st.stale_ms,
         "overlap_conflict": st.overlap_conflict,
+        # Measured, not assumed, and attached to the player rather than the page:
+        # a fresh uncontested sample is good to ~12 units, a contested one to
+        # ~875. Drawing both with the same confidence was the prototype's real
+        # weakness. None when there is no position to qualify.
+        "position_error": accuracy_to_dict(
+            position_error(st.stale_ms, overlap_conflict=st.overlap_conflict)
+        ) if _has_position(st) else None,
         "vx": st.vx, "vy": st.vy, "vz": st.vz,
         "velocity_stale_ms": st.velocity_stale_ms,
         "velocity_reason": st.velocity_reason,
@@ -652,6 +675,50 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     )
 
 
+async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
+    """The reinforcement clock for both teams, and where `t_ms` sits in it.
+
+    §5 calls the clock the round's third opponent: a fight is worth taking or
+    not depending on how long the loser stays dead, and that is a property of
+    the moment, not of the players. This is what the snapshot needs to say it.
+
+    Every team gets an entry, including one whose clock could not be
+    established — a missing key would read as "no clock here" when the truth is
+    "we could not verify one", and §5.2 draws precisely that line. `phase_ms`
+    and `time_to_next_wave_ms` appear only for a **validated** clock, because
+    they are computed from the offset the protocol refuses to publish otherwise.
+    """
+    observations = await fetch_timing_observations(db, round_id)
+    lives, revives, _track_end = await fetch_clock_lives_and_revives(db, round_id)
+    if not observations:
+        # No eligible spawn-timing rows: either the round fails the strict gate
+        # (bot round, invalid, not a played half) or nobody died. Both are
+        # "unavailable", never a silently absent clock.
+        return {
+            team: {"status": "unavailable",
+                   "reason": "no eligible spawn-timing rows for this round"}
+            for team in ("AXIS", "ALLIES")
+        }
+
+    validations = validate_round_clocks(observations, lives, revives)
+    clock: dict[str, dict] = {}
+    for team in ("AXIS", "ALLIES"):
+        validation = validations.get(team)
+        if validation is None:
+            clock[team] = {"status": "unavailable",
+                           "reason": "no timing observations for this team"}
+            continue
+        payload = clock_validation_payload(validation)
+        if validation.status == "validated" and validation.interval_ms:
+            phase, remaining = wave_position(
+                t_ms, validation.interval_ms, validation.offset_ms or 0
+            )
+            payload["phase_ms"] = phase
+            payload["time_to_next_wave_ms"] = remaining
+        clock[team] = payload
+    return clock
+
+
 async def get_round_snapshot(
     db, round_id: int, t_ms: int, *, max_stale_ms: int | None = None,
     velocity_max_dt_ms: int | None = None,
@@ -693,6 +760,8 @@ async def get_round_snapshot(
             "manifest_count": policy.manifest_count,
             "conflicting_flags": policy.conflicting_flags,
         },
+        "clock": await load_round_clock(db, round_id, t_ms),
+        "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,
         "gaps": snap.gaps,
