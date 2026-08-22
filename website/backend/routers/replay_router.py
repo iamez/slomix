@@ -69,6 +69,10 @@ async def get_round_web(
         None, ge=0,
         description="Exclude states older than this; omit to get everything "
                     "with its staleness stated"),
+    pov: str | None = Query(
+        None, max_length=64,
+        description="Whose information state to return: a player GUID, or "
+                    "'world' for the oracle view. Omitted means 'world'."),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Layer 1: the relational reconstruction of one moment.
@@ -78,8 +82,14 @@ async def get_round_web(
     sample from after `t`, and carries `stale_ms`, `overlap_conflict` and
     `velocity_reason` alongside the values they qualify.
 
+    `information_state` carries §6 Layer 3: what each player could plausibly
+    have known, per holder. `pov` restricts it to one player; `world` returns
+    the oracle view for every holder.
+
     ⛔ Reconstruction only — no score, no ranking (spec §4.6). Line-of-sight is
-    deliberately absent: it stays unvalidated until W6.
+    deliberately absent from the beliefs: a clear ray is a necessary but not
+    sufficient condition for having seen someone, so it stays an oracle upper
+    bound and never becomes knowledge.
     """
     # A round that does not exist is 404; a round that exists but has no linked
     # tracks is 200 with `unavailable` set. Collapsing the two would tell a
@@ -89,5 +99,5 @@ async def get_round_web(
     if not exists:
         raise HTTPException(status_code=404, detail=f"round {round_id} not found")
     return await round_web_service.get_round_snapshot(
-        db, round_id, t, max_stale_ms=max_stale_ms
+        db, round_id, t, max_stale_ms=max_stale_ms, pov=pov,
     )

@@ -23,8 +23,11 @@ from website.backend.services.round_web_service import (
     build_snapshot,
     derive_velocity,
     find_position_floor,
+    CapturePolicy,
+    Snapshot,
     load_capture_policy,
     load_round_clock,
+    load_round_information_state,
     nearest_teammate_separation,
     select_life,
 )
@@ -581,3 +584,68 @@ class TestLoadRoundClock:
         assert axis["offset_ms"] is None
         assert "phase_ms" not in axis
         assert "time_to_next_wave_ms" not in axis
+
+
+class _InfoStubDb:
+    """Answers the four Layer 3 queries in the order the loader issues them."""
+
+    def __init__(self, deaths=(), engagements=(), shots=(), locks=()):
+        self._queue = [list(deaths), list(engagements), list(shots), list(locks)]
+
+    async def fetch_all(self, _sql, _params=None):
+        return self._queue.pop(0) if self._queue else []
+
+
+def _snapshot_of(*guids: str) -> Snapshot:
+    players = {
+        g: PlayerState(guid=g, name=g, team="AXIS" if i % 2 else "ALLIES",
+                       player_class=None, x=float(i * 100), y=0.0, z=0.0,
+                       health=100, weapon=None, stance=None, speed=0.0, alive=True,
+                       track_id=i, stale_ms=0, overlap_conflict=False)
+        for i, g in enumerate(guids)
+    }
+    return Snapshot(t_ms=0, players=players, edges=[], overlap_conflicts=0, gaps={})
+
+
+class TestInformationStateLoader:
+    """§6 Layer 3 as the snapshot serves it."""
+
+    @pytest.mark.asyncio
+    async def test_every_player_gets_an_entry_even_with_no_beliefs(self):
+        """⛔ Otherwise a player who learned nothing and a player we could not
+        model look identical in the payload."""
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 1000, _snapshot_of("A", "B"), {},
+            CapturePolicy(capabilities={"shot_fired": "enabled", "aim_lock": "enabled"}))
+        assert set(result["holders"]) == {"A", "B"}
+        assert all(h["known_enemy_count"] == 0 for h in result["holders"].values())
+
+    @pytest.mark.asyncio
+    async def test_an_unproven_channel_is_named_for_every_holder(self):
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 1000, _snapshot_of("A", "B"), {}, CapturePolicy())
+        for holder in result["holders"].values():
+            assert set(holder["unavailable"]) == {"gunfire", "aim_lock"}
+
+    @pytest.mark.asyncio
+    async def test_a_death_reaches_the_other_players(self):
+        result = await load_round_information_state(
+            _InfoStubDb(deaths=[("V", "AXIS", 500)]), 1, 1000,
+            _snapshot_of("A", "V"), {"AXIS": {"interval_ms": 20000, "offset_ms": 0}},
+            CapturePolicy(capabilities={"shot_fired": "enabled", "aim_lock": "enabled"}))
+        assert result["holders"]["A"]["beliefs"], "the death was not announced"
+        assert result["holders"]["V"]["beliefs"] == [], "the victim told themselves"
+
+    @pytest.mark.asyncio
+    async def test_the_audible_radius_is_published_not_buried(self):
+        """§6.3: the radius and localisation error are named model parameters."""
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 0, _snapshot_of("A"), {}, CapturePolicy())
+        assert result["audible_gunfire_radius"] > 0
+
+    @pytest.mark.asyncio
+    async def test_an_empty_round_returns_the_same_shape(self):
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 0, _snapshot_of(), {}, CapturePolicy())
+        assert result["holders"] == {}
+        assert "audible_gunfire_radius" in result
