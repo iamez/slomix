@@ -59,6 +59,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
+from proximity.parser.capability_manifest import is_declared
 from website.backend.logging_config import get_app_logger
 from website.backend.services.replay_service import (
     _TRACK_ROUND_JOIN,
@@ -68,6 +70,7 @@ from website.backend.services.replay_service import (
 from website.backend.utils.et_constants import strip_et_colors
 
 logger = get_app_logger("service.round_web")
+
 
 # The tracker leaves an engagement open until this timeout even when nobody has
 # fired since. Spec §4.5: "So 'engagement open at t' can mean 'was shot at up to
@@ -118,11 +121,18 @@ class CapturePolicy:
     #: off, and collapsing that to a boolean turns missing telemetry into a
     #: claim about the match.
     capabilities: dict[str, str] = field(default_factory=dict)
-    #: >0 when several files map to this round and disagree. Their disputed
-    #: flags are `unknown`, because we cannot tell which file the rows came
-    #: from. Rare (1 round in 776) but real, and silently picking one would be
-    #: a guess wearing a fact's clothes.
-    conflicting_files: int = 0
+    #: How many manifests this round resolved to. Normally 1; a second means
+    #: two processed files map to the same round (1 round in 776 on the dev
+    #: corpus).
+    manifest_count: int = 0
+    #: How many individual flags those manifests disagree about. Each disputed
+    #: flag becomes `unknown`, because we cannot tell which file the rows came
+    #: from, and silently picking one would be a guess wearing a fact's clothes.
+    #:
+    #: ⚠️ This counts FLAGS, not files — the two are different numbers and an
+    #: earlier version reported the flag count under a file-count name
+    #: (CodeRabbit, PR #795).
+    conflicting_flags: int = 0
 
 
 @dataclass(slots=True)
@@ -570,6 +580,7 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
           AND f.capabilities IS NOT NULL
           AND r.round_start_unix IS NOT NULL
           AND r.round_start_unix > 0
+        ORDER BY f.filename
     """, (round_id,))
     manifests: list[dict] = []
     for row in rows:
@@ -592,27 +603,44 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     if not manifests:
         return CapturePolicy()
 
-    head = manifests[0]
-    capabilities: dict[str, str] = dict(head.get("capabilities") or {})
-    conflicts = 0
-    for other in manifests[1:]:
-        for flag, state in (other.get("capabilities") or {}).items():
-            if capabilities.get(flag, state) != state:
-                capabilities[flag] = "unknown"
-                conflicts += 1
-            else:
-                capabilities.setdefault(flag, state)
+    # A declared manifest is exact where an inferred one is a lower bound, so
+    # it leads regardless of filename order. Ordering is otherwise by filename
+    # (see the query) so the same round always answers the same way — `head`
+    # used to be whichever row the database happened to return first, which made
+    # `mode`, `source` and the cadence non-deterministic on the rare round with
+    # two files (CodeRabbit, PR #795).
+    head = next((m for m in manifests if is_declared(m)), manifests[0])
 
-    interval = head.get("position_sample_interval_ms")
+    capabilities: dict[str, str] = dict(head.get("capabilities") or {})
+    conflicting_flags = 0
+    for other in manifests:
+        if other is head:
+            continue
+        for flag, state in (other.get("capabilities") or {}).items():
+            if flag not in capabilities:
+                capabilities[flag] = state
+            elif capabilities[flag] != state and capabilities[flag] != UNKNOWN_STATE:
+                capabilities[flag] = UNKNOWN_STATE
+                conflicting_flags += 1
+
+    # The cadence is a fact about the file, so two files disagreeing about it
+    # means we do not know this round's cadence — not that one of them wins.
+    intervals = {
+        m.get("position_sample_interval_ms")
+        for m in manifests
+        if m.get("position_sample_interval_ms")
+    }
+    interval = intervals.pop() if len(intervals) == 1 else None
+    sources = {m.get("source") for m in manifests if m.get("source")}
+
     return CapturePolicy(
-        # The cadence is a fixed interval written in the file header; `unknown`
-        # stays whenever no manifest carried one.
         mode="fixed" if interval else "unknown",
         observation_interval_ms=interval,
         capabilities=capabilities,
         policy_version=str(head.get("manifest_version") or "") or None,
-        source=head.get("source") or "absent",
-        conflicting_files=conflicts,
+        source=(sources.pop() if len(sources) == 1 else "conflicting"),
+        manifest_count=len(manifests),
+        conflicting_flags=conflicting_flags,
     )
 
 
@@ -654,7 +682,8 @@ async def get_round_snapshot(
             "source": policy.source,
             "manifest_version": policy.policy_version,
             "capabilities": policy.capabilities,
-            "conflicting_files": policy.conflicting_files,
+            "manifest_count": policy.manifest_count,
+            "conflicting_flags": policy.conflicting_flags,
         },
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,
