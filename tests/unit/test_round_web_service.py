@@ -431,8 +431,18 @@ class TestCapturePolicyWithSeveralManifests:
         for rows in ([(inferred,), (declared,)], [(declared,), (inferred,)]):
             policy = await load_capture_policy(_StubDb(rows), 1)
             assert policy.capabilities["shot_fired"] == "unknown"  # they disagree
-            assert policy.policy_version == "1"
+            assert policy.policy_version == "1"  # both are manifest_version 1
             assert policy.source == "conflicting"
+
+    @pytest.mark.asyncio
+    async def test_disagreeing_manifest_version_is_dropped_too(self):
+        """Every scalar follows one rule: one answer or none. Reporting this one
+        from an arbitrary file while the rest fall back would leave a single
+        field describing one file and the others describing the round."""
+        a = self._m()
+        b = dict(self._m(), manifest_version=2)
+        policy = await load_capture_policy(_StubDb([(a,), (b,)]), 1)
+        assert policy.policy_version is None
 
     @pytest.mark.asyncio
     async def test_disagreeing_cadence_is_unknown(self):
