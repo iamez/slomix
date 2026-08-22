@@ -33,6 +33,15 @@ from pathlib import Path
 ENTITYNUM_WORLD = 1022
 ENTITYNUM_NONE = 1023
 
+#: What each control MUST answer, known before the engine is asked.
+#:
+#: DOWN traces 10,000 units straight down from a point a player occupied — they
+#: were standing on something, so it must block. TINY traces one unit sideways
+#: inside the space they already filled, so it must be clear. A control that
+#: does not carry its own expected answer cannot fail, and a check that cannot
+#: fail is decoration.
+CONTROL_EXPECTATIONS = {"control_down": "blocked", "control_tiny": "clear"}
+
 
 def read_fixture(path: Path) -> tuple[dict, dict[str, tuple]]:
     meta: dict[str, str] = {}
@@ -122,15 +131,31 @@ def main() -> int:
             counter["startsolid_differs"] += 1
 
         # Controls carry their own answer; a wrong one invalidates the capture.
-        if kind == "control":
-            expected = "blocked" if float(frac) < 1.0 or off_status == "blocked" else "clear"
-            if eng != off_status:
-                hard_fail.append(f"control idx={idx}: offline={off_status} engine={eng}")
-            del expected
+        #
+        # ⭐ The expected value comes from CONTROL_EXPECTATIONS — the control's
+        # design — not from what was observed. The previous version derived it
+        # from the measured fraction, which made it unfalsifiable, and then
+        # `del`eted it without ever comparing. Codacy saw the unused variable;
+        # the real defect was a control that could not fail.
+        #
+        # Both sides are checked against it, not against each other: two sides
+        # that agree DOWN is clear is precisely the breakage a control exists
+        # to catch, and an agreement test passes it.
+        expected = CONTROL_EXPECTATIONS.get(kind)
+        if expected is not None:
+            if off_status != expected:
+                hard_fail.append(
+                    f"{kind} idx={idx}: offline={off_status}, must be {expected}"
+                )
+            if eng != expected:
+                hard_fail.append(
+                    f"{kind} idx={idx}: engine={eng} (frac={frac}), "
+                    f"must be {expected}"
+                )
 
     print("\n  === ujemanje po vrsti daljice ===")
     total_n = total_agree = 0
-    for kind in ("blocked", "clear", "random", "control"):
+    for kind in ("blocked", "clear", "random", "control_down", "control_tiny"):
         c = by_kind.get(kind)
         if not c:
             continue

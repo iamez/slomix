@@ -4092,6 +4092,11 @@ end
 -- without any reference to the geometry under test.
 local trace_probe_done = false
 local trace_probe_last = 0
+-- ⛔ The capture waits for this, not for trace_probe_done. "The probe ran" and
+-- "the probe proved its preconditions" are different facts, and W6's entire
+-- verdict rests on the second: if entNum = -2 does NOT skip entity clipping,
+-- every fixture segment is measuring something other than the world.
+local trace_probe_validated = false
 
 local function traceProbeOne(label, a, b)
     local res = {}
@@ -4150,9 +4155,28 @@ local function runTraceProbe()
     et.G_Print(string.format("[PROX-W6] map=%s clients=%d seed=%.1f,%.1f,%.1f\n",
         tostring(et.trap_Cvar_Get("mapname")), #clients, seed[1], seed[2], seed[3]))
 
-    -- Controls whose answer is known without knowing the map.
-    traceProbeOne("DOWN", eye, {seed[1], seed[2], seed[3] - 10000})   -- must block
-    traceProbeOne("TINY", eye, {seed[1] + 1, seed[2], seed[3] + 56})  -- must be clear
+    -- Controls whose answer is known without knowing the map. Their results
+    -- used to be printed and dropped; a wrong one now stops the probe, because
+    -- a probe that answers a known question wrong cannot be trusted with an
+    -- unknown one.
+    local down_w = traceProbeOne("DOWN", eye, {seed[1], seed[2], seed[3] - 10000})
+    local tiny_w = traceProbeOne("TINY", eye, {seed[1] + 1, seed[2], seed[3] + 56})
+    if not down_w or not tiny_w then
+        et.G_Print("[PROX-W6] REFUSED: a control trace errored\n")
+        return true
+    end
+    if down_w.frac >= 1.0 then
+        et.G_Print(string.format(
+            "[PROX-W6] REFUSED: DOWN did not block (frac=%.4f). 10,000 units "
+            .. "down from a standing position must hit something.\n", down_w.frac))
+        return true
+    end
+    if tiny_w.frac < 1.0 then
+        et.G_Print(string.format(
+            "[PROX-W6] REFUSED: TINY was blocked (frac=%.4f). One unit sideways "
+            .. "inside the space the player already filled must be clear.\n", tiny_w.frac))
+        return true
+    end
 
     -- The decisive test. Controls above prove the probe works; they do NOT
     -- prove that -2 skips entity clipping, because nothing in them is blocked
@@ -4225,6 +4249,18 @@ local function runTraceProbe()
         "[PROX-W6] VERDICT entNum=-2 skips entity clipping: %s\n",
         (ent_differ > 0) and "CONFIRMED by the running engine"
                           or "NOT SHOWN -- no entity blocked any probe segment"))
+
+    -- ⭐ NOT SHOWN is not the same as false, and it is not good enough either.
+    -- Client pairs agreeing proves nothing: with no entity on the segment, -2
+    -- and -1 must agree whether or not -2 skips entity clipping. Only a segment
+    -- an entity blocks discriminates, so without one the premise is untested and
+    -- the capture stays shut. Returning true here ends the probe; it is
+    -- `trace_probe_validated` that opens the gate.
+    trace_probe_validated = (ent_differ > 0)
+    if not trace_probe_validated then
+        et.G_Print("[PROX-W6] CAPTURE DISABLED: premise untested. Load a map with "
+            .. "solid brush entities (a door, a mover) and probe again.\n")
+    end
     return true
 end
 
@@ -4247,7 +4283,11 @@ function et_RunFrame(levelTime)
         end
     end
 
-    if config.trace_fixture and config.trace_fixture.enabled then
+    -- ⛔ trace_probe_validated, not .enabled: the fixture capture may only run
+    -- once the probe has SHOWN, on this running engine, that entNum = -2
+    -- excludes entity clipping. Before that, every traced segment would be
+    -- answering a different question than the offline tracer.
+    if config.trace_fixture and config.trace_fixture.enabled and trace_probe_validated then
         if w6.segments == nil and w6.map ~= tracker.round.map_name then
             w6.map = tracker.round.map_name
             w6.segments = w6Load(tostring(w6.map))
