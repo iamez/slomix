@@ -268,7 +268,22 @@ local config = {
         objective_run_tracking = true,
         -- v9 true-aim (6.02): per-shot origin + view angles. DEFAULT OFF —
         -- high frequency; opt-in only. Production unchanged until enabled.
-        shot_fired = false,
+        -- ⭐ TRUE IN THE REPOSITORY ON PURPOSE (2026-08-22). It was true on the
+        -- live server and false here, so the next deploy of this file silently
+        -- turned the capture off: shot rows stop dead on 2026-08-11 and every
+        -- session since has no gunfire data. §10.3 warned about exactly this
+        -- ("never blind-copy the repo file over the live one") — the durable fix
+        -- is for the repository to agree with the server, not for someone to
+        -- remember to re-edit the live copy after every deploy.
+        --
+        -- `aim_lock` is the control that proves the mechanism: it is true HERE,
+        -- and it survived the same deploy with 92% August coverage.
+        --
+        -- Measured cost on the local test server (6 bots, 690 s round):
+        -- 1.73 KB per player-minute, 26 shots per player-minute, ~207 KB for a
+        -- 12-player 10-minute round. Server CPU could not resolve a difference
+        -- at all (0.06% vs 0.12%, both rounding to 0-1%).
+        shot_fired = true,
         -- v7 draft (6.10): enable individually after the gated testmode probe
         -- (docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md).
         aim_lock = true,          -- crosshair-on-enemy lock events (activated 2026-06-22)
@@ -4505,12 +4520,20 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     end
     createPlayerTrack(clientNum)
 
-    -- v7 (6.10, dormant): which spawn point did the player pick?
-    -- sess.spawnObjectiveIndex + pers.lastSpawnTime are documented fields
-    -- (LUA_V7_CAPTURE_RESEARCH_2026-06.md, candidate 4). Real spawns only —
-    -- the revived==1 path returned above.
+    -- v7: which spawn point did the player pick? Real spawns only — the
+    -- revived==1 path returned above.
+    --
+    -- ⚠️ This read `sess.spawnObjectiveIndex` until 2026-08-22, on the strength
+    -- of LUA_V7_CAPTURE_RESEARCH_2026-06.md calling it a documented field. It is
+    -- not: the name appears ZERO times in the whole ET:Legacy source tree
+    -- (checked against commit 732518ef). Every capture it ever made was -1.
+    --
+    -- `sess.userSpawnPointValue` is the real one — 12 occurrences in the engine
+    -- and exposed to Lua as FIELD_INT (src/game/g_lua.c:1313). It has existed
+    -- since 2.83, so nothing about the live build blocked this.
+    -- `pers.lastSpawnTime` was always fine (g_lua.c:1270).
     if isFeatureEnabled("spawn_select") then
-        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.spawnObjectiveIndex"))
+        local spawn_index = tonumber(safe_gentity_get(clientNum, "sess.userSpawnPointValue"))
         local last_spawn = tonumber(safe_gentity_get(clientNum, "pers.lastSpawnTime"))
         tracker.spawn_selects[#tracker.spawn_selects + 1] = {
             time = gameTime(),
