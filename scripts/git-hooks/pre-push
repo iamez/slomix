@@ -60,6 +60,28 @@ SECRET_KWARG_RE='(password|passwd|token|secret|api_key)[[:space:]]*=[[:space:]]*
 # in install.sh's help text trips the guard — which it did, on this hook's own
 # first push. A guard that cries wolf gets --no-verify'd into uselessness.
 PLACEHOLDER_RE='your_|_here|changeme|change_me|xxxxx|REDACTED|example|placeholder|<[a-z_]+>|\$\{?[A-Z_]+\}?|not-for-production|test_password|fake_|dummy_'
+# A name ending in _FILE / _PATH / _DIR holds a LOCATION, not a credential, and
+# its default is a path. Without this, `os.environ.get("SECRET_FILE",
+# "/etc/app/secret.pem")` is refused — the name matches [A-Z_]*SECRET[A-Z_]* and
+# the value is just eight-plus characters. A guard that refuses a path default
+# is a guard someone turns off.
+#
+# ⚠️ Matched against the whole line, like PLACEHOLDER_RE, so a line carrying
+# BOTH a path-named variable and a real credential is skipped. Narrow enough to
+# accept; splitting values out of the line would mean parsing Python in bash.
+LOCATION_NAME_RE='["'\''][A-Za-z_]*(FILE|PATH|DIR|FOLDER|LOCATION)["'\'']'
+# ⚠️ WHAT THIS DOES NOT CATCH, measured against real credential formats rather
+# than guessed. All four still push clean:
+#
+#   apiKey="sk-proj-…"                    camelCase: the pattern lists api_key
+#   aws_secret_access_key="…"             the keyword is a PREFIX, not the whole name
+#   dsn="postgresql://user:pass@host/db"  a credential inside a connection string
+#   GITHUB_TOKEN = "ghp_…"                check 4's name list is fixed and lacks it
+#
+# Widening the keyword pattern to `[A-Za-z_]*(password|…)[A-Za-z_]*` was tried
+# and rejected: it fixes the second case and introduces a false positive on
+# `password_field_name = "user_password"`, which is a description, not a secret.
+# These are named here so nobody reads this guard as complete.
 
 red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 note() { printf '  %s\n' "$*" >&2; }
@@ -159,9 +181,20 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         #
         # A warning would not have been enough: it prints in yellow in the
         # middle of a long push and is read as noise.
-        literal=$(git cat-file blob "$blob" 2>/dev/null \
-                    | grep -EI "$SECRET_ENV_DEFAULT_RE|$SECRET_KWARG_RE" 2>/dev/null \
-                    | grep -EvI "$PLACEHOLDER_RE" | head -3)
+        # ⚠️ Two greps, and only the second is case-insensitive. Measured, not
+        # assumed: `-i` on the keyword pattern catches API_TOKEN= and Password=
+        # with no false positive that the placeholder filter does not already
+        # handle. `-i` on the env-default pattern catches
+        # `os.environ.get("my_password", ...)` but ALSO flags
+        # `os.environ.get("SECRET_FILE", "/etc/app/secret.pem")` — a file path,
+        # not a credential. A guard that refuses a path default is a guard
+        # someone disables.
+        literal=$( { git cat-file blob "$blob" 2>/dev/null \
+                       | grep -EI "$SECRET_ENV_DEFAULT_RE" 2>/dev/null
+                     git cat-file blob "$blob" 2>/dev/null \
+                       | grep -EIi "$SECRET_KWARG_RE" 2>/dev/null ; } \
+                   | grep -EvIi "$PLACEHOLDER_RE" \
+                   | grep -EvI "$LOCATION_NAME_RE" | head -3)
         if [ -n "$literal" ]; then
             red "pre-push: $f hardcodes a credential where one is read or passed."
             printf '    %s\n' "$literal" >&2
