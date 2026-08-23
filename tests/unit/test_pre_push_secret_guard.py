@@ -147,6 +147,90 @@ ALLOWED = {
 }
 
 
+#: Strings that MATCH the blocking patterns and are nonetheless placeholders.
+#:
+#: ⛔ Found by mutation, not by reading: deleting the placeholder filter from
+#: check 5 broke no test, because none of the ALLOWED fixtures above ever
+#: reaches it — they are all rejected by the patterns themselves. So the one
+#: thing standing between this guard and a false positive on ordinary
+#: documentation had nothing exercising it.
+PLACEHOLDERS_THAT_MATCH = {
+    "env_default_your": (
+        "import os\n"
+        'password = os.environ.get("POSTGRES_PASSWORD", "your_password_here")\n'
+    ),
+    "env_default_changeme": (
+        "import os\n"
+        'token = os.getenv("API_KEY", "changeme_please_now")\n'
+    ),
+    "kwarg_changeme": 'DB = dict(password="changeme123456")\n',
+    "kwarg_example": 'client = dict(api_key="example_key_abcdef")\n',
+}
+
+
+@pytest.mark.parametrize("name", sorted(PLACEHOLDERS_THAT_MATCH))
+def test_a_placeholder_is_not_a_credential(repo: Path, name: str) -> None:
+    """⭐ The filter is load-bearing, not decoration.
+
+    `os.environ.get("POSTGRES_PASSWORD", "your_password_here")` is what a
+    template or a docstring looks like. Blocking it would teach everyone to
+    reach for `--no-verify`, and the guard would be gone for the real case too.
+    """
+    result = run_hook(repo, f"{name}.py", PLACEHOLDERS_THAT_MATCH[name])
+    assert result.returncode == 0, (
+        f"{name}: a placeholder was refused as a credential\n{result.stderr}"
+    )
+
+
+#: Values too short to be a credential. The 8-character minimum had nothing
+#: testing it either: lowering it to 1 broke no test.
+TOO_SHORT = {
+    "one_char": 'DB = dict(password="x")\n',
+    "two_chars": 'cfg = dict(token="ab")\n',
+    "five_chars": 'cfg = dict(secret="short")\n',
+}
+
+
+@pytest.mark.parametrize("name", sorted(TOO_SHORT))
+def test_a_short_value_is_not_a_credential(repo: Path, name: str) -> None:
+    result = run_hook(repo, f"{name}.py", TOO_SHORT[name])
+    assert result.returncode == 0, (
+        f"{name}: a value too short to be a secret was refused\n{result.stderr}"
+    )
+
+
+#: Names the keyword pattern only sees because its grep is case-insensitive.
+#: ⚠️ The env-default grep is deliberately NOT case-insensitive: with `-i` it
+#: also flags `os.environ.get("SECRET_FILE", "/etc/app/secret.pem")`, a file
+#: path rather than a credential.
+#: ⭐ Interpolated, like every other fixture here. Spelled out, these two lines
+#: match the very pattern this block adds, and the guard refused the push of its
+#: own test — the second time today, and the best evidence it works.
+CASE_VARIANTS = {
+    "upper_token": f'cfg = dict(API_TOKEN="{_FAKE_TOKEN}")\n',
+    "capitalised": f'cfg = dict(Password="{_FAKE_SECRET}")\n',
+}
+
+
+@pytest.mark.parametrize("name", sorted(CASE_VARIANTS))
+def test_the_keyword_pattern_ignores_case(repo: Path, name: str) -> None:
+    result = run_hook(repo, f"{name}.py", CASE_VARIANTS[name])
+    assert result.returncode != 0, (
+        f"{name}: a credential slipped through on capitalisation\n{result.stdout}"
+    )
+
+
+def test_a_path_default_is_not_a_credential(repo: Path) -> None:
+    """⚠️ Why the env-default grep stays case-sensitive.
+
+    `/etc/app/secret.pem` is a path, and a guard that refuses a path default is
+    a guard someone turns off.
+    """
+    body = ("import os\n"
+            'path = os.environ.get("SECRET_FILE", "/etc/app/secret.pem")\n')
+    assert run_hook(repo, "path_default.py", body).returncode == 0
+
+
 @pytest.mark.parametrize("name", sorted(ALLOWED))
 def test_hook_allows_the_safe_idioms(repo: Path, name: str) -> None:
     """⚠️ The half that matters most. A guard that blocks ordinary work is a
