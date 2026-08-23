@@ -4386,7 +4386,20 @@ function et_RunFrame(levelTime)
             end
         end
         if w6.segments then
-            w6Step(config.trace_fixture.batch or 250)
+            -- ⚠️ pcall for the same reason `runTraceProbe` has one, which this
+            -- call site was missing. An error raised here propagates out of
+            -- et_RunFrame and takes the REST of the tracker's frame with it,
+            -- every frame for the rest of the map — the failure mode a
+            -- `string.format("%d", <float>)` already caused once in this file
+            -- (v6.10, et_InitGame, objectives never scanned). The capture is a
+            -- diagnostic; it must never be able to stop the tracker.
+            local ok, err = pcall(w6Step, config.trace_fixture.batch or 250)
+            if not ok then
+                et.G_Print("[PROX-W6] capture failed, disabling: "
+                    .. tostring(err) .. "\n")
+                w6.segments = nil
+                trace_probe_validated = false
+            end
         end
     end
 

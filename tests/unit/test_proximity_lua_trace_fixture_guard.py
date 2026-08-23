@@ -68,6 +68,38 @@ def test_the_entry_point_exists_before_anything_is_asserted_about_it(marker: str
     assert uses, f"{marker} is never used; the guard below would assert nothing"
 
 
+def _enclosing_gate(lines: list[str], line_no: int) -> str | None:
+    """The gate whose block lexically CONTAINS this line, or None.
+
+    ⚠️ Replaces a 900-character proximity window, which was wrong in both
+    directions. Too small: adding a comment between the gate and the call
+    pushed the gate out of the window and failed a correctly gated call. Too
+    large: any unrelated mention of `trace_probe` within 900 characters would
+    have passed an ungated one. Neither has anything to do with whether the
+    call is actually inside the block.
+
+    Lua has no braces, so enclosure is read off indentation: walk outwards to
+    lines that open a block at a strictly smaller indent, and stop at the first
+    function boundary — a gate in a different function does not guard this call.
+    """
+    indent = len(lines[line_no]) - len(lines[line_no].lstrip())
+    for i in range(line_no - 1, -1, -1):
+        line = lines[i]
+        if not line.strip() or line.strip().startswith("--"):
+            continue
+        here = len(line) - len(line.lstrip())
+        if here >= indent:
+            continue
+        indent = here
+        if re.match(r"\s*(local\s+)?function\b", line):
+            return None
+        if re.match(r"\s*if\b", line) and (
+            "config.trace_fixture" in line or "trace_probe" in line
+        ):
+            return line.strip()
+    return None
+
+
 @pytest.mark.parametrize("marker", PROBE_ENTRY_POINTS)
 def test_every_probe_entry_point_is_gated(marker: str) -> None:
     """A single ungated call site is enough to hitch a production frame."""
@@ -78,10 +110,13 @@ def test_every_probe_entry_point_is_gated(marker: str) -> None:
         if not source[:m.start()].rstrip().endswith("local function")
     ]
     assert calls, f"{marker}: no call sites found"
+    lines = source.splitlines()
     for match in calls:
-        preceding = source[max(0, match.start() - 900):match.start()]
-        assert "config.trace_fixture" in preceding or "trace_probe" in preceding, (
-            f"{marker} is called without a nearby trace_fixture / probe gate"
+        line_no = source[:match.start()].count("\n")
+        gate = _enclosing_gate(lines, line_no)
+        assert gate is not None, (
+            f"{marker} at line {line_no + 1} is not inside a trace_fixture / "
+            f"probe gate"
         )
 
 
@@ -94,6 +129,20 @@ def test_the_probe_says_where_it_may_run() -> None:
 # --- the probe must prove its premise before the capture runs ---------------
 
 
+def _source_without_comments() -> str:
+    """The Lua with `--` comments removed.
+
+    A guard that reads prose is not a guard. This exists because one here did:
+    the assertion below was satisfied by a comment that said the right thing
+    beside code that no longer did it.
+    """
+    stripped = re.sub(r"--[^\n]*", "", _source())
+    # ⚠️ The helper must be shown to DO something. A stripper that silently
+    # matched nothing would restore exactly the hole it was written to close.
+    assert len(stripped) < len(_source()), "no comments were stripped"
+    return stripped
+
+
 def test_capture_waits_for_the_probe_to_validate_not_merely_to_run() -> None:
     """⭐ "the probe ran" and "the probe proved its preconditions" differ.
 
@@ -102,16 +151,24 @@ def test_capture_waits_for_the_probe_to_validate_not_merely_to_run() -> None:
     the 99.92% is about nothing. The capture gate must therefore test the
     validated flag, not the config flag and not "the probe finished".
     """
-    source = _source()
-    gate = re.search(
-        r"if config\.trace_fixture and config\.trace_fixture\.enabled"
-        r"(.*?)then\s*\n\s*if w6\.segments == nil",
-        source, re.S,
-    )
+    # ⛔ COMMENTS STRIPPED, AND THE MATCH MAY NOT CROSS A LINE.
+    #
+    # The first version of this guard could not fail. Its pattern anchored on
+    # `if config.trace_fixture and config.trace_fixture.enabled`, which first
+    # occurs at the PROBE gate, and `(.*?)` under re.S then ran 17 lines down
+    # to the capture gate — swallowing the probe block and the explanatory
+    # comment on the way. `trace_probe_validated` appeared in that span twice,
+    # once of them in a comment, so deleting the flag from the actual condition
+    # left the assertion satisfied by prose. Verified by mutation: removing it
+    # from the gate kept all 15 tests green.
+    source = _source_without_comments()
+    gate = re.search(r"\n[^\n]*if ([^\n]*?) then\n\s*if w6\.segments == nil", source)
     assert gate, "the fixture capture gate was not found"
-    assert "trace_probe_validated" in gate.group(1), (
-        "the capture runs on the config flag alone; it must require the probe's "
-        "verdict"
+    condition = gate.group(1)
+    assert "\n" not in condition, "the gate condition must be one line"
+    assert "trace_probe_validated" in condition, (
+        f"the capture gate is `{condition}`; it must require the probe's "
+        "verdict, not the config flag alone"
     )
 
 
