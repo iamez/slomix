@@ -783,6 +783,23 @@ class TestTheSnapshotSaysWhereAndHowLong:
         assert payload["round_duration_ms"] == 480_000
 
     @pytest.mark.asyncio
+    async def test_a_track_starting_before_zero_does_not_advertise_a_negative_moment(self):
+        """⛔ The endpoint rejects `t < 0` with 422, so publishing a negative
+        first moment hands the caller a request the API refuses.
+
+        12.5% of rounds (113 of 906) have a track whose spawn precedes the
+        round's zero — warmup — and the page opened at that value, took a 422
+        and showed "could not load". Every one of those rounds was unreachable.
+        A player who spawned before zero is present AT zero, so that is the
+        first moment worth asking about.
+        """
+        track = list(_stub_track("A", 0.0))
+        track[4] = -42_227
+        db = _SnapshotStubDb(tracks=[tuple(track)], duration_s=471)
+        payload = await get_round_snapshot(db, 1, 5_000)
+        assert payload["first_position_ms"] == 0
+
+    @pytest.mark.asyncio
     async def test_an_unknown_map_is_null_not_invented(self):
         payload = await get_round_snapshot(_SnapshotStubDb(), 1, 5_000)
         assert payload["map_name"] is None
