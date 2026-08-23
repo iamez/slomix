@@ -15,16 +15,19 @@ import pytest
 from website.backend.services import replay_service
 from website.backend.services.reconstruction_accuracy import position_error
 from website.backend.services.round_web_service import (
+    AUDIBLE_GUNFIRE_RADIUS,
     VELOCITY_SANITY_CAP_UPS,
     CapturePolicy,
     Edge,
     PlayerState,
     Snapshot,
     _contested_guids,
+    _ensure_attackers,
     build_edges,
     build_snapshot,
     derive_velocity,
     find_position_floor,
+    get_round_snapshot,
     load_capture_policy,
     load_round_clock,
     load_round_information_state,
@@ -38,6 +41,25 @@ from website.backend.services.round_web_service import (
 # shape load_round_tracks returns.
 def _track(spawn, death, track_id, path=None):
     return ("G1", "p", "AXIS", "soldier", spawn, death, path or [], "supply", track_id)
+
+
+class TestTheAudibleRadiusComesFromTheEngine:
+    def test_it_is_the_distance_at_which_the_volume_reaches_zero(self):
+        """⭐ The derivation, not the number.
+
+        `src/client/snd_dma.c`: SOUND_RANGE_DEFAULT 1250, SOUND_FULLVOLUME 80.
+        `S_SpatializeOrigin` computes dist_fullvol = range * 0.064, then
+        dist = (d - dist_fullvol) / range, and scales volume by (1 - dist).
+        Volume is zero once dist >= 1.
+
+        Written this way the test fails if someone restores the invented 1,500,
+        and it also fails if the engine's own constants are ever mis-copied —
+        which a bare `== 1330.0` would not catch.
+        """
+        sound_range, full_volume = 1250.0, 1250.0 * 0.064
+        assert full_volume == 80.0, "SOUND_FULLVOLUME in the engine"
+        inaudible_at = full_volume + sound_range  # dist == 1 => volume 0
+        assert inaudible_at == AUDIBLE_GUNFIRE_RADIUS
 
 
 class TestMakeLocator:
@@ -663,6 +685,108 @@ def _snapshot_of(*guids: str) -> Snapshot:
         for i, g in enumerate(guids)
     }
     return Snapshot(t_ms=0, players=players, edges=[], overlap_conflicts=0, gaps={})
+
+
+class _SnapshotStubDb:
+    """Answers by what the query ASKS FOR, not by call order.
+
+    `get_round_snapshot` issues a dozen queries through five loaders, and their
+    order is an implementation detail that a positional stub would freeze into
+    the tests — reordering two independent loads would then break tests that
+    have nothing to do with ordering.
+    """
+
+    def __init__(self, tracks=(), duration_s=None):
+        self._tracks = list(tracks)
+        self._duration_s = duration_s
+
+    async def fetch_all(self, sql, _params=None):
+        if "death_time_ms IS NOT NULL" in sql:
+            return []                       # Layer 3 deaths
+        if "FROM player_track pt" in sql:
+            return self._tracks
+        if "FROM rounds r" in sql:
+            return [(self._duration_s,)] if self._duration_s else []
+        return []
+
+
+def _stub_track(guid: str, x: float) -> tuple:
+    """One life, in `load_round_tracks` column order."""
+    path = [{"x": x, "y": 0.0, "z": 0.0, "time": 0},
+            {"x": x, "y": 0.0, "z": 0.0, "time": 10_000}]
+    return (guid, guid, "AXIS", "soldier", 0, None, path, "supply", hash(guid) % 1000)
+
+
+class TestPointOfView:
+    """`pov` decides WHOSE picture is returned — 82 lines that had no test.
+
+    Every path here was exercised only by throwaway scripts during development.
+    The oracle view is the dangerous one: §6.4 makes `world` a named diagnostic,
+    so it has to be asked for rather than arrived at by accident.
+    """
+
+    async def _snapshot(self, **kw):
+        db = _SnapshotStubDb(tracks=[_stub_track("A", 0.0), _stub_track("B", 500.0)])
+        return await get_round_snapshot(db, 1, 5_000, **kw)
+
+    @pytest.mark.asyncio
+    async def test_no_pov_is_the_world_view_and_says_so(self):
+        info = (await self._snapshot())["information_state"]
+        assert info["pov"] == "world"
+        assert set(info["holders"]) == {"A", "B"}
+
+    @pytest.mark.asyncio
+    async def test_world_is_spelled_out_not_arrived_at(self):
+        info = (await self._snapshot(pov="world"))["information_state"]
+        assert info["pov"] == "world"
+        assert set(info["holders"]) == {"A", "B"}
+        assert "pov_unavailable" not in info
+
+    @pytest.mark.asyncio
+    async def test_a_player_pov_returns_only_that_player(self):
+        info = (await self._snapshot(pov="A"))["information_state"]
+        assert set(info["holders"]) == {"A"}
+        assert info["pov"] == "A"
+        assert info["pov_unavailable"] is None
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_pov_explains_itself_instead_of_falling_back(self):
+        """⛔ Never silently the world view: a typo in a GUID would then hand
+        back omniscience labelled as one player's knowledge."""
+        info = (await self._snapshot(pov="GHOST"))["information_state"]
+        assert info["holders"] == {}
+        assert "GHOST" in info["pov_unavailable"]
+        assert info["pov"] == "GHOST"
+
+
+class TestAnEmptyRoundKeepsTheContract:
+    @pytest.mark.asyncio
+    async def test_every_key_survives_a_round_with_no_tracks(self):
+        """A thin round used to take a shortcut with a different shape, so a
+        consumer reading `capture_policy` hit a KeyError exactly when the data
+        was thinnest (CodeRabbit, PR #792)."""
+        payload = await get_round_snapshot(_SnapshotStubDb(), 1, 5_000)
+        for key in ("capture_policy", "clock", "information_state", "player_count",
+                    "gaps", "players", "edges", "reconstruction_accuracy"):
+            assert key in payload, key
+        assert payload["unavailable"]
+
+
+class TestEnsureAttackers:
+    """`attackers` is a list from asyncpg and text from other drivers."""
+
+    def test_a_list_passes_through(self):
+        assert _ensure_attackers([{"guid": "X"}]) == [{"guid": "X"}]
+
+    def test_json_text_is_parsed(self):
+        assert _ensure_attackers('[{"guid": "X"}]') == [{"guid": "X"}]
+
+    def test_broken_json_is_empty_not_an_exception(self):
+        """⚠️ One malformed row must not take down the whole snapshot."""
+        assert _ensure_attackers("{not json") == []
+
+    def test_null_is_empty(self):
+        assert _ensure_attackers(None) == []
 
 
 class TestInformationStateLoader:

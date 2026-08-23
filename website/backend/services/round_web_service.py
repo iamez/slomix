@@ -61,6 +61,7 @@ from typing import Any
 
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
 from proximity.parser.capability_manifest import is_declared
+from shared.round_time import round_duration_sql
 from website.backend.logging_config import get_app_logger
 from website.backend.services.clock_inputs import (
     clock_validation_payload,
@@ -731,11 +732,53 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
     return clock
 
 
-#: How far a shot carries, in game units. A named model parameter, not a
-#: measurement: §6.3 requires the radius and localisation error to be stated
-#: rather than buried. Roughly a large courtyard — beyond it a player is not
-#: reliably placing the noise at all.
-AUDIBLE_GUNFIRE_RADIUS = 1500.0
+#: How far a shot carries, in game units — DERIVED FROM THE ENGINE, not chosen.
+#:
+#: This was 1,500: a plausible-sounding number with nothing behind it, sitting
+#: in the same file as a radius measured to the p90. The engine settles it.
+#: `src/client/snd_dma.c` defines `SOUND_RANGE_DEFAULT 1250` and
+#: `SOUND_FULLVOLUME 80`, and `S_SpatializeOrigin` computes
+#: `dist_fullvol = range * 0.064` (= 80), then `dist = (d - 80) / 1250` and
+#: scales the volume by `1 - dist`. Volume reaches zero at `dist >= 1`, so a
+#: shot is inaudible at **d >= 1330**: full volume within 80 units, linear
+#: falloff to silence at 1,330.
+#:
+#: ⭐ THE BETTER ANSWER IS PVS, AND IT IS REACHABLE. Distance is only half of
+#: audibility — the client can play a sound only if the event reached it, and
+#: in a Quake engine the server decides that with the potentially visible set
+#: (`CM_ClusterPVS`; ET:Legacy has no PHS, so there is no separate hearable
+#: set). A shot behind a sealed wall is not heard at 400 units, and this
+#: constant says it is. Our BSP reader already parses PLANES, NODES and LEAFS
+#: with their `cluster`, already knows `VISIBILITY = 16` without reading it,
+#: and `BspPointTracer._candidate_leaf_indices` already walks the node tree —
+#: so audibility could be `PVS and d < 1330`. Not done here; recorded so the
+#: next reader does not have to rediscover that it is a small step.
+#:
+#: ⚠️ Changing this alters nothing today: `shot_fired` has been off in
+#: production since 2026-08-11, so the gunfire channel carries no rows. That is
+#: not a reason for the number to stay wrong.
+AUDIBLE_GUNFIRE_RADIUS = 1330.0
+
+
+async def load_round_end_ms(db, round_id: int, tracks: dict[str, list]) -> int | None:
+    """When every live-round belief stops, in round-relative ms.
+
+    §6.3 makes round end public and ends all live-round beliefs, so
+    `uncertain_after_down` needs it as a terminus — without one it would be
+    handed an invented horizon.
+
+    Duration comes from `shared/round_time.py`, never from `rounds.actual_time`
+    directly: that column is the stopwatch TARGET (`g_nextTimeLimit`) and
+    overstates about 15% of rounds. When it cannot be established the last
+    observed life end stands in, which is a measurement rather than a default.
+    """
+    rows = await db.fetch_all(
+        f"SELECT {round_duration_sql('r')} FROM rounds r WHERE r.id = $1",
+        (round_id,))
+    if rows and rows[0] and rows[0][0]:
+        return int(rows[0][0]) * 1000
+    ends = [t[5] for lives in tracks.values() for t in lives if t[5] is not None]
+    return max(ends) if ends else None
 
 
 def make_locator(tracks: dict[str, list]) -> Locator:
@@ -833,8 +876,10 @@ async def load_round_information_state(
         WHERE round_id = $1 AND start_time <= $2 AND target_guid IS NOT NULL
     """, (round_id, t_ms))
 
+    round_end_ms = await load_round_end_ms(db, round_id, tracks or {})
     beliefs = obituary_beliefs(
-        [(r[0], r[1], r[2]) for r in (deaths or [])], holders, clock=clock)
+        [(r[0], r[1], r[2]) for r in (deaths or [])], holders, clock=clock,
+        round_end_ms=round_end_ms)
     # ⭐ `locate` is what turns "he knows WHO" into "he knows who and roughly
     # where". Without it both subject channels carried a name and no place, and
     # `nearest_known_enemy_distance` could not return a value for any input.

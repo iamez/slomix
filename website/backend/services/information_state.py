@@ -35,6 +35,24 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 from website.backend.services.clock_inputs import wave_position as _wave_position
+from website.backend.services.reconstruction_accuracy import reach_bound
+
+#: Widest a grown region may be and still support a distance claim, in units.
+#:
+#: ⭐ A HORIZON, NOT A CLAMP. Growth alone makes the derived distance useless
+#: rather than wrong: measured over 215 holder samples, an ungated model reports
+#: an interval every time, with a median width of 2,385 units and 76% of them
+#: saying "he could be right on top of me". At 1,000 the number appears in 27%
+#: of samples with a median width of 964. The region itself is NEVER trimmed to
+#: this — only the derived distance is withheld, and the threshold is published
+#: so a missing number is explicable rather than indistinguishable from
+#: "no enemy known".
+#:
+#: ⚠️ Deliberately one tunable number, kept out of the model: the intent is to
+#: try 1,000 first and possibly tighten to 500 (about 0.8 s of freshness, 10%
+#: coverage, median width 481). Moving it is a one-line change and the payload
+#: shows which value produced the picture.
+POSITION_CLAIM_MAX_RADIUS = 1000.0
 
 #: How long a positional belief stays worth acting on, per source, in seconds.
 #:
@@ -151,6 +169,8 @@ MAX_OBSERVED_REINFORCE_MS = 35_000
 #: reader can tell an exact wave from a bound.
 EXPIRY_VALIDATED_WAVE = "validated_wave"   # interval AND phase known: a step
 EXPIRY_INTERVAL_ONLY = "interval_only"     # period known, phase not: linear
+#: The wave has already passed; this belief ends only when the round does.
+EXPIRY_ROUND_END = "round_end"
 EXPIRY_BOUND = "bound"                     # neither: linear over the outer bound
 
 #: Roster states a holder can hold about someone else.
@@ -226,6 +246,28 @@ class BeliefItem:
             return "subject_position" if self.subject_guid else "position_region"
         return "subject_contact" if self.subject_guid else "nonspatial_contact"
 
+    def region_at(self, t_ms: int) -> Region | None:
+        """Where the subject could be NOW, given where they were then.
+
+        ⭐ §6.3 requires the uncertainty to grow with time, and the first
+        version did not: the radius stayed at the reconstruction error for the
+        belief's whole life, so a contact belief still claimed +/-44 units seven
+        seconds later while the subject could be anywhere within about 2,200.
+        A player is 40 units wide — the claim was roughly 50x too tight at the
+        maximum age a belief can reach.
+
+        ⛔ Only the radius grows; the centre never moves. Sliding it along a
+        last-known heading would invent a direction of travel that nothing
+        observed, which is the same overclaim in a different coordinate.
+        """
+        if self.region is None:
+            return None
+        grown = reach_bound(t_ms - self.t_observed)
+        if not grown:
+            return self.region
+        return Region(self.region.x, self.region.y, self.region.z,
+                      self.region.radius + grown)
+
     def confidence(self, t_ms: int) -> float:
         """How much of this is still worth acting on at `t_ms`.
 
@@ -245,7 +287,7 @@ class BeliefItem:
         if self.expires_at_ms is not None:
             if t_ms >= self.expires_at_ms:
                 return 0.0
-            if self.expiry_basis == EXPIRY_VALIDATED_WAVE:
+            if self.expiry_basis in (EXPIRY_VALIDATED_WAVE, EXPIRY_ROUND_END):
                 return 1.0
             span = self.expires_at_ms - self.t_observed
             # ⚠️ UNREACHABLE, kept as a structural guard. Reaching here means
@@ -328,6 +370,26 @@ def gunfire_beliefs(
     return out
 
 
+def counts_as_known(belief: BeliefItem, t_ms: int, *, floor: float = CONFIDENCE_FLOOR) -> bool:
+    """Whether this item is an enemy the holder could name RIGHT NOW.
+
+    ⭐ ONE rule, used by both `known_enemy_count` and the payload flag. They
+    were two separate expressions, and a belief could be `counts_as_known` in
+    the payload while the count beside it excluded the same belief — the
+    contradiction class this module has already been burned by twice.
+
+    ⛔ `uncertain_after_down` is deliberately excluded. "His team could have
+    spawned him by now" is knowledge that someone exists, not knowledge of them
+    now; counting it would mean the count never falls again for the rest of the
+    round.
+    """
+    return (
+        bool(belief.subject_guid)
+        and belief.roster_state != UNCERTAIN_AFTER_DOWN
+        and belief.confidence(t_ms) >= floor
+    )
+
+
 def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENCE_FLOOR) -> int | str:
     """Distinct enemies this holder could name — not a count of belief items.
 
@@ -340,9 +402,7 @@ def known_enemy_count(state: HolderState, t_ms: int, *, floor: float = CONFIDENC
     promoting them would reintroduce the phantom squad through the back door.
     """
     subjects = {
-        b.subject_guid
-        for b in state.beliefs
-        if b.subject_guid and b.confidence(t_ms) >= floor
+        b.subject_guid for b in state.beliefs if counts_as_known(b, t_ms, floor=floor)
     }
     return len(subjects)
 
@@ -370,7 +430,13 @@ def _nearest(
             continue
         if bool(belief.subject_guid) is not resolved:
             continue
-        lo, hi = belief.region.distance_interval(*holder_pos)
+        region = belief.region_at(t_ms)
+        # ⭐ Past the horizon the belief still exists and still names its
+        # subject — it simply stops supporting a claim about distance. Dropping
+        # it from the count as well would lose knowledge the holder really has.
+        if region.radius > POSITION_CLAIM_MAX_RADIUS:
+            continue
+        lo, hi = region.distance_interval(*holder_pos)
         lo_bound = lo if lo_bound is None else min(lo_bound, lo)
         hi_bound = hi if hi_bound is None else min(hi_bound, hi)
     if lo_bound is None or hi_bound is None:
@@ -434,13 +500,17 @@ def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float
                 # Whether this item is inside `known_enemy_count`. Carried per
                 # item so the panel can fade a belief out without ever showing
                 # something the count has already discarded.
-                "counts_as_known": b.confidence(t_ms) >= CONFIDENCE_FLOOR,
+                "counts_as_known": counts_as_known(b, t_ms),
                 "capability": b.capability,
                 "expiry_basis": b.expiry_basis,
+                # ⚠️ The GROWN region, not the stored one. Publishing the
+                # observation-instant radius would hand a consumer a circle
+                # that was true seconds ago and draw it as though it were true
+                # now — the defect this whole field exists to correct.
                 "region": (
-                    {"x": b.region.x, "y": b.region.y, "z": b.region.z,
-                     "radius": b.region.radius}
-                    if b.region else None
+                    {"x": grown.x, "y": grown.y, "z": grown.z,
+                     "radius": round(grown.radius, 1)}
+                    if (grown := b.region_at(t_ms)) else None
                 ),
             }
             for b in sorted(live, key=lambda x: -x.confidence(t_ms))
@@ -448,6 +518,9 @@ def to_dict(state: HolderState, t_ms: int, holder_pos: tuple[float, float, float
         #: ⛔ Named channels, not silence. A round that could not capture gunfire
         #: has nothing to say about heard shots — and no right to say nobody
         #: heard anything.
+        #: The horizon that produced the distances above. Without it a missing
+        #: distance is indistinguishable from a holder who knows of nobody.
+        "position_claim_max_radius": POSITION_CLAIM_MAX_RADIUS,
         "unavailable": dict(state.unavailable),
         "notes": [
             ("beliefs are per player and a LOWER BOUND: Discord voice is not "
@@ -499,6 +572,7 @@ def obituary_beliefs(
     holders: Iterable[str],
     *,
     clock: dict | None = None,
+    round_end_ms: int | None = None,
 ) -> list[BeliefItem]:
     """A death is announced to everyone — that is what makes it public.
 
@@ -507,10 +581,31 @@ def obituary_beliefs(
 
     ⚠️ At the expiry the subject becomes `uncertain_after_down`, never server
     truth: a wave says someone COULD be back, not that this GUID spawned.
+
+    ⛔ That transition is a SECOND item, and it used to be missing entirely —
+    the constant existed, nothing created it, and at the wave the belief simply
+    vanished. §6.3 says the holder *retains* `uncertain_after_down`, so the
+    holder went from "he is down" to knowing nothing, when what they had
+    learned is "his team can have spawned him by now".
+
+    It runs to `round_end_ms` because §6.3 makes round end public and ends every
+    live-round belief. Without a round end there is no terminus to give it, so
+    it is not created rather than being handed an invented one.
     """
     out: list[BeliefItem] = []
     holders = tuple(holders)
+    # ⛔ One roster fact per subject, not one per death. `uncertain_after_down`
+    # runs to round end, so emitting a pair per death accumulates them: three
+    # rounds produced 16,472 of these against 1,092 `observed_out_of_action`.
+    # Five deaths do not make a player five-times-uncertain — only the most
+    # recent describes where he stands now. `deaths` is already filtered to
+    # `death_time_ms <= t_ms` by the loader, so "latest" is always in the past.
+    latest: dict[str, tuple] = {}
     for victim, team, t_ms in deaths:
+        previous = latest.get(str(victim))
+        if previous is None or int(t_ms) > int(previous[2]):
+            latest[str(victim)] = (victim, team, t_ms)
+    for victim, team, t_ms in latest.values():
         expiry, basis = resolve_expiry((clock or {}).get(str(team or "")), int(t_ms))
         for holder in holders:
             if holder == victim:
@@ -524,6 +619,21 @@ def obituary_beliefs(
                 expires_at_ms=expiry,
                 expiry_basis=basis,
             ))
+            if round_end_ms is not None and expiry < int(round_end_ms):
+                # Full confidence, because the wave is a PUBLIC fact and the
+                # holder is certain it passed. The uncertainty lives in the
+                # label — `uncertain_after_down` says nothing about where he is
+                # or whether he actually spawned — not in a discounted number
+                # that would read as "we are unsure the wave happened".
+                out.append(BeliefItem(
+                    holder_guid=holder,
+                    source="public_obituary",
+                    t_observed=expiry,
+                    subject_guid=str(victim),
+                    roster_state=UNCERTAIN_AFTER_DOWN,
+                    expires_at_ms=int(round_end_ms),
+                    expiry_basis=EXPIRY_ROUND_END,
+                ))
     return out
 
 

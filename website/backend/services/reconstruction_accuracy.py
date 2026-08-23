@@ -87,6 +87,70 @@ CONFLICT_BANDS: tuple[tuple[int | None, float, float, bool], ...] = (
 )
 
 
+#: How far a player actually gets in N seconds, measured. Upper edge of each
+#: band in ms, then the p99 displacement in game units.
+#:
+#: ⭐ DISPLACEMENT, NOT SPEED x TIME. The obvious model multiplies a speed
+#: percentile by the age, and it overstates by 50-80%: the stored `speed`
+#: samples put p99 at 533 units/s over 703,000 samples, which across eight
+#: seconds would be 4,266 units, while the players themselves cover 2,371.
+#: Nobody holds top speed in a straight line for eight seconds — they turn,
+#: stop, fight and die. The naive figure describes a player who does not exist.
+#:
+#: ⭐ p99, because this sizes a CONTAINMENT claim. The region has to hold the
+#: true position, so it is sized by the tail; a median would be wrong about
+#: precisely the players who moved.
+REACH_BANDS: tuple[tuple[int | None, float], ...] = (
+    (1000, 353.0),     # n=306,755
+    (2000, 736.0),     # n=369,235
+    (3000, 1106.0),    # n=354,151
+    (4000, 1434.0),    # n=339,098
+    (5000, 1717.0),    # n=324,124
+    (6000, 1956.0),    # n=309,299
+    (7000, 2170.0),    # n=294,650
+    (8000, 2371.0),    # n=280,302
+    (None, 2522.0),    # n=161,322
+)
+
+#: Provenance for REACH_BANDS, published beside the numbers for the same reason
+#: MEASUREMENT is.
+REACH_MEASUREMENT = {
+    "measured_at": "2026-08-23",
+    "script": "scripts/measure_reach_bound.py",
+    "rounds": 60,
+    "pairs": 2739236,
+    "source": "player_track.path, forward pairs within one life",
+    "statistic": "p99 displacement in game units",
+    "unit": "game units (a player is about 40 wide)",
+    # ⚠️ The second route agrees on shape and converges by 6-8 s, but reads
+    # LOWER at short windows (222 vs 353 at 1 s). That is not a disagreement
+    # about movement: a shot pair starts at a moment the player was SHOOTING,
+    # and someone shooting is standing or strafing rather than crossing the
+    # map. Two populations, not two answers. The track bands are kept because
+    # they are the unbiased population and the larger radius is the
+    # conservative one for a claim that must contain the truth.
+    "cross_check": {
+        "source": "proximity_shot_fired.origin_*, 60 rounds carrying shots",
+        "p99_at_1s": 222.4, "p99_at_4s": 1028.3, "p99_at_8s": 2647.3,
+    },
+}
+
+
+def reach_bound(age_ms: int) -> float:
+    """How far the subject could have moved since the belief was formed.
+
+    Zero for a belief observed at this instant, and never negative: a caller
+    asking about a moment before the observation is asking about a belief that
+    did not exist yet, and `confidence` already returns 0.0 there.
+    """
+    if age_ms <= 0:
+        return 0.0
+    for upper, p99 in REACH_BANDS:
+        if upper is None or age_ms < upper:
+            return p99
+    raise AssertionError("unreachable: the last band is open-ended")
+
+
 def position_error(stale_ms: int | None, *, overlap_conflict: bool = False) -> PositionError | None:
     """The measured error for one player's drawn position.
 
