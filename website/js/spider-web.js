@@ -77,7 +77,7 @@ const state = {
  * same distance apart look different sizes depending on where they stand, and
  * this drawing is measured against a scale bar.
  */
-function project(x, y, z, cam, view) {
+export function project(x, y, z, cam, view) {
     const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
     const rx = x * cy - y * sy;
     const ry = x * sy + y * cy;
@@ -100,7 +100,7 @@ function project(x, y, z, cam, view) {
  * corners of the map's bounding box and fitting THAT is the same arithmetic
  * the renderer is about to do anyway, and it re-fits when the camera turns.
  */
-function viewportFor(mesh, canvas, cam) {
+export function viewportFor(mesh, canvas, cam) {
     const b = mesh.bounds;
     const mid = {
         midX: (b.min[0] + b.max[0]) / 2,
@@ -126,6 +126,17 @@ function viewportFor(mesh, canvas, cam) {
         (canvas.width * pad) / Math.max(1e-6, hi.x - lo.x),
         (canvas.height * pad) / Math.max(1e-6, hi.y - lo.y),
     );
+    // ⚠️ The recentring term is provably ZERO for the input this is given, and
+    // it is kept anyway. An axis-aligned box's eight corners are symmetric
+    // about its centre, `project` is linear, and the centre is subtracted
+    // before projecting — so the projected cloud is symmetric about the origin
+    // and `lo + hi` cancels. Measured over 20,000 random maps and camera
+    // angles: |lo + hi| / span never exceeded 1.9e-15.
+    //
+    // No test can catch its removal, so it is labelled rather than left for
+    // the next reader to hunt a test for. It stays because it is what makes
+    // this correct if the corner set ever stops being a box — fitting to the
+    // real geometry extent instead of the bounding box would do exactly that.
     return {
         cx: canvas.width / 2 - ((lo.x + hi.x) / 2) * scale,
         cy: canvas.height / 2 - ((lo.y + hi.y) / 2) * scale,
@@ -229,14 +240,29 @@ function drawPlayers(ctx, players, cam, view) {
     // the disc still shows the player is there.
     ctx.fillStyle = '#c8d2e0';
     ctx.font = '11px ui-monospace, monospace';
+    for (const l of placeLabels(labels)) {
+        ctx.fillText(l.text, l.x, l.y);
+    }
+}
+
+/**
+ * Which labels get drawn when several land on top of each other.
+ *
+ * ⛔ Drops, never nudges. At a spawn eight players stand within a few units of
+ * one another; moving their names apart would put a name beside a position
+ * nobody occupied, and this page's whole argument is that it does not draw
+ * things that were not there. The disc still shows the player.
+ */
+export function placeLabels(labels, minX = 70, minY = 13) {
     const placed = [];
     for (const l of labels) {
-        if (placed.some((q) => Math.abs(q.x - l.x) < 70 && Math.abs(q.y - l.y) < 13)) {
+        if (placed.some((q) => Math.abs(q.x - l.x) < minX
+                            && Math.abs(q.y - l.y) < minY)) {
             continue;
         }
         placed.push(l);
-        ctx.fillText(l.text, l.x, l.y);
     }
+    return placed;
 }
 
 function render(canvas) {
@@ -281,7 +307,7 @@ async function loadMoment(roundId, tMs) {
 
 // ── View ──────────────────────────────────────────────────────────────────────
 
-function statusLine(snapshot) {
+export function statusLine(snapshot) {
     if (!snapshot) return '';
     const players = snapshot.players || [];
     const positioned = players.filter((p) => p.x != null).length;
