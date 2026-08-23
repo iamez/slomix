@@ -247,6 +247,24 @@ class TestContactIsAsymmetric:
         assert holders == {"ATT", "VICTIM"}
 
 
+#: The fourteen whose id AND name this repository already carries.
+INDIRECT_BY_REPO_NAME = {
+    4: "Grenade Launcher", 5: "Panzerfaust", 6: "Flamethrower", 9: "Grenade",
+    13: "Artillery", 15: "Dynamite", 17: "Map Mortar", 26: "Landmine",
+    27: "Satchel", 29: "Smoke Bomb", 37: "GPG40", 38: "M7", 53: "Bazooka",
+    55: "Airstrike",
+}
+
+#: The six `WP_WEAPON_NAMES` cannot distinguish: it has no entry for 22 or 28,
+#: and calls 34, 43 and 51 all "Mortar". Pinned to the engine enum instead.
+INDIRECT_BY_ENGINE_NAME = {
+    22: "WP_SMOKE_MARKER", 28: "WP_SATCHEL_DET", 34: "WP_MORTAR",
+    43: "WP_MORTAR_SET", 51: "WP_MORTAR2", 52: "WP_MORTAR2_SET",
+}
+
+ENGINE_HEADER = Path("/home/samba/share/etlegacy-source/src/game/bg_public.h")
+
+
 class TestWeaponClassification:
     def test_derived_ids_match_this_repository_s_own_names(self):
         """⚠️ The first derivation of these ids was wrong and self-consistent:
@@ -256,17 +274,38 @@ class TestWeaponClassification:
         WP_WEAPON_NAMES, and WP_WEAPON_NAMES was right."""
         from website.backend.services.player_profile_metrics import WP_WEAPON_NAMES
 
-        expected = {
-            4: "Grenade Launcher", 5: "Panzerfaust", 6: "Flamethrower",
-            9: "Grenade", 13: "Artillery", 15: "Dynamite", 17: "Map Mortar",
-            26: "Landmine", 27: "Satchel", 29: "Smoke Bomb", 37: "GPG40",
-            38: "M7", 53: "Bazooka", 55: "Airstrike",
-        }
-        for wid, name in expected.items():
+        for wid, name in INDIRECT_BY_REPO_NAME.items():
             assert wid in INDIRECT_WEAPON_IDS, f"{name} ({wid}) must be indirect"
             assert WP_WEAPON_NAMES.get(wid) == name, (
                 f"id {wid} is {WP_WEAPON_NAMES.get(wid)!r} here, expected {name!r}"
             )
+
+    def test_every_indirect_id_is_accounted_for(self):
+        """⭐ Six ids had no second source at all.
+
+        `WP_WEAPON_NAMES` has no entry for 22 or 28, and 34/43/51/52 are all
+        spelled "Mortar", so fourteen of twenty were cross-checked and six were
+        taken on trust (CodeRabbit, PR #799). Those six are pinned here against
+        the ET:Legacy enum's own `///< N` comments, which is where every id in
+        this set came from.
+        """
+        assert set(INDIRECT_BY_REPO_NAME) | set(INDIRECT_BY_ENGINE_NAME) == (
+            INDIRECT_WEAPON_IDS
+        ), "an indirect id is verified against neither source"
+
+    @pytest.mark.skipif(not ENGINE_HEADER.exists(),
+                        reason="ET:Legacy source not present on this host")
+    @pytest.mark.parametrize("wid,name", sorted(INDIRECT_BY_ENGINE_NAME.items()))
+    def test_the_unnamed_ids_match_the_engine_enum(self, wid: int, name: str):
+        """Runs only where the source is checked out. The test above holds
+        everywhere, so this one adds evidence without being the only guard."""
+        text = ENGINE_HEADER.read_text().splitlines()[845:913]
+        by_id = {}
+        for raw in text:
+            m = re.match(r"^\s*([A-Z][A-Z0-9_]*),?\s*///<\s*(\d+)", raw)
+            if m:
+                by_id[int(m.group(2))] = m.group(1)
+        assert by_id.get(wid) == name
 
     @pytest.mark.parametrize("wid,name", [(3, "MP40"), (8, "Thompson"),
                                           (23, "Kar98"), (32, "FG42")])
