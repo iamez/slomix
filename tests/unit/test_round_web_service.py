@@ -759,6 +759,35 @@ class TestPointOfView:
         assert info["pov"] == "GHOST"
 
 
+class TestTheSnapshotSaysWhereAndHowLong:
+    """A moment of a round has to name the round's map and length.
+
+    Both were missing. Without `map_name` a consumer holding a snapshot cannot
+    say WHERE it happened, so it cannot load that map's geometry; without a
+    duration it cannot bound a time control except by guessing one.
+    """
+
+    @pytest.mark.asyncio
+    async def test_the_map_comes_from_the_tracks_already_loaded(self):
+        db = _SnapshotStubDb(tracks=[_stub_track("A", 0.0)], duration_s=480)
+        payload = await get_round_snapshot(db, 1, 5_000)
+        assert payload["map_name"] == "supply"
+
+    @pytest.mark.asyncio
+    async def test_the_duration_is_milliseconds_not_seconds(self):
+        """⚠️ The source is seconds; the rest of the payload is milliseconds.
+        Publishing 480 beside `t_ms` would put a time control's whole range
+        inside the first half-second of the round."""
+        db = _SnapshotStubDb(tracks=[_stub_track("A", 0.0)], duration_s=480)
+        payload = await get_round_snapshot(db, 1, 5_000)
+        assert payload["round_duration_ms"] == 480_000
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_map_is_null_not_invented(self):
+        payload = await get_round_snapshot(_SnapshotStubDb(), 1, 5_000)
+        assert payload["map_name"] is None
+
+
 class TestAnEmptyRoundKeepsTheContract:
     @pytest.mark.asyncio
     async def test_every_key_survives_a_round_with_no_tracks(self):

@@ -26,6 +26,7 @@ import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260812-b3';
 import { loadStoryView } from './story.js?v=20260817-restore';
 import { loadReplayView } from './replay.js';
+import { loadSpiderWebView } from './spider-web.js?v=20260823-web';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSystemView } from './system.js?v=20260815-system';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
@@ -147,6 +148,7 @@ const legacyRuntime = {
     loadProximityView,
     loadStoryView,
     loadReplayView,
+    loadSpiderWebView,
     loadRivalriesView,
     loadSystemView,
     loadSmartStatsDiagView,
