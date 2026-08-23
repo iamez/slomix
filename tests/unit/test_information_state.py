@@ -106,6 +106,59 @@ class TestDistanceIsAnInterval:
         """Zero would read as "an enemy is right here"."""
         assert nearest_known_enemy_distance(HolderState("H"), 0, (0.0, 0.0, 0.0)) is None
 
+    def test_a_tighter_belief_lowers_the_upper_bound(self):
+        """⭐ The bound the holder can PROVE, not the bound of one belief.
+
+        Two enemies: AAA somewhere in [500, 1300], BBB certainly in [520, 600].
+        The nearest of the two is therefore at most 600 — the holder can rule
+        1300 out. Taking `max` from whichever belief happened to win on `min`
+        threw that proof away and reported an enemy possibly twice as far as
+        anything believed, which is the same overclaiming the docstring
+        forbids one line up ("a number the holder never had").
+        """
+        def believe(guid, x, radius):
+            return BeliefItem(
+                holder_guid="H", source="obituary", t_observed=0,
+                region=Region(x, 0.0, 0.0, radius), subject_guid=guid,
+                expires_at_ms=100_000)
+
+        wide = believe("AAA", 900.0, 400.0)
+        tight = believe("BBB", 560.0, 40.0)
+        pos = (0.0, 0.0, 0.0)
+        expected = {"min": 500.0, "max": 600.0}
+        # Order must not matter: this is a property of the set of beliefs.
+        assert nearest_known_enemy_distance(
+            HolderState("H", [wide, tight]), 1000, pos) == expected
+        assert nearest_known_enemy_distance(
+            HolderState("H", [tight, wide]), 1000, pos) == expected
+
+    def test_the_interval_never_inverts(self):
+        """min <= max holds however the two bounds are chosen."""
+        def believe(guid, x, radius):
+            return BeliefItem(
+                holder_guid="H", source="obituary", t_observed=0,
+                region=Region(x, 0.0, 0.0, radius), subject_guid=guid,
+                expires_at_ms=100_000)
+
+        state = HolderState("H", [believe("A", 2000.0, 100.0),
+                                  believe("B", 300.0, 250.0),
+                                  believe("C", 900.0, 600.0)])
+        out = nearest_known_enemy_distance(state, 1000, (0.0, 0.0, 0.0))
+        assert out["min"] <= out["max"]
+
+    def test_a_zero_length_life_is_never_believed(self):
+        """A belief that expires when it was observed is worth nothing.
+
+        It returns 0.0 through the expiry check, NOT through the `span <= 0`
+        guard below it: `t >= expires_at_ms` is already true. Mutating that
+        guard changes no output for any input (verified by exhaustive search
+        over t_observed/expires_at/t), which is why it is documented as
+        unreachable rather than covered by a test that cannot exist.
+        """
+        belief = BeliefItem(holder_guid="H", source="obituary", t_observed=5_000,
+                            subject_guid="X", expires_at_ms=5_000)
+        assert belief.confidence(5_000) == 0.0
+
 
 class TestDecay:
     def test_one_time_constant_is_one_over_e(self):
@@ -263,6 +316,35 @@ INDIRECT_BY_ENGINE_NAME = {
 }
 
 ENGINE_HEADER = Path("/home/samba/share/etlegacy-source/src/game/bg_public.h")
+
+
+class TestMalformedRowsAreSkippedNotGuessed:
+    """A row the database could not fill must produce no belief at all.
+
+    Both fields come straight out of the engagement JSON, so both can be NULL.
+    A missing attacker guid has no holder to attribute the belief to, and a
+    missing first_hit_ms has no instant to attach it at — inventing either
+    would put a fabricated belief in front of a real player.
+    """
+
+    def test_an_attacker_without_a_guid_is_skipped(self):
+        rows = [("VICTIM", [{"guid": None, "weapons": {"3": 1},
+                             "first_hit_ms": 1000}])]
+        assert contact_beliefs(rows) == []
+
+    def test_an_attacker_without_a_hit_time_is_skipped(self):
+        rows = [("VICTIM", [{"guid": "ATT", "weapons": {"3": 1},
+                             "first_hit_ms": None}])]
+        assert contact_beliefs(rows) == []
+
+    def test_a_well_formed_row_beside_a_broken_one_still_lands(self):
+        """The skip must drop one row, not abandon the batch."""
+        rows = [("VICTIM", [
+            {"guid": None, "weapons": {"3": 1}, "first_hit_ms": 1000},
+            {"guid": "ATT", "weapons": {"3": 1}, "first_hit_ms": 2000},
+        ])]
+        holders = {b.holder_guid for b in contact_beliefs(rows)}
+        assert "ATT" in holders
 
 
 class TestWeaponClassification:
