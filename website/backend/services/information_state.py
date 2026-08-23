@@ -248,6 +248,12 @@ class BeliefItem:
             if self.expiry_basis == EXPIRY_VALIDATED_WAVE:
                 return 1.0
             span = self.expires_at_ms - self.t_observed
+            # ⚠️ UNREACHABLE, kept as a structural guard. Reaching here means
+            # t_observed <= t_ms < expires_at_ms, so span > 0 always; an
+            # exhaustive search over the three timestamps finds no input that
+            # enters this branch, and no mutation of it can be caught by any
+            # test. It stays because the division below must never be exposed
+            # if either check above is ever narrowed.
             if span <= 0:
                 return 0.0
             return 1.0 - (t_ms - self.t_observed) / span
@@ -338,18 +344,31 @@ def _nearest(
     state: HolderState, t_ms: int, holder_pos: tuple[float, float, float],
     *, resolved: bool, floor: float,
 ) -> dict | None:
-    best: tuple[float, float] | None = None
+    # ⭐ The two bounds come from DIFFERENT beliefs, and that is the point.
+    #
+    # `min` is the closest anyone could be: min over lower bounds. `max` is the
+    # closest anyone is GUARANTEED to be within: min over upper bounds — if one
+    # belief proves an enemy is inside 600, the nearest enemy is inside 600
+    # whatever the other beliefs allow. Pairing `max` with whichever belief won
+    # on `min` discarded that proof and reported a distance the holder could
+    # rule out (a wide [500, 1300] beside a tight [520, 600] answered 1,300),
+    # which is the same overclaiming the caller's docstring forbids.
+    #
+    # It cannot invert: min(lo) <= lo_k <= hi_k = min(hi) for the k achieving
+    # the minimum upper bound.
+    lo_bound: float | None = None
+    hi_bound: float | None = None
     for belief in state.beliefs:
         if belief.region is None or belief.confidence(t_ms) < floor:
             continue
         if bool(belief.subject_guid) is not resolved:
             continue
         lo, hi = belief.region.distance_interval(*holder_pos)
-        if best is None or lo < best[0]:
-            best = (lo, hi)
-    if best is None:
+        lo_bound = lo if lo_bound is None else min(lo_bound, lo)
+        hi_bound = hi if hi_bound is None else min(hi_bound, hi)
+    if lo_bound is None or hi_bound is None:
         return None
-    return {"min": round(best[0], 1), "max": round(best[1], 1)}
+    return {"min": round(lo_bound, 1), "max": round(hi_bound, 1)}
 
 
 def nearest_known_enemy_distance(
