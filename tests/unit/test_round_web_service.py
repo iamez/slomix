@@ -13,8 +13,10 @@ import json
 import pytest
 
 from website.backend.services import replay_service
+from website.backend.services.reconstruction_accuracy import position_error
 from website.backend.services.round_web_service import (
     VELOCITY_SANITY_CAP_UPS,
+    CapturePolicy,
     Edge,
     PlayerState,
     Snapshot,
@@ -23,11 +25,10 @@ from website.backend.services.round_web_service import (
     build_snapshot,
     derive_velocity,
     find_position_floor,
-    CapturePolicy,
-    Snapshot,
     load_capture_policy,
     load_round_clock,
     load_round_information_state,
+    make_locator,
     nearest_teammate_separation,
     select_life,
 )
@@ -37,6 +38,63 @@ from website.backend.services.round_web_service import (
 # shape load_round_tracks returns.
 def _track(spawn, death, track_id, path=None):
     return ("G1", "p", "AXIS", "soldier", spawn, death, path or [], "supply", track_id)
+
+
+class TestMakeLocator:
+    """The seam that turns "he knows WHO" into "he knows who and roughly where".
+
+    Before it existed, `contact_hit` and `aim_lock` carried a subject and no
+    region, so `nearest_known_enemy_distance` — which needs both — was
+    structurally incapable of a value: None in 110 of 110 holder samples across
+    three rounds. Every test here pins a property that measurement caught and
+    the hand-built fixtures of the belief tests could not.
+    """
+
+    PATH = [
+        {"x": 0.0, "y": 0.0, "z": 0.0, "time": 1000},
+        {"x": 100.0, "y": 0.0, "z": 0.0, "time": 2000},
+        {"x": 900.0, "y": 0.0, "z": 0.0, "time": 3000},
+    ]
+
+    def test_a_guid_not_in_the_round_has_no_position(self):
+        assert make_locator({})("NOBODY", 1500) is None
+
+    def test_the_path_may_arrive_as_json_text(self):
+        """⭐ The defect runtime found and 133 unit tests did not.
+
+        Fixtures hand `path` over as a list; some drivers return the same
+        column as text, and `find_position_floor` then called `.get` on a
+        string. Every belief in every round raised AttributeError.
+        """
+        region = make_locator(
+            {"G1": [_track(0, None, 1, json.dumps(self.PATH))]})("G1", 2000)
+        assert region is not None
+        assert (region.x, region.y) == (100.0, 0.0)
+
+    def test_the_position_never_comes_from_the_future(self):
+        """FLOOR, not nearest: at 2,100 ms the answer is the 2,000 ms sample,
+        even though 3,000 ms is only 900 ms away and would be picked by a
+        nearest-neighbour lookup."""
+        region = make_locator({"G1": [_track(0, None, 1, self.PATH)]})("G1", 2100)
+        assert region.x == 100.0
+
+    def test_before_the_first_sample_there_is_no_position(self):
+        assert make_locator({"G1": [_track(0, None, 1, self.PATH)]})("G1", 500) is None
+
+    def test_the_radius_is_the_measured_error_not_a_constant(self):
+        """A stale sample must widen the region. If the radius were a chosen
+        constant the two would match, and the page would draw a 60-second-old
+        position as confidently as a fresh one."""
+        locate = make_locator({"G1": [_track(0, None, 1, self.PATH)]})
+        fresh = locate("G1", 2000)
+        stale = locate("G1", 60_000)
+        assert stale.radius > fresh.radius
+        assert fresh.radius == position_error(0).p90
+
+    def test_a_path_without_coordinates_yields_no_region(self):
+        """A sample missing x/y/z must not become a region at the origin."""
+        broken = [{"time": 1000, "event": "spawn"}]
+        assert make_locator({"G1": [_track(0, None, 1, broken)]})("G1", 1500) is None
 
 
 class TestSelectLife:

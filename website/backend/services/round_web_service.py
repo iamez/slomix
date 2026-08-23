@@ -70,6 +70,8 @@ from website.backend.services.clock_inputs import (
 )
 from website.backend.services.information_state import (
     HolderState,
+    Locator,
+    Region,
     aim_lock_beliefs,
     apply_capability,
     contact_beliefs,
@@ -736,9 +738,59 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
 AUDIBLE_GUNFIRE_RADIUS = 1500.0
 
 
+def make_locator(tracks: dict[str, list]) -> Locator:
+    """Where a named player was at an instant, as a region we can defend.
+
+    ⭐ The radius is OUR error, not their eyesight. A player who was shot in the
+    face knew exactly where the shooter was; what is uncertain is where our
+    reconstruction puts them, so the region is sized by the measured p90 of
+    Layer 1's position error for that sample's staleness and life-conflict
+    state (`reconstruction_accuracy`, measured 2026-08-22 over 150 rounds).
+    That is the difference between this radius and `AUDIBLE_GUNFIRE_RADIUS`,
+    which is a named model parameter with no measurement behind it.
+
+    ⚠️ FLOOR, and the LATEST overlapping life — the same two contracts Layer 1
+    had to be corrected on. A belief must never be handed a position from after
+    the instant it was formed.
+
+    Returns None rather than a guess when the moment cannot be reconstructed:
+    the belief then keeps its subject and loses only its place.
+    """
+    # ⚠️ Parsed once per life, not once per belief. `path` arrives as text from
+    # some drivers and a round carries hundreds of beliefs against a handful of
+    # lives, so parsing inside the loop re-decodes the same half-megabyte
+    # document hundreds of times. Keyed on `pt.id`, which is why that column is
+    # selected.
+    parsed: dict[int, list] = {}
+
+    def locate(guid: str, t_ms: int) -> Region | None:
+        track_list = tracks.get(guid)
+        if not track_list:
+            return None
+        track, _alive, conflict = select_life(track_list, t_ms)
+        if track is None:
+            return None
+        path = parsed.get(track[8])
+        if path is None:
+            path = parsed[track[8]] = _ensure_path_list(track[6])
+        sample, stale_ms, _idx = find_position_floor(path, t_ms)
+        if sample is None:
+            return None
+        error = position_error(stale_ms, overlap_conflict=conflict)
+        if error is None:
+            return None
+        try:
+            x, y, z = float(sample["x"]), float(sample["y"]), float(sample["z"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return Region(x, y, z, error.p90)
+
+    return locate
+
+
 async def load_round_information_state(
     db, round_id: int, t_ms: int, snapshot: Snapshot, clock: dict,
-    capture_policy: CapturePolicy,
+    capture_policy: CapturePolicy, tracks: dict[str, list] | None = None,
 ) -> dict:
     """§6 Layer 3: what each player in this round could plausibly have known.
 
@@ -783,12 +835,18 @@ async def load_round_information_state(
 
     beliefs = obituary_beliefs(
         [(r[0], r[1], r[2]) for r in (deaths or [])], holders, clock=clock)
+    # ⭐ `locate` is what turns "he knows WHO" into "he knows who and roughly
+    # where". Without it both subject channels carried a name and no place, and
+    # `nearest_known_enemy_distance` could not return a value for any input.
+    locate = make_locator(tracks) if tracks else None
     beliefs += contact_beliefs(
-        [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])])
+        [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])],
+        locate=locate)
     beliefs += gunfire_beliefs(
         [(r[0], r[1], float(r[2]), float(r[3]), float(r[4])) for r in (shots or [])],
         positions, audible_radius=AUDIBLE_GUNFIRE_RADIUS)
-    beliefs += aim_lock_beliefs([(r[0], r[1], r[2]) for r in (locks or [])])
+    beliefs += aim_lock_beliefs(
+        [(r[0], r[1], r[2]) for r in (locks or [])], locate=locate)
 
     states = group_by_holder(beliefs)
     # ⛔ Every player gets an entry, including one with no beliefs: otherwise a
@@ -848,7 +906,7 @@ async def get_round_snapshot(
     policy = await load_capture_policy(db, round_id)
     clock = await load_round_clock(db, round_id, t_ms)
     information = await load_round_information_state(
-        db, round_id, t_ms, snap, clock, policy
+        db, round_id, t_ms, snap, clock, policy, tracks
     ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
 
     # ⭐ `pov` selects WHOSE picture is returned, the interaction VALORANT's

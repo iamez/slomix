@@ -32,7 +32,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Iterable
+from typing import Callable, Iterable
 
 from website.backend.services.clock_inputs import wave_position as _wave_position
 
@@ -266,6 +266,13 @@ class BeliefItem:
                 f"an expiry; it would be believed forever"
             )
         return math.exp(-(t_ms - self.t_observed) / 1000.0 / tau)
+
+
+#: Where a named player was at a given instant, as a region sized by how wrong
+#: our reconstruction is there. Returns None when the moment cannot be
+#: reconstructed — a belief then keeps its subject and loses only its place,
+#: which is the honest degradation.
+Locator = Callable[[str, int], "Region | None"]
 
 
 @dataclass(slots=True)
@@ -520,11 +527,22 @@ def obituary_beliefs(
     return out
 
 
-def contact_beliefs(engagements: Iterable[tuple]) -> list[BeliefItem]:
+def contact_beliefs(
+    engagements: Iterable[tuple], *, locate: Locator | None = None,
+) -> list[BeliefItem]:
     """What a fight tells the two sides — and it is not the same thing.
 
     `engagements` rows are (target_guid, attackers_json) where each attacker
     carries guid, weapons and first/last hit times.
+
+    ⭐ `locate` gives the attacker WHERE as well as who. Hitting someone with a
+    direct-fire weapon means seeing them, so their position at `first_hit_ms`
+    is knowledge the attacker genuinely had — and without it this channel
+    resolved a subject and no place, which is why `nearest_known_enemy_distance`
+    was structurally incapable of returning anything but None (measured 2026-08-23:
+    None in 110 of 110 holder samples across three rounds). The region is sized
+    by OUR reconstruction error, not by their perception: they saw a player, we
+    are the ones unsure where that player was.
 
     ⭐ Asymmetric on purpose (§6.3):
       * the ATTACKER may name their target, but only for direct-fire weapons —
@@ -549,6 +567,7 @@ def contact_beliefs(engagements: Iterable[tuple]) -> list[BeliefItem]:
                     holder_guid=str(guid),
                     source="contact_hit",
                     t_observed=int(first),
+                    region=locate(str(target), int(first)) if locate else None,
                     subject_guid=str(target),
                 ))
             # The victim learns they are being hit, and only that.
@@ -561,7 +580,9 @@ def contact_beliefs(engagements: Iterable[tuple]) -> list[BeliefItem]:
     return out
 
 
-def aim_lock_beliefs(locks: Iterable[tuple]) -> list[BeliefItem]:
+def aim_lock_beliefs(
+    locks: Iterable[tuple], *, locate: Locator | None = None,
+) -> list[BeliefItem]:
     """The only channel that resolves WHO for a holder who was not hit.
 
     `locks` rows are (holder_guid, target_guid, start_ms).
@@ -569,12 +590,17 @@ def aim_lock_beliefs(locks: Iterable[tuple]) -> list[BeliefItem]:
     A crosshair held on an enemy is recipient-observable by construction: the
     holder was the one looking. That is why this, unlike gunfire, may carry a
     `subject_guid` — and why it is capability-gated just as hard.
+
+    ⭐ It carries a region for the same reason: someone holding a crosshair on a
+    player is looking straight at them. `locate` supplies where that player was
+    at `start_ms`, sized by our reconstruction error rather than by their sight.
     """
     return [
         BeliefItem(
             holder_guid=str(holder),
             source="aim_lock",
             t_observed=int(start_ms),
+            region=locate(str(target), int(start_ms)) if locate else None,
             subject_guid=str(target),
             capability="aim_lock",
         )
