@@ -1,0 +1,334 @@
+{
+ "generated_at": "2026-08-23T17:07:52+00:00",
+ "script": "scripts/export_map_geometry.py",
+ "etmain": "/home/samba/share/etmain",
+ "floor_normal_z": 0.7,
+ "min_triangle_area": 16.0,
+ "surface_flags_excluded": {
+  "SURF_SKY": 4,
+  "SURF_NODRAW": 128,
+  "SURF_SKIP": 512,
+  "SURF_NONSOLID": 16384
+ },
+ "maps": {
+  "adlernest": {
+   "available": false,
+   "published": false,
+   "triangles": 5571,
+   "vertices": 6159,
+   "bytes": 169277,
+   "median_triangle_area": 3200.0,
+   "rejected": {
+    "not_planar": 228,
+    "degenerate": 0,
+    "not_floor": 6628,
+    "shader": 12,
+    "sliver": 635
+   },
+   "file": "adlernest.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "braundorf_b4": {
+   "available": false,
+   "published": false,
+   "triangles": 3980,
+   "vertices": 4961,
+   "bytes": 126777,
+   "median_triangle_area": 2048.0,
+   "rejected": {
+    "not_planar": 495,
+    "degenerate": 0,
+    "not_floor": 6324,
+    "shader": 165,
+    "sliver": 224
+   },
+   "file": "braundorf_b4.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "bremen_b3": {
+   "available": false,
+   "published": false,
+   "triangles": 5952,
+   "vertices": 6840,
+   "bytes": 179578,
+   "median_triangle_area": 1382.0,
+   "rejected": {
+    "not_planar": 195,
+    "degenerate": 0,
+    "not_floor": 6284,
+    "shader": 106,
+    "sliver": 405
+   },
+   "file": "bremen_b3.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "decay_sw": {
+   "available": false,
+   "published": false,
+   "triangles": 11474,
+   "vertices": 14560,
+   "bytes": 373709,
+   "median_triangle_area": 450.0,
+   "rejected": {
+    "not_planar": 879,
+    "degenerate": 0,
+    "not_floor": 16638,
+    "shader": 239,
+    "sliver": 2597
+   },
+   "file": "decay_sw.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "erdenberg_t2": {
+   "available": true,
+   "published": true,
+   "triangles": 4283,
+   "vertices": 4505,
+   "bytes": 127819,
+   "median_triangle_area": 1558.0,
+   "rejected": {
+    "not_planar": 129,
+    "degenerate": 0,
+    "not_floor": 3571,
+    "shader": 124,
+    "sliver": 397
+   },
+   "file": "erdenberg_t2.json"
+  },
+  "et_beach": {
+   "available": false,
+   "published": false,
+   "triangles": 5484,
+   "vertices": 4858,
+   "bytes": 146147,
+   "median_triangle_area": 18432.0,
+   "rejected": {
+    "not_planar": 436,
+    "degenerate": 0,
+    "not_floor": 3495,
+    "shader": 29,
+    "sliver": 243
+   },
+   "file": "et_beach.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "et_brewdog": {
+   "available": true,
+   "published": true,
+   "triangles": 3842,
+   "vertices": 5115,
+   "bytes": 126169,
+   "median_triangle_area": 1280.0,
+   "rejected": {
+    "not_planar": 424,
+    "degenerate": 0,
+    "not_floor": 5492,
+    "shader": 74,
+    "sliver": 337
+   },
+   "file": "et_brewdog.json"
+  },
+  "etl_adlernest": {
+   "available": true,
+   "published": true,
+   "triangles": 5777,
+   "vertices": 6267,
+   "bytes": 173018,
+   "median_triangle_area": 1520.0,
+   "rejected": {
+    "not_planar": 1255,
+    "degenerate": 0,
+    "not_floor": 8314,
+    "shader": 66,
+    "sliver": 823
+   },
+   "file": "etl_adlernest.json"
+  },
+  "etl_frostbite": {
+   "available": true,
+   "published": true,
+   "triangles": 5007,
+   "vertices": 5493,
+   "bytes": 150101,
+   "median_triangle_area": 1152.0,
+   "rejected": {
+    "not_planar": 2172,
+    "degenerate": 0,
+    "not_floor": 5685,
+    "shader": 15,
+    "sliver": 459
+   },
+   "file": "etl_frostbite.json"
+  },
+  "etl_ice": {
+   "available": false,
+   "published": false,
+   "triangles": 8195,
+   "vertices": 8303,
+   "bytes": 241317,
+   "median_triangle_area": 1536.0,
+   "rejected": {
+    "not_planar": 1499,
+    "degenerate": 0,
+    "not_floor": 7620,
+    "shader": 23,
+    "sliver": 785
+   },
+   "file": "etl_ice.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "etl_sp_delivery": {
+   "available": true,
+   "published": true,
+   "triangles": 6105,
+   "vertices": 7760,
+   "bytes": 195856,
+   "median_triangle_area": 752.0,
+   "rejected": {
+    "not_planar": 1820,
+    "degenerate": 0,
+    "not_floor": 10089,
+    "shader": 31,
+    "sliver": 1181
+   },
+   "file": "etl_sp_delivery.json"
+  },
+  "etl_supply": {
+   "available": false,
+   "reason": "no BSP for this map in the indexed etmain tree"
+  },
+  "goldrush": {
+   "available": false,
+   "published": false,
+   "triangles": 8817,
+   "vertices": 10954,
+   "bytes": 286374,
+   "median_triangle_area": 906.0,
+   "rejected": {
+    "not_planar": 829,
+    "degenerate": 0,
+    "not_floor": 21876,
+    "shader": 292,
+    "sliver": 1147
+   },
+   "file": "goldrush.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "mp_sillyctf": {
+   "available": false,
+   "published": false,
+   "triangles": 1924,
+   "vertices": 2482,
+   "bytes": 58474,
+   "median_triangle_area": 1024.0,
+   "rejected": {
+    "not_planar": 260,
+    "degenerate": 0,
+    "not_floor": 2505,
+    "shader": 35,
+    "sliver": 264
+   },
+   "file": "mp_sillyctf.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "radar": {
+   "available": false,
+   "published": false,
+   "triangles": 9397,
+   "vertices": 10753,
+   "bytes": 308006,
+   "median_triangle_area": 960.0,
+   "rejected": {
+    "not_planar": 1082,
+    "degenerate": 0,
+    "not_floor": 11456,
+    "shader": 60,
+    "sliver": 2228
+   },
+   "file": "radar.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "sp_delivery_te": {
+   "available": false,
+   "published": false,
+   "triangles": 4269,
+   "vertices": 4987,
+   "bytes": 128699,
+   "median_triangle_area": 768.0,
+   "rejected": {
+    "not_planar": 596,
+    "degenerate": 0,
+    "not_floor": 5876,
+    "shader": 12,
+    "sliver": 704
+   },
+   "file": "sp_delivery_te.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "supply": {
+   "available": true,
+   "published": true,
+   "triangles": 3249,
+   "vertices": 3685,
+   "bytes": 95358,
+   "median_triangle_area": 1536.0,
+   "rejected": {
+    "not_planar": 328,
+    "degenerate": 0,
+    "not_floor": 3992,
+    "shader": 112,
+    "sliver": 166
+   },
+   "file": "supply.json"
+  },
+  "sw_goldrush_te": {
+   "available": true,
+   "published": true,
+   "triangles": 9191,
+   "vertices": 11492,
+   "bytes": 301007,
+   "median_triangle_area": 864.0,
+   "rejected": {
+    "not_planar": 849,
+    "degenerate": 0,
+    "not_floor": 22488,
+    "shader": 283,
+    "sliver": 1001
+   },
+   "file": "sw_goldrush_te.json"
+  },
+  "sw_oasis_b3": {
+   "available": false,
+   "published": false,
+   "triangles": 17021,
+   "vertices": 17809,
+   "bytes": 533060,
+   "median_triangle_area": 1248.0,
+   "rejected": {
+    "not_planar": 823,
+    "degenerate": 0,
+    "not_floor": 15057,
+    "shader": 989,
+    "sliver": 1624
+   },
+   "file": "sw_oasis_b3.json",
+   "reason": "measured but not published: too few rounds to justify the bytes in a public repository"
+  },
+  "te_escape2": {
+   "available": true,
+   "published": true,
+   "triangles": 6108,
+   "vertices": 7709,
+   "bytes": 199437,
+   "median_triangle_area": 864.0,
+   "rejected": {
+    "not_planar": 530,
+    "degenerate": 0,
+    "not_floor": 8681,
+    "shader": 95,
+    "sliver": 560
+   },
+   "file": "te_escape2.json"
+  }
+ }
+}
