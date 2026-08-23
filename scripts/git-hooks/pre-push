@@ -30,10 +30,58 @@ ZERO=0000000000000000000000000000000000000000
 # for. Oversized CSVs still die on the size check above (CodeRabbit).
 RAW_DATA_EXT='xlsx|xls|sqlite|sqlite3|db|dump|bak|zip|tar|gz|tgz|7z|rar|xz'
 SECRET_VALUE_RE='(PGPASSWORD|POSTGRES_PASSWORD|DISCORD_BOT_TOKEN|RCON_PASSWORD|API_KEY|SECRET)[[:space:]]*=[[:space:]]*['\''"]?[A-Za-z0-9_/+.-]{8,}'
+# Two shapes the assignment pattern above cannot see, because the name and the
+# value are not joined by `=`. Both are LITERALS sitting where a credential
+# belongs, which is narrow enough to block on rather than warn about.
+#
+#   os.environ.get("POSTGRES_PASSWORD", <a quoted literal>)
+#   psycopg2.connect(..., password=<a quoted literal>)
+#
+# Written without quotes on purpose: spelled out, these two comment lines match
+# the patterns below and the hook refuses its own push. That is not a flaw —
+# it is the guard working — but a file cannot document what it forbids by
+# example, so it documents the shape instead.
+#
+# ⛔ This is not hypothetical. The first form reached this public repository on
+# 2026-08-22: a research script had the dev password as a fallback so it could
+# be run by hand without exporting a variable, and it was committed without
+# being re-read. `git log -S` then showed the same value in 66 commits going
+# back to 2025-11-05 — the fallback was a habit, not a one-off.
+#
+# The env-default form is the dangerous one precisely because it LOOKS careful:
+# it reads from the environment, so it passes a glance, and the default is only
+# used when someone forgets to export — which is exactly when it matters.
+# The value class excludes braces on purpose: a default containing `{` or `}`
+# is a format placeholder or a shell expansion, not a literal credential — and
+# it is how this hook's own test writes its fixtures without tripping it.
+SECRET_ENV_DEFAULT_RE='(environ\.get|getenv)\([[:space:]]*['\''"][A-Z_]*(PASSWORD|TOKEN|SECRET|API_KEY)[A-Z_]*['\''"][[:space:]]*,[[:space:]]*['\''"][^'\''"{}]{8,}'
+SECRET_KWARG_RE='(password|passwd|token|secret|api_key)[[:space:]]*=[[:space:]]*['\''"][A-Za-z0-9_/+.-]{8,}['\''"]'
 # Placeholders are not credentials. Without this, `DISCORD_BOT_TOKEN=your_token_here`
 # in install.sh's help text trips the guard — which it did, on this hook's own
 # first push. A guard that cries wolf gets --no-verify'd into uselessness.
-PLACEHOLDER_RE='your_|_here|changeme|change_me|xxxxx|REDACTED|example|placeholder|<[a-z_]+>|\$\{?[A-Z_]+\}?'
+PLACEHOLDER_RE='your_|_here|changeme|change_me|xxxxx|REDACTED|example|placeholder|<[a-z_]+>|\$\{?[A-Z_]+\}?|not-for-production|test_password|fake_|dummy_'
+# A name ending in _FILE / _PATH / _DIR holds a LOCATION, not a credential, and
+# its default is a path. Without this, `os.environ.get("SECRET_FILE",
+# "/etc/app/secret.pem")` is refused — the name matches [A-Z_]*SECRET[A-Z_]* and
+# the value is just eight-plus characters. A guard that refuses a path default
+# is a guard someone turns off.
+#
+# ⚠️ Matched against the whole line, like PLACEHOLDER_RE, so a line carrying
+# BOTH a path-named variable and a real credential is skipped. Narrow enough to
+# accept; splitting values out of the line would mean parsing Python in bash.
+LOCATION_NAME_RE='["'\''][A-Za-z_]*(FILE|PATH|DIR|FOLDER|LOCATION)["'\'']'
+# ⚠️ WHAT THIS DOES NOT CATCH, measured against real credential formats rather
+# than guessed. All four still push clean:
+#
+#   apiKey="sk-proj-…"                    camelCase: the pattern lists api_key
+#   aws_secret_access_key="…"             the keyword is a PREFIX, not the whole name
+#   dsn="postgresql://user:pass@host/db"  a credential inside a connection string
+#   GITHUB_TOKEN = "ghp_…"                check 4's name list is fixed and lacks it
+#
+# Widening the keyword pattern to `[A-Za-z_]*(password|…)[A-Za-z_]*` was tried
+# and rejected: it fixes the second case and introduces a false positive on
+# `password_field_name = "user_password"`, which is a description, not a secret.
+# These are named here so nobody reads this guard as complete.
 
 red() { printf '\033[31m%s\033[0m\n' "$*" >&2; }
 note() { printf '  %s\n' "$*" >&2; }
@@ -119,6 +167,41 @@ while read -r _local_ref local_sha _remote_ref remote_sha; do
         if [ -n "$hits" ]; then
             printf '\033[33mpre-push: %s may contain a credential value — review:\033[0m\n' "$f" >&2
             printf '    %s\n' "$hits" >&2
+        fi
+
+        # 5. A literal where a credential belongs — this one BLOCKS.
+        #
+        # Check 4 stays a warning because its pattern cannot tell a token from
+        # a placeholder. These two can: they require a quoted literal of eight
+        # or more characters as the DEFAULT of an env read, or as the value of
+        # a `password=`/`token=` keyword. Nothing legitimate looks like that;
+        # the safe idioms this repo already uses — `os.environ.get("X", "")`,
+        # `os.environ.get("X") or os.environ.get("Y", "")`, `password=_fn()` —
+        # all pass, and are covered by the test alongside the ones that must fail.
+        #
+        # A warning would not have been enough: it prints in yellow in the
+        # middle of a long push and is read as noise.
+        # ⚠️ Two greps, and only the second is case-insensitive. Measured, not
+        # assumed: `-i` on the keyword pattern catches API_TOKEN= and Password=
+        # with no false positive that the placeholder filter does not already
+        # handle. `-i` on the env-default pattern catches
+        # `os.environ.get("my_password", ...)` but ALSO flags
+        # `os.environ.get("SECRET_FILE", "/etc/app/secret.pem")` — a file path,
+        # not a credential. A guard that refuses a path default is a guard
+        # someone disables.
+        literal=$( { git cat-file blob "$blob" 2>/dev/null \
+                       | grep -EI "$SECRET_ENV_DEFAULT_RE" 2>/dev/null
+                     git cat-file blob "$blob" 2>/dev/null \
+                       | grep -EIi "$SECRET_KWARG_RE" 2>/dev/null ; } \
+                   | grep -EvIi "$PLACEHOLDER_RE" \
+                   | grep -EvI "$LOCATION_NAME_RE" | head -3)
+        if [ -n "$literal" ]; then
+            red "pre-push: $f hardcodes a credential where one is read or passed."
+            printf '    %s\n' "$literal" >&2
+            note "Read it from the environment with NO fallback, and fail loudly"
+            note "when the variable is missing. An empty-string default hides the"
+            note "cause; a real default publishes the credential."
+            problems=$((problems + 1))
         fi
     done
 done
