@@ -13,18 +13,25 @@ import json
 import pytest
 
 from website.backend.services import replay_service
+from website.backend.services.reconstruction_accuracy import position_error
 from website.backend.services.round_web_service import (
+    AUDIBLE_GUNFIRE_RADIUS,
     VELOCITY_SANITY_CAP_UPS,
+    CapturePolicy,
     Edge,
     PlayerState,
     Snapshot,
     _contested_guids,
+    _ensure_attackers,
     build_edges,
     build_snapshot,
     derive_velocity,
     find_position_floor,
+    get_round_snapshot,
     load_capture_policy,
     load_round_clock,
+    load_round_information_state,
+    make_locator,
     nearest_teammate_separation,
     select_life,
 )
@@ -34,6 +41,82 @@ from website.backend.services.round_web_service import (
 # shape load_round_tracks returns.
 def _track(spawn, death, track_id, path=None):
     return ("G1", "p", "AXIS", "soldier", spawn, death, path or [], "supply", track_id)
+
+
+class TestTheAudibleRadiusComesFromTheEngine:
+    def test_it_is_the_distance_at_which_the_volume_reaches_zero(self):
+        """⭐ The derivation, not the number.
+
+        `src/client/snd_dma.c`: SOUND_RANGE_DEFAULT 1250, SOUND_FULLVOLUME 80.
+        `S_SpatializeOrigin` computes dist_fullvol = range * 0.064, then
+        dist = (d - dist_fullvol) / range, and scales volume by (1 - dist).
+        Volume is zero once dist >= 1.
+
+        Written this way the test fails if someone restores the invented 1,500,
+        and it also fails if the engine's own constants are ever mis-copied —
+        which a bare `== 1330.0` would not catch.
+        """
+        sound_range, full_volume = 1250.0, 1250.0 * 0.064
+        assert full_volume == 80.0, "SOUND_FULLVOLUME in the engine"
+        inaudible_at = full_volume + sound_range  # dist == 1 => volume 0
+        assert inaudible_at == AUDIBLE_GUNFIRE_RADIUS
+
+
+class TestMakeLocator:
+    """The seam that turns "he knows WHO" into "he knows who and roughly where".
+
+    Before it existed, `contact_hit` and `aim_lock` carried a subject and no
+    region, so `nearest_known_enemy_distance` — which needs both — was
+    structurally incapable of a value: None in 110 of 110 holder samples across
+    three rounds. Every test here pins a property that measurement caught and
+    the hand-built fixtures of the belief tests could not.
+    """
+
+    PATH = [
+        {"x": 0.0, "y": 0.0, "z": 0.0, "time": 1000},
+        {"x": 100.0, "y": 0.0, "z": 0.0, "time": 2000},
+        {"x": 900.0, "y": 0.0, "z": 0.0, "time": 3000},
+    ]
+
+    def test_a_guid_not_in_the_round_has_no_position(self):
+        assert make_locator({})("NOBODY", 1500) is None
+
+    def test_the_path_may_arrive_as_json_text(self):
+        """⭐ The defect runtime found and 133 unit tests did not.
+
+        Fixtures hand `path` over as a list; some drivers return the same
+        column as text, and `find_position_floor` then called `.get` on a
+        string. Every belief in every round raised AttributeError.
+        """
+        region = make_locator(
+            {"G1": [_track(0, None, 1, json.dumps(self.PATH))]})("G1", 2000)
+        assert region is not None
+        assert (region.x, region.y) == (100.0, 0.0)
+
+    def test_the_position_never_comes_from_the_future(self):
+        """FLOOR, not nearest: at 2,100 ms the answer is the 2,000 ms sample,
+        even though 3,000 ms is only 900 ms away and would be picked by a
+        nearest-neighbour lookup."""
+        region = make_locator({"G1": [_track(0, None, 1, self.PATH)]})("G1", 2100)
+        assert region.x == 100.0
+
+    def test_before_the_first_sample_there_is_no_position(self):
+        assert make_locator({"G1": [_track(0, None, 1, self.PATH)]})("G1", 500) is None
+
+    def test_the_radius_is_the_measured_error_not_a_constant(self):
+        """A stale sample must widen the region. If the radius were a chosen
+        constant the two would match, and the page would draw a 60-second-old
+        position as confidently as a fresh one."""
+        locate = make_locator({"G1": [_track(0, None, 1, self.PATH)]})
+        fresh = locate("G1", 2000)
+        stale = locate("G1", 60_000)
+        assert stale.radius > fresh.radius
+        assert fresh.radius == position_error(0).p90
+
+    def test_a_path_without_coordinates_yields_no_region(self):
+        """A sample missing x/y/z must not become a region at the origin."""
+        broken = [{"time": 1000, "event": "spawn"}]
+        assert make_locator({"G1": [_track(0, None, 1, broken)]})("G1", 1500) is None
 
 
 class TestSelectLife:
@@ -581,3 +664,170 @@ class TestLoadRoundClock:
         assert axis["offset_ms"] is None
         assert "phase_ms" not in axis
         assert "time_to_next_wave_ms" not in axis
+
+
+class _InfoStubDb:
+    """Answers the four Layer 3 queries in the order the loader issues them."""
+
+    def __init__(self, deaths=(), engagements=(), shots=(), locks=()):
+        self._queue = [list(deaths), list(engagements), list(shots), list(locks)]
+
+    async def fetch_all(self, _sql, _params=None):
+        return self._queue.pop(0) if self._queue else []
+
+
+def _snapshot_of(*guids: str) -> Snapshot:
+    players = {
+        g: PlayerState(guid=g, name=g, team="AXIS" if i % 2 else "ALLIES",
+                       player_class=None, x=float(i * 100), y=0.0, z=0.0,
+                       health=100, weapon=None, stance=None, speed=0.0, alive=True,
+                       track_id=i, stale_ms=0, overlap_conflict=False)
+        for i, g in enumerate(guids)
+    }
+    return Snapshot(t_ms=0, players=players, edges=[], overlap_conflicts=0, gaps={})
+
+
+class _SnapshotStubDb:
+    """Answers by what the query ASKS FOR, not by call order.
+
+    `get_round_snapshot` issues a dozen queries through five loaders, and their
+    order is an implementation detail that a positional stub would freeze into
+    the tests — reordering two independent loads would then break tests that
+    have nothing to do with ordering.
+    """
+
+    def __init__(self, tracks=(), duration_s=None):
+        self._tracks = list(tracks)
+        self._duration_s = duration_s
+
+    async def fetch_all(self, sql, _params=None):
+        if "death_time_ms IS NOT NULL" in sql:
+            return []                       # Layer 3 deaths
+        if "FROM player_track pt" in sql:
+            return self._tracks
+        if "FROM rounds r" in sql:
+            return [(self._duration_s,)] if self._duration_s else []
+        return []
+
+
+def _stub_track(guid: str, x: float) -> tuple:
+    """One life, in `load_round_tracks` column order."""
+    path = [{"x": x, "y": 0.0, "z": 0.0, "time": 0},
+            {"x": x, "y": 0.0, "z": 0.0, "time": 10_000}]
+    return (guid, guid, "AXIS", "soldier", 0, None, path, "supply", hash(guid) % 1000)
+
+
+class TestPointOfView:
+    """`pov` decides WHOSE picture is returned — 82 lines that had no test.
+
+    Every path here was exercised only by throwaway scripts during development.
+    The oracle view is the dangerous one: §6.4 makes `world` a named diagnostic,
+    so it has to be asked for rather than arrived at by accident.
+    """
+
+    async def _snapshot(self, **kw):
+        db = _SnapshotStubDb(tracks=[_stub_track("A", 0.0), _stub_track("B", 500.0)])
+        return await get_round_snapshot(db, 1, 5_000, **kw)
+
+    @pytest.mark.asyncio
+    async def test_no_pov_is_the_world_view_and_says_so(self):
+        info = (await self._snapshot())["information_state"]
+        assert info["pov"] == "world"
+        assert set(info["holders"]) == {"A", "B"}
+
+    @pytest.mark.asyncio
+    async def test_world_is_spelled_out_not_arrived_at(self):
+        info = (await self._snapshot(pov="world"))["information_state"]
+        assert info["pov"] == "world"
+        assert set(info["holders"]) == {"A", "B"}
+        assert "pov_unavailable" not in info
+
+    @pytest.mark.asyncio
+    async def test_a_player_pov_returns_only_that_player(self):
+        info = (await self._snapshot(pov="A"))["information_state"]
+        assert set(info["holders"]) == {"A"}
+        assert info["pov"] == "A"
+        assert info["pov_unavailable"] is None
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_pov_explains_itself_instead_of_falling_back(self):
+        """⛔ Never silently the world view: a typo in a GUID would then hand
+        back omniscience labelled as one player's knowledge."""
+        info = (await self._snapshot(pov="GHOST"))["information_state"]
+        assert info["holders"] == {}
+        assert "GHOST" in info["pov_unavailable"]
+        assert info["pov"] == "GHOST"
+
+
+class TestAnEmptyRoundKeepsTheContract:
+    @pytest.mark.asyncio
+    async def test_every_key_survives_a_round_with_no_tracks(self):
+        """A thin round used to take a shortcut with a different shape, so a
+        consumer reading `capture_policy` hit a KeyError exactly when the data
+        was thinnest (CodeRabbit, PR #792)."""
+        payload = await get_round_snapshot(_SnapshotStubDb(), 1, 5_000)
+        for key in ("capture_policy", "clock", "information_state", "player_count",
+                    "gaps", "players", "edges", "reconstruction_accuracy"):
+            assert key in payload, key
+        assert payload["unavailable"]
+
+
+class TestEnsureAttackers:
+    """`attackers` is a list from asyncpg and text from other drivers."""
+
+    def test_a_list_passes_through(self):
+        assert _ensure_attackers([{"guid": "X"}]) == [{"guid": "X"}]
+
+    def test_json_text_is_parsed(self):
+        assert _ensure_attackers('[{"guid": "X"}]') == [{"guid": "X"}]
+
+    def test_broken_json_is_empty_not_an_exception(self):
+        """⚠️ One malformed row must not take down the whole snapshot."""
+        assert _ensure_attackers("{not json") == []
+
+    def test_null_is_empty(self):
+        assert _ensure_attackers(None) == []
+
+
+class TestInformationStateLoader:
+    """§6 Layer 3 as the snapshot serves it."""
+
+    @pytest.mark.asyncio
+    async def test_every_player_gets_an_entry_even_with_no_beliefs(self):
+        """⛔ Otherwise a player who learned nothing and a player we could not
+        model look identical in the payload."""
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 1000, _snapshot_of("A", "B"), {},
+            CapturePolicy(capabilities={"shot_fired": "enabled", "aim_lock": "enabled"}))
+        assert set(result["holders"]) == {"A", "B"}
+        assert all(h["known_enemy_count"] == 0 for h in result["holders"].values())
+
+    @pytest.mark.asyncio
+    async def test_an_unproven_channel_is_named_for_every_holder(self):
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 1000, _snapshot_of("A", "B"), {}, CapturePolicy())
+        for holder in result["holders"].values():
+            assert set(holder["unavailable"]) == {"gunfire", "aim_lock"}
+
+    @pytest.mark.asyncio
+    async def test_a_death_reaches_the_other_players(self):
+        result = await load_round_information_state(
+            _InfoStubDb(deaths=[("V", "AXIS", 500)]), 1, 1000,
+            _snapshot_of("A", "V"), {"AXIS": {"interval_ms": 20000, "offset_ms": 0}},
+            CapturePolicy(capabilities={"shot_fired": "enabled", "aim_lock": "enabled"}))
+        assert result["holders"]["A"]["beliefs"], "the death was not announced"
+        assert result["holders"]["V"]["beliefs"] == [], "the victim told themselves"
+
+    @pytest.mark.asyncio
+    async def test_the_audible_radius_is_published_not_buried(self):
+        """§6.3: the radius and localisation error are named model parameters."""
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 0, _snapshot_of("A"), {}, CapturePolicy())
+        assert result["audible_gunfire_radius"] > 0
+
+    @pytest.mark.asyncio
+    async def test_an_empty_round_returns_the_same_shape(self):
+        result = await load_round_information_state(
+            _InfoStubDb(), 1, 0, _snapshot_of(), {}, CapturePolicy())
+        assert result["holders"] == {}
+        assert "audible_gunfire_radius" in result
