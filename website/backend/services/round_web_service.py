@@ -61,6 +61,7 @@ from typing import Any
 
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
 from proximity.parser.capability_manifest import is_declared
+from shared.round_time import round_duration_sql
 from website.backend.logging_config import get_app_logger
 from website.backend.services.clock_inputs import (
     clock_validation_payload,
@@ -68,6 +69,18 @@ from website.backend.services.clock_inputs import (
     fetch_timing_observations,
     wave_position,
 )
+from website.backend.services.information_state import (
+    HolderState,
+    Locator,
+    Region,
+    aim_lock_beliefs,
+    apply_capability,
+    contact_beliefs,
+    group_by_holder,
+    gunfire_beliefs,
+    obituary_beliefs,
+)
+from website.backend.services.information_state import to_dict as belief_payload
 from website.backend.services.reconstruction_accuracy import (
     MEASUREMENT as ACCURACY_MEASUREMENT,
 )
@@ -719,9 +732,197 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
     return clock
 
 
+#: How far a shot carries, in game units — DERIVED FROM THE ENGINE, not chosen.
+#:
+#: This was 1,500: a plausible-sounding number with nothing behind it, sitting
+#: in the same file as a radius measured to the p90. The engine settles it.
+#: `src/client/snd_dma.c` defines `SOUND_RANGE_DEFAULT 1250` and
+#: `SOUND_FULLVOLUME 80`, and `S_SpatializeOrigin` computes
+#: `dist_fullvol = range * 0.064` (= 80), then `dist = (d - 80) / 1250` and
+#: scales the volume by `1 - dist`. Volume reaches zero at `dist >= 1`, so a
+#: shot is inaudible at **d >= 1330**: full volume within 80 units, linear
+#: falloff to silence at 1,330.
+#:
+#: ⭐ THE BETTER ANSWER IS PVS, AND IT IS REACHABLE. Distance is only half of
+#: audibility — the client can play a sound only if the event reached it, and
+#: in a Quake engine the server decides that with the potentially visible set
+#: (`CM_ClusterPVS`; ET:Legacy has no PHS, so there is no separate hearable
+#: set). A shot behind a sealed wall is not heard at 400 units, and this
+#: constant says it is. Our BSP reader already parses PLANES, NODES and LEAFS
+#: with their `cluster`, already knows `VISIBILITY = 16` without reading it,
+#: and `BspPointTracer._candidate_leaf_indices` already walks the node tree —
+#: so audibility could be `PVS and d < 1330`. Not done here; recorded so the
+#: next reader does not have to rediscover that it is a small step.
+#:
+#: ⚠️ Changing this alters nothing today: `shot_fired` has been off in
+#: production since 2026-08-11, so the gunfire channel carries no rows. That is
+#: not a reason for the number to stay wrong.
+AUDIBLE_GUNFIRE_RADIUS = 1330.0
+
+
+async def load_round_end_ms(db, round_id: int, tracks: dict[str, list]) -> int | None:
+    """When every live-round belief stops, in round-relative ms.
+
+    §6.3 makes round end public and ends all live-round beliefs, so
+    `uncertain_after_down` needs it as a terminus — without one it would be
+    handed an invented horizon.
+
+    Duration comes from `shared/round_time.py`, never from `rounds.actual_time`
+    directly: that column is the stopwatch TARGET (`g_nextTimeLimit`) and
+    overstates about 15% of rounds. When it cannot be established the last
+    observed life end stands in, which is a measurement rather than a default.
+    """
+    rows = await db.fetch_all(
+        f"SELECT {round_duration_sql('r')} FROM rounds r WHERE r.id = $1",
+        (round_id,))
+    if rows and rows[0] and rows[0][0]:
+        return int(rows[0][0]) * 1000
+    ends = [t[5] for lives in tracks.values() for t in lives if t[5] is not None]
+    return max(ends) if ends else None
+
+
+def make_locator(tracks: dict[str, list]) -> Locator:
+    """Where a named player was at an instant, as a region we can defend.
+
+    ⭐ The radius is OUR error, not their eyesight. A player who was shot in the
+    face knew exactly where the shooter was; what is uncertain is where our
+    reconstruction puts them, so the region is sized by the measured p90 of
+    Layer 1's position error for that sample's staleness and life-conflict
+    state (`reconstruction_accuracy`, measured 2026-08-22 over 150 rounds).
+    That is the difference between this radius and `AUDIBLE_GUNFIRE_RADIUS`,
+    which is a named model parameter with no measurement behind it.
+
+    ⚠️ FLOOR, and the LATEST overlapping life — the same two contracts Layer 1
+    had to be corrected on. A belief must never be handed a position from after
+    the instant it was formed.
+
+    Returns None rather than a guess when the moment cannot be reconstructed:
+    the belief then keeps its subject and loses only its place.
+    """
+    # ⚠️ Parsed once per life, not once per belief. `path` arrives as text from
+    # some drivers and a round carries hundreds of beliefs against a handful of
+    # lives, so parsing inside the loop re-decodes the same half-megabyte
+    # document hundreds of times. Keyed on `pt.id`, which is why that column is
+    # selected.
+    parsed: dict[int, list] = {}
+
+    def locate(guid: str, t_ms: int) -> Region | None:
+        track_list = tracks.get(guid)
+        if not track_list:
+            return None
+        track, _alive, conflict = select_life(track_list, t_ms)
+        if track is None:
+            return None
+        path = parsed.get(track[8])
+        if path is None:
+            path = parsed[track[8]] = _ensure_path_list(track[6])
+        sample, stale_ms, _idx = find_position_floor(path, t_ms)
+        if sample is None:
+            return None
+        error = position_error(stale_ms, overlap_conflict=conflict)
+        if error is None:
+            return None
+        try:
+            x, y, z = float(sample["x"]), float(sample["y"]), float(sample["z"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        return Region(x, y, z, error.p90)
+
+    return locate
+
+
+async def load_round_information_state(
+    db, round_id: int, t_ms: int, snapshot: Snapshot, clock: dict,
+    capture_policy: CapturePolicy, tracks: dict[str, list] | None = None,
+) -> dict:
+    """§6 Layer 3: what each player in this round could plausibly have known.
+
+    Built from four channels whose coverage differs wildly — obituary and
+    contact reach nearly the whole corpus, gunfire and aim_lock only the rounds
+    whose manifest proves the capture was on. `apply_capability` names the ones
+    this round cannot support; they never become silence.
+
+    ⛔ Line-of-sight is deliberately NOT a channel. It is an oracle upper bound
+    on what could have been seen, not an observation, and §6.1 forbids inserting
+    a belief merely because a ray was clear.
+    """
+    holders = [p.guid for p in snapshot.players.values()]
+    if not holders:
+        return {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
+
+    positions = {
+        p.guid: (p.x, p.y, p.z)
+        for p in snapshot.players.values() if _has_position(p)
+    }
+
+    deaths = await db.fetch_all("""
+        SELECT player_guid, team, death_time_ms
+        FROM player_track
+        WHERE round_id = $1 AND death_time_ms IS NOT NULL AND death_time_ms <= $2
+          AND path -> -1 ->> 'event' IN
+              ('killed', 'selfkill', 'fallen', 'world', 'teamkill')
+    """, (round_id, t_ms))
+    engagements = await db.fetch_all("""
+        SELECT target_guid, attackers FROM combat_engagement
+        WHERE round_id = $1 AND start_time_ms IS NOT NULL AND start_time_ms <= $2
+    """, (round_id, t_ms))
+    shots = await db.fetch_all("""
+        SELECT guid, event_time, origin_x, origin_y, origin_z
+        FROM proximity_shot_fired
+        WHERE round_id = $1 AND event_time <= $2 AND origin_x IS NOT NULL
+    """, (round_id, t_ms))
+    locks = await db.fetch_all("""
+        SELECT guid, target_guid, start_time FROM proximity_aim_lock
+        WHERE round_id = $1 AND start_time <= $2 AND target_guid IS NOT NULL
+    """, (round_id, t_ms))
+
+    round_end_ms = await load_round_end_ms(db, round_id, tracks or {})
+    beliefs = obituary_beliefs(
+        [(r[0], r[1], r[2]) for r in (deaths or [])], holders, clock=clock,
+        round_end_ms=round_end_ms)
+    # ⭐ `locate` is what turns "he knows WHO" into "he knows who and roughly
+    # where". Without it both subject channels carried a name and no place, and
+    # `nearest_known_enemy_distance` could not return a value for any input.
+    locate = make_locator(tracks) if tracks else None
+    beliefs += contact_beliefs(
+        [(r[0], _ensure_attackers(r[1])) for r in (engagements or [])],
+        locate=locate)
+    beliefs += gunfire_beliefs(
+        [(r[0], r[1], float(r[2]), float(r[3]), float(r[4])) for r in (shots or [])],
+        positions, audible_radius=AUDIBLE_GUNFIRE_RADIUS)
+    beliefs += aim_lock_beliefs(
+        [(r[0], r[1], r[2]) for r in (locks or [])], locate=locate)
+
+    states = group_by_holder(beliefs)
+    # ⛔ Every player gets an entry, including one with no beliefs: otherwise a
+    # player who learned nothing and a player we could not model look identical.
+    for guid in holders:
+        states.setdefault(guid, HolderState(holder_guid=guid))
+    apply_capability(
+        states, {"capabilities": capture_policy.capabilities}, holders)
+
+    return {
+        "holders": {
+            guid: belief_payload(state, t_ms, positions.get(guid))
+            for guid, state in states.items()
+        },
+        "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS,
+    }
+
+
+def _ensure_attackers(value) -> list:
+    """`attackers` comes back as a list from asyncpg and as text from others."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except ValueError:
+            return []
+    return value or []
+
+
 async def get_round_snapshot(
     db, round_id: int, t_ms: int, *, max_stale_ms: int | None = None,
-    velocity_max_dt_ms: int | None = None,
+    velocity_max_dt_ms: int | None = None, pov: str | None = None,
 ) -> dict[str, Any]:
     """One reconstructed moment of a round, as a plain dict.
 
@@ -748,6 +949,32 @@ async def get_round_snapshot(
     )
     separation = nearest_teammate_separation(snap)
     policy = await load_capture_policy(db, round_id)
+    clock = await load_round_clock(db, round_id, t_ms)
+    information = await load_round_information_state(
+        db, round_id, t_ms, snap, clock, policy, tracks
+    ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
+
+    # ⭐ `pov` selects WHOSE picture is returned, the interaction VALORANT's
+    # replay tool settled on: switch between a player and the omniscient view.
+    # Their known limitation is that the minimap cannot be restricted; ours can,
+    # because the information state is data rather than a rendering choice.
+    #
+    # ⛔ `world` is the oracle. It is a named diagnostic (§6.4) and never a
+    # belief source — which is why it is spelled out rather than being the
+    # silent default.
+    if pov and pov != "world":
+        holders = information.get("holders", {})
+        information = {
+            **information,
+            "holders": {pov: holders[pov]} if pov in holders else {},
+            "pov": pov,
+            "pov_unavailable": (
+                None if pov in holders
+                else f"{pov} has no reconstructed state in this round at t={t_ms}"
+            ),
+        }
+    else:
+        information = {**information, "pov": pov or "world"}
     payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
@@ -760,7 +987,8 @@ async def get_round_snapshot(
             "manifest_count": policy.manifest_count,
             "conflicting_flags": policy.conflicting_flags,
         },
-        "clock": await load_round_clock(db, round_id, t_ms),
+        "clock": clock,
+        "information_state": information,
         "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,
