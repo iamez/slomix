@@ -978,6 +978,27 @@ async def get_round_snapshot(
     payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
+        # ⭐ Which map, and how long the round ran. Both were missing, and both
+        # are things a snapshot cannot be complete without: a consumer holding
+        # a moment of a round had no way to say WHERE it happened, so it could
+        # not load that map's geometry, and no way to bound a time control
+        # without guessing a duration. `map_name` comes off the tracks that
+        # were already loaded; the duration is `shared/round_time.py`, never
+        # `rounds.actual_time` (that column is the stopwatch target and
+        # overstates about 15% of rounds).
+        "map_name": next(
+            (t[7] for lives in (tracks or {}).values() for t in lives if t[7]), None
+        ),
+        "round_duration_ms": await load_round_end_ms(db, round_id, tracks or {}),
+        # ⚠️ When the round first HAS anybody. At t=0 no player has spawned, so
+        # a viewer opening at zero sees an empty map and reads it as "nobody was
+        # there" — the warmup trap this project has already been caught by once
+        # on the live page. Taken from the tracks in memory, not guessed as a
+        # fraction of the duration.
+        "first_position_ms": min(
+            (t[4] for lives in (tracks or {}).values() for t in lives
+             if t[4] is not None), default=None
+        ),
         "capture_policy": {
             "mode": policy.mode,
             "observation_interval_ms": policy.observation_interval_ms,
