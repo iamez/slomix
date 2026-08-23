@@ -55,6 +55,11 @@ htmlcov/
 # NODE / REACT
 # ============================================
 node_modules/
+# ⚠️ Without the slash too: a worktree that shares the dev tree's packages does
+# it with a SYMLINK, and `node_modules/` matches directories only — so the link
+# showed up as untracked and one `git add -A` away from committing a pointer
+# into someone's home directory.
+node_modules
 website/frontend/test-results/
 website/frontend/playwright-report/
 gemini-website/dist/
