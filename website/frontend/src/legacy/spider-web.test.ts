@@ -20,7 +20,9 @@
 import { describe, expect, it } from 'vitest';
 
 // @ts-expect-error - legacy JS module, no type declarations
-import { placeLabels, project, statusLine, viewportFor } from '../../../js/spider-web.js';
+import {
+  boundsFromPlayers, placeLabels, project, statusLine, viewportFor,
+} from '../../../js/spider-web.js';
 
 const VIEW = { cx: 500, cy: 300, scale: 0.1, midX: 0, midY: 0, midZ: 0 };
 const CAM = { yaw: 0.6, pitch: 0.9, zoom: 1, panX: 0, panY: 0 };
@@ -197,5 +199,40 @@ describe('statusLine', () => {
 
   it('is empty rather than fabricated when there is no snapshot', () => {
     expect(statusLine(null)).toBe('');
+  });
+});
+
+describe('boundsFromPlayers', () => {
+  // ⛔ Twelve of the twenty maps in the corpus ship no geometry — the eight most
+  // played were published and the rest carry 1-4 rounds each. Before this, a
+  // missing mesh meant the renderer drew NOTHING: not the floors it does not
+  // have, and not the players it does. The positions are known; only the space
+  // is missing, and a black rectangle says neither.
+  it('brackets the players it was given', () => {
+    const players = [
+      { x: -100, y: 50, z: 0 },
+      { x: 900, y: -200, z: 320 },
+    ];
+    const b = boundsFromPlayers(players);
+    expect(b.min[0]).toBeLessThanOrEqual(-100);
+    expect(b.max[0]).toBeGreaterThanOrEqual(900);
+    expect(b.min[1]).toBeLessThanOrEqual(-200);
+    expect(b.max[2]).toBeGreaterThanOrEqual(320);
+  });
+
+  it('ignores players who have no position', () => {
+    const b = boundsFromPlayers([{ x: 10, y: 10, z: 10 }, { name: 'gap' }]);
+    expect(b.min).toEqual([10, 10, 10].map((v) => v - 512));
+  });
+
+  it('is null when nobody can be placed, rather than a point at the origin', () => {
+    expect(boundsFromPlayers([])).toBeNull();
+    expect(boundsFromPlayers([{ name: 'gap' }])).toBeNull();
+  });
+
+  it('never collapses to zero span, which would divide the scale by nothing', () => {
+    const b = boundsFromPlayers([{ x: 5, y: 5, z: 5 }]);
+    expect(b.max[0] - b.min[0]).toBeGreaterThan(0);
+    expect(b.max[1] - b.min[1]).toBeGreaterThan(0);
   });
 });

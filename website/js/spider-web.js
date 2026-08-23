@@ -145,6 +145,30 @@ export function viewportFor(mesh, canvas, cam) {
     };
 }
 
+/**
+ * Bounds taken from the players themselves, for a map with no exported floors.
+ *
+ * ⛔ Twelve of the twenty maps in the corpus ship no geometry: the eight most
+ * played were published and the rest carry one to four rounds each. Without
+ * this the renderer drew NOTHING on them — not the floors it does not have,
+ * and not the players it does. The positions are known and the space is not,
+ * and a black rectangle says neither of those things.
+ *
+ * Returns null when nobody can be placed, rather than a point at the world
+ * origin: a zero span would scale the whole canvas onto one pixel.
+ */
+export function boundsFromPlayers(players, margin = 512) {
+    const placed = (players || []).filter(
+        (p) => p && p.x != null && p.y != null && p.z != null);
+    if (!placed.length) return null;
+    const axis = (k) => placed.map((p) => p[k]);
+    const [xs, ys, zs] = [axis('x'), axis('y'), axis('z')];
+    return {
+        min: [Math.min(...xs) - margin, Math.min(...ys) - margin, Math.min(...zs) - margin],
+        max: [Math.max(...xs) + margin, Math.max(...ys) + margin, Math.max(...zs) + margin],
+    };
+}
+
 // ── Drawing ───────────────────────────────────────────────────────────────────
 
 function drawFloors(ctx, mesh, cam, view) {
@@ -271,12 +295,16 @@ function render(canvas) {
     ctx.fillStyle = '#0a0d14';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    if (!state.mesh) return;
-    const view = viewportFor(state.mesh, canvas, state.camera);
-    drawFloors(ctx, state.mesh, state.camera, view);
-    if (state.snapshot && Array.isArray(state.snapshot.players)) {
-        drawPlayers(ctx, state.snapshot.players, state.camera, view);
-    }
+    const players = (state.snapshot && state.snapshot.players) || [];
+    // A map without floors still has people in it. Falling back to the extent
+    // of the players keeps them on screen, and the banner above the canvas is
+    // what says the space is missing.
+    const bounds = state.mesh ? state.mesh.bounds : boundsFromPlayers(players);
+    if (!bounds) return;
+
+    const view = viewportFor({ bounds }, canvas, state.camera);
+    if (state.mesh) drawFloors(ctx, state.mesh, state.camera, view);
+    if (Array.isArray(players)) drawPlayers(ctx, players, state.camera, view);
 }
 
 // ── Data ──────────────────────────────────────────────────────────────────────
@@ -366,7 +394,11 @@ export async function loadSpiderWebView(params = {}) {
     try {
         snapshot = await loadMoment(roundId, state.tMs || 0);
         if (!state.tMs && snapshot && snapshot.first_position_ms) {
-            state.tMs = snapshot.first_position_ms;
+            // Clamped here too. The payload is fixed, but the endpoint answers
+            // `t < 0` with a 422 and this page's only response to that is
+            // "could not load" — a floor the caller can enforce for itself
+            // costs one call to Math.max.
+            state.tMs = Math.max(0, snapshot.first_position_ms);
             snapshot = await loadMoment(roundId, state.tMs);
         }
     } catch {

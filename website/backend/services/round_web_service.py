@@ -995,10 +995,16 @@ async def get_round_snapshot(
         # there" — the warmup trap this project has already been caught by once
         # on the live page. Taken from the tracks in memory, not guessed as a
         # fraction of the duration.
-        "first_position_ms": min(
+        # ⛔ Never negative. The endpoint rejects `t < 0` with 422, so a
+        # negative value here is a moment the API refuses to serve — and 12.5%
+        # of rounds (113 of 906) have a track that spawned before the round's
+        # zero, during warmup. The page opened at that value, took the 422 and
+        # said "could not load", which made every one of those rounds
+        # unreachable. Someone who spawned before zero is present AT zero.
+        "first_position_ms": max(0, min(
             (t[4] for lives in (tracks or {}).values() for t in lives
-             if t[4] is not None), default=None
-        ),
+             if t[4] is not None), default=0
+        )) if tracks else None,
         "capture_policy": {
             "mode": policy.mode,
             "observation_interval_ms": policy.observation_interval_ms,
