@@ -13,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from website.backend.services import information_state
 from website.backend.services.information_state import (
     CONFIDENCE_FLOOR,
     DECAY_TAU_S,
@@ -23,6 +24,8 @@ from website.backend.services.information_state import (
     INDIRECT_WEAPON_IDS,
     MAX_OBSERVED_REINFORCE_MS,
     OBSERVED_OUT_OF_ACTION,
+    POSITION_CLAIM_MAX_RADIUS,
+    UNCERTAIN_AFTER_DOWN,
     BeliefItem,
     HolderState,
     Region,
@@ -39,6 +42,7 @@ from website.backend.services.information_state import (
     resolves_a_subject,
     to_dict,
 )
+from website.backend.services.reconstruction_accuracy import reach_bound
 
 
 class TestGunfireResolvesNoOne:
@@ -126,11 +130,12 @@ class TestDistanceIsAnInterval:
         tight = believe("BBB", 560.0, 40.0)
         pos = (0.0, 0.0, 0.0)
         expected = {"min": 500.0, "max": 600.0}
-        # Order must not matter: this is a property of the set of beliefs.
+        # Asked at the observation instant, so the regions have not grown yet
+        # and this isolates the choice of bounds from `region_at`.
         assert nearest_known_enemy_distance(
-            HolderState("H", [wide, tight]), 1000, pos) == expected
+            HolderState("H", [wide, tight]), 0, pos) == expected
         assert nearest_known_enemy_distance(
-            HolderState("H", [tight, wide]), 1000, pos) == expected
+            HolderState("H", [tight, wide]), 0, pos) == expected
 
     def test_the_interval_never_inverts(self):
         """min <= max holds however the two bounds are chosen."""
@@ -143,7 +148,7 @@ class TestDistanceIsAnInterval:
         state = HolderState("H", [believe("A", 2000.0, 100.0),
                                   believe("B", 300.0, 250.0),
                                   believe("C", 900.0, 600.0)])
-        out = nearest_known_enemy_distance(state, 1000, (0.0, 0.0, 0.0))
+        out = nearest_known_enemy_distance(state, 0, (0.0, 0.0, 0.0))
         assert out["min"] <= out["max"]
 
     def test_a_zero_length_life_is_never_believed(self):
@@ -158,6 +163,101 @@ class TestDistanceIsAnInterval:
         belief = BeliefItem(holder_guid="H", source="obituary", t_observed=5_000,
                             subject_guid="X", expires_at_ms=5_000)
         assert belief.confidence(5_000) == 0.0
+
+
+class TestTheRegionWidensWithAge:
+    """§6.3 line 594: "a region ... whose uncertainty grows with time".
+
+    The first version had a fixed radius and decayed only the confidence, so a
+    contact belief still claimed +/-44 units seven seconds later — while the
+    subject could be anywhere within about 2,200 (measured, 2.7M forward pairs).
+    A player is 40 units wide, so the claim was roughly 50x too tight at the
+    belief's maximum age.
+    """
+
+    def _seen(self, t_observed=0):
+        return BeliefItem(
+            holder_guid="H", source="contact_hit", t_observed=t_observed,
+            region=Region(1000.0, 0.0, 0.0, 44.0), subject_guid="X")
+
+    def test_at_the_observed_instant_it_is_the_reconstruction_error(self):
+        assert self._seen().region_at(0).radius == 44.0
+
+    def test_it_grows_by_the_measured_reach(self):
+        belief = self._seen()
+        assert belief.region_at(4_500).radius == 44.0 + reach_bound(4_500)
+
+    def test_it_never_shrinks(self):
+        belief = self._seen()
+        radii = [belief.region_at(t).radius for t in range(0, 9_000, 500)]
+        assert radii == sorted(radii)
+
+    def test_the_centre_never_moves(self):
+        """Only the uncertainty grows. Moving the centre would be inventing a
+        direction of travel that nothing observed."""
+        belief = self._seen()
+        early, late = belief.region_at(0), belief.region_at(7_000)
+        assert (early.x, early.y, early.z) == (late.x, late.y, late.z)
+
+    def test_a_belief_with_no_region_stays_without_one(self):
+        contact = BeliefItem(holder_guid="H", source="contact_hit",
+                             t_observed=0, subject_guid="X")
+        assert contact.region_at(5_000) is None
+
+
+class TestThePositionClaimHasAHorizon:
+    """A region wide enough to hold half the map is not a distance claim.
+
+    Growth alone makes the derived distance useless rather than wrong: without
+    a horizon every holder reports an interval, 82% of them saying "he could be
+    right on top of me". The cap is what keeps the number meaning something,
+    and it is published so a reader can see WHY there is no number.
+    """
+
+    def _seen(self, t_observed, x=1000.0):
+        return BeliefItem(
+            holder_guid="H", source="contact_hit", t_observed=t_observed,
+            region=Region(x, 0.0, 0.0, 44.0), subject_guid="X",
+            expires_at_ms=100_000)
+
+    def test_a_belief_grown_past_the_horizon_yields_no_distance(self):
+        state = HolderState("H", [self._seen(0)])
+        # At 7 s the reach bound is 2,170 units, far past the 1,000 cap.
+        assert nearest_known_enemy_distance(state, 7_000, (0.0, 0.0, 0.0)) is None
+
+    def test_a_fresh_belief_still_yields_one(self):
+        state = HolderState("H", [self._seen(0)])
+        out = nearest_known_enemy_distance(state, 500, (0.0, 0.0, 0.0))
+        assert out is not None
+        assert out["max"] - out["min"] == pytest.approx(2 * (44.0 + reach_bound(500)))
+
+    @pytest.mark.parametrize("cap", [500.0, 1000.0])
+    def test_a_stricter_horizon_is_never_more_generous(self, cap, monkeypatch):
+        """⭐ Pins the PROPERTY, not the number: the owner intends to move this
+        threshold (1,000 now, possibly 500 later), and a test written against
+        one value would have to be rewritten rather than re-run."""
+        beliefs = [self._seen(t) for t in (0, 2_000, 4_000, 6_000)]
+        state = HolderState("H", beliefs)
+        monkeypatch.setattr(information_state, "POSITION_CLAIM_MAX_RADIUS", 1000.0)
+        loose = nearest_known_enemy_distance(state, 6_500, (0.0, 0.0, 0.0))
+        monkeypatch.setattr(information_state, "POSITION_CLAIM_MAX_RADIUS", cap)
+        strict = nearest_known_enemy_distance(state, 6_500, (0.0, 0.0, 0.0))
+        if strict is None:
+            return
+        assert loose is not None
+        assert strict["max"] - strict["min"] <= loose["max"] - loose["min"]
+
+    def test_the_payload_publishes_the_grown_radius_not_the_stored_one(self):
+        state = HolderState("H", [self._seen(0)])
+        payload = to_dict(state, 3_000, (0.0, 0.0, 0.0))
+        region = payload["beliefs"][0]["region"]
+        assert region["radius"] == 44.0 + reach_bound(3_000)
+
+    def test_the_payload_publishes_the_horizon_itself(self):
+        """A missing number must be explicable. Without the threshold in the
+        payload, "no distance" and "no enemy known" look identical."""
+        payload = to_dict(HolderState("H", [self._seen(0)]), 7_000, (0.0, 0.0, 0.0))
+        assert payload["position_claim_max_radius"] == POSITION_CLAIM_MAX_RADIUS
 
 
 class TestDecay:
@@ -258,6 +358,97 @@ class TestRosterStateExpiry:
         """⚠️ 35 s, not the 30 s "everyone knows" ET uses: the intervals present
         in proximity_spawn_timing are 15, 20, 25, 30 AND 35."""
         assert MAX_OBSERVED_REINFORCE_MS == 35_000
+
+
+class TestTheHolderRetainsUncertainAfterDown:
+    """§6.3 line 590: "the holder **retains** `uncertain_after_down`".
+
+    The docstring claimed this transition from the day it was written and the
+    code never performed it — the constant was defined and used nowhere, and at
+    the wave the belief simply vanished. The holder went from "he is down"
+    straight to nothing, when what they actually learn is "his team can have
+    spawned him by now", which is knowledge, not silence.
+
+    ⛔ A wave says someone COULD be back. It never identifies which GUID
+    spawned, so this is never promoted to server truth.
+    """
+
+    ROUND_END = 600_000
+
+    def _beliefs(self, death_ms=30_000, interval=20_000, offset=15_000):
+        return obituary_beliefs(
+            [("VICTIM", "axis", death_ms)], ["HOLDER", "VICTIM"],
+            clock={"axis": {"interval_ms": interval, "offset_ms": offset}},
+            round_end_ms=self.ROUND_END)
+
+    def _at(self, beliefs, t_ms):
+        return [b for b in beliefs if b.confidence(t_ms) > 0.0]
+
+    def test_before_the_wave_he_is_simply_down(self):
+        live = self._at(self._beliefs(), 31_000)
+        assert [b.roster_state for b in live] == [OBSERVED_OUT_OF_ACTION]
+
+    def test_at_the_wave_the_belief_changes_rather_than_disappears(self):
+        beliefs = self._beliefs()
+        expiry = next(b.expires_at_ms for b in beliefs
+                      if b.roster_state == OBSERVED_OUT_OF_ACTION)
+        live = self._at(beliefs, expiry + 1)
+        assert [b.roster_state for b in live] == [UNCERTAIN_AFTER_DOWN]
+
+    def test_it_lasts_until_the_round_ends_and_no_longer(self):
+        beliefs = self._beliefs()
+        assert self._at(beliefs, self.ROUND_END - 1)
+        assert not self._at(beliefs, self.ROUND_END)
+
+    def test_it_is_not_counted_as_a_known_enemy(self):
+        """⛔ Knowledge that someone exists is not knowledge of them now.
+        Counting it would mean the count never falls for the rest of the round.
+        """
+        beliefs = self._beliefs()
+        state = HolderState("HOLDER", [b for b in beliefs if b.holder_guid == "HOLDER"])
+        expiry = next(b.expires_at_ms for b in beliefs
+                      if b.roster_state == OBSERVED_OUT_OF_ACTION)
+        assert known_enemy_count(state, expiry - 1) == 1
+        assert known_enemy_count(state, expiry + 1) == 0
+
+    def test_the_payload_never_contradicts_the_count(self):
+        """⭐ The two are computed by ONE rule now. When they were separate
+        expressions a belief could be `counts_as_known` in the payload and
+        absent from the count in the same response.
+
+        ⚠️ DISTINCT SUBJECTS, not flagged items. The count has always been
+        "enemies you could name", so a holder with two live beliefs about one
+        player counts them once. Asserting item equality passed here only
+        because this fixture has a single subject, and a runtime check over 457
+        real samples read 135 "contradictions" that were nothing but that.
+        """
+        beliefs = self._beliefs()
+        state = HolderState("HOLDER", [b for b in beliefs if b.holder_guid == "HOLDER"])
+        for t in (31_000, 34_000, 36_000, 120_000):
+            payload = to_dict(state, t, (0.0, 0.0, 0.0))
+            named = {b["subject_guid"] for b in payload["beliefs"] if b["counts_as_known"]}
+            assert len(named) == payload["known_enemy_count"], f"t={t}"
+
+    def test_only_the_latest_death_of_a_player_produces_beliefs(self):
+        """⛔ Roster state is one fact per subject, not a history.
+
+        Every death used to emit its own pair, and `uncertain_after_down` runs
+        to round end, so they accumulate: a runtime pass over three rounds put
+        16,472 of them in the payloads against 1,092 `observed_out_of_action`.
+        Five deaths do not make a player five-times-uncertain — only the most
+        recent one describes where he stands now.
+        """
+        beliefs = obituary_beliefs(
+            [("VICTIM", "axis", 10_000), ("VICTIM", "axis", 60_000)],
+            ["HOLDER", "VICTIM"],
+            clock={"axis": {"interval_ms": 20_000, "offset_ms": 15_000}},
+            round_end_ms=self.ROUND_END)
+        assert {b.t_observed for b in beliefs if b.roster_state == OBSERVED_OUT_OF_ACTION} \
+            == {60_000}
+        assert len([b for b in beliefs if b.roster_state == UNCERTAIN_AFTER_DOWN]) == 1
+
+    def test_the_victim_never_holds_a_belief_about_their_own_death(self):
+        assert all(b.holder_guid != "VICTIM" for b in self._beliefs())
 
 
 class TestContactIsAsymmetric:
