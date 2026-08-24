@@ -68,4 +68,9 @@ describe('withAlpha', () => {
     expect(withAlpha('rgba(56, 189, 248, 0.9)', 2)).toBe('rgba(56, 189, 248, 1)');
     expect(withAlpha('#8bb0d6', 0.5)).toBe('#8bb0d6');
   });
+
+  it('keeps the colour on non-finite alpha instead of emitting rgba(..., NaN)', () => {
+    expect(withAlpha('rgb(56, 189, 248)', Number.NaN)).toBe('rgb(56, 189, 248)');
+    expect(withAlpha('rgb(56, 189, 248)', Infinity)).toBe('rgb(56, 189, 248)');
+  });
 });

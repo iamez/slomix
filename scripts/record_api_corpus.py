@@ -67,7 +67,9 @@ def mint_owner_cookie() -> str:
     from dotenv import dotenv_values  # noqa: PLC0415
 
     env = dotenv_values(REPO_ROOT / "website" / ".env")
-    secret = env.get("SESSION_SECRET") or os.getenv("SESSION_SECRET")
+    # ENV first, file second — the house priority (ENV > config > defaults);
+    # the reversed order signed cookies with a stale file value (CodeRabbit).
+    secret = os.getenv("SESSION_SECRET") or env.get("SESSION_SECRET")
     if not secret:
         raise SystemExit("SESSION_SECRET not found in website/.env")
     payload = base64.b64encode(

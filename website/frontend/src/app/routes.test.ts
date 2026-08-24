@@ -18,6 +18,7 @@ const SAMPLE_PARAMS = new Map<string, Record<string, unknown>>(Object.entries({
   'proximity-player': { guid: '1C747DF1' },
   'proximity-replay': { roundId: '11277' },
   'proximity-teams': { roundId: '11277' },
+  'spider-web': { roundId: '11277' },
   greatshot: { section: 'demos' },
   'greatshot-demo': { demoId: 'abc123' },
   'upload-detail': { uploadId: 'de4f8d86' },
@@ -26,6 +27,29 @@ const SAMPLE_PARAMS = new Map<string, Record<string, unknown>>(Object.entries({
 }));
 
 const appByKey = new Map(APP_ROUTES.map((r) => [r.key, r]));
+
+/**
+ * Convert a react-router path pattern to a matcher: ':param' matches one
+ * segment, a trailing '?' makes it optional. Translating a hash must land on
+ * a REGISTERED route — '/leadeboards' is slash-prefixed and still a 404
+ * (CodeRabbit on #802).
+ */
+function patternToRegex(pattern: string): RegExp {
+  const parts = pattern.split('/').filter(Boolean).map((seg) => {
+    const optional = seg.endsWith('?');
+    const core = optional ? seg.slice(0, -1) : seg;
+    const piece = core.startsWith(':') ? '[^/]+' : core.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return optional ? `(?:/${piece})?` : `/${piece}`;
+  });
+  return new RegExp(`^${parts.join('')}$`);
+}
+
+const ROUTE_MATCHERS = APP_ROUTES.map((r) => patternToRegex(r.path));
+
+function matchesRegisteredRoute(pathname: string): boolean {
+  if (pathname === '/') return true;
+  return ROUTE_MATCHERS.some((rx) => rx.test(pathname));
+}
 
 describe('routes.ts covers the legacy registry', () => {
   const definitions = listRouteDefinitions() as Record<string, { label: string }>;
@@ -36,12 +60,16 @@ describe('routes.ts covers the legacy registry', () => {
       expect(appByKey.has(target), `no APP_ROUTES entry for '${target}'`).toBe(true);
     });
 
-    it(`legacy hash for '${key}' maps to a non-empty path`, () => {
+    it(`legacy hash for '${key}' maps to a REGISTERED route`, () => {
       const hash = getRouteHash(key, SAMPLE_PARAMS.get(key) ?? {});
       // home builds '' by design — the shim maps that to '/' via empty hash.
       const mapped = hashToPath(hash || '#/');
       expect(mapped, `hashToPath('${hash}') came back empty`).toBeTruthy();
-      expect(mapped.startsWith('/')).toBe(true);
+      const pathname = mapped.split('?')[0];
+      expect(
+        matchesRegisteredRoute(pathname),
+        `'${pathname}' (from '${hash}') matches no APP_ROUTES pattern — the router would render Not Found`,
+      ).toBe(true);
     });
   }
 

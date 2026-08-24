@@ -26,7 +26,11 @@ export function clamp(value: number, min: number, max: number): number {
 
 export function withAlpha(color: string, alpha: number): string {
   if (typeof color !== 'string') return color;
-  const value = clamp(Number(alpha), 0, 1);
+  // Deliberate divergence from the verbatim legacy source: NaN alpha there
+  // produced 'rgba(..., NaN)', which a canvas silently discards — the same
+  // bug class #803's alphaHex fixed. Non-finite alpha keeps the colour.
+  if (!Number.isFinite(alpha)) return color;
+  const value = clamp(alpha, 0, 1);
   const rgbaMatch = color.match(/^rgba\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\)$/i);
   if (rgbaMatch) {
     return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, ${value})`;

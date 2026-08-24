@@ -65,14 +65,27 @@ def _read_path_list(file: Path) -> set[str]:
     return lines
 
 
+# A candidate shorter than this many segments ("/api/proximity" = 2) may NOT
+# claim coverage of deeper required paths: one templated call captured as a
+# bare family prefix would otherwise clear every /api/proximity/* line and
+# hide missing migration work (CodeRabbit on #802).
+_MIN_COVERING_SEGMENTS = 3
+
+
 def _covered(required: str, new_paths: set[str]) -> bool:
-    """A required path counts as covered when a new-tree path equals it or
-    is a prefix of it (the new literal was captured before a dynamic
-    segment), or extends it (required itself was a truncated legacy prefix)."""
+    """A required path counts as covered when a new-tree path equals it, is a
+    sufficiently specific prefix of it (the new literal was captured before a
+    dynamic segment), or extends it (required itself was a truncated legacy
+    prefix)."""
     for candidate in new_paths:
         if candidate == required:
             return True
-        if required.startswith(candidate + "/") or candidate.startswith(required + "/"):
+        if candidate.startswith(required + "/"):
+            return True
+        if (
+            required.startswith(candidate + "/")
+            and len(_segments := [seg for seg in candidate.split("/") if seg]) >= _MIN_COVERING_SEGMENTS
+        ):
             return True
     return False
 
