@@ -29,29 +29,37 @@ const SAMPLE_PARAMS = new Map<string, Record<string, unknown>>(Object.entries({
 const appByKey = new Map(APP_ROUTES.map((r) => [r.key, r]));
 
 /**
- * Convert a react-router path pattern to a matcher: ':param' matches one
- * segment, a trailing '?' makes it optional. Translating a hash must land on
- * a REGISTERED route — '/leadeboards' is slash-prefixed and still a 404
- * (CodeRabbit on #802).
+ * Segment-wise route matcher: ':param' matches one segment, a trailing '?'
+ * makes it optional. Translating a hash must land on a REGISTERED route —
+ * '/leadeboards' is slash-prefixed and still a 404 (CodeRabbit on #802).
+ * Written without RegExp on purpose: dynamic patterns trip three different
+ * non-literal-RegExp scanners, and segments compare cleaner anyway.
  */
-function patternToRegex(pattern: string): RegExp {
-  const parts = pattern.split('/').filter(Boolean).map((seg) => {
-    const optional = seg.endsWith('?');
-    const core = optional ? seg.slice(0, -1) : seg;
-    const piece = core.startsWith(':') ? '[^/]+' : core.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return optional ? `(?:/${piece})?` : `/${piece}`;
-  });
-  // Input is our own APP_ROUTES constant table, not user data (test-only).
-  // eslint-disable-next-line security/detect-non-literal-regexp
-  // nosemgrep
-  return new RegExp(`^${parts.join('')}$`);
+function matchesPattern(pathname: string, pattern: string): boolean {
+  const want = pattern.split('/').filter(Boolean);
+  const have = pathname.split('/').filter(Boolean);
+  let hi = 0;
+  for (const rawSeg of want) {
+    const optional = rawSeg.endsWith('?');
+    const seg = optional ? rawSeg.slice(0, -1) : rawSeg;
+    const actual = have[hi];
+    if (actual === undefined) {
+      if (optional) continue;
+      return false;
+    }
+    if (seg.startsWith(':') || seg === actual) {
+      hi += 1;
+      continue;
+    }
+    if (optional) continue;
+    return false;
+  }
+  return hi === have.length;
 }
-
-const ROUTE_MATCHERS = APP_ROUTES.map((r) => patternToRegex(r.path));
 
 function matchesRegisteredRoute(pathname: string): boolean {
   if (pathname === '/') return true;
-  return ROUTE_MATCHERS.some((rx) => rx.test(pathname));
+  return APP_ROUTES.some((r) => matchesPattern(pathname, r.path));
 }
 
 describe('routes.ts covers the legacy registry', () => {
