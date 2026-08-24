@@ -1,0 +1,748 @@
+/**
+ * Spider Web — one moment of a round, drawn as the place it happened in.
+ *
+ * The proximity overlay draws players on a levelshot, which is a photograph
+ * with no height in it: two players thirty metres apart vertically land on the
+ * same pixel. This draws the exported floor geometry instead, in an
+ * axonometric projection you can turn, so height is something you can see.
+ *
+ * ⭐ IT DRAWS UNCERTAINTY, NOT JUST POSITION. Every replay viewer in this genre
+ * — DEMO24, RoundIQ, Memorin — draws confident dots. Ours cannot honestly do
+ * that: a position is a floor sample up to some age old, and `position_error`
+ * carries the MEASURED p90 for that age (about 12 units when fresh and
+ * uncontested, about 875 when the reconstruction cannot tell which life a
+ * player was on). So a player is a disc the size of what we actually know,
+ * and a contested one is visibly a smear rather than a point.
+ *
+ * ⛔ A player with no state is NAMED, never omitted. `gaps` says why each one
+ * is missing, and a silent absence would read as "nobody was there".
+ *
+ * Canvas 2D on purpose. The whole scene is at most ~17,000 triangles and ten
+ * players, so WebGL would solve a problem we do not have, and the look this
+ * wants — thin linework, labels, readouts — is something 2D draws more
+ * sharply and without shaders.
+ *
+ * @module spider-web
+ */
+
+import { API_BASE, fetchJSON } from './utils.js';
+
+/** Safe DOM element factory. Strings become text nodes; nullish children skipped. */
+function _el(tag, className, ...children) {
+    const el = document.createElement(tag);
+    if (className) el.className = className;
+    for (const c of children) {
+        if (c == null) continue;
+        el.appendChild(typeof c === 'string' ? document.createTextNode(c) : c);
+    }
+    return el;
+}
+
+function stripEtColors(text) {
+    return String(text || '').replace(/\^[0-9A-Za-z]/g, '');
+}
+
+const GEOMETRY_BASE = '/assets/maps/geometry';
+
+/** Team colours. Axis warm, Allies cool — the same pairing the rest of the site uses. */
+const TEAM_COLOR = {
+    AXIS: '#f0a868',
+    ALLIES: '#6aa9f0',
+};
+const NEUTRAL = '#8892a4';
+
+let loadId = 0;
+
+const state = {
+    roundId: null,
+    pov: 'world',
+    teams: [],
+    tMs: 0,
+    durationMs: 0,
+    mesh: null,          // { vertices:[x,y,z,...], indexes:[i,i,i,...], bounds }
+    meshMapName: null,
+    snapshot: null,      // /replay/round/{id}/web payload
+    camera: { yaw: 0.6, pitch: 0.9, zoom: 1, panX: 0, panY: 0 },
+    drag: null,
+};
+
+// ── Projection ────────────────────────────────────────────────────────────────
+
+/**
+ * World (x, y, z) to screen, as an axonometric projection.
+ *
+ * Yaw turns the map about its vertical axis; pitch tips it towards the viewer.
+ * At pitch = 0 this is a plan view and heights collapse — which is exactly the
+ * levelshot's failure, so the default is tipped well away from it.
+ *
+ * ⚠️ Deliberately NOT perspective. A perspective camera makes two players the
+ * same distance apart look different sizes depending on where they stand, and
+ * this drawing is measured against a scale bar.
+ */
+export function project(x, y, z, cam, view) {
+    const cy = Math.cos(cam.yaw), sy = Math.sin(cam.yaw);
+    const rx = x * cy - y * sy;
+    const ry = x * sy + y * cy;
+    const cp = Math.cos(cam.pitch), sp = Math.sin(cam.pitch);
+    return {
+        x: view.cx + (rx * view.scale * cam.zoom) + cam.panX,
+        y: view.cy + ((ry * cp - z * sp) * view.scale * cam.zoom) + cam.panY,
+        // Depth for the painter's algorithm: further from the viewer sorts first.
+        depth: ry * sp + z * cp,
+    };
+}
+
+/**
+ * Screen scale and centre that fit the map into the canvas AT THIS ANGLE.
+ *
+ * ⚠️ Fitted in SCREEN space, not world space. The projection squashes one axis
+ * by cos(pitch) and shears height into it, so a scale derived from the world
+ * extent always under-fills — measured at the default angle, supply covered
+ * about a third of the canvas and the rest was margin. Projecting the eight
+ * corners of the map's bounding box and fitting THAT is the same arithmetic
+ * the renderer is about to do anyway, and it re-fits when the camera turns.
+ */
+export function viewportFor(mesh, canvas, cam) {
+    const b = mesh.bounds;
+    const mid = {
+        midX: (b.min[0] + b.max[0]) / 2,
+        midY: (b.min[1] + b.max[1]) / 2,
+        midZ: (b.min[2] + b.max[2]) / 2,
+        minZ: b.min[2],
+        maxZ: b.max[2],
+    };
+    const unit = { cx: 0, cy: 0, scale: 1, ...mid };
+    const flat = { ...cam, zoom: 1, panX: 0, panY: 0 };
+    let lo = { x: Infinity, y: Infinity }, hi = { x: -Infinity, y: -Infinity };
+    for (const cx of [b.min[0], b.max[0]]) {
+        for (const cy of [b.min[1], b.max[1]]) {
+            for (const cz of [b.min[2], b.max[2]]) {
+                const p = project(cx - mid.midX, cy - mid.midY, cz - mid.midZ, flat, unit);
+                lo = { x: Math.min(lo.x, p.x), y: Math.min(lo.y, p.y) };
+                hi = { x: Math.max(hi.x, p.x), y: Math.max(hi.y, p.y) };
+            }
+        }
+    }
+    const pad = 0.92;
+    const scale = Math.min(
+        (canvas.width * pad) / Math.max(1e-6, hi.x - lo.x),
+        (canvas.height * pad) / Math.max(1e-6, hi.y - lo.y),
+    );
+    // ⚠️ The recentring term is provably ZERO for the input this is given, and
+    // it is kept anyway. An axis-aligned box's eight corners are symmetric
+    // about its centre, `project` is linear, and the centre is subtracted
+    // before projecting — so the projected cloud is symmetric about the origin
+    // and `lo + hi` cancels. Measured over 20,000 random maps and camera
+    // angles: |lo + hi| / span never exceeded 1.9e-15.
+    //
+    // No test can catch its removal, so it is labelled rather than left for
+    // the next reader to hunt a test for. It stays because it is what makes
+    // this correct if the corner set ever stops being a box — fitting to the
+    // real geometry extent instead of the bounding box would do exactly that.
+    return {
+        cx: canvas.width / 2 - ((lo.x + hi.x) / 2) * scale,
+        cy: canvas.height / 2 - ((lo.y + hi.y) / 2) * scale,
+        scale,
+        ...mid,
+    };
+}
+
+/**
+ * Bounds taken from the players themselves, for a map with no exported floors.
+ *
+ * ⛔ Twelve of the twenty maps in the corpus ship no geometry: the eight most
+ * played were published and the rest carry one to four rounds each. Without
+ * this the renderer drew NOTHING on them — not the floors it does not have,
+ * and not the players it does. The positions are known and the space is not,
+ * and a black rectangle says neither of those things.
+ *
+ * Returns null when nobody can be placed, rather than a point at the world
+ * origin: a zero span would scale the whole canvas onto one pixel.
+ */
+export function boundsFromPlayers(players, margin = 512) {
+    const placed = (players || []).filter(
+        (p) => p && p.x != null && p.y != null && p.z != null);
+    if (!placed.length) return null;
+    const axis = (k) => placed.map((p) => p[k]);
+    const [xs, ys, zs] = [axis('x'), axis('y'), axis('z')];
+    return {
+        min: [Math.min(...xs) - margin, Math.min(...ys) - margin, Math.min(...zs) - margin],
+        max: [Math.max(...xs) + margin, Math.max(...ys) + margin, Math.max(...zs) + margin],
+    };
+}
+
+/**
+ * The enemy regions a point of view is entitled to draw.
+ *
+ * ⭐ Under a team view an enemy is NOT a dot. The holder never knew a point —
+ * they knew a place, from a contact or a crosshair or a noise, and that place
+ * has been widening ever since. So the region is what gets drawn, at the size
+ * the backend already grew it to, and its opacity is the belief's confidence.
+ *
+ * ⛔ Only beliefs that name a subject AND carry a region. A gunfire belief
+ * names nobody (§6.3, the phantom squad) and a roster belief has no place;
+ * drawing either as an enemy position would invent one.
+ */
+export function beliefRegions(holder) {
+    if (!holder || !Array.isArray(holder.beliefs)) return { regions: [], unplacedSubjects: [] };
+    // ⛔ Past the published horizon a region is NOT drawn. The backend already
+    // refuses to derive a distance from one that wide, and drawing it anyway
+    // makes the same overclaim in pixels: a 2,500-unit circle on a 4,600-unit
+    // map is not "he is somewhere here", it is the whole map. Those subjects
+    // are still KNOWN — they are reported as "position unknown" in words,
+    // which is what the holder actually had.
+    const horizon = typeof holder.position_claim_max_radius === 'number'
+        ? holder.position_claim_max_radius : Infinity;
+    const drawable = [];
+    const unplaced = new Set();
+    for (const b of holder.beliefs) {
+        if (!b || !b.subject_guid) continue;
+        if (!b.region) continue;
+        if (b.region.radius > horizon) {
+            unplaced.add(b.subject_guid);
+            continue;
+        }
+        drawable.push({
+            x: b.region.x, y: b.region.y, z: b.region.z,
+            radius: b.region.radius,
+            confidence: typeof b.confidence === 'number' ? b.confidence : 0,
+            subject: b.subject_guid,
+            source: b.source,
+        });
+    }
+    // A subject with one fresh region and one stale one is placed, not unplaced.
+    for (const d of drawable) unplaced.delete(d.subject);
+    // ⚠️ An object, not an array with a property bolted on: the second answer
+    // is as much part of the result as the first, and hiding it on the array
+    // made it invisible to any caller that treated the return as a list.
+    return { regions: drawable, unplacedSubjects: [...unplaced] };
+}
+
+/** The published horizon, or Infinity when a view does not carry one. */
+export function horizonOf(holder) {
+    return holder && typeof holder.position_claim_max_radius === 'number'
+        ? holder.position_claim_max_radius : Infinity;
+}
+
+/** Whether this view is one team's picture rather than the oracle's. */
+export function isTeamPov(pov) {
+    return typeof pov === 'string' && pov.toLowerCase().startsWith('team:');
+}
+
+// ── Drawing ───────────────────────────────────────────────────────────────────
+
+function drawFloors(ctx, mesh, cam, view) {
+    const { vertices, indexes } = mesh;
+    const zSpan = Math.max(1, view.maxZ - view.minZ);
+    const faces = [];
+
+    for (let i = 0; i + 2 < indexes.length; i += 3) {
+        const pts = [];
+        let depth = 0;
+        let zSum = 0;
+        for (let k = 0; k < 3; k++) {
+            const v = indexes[i + k] * 3;
+            const p = project(vertices[v] - view.midX, vertices[v + 1] - view.midY,
+                              vertices[v + 2] - view.midZ, cam, view);
+            pts.push(p);
+            depth += p.depth;
+            zSum += vertices[v + 2];
+        }
+        faces.push({ pts, depth: depth / 3, z: zSum / 3 });
+    }
+
+    // Painter's algorithm. With floors only — no walls, no overhangs to
+    // interpenetrate — sorting whole triangles is enough, and it costs one
+    // sort of ~10,000 items rather than a depth buffer.
+    faces.sort((a, b) => a.depth - b.depth);
+
+    for (const face of faces) {
+        // Height reads as brightness. Without it a plan-ish view of a
+        // multi-level map is an unreadable tangle of identical outlines.
+        const t = (face.z - view.minZ) / zSpan;
+        // Height reads as brightness AND opacity together. One alone is not
+        // enough separation on a map like te_escape2, whose floors span 2,100
+        // units: colour alone washes out, opacity alone loses the low ground.
+        const shade = 0.34 + 0.46 * t;
+        ctx.fillStyle = `rgba(${Math.round(96 + 104 * t)}, ${Math.round(132 + 96 * t)}, ${Math.round(176 + 74 * t)}, ${shade})`;
+        ctx.beginPath();
+        ctx.moveTo(face.pts[0].x, face.pts[0].y);
+        ctx.lineTo(face.pts[1].x, face.pts[1].y);
+        ctx.lineTo(face.pts[2].x, face.pts[2].y);
+        ctx.closePath();
+        ctx.fill();
+    }
+}
+
+/**
+ * How a thread between two players is drawn.
+ *
+ * ⚠️ `recently_contested` does NOT mean "fighting right now". The tracker holds
+ * an engagement open for up to 15 seconds after the last hit and closes it only
+ * on `escape_time_ms` plus 300 units of movement, so a contested edge can mean
+ * "was shot at fifteen seconds ago and has been standing still since". Drawn
+ * distinctly, but never as an alarm.
+ *
+ * ⛔ An edge is geometric separation, not tactical support. Two teammates joined
+ * by a short line may have a wall between them; line-of-sight is deliberately
+ * not a channel here (§6.1).
+ */
+export function edgeStyle(kind, contested) {
+    const opponent = kind === 'opponent';
+    return {
+        color: opponent ? '#e0705a' : '#5f8fbf',
+        width: contested ? 1.8 : 0.8,
+        dash: contested ? [] : [3, 4],
+        alpha: contested ? 0.75 : 0.28,
+    };
+}
+
+function drawEdges(ctx, edges, players, cam, view) {
+    const at = new Map();
+    for (const p of players) {
+        if (p.x == null || p.y == null || p.z == null) continue;
+        at.set(p.guid, project(p.x - view.midX, p.y - view.midY, p.z - view.midZ,
+                               cam, view));
+    }
+    // Contested last, so the threads that carry the most meaning are not
+    // buried under the ones that carry the least.
+    const ordered = [...edges].sort(
+        (x, y) => Number(!!x.recently_contested) - Number(!!y.recently_contested));
+
+    for (const e of ordered) {
+        const a = at.get(e.a);
+        const b = at.get(e.b);
+        // ⛔ Both ends or nothing. An edge drawn to a player we could not place
+        // would be a line to a position nobody occupied.
+        if (!a || !b) continue;
+        const st = edgeStyle(e.kind, !!e.recently_contested);
+        ctx.save();
+        ctx.globalAlpha = st.alpha;
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = st.width;
+        ctx.setLineDash(st.dash);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+function drawBeliefRegions(ctx, regions, cam, view) {
+    for (const r of regions) {
+        const c = project(r.x - view.midX, r.y - view.midY, r.z - view.midZ,
+                          cam, view);
+        const px = Math.max(3, r.radius * view.scale * cam.zoom);
+        // Confidence is the opacity, floored so a fading belief stays visible
+        // as a fading belief rather than disappearing into the background.
+        const a = Math.max(0.08, Math.min(0.5, r.confidence));
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, px, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(224, 112, 90, ${a * 0.25})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(224, 112, 90, ${a})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+function drawPlayers(ctx, players, cam, view) {
+    const drawn = [];
+    for (const p of players) {
+        if (p.x == null || p.y == null || p.z == null) continue;
+        const s = project(p.x - view.midX, p.y - view.midY, p.z - view.midZ, cam, view);
+        drawn.push({ p, s });
+    }
+    drawn.sort((a, b) => a.s.depth - b.s.depth);
+    const labels = [];
+
+    for (const { p, s } of drawn) {
+        const color = TEAM_COLOR[String(p.team || '').toUpperCase()] || NEUTRAL;
+
+        // ⭐ The measured error, drawn at map scale. `position_error.p90` is
+        // what the reconstruction was shown to be worth for a sample this old
+        // in this life state — so a contested player is a wide, faint disc and
+        // a fresh one is nearly a point. This is the whole reason the accuracy
+        // work exists, and hiding it would put the prototype's flaw back.
+        const p90 = p.position_error && p.position_error.p90;
+        if (p90) {
+            const r = Math.max(2, p90 * view.scale * cam.zoom);
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+            ctx.fillStyle = `${color}1a`;
+            ctx.fill();
+            ctx.strokeStyle = `${color}55`;
+            ctx.lineWidth = 1;
+            ctx.setLineDash(p.overlap_conflict ? [4, 3] : []);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = p.alive === false ? '#00000000' : color;
+        ctx.fill();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+
+        labels.push({ x: s.x + 8, y: s.y + 3, text: stripEtColors(p.name) });
+    }
+
+    // ⚠️ Labels last, and only where one fits. At a spawn eight players stand
+    // within a few units of each other and their names print on top of one
+    // another into an unreadable smear. Nudging them apart would draw people
+    // where they were not, so a name that has no room is simply not drawn —
+    // the disc still shows the player is there.
+    ctx.fillStyle = '#c8d2e0';
+    ctx.font = '11px ui-monospace, monospace';
+    for (const l of placeLabels(labels)) {
+        ctx.fillText(l.text, l.x, l.y);
+    }
+}
+
+/**
+ * Which labels get drawn when several land on top of each other.
+ *
+ * ⛔ Drops, never nudges. At a spawn eight players stand within a few units of
+ * one another; moving their names apart would put a name beside a position
+ * nobody occupied, and this page's whole argument is that it does not draw
+ * things that were not there. The disc still shows the player.
+ */
+export function placeLabels(labels, minX = 70, minY = 13) {
+    const placed = [];
+    for (const l of labels) {
+        if (placed.some((q) => Math.abs(q.x - l.x) < minX
+                            && Math.abs(q.y - l.y) < minY)) {
+            continue;
+        }
+        placed.push(l);
+    }
+    return placed;
+}
+
+function render(canvas) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#0a0d14';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const players = (state.snapshot && state.snapshot.players) || [];
+    // A map without floors still has people in it. Falling back to the extent
+    // of the players keeps them on screen, and the banner above the canvas is
+    // what says the space is missing.
+    const bounds = state.mesh ? state.mesh.bounds : boundsFromPlayers(players);
+    if (!bounds) return;
+
+    const view = viewportFor({ bounds }, canvas, state.camera);
+    if (state.mesh) drawFloors(ctx, state.mesh, state.camera, view);
+
+    // Enemy beliefs beneath everything else: they are the least certain thing
+    // on the canvas and must not sit on top of what is known.
+    if (isTeamPov(state.pov)) {
+        const info = (state.snapshot && state.snapshot.information_state) || {};
+        const holder = Object.values(info.holders || {})[0];
+        drawBeliefRegions(ctx, beliefRegions(holder).regions, state.camera, view);
+    }
+
+    // Threads under the players: a dot must never be hidden by a line.
+    const edges = (state.snapshot && state.snapshot.edges) || [];
+    if (Array.isArray(edges)) drawEdges(ctx, edges, players, state.camera, view);
+    if (Array.isArray(players)) drawPlayers(ctx, players, state.camera, view);
+}
+
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+async function loadMesh(mapName) {
+    if (state.meshMapName === mapName && state.mesh) return state.mesh;
+    try {
+        const mesh = await fetchJSON(`${GEOMETRY_BASE}/${encodeURIComponent(mapName)}.json`);
+        state.mesh = mesh;
+        state.meshMapName = mapName;
+    } catch {
+        // ⛔ Named, not silent. `etl_supply` has no BSP in etmain and a handful
+        // of maps were never exported; drawing an empty stage would read as an
+        // empty round.
+        state.mesh = null;
+        state.meshMapName = mapName;
+    }
+    return state.mesh;
+}
+
+async function loadMoment(roundId, tMs, pov) {
+    // ⛔ The point of view is a QUERY PARAMETER, so the withholding happens on
+    // the server and each view is its own cache entry. Fetching the oracle once
+    // and filtering locally would be faster and would quietly undo the whole
+    // guarantee.
+    const params = new URLSearchParams({ t: String(Math.round(tMs)) });
+    if (pov && pov !== 'world') params.set('pov', pov);
+    // ⛔ Returns without touching shared state. It used to assign
+    // `state.snapshot` here, before the caller's staleness guard ran — so a
+    // superseded request still overwrote the current moment. Scrubbing fast,
+    // the request for an earlier `t` can settle after the one for a later `t`:
+    // the slider and readout then show the later moment while the snapshot
+    // holds the earlier one, and the next camera drag redraws the earlier
+    // moment under the later label. The winner commits (CodeRabbit, #800).
+    return fetchJSON(
+        `${API_BASE}/replay/round/${encodeURIComponent(roundId)}/web?${params}`
+    );
+}
+
+// ── View ──────────────────────────────────────────────────────────────────────
+
+export function statusLine(snapshot) {
+    if (!snapshot) return '';
+    const players = snapshot.players || [];
+    const positioned = players.filter((p) => p.x != null).length;
+    const stale = players.reduce((m, p) => Math.max(m, p.stale_ms || 0), 0);
+    const gaps = Object.keys(snapshot.gaps || {}).length;
+    return `${positioned}/${players.length} razrešenih · `
+        + `${snapshot.overlap_conflicts || 0} spornih življenj · `
+        + `najstarejši vzorec ${stale} ms`
+        + (gaps ? ` · ${gaps} brez stanja` : '');
+}
+
+function bindCamera(canvas, redraw) {
+    canvas.addEventListener('mousedown', (e) => {
+        state.drag = { x: e.clientX, y: e.clientY, ...state.camera };
+    });
+    window.addEventListener('mouseup', () => { state.drag = null; });
+    window.addEventListener('mousemove', (e) => {
+        if (!state.drag) return;
+        state.camera.yaw = state.drag.yaw + (e.clientX - state.drag.x) * 0.006;
+        // Clamped short of a plan view: at pitch 0 every height collapses onto
+        // one line, which is the levelshot's failure this page exists to undo.
+        state.camera.pitch = Math.min(1.45, Math.max(0.15,
+            state.drag.pitch - (e.clientY - state.drag.y) * 0.005));
+        redraw();
+    });
+    canvas.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        state.camera.zoom = Math.min(8, Math.max(0.4,
+            state.camera.zoom * (e.deltaY < 0 ? 1.1 : 1 / 1.1)));
+        redraw();
+    }, { passive: false });
+}
+
+export async function loadSpiderWebView(params = {}) {
+    const container = document.getElementById('spider-web-container');
+    if (!container) return;
+
+    const myLoad = ++loadId;
+    const roundId = params.roundId || state.roundId;
+    container.textContent = '';
+
+    if (!roundId) {
+        container.appendChild(_el('p', 'text-slate-400 text-sm py-12 text-center',
+            'Izberi rundo: #/spider-web/round/<id>'));
+        return;
+    }
+    state.roundId = roundId;
+
+    container.appendChild(_el('p', 'text-slate-400 text-sm py-12 text-center',
+        'Nalagam rundo…'));
+
+    // ⚠️ Opening at t=0 shows an empty map: nobody has spawned yet, and the
+    // page would read as "nobody was there". The payload says when the round
+    // first has anybody, so the first frame is a moment that exists.
+    let snapshot;
+    try {
+        snapshot = await loadMoment(roundId, state.tMs || 0, state.pov);
+        state.snapshot = snapshot;
+        if (!state.tMs && snapshot && snapshot.first_position_ms) {
+            // Clamped here too. The payload is fixed, but the endpoint answers
+            // `t < 0` with a 422 and this page's only response to that is
+            // "could not load" — a floor the caller can enforce for itself
+            // costs one call to Math.max.
+            state.tMs = Math.max(0, snapshot.first_position_ms);
+            snapshot = await loadMoment(roundId, state.tMs, state.pov);
+            state.snapshot = snapshot;
+        }
+    } catch {
+        if (myLoad !== loadId) return;
+        container.textContent = '';
+        container.appendChild(_el('p', 'text-rose-400 text-sm py-12 text-center',
+            `Runde ${roundId} ni bilo mogoče naložiti.`));
+        return;
+    }
+    if (myLoad !== loadId) return;
+
+    const mapName = (snapshot.players || []).length ? snapshot.map_name : snapshot.map_name;
+    await loadMesh(mapName || '');
+    if (myLoad !== loadId) return;
+
+    container.textContent = '';
+
+    // Teams are learned from the oracle load and kept: under a team view the
+    // payload no longer contains the other side, so the switch would lose its
+    // own options after the first click.
+    if (!state.teams.length) {
+        state.teams = [...new Set((snapshot.players || [])
+            .map((p) => p.team).filter(Boolean))].sort();
+    }
+
+    const header = _el('div', 'mb-3');
+    header.appendChild(_el('h2', 'text-lg font-semibold text-slate-100',
+        `Spider Web · runda ${roundId}${mapName ? ` · ${mapName}` : ''}`));
+    const status = _el('p', 'text-xs text-slate-400 font-mono', statusLine(snapshot));
+    header.appendChild(status);
+    container.appendChild(header);
+
+    if (!state.mesh) {
+        container.appendChild(_el('p', 'text-amber-400 text-sm mb-3',
+            `Za mapo ${mapName || '?'} ni izvožene geometrije — lege so znane, prostor ni.`));
+    }
+
+    // ⭐ Point of view. §6.4 makes `world` a NAMED diagnostic, so it is spelled
+    // out as one rather than being the unlabelled default.
+    const povBar = _el('div', 'flex items-center gap-2 mb-2 flex-wrap');
+    povBar.appendChild(_el('span', 'text-[11px] uppercase tracking-wider text-slate-500',
+        'točka pogleda'));
+    const povButtons = [];
+    for (const [value, label] of [
+        ...state.teams.map((t) => [`team:${t}`, t]),
+        ['world', 'WORLD (ORACLE)'],
+    ]) {
+        const btn = _el('button', 'px-2 py-1 text-xs rounded font-mono border', label);
+        btn.dataset.pov = value;
+        povButtons.push(btn);
+        btn.addEventListener('click', async () => {
+            if (state.pov === value) return;
+            state.pov = value;
+            await goTo(state.tMs);
+            paintPov();
+        });
+        povBar.appendChild(btn);
+    }
+    const paintPov = () => {
+        for (const b of povButtons) {
+            const on = b.dataset.pov === state.pov;
+            b.className = 'px-2 py-1 text-xs rounded font-mono border '
+                + (on ? 'bg-slate-700 text-slate-100 border-slate-500'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800');
+        }
+    };
+    container.appendChild(povBar);
+
+    // What this view IS and IS NOT. Under a team view the page withholds truth
+    // it holds, and §6 requires the own-team simplification to be stated rather
+    // than assumed — an unstated simplification is just an error.
+    const povNote = _el('p', 'text-[11px] leading-relaxed mb-2');
+    const paintPovNote = () => {
+        const info = (state.snapshot && state.snapshot.information_state) || {};
+        const withheld = (state.snapshot && state.snapshot.withheld_by_pov) || [];
+        povNote.textContent = '';
+        if (info.pov_unavailable) {
+            povNote.className = 'text-[11px] leading-relaxed mb-2 text-amber-400';
+            povNote.textContent = info.pov_unavailable;
+            return;
+        }
+        if (!isTeamPov(state.pov)) {
+            povNote.className = 'text-[11px] leading-relaxed mb-2 text-amber-500/80';
+            povNote.textContent = 'ORACLE: vidiš vse, kar se je zgodilo, ne tega, '
+                + 'kar je kdo vedel. Diagnostika, ne pogled igralca.';
+            return;
+        }
+        const holder = Object.values(info.holders || {})[0] || {};
+        const known = holder.known_enemy_count || 0;
+        const unplaced = beliefRegions(holder).unplacedSubjects.length;
+        povNote.className = 'text-[11px] leading-relaxed mb-2 text-slate-400';
+        povNote.textContent =
+            `Lege ${withheld.length} nasprotnikov so ZADRŽANE na strežniku, ne skrite `
+            + 'pri risanju. Nasprotnik je narisan samo kot regija, ki jo je ta ekipa '
+            + 'lahko sklepala, in ta se s časom širi. '
+            + (known
+                ? `Trenutno pozna ${known} ${known === 1 ? 'nasprotnika' : 'nasprotnikov'}.`
+                : 'V tem trenutku ta ekipa ni vedela za nobenega nasprotnika.')
+            + (unplaced
+                ? ` Pri ${unplaced} od njih je regija že širša od `
+                  + `${Math.round(horizonOf(holder))} enot, zato ni narisana: `
+                  + 'ekipa ve, da obstaja, ne pa več kje je.'
+                : '')
+            + ' ⚠️ Lege soigralcev so prikazane kot znane — to je poenostavitev '
+            + '(glasovni kanal ni zajet), ne meritev.';
+    };
+    container.appendChild(povNote);
+
+    const canvas = document.createElement('canvas');
+    canvas.className = 'w-full rounded border border-slate-800 bg-slate-950 cursor-move';
+    canvas.style.height = '640px';
+    container.appendChild(canvas);
+
+    // ⚠️ Backing store sized to the element it is actually shown at, times the
+    // device pixel ratio. A fixed 1100x640 buffer stretched across a wider
+    // element resamples every line, and this drawing is nothing but lines.
+    const sizeCanvas = () => {
+        const ratio = window.devicePixelRatio || 1;
+        const rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(320, Math.round(rect.width * ratio));
+        canvas.height = Math.max(240, Math.round(640 * ratio));
+    };
+    sizeCanvas();
+
+    const redraw = () => render(canvas);
+    window.addEventListener('resize', () => { sizeCanvas(); redraw(); });
+
+    // Time scrubber. The steps are the prototype's, and 200 ms is the capture
+    // interval — a smaller step would ask for a moment nothing was recorded at.
+    const controls = _el('div', 'flex items-center gap-2 mt-3 flex-wrap');
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0';
+    slider.max = String(Math.max(1000, snapshot.round_duration_ms || 600000));
+    slider.step = '200';
+    slider.value = String(state.tMs || 0);
+    slider.className = 'flex-1 min-w-[240px]';
+    const readout = _el('span', 'text-xs font-mono text-slate-300 tabular-nums',
+        `t = ${state.tMs || 0} ms`);
+
+    const goTo = async (nextMs) => {
+        const clamped = Math.max(0, Math.min(Number(slider.max), Math.round(nextMs)));
+        state.tMs = clamped;
+        slider.value = String(clamped);
+        readout.textContent = `t = ${clamped} ms`;
+        const mine = ++loadId;
+        let fresh;
+        try {
+            fresh = await loadMoment(roundId, clamped, state.pov);
+        } catch {
+            return;
+        }
+        if (mine !== loadId) return;
+        state.snapshot = fresh;
+        status.textContent = statusLine(state.snapshot);
+        paintPovNote();
+        redraw();
+    };
+
+    for (const [label, delta] of [['−1 s', -1000], ['−200 ms', -200],
+                                  ['+200 ms', 200], ['+1 s', 1000]]) {
+        const btn = _el('button', 'px-2 py-1 text-xs rounded bg-slate-800 '
+            + 'hover:bg-slate-700 text-slate-200 font-mono', label);
+        btn.addEventListener('click', () => goTo(state.tMs + delta));
+        controls.appendChild(btn);
+    }
+    controls.appendChild(slider);
+    controls.appendChild(readout);
+    slider.addEventListener('change', () => goTo(Number(slider.value)));
+    container.appendChild(controls);
+
+    const legend = _el('p', 'text-[11px] text-slate-500 mt-2 leading-relaxed',
+        'Obroč okoli igralca je IZMERJENA negotovost lege (p90 za starost vzorca); '
+        + 'črtkan pomeni sporno življenje, kjer rekonstrukcija ne ve, katero od '
+        + 'prekrivajočih se življenj je pravo. Niti so geometrijska razdalja, '
+        + 'ne vidno polje — modre med soigralci, rdeče med nasprotniki, polne '
+        + 'tam, kjer je bil spopad odprt. ⚠️ Odprt spopad tracker drži do 15 s '
+        + 'po zadnjem zadetku, zato polna nit ne pomeni »zdaj se streljata«. '
+        + 'Vlečenje vrti, kolešček približa.');
+    container.appendChild(legend);
+
+    bindCamera(canvas, redraw);
+    paintPov();
+    paintPovNote();
+    redraw();
+}
