@@ -281,7 +281,7 @@ async def add_static_cache_headers(request, call_next):
     path = routed_path(request)
     if path in _ENTRYPOINT_NO_CACHE_PATHS:
         response.headers["Cache-Control"] = "no-cache"
-    elif path.startswith("/static/modern/chunks/") or path.startswith("/app/assets/"):
+    elif path.startswith(("/static/modern/chunks/", "/app/assets/")):
         # Content-hashed filenames on both build outputs — safe to pin forever.
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     elif path == "/app" or path.startswith("/app/"):
