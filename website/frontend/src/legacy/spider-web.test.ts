@@ -461,19 +461,42 @@ describe('mixHex', () => {
 });
 
 describe('clockBadge', () => {
-  it('never says VALIDATED, even when the payload does', () => {
-    // ⛔ The payload's `status` field says "validated" and does not mean what
-    // the word implies: §5's reconstruction is INTERNALLY consistent — it
-    // agrees with the rows it was derived from — and has never been confirmed
-    // against an independent source. That is C2, and it has not happened. The
-    // data contract forbids the badge outright.
-    const team = { status: 'validated', interval_ms: 30000, pass_ratio: 1.0 };
-    expect(clockBadge(team).badge).toBe('UNVALIDATED');
+  it('reports the backend verdict rather than overriding it', () => {
+    // ⭐ An earlier version forced UNVALIDATED everywhere, believing
+    // `validated` meant "internally consistent only". It does not: §5.3 and
+    // acceptance B1 define it as having passed against INDEPENDENT
+    // `player_track` spawn landings — explicitly not the rows that produced
+    // the offset — with a frozen residual tolerance. Overriding it was itself
+    // an overclaim, in the other direction: it called a clock unproven that
+    // had passed the gate the spec defines.
+    expect(clockBadge({ status: 'validated', interval_ms: 30000 }).badge)
+      .toBe('VALIDATED');
   });
 
-  it('says UNVALIDATED for both teams, not just the weaker one', () => {
-    for (const status of ['validated', 'interval_only', 'insufficient']) {
-      expect(clockBadge({ status }).badge).toBe('UNVALIDATED');
+  it('keeps the three verdicts apart', () => {
+    // ⛔ `inconsistent` is not a weaker `unvalidated`: the candidates disagree
+    // and the value is published as null, never averaged into one.
+    expect(clockBadge({ status: 'internally_consistent_unvalidated' }).badge)
+      .toBe('UNVALIDATED');
+    expect(clockBadge({ status: 'insufficient' }).badge).toBe('UNVALIDATED');
+    expect(clockBadge({ status: 'inconsistent' }).badge).toBe('INCONSISTENT');
+  });
+
+  it('says C2 is a stronger confirmation still pending, not the only one', () => {
+    expect(clockBadge({ status: 'validated' }).reason).toMatch(/C2/);
+    expect(clockBadge({ status: 'validated' }).reason).toMatch(/§5\.3/);
+  });
+
+  it('never returns a non-string reason, whatever the payload holds', () => {
+    // ⛔ The type promises `string | undefined`. `team && team.reason` handed
+    // back `null` for the explicitly supported `clockBadge(null)` call, and a
+    // consumer narrowing on `!== undefined` would then treat null as a string
+    // (Codex, #804).
+    for (const team of [null, undefined, { status: 'unavailable' },
+                        { status: 'unavailable', reason: null },
+                        { status: 'unavailable', reason: 42 }]) {
+      const { reason } = clockBadge(team as never);
+      expect(reason === undefined || typeof reason === 'string').toBe(true);
     }
   });
 
@@ -487,7 +510,9 @@ describe('clockBadge', () => {
   });
 
   it('says why, so the badge is never bare', () => {
-    expect(clockBadge({ status: 'validated' }).reason).toMatch(/C2/);
+    for (const status of ['validated', 'insufficient', 'inconsistent']) {
+      expect(clockBadge({ status }).reason).toBeTruthy();
+    }
   });
 });
 

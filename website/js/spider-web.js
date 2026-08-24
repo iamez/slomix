@@ -527,26 +527,51 @@ function render(canvas) {
 }
 
 /**
- * What the clock panel is allowed to say about a team's reinforcement wave.
+ * What the clock panel may say about a team's reinforcement wave.
  *
- * ⛔ NEVER "VALIDATED", FOR EITHER TEAM. The payload's `status` field says
- * `validated`, and it does not mean what the word implies: §5's reconstruction
- * is INTERNALLY consistent — the model agrees with the spawn-timing rows it was
- * derived from, 98.7% of the time — and has never been confirmed against an
- * independent source. That confirmation is C2, and it has not happened. The UI
- * data contract forbids the badge outright for exactly this reason.
+ * ⭐ IT REPORTS THE BACKEND'S VERDICT. An earlier version forced UNVALIDATED
+ * for every team on the belief that `validated` meant "internally consistent
+ * only". It does not. §5.3 and acceptance criterion B1 define `validated` as
+ * having passed against **independent** `player_track` spawn landings —
+ * explicitly not the `time_to_next_spawn` values that produced the candidate
+ * offset, precisely so the check is not circular — with a frozen residual
+ * tolerance and a minimum support count. `validate_clock` implements exactly
+ * that, and only promotes a clock that was already
+ * `internally_consistent_unvalidated`.
  *
- * So the badge is `UNVALIDATED` for both teams today, and the agreement figure
- * is shown beside it under its own name. A number is not evidence of the thing
- * it was derived from.
+ * ⚠️ So overriding the verdict was itself the overclaim, in the other
+ * direction: it called a clock unproven that had passed the gate the spec
+ * defines. C2 is a future DIRECT seed capture — a stronger confirmation still
+ * to come — not the only independent validation that exists (Codex, #804).
+ *
+ * ⛔ `UNAVAILABLE` stays distinct from `UNVALIDATED`: one means the round had
+ * nothing to reconstruct from, the other that a reconstruction exists and did
+ * not pass.
  */
 export function clockBadge(team) {
+    const reason = (t) => (typeof t === 'string' && t ? t : undefined);
     if (!team || team.status === 'unavailable') {
-        return { badge: 'UNAVAILABLE', reason: team && team.reason };
+        return { badge: 'UNAVAILABLE', reason: reason(team && team.reason) };
+    }
+    if (team.status === 'validated') {
+        return {
+            badge: 'VALIDATED',
+            reason: reason(team.reason)
+                || 'passed against independent spawn landings (§5.3); direct '
+                   + 'seed capture (C2) is a stronger confirmation still pending',
+        };
+    }
+    if (team.status === 'inconsistent') {
+        return {
+            badge: 'INCONSISTENT',
+            reason: reason(team.reason)
+                || 'candidate offsets disagree; published as null, never averaged',
+        };
     }
     return {
         badge: 'UNVALIDATED',
-        reason: 'internally consistent only; independent confirmation (C2) pending',
+        reason: reason(team.reason)
+            || 'no independent spawn support; internally consistent at most',
     };
 }
 
@@ -905,10 +930,20 @@ export async function loadSpiderWebView(params = {}) {
             row.appendChild(detail);
             clockPanel.appendChild(row);
         }
+        // ⚠️ Derived from the actual verdicts. An unconditional sentence here
+        // claimed both teams were UNVALIDATED and internally consistent, which
+        // contradicted the badges above it whenever a team was UNAVAILABLE and
+        // asserted the opposite of the backend for an INCONSISTENT one
+        // (Codex, #804).
+        const badges = Object.values(snap.clock || {}).map((t) => clockBadge(t).badge);
         const note = _el('p', 'text-[10px] leading-relaxed mt-1',
-            '⚠️ Obe ekipi sta UNVALIDATED. Rekonstrukcija je notranje skladna — '
-            + 'model se ujema z vrsticami, iz katerih je izpeljan — neodvisno pa '
-            + 'ni potrjena za nobeno ekipo. Odstotek zgoraj je skladnost, ne dokaz.');
+            badges.includes('VALIDATED')
+                ? 'VALIDATED pomeni: prestala neodvisno preverbo proti spawn '
+                  + 'pristankom iz player_track (§5.3), z zamrznjenim pragom — '
+                  + 'ne proti vrsticam, iz katerih je odmik nastal. Neposreden '
+                  + 'zajem semena (C2) je močnejša potrditev in še ni na voljo.'
+                : 'Nobena ura tu ni prestala neodvisne preverbe; odstotek '
+                  + 'skladnosti je ujemanje z lastnim izvorom, ne dokaz.');
         note.style.color = THEME.label;
         clockPanel.appendChild(note);
 
@@ -916,10 +951,18 @@ export async function loadSpiderWebView(params = {}) {
             'text-[11px] uppercase tracking-wider mb-2', 'integriteta posnetka'));
         integrityPanel.lastChild.style.color = THEME.label;
         const policy = snap.capture_policy || {};
+        // ⚠️ The WHOLE provenance. `manifest_version`, `manifest_count` and
+        // `conflicting_flags` were dropped, so a reader could not tell a normal
+        // single manifest from an ambiguous multi-manifest result — which is
+        // exactly what decides whether a capability state can be trusted
+        // (acceptance A6; Codex, #804).
         const facts = [
             ['zajem', `${policy.mode || 'unknown'}`
                 + (policy.observation_interval_ms ? ` · ${policy.observation_interval_ms} ms` : '')],
             ['vir politike', policy.source || 'unknown'],
+            ['verzija manifesta', policy.manifest_version ?? 'unknown'],
+            ['manifestov', String(policy.manifest_count ?? 'unknown')],
+            ['nasprotujočih zastavic', String(policy.conflicting_flags ?? 'unknown')],
             ['prekrivajoča življenja', String(snap.overlap_conflicts ?? 'unknown')],
             ['igralci brez stanja', String(Object.keys(snap.gaps || {}).length)],
         ];
@@ -954,9 +997,21 @@ export async function loadSpiderWebView(params = {}) {
         }
         const acc = snap.reconstruction_accuracy || {};
         if (acc.measured_at) {
+            // ⚠️ Including what was EXCLUDED and what it was checked against.
+            // Dropping `excluded` hid that the victim coordinate was left out
+            // because it shares a writer with the reconstructed track — the
+            // single fact that keeps the measurement from being circular — and
+            // dropping `sources` hid that two separately written pipelines
+            // agreed (Codex, #804).
+            const samples = acc.samples && typeof acc.samples === 'object'
+                ? Object.entries(acc.samples).map(([k, v]) => `${k} ${v}`).join(', ')
+                : null;
             const prov = _el('p', 'text-[10px] mt-2 leading-relaxed',
                 `Napaka lege izmerjena ${acc.measured_at} na ${acc.rounds} rundah `
-                + `(${acc.script}). Enota: ${acc.unit}.`);
+                + `(${acc.script}). Enota: ${acc.unit}.`
+                + (samples ? ` Vzorci: ${samples}.` : '')
+                + (Array.isArray(acc.sources) ? ` Viri: ${acc.sources.join(', ')}.` : '')
+                + (acc.excluded ? ` Izključeno: ${acc.excluded}.` : ''));
             prov.style.color = THEME.label;
             integrityPanel.appendChild(prov);
         }
