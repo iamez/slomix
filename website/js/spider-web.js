@@ -79,6 +79,15 @@ export const THEME = {
     textDim: '#8d8981',
     positive: '#8fae8a',
 
+    // ⚠️ The floor ramp, as its two endpoints. It used to be three hard-coded
+    // RGB components interpolated inline, which meant the ENTIRE canvas floor
+    // palette sat outside this object while the module advertised itself as
+    // the single palette — and the hex scan below could not see it, because it
+    // only matched `#rrggbb` literals. A rewrite reading THEME would have been
+    // unable to reproduce the ramp (Codex, review of #803).
+    floorLow: '#6084b0',
+    floorHigh: '#c8e4ff',
+
     // ⚠️ `label` and `neutral` carry the same value on purpose: the rewrite
     // maps them to one token today. They are kept apart because their ROLES
     // differ — a player with no team, and the colour of an axis label — and if
@@ -307,7 +316,7 @@ function drawFloors(ctx, mesh, cam, view) {
         // enough separation on a map like te_escape2, whose floors span 2,100
         // units: colour alone washes out, opacity alone loses the low ground.
         const shade = 0.34 + 0.46 * t;
-        ctx.fillStyle = `rgba(${Math.round(96 + 104 * t)}, ${Math.round(132 + 96 * t)}, ${Math.round(176 + 74 * t)}, ${shade})`;
+        ctx.fillStyle = mixHex(THEME.floorLow, THEME.floorHigh, t) + alphaHex(shade);
         ctx.beginPath();
         ctx.moveTo(face.pts[0].x, face.pts[0].y);
         ctx.lineTo(face.pts[1].x, face.pts[1].y);
@@ -370,6 +379,15 @@ function drawEdges(ctx, edges, players, cam, view) {
         ctx.stroke();
         ctx.restore();
     }
+}
+
+/** Blend two THEME colours, so a ramp is expressed in the palette it belongs to. */
+export function mixHex(from, to, t) {
+    const clamp = Math.max(0, Math.min(1, Number(t) || 0));
+    const part = (hex, i) => parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+    const out = [0, 1, 2].map(
+        (i) => Math.round(part(from, i) + (part(to, i) - part(from, i)) * clamp));
+    return '#' + out.map((v) => v.toString(16).padStart(2, '0')).join('');
 }
 
 /** Two hex digits for an alpha in 0..1, so a colour keeps its THEME value. */

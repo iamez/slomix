@@ -102,6 +102,8 @@ export declare const THEME: Record<string, string>;
 
 export function alphaHex(a: number): string;
 
+export function mixHex(from: string, to: string, t: number): string;
+
 export function statusLine(snapshot: Record<string, unknown> | null): string;
 
 export function loadSpiderWebView(params?: Record<string, string>): Promise<void>;
