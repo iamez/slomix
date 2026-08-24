@@ -61,6 +61,9 @@ MAX_DROP = 512.0
 
 #: A player's origin sits above their feet; anything further above the floor
 #: than this is airborne (a jump, a ladder, a fall) rather than standing.
+#: ⚠️ Airborne samples are COUNTED AND REPORTED, never folded into the standing
+#: distribution and never blamed on the export: a jump is the game, not a hole
+#: in the geometry.
 MAX_RISE = 96.0
 
 
@@ -127,7 +130,7 @@ async def main() -> int:
     db = get_db_pool()
 
     print(f"  {'mapa':<20s} {'vzorcev':>8s} {'na tleh':>9s} {'višina p50':>11s} "
-          f"{'razmik p10–p90':>15s} {'brez tal':>9s}")
+          f"{'razmik p10–p90':>15s} {'brez tal':>9s} {'v zraku':>8s}")
     failures: list[str] = []
     for name in sorted(wanted):
         mesh_path = args.geometry / f"{name}.json"
@@ -142,13 +145,30 @@ async def main() -> int:
 
         rises: list[float] = []
         unsupported = 0
+        airborne = 0
         for x, y, z in positions:
-            below = [h for h in floors_below(vertices, indexes, x, y)
-                     if z - h <= MAX_DROP and z - h >= -MAX_RISE]
-            if not below:
+            # ⛔ AT OR BELOW THE SAMPLE, AND WITHIN STANDING HEIGHT.
+            #
+            # The first version accepted a floor up to MAX_RISE ABOVE the
+            # player, which contradicts the rule the docstring states two
+            # paragraphs up. Two things followed: `max(below)` could pick a
+            # floor above the sample, making the rise negative, and a jump 200
+            # units up counted as standing and widened the spread this script
+            # reports as its verdict (CodeRabbit, PR #800).
+            #
+            # A sample too high above every floor is AIRBORNE, not unsupported:
+            # a jump is not a hole in the export, and counting it as one would
+            # blame the geometry for the game.
+            candidates = [h for h in floors_below(vertices, indexes, x, y)
+                          if h <= z and z - h <= MAX_DROP]
+            if not candidates:
                 unsupported += 1
                 continue
-            rises.append(z - max(below))
+            rise = z - max(candidates)
+            if rise > MAX_RISE:
+                airborne += 1
+                continue
+            rises.append(rise)
 
         if not rises:
             failures.append(f"{name}: no sample found any floor")
@@ -168,6 +188,7 @@ async def main() -> int:
                 f"{name}: spread {spread:.0f}, unsupported {100*share_unsupported:.0f}%")
         print(f"  {name:<20s} {len(positions):>8d} {len(rises):>9d} {p50:>11.0f} "
               f"{spread:>15.0f} {100*share_unsupported:>8.0f}%"
+              f" {airborne:>8d}"
               + ("  ⛔" if bad else ""))
 
     print()

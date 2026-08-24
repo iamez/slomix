@@ -990,8 +990,19 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
                 "nearest_heard_activity_distance": None,
                 "beliefs": sorted(beliefs, key=lambda b: -(b.get("confidence") or 0)),
                 "unavailable": unavailable,
-                "position_claim_max_radius":
-                    (own[0].get("position_claim_max_radius") if own else None),
+                # ⚠️ The MAXIMUM across the union, not one member's.
+                # `pov_team["members"]` is a set, so `own` has no defined order
+                # and `own[0]` picked an arbitrary holder — safe today only
+                # because every holder publishes the same module constant, and
+                # a latent bug the moment one does not. The consumer uses this
+                # as a hard filter (`beliefRegions` drops regions wider than
+                # it), so an arbitrary pick could drop a region one member was
+                # entitled to draw. Taking the widest keeps the union's promise:
+                # what ANY member could claim, the team can (CodeRabbit, #800).
+                "position_claim_max_radius": max(
+                    (h.get("position_claim_max_radius") for h in own
+                     if isinstance(h.get("position_claim_max_radius"), (int, float))),
+                    default=None),
                 "notes": [
                     ("this is the UNION of the team's per-player beliefs (§6.3); "
                      "no team-wide belief set exists"),
