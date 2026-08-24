@@ -68,6 +68,15 @@ export function boundsFromPlayers(
   players: Array<Record<string, unknown>>, margin?: number,
 ): Bounds | null;
 
+export interface EdgeStyle {
+  color: string;
+  width: number;
+  dash: number[];
+  alpha: number;
+}
+
+export function edgeStyle(kind: string, contested: boolean): EdgeStyle;
+
 export function statusLine(snapshot: Record<string, unknown> | null): string;
 
 export function loadSpiderWebView(params?: Record<string, string>): Promise<void>;
