@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  boundsFromPlayers, edgeStyle, placeLabels, project, statusLine, viewportFor,
+  beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, isTeamPov, placeLabels,
+  project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
 
 const VIEW = { cx: 500, cy: 300, scale: 0.1, midX: 0, midY: 0, midZ: 0 };
@@ -276,5 +277,94 @@ describe('edgeStyle', () => {
         expect(edgeStyle(kind, contested).alpha).toBeLessThan(1);
       }
     }
+  });
+});
+
+describe('isTeamPov', () => {
+  it.each(['team:AXIS', 'team:allies', 'TEAM:AXIS'])('recognises %s', (pov) => {
+    expect(isTeamPov(pov)).toBe(true);
+  });
+
+  it.each(['world', '', null, undefined, 'AB12CD34'])('rejects %s', (pov) => {
+    // ⛔ A player GUID is not a team. Treating one as a team view would draw a
+    // single player's knowledge as if it were his side's.
+    expect(isTeamPov(pov)).toBe(false);
+  });
+});
+
+describe('beliefRegions', () => {
+  const belief = (over: Record<string, unknown> = {}) => ({
+    region: { x: 10, y: 20, z: 30, radius: 400 },
+    subject_guid: 'ENEMY',
+    confidence: 0.6,
+    source: 'contact_hit',
+    ...over,
+  });
+
+  it('keeps a belief that names someone AND places them', () => {
+    expect(beliefRegions({ beliefs: [belief()] }).regions).toHaveLength(1);
+  });
+
+  it('drops a belief with no subject, however well placed', () => {
+    // ⛔ Gunfire names nobody (§6.3, the phantom squad). Drawing it as an enemy
+    // would conjure a player out of a noise.
+    expect(beliefRegions({ beliefs: [belief({ subject_guid: null })] }).regions).toEqual([]);
+  });
+
+  it('drops a belief with no region, however certain', () => {
+    expect(beliefRegions({ beliefs: [belief({ region: null, confidence: 1 })] }).regions)
+      .toEqual([]);
+  });
+
+  it('carries the radius the backend grew, not one of its own', () => {
+    // The widening is measured server-side from real displacement; recomputing
+    // or capping it here would quietly restate the uncertainty.
+    expect(beliefRegions({ beliefs: [belief()] }).regions[0].radius).toBe(400);
+  });
+
+  it('is empty rather than throwing when there is no holder', () => {
+    expect(beliefRegions(null).regions).toEqual([]);
+    expect(beliefRegions({}).regions).toEqual([]);
+  });
+
+  describe('the published horizon', () => {
+    // ⛔ Past the horizon a region is not a place. The backend already refuses
+    // to derive a distance from one that wide; drawing it anyway makes the same
+    // overclaim in pixels — a 2,500-unit circle on a 4,600-unit map is not
+    // "somewhere here", it is the whole map.
+    const holder = (radius: number) => ({
+      position_claim_max_radius: 1000,
+      beliefs: [belief({ region: { x: 0, y: 0, z: 0, radius } })],
+    });
+
+    it('draws a region inside the horizon', () => {
+      expect(beliefRegions(holder(900)).regions).toHaveLength(1);
+    });
+
+    it('refuses to draw one past it', () => {
+      expect(beliefRegions(holder(2500)).regions).toHaveLength(0);
+    });
+
+    it('still reports that subject as known, in words', () => {
+      // ⭐ Not drawn is not forgotten: the team knows he exists, just not where.
+      expect(beliefRegions(holder(2500)).unplacedSubjects).toEqual(['ENEMY']);
+    });
+
+    it('counts a subject as placed when ANY of his regions is fresh enough', () => {
+      const both = {
+        position_claim_max_radius: 1000,
+        beliefs: [
+          belief({ region: { x: 0, y: 0, z: 0, radius: 2500 } }),
+          belief({ region: { x: 5, y: 5, z: 5, radius: 200 } }),
+        ],
+      };
+      expect(beliefRegions(both).regions).toHaveLength(1);
+      expect(beliefRegions(both).unplacedSubjects).toEqual([]);
+    });
+
+    it('draws everything when no horizon is published', () => {
+      expect(horizonOf(null)).toBe(Infinity);
+      expect(beliefRegions({ beliefs: [belief()] }).regions).toHaveLength(1);
+    });
   });
 });
