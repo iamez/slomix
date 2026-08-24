@@ -35,11 +35,16 @@ export default defineConfig({
     {
       name: 'slomix-csp-meta',
       apply: 'build',
-      transformIndexHtml(html) {
-        return html.replace(
-          '</title>',
-          `</title>\n    <meta http-equiv="Content-Security-Policy" content="${CSP_CONTENT}" />`,
-        );
+      // Tag-descriptor form on purpose: no string surgery on the HTML
+      // (scanners rightly dislike html.replace) — Vite injects the tag.
+      transformIndexHtml() {
+        return [
+          {
+            tag: 'meta',
+            attrs: { 'http-equiv': 'Content-Security-Policy', content: CSP_CONTENT },
+            injectTo: 'head',
+          },
+        ];
       },
     },
   ],
