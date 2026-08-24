@@ -51,7 +51,7 @@ MINIMAL_ENV = {
 
 
 def generate_spec() -> str:
-    result = subprocess.run(  # noqa: S603
+    result = subprocess.run(  # noqa: S603  # nosec B603 — static argv: [sys.executable, -c, const]
         [sys.executable, "-c", _SUBPROCESS_SCRIPT],
         env=MINIMAL_ENV,
         cwd=REPO_ROOT,

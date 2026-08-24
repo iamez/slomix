@@ -53,7 +53,11 @@ function loadLegacy(): LegacyModule {
   ]
     .map(sliceFunction)
     .join('\n');
+  // Deliberate: the ONLY way to run un-exported legacy functions verbatim is
+  // evaluating their sliced source. Test-only file; input is our own frozen
+  // proximity.js, not user data.
   // eslint-disable-next-line @typescript-eslint/no-implied-eval
+  // nosemgrep
   const factory = new Function(
     `${source}\nreturn { computeObjectiveZoneStates, computeObjectiveTimelineRows, shouldRenderObjectiveZone };`,
   );
