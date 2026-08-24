@@ -10,8 +10,39 @@ import tailwindcss from '@tailwindcss/vite';
 // website/static/app is what makes the FastAPI mount in main.py register
 // (it only mounts when the directory exists, so a checkout without a build
 // — production today — never grows an /app route).
+// Stricter than the legacy shell's CSP on purpose: the standalone app
+// self-hosts everything (fonts via @fontsource, no CDN scripts), so no
+// third-party origins are allowed. Injected at BUILD only — `vite dev`
+// needs its inline React-Refresh preamble, which script-src 'self' would
+// block (Codex on #802). 'unsafe-inline' for style covers React's style
+// attributes, same as legacy.
+const CSP_CONTENT = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self'",
+  "img-src 'self' data: blob:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join('; ');
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [
+    react(),
+    tailwindcss(),
+    {
+      name: 'slomix-csp-meta',
+      apply: 'build',
+      transformIndexHtml(html) {
+        return html.replace(
+          '</title>',
+          `</title>\n    <meta http-equiv="Content-Security-Policy" content="${CSP_CONTENT}" />`,
+        );
+      },
+    },
+  ],
   // Pinned, not env-driven: the FastAPI mount (/app/assets) and the router
   // basename ('/app') are fixed, so a divergent APP_BASE could only emit
   // asset URLs nothing serves (CodeRabbit on #802).

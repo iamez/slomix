@@ -16,7 +16,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from tests.integration.test_route_contract import _extract_frontend_api_paths
+from tests.integration.test_route_contract import (
+    _API_BASE_PREFIX,
+    _EXCLUDED_JS_FILES,
+    _FE_LITERAL_API_RE,
+    _FE_PATH_RE,
+    WEBSITE_JS_DIR,
+    _extract_frontend_api_paths,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_SRC = REPO_ROOT / "website" / "frontend" / "src"
@@ -75,6 +82,32 @@ def _extract_new_frontend_paths() -> tuple[set[str], set[str]]:
     return exact, dynamic
 
 
+def _extract_legacy_paths_tagged() -> tuple[set[str], set[str]]:
+    """Same captures as test_route_contract's extractor, plus a tag: a match
+    immediately followed by an interpolation is a DYNAMIC (truncated) prefix.
+    Needed because an EXACT legacy call (availability.js's /api/bets/market)
+    must stay in the gap even when a deeper sibling is migrated first —
+    deeper-candidate coverage is only sound for truncated prefixes (Codex
+    third-wave on #802)."""
+    exact: set[str] = set()
+    dynamic: set[str] = set()
+    for js_file in sorted(WEBSITE_JS_DIR.glob("*.js")):
+        if js_file.name in _EXCLUDED_JS_FILES:
+            continue
+        text = js_file.read_text(encoding="utf-8")
+        for match in _FE_PATH_RE.finditer(text):
+            path = match.group(1).rstrip("/")
+            if path:
+                target = dynamic if text[match.end():match.end() + 2] == "${" else exact
+                target.add(_API_BASE_PREFIX + path)
+        for match in _FE_LITERAL_API_RE.finditer(text):
+            path = match.group(0).rstrip("/")
+            if path:
+                target = dynamic if text[match.end():match.end() + 2] == "${" else exact
+                target.add(path)
+    return exact, dynamic
+
+
 def _read_path_list(file: Path) -> set[str]:
     lines = set()
     for raw in file.read_text(encoding="utf-8").splitlines():
@@ -91,17 +124,19 @@ def _read_path_list(file: Path) -> set[str]:
 _MIN_COVERING_SEGMENTS = 3
 
 
-def _covered(required: str, exact: set[str], dynamic: set[str]) -> bool:
-    """Covered when: an exact call equals it; any call is DEEPER than it
-    (required itself was a truncated legacy prefix); or a DYNAMIC prefix of
-    sufficient specificity leads into it. An exact literal never covers a
-    deeper required path (Codex), and a dynamic family stub never clears a
-    whole family (CodeRabbit)."""
+def _covered(required: str, required_is_dynamic: bool, exact: set[str], dynamic: set[str]) -> bool:
+    """Covered when: a call equals it; a call is DEEPER than it AND the
+    required capture itself was a truncated dynamic prefix; or a DYNAMIC
+    new-tree prefix of sufficient specificity leads into it. An exact
+    literal never covers a deeper required path in either direction (Codex,
+    twice), and a dynamic family stub never clears a whole family
+    (CodeRabbit)."""
     if required in exact or required in dynamic:
         return True
-    for candidate in exact | dynamic:
-        if candidate.startswith(required + "/"):
-            return True
+    if required_is_dynamic:
+        for candidate in exact | dynamic:
+            if candidate.startswith(required + "/"):
+                return True
     for candidate in dynamic:
         if (
             required.startswith(candidate + "/")
@@ -112,10 +147,19 @@ def _covered(required: str, exact: set[str], dynamic: set[str]) -> bool:
 
 
 def compute_gap() -> set[str]:
-    legacy = _extract_frontend_api_paths()
+    legacy_exact, legacy_dynamic = _extract_legacy_paths_tagged()
+    # Cross-check against the untagged extractor so the two can never drift.
+    assert legacy_exact | legacy_dynamic == _extract_frontend_api_paths(), (
+        "tagged legacy extraction diverged from test_route_contract's"
+    )
     extras = _read_path_list(EXTRA_FILE)
     exact, dynamic = _extract_new_frontend_paths()
-    gap = {path for path in legacy if not _covered(path, exact, dynamic)}
+    gap = {
+        path
+        for path in legacy_exact | legacy_dynamic
+        # captured exact ANYWHERE -> the exact requirement wins
+        if not _covered(path, path in legacy_dynamic and path not in legacy_exact, exact, dynamic)
+    }
     # Extras demand an EXACT call: prefix coverage would close
     # /storytelling/win-contribution/formula the moment anything calls its
     # /storytelling/win-contribution sibling (measured while seeding).

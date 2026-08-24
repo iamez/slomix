@@ -42,6 +42,25 @@ export type PathParamsOf<P extends GetPath> = paths[P] extends {
   ? PP
   : never;
 
+/**
+ * Same convention for query: the generator emits `query: {...}` (required
+ * prop) exactly when the operation has REQUIRED query parameters, and
+ * `query?: {...}` otherwise — so this resolves to `never` unless the call
+ * cannot succeed without a query (Codex on #802: /api/player/search
+ * compiled without its required parameter and 422'd at runtime).
+ */
+export type RequiredQueryOf<P extends GetPath> = paths[P] extends {
+  get: { parameters: { query: infer Q } };
+}
+  ? Q
+  : never;
+
+type NeedsOptions<P extends GetPath> = [PathParamsOf<P>] extends [never]
+  ? [RequiredQueryOf<P>] extends [never]
+    ? false
+    : true
+  : true;
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -61,9 +80,12 @@ interface BaseOptions<P extends GetPath> {
   signal?: AbortSignal;
 }
 
-export type ApiGetOptions<P extends GetPath> = [PathParamsOf<P>] extends [never]
-  ? BaseOptions<P> & { pathParams?: never }
-  : BaseOptions<P> & { pathParams: PathParamsOf<P> };
+export type ApiGetOptions<P extends GetPath> = ([RequiredQueryOf<P>] extends [never]
+  ? BaseOptions<P>
+  : Omit<BaseOptions<P>, 'query'> & { query: QueryOf<P> }) &
+  ([PathParamsOf<P>] extends [never]
+    ? { pathParams?: never }
+    : { pathParams: PathParamsOf<P> });
 
 /**
  * File-producing GETs (upload download/poster, greatshot reports, clips,
@@ -73,9 +95,9 @@ export type ApiGetOptions<P extends GetPath> = [PathParamsOf<P>] extends [never]
  */
 export async function apiGetResponse<P extends GetPath>(
   path: P,
-  ...args: [PathParamsOf<P>] extends [never]
-    ? [options?: ApiGetOptions<P>]
-    : [options: ApiGetOptions<P>]
+  ...args: NeedsOptions<P> extends true
+    ? [options: ApiGetOptions<P>]
+    : [options?: ApiGetOptions<P>]
 ): Promise<Response> {
   const options = (args[0] ?? {}) as BaseOptions<P> & {
     pathParams?: Record<string, string | number>;
@@ -111,11 +133,11 @@ function fillPath(path: string, pathParams: Record<string, string | number> | un
 
 export async function apiGet<P extends GetPath>(
   path: P,
-  // A templated path REQUIRES options with its pathParams; a plain path may
-  // omit options entirely — enforced by the conditional tuple.
-  ...args: [PathParamsOf<P>] extends [never]
-    ? [options?: ApiGetOptions<P>]
-    : [options: ApiGetOptions<P>]
+  // A templated path or a required query REQUIRES options; a plain path may
+  // omit them entirely — enforced by the conditional tuple.
+  ...args: NeedsOptions<P> extends true
+    ? [options: ApiGetOptions<P>]
+    : [options?: ApiGetOptions<P>]
 ): Promise<unknown> {
   // url is a compile-time literal from the generated paths map plus
   // encodeURIComponent'd params — never a user-controlled absolute URL.
