@@ -19,7 +19,8 @@
 
 import { describe, expect, it } from 'vitest';
 
-// @ts-expect-error - legacy JS module, no type declarations
+import type { Camera } from '../../../js/spider-web.js';
+
 import {
   boundsFromPlayers, placeLabels, project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
@@ -84,7 +85,7 @@ describe('viewportFor', () => {
   const mesh = { bounds: { min: [-2000, -1500, -300], max: [2600, 1900, 700] } };
   const canvas = { width: 1200, height: 640 };
 
-  function projectedCorners(cam: Record<string, number>) {
+  function projectedCorners(cam: Camera) {
     const view = viewportFor(mesh, canvas, cam);
     const pts = [];
     for (const x of [mesh.bounds.min[0], mesh.bounds.max[0]]) {
@@ -208,12 +209,21 @@ describe('boundsFromPlayers', () => {
   // missing mesh meant the renderer drew NOTHING: not the floors it does not
   // have, and not the players it does. The positions are known; only the space
   // is missing, and a black rectangle says neither.
+  // ⭐ `boundsFromPlayers` returns `Bounds | null`, and the declaration file
+  // makes the type checker insist these tests acknowledge it. They did not,
+  // which is the kind of assumption a test is supposed to state rather than
+  // carry silently.
+  function requireBounds(players: Array<Record<string, unknown>>) {
+    const b = boundsFromPlayers(players);
+    expect(b).not.toBeNull();
+    return b as { min: number[]; max: number[] };
+  }
+
   it('brackets the players it was given', () => {
-    const players = [
+    const b = requireBounds([
       { x: -100, y: 50, z: 0 },
       { x: 900, y: -200, z: 320 },
-    ];
-    const b = boundsFromPlayers(players);
+    ]);
     expect(b.min[0]).toBeLessThanOrEqual(-100);
     expect(b.max[0]).toBeGreaterThanOrEqual(900);
     expect(b.min[1]).toBeLessThanOrEqual(-200);
@@ -221,7 +231,7 @@ describe('boundsFromPlayers', () => {
   });
 
   it('ignores players who have no position', () => {
-    const b = boundsFromPlayers([{ x: 10, y: 10, z: 10 }, { name: 'gap' }]);
+    const b = requireBounds([{ x: 10, y: 10, z: 10 }, { name: 'gap' }]);
     expect(b.min).toEqual([10, 10, 10].map((v) => v - 512));
   });
 
@@ -231,7 +241,7 @@ describe('boundsFromPlayers', () => {
   });
 
   it('never collapses to zero span, which would divide the scale by nothing', () => {
-    const b = boundsFromPlayers([{ x: 5, y: 5, z: 5 }]);
+    const b = requireBounds([{ x: 5, y: 5, z: 5 }]);
     expect(b.max[0] - b.min[0]).toBeGreaterThan(0);
     expect(b.max[1] - b.min[1]).toBeGreaterThan(0);
   });
