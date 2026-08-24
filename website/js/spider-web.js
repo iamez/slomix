@@ -214,6 +214,61 @@ function drawFloors(ctx, mesh, cam, view) {
     }
 }
 
+/**
+ * How a thread between two players is drawn.
+ *
+ * ⚠️ `recently_contested` does NOT mean "fighting right now". The tracker holds
+ * an engagement open for up to 15 seconds after the last hit and closes it only
+ * on `escape_time_ms` plus 300 units of movement, so a contested edge can mean
+ * "was shot at fifteen seconds ago and has been standing still since". Drawn
+ * distinctly, but never as an alarm.
+ *
+ * ⛔ An edge is geometric separation, not tactical support. Two teammates joined
+ * by a short line may have a wall between them; line-of-sight is deliberately
+ * not a channel here (§6.1).
+ */
+export function edgeStyle(kind, contested) {
+    const opponent = kind === 'opponent';
+    return {
+        color: opponent ? '#e0705a' : '#5f8fbf',
+        width: contested ? 1.8 : 0.8,
+        dash: contested ? [] : [3, 4],
+        alpha: contested ? 0.75 : 0.28,
+    };
+}
+
+function drawEdges(ctx, edges, players, cam, view) {
+    const at = new Map();
+    for (const p of players) {
+        if (p.x == null || p.y == null || p.z == null) continue;
+        at.set(p.guid, project(p.x - view.midX, p.y - view.midY, p.z - view.midZ,
+                               cam, view));
+    }
+    // Contested last, so the threads that carry the most meaning are not
+    // buried under the ones that carry the least.
+    const ordered = [...edges].sort(
+        (x, y) => Number(!!x.recently_contested) - Number(!!y.recently_contested));
+
+    for (const e of ordered) {
+        const a = at.get(e.a);
+        const b = at.get(e.b);
+        // ⛔ Both ends or nothing. An edge drawn to a player we could not place
+        // would be a line to a position nobody occupied.
+        if (!a || !b) continue;
+        const st = edgeStyle(e.kind, !!e.recently_contested);
+        ctx.save();
+        ctx.globalAlpha = st.alpha;
+        ctx.strokeStyle = st.color;
+        ctx.lineWidth = st.width;
+        ctx.setLineDash(st.dash);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
 function drawPlayers(ctx, players, cam, view) {
     const drawn = [];
     for (const p of players) {
@@ -304,6 +359,9 @@ function render(canvas) {
 
     const view = viewportFor({ bounds }, canvas, state.camera);
     if (state.mesh) drawFloors(ctx, state.mesh, state.camera, view);
+    // Threads under the players: a dot must never be hidden by a line.
+    const edges = (state.snapshot && state.snapshot.edges) || [];
+    if (Array.isArray(edges)) drawEdges(ctx, edges, players, state.camera, view);
     if (Array.isArray(players)) drawPlayers(ctx, players, state.camera, view);
 }
 
@@ -491,7 +549,11 @@ export async function loadSpiderWebView(params = {}) {
     const legend = _el('p', 'text-[11px] text-slate-500 mt-2 leading-relaxed',
         'Obroč okoli igralca je IZMERJENA negotovost lege (p90 za starost vzorca); '
         + 'črtkan pomeni sporno življenje, kjer rekonstrukcija ne ve, katero od '
-        + 'prekrivajočih se življenj je pravo. Vlečenje vrti, kolešček približa.');
+        + 'prekrivajočih se življenj je pravo. Niti so geometrijska razdalja, '
+        + 'ne vidno polje — modre med soigralci, rdeče med nasprotniki, polne '
+        + 'tam, kjer je bil spopad odprt. ⚠️ Odprt spopad tracker drži do 15 s '
+        + 'po zadnjem zadetku, zato polna nit ne pomeni »zdaj se streljata«. '
+        + 'Vlečenje vrti, kolešček približa.');
     container.appendChild(legend);
 
     bindCamera(canvas, redraw);

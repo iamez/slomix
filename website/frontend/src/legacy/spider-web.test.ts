@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  boundsFromPlayers, placeLabels, project, statusLine, viewportFor,
+  boundsFromPlayers, edgeStyle, placeLabels, project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
 
 const VIEW = { cx: 500, cy: 300, scale: 0.1, midX: 0, midY: 0, midZ: 0 };
@@ -244,5 +244,37 @@ describe('boundsFromPlayers', () => {
     const b = requireBounds([{ x: 5, y: 5, z: 5 }]);
     expect(b.max[0] - b.min[0]).toBeGreaterThan(0);
     expect(b.max[1] - b.min[1]).toBeGreaterThan(0);
+  });
+});
+
+describe('edgeStyle', () => {
+  it('tells opponents from teammates by colour', () => {
+    expect(edgeStyle('opponent', false).color)
+      .not.toBe(edgeStyle('teammate', false).color);
+  });
+
+  it('draws a contested thread solid and a quiet one dashed', () => {
+    // ⚠️ Contested is emphasis, not an alarm: the tracker holds an engagement
+    // open for up to 15 seconds after the last hit, so a solid thread can mean
+    // "was shot at fifteen seconds ago and has stood still since".
+    expect(edgeStyle('opponent', true).dash).toEqual([]);
+    expect(edgeStyle('opponent', false).dash.length).toBeGreaterThan(0);
+  });
+
+  it('makes a contested thread more visible, never less', () => {
+    const loud = edgeStyle('opponent', true);
+    const quiet = edgeStyle('opponent', false);
+    expect(loud.alpha).toBeGreaterThan(quiet.alpha);
+    expect(loud.width).toBeGreaterThan(quiet.width);
+  });
+
+  it('never draws a thread fully opaque', () => {
+    // The floors and the uncertainty discs have to stay readable underneath;
+    // a solid mesh of lines is what made the prototype's web unreadable.
+    for (const kind of ['opponent', 'teammate']) {
+      for (const contested of [true, false]) {
+        expect(edgeStyle(kind, contested).alpha).toBeLessThan(1);
+      }
+    }
   });
 });
