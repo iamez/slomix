@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  THEME, alphaHex, beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, mixHex,
+  THEME, alphaHex, beliefRegions, boundsFromPlayers, capabilityRows, clockBadge,
+  edgeStyle, horizonOf, mixHex,
   isTeamPov, placeLabels,
   project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
@@ -456,5 +457,68 @@ describe('mixHex', () => {
   it('clamps rather than extrapolating past an endpoint', () => {
     expect(mixHex('#000000', '#ffffff', 5)).toBe('#ffffff');
     expect(mixHex('#000000', '#ffffff', -2)).toBe('#000000');
+  });
+});
+
+describe('clockBadge', () => {
+  it('never says VALIDATED, even when the payload does', () => {
+    // ⛔ The payload's `status` field says "validated" and does not mean what
+    // the word implies: §5's reconstruction is INTERNALLY consistent — it
+    // agrees with the rows it was derived from — and has never been confirmed
+    // against an independent source. That is C2, and it has not happened. The
+    // data contract forbids the badge outright.
+    const team = { status: 'validated', interval_ms: 30000, pass_ratio: 1.0 };
+    expect(clockBadge(team).badge).toBe('UNVALIDATED');
+  });
+
+  it('says UNVALIDATED for both teams, not just the weaker one', () => {
+    for (const status of ['validated', 'interval_only', 'insufficient']) {
+      expect(clockBadge({ status }).badge).toBe('UNVALIDATED');
+    }
+  });
+
+  it('distinguishes "no clock at all" from "not independently confirmed"', () => {
+    // These are different facts and a reader needs them apart: one means the
+    // round had nothing to reconstruct from, the other that the reconstruction
+    // exists and has not been checked from outside.
+    expect(clockBadge({ status: 'unavailable', reason: 'no rows' }).badge)
+      .toBe('UNAVAILABLE');
+    expect(clockBadge(null).badge).toBe('UNAVAILABLE');
+  });
+
+  it('says why, so the badge is never bare', () => {
+    expect(clockBadge({ status: 'validated' }).reason).toMatch(/C2/);
+  });
+});
+
+describe('capabilityRows', () => {
+  it('keeps three states and never folds unknown into disabled', () => {
+    // ⛔ For every round captured before the tracker declared its flags, an
+    // absent section is equally consistent with the capture being off and with
+    // it being on and having nothing to report. Rendering them alike turns "we
+    // do not know" into "it was off".
+    const rows = capabilityRows({ capabilities: {
+      shot_fired: 'enabled', aim_lock: 'disabled', comm_events: 'unknown',
+    } });
+    // Sorted by name, so the order is aim_lock, comm_events, shot_fired —
+    // stable output matters more than input order for a panel a human reads.
+    expect(rows.map((r) => `${r.name}=${r.state}`)).toEqual([
+      'aim_lock=disabled', 'comm_events=unknown', 'shot_fired=enabled',
+    ]);
+  });
+
+  it('treats an unrecognised value as unknown rather than guessing', () => {
+    const rows = capabilityRows({ capabilities: { odd: 'maybe', missing: '' } });
+    expect(rows.every((r) => r.state === 'unknown' && r.known === false)).toBe(true);
+  });
+
+  it('marks only enabled and disabled as known', () => {
+    const rows = capabilityRows({ capabilities: { a: 'enabled', b: 'unknown' } });
+    expect(rows.map((r) => r.known)).toEqual([true, false]);
+  });
+
+  it('is empty rather than throwing when there is no policy', () => {
+    expect(capabilityRows(null)).toEqual([]);
+    expect(capabilityRows({})).toEqual([]);
   });
 });
