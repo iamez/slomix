@@ -74,6 +74,8 @@ export async function apiGet<P extends GetPath>(
   options: ApiGetOptions<P> = {},
 ): Promise<unknown> {
   const url = fillPath(path, options.pathParams) + buildQuery(options.query as Record<string, unknown> | undefined);
+  // nosemgrep: url is a compile-time literal from the generated paths map
+  // plus encodeURIComponent'd params — never a user-controlled absolute URL.
   const res = await fetch(url, { signal: options.signal });
   if (!res.ok) throw new ApiError(res.status, url);
   return res.json();

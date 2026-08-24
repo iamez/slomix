@@ -7,13 +7,13 @@ import { listRouteDefinitions, getRouteHash } from '../../../js/route-registry.j
 import { APP_ROUTES, hashToPath } from './routes';
 
 /** Registry keys that deliberately fold into another app route. */
-const FOLDED: Record<string, string> = {
-  records: 'record-book',
-  'hall-of-fame': 'record-book',
-};
+const FOLDED = new Map<string, string>([
+  ['records', 'record-book'],
+  ['hall-of-fame', 'record-book'],
+]);
 
 /** Sample params so buildHash() emits its non-empty shape per key. */
-const SAMPLE_PARAMS: Record<string, Record<string, unknown>> = {
+const SAMPLE_PARAMS = new Map<string, Record<string, unknown>>(Object.entries({
   profile: { id: 'E587CA5F' },
   'proximity-player': { guid: '1C747DF1' },
   'proximity-replay': { roundId: '11277' },
@@ -23,7 +23,7 @@ const SAMPLE_PARAMS: Record<string, Record<string, unknown>> = {
   'upload-detail': { uploadId: 'de4f8d86' },
   story: { gsid: 150 },
   'session-detail': { sessionId: '150', tab: 'players' },
-};
+}));
 
 const appByKey = new Map(APP_ROUTES.map((r) => [r.key, r]));
 
@@ -32,12 +32,12 @@ describe('routes.ts covers the legacy registry', () => {
 
   for (const key of Object.keys(definitions)) {
     it(`legacy key '${key}' resolves to an app route`, () => {
-      const target = FOLDED[key] ?? key;
+      const target = FOLDED.get(key) ?? key;
       expect(appByKey.has(target), `no APP_ROUTES entry for '${target}'`).toBe(true);
     });
 
     it(`legacy hash for '${key}' maps to a non-empty path`, () => {
-      const hash = getRouteHash(key, SAMPLE_PARAMS[key] ?? {});
+      const hash = getRouteHash(key, SAMPLE_PARAMS.get(key) ?? {});
       // home builds '' by design — the shim maps that to '/' via empty hash.
       const mapped = hashToPath(hash || '#/');
       expect(mapped, `hashToPath('${hash}') came back empty`).toBeTruthy();
