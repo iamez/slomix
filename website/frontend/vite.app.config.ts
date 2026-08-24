@@ -12,7 +12,10 @@ import tailwindcss from '@tailwindcss/vite';
 // — production today — never grows an /app route).
 export default defineConfig({
   plugins: [react(), tailwindcss()],
-  base: process.env.APP_BASE ?? '/app/',
+  // Pinned, not env-driven: the FastAPI mount (/app/assets) and the router
+  // basename ('/app') are fixed, so a divergent APP_BASE could only emit
+  // asset URLs nothing serves (CodeRabbit on #802).
+  base: '/app/',
   define: { 'process.env.NODE_ENV': JSON.stringify('production') },
   build: {
     outDir: path.resolve(__dirname, '../static/app'),

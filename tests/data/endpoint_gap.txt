@@ -3,11 +3,16 @@
 # Every build phase deletes lines; the goal is an EMPTY file by switchover.
 # Before deleting a line: verify against live /openapi.json AND call it once
 # (docs/design/07 §C.1). Seeded 2026-08-24 from the extractors themselves.
+/api/availability/link-token
+/api/availability/promotion-preferences
+/api/availability/promotions/campaign
+/api/availability/subscriptions
 /api/bets
 /api/bets/market
 /api/bets/market/current
 /api/bets/wallet
 /api/challenges/current
+/api/diagnostics/storytelling-completeness
 /api/live/feed
 /api/live/state
 /api/monitoring/status
@@ -72,5 +77,6 @@
 /api/storytelling/useless-defense-deaths
 /api/storytelling/win-contribution/formula
 /api/system/overview
+/api/uploads/resumable
 /api/voice-activity/current
 /api/voice-activity/history
