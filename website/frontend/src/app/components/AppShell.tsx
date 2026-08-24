@@ -9,14 +9,14 @@ import { APP_ROUTES } from '../routes';
  * telemetry). Footer: hairline + two mono lines.
  */
 
-const PRIMARY: Array<{ label: string; to: string; section: 'stats' | 'telemetry' | null }> = [
-  { label: 'Stats', to: '/sessions', section: 'stats' },
-  { label: 'Live', to: '/live', section: null },
-  { label: 'Telemetry', to: '/proximity', section: 'telemetry' },
-  { label: 'Greatshot', to: '/greatshot/demos', section: null },
-  { label: 'Uploads', to: '/uploads', section: null },
-  { label: '#ETL', to: '/availability', section: null },
-  { label: 'About', to: '/admin', section: null },
+const PRIMARY: Array<{ label: string; to: string; section: 'stats' | 'telemetry' | null; prefix: string }> = [
+  { label: 'Stats', to: '/sessions', section: 'stats', prefix: '/sessions' },
+  { label: 'Live', to: '/live', section: null, prefix: '/live' },
+  { label: 'Telemetry', to: '/proximity', section: 'telemetry', prefix: '/proximity' },
+  { label: 'Greatshot', to: '/greatshot/demos', section: null, prefix: '/greatshot' },
+  { label: 'Uploads', to: '/uploads', section: null, prefix: '/uploads' },
+  { label: '#ETL', to: '/availability', section: null, prefix: '/availability' },
+  { label: 'About', to: '/admin', section: null, prefix: '/admin' },
 ];
 
 function sectionFor(pathname: string): 'stats' | 'telemetry' | null {
@@ -67,8 +67,8 @@ export function AppShell() {
       <div style={{ borderBottom: '1px solid var(--color-rule-800)' }}>
         <div
           style={{
-            maxWidth: 1180, margin: '0 auto', padding: '0 34px', display: 'flex',
-            alignItems: 'center', height: 60, gap: 26,
+            maxWidth: 1180, margin: '0 auto', padding: '8px 34px', display: 'flex',
+            alignItems: 'center', minHeight: 60, gap: 26, flexWrap: 'wrap', rowGap: 8,
           }}
         >
           <Link
@@ -80,11 +80,17 @@ export function AppShell() {
           >
             slomix
           </Link>
-          <nav style={{ display: 'flex', gap: 20 }}>
+          {/* Wraps on narrow viewports as an interim measure; the real
+              responsive pass is phase-1 design work (docs/design/08). */}
+          <nav style={{ display: 'flex', gap: 20, flexWrap: 'wrap', rowGap: 6 }}>
             {PRIMARY.map((item) => {
-              const active = section === item.section
-                ? item.section !== null
-                : pathname === item.to || pathname.startsWith(`${item.to}/`);
+              // Sectioned entries light up for their whole sub-navigation;
+              // unsectioned ones by their own prefix (a `section === null`
+              // comparison would short-circuit to false on their own pages —
+              // Codex review on #802).
+              const active = item.section !== null
+                ? section === item.section
+                : pathname === item.prefix || pathname.startsWith(`${item.prefix}/`);
               return (
                 <Link
                   key={item.label}
@@ -106,6 +112,9 @@ export function AppShell() {
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#454340' }} />
               DEV
             </span>
+            {/* Known limitation until phase 6 (auth flows): the OAuth
+                callback returns to the legacy site, not to /app — the login
+                round-trip works, the return location does not yet. */}
             <a
               href="/auth/login"
               style={{

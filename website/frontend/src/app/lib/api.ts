@@ -4,9 +4,11 @@ import type { paths } from '../../api/generated/openapi.d';
  * Typed GET for the standalone app (docs/design/06 §4b).
  *
  * What the compiler checks — and what it deliberately cannot:
- *  - paths and query parameter names/types come from docs/api/openapi.json
- *    via openapi-typescript, so a typo'd path or a `days` vs `range_days`
- *    mixup fails the build (that is where the real bugs lived — 07 §C.1);
+ *  - paths, query parameter names/types AND path parameter names/presence
+ *    come from docs/api/openapi.json via openapi-typescript, so a typo'd
+ *    path, a `days` vs `range_days` mixup, or a templated path called
+ *    without its `{round_id}` all fail the build (that is where the real
+ *    bugs lived — 07 §C.1, plus Codex review on #802);
  *  - response bodies are `unknown` because the backend declares almost no
  *    response_model (06 §4: 259 operations, 5 typed). Real response types
  *    are earned per phase in types.ts as endpoints gain response_model —
@@ -29,6 +31,17 @@ export type QueryOf<P extends GetPath> = paths[P] extends {
   ? Q
   : never;
 
+/**
+ * The generated types mark `path` REQUIRED exactly when the route is
+ * templated (`path?: never` otherwise), so this resolves to `never` for
+ * plain routes and to the named-param record for templated ones.
+ */
+export type PathParamsOf<P extends GetPath> = paths[P] extends {
+  get: { parameters: { path: infer PP } };
+}
+  ? PP
+  : never;
+
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -38,6 +51,19 @@ export class ApiError extends Error {
     this.name = 'ApiError';
   }
 }
+
+interface BaseOptions<P extends GetPath> {
+  // No `& Record<string, unknown>` widening here: it would let a wrong
+  // parameter name (`days` vs `range_days`) compile — the exact bug class
+  // this wrapper exists to catch (measured: the guard test went green the
+  // moment the intersection was added).
+  query?: QueryOf<P>;
+  signal?: AbortSignal;
+}
+
+export type ApiGetOptions<P extends GetPath> = [PathParamsOf<P>] extends [never]
+  ? BaseOptions<P> & { pathParams?: never }
+  : BaseOptions<P> & { pathParams: PathParamsOf<P> };
 
 function buildQuery(query: Record<string, unknown> | undefined): string {
   if (!query) return '';
@@ -59,21 +85,20 @@ function fillPath(path: string, pathParams: Record<string, string | number> | un
   });
 }
 
-export interface ApiGetOptions<P extends GetPath> {
-  // No `& Record<string, unknown>` widening here: it would let a wrong
-  // parameter name (`days` vs `range_days`) compile — the exact bug class
-  // this wrapper exists to catch (measured: the guard test went green the
-  // moment the intersection was added).
-  query?: QueryOf<P>;
-  pathParams?: Record<string, string | number>;
-  signal?: AbortSignal;
-}
-
 export async function apiGet<P extends GetPath>(
   path: P,
-  options: ApiGetOptions<P> = {},
+  // A templated path REQUIRES options with its pathParams; a plain path may
+  // omit options entirely — enforced by the conditional tuple.
+  ...args: [PathParamsOf<P>] extends [never]
+    ? [options?: ApiGetOptions<P>]
+    : [options: ApiGetOptions<P>]
 ): Promise<unknown> {
-  const url = fillPath(path, options.pathParams) + buildQuery(options.query as Record<string, unknown> | undefined);
+  const options = (args[0] ?? {}) as BaseOptions<P> & {
+    pathParams?: Record<string, string | number>;
+  };
+  const url =
+    fillPath(path, options.pathParams) +
+    buildQuery(options.query as Record<string, unknown> | undefined);
   // url is a compile-time literal from the generated paths map plus
   // encodeURIComponent'd params — never a user-controlled absolute URL.
   // nosemgrep
