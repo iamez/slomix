@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiGet } from './api';
+import { ApiError, apiGet, apiGetResponse } from './api';
 
 /**
  * Compile-time contract (checked by `npm run typecheck`, which compiles this
@@ -43,6 +43,15 @@ describe('apiGet', () => {
     expect(fetchMock).toHaveBeenLastCalledWith('/api/stats/session-leaderboard?limit=5', {
       signal: undefined,
     });
+  });
+
+  it('apiGetResponse returns the raw Response for file-producing routes', async () => {
+    const response = { ok: true, json: () => Promise.reject(new Error('not json')) };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
+    const res = await apiGetResponse('/api/uploads/{upload_id}/download', {
+      pathParams: { upload_id: 'abc' },
+    });
+    expect(res).toBe(response);
   });
 
   it('throws ApiError with status and path on non-2xx', async () => {

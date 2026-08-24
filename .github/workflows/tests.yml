@@ -185,6 +185,14 @@ jobs:
           git diff --exit-code -- src/api/generated/openapi.d.ts
       - name: Unit tests (vitest)
         run: npm test
+      - name: Standalone app build (vite.app.config.ts)
+        # tsc validates neither app.html nor the app Vite/Tailwind config nor
+        # the emitted /app/assets layout the backend mounts — only the build
+        # itself does (Codex on #802).
+        run: |
+          npm run build:app
+          test -f ../static/app/app.html
+          ls ../static/app/assets/*.js >/dev/null
 
   shellcheck:
     name: ShellCheck (deploy + ops scripts)

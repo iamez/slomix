@@ -35,25 +35,44 @@ _NEW_TEMPLATE_RE = re.compile(r"\$\{API(?:_BASE)?\}(/[a-zA-Z0-9/_-]+)")
 _NEW_LITERAL_RE = re.compile(r"(?<=['\"`}])/(?:api|auth)/[a-zA-Z0-9/_-]+")
 
 
-def _extract_new_frontend_paths() -> set[str]:
-    paths: set[str] = set()
+_BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
+_LINE_COMMENT_RE = re.compile(r"^\s*//.*$", re.M)
+
+
+def _strip_comments(text: str) -> str:
+    """Paths quoted in comments are documentation, not calls — the api.ts
+    doc-comment's example literally registered /api/rounds as coverage
+    (Codex on #802). Block comments and full-line // comments go; trailing
+    // after code is left alone (a ':' in 'https://' makes that cut unsafe)."""
+    return _LINE_COMMENT_RE.sub("", _BLOCK_COMMENT_RE.sub("", text))
+
+
+def _extract_new_frontend_paths() -> tuple[set[str], set[str]]:
+    """Returns (exact, dynamic_prefixes): a capture that stopped at an
+    interpolation (`${`) is a truncated DYNAMIC prefix and may claim deeper
+    coverage; an exact literal covers only itself (Codex on #802 — an exact
+    /api/bets call must not clear /api/bets/market)."""
+    exact: set[str] = set()
+    dynamic: set[str] = set()
+
+    def add(candidate: str, text: str, end: int) -> None:
+        candidate = candidate.rstrip("/")
+        if not candidate:
+            return
+        if not candidate.startswith(("/api/", "/auth/")):
+            candidate = "/api" + candidate
+        (dynamic if text[end:end + 2] == "${" else exact).add(candidate)
+
     for ts_file in sorted(FRONTEND_SRC.rglob("*.ts")) + sorted(FRONTEND_SRC.rglob("*.tsx")):
         if "generated" in ts_file.parts or ts_file.name.endswith((".test.ts", ".test.tsx")):
             continue
-        text = ts_file.read_text(encoding="utf-8")
-        for match in _NEW_WRAPPER_RE.finditer(text):
-            candidate = match.group(1).rstrip("/")
-            if candidate and not candidate.startswith(("/api/", "/auth/")):
-                candidate = "/api" + candidate
-            if candidate:
-                paths.add(candidate)
-        for match in _NEW_TEMPLATE_RE.finditer(text):
-            candidate = match.group(1).rstrip("/")
-            if candidate:
-                paths.add("/api" + candidate if not candidate.startswith("/api") else candidate)
+        text = _strip_comments(ts_file.read_text(encoding="utf-8"))
+        for rx in (_NEW_WRAPPER_RE, _NEW_TEMPLATE_RE):
+            for match in rx.finditer(text):
+                add(match.group(1), text, match.end())
         for match in _NEW_LITERAL_RE.finditer(text):
-            paths.add(match.group(0).rstrip("/"))
-    return paths
+            add(match.group(0), text, match.end())
+    return exact, dynamic
 
 
 def _read_path_list(file: Path) -> set[str]:
@@ -72,19 +91,21 @@ def _read_path_list(file: Path) -> set[str]:
 _MIN_COVERING_SEGMENTS = 3
 
 
-def _covered(required: str, new_paths: set[str]) -> bool:
-    """A required path counts as covered when a new-tree path equals it, is a
-    sufficiently specific prefix of it (the new literal was captured before a
-    dynamic segment), or extends it (required itself was a truncated legacy
-    prefix)."""
-    for candidate in new_paths:
-        if candidate == required:
-            return True
+def _covered(required: str, exact: set[str], dynamic: set[str]) -> bool:
+    """Covered when: an exact call equals it; any call is DEEPER than it
+    (required itself was a truncated legacy prefix); or a DYNAMIC prefix of
+    sufficient specificity leads into it. An exact literal never covers a
+    deeper required path (Codex), and a dynamic family stub never clears a
+    whole family (CodeRabbit)."""
+    if required in exact or required in dynamic:
+        return True
+    for candidate in exact | dynamic:
         if candidate.startswith(required + "/"):
             return True
+    for candidate in dynamic:
         if (
             required.startswith(candidate + "/")
-            and len(_segments := [seg for seg in candidate.split("/") if seg]) >= _MIN_COVERING_SEGMENTS
+            and len([seg for seg in candidate.split("/") if seg]) >= _MIN_COVERING_SEGMENTS
         ):
             return True
     return False
@@ -93,12 +114,12 @@ def _covered(required: str, new_paths: set[str]) -> bool:
 def compute_gap() -> set[str]:
     legacy = _extract_frontend_api_paths()
     extras = _read_path_list(EXTRA_FILE)
-    new_paths = _extract_new_frontend_paths()
-    gap = {path for path in legacy if not _covered(path, new_paths)}
+    exact, dynamic = _extract_new_frontend_paths()
+    gap = {path for path in legacy if not _covered(path, exact, dynamic)}
     # Extras demand an EXACT call: prefix coverage would close
     # /storytelling/win-contribution/formula the moment anything calls its
     # /storytelling/win-contribution sibling (measured while seeding).
-    gap |= {path for path in extras if path not in new_paths}
+    gap |= {path for path in extras if path not in exact}
     return gap
 
 

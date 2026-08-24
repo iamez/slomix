@@ -65,6 +65,30 @@ export type ApiGetOptions<P extends GetPath> = [PathParamsOf<P>] extends [never]
   ? BaseOptions<P> & { pathParams?: never }
   : BaseOptions<P> & { pathParams: PathParamsOf<P> };
 
+/**
+ * File-producing GETs (upload download/poster, greatshot reports, clips,
+ * rendered videos) are in the generated paths map too — res.json() on those
+ * rejects a perfectly good 2xx (Codex on #802). apiGetResponse returns the
+ * raw Response for the caller to stream/blob; apiGet stays JSON-only.
+ */
+export async function apiGetResponse<P extends GetPath>(
+  path: P,
+  ...args: [PathParamsOf<P>] extends [never]
+    ? [options?: ApiGetOptions<P>]
+    : [options: ApiGetOptions<P>]
+): Promise<Response> {
+  const options = (args[0] ?? {}) as BaseOptions<P> & {
+    pathParams?: Record<string, string | number>;
+  };
+  const url =
+    fillPath(path, options.pathParams) +
+    buildQuery(options.query as Record<string, unknown> | undefined);
+  // nosemgrep
+  const res = await fetch(url, { signal: options.signal });
+  if (!res.ok) throw new ApiError(res.status, url);
+  return res;
+}
+
 function buildQuery(query: Record<string, unknown> | undefined): string {
   if (!query) return '';
   const params = new URLSearchParams();
@@ -93,16 +117,11 @@ export async function apiGet<P extends GetPath>(
     ? [options?: ApiGetOptions<P>]
     : [options: ApiGetOptions<P>]
 ): Promise<unknown> {
-  const options = (args[0] ?? {}) as BaseOptions<P> & {
-    pathParams?: Record<string, string | number>;
-  };
-  const url =
-    fillPath(path, options.pathParams) +
-    buildQuery(options.query as Record<string, unknown> | undefined);
   // url is a compile-time literal from the generated paths map plus
   // encodeURIComponent'd params — never a user-controlled absolute URL.
-  // nosemgrep
-  const res = await fetch(url, { signal: options.signal });
-  if (!res.ok) throw new ApiError(res.status, url);
+  const res = await apiGetResponse(
+    path,
+    ...(args as [options: ApiGetOptions<P>]),
+  );
   return res.json();
 }
