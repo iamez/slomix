@@ -15,6 +15,12 @@ function compileTimeContract() {
   // @ts-expect-error wrong query parameter name must not compile
   void apiGet('/api/stats/session-leaderboard', { query: { days: 5 } });
   void apiGet('/api/rounds/{round_id}/awards', { pathParams: { round_id: 11277 } });
+  // @ts-expect-error templated path without pathParams must not compile
+  void apiGet('/api/rounds/{round_id}/awards');
+  // @ts-expect-error wrong path parameter name must not compile
+  void apiGet('/api/rounds/{round_id}/awards', { pathParams: { roundId: 11277 } });
+  // @ts-expect-error plain path must not accept pathParams
+  void apiGet('/api/stats/overview', { pathParams: { round_id: 1 } });
 }
 void compileTimeContract;
 

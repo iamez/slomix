@@ -175,6 +175,14 @@ jobs:
         run: npm ci
       - name: Typecheck (tsc --noEmit)
         run: npm run typecheck
+      - name: Generated API types match the openapi snapshot
+        # docs/api/openapi.json is ratcheted by tests/integration/
+        # test_openapi_snapshot.py; this closes the OTHER half — a refreshed
+        # JSON with a forgotten `npm run generate:api` would leave apiGet
+        # compiling against stale paths (Codex review on #802).
+        run: |
+          npm run generate:api
+          git diff --exit-code -- src/api/generated/openapi.d.ts
       - name: Unit tests (vitest)
         run: npm test
 

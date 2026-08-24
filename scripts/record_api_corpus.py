@@ -76,6 +76,18 @@ def mint_owner_cookie() -> str:
     return itsdangerous.TimestampSigner(str(secret)).sign(payload).decode()
 
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Never follow redirects: /auth/login 302s to discord.com, and following
+    it would ship the minted owner session cookie to a third party (Codex P1
+    on #802). A 3xx is recorded as the endpoint's answer, not chased."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ARG002
+        return None
+
+
+_OPENER = urllib.request.build_opener(_NoRedirect)
+
+
 def http_get(base: str, url: str, cookie: str, timeout: int = 60):
     req = urllib.request.Request(  # noqa: S310 — base is a caller-supplied http(s) dev URL
         base + url,
@@ -83,10 +95,14 @@ def http_get(base: str, url: str, cookie: str, timeout: int = 60):
     )
     started = time.time()
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as res:  # noqa: S310
+        with _OPENER.open(req, timeout=timeout) as res:  # noqa: S310
             return res.status, res.read(), time.time() - started
     except urllib.error.HTTPError as err:
-        return err.code, err.read(), time.time() - started
+        body = err.read()
+        location = err.headers.get("Location") if err.headers else None
+        if location and not body:
+            body = f"redirect (not followed) -> {location}".encode()
+        return err.code, body, time.time() - started
     except Exception as err:  # noqa: BLE001
         return -1, str(err).encode(), time.time() - started
 
@@ -102,7 +118,11 @@ def fill_path(path: str, subs: dict[str, str]) -> str | None:
 
 
 def slug_for(path: str) -> str:
-    return re.sub(r"[^a-zA-Z0-9]+", "_", path).strip("_")
+    """Bijective enough for the spec: '/' becomes '__', '-' survives — a plain
+    non-alnum squash collided /api/live-status with /api/live/status and both
+    weapons spellings, silently overwriting fixtures (Codex P2 on #802)."""
+    cleaned = path.strip("/").replace("{", "").replace("}", "")
+    return re.sub(r"[^A-Za-z0-9_.-]", "_", cleaned.replace("/", "__"))
 
 
 def main() -> int:
