@@ -42,9 +42,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   implementation copied the parsed R2 file wholesale (`match_summary =
   round_2_cumulative_result.copy()`, commit `ee500692`, 2025-11-07): its kills
   and damage really are cumulative, its playtime is not, so DPM read off R0
-  came out doubled and every consumer moved to the halves instead. The importer
-  stopped writing new R0 player rows in 2026-08; the historical ones stay,
-  unread. A view cannot drift the way that copy did — it IS the sum.
+  came out doubled and every consumer moved to the halves instead.
+
+  ⚠️ **R0 ROWS ARE STILL BEING WRITTEN.** This paragraph used to say the
+  importer stopped in 2026-08. It did not: the session of 2026-08-23 produced
+  5 R0 rounds and **30 new R0 player rows**, and every session day before it
+  did the same (2026-08-21: 18, 2026-08-20: 68, 2026-08-18: 48). Nothing reads
+  them — the bot's `_post_match_summary` is dead code and the website filters
+  the halves everywhere — but "they are no longer created" and "they are
+  created and ignored" are different facts, and only the second one warns you
+  that an unfiltered query still doubles. The filter above is not historical
+  hygiene; it is load-bearing today.
+
+  A view cannot drift the way that copy did — it IS the sum.
 - ALWAYS take round DURATION from `shared/round_time.py`
   (`round_duration_seconds` / `round_duration_sql`). `rounds.actual_time` is
   the stopwatch TARGET (`g_nextTimeLimit`), not a measurement — it overstates
