@@ -77,6 +77,27 @@ export interface EdgeStyle {
 
 export function edgeStyle(kind: string, contested: boolean): EdgeStyle;
 
+export interface BeliefRegion {
+  x: number;
+  y: number;
+  z: number;
+  radius: number;
+  confidence: number;
+  subject: string;
+  source: string;
+}
+
+export function beliefRegions(
+  holder: {
+    beliefs?: Array<Record<string, unknown>>;
+    position_claim_max_radius?: number;
+  } | null | undefined,
+): { regions: BeliefRegion[]; unplacedSubjects: string[] };
+
+export function horizonOf(holder: { position_claim_max_radius?: number } | null): number;
+
+export function isTeamPov(pov: unknown): boolean;
+
 export function statusLine(snapshot: Record<string, unknown> | null): string;
 
 export function loadSpiderWebView(params?: Record<string, string>): Promise<void>;

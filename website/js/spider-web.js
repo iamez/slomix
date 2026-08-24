@@ -55,6 +55,8 @@ let loadId = 0;
 
 const state = {
     roundId: null,
+    pov: 'world',
+    teams: [],
     tMs: 0,
     durationMs: 0,
     mesh: null,          // { vertices:[x,y,z,...], indexes:[i,i,i,...], bounds }
@@ -169,6 +171,64 @@ export function boundsFromPlayers(players, margin = 512) {
     };
 }
 
+/**
+ * The enemy regions a point of view is entitled to draw.
+ *
+ * ⭐ Under a team view an enemy is NOT a dot. The holder never knew a point —
+ * they knew a place, from a contact or a crosshair or a noise, and that place
+ * has been widening ever since. So the region is what gets drawn, at the size
+ * the backend already grew it to, and its opacity is the belief's confidence.
+ *
+ * ⛔ Only beliefs that name a subject AND carry a region. A gunfire belief
+ * names nobody (§6.3, the phantom squad) and a roster belief has no place;
+ * drawing either as an enemy position would invent one.
+ */
+export function beliefRegions(holder) {
+    if (!holder || !Array.isArray(holder.beliefs)) return { regions: [], unplacedSubjects: [] };
+    // ⛔ Past the published horizon a region is NOT drawn. The backend already
+    // refuses to derive a distance from one that wide, and drawing it anyway
+    // makes the same overclaim in pixels: a 2,500-unit circle on a 4,600-unit
+    // map is not "he is somewhere here", it is the whole map. Those subjects
+    // are still KNOWN — they are reported as "position unknown" in words,
+    // which is what the holder actually had.
+    const horizon = typeof holder.position_claim_max_radius === 'number'
+        ? holder.position_claim_max_radius : Infinity;
+    const drawable = [];
+    const unplaced = new Set();
+    for (const b of holder.beliefs) {
+        if (!b || !b.subject_guid) continue;
+        if (!b.region) continue;
+        if (b.region.radius > horizon) {
+            unplaced.add(b.subject_guid);
+            continue;
+        }
+        drawable.push({
+            x: b.region.x, y: b.region.y, z: b.region.z,
+            radius: b.region.radius,
+            confidence: typeof b.confidence === 'number' ? b.confidence : 0,
+            subject: b.subject_guid,
+            source: b.source,
+        });
+    }
+    // A subject with one fresh region and one stale one is placed, not unplaced.
+    for (const d of drawable) unplaced.delete(d.subject);
+    // ⚠️ An object, not an array with a property bolted on: the second answer
+    // is as much part of the result as the first, and hiding it on the array
+    // made it invisible to any caller that treated the return as a list.
+    return { regions: drawable, unplacedSubjects: [...unplaced] };
+}
+
+/** The published horizon, or Infinity when a view does not carry one. */
+export function horizonOf(holder) {
+    return holder && typeof holder.position_claim_max_radius === 'number'
+        ? holder.position_claim_max_radius : Infinity;
+}
+
+/** Whether this view is one team's picture rather than the oracle's. */
+export function isTeamPov(pov) {
+    return typeof pov === 'string' && pov.toLowerCase().startsWith('team:');
+}
+
 // ── Drawing ───────────────────────────────────────────────────────────────────
 
 function drawFloors(ctx, mesh, cam, view) {
@@ -269,6 +329,27 @@ function drawEdges(ctx, edges, players, cam, view) {
     }
 }
 
+function drawBeliefRegions(ctx, regions, cam, view) {
+    for (const r of regions) {
+        const c = project(r.x - view.midX, r.y - view.midY, r.z - view.midZ,
+                          cam, view);
+        const px = Math.max(3, r.radius * view.scale * cam.zoom);
+        // Confidence is the opacity, floored so a fading belief stays visible
+        // as a fading belief rather than disappearing into the background.
+        const a = Math.max(0.08, Math.min(0.5, r.confidence));
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(c.x, c.y, px, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(224, 112, 90, ${a * 0.25})`;
+        ctx.fill();
+        ctx.strokeStyle = `rgba(224, 112, 90, ${a})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
 function drawPlayers(ctx, players, cam, view) {
     const drawn = [];
     for (const p of players) {
@@ -359,6 +440,15 @@ function render(canvas) {
 
     const view = viewportFor({ bounds }, canvas, state.camera);
     if (state.mesh) drawFloors(ctx, state.mesh, state.camera, view);
+
+    // Enemy beliefs beneath everything else: they are the least certain thing
+    // on the canvas and must not sit on top of what is known.
+    if (isTeamPov(state.pov)) {
+        const info = (state.snapshot && state.snapshot.information_state) || {};
+        const holder = Object.values(info.holders || {})[0];
+        drawBeliefRegions(ctx, beliefRegions(holder).regions, state.camera, view);
+    }
+
     // Threads under the players: a dot must never be hidden by a line.
     const edges = (state.snapshot && state.snapshot.edges) || [];
     if (Array.isArray(edges)) drawEdges(ctx, edges, players, state.camera, view);
@@ -383,9 +473,15 @@ async function loadMesh(mapName) {
     return state.mesh;
 }
 
-async function loadMoment(roundId, tMs) {
+async function loadMoment(roundId, tMs, pov) {
+    // ⛔ The point of view is a QUERY PARAMETER, so the withholding happens on
+    // the server and each view is its own cache entry. Fetching the oracle once
+    // and filtering locally would be faster and would quietly undo the whole
+    // guarantee.
+    const params = new URLSearchParams({ t: String(Math.round(tMs)) });
+    if (pov && pov !== 'world') params.set('pov', pov);
     const snapshot = await fetchJSON(
-        `${API_BASE}/replay/round/${encodeURIComponent(roundId)}/web?t=${Math.round(tMs)}`
+        `${API_BASE}/replay/round/${encodeURIComponent(roundId)}/web?${params}`
     );
     state.snapshot = snapshot;
     return snapshot;
@@ -450,14 +546,14 @@ export async function loadSpiderWebView(params = {}) {
     // first has anybody, so the first frame is a moment that exists.
     let snapshot;
     try {
-        snapshot = await loadMoment(roundId, state.tMs || 0);
+        snapshot = await loadMoment(roundId, state.tMs || 0, state.pov);
         if (!state.tMs && snapshot && snapshot.first_position_ms) {
             // Clamped here too. The payload is fixed, but the endpoint answers
             // `t < 0` with a 422 and this page's only response to that is
             // "could not load" — a floor the caller can enforce for itself
             // costs one call to Math.max.
             state.tMs = Math.max(0, snapshot.first_position_ms);
-            snapshot = await loadMoment(roundId, state.tMs);
+            snapshot = await loadMoment(roundId, state.tMs, state.pov);
         }
     } catch {
         if (myLoad !== loadId) return;
@@ -474,6 +570,14 @@ export async function loadSpiderWebView(params = {}) {
 
     container.textContent = '';
 
+    // Teams are learned from the oracle load and kept: under a team view the
+    // payload no longer contains the other side, so the switch would lose its
+    // own options after the first click.
+    if (!state.teams.length) {
+        state.teams = [...new Set((snapshot.players || [])
+            .map((p) => p.team).filter(Boolean))].sort();
+    }
+
     const header = _el('div', 'mb-3');
     header.appendChild(_el('h2', 'text-lg font-semibold text-slate-100',
         `Spider Web · runda ${roundId}${mapName ? ` · ${mapName}` : ''}`));
@@ -485,6 +589,77 @@ export async function loadSpiderWebView(params = {}) {
         container.appendChild(_el('p', 'text-amber-400 text-sm mb-3',
             `Za mapo ${mapName || '?'} ni izvožene geometrije — lege so znane, prostor ni.`));
     }
+
+    // ⭐ Point of view. §6.4 makes `world` a NAMED diagnostic, so it is spelled
+    // out as one rather than being the unlabelled default.
+    const povBar = _el('div', 'flex items-center gap-2 mb-2 flex-wrap');
+    povBar.appendChild(_el('span', 'text-[11px] uppercase tracking-wider text-slate-500',
+        'točka pogleda'));
+    const povButtons = [];
+    for (const [value, label] of [
+        ...state.teams.map((t) => [`team:${t}`, t]),
+        ['world', 'WORLD (ORACLE)'],
+    ]) {
+        const btn = _el('button', 'px-2 py-1 text-xs rounded font-mono border', label);
+        btn.dataset.pov = value;
+        povButtons.push(btn);
+        btn.addEventListener('click', async () => {
+            if (state.pov === value) return;
+            state.pov = value;
+            await goTo(state.tMs);
+            paintPov();
+        });
+        povBar.appendChild(btn);
+    }
+    const paintPov = () => {
+        for (const b of povButtons) {
+            const on = b.dataset.pov === state.pov;
+            b.className = 'px-2 py-1 text-xs rounded font-mono border '
+                + (on ? 'bg-slate-700 text-slate-100 border-slate-500'
+                      : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800');
+        }
+    };
+    container.appendChild(povBar);
+
+    // What this view IS and IS NOT. Under a team view the page withholds truth
+    // it holds, and §6 requires the own-team simplification to be stated rather
+    // than assumed — an unstated simplification is just an error.
+    const povNote = _el('p', 'text-[11px] leading-relaxed mb-2');
+    const paintPovNote = () => {
+        const info = (state.snapshot && state.snapshot.information_state) || {};
+        const withheld = (state.snapshot && state.snapshot.withheld_by_pov) || [];
+        povNote.textContent = '';
+        if (info.pov_unavailable) {
+            povNote.className = 'text-[11px] leading-relaxed mb-2 text-amber-400';
+            povNote.textContent = info.pov_unavailable;
+            return;
+        }
+        if (!isTeamPov(state.pov)) {
+            povNote.className = 'text-[11px] leading-relaxed mb-2 text-amber-500/80';
+            povNote.textContent = 'ORACLE: vidiš vse, kar se je zgodilo, ne tega, '
+                + 'kar je kdo vedel. Diagnostika, ne pogled igralca.';
+            return;
+        }
+        const holder = Object.values(info.holders || {})[0] || {};
+        const known = holder.known_enemy_count || 0;
+        const unplaced = beliefRegions(holder).unplacedSubjects.length;
+        povNote.className = 'text-[11px] leading-relaxed mb-2 text-slate-400';
+        povNote.textContent =
+            `Lege ${withheld.length} nasprotnikov so ZADRŽANE na strežniku, ne skrite `
+            + 'pri risanju. Nasprotnik je narisan samo kot regija, ki jo je ta ekipa '
+            + 'lahko sklepala, in ta se s časom širi. '
+            + (known
+                ? `Trenutno pozna ${known} ${known === 1 ? 'nasprotnika' : 'nasprotnikov'}.`
+                : 'V tem trenutku ta ekipa ni vedela za nobenega nasprotnika.')
+            + (unplaced
+                ? ` Pri ${unplaced} od njih je regija že širša od `
+                  + `${Math.round(horizonOf(holder))} enot, zato ni narisana: `
+                  + 'ekipa ve, da obstaja, ne pa več kje je.'
+                : '')
+            + ' ⚠️ Lege soigralcev so prikazane kot znane — to je poenostavitev '
+            + '(glasovni kanal ni zajet), ne meritev.';
+    };
+    container.appendChild(povNote);
 
     const canvas = document.createElement('canvas');
     canvas.className = 'w-full rounded border border-slate-800 bg-slate-950 cursor-move';
@@ -525,12 +700,13 @@ export async function loadSpiderWebView(params = {}) {
         readout.textContent = `t = ${clamped} ms`;
         const mine = ++loadId;
         try {
-            await loadMoment(roundId, clamped);
+            await loadMoment(roundId, clamped, state.pov);
         } catch {
             return;
         }
         if (mine !== loadId) return;
         status.textContent = statusLine(state.snapshot);
+        paintPovNote();
         redraw();
     };
 
@@ -557,5 +733,7 @@ export async function loadSpiderWebView(params = {}) {
     container.appendChild(legend);
 
     bindCamera(canvas, redraw);
+    paintPov();
+    paintPovNote();
     redraw();
 }
