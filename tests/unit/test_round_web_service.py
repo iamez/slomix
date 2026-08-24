@@ -43,6 +43,47 @@ def _track(spawn, death, track_id, path=None):
     return ("G1", "p", "AXIS", "soldier", spawn, death, path or [], "supply", track_id)
 
 
+class TestABeliefCentreComesFromTheRevealNotTheTruth:
+    """⭐ The one leak the "no coordinates outside a belief" scan cannot see.
+
+    That scan excludes belief regions on purpose: a region legitimately holds
+    an enemy's position, because that is what the holder inferred. But the
+    exclusion is only safe while the centre comes from the OBSERVATION. If
+    anyone ever computed it from the CURRENT truth, the oracle would be
+    wearing a belief's clothes and the scan would wave it through.
+
+    Fable asked for the scenario that separates the two: pick a moment at which
+    the subject has moved further than the region's radius since the reveal,
+    and check the centre stayed where the reveal was.
+
+    `make_locator` already reads through `find_position_floor`, so the property
+    holds by construction — this pins it against a future change.
+    """
+
+    #: Walks a long way east between the reveal and the moment asked about.
+    PATH = [
+        {"x": 0.0, "y": 0.0, "z": 0.0, "time": 1_000},
+        {"x": 4_000.0, "y": 0.0, "z": 0.0, "time": 30_000},
+    ]
+
+    def test_the_centre_is_where_he_was_seen(self):
+        locate = make_locator({"ENEMY": [_track(0, None, 1, self.PATH)]})
+        region = locate("ENEMY", 1_000)          # the reveal
+        assert (region.x, region.y) == (0.0, 0.0)
+
+    def test_the_centre_is_not_where_he_is_now(self):
+        """⛔ The assertion that would fail if the centre were recomputed from
+        current truth. He is at x=4000 by then; the belief must still say 0."""
+        locate = make_locator({"ENEMY": [_track(0, None, 1, self.PATH)]})
+        reveal = locate("ENEMY", 1_000)
+        now = locate("ENEMY", 30_000)
+        assert now.x == 4_000.0, "the fixture no longer moves him"
+        assert reveal.x != now.x
+        # And he has moved further than the reveal's own radius, so the two
+        # cannot be confused for the same claim.
+        assert abs(now.x - reveal.x) > reveal.radius
+
+
 class TestTheAudibleRadiusComesFromTheEngine:
     def test_it_is_the_distance_at_which_the_volume_reaches_zero(self):
         """⭐ The derivation, not the number.

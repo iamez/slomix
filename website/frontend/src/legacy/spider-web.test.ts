@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, isTeamPov, placeLabels,
+  THEME, alphaHex, beliefRegions, boundsFromPlayers, edgeStyle, horizonOf,
+  isTeamPov, placeLabels,
   project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
 
@@ -366,5 +367,60 @@ describe('beliefRegions', () => {
       expect(horizonOf(null)).toBe(Infinity);
       expect(beliefRegions({ beliefs: [belief()] }).regions).toHaveLength(1);
     });
+  });
+});
+
+describe('THEME', () => {
+  // The chosen dark-instrument tokens. Pinned here because the React rewrite
+  // will READ this object rather than re-derive the palette, so a value that
+  // drifts to an eyeballed neighbour silently desynchronises the two surfaces
+  // — and nothing else in the suite would notice.
+  it.each([
+    ['background', '#0b0b0a'],
+    ['allies', '#8bb0d6'],
+    ['axis', '#d1857c'],
+    ['positive', '#8fae8a'],
+    ['negative', '#b0847c'],
+  ])('%s is the chosen token', (key, value) => {
+    expect(THEME[key as keyof typeof THEME]).toBe(value);
+  });
+
+  it('has no colour literal left outside it', async () => {
+    // ⭐ The structural half. Pinning the values catches a changed token; this
+    // catches a NEW colour introduced somewhere else, which is how a palette
+    // scatters in the first place (the `replay.js` lesson the spec cites).
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    // ⚠️ From the vitest root (website/frontend), not `import.meta.url` — under
+    // vitest that is not a file: URL and readFile rejects it.
+    const source = await fs.readFile(
+      path.resolve(process.cwd(), '../js/spider-web.js'), 'utf8');
+    const themeBlock = source.slice(
+      source.indexOf('export const THEME'), source.indexOf('};', source.indexOf('export const THEME')));
+    const outside = source.replace(themeBlock, '');
+    const strays = [...outside.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((m) => m[0]);
+    expect(strays).toEqual([]);
+  });
+});
+
+describe('alphaHex', () => {
+  it('turns an opacity into two hex digits', () => {
+    expect(alphaHex(1)).toBe('ff');
+    expect(alphaHex(0)).toBe('00');
+    expect(alphaHex(0.5)).toBe('80');
+  });
+
+  it('is always two digits, so a colour never becomes malformed', () => {
+    // ⛔ `(3).toString(16)` is "3", and `#b0847c3` is not a colour — the
+    // canvas would silently drop the style and draw in whatever came before.
+    for (const a of [0.001, 0.01, 0.02, 0.05]) {
+      expect(alphaHex(a)).toHaveLength(2);
+    }
+  });
+
+  it('clamps rather than producing nonsense for out-of-range input', () => {
+    expect(alphaHex(5)).toBe('ff');
+    expect(alphaHex(-1)).toBe('00');
+    expect(alphaHex(NaN)).toBe('00');
   });
 });

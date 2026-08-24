@@ -44,12 +44,37 @@ function stripEtColors(text) {
 
 const GEOMETRY_BASE = '/assets/maps/geometry';
 
-/** Team colours. Axis warm, Allies cool — the same pairing the rest of the site uses. */
-const TEAM_COLOR = {
-    AXIS: '#f0a868',
-    ALLIES: '#6aa9f0',
+/**
+ * Every colour this page draws with, in one place.
+ *
+ * ⭐ ONE OBJECT, INJECTED, NOT SCATTERED. `replay.js` spread its palette across
+ * a dozen call sites and the React rewrite had to hunt each one; the migration
+ * spec asks for a single configuration object so the rewrite can read it
+ * instead of re-deriving it. Values are the chosen dark-instrument tokens, not
+ * eyeballed neighbours of them.
+ *
+ * ⚠️ A colour that appears nowhere in here is a colour the rewrite will miss.
+ * If a new element needs one, it belongs in this object first.
+ */
+export const THEME = {
+    background: '#0b0b0a',
+    hairline: '#171715',
+    text: '#eae7e1',
+    textDim: '#8d8981',
+    label: '#807c75',
+    allies: '#8bb0d6',
+    axis: '#d1857c',
+    positive: '#8fae8a',
+    negative: '#b0847c',
+    neutral: '#807c75',
 };
-const NEUTRAL = '#8892a4';
+
+/** Team colours, read off the theme so there is one source and not two. */
+const TEAM_COLOR = {
+    AXIS: THEME.axis,
+    ALLIES: THEME.allies,
+};
+const NEUTRAL = THEME.neutral;
 
 let loadId = 0;
 
@@ -290,7 +315,7 @@ function drawFloors(ctx, mesh, cam, view) {
 export function edgeStyle(kind, contested) {
     const opponent = kind === 'opponent';
     return {
-        color: opponent ? '#e0705a' : '#5f8fbf',
+        color: opponent ? THEME.negative : THEME.allies,
         width: contested ? 1.8 : 0.8,
         dash: contested ? [] : [3, 4],
         alpha: contested ? 0.75 : 0.28,
@@ -329,6 +354,12 @@ function drawEdges(ctx, edges, players, cam, view) {
     }
 }
 
+/** Two hex digits for an alpha in 0..1, so a colour keeps its THEME value. */
+export function alphaHex(a) {
+    const clamped = Math.max(0, Math.min(1, Number(a) || 0));
+    return Math.round(clamped * 255).toString(16).padStart(2, '0');
+}
+
 function drawBeliefRegions(ctx, regions, cam, view) {
     for (const r of regions) {
         const c = project(r.x - view.midX, r.y - view.midY, r.z - view.midZ,
@@ -340,9 +371,11 @@ function drawBeliefRegions(ctx, regions, cam, view) {
         ctx.save();
         ctx.beginPath();
         ctx.arc(c.x, c.y, px, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(224, 112, 90, ${a * 0.25})`;
+        // Hex + alpha suffix rather than a second rgba() literal, so the value
+        // still comes from THEME and cannot drift away from it.
+        ctx.fillStyle = THEME.negative + alphaHex(a * 0.25);
         ctx.fill();
-        ctx.strokeStyle = `rgba(224, 112, 90, ${a})`;
+        ctx.strokeStyle = THEME.negative + alphaHex(a);
         ctx.lineWidth = 1;
         ctx.setLineDash([5, 4]);
         ctx.stroke();
@@ -384,7 +417,9 @@ function drawPlayers(ctx, players, cam, view) {
 
         ctx.beginPath();
         ctx.arc(s.x, s.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = p.alive === false ? '#00000000' : color;
+        // A dead player is a ring, not a disc: transparent fill rather than a
+        // colour, so it reads as absence instead of a fourth team.
+        ctx.fillStyle = p.alive === false ? 'transparent' : color;
         ctx.fill();
         ctx.strokeStyle = color;
         ctx.lineWidth = 1.5;
@@ -398,7 +433,7 @@ function drawPlayers(ctx, players, cam, view) {
     // another into an unreadable smear. Nudging them apart would draw people
     // where they were not, so a name that has no room is simply not drawn —
     // the disc still shows the player is there.
-    ctx.fillStyle = '#c8d2e0';
+    ctx.fillStyle = THEME.text;
     ctx.font = '11px ui-monospace, monospace';
     for (const l of placeLabels(labels)) {
         ctx.fillText(l.text, l.x, l.y);
@@ -428,7 +463,7 @@ export function placeLabels(labels, minX = 70, minY = 13) {
 function render(canvas) {
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = '#0a0d14';
+    ctx.fillStyle = THEME.background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
     const players = (state.snapshot && state.snapshot.players) || [];
@@ -600,6 +635,12 @@ export async function loadSpiderWebView(params = {}) {
     // ⭐ Point of view. §6.4 makes `world` a NAMED diagnostic, so it is spelled
     // out as one rather than being the unlabelled default.
     const povBar = _el('div', 'flex items-center gap-2 mb-2 flex-wrap');
+    // ⭐ Parity keys for the React rewrite's harness, in its stable kebab-case
+    // form. ⚠️ Only the panels that EXIST are marked. The spec reserves keys
+    // for the clock, snapshot integrity, gaps and the rest; tagging elements
+    // that are not built yet would tell the harness a panel is present and
+    // make its first run a false pass.
+    povBar.dataset.parity = 'spider-web.pov-toggle';
     povBar.appendChild(_el('span', 'text-[11px] uppercase tracking-wider text-slate-500',
         'točka pogleda'));
     const povButtons = [];
@@ -670,6 +711,7 @@ export async function loadSpiderWebView(params = {}) {
 
     const canvas = document.createElement('canvas');
     canvas.className = 'w-full rounded border border-slate-800 bg-slate-950 cursor-move';
+    canvas.dataset.parity = 'spider-web.web-canvas';
     canvas.style.height = '640px';
     container.appendChild(canvas);
 
@@ -690,6 +732,7 @@ export async function loadSpiderWebView(params = {}) {
     // Time scrubber. The steps are the prototype's, and 200 ms is the capture
     // interval — a smaller step would ask for a moment nothing was recorded at.
     const controls = _el('div', 'flex items-center gap-2 mt-3 flex-wrap');
+    controls.dataset.parity = 'spider-web.timeline';
     const slider = document.createElement('input');
     slider.type = 'range';
     slider.min = '0';
