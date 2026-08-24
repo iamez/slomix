@@ -57,16 +57,34 @@ const GEOMETRY_BASE = '/assets/maps/geometry';
  * If a new element needs one, it belongs in this object first.
  */
 export const THEME = {
+    // In use today.
     background: '#0b0b0a',
-    hairline: '#171715',
     text: '#eae7e1',
-    textDim: '#8d8981',
-    label: '#807c75',
     allies: '#8bb0d6',
     axis: '#d1857c',
-    positive: '#8fae8a',
     negative: '#b0847c',
     neutral: '#807c75',
+
+    // ⚠️ Declared and NOT yet drawn with. The clock and snapshot-integrity
+    // panels are still to be built, and the hex scan below forbids inventing a
+    // colour for them at the call site — so the palette they must draw from is
+    // named here first.
+    //
+    // ⛔ This is deliberately NOT the same call as the parity keys, where only
+    // the panels that exist are tagged. A parity key asserts to a harness that
+    // a panel is present, and a false one makes its first run a false pass. A
+    // token asserts nothing about the page; it declares what the page is
+    // allowed to use. Reserving one costs nothing, reserving the other lies.
+    hairline: '#171715',
+    textDim: '#8d8981',
+    positive: '#8fae8a',
+
+    // ⚠️ `label` and `neutral` carry the same value on purpose: the rewrite
+    // maps them to one token today. They are kept apart because their ROLES
+    // differ — a player with no team, and the colour of an axis label — and if
+    // they ever diverge it should happen here rather than at a call site
+    // (Fable, review of #803).
+    label: '#807c75',
 };
 
 /** Team colours, read off the theme so there is one source and not two. */
