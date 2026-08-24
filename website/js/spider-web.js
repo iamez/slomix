@@ -526,6 +526,52 @@ function render(canvas) {
     if (Array.isArray(players)) drawPlayers(ctx, players, state.camera, view);
 }
 
+/**
+ * What the clock panel is allowed to say about a team's reinforcement wave.
+ *
+ * ⛔ NEVER "VALIDATED", FOR EITHER TEAM. The payload's `status` field says
+ * `validated`, and it does not mean what the word implies: §5's reconstruction
+ * is INTERNALLY consistent — the model agrees with the spawn-timing rows it was
+ * derived from, 98.7% of the time — and has never been confirmed against an
+ * independent source. That confirmation is C2, and it has not happened. The UI
+ * data contract forbids the badge outright for exactly this reason.
+ *
+ * So the badge is `UNVALIDATED` for both teams today, and the agreement figure
+ * is shown beside it under its own name. A number is not evidence of the thing
+ * it was derived from.
+ */
+export function clockBadge(team) {
+    if (!team || team.status === 'unavailable') {
+        return { badge: 'UNAVAILABLE', reason: team && team.reason };
+    }
+    return {
+        badge: 'UNVALIDATED',
+        reason: 'internally consistent only; independent confirmation (C2) pending',
+    };
+}
+
+/**
+ * The capture policy, as three states per capability — never two.
+ *
+ * ⛔ `unknown` IS NOT `disabled`. For every round captured before the tracker
+ * began declaring its flags, an absent section is equally consistent with the
+ * capture being off and with it being on and having nothing to report. A panel
+ * that renders the two the same way turns "we do not know" into "it was off",
+ * which is the single claim the manifest exists to prevent.
+ */
+export function capabilityRows(policy) {
+    const caps = (policy && policy.capabilities) || {};
+    const names = Object.keys(caps).sort();
+    return names.map((name) => {
+        const state = caps[name];
+        return {
+            name,
+            state: state === 'enabled' || state === 'disabled' ? state : 'unknown',
+            known: state === 'enabled' || state === 'disabled',
+        };
+    });
+}
+
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 async function loadMesh(mapName) {
@@ -795,6 +841,7 @@ export async function loadSpiderWebView(params = {}) {
         state.snapshot = fresh;
         status.textContent = statusLine(state.snapshot);
         paintPovNote();
+        paintPanels();
         redraw();
     };
 
@@ -810,6 +857,111 @@ export async function loadSpiderWebView(params = {}) {
     slider.addEventListener('change', () => goTo(Number(slider.value)));
     container.appendChild(controls);
 
+    // ── The clock, and the snapshot's own integrity ──────────────────────────
+    const panels = _el('div', 'grid gap-4 mt-4 md:grid-cols-2');
+
+    const clockPanel = _el('div', 'rounded border p-3');
+    clockPanel.style.borderColor = THEME.hairline;
+    clockPanel.dataset.parity = 'spider-web.clock';
+    const integrityPanel = _el('div', 'rounded border p-3');
+    integrityPanel.style.borderColor = THEME.hairline;
+    integrityPanel.dataset.parity = 'spider-web.snapshot-integrity';
+    panels.appendChild(clockPanel);
+    panels.appendChild(integrityPanel);
+    container.appendChild(panels);
+
+    const paintPanels = () => {
+        const snap = state.snapshot || {};
+        clockPanel.textContent = '';
+        integrityPanel.textContent = '';
+
+        clockPanel.appendChild(_el('h3',
+            'text-[11px] uppercase tracking-wider mb-2', 'ura — tretji nasprotnik'));
+        clockPanel.lastChild.style.color = THEME.label;
+        for (const [name, team] of Object.entries(snap.clock || {})) {
+            const { badge, reason } = clockBadge(team);
+            const row = _el('div', 'mb-2');
+            const head = _el('div', 'flex items-baseline justify-between gap-2');
+            const label = _el('span', 'font-mono text-sm', name);
+            label.style.color = name.toUpperCase() === 'AXIS' ? THEME.axis : THEME.allies;
+            const tag = _el('span', 'text-[10px] font-mono px-1 rounded', badge);
+            tag.style.color = THEME.textDim;
+            tag.style.border = `1px solid ${THEME.hairline}`;
+            head.appendChild(label);
+            head.appendChild(tag);
+            row.appendChild(head);
+
+            const detail = _el('p', 'text-[11px] font-mono');
+            detail.style.color = THEME.textDim;
+            detail.textContent = team && team.interval_ms
+                ? `interval ${(team.interval_ms / 1000).toFixed(0)} s`
+                  + (typeof team.time_to_next_wave_ms === 'number'
+                      ? ` · do naslednjega vala ${(team.time_to_next_wave_ms / 1000).toFixed(1)} s`
+                      : '')
+                  + (typeof team.pass_ratio === 'number'
+                      ? ` · notranja skladnost ${(team.pass_ratio * 100).toFixed(1)} %`
+                      : '')
+                : (reason || 'ure za to ekipo ni bilo mogoče ugotoviti');
+            row.appendChild(detail);
+            clockPanel.appendChild(row);
+        }
+        const note = _el('p', 'text-[10px] leading-relaxed mt-1',
+            '⚠️ Obe ekipi sta UNVALIDATED. Rekonstrukcija je notranje skladna — '
+            + 'model se ujema z vrsticami, iz katerih je izpeljan — neodvisno pa '
+            + 'ni potrjena za nobeno ekipo. Odstotek zgoraj je skladnost, ne dokaz.');
+        note.style.color = THEME.label;
+        clockPanel.appendChild(note);
+
+        integrityPanel.appendChild(_el('h3',
+            'text-[11px] uppercase tracking-wider mb-2', 'integriteta posnetka'));
+        integrityPanel.lastChild.style.color = THEME.label;
+        const policy = snap.capture_policy || {};
+        const facts = [
+            ['zajem', `${policy.mode || 'unknown'}`
+                + (policy.observation_interval_ms ? ` · ${policy.observation_interval_ms} ms` : '')],
+            ['vir politike', policy.source || 'unknown'],
+            ['prekrivajoča življenja', String(snap.overlap_conflicts ?? 'unknown')],
+            ['igralci brez stanja', String(Object.keys(snap.gaps || {}).length)],
+        ];
+        if (Array.isArray(snap.withheld_by_pov) && snap.withheld_by_pov.length) {
+            facts.push(['zadržani po pogledu', String(snap.withheld_by_pov.length)]);
+        }
+        for (const [k, v] of facts) {
+            const row = _el('div', 'flex justify-between text-[11px] font-mono');
+            const a = _el('span', '', k); a.style.color = THEME.textDim;
+            const b = _el('span', '', v); b.style.color = THEME.text;
+            row.appendChild(a); row.appendChild(b);
+            integrityPanel.appendChild(row);
+        }
+        const caps = capabilityRows(policy);
+        if (caps.length) {
+            const capHead = _el('p', 'text-[10px] uppercase tracking-wider mt-2 mb-1',
+                'zmožnosti zajema');
+            capHead.style.color = THEME.label;
+            integrityPanel.appendChild(capHead);
+            for (const c of caps) {
+                const row = _el('div', 'flex justify-between text-[11px] font-mono');
+                const a = _el('span', '', c.name); a.style.color = THEME.textDim;
+                const b = _el('span', '', c.state);
+                // ⛔ `unknown` gets its own colour, never the one `disabled`
+                // gets: rendering them alike turns "we do not know" into "it
+                // was off", which is the claim the manifest exists to prevent.
+                b.style.color = c.state === 'enabled' ? THEME.positive
+                    : c.state === 'disabled' ? THEME.negative : THEME.label;
+                row.appendChild(a); row.appendChild(b);
+                integrityPanel.appendChild(row);
+            }
+        }
+        const acc = snap.reconstruction_accuracy || {};
+        if (acc.measured_at) {
+            const prov = _el('p', 'text-[10px] mt-2 leading-relaxed',
+                `Napaka lege izmerjena ${acc.measured_at} na ${acc.rounds} rundah `
+                + `(${acc.script}). Enota: ${acc.unit}.`);
+            prov.style.color = THEME.label;
+            integrityPanel.appendChild(prov);
+        }
+    };
+
     const legend = _el('p', 'text-[11px] text-slate-500 mt-2 leading-relaxed',
         'Obroč okoli igralca je IZMERJENA negotovost lege (p90 za starost vzorca); '
         + 'črtkan pomeni sporno življenje, kjer rekonstrukcija ne ve, katero od '
@@ -823,5 +975,6 @@ export async function loadSpiderWebView(params = {}) {
     bindCamera(canvas, redraw);
     paintPov();
     paintPovNote();
+    paintPanels();
     redraw();
 }
