@@ -51,6 +51,13 @@ DEFAULT_SUBS: dict[str, str] = {
     "map_name": "supply",
     "season_id": "2026-Q3",
     "channel": "etl",
+    # aliases various routers use for the same things
+    "identifier": "1C747DF1",
+    "guid1": "1C747DF1",
+    "guid2": "2B5938F5",
+    "g1": "1C747DF1",
+    "g2": "2B5938F5",
+    "upload_id": "de4f8d8628c148e5a8756a522aeb43b0",
 }
 
 # Query battery applied when a bare call answers 422 — the storytelling
@@ -132,7 +139,21 @@ def main() -> int:
     parser.add_argument("--base", default="http://127.0.0.1:8000")
     parser.add_argument("--out", default="tests/fixtures/api/recorded")
     parser.add_argument("--only", default="", help="record only paths with this prefix")
+    parser.add_argument(
+        "--sub",
+        action="append",
+        default=[],
+        metavar="NAME=VALUE",
+        help="override/add a path-parameter substitution (repeatable), e.g. --sub demo_id=abc",
+    )
     args = parser.parse_args()
+
+    subs = dict(DEFAULT_SUBS)
+    for pair in args.sub:
+        name, sep, value = pair.partition("=")
+        if not sep or not name:
+            raise SystemExit(f"--sub expects NAME=VALUE, got: {pair!r}")
+        subs[name] = value
 
     spec = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     out_dir = (REPO_ROOT / args.out).resolve()
@@ -145,7 +166,7 @@ def main() -> int:
         op = ops.get("get")
         if not op or (args.only and not path.startswith(args.only)):
             continue
-        url = fill_path(path, DEFAULT_SUBS)
+        url = fill_path(path, subs)
         if url is None:
             skipped.append(path)
             continue
@@ -181,7 +202,7 @@ def main() -> int:
     (out_dir / "_index.json").write_text(
         json.dumps(
             {"recorded": time.strftime("%Y-%m-%d %H:%M"), "base": args.base,
-             "subs": DEFAULT_SUBS, "skipped_no_param": skipped, "results": index},
+             "subs": subs, "skipped_no_param": skipped, "results": index},
             indent=1,
             ensure_ascii=False,
         ),

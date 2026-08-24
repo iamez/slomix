@@ -60,6 +60,9 @@
 /api/rivalries/h2h
 /api/rivalries/leaderboard
 /api/rivalries/player
+/api/seasons/current/awards
+/api/seasons/current/leaders
+/api/seasons/current/summary
 /api/server-activity/history
 /api/skill/movers
 /api/skill/ssr
@@ -69,8 +72,10 @@
 /api/stats/matches
 /api/stats/session-leaderboard
 /api/stats/tonight
+/api/stats/weapons/by_player
 /api/storytelling/best-lives
 /api/storytelling/formula
+/api/storytelling/kill-impact/details
 /api/storytelling/kill-matrix
 /api/storytelling/momentum-session
 /api/storytelling/movement
