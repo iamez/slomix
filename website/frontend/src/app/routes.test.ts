@@ -41,6 +41,9 @@ function patternToRegex(pattern: string): RegExp {
     const piece = core.startsWith(':') ? '[^/]+' : core.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return optional ? `(?:/${piece})?` : `/${piece}`;
   });
+  // Input is our own APP_ROUTES constant table, not user data (test-only).
+  // eslint-disable-next-line security/detect-non-literal-regexp
+  // nosemgrep
   return new RegExp(`^${parts.join('')}$`);
 }
 
