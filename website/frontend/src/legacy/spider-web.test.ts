@@ -22,7 +22,7 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  THEME, alphaHex, beliefRegions, boundsFromPlayers, edgeStyle, horizonOf,
+  THEME, alphaHex, beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, mixHex,
   isTeamPov, placeLabels,
   project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
@@ -381,6 +381,8 @@ describe('THEME', () => {
     ['axis', '#d1857c'],
     ['positive', '#8fae8a'],
     ['negative', '#b0847c'],
+    ['floorLow', '#6084b0'],
+    ['floorHigh', '#c8e4ff'],
   ])('%s is the chosen token', (key, value) => {
     expect(THEME[key as keyof typeof THEME]).toBe(value);
   });
@@ -398,7 +400,15 @@ describe('THEME', () => {
     const themeBlock = source.slice(
       source.indexOf('export const THEME'), source.indexOf('};', source.indexOf('export const THEME')));
     const outside = source.replace(themeBlock, '');
-    const strays = [...outside.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((m) => m[0]);
+    // ⚠️ Hex literals AND colours built from raw components. The first version
+    // matched only `#rrggbb`, and the whole canvas floor ramp — three RGB
+    // numbers interpolated inline — slipped past it while the module advertised
+    // itself as the single palette (Codex, review of #803). A guard that only
+    // catches one spelling of the mistake invites the other.
+    const strays = [
+      ...[...outside.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((m) => m[0]),
+      ...[...outside.matchAll(/rgba?\(\s*[\d$][^)]*\)/g)].map((m) => m[0]),
+    ];
     expect(strays).toEqual([]);
   });
 });
@@ -422,5 +432,29 @@ describe('alphaHex', () => {
     expect(alphaHex(5)).toBe('ff');
     expect(alphaHex(-1)).toBe('00');
     expect(alphaHex(NaN)).toBe('00');
+  });
+});
+
+describe('mixHex', () => {
+  it('returns the endpoints unchanged', () => {
+    expect(mixHex('#6084b0', '#c8e4ff', 0)).toBe('#6084b0');
+    expect(mixHex('#6084b0', '#c8e4ff', 1)).toBe('#c8e4ff');
+  });
+
+  it('lands between them in the middle', () => {
+    expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080');
+  });
+
+  it('always returns six digits, so a colour never becomes malformed', () => {
+    // ⛔ Same trap as alphaHex: an unpadded component makes `#8084b` and the
+    // canvas silently drops the style.
+    for (const t of [0, 0.02, 0.5, 0.97, 1]) {
+      expect(mixHex('#010203', '#040506', t)).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it('clamps rather than extrapolating past an endpoint', () => {
+    expect(mixHex('#000000', '#ffffff', 5)).toBe('#ffffff');
+    expect(mixHex('#000000', '#ffffff', -2)).toBe('#000000');
   });
 });

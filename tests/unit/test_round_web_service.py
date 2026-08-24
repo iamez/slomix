@@ -66,22 +66,44 @@ class TestABeliefCentreComesFromTheRevealNotTheTruth:
         {"x": 4_000.0, "y": 0.0, "z": 0.0, "time": 30_000},
     ]
 
-    def test_the_centre_is_where_he_was_seen(self):
+    def test_the_locator_itself_honours_the_instant_it_is_given(self):
+        """The narrow property: same subject, two instants, two answers."""
         locate = make_locator({"ENEMY": [_track(0, None, 1, self.PATH)]})
-        region = locate("ENEMY", 1_000)          # the reveal
-        assert (region.x, region.y) == (0.0, 0.0)
-
-    def test_the_centre_is_not_where_he_is_now(self):
-        """⛔ The assertion that would fail if the centre were recomputed from
-        current truth. He is at x=4000 by then; the belief must still say 0."""
-        locate = make_locator({"ENEMY": [_track(0, None, 1, self.PATH)]})
-        reveal = locate("ENEMY", 1_000)
-        now = locate("ENEMY", 30_000)
-        assert now.x == 4_000.0, "the fixture no longer moves him"
-        assert reveal.x != now.x
-        # And he has moved further than the reveal's own radius, so the two
-        # cannot be confused for the same claim.
+        reveal, now = locate("ENEMY", 1_000), locate("ENEMY", 30_000)
+        assert (reveal.x, now.x) == (0.0, 4_000.0)
+        # Further than the reveal's own radius, so the two claims cannot be
+        # mistaken for one another.
         assert abs(now.x - reveal.x) > reveal.radius
+
+    @pytest.mark.asyncio
+    async def test_a_belief_serialised_later_still_points_at_the_reveal(self):
+        """⭐ THROUGH THE REAL CALL PATH, not `locate` twice.
+
+        The two assertions above only prove the locator honours whatever
+        timestamp it is handed. If `contact_beliefs` or its caller were later
+        changed to ask for the target's position at the SNAPSHOT time, the
+        oracle leak this class exists to prevent would happen and both of them
+        would still pass — the seam they pin is not the seam that breaks
+        (Codex, review of #803).
+
+        So: a contact observed at 1,000 ms, serialised at 30,000 ms, after the
+        subject has walked 4,000 units away. The published region must still be
+        where he was seen.
+        """
+        db = _SnapshotStubDb(
+            tracks=[_stub_track("HOLDER", 0.0, team="AXIS"),
+                    ("ENEMY", "ENEMY", "ALLIES", "soldier", 0, None,
+                     self.PATH, "supply", 77)],
+            engagements=[("ENEMY", [{"guid": "HOLDER", "weapons": {"3": 1},
+                                     "first_hit_ms": 1_000}])],
+        )
+        payload = await get_round_snapshot(db, 1, 30_000)
+        holder = payload["information_state"]["holders"]["HOLDER"]
+        regions = [b["region"] for b in holder["beliefs"]
+                   if b.get("region") and b.get("subject_guid") == "ENEMY"]
+        assert regions, "the fixture produced no belief about the subject"
+        for region in regions:
+            assert region["x"] == 0.0, "the centre followed him instead of staying"
 
 
 class TestTheAudibleRadiusComesFromTheEngine:
