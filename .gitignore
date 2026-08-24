@@ -61,6 +61,7 @@ gemini-website/dist/
 gemini-website/.next/
 build/
 website/static/modern/
+website/static/app/
 # Deploy staging/rollback dirs for the modern build (deploy_release.sh step 3c).
 # MUST be ignored: the deploy's clean-tree guard aborts on any untracked path,
 # so an un-ignored static/modern.prev left after a deploy would break the next one.
@@ -178,6 +179,8 @@ nov2_*.txt
 !docs/*.html
 !website/*.html
 !website/index.html
+# The standalone app's Vite entry is source, not a report (docs/design/06 §1).
+!website/frontend/app.html
 
 # Field mapping dev files
 field_*.txt
