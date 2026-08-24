@@ -480,11 +480,16 @@ async function loadMoment(roundId, tMs, pov) {
     // guarantee.
     const params = new URLSearchParams({ t: String(Math.round(tMs)) });
     if (pov && pov !== 'world') params.set('pov', pov);
-    const snapshot = await fetchJSON(
+    // ⛔ Returns without touching shared state. It used to assign
+    // `state.snapshot` here, before the caller's staleness guard ran — so a
+    // superseded request still overwrote the current moment. Scrubbing fast,
+    // the request for an earlier `t` can settle after the one for a later `t`:
+    // the slider and readout then show the later moment while the snapshot
+    // holds the earlier one, and the next camera drag redraws the earlier
+    // moment under the later label. The winner commits (CodeRabbit, #800).
+    return fetchJSON(
         `${API_BASE}/replay/round/${encodeURIComponent(roundId)}/web?${params}`
     );
-    state.snapshot = snapshot;
-    return snapshot;
 }
 
 // ── View ──────────────────────────────────────────────────────────────────────
@@ -547,6 +552,7 @@ export async function loadSpiderWebView(params = {}) {
     let snapshot;
     try {
         snapshot = await loadMoment(roundId, state.tMs || 0, state.pov);
+        state.snapshot = snapshot;
         if (!state.tMs && snapshot && snapshot.first_position_ms) {
             // Clamped here too. The payload is fixed, but the endpoint answers
             // `t < 0` with a 422 and this page's only response to that is
@@ -554,6 +560,7 @@ export async function loadSpiderWebView(params = {}) {
             // costs one call to Math.max.
             state.tMs = Math.max(0, snapshot.first_position_ms);
             snapshot = await loadMoment(roundId, state.tMs, state.pov);
+            state.snapshot = snapshot;
         }
     } catch {
         if (myLoad !== loadId) return;
@@ -699,12 +706,14 @@ export async function loadSpiderWebView(params = {}) {
         slider.value = String(clamped);
         readout.textContent = `t = ${clamped} ms`;
         const mine = ++loadId;
+        let fresh;
         try {
-            await loadMoment(roundId, clamped, state.pov);
+            fresh = await loadMoment(roundId, clamped, state.pov);
         } catch {
             return;
         }
         if (mine !== loadId) return;
+        state.snapshot = fresh;
         status.textContent = statusLine(state.snapshot);
         paintPovNote();
         redraw();

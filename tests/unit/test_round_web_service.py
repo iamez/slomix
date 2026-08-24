@@ -991,6 +991,35 @@ class TestTheTeamViewIsAUnion:
         assert not (set(payload["gaps"]) & set(payload["withheld_by_pov"]))
 
 
+class TestTheTeamHorizonIsDefined:
+    @pytest.mark.asyncio
+    async def test_the_horizon_is_the_widest_in_the_union_not_an_arbitrary_member(self):
+        """⚠️ `pov_team["members"]` is a set, so the member list has no defined
+        order. Reading one member's horizon was safe only because every holder
+        publishes the same module constant — and the consumer uses this as a
+        HARD FILTER, dropping every region wider than it. An arbitrary pick
+        would drop a region another member was entitled to draw, differently on
+        different workers (CodeRabbit, PR #800).
+        """
+        from website.backend.services import round_web_service as svc
+        info = {"holders": {
+            "A": {"beliefs": [], "position_claim_max_radius": 500.0},
+            "B": {"beliefs": [], "position_claim_max_radius": 1500.0},
+        }}
+        pov_team = {"team": "AXIS", "members": {"A", "B"}, "all_guids": {"A", "B"}}
+        out = svc._team_information(info, pov_team, 0)  # noqa: SLF001
+        team = out["holders"]["team:AXIS"]
+        assert team["position_claim_max_radius"] == 1500.0
+
+    @pytest.mark.asyncio
+    async def test_no_horizon_anywhere_is_none_rather_than_a_number(self):
+        from website.backend.services import round_web_service as svc
+        info = {"holders": {"A": {"beliefs": []}}}
+        out = svc._team_information(  # noqa: SLF001
+            info, {"team": "AXIS", "members": {"A"}, "all_guids": {"A"}}, 0)
+        assert out["holders"]["team:AXIS"]["position_claim_max_radius"] is None
+
+
 class TestAnEmptyRoundKeepsTheContract:
     @pytest.mark.asyncio
     async def test_every_key_survives_a_round_with_no_tracks(self):
