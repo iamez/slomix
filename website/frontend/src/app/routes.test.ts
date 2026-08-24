@@ -42,7 +42,9 @@ function matchesPattern(pathname: string, pattern: string): boolean {
   for (const rawSeg of want) {
     const optional = rawSeg.endsWith('?');
     const seg = optional ? rawSeg.slice(0, -1) : rawSeg;
-    const actual = have[hi];
+    // .at() types as string|undefined (bracket indexing doesn't under this
+    // tsconfig) and sidesteps the object-injection-sink pattern scanners flag.
+    const actual = have.at(hi);
     if (actual === undefined) {
       if (optional) continue;
       return false;
