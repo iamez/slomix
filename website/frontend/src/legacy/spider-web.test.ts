@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, isTeamPov, placeLabels,
+  THEME, alphaHex, beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, mixHex,
+  isTeamPov, placeLabels,
   project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
 
@@ -366,5 +367,94 @@ describe('beliefRegions', () => {
       expect(horizonOf(null)).toBe(Infinity);
       expect(beliefRegions({ beliefs: [belief()] }).regions).toHaveLength(1);
     });
+  });
+});
+
+describe('THEME', () => {
+  // The chosen dark-instrument tokens. Pinned here because the React rewrite
+  // will READ this object rather than re-derive the palette, so a value that
+  // drifts to an eyeballed neighbour silently desynchronises the two surfaces
+  // — and nothing else in the suite would notice.
+  it.each([
+    ['background', '#0b0b0a'],
+    ['allies', '#8bb0d6'],
+    ['axis', '#d1857c'],
+    ['positive', '#8fae8a'],
+    ['negative', '#b0847c'],
+    ['floorLow', '#6084b0'],
+    ['floorHigh', '#c8e4ff'],
+  ])('%s is the chosen token', (key, value) => {
+    expect(THEME[key as keyof typeof THEME]).toBe(value);
+  });
+
+  it('has no colour literal left outside it', async () => {
+    // ⭐ The structural half. Pinning the values catches a changed token; this
+    // catches a NEW colour introduced somewhere else, which is how a palette
+    // scatters in the first place (the `replay.js` lesson the spec cites).
+    const fs = await import('node:fs/promises');
+    const path = await import('node:path');
+    // ⚠️ From the vitest root (website/frontend), not `import.meta.url` — under
+    // vitest that is not a file: URL and readFile rejects it.
+    const source = await fs.readFile(
+      path.resolve(process.cwd(), '../js/spider-web.js'), 'utf8');
+    const themeBlock = source.slice(
+      source.indexOf('export const THEME'), source.indexOf('};', source.indexOf('export const THEME')));
+    const outside = source.replace(themeBlock, '');
+    // ⚠️ Hex literals AND colours built from raw components. The first version
+    // matched only `#rrggbb`, and the whole canvas floor ramp — three RGB
+    // numbers interpolated inline — slipped past it while the module advertised
+    // itself as the single palette (Codex, review of #803). A guard that only
+    // catches one spelling of the mistake invites the other.
+    const strays = [
+      ...[...outside.matchAll(/#[0-9a-fA-F]{6}\b/g)].map((m) => m[0]),
+      ...[...outside.matchAll(/rgba?\(\s*[\d$][^)]*\)/g)].map((m) => m[0]),
+    ];
+    expect(strays).toEqual([]);
+  });
+});
+
+describe('alphaHex', () => {
+  it('turns an opacity into two hex digits', () => {
+    expect(alphaHex(1)).toBe('ff');
+    expect(alphaHex(0)).toBe('00');
+    expect(alphaHex(0.5)).toBe('80');
+  });
+
+  it('is always two digits, so a colour never becomes malformed', () => {
+    // ⛔ `(3).toString(16)` is "3", and `#b0847c3` is not a colour — the
+    // canvas would silently drop the style and draw in whatever came before.
+    for (const a of [0.001, 0.01, 0.02, 0.05]) {
+      expect(alphaHex(a)).toHaveLength(2);
+    }
+  });
+
+  it('clamps rather than producing nonsense for out-of-range input', () => {
+    expect(alphaHex(5)).toBe('ff');
+    expect(alphaHex(-1)).toBe('00');
+    expect(alphaHex(NaN)).toBe('00');
+  });
+});
+
+describe('mixHex', () => {
+  it('returns the endpoints unchanged', () => {
+    expect(mixHex('#6084b0', '#c8e4ff', 0)).toBe('#6084b0');
+    expect(mixHex('#6084b0', '#c8e4ff', 1)).toBe('#c8e4ff');
+  });
+
+  it('lands between them in the middle', () => {
+    expect(mixHex('#000000', '#ffffff', 0.5)).toBe('#808080');
+  });
+
+  it('always returns six digits, so a colour never becomes malformed', () => {
+    // ⛔ Same trap as alphaHex: an unpadded component makes `#8084b` and the
+    // canvas silently drops the style.
+    for (const t of [0, 0.02, 0.5, 0.97, 1]) {
+      expect(mixHex('#010203', '#040506', t)).toMatch(/^#[0-9a-f]{6}$/);
+    }
+  });
+
+  it('clamps rather than extrapolating past an endpoint', () => {
+    expect(mixHex('#000000', '#ffffff', 5)).toBe('#ffffff');
+    expect(mixHex('#000000', '#ffffff', -2)).toBe('#000000');
   });
 });
