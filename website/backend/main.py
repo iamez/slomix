@@ -424,7 +424,12 @@ async def greatshot_spa_entry(demo_id: str | None = None):
 # the legacy site keeps /. Guarded on the build output existing, so a checkout
 # without `npm run build:app` — production today — never grows these routes.
 _APP_DIST = os.path.join(project_root, "website", "static", "app")
-if os.path.isdir(_APP_DIST):
+# Both artifacts, not just the directory: an interrupted build that left an
+# empty output dir must degrade exactly like a no-build checkout, not raise
+# on import (assets missing) or 500 at response time (app.html missing).
+if os.path.isdir(os.path.join(_APP_DIST, "assets")) and os.path.isfile(
+    os.path.join(_APP_DIST, "app.html")
+):
     app.mount(
         "/app/assets",
         StaticFiles(directory=os.path.join(_APP_DIST, "assets")),

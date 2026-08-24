@@ -21,6 +21,15 @@ function compileTimeContract() {
   void apiGet('/api/rounds/{round_id}/awards', { pathParams: { roundId: 11277 } });
   // @ts-expect-error plain path must not accept pathParams
   void apiGet('/api/stats/overview', { pathParams: { round_id: 1 } });
+  void apiGet('/api/player/search', { query: { query: 'vid' } });
+  // @ts-expect-error required query must not compile without it
+  void apiGet('/api/player/search');
+  void apiGet('/api/replay/round/{round_id}/positions', {
+    pathParams: { round_id: 11277 },
+    query: { t: 148600 },
+  });
+  // @ts-expect-error required query t missing must not compile
+  void apiGet('/api/replay/round/{round_id}/positions', { pathParams: { round_id: 11277 } });
 }
 void compileTimeContract;
 

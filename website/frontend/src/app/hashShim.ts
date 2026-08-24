@@ -11,10 +11,17 @@ import { hashToPath } from './routes';
  *    hash link into an already-open tab re-fires no module code), hence the
  *    hashchange listener.
  */
+/** Only the legacy grammar ('#/...') is ours to rewrite — an ordinary
+ * in-page anchor like '#section' must keep working as an anchor
+ * (Codex on #802: the shim was navigating '/app/live#section' to a 404). */
+export function isLegacyHash(hash: string): boolean {
+  return typeof hash === 'string' && hash.startsWith('#/');
+}
+
 export function applyHashShim(basename = '/app'): void {
   const base = basename.replace(/\/$/, '');
   const rewrite = () => {
-    if (!window.location.hash) return;
+    if (!isLegacyHash(window.location.hash)) return;
     const mapped = hashToPath(window.location.hash);
     if (mapped) {
       window.history.replaceState(null, '', base + mapped);
@@ -22,7 +29,7 @@ export function applyHashShim(basename = '/app'): void {
       window.dispatchEvent(new PopStateEvent('popstate'));
     }
   };
-  if (window.location.hash) {
+  if (isLegacyHash(window.location.hash)) {
     // Boot: rewrite before the router reads location, no popstate needed.
     const mapped = hashToPath(window.location.hash);
     if (mapped) window.history.replaceState(null, '', base + mapped);

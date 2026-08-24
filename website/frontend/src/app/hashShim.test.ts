@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hashToPath } from './routes';
+import { isLegacyHash } from './hashShim';
 
 /**
  * Every legacy hash shape a producer can emit (docs/design/06 §3 — the eight
@@ -45,6 +46,13 @@ describe('hashToPath', () => {
   it('empty hash resolves to root', () => {
     expect(hashToPath('')).toBe('/');
     expect(hashToPath('#')).toBe('/');
+  });
+
+  it('ordinary in-page anchors are NOT legacy hashes and stay untouched', () => {
+    expect(isLegacyHash('#section')).toBe(false);
+    expect(isLegacyHash('#snapshot-integrity')).toBe(false);
+    expect(isLegacyHash('')).toBe(false);
+    expect(isLegacyHash('#/live')).toBe(true);
   });
 
   it('never returns an empty string for any registry-shaped hash', () => {
