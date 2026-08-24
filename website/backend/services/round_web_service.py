@@ -920,6 +920,95 @@ def _ensure_attackers(value) -> list:
     return value or []
 
 
+#: `load_round_tracks` column order; see its docstring.
+_TRACK_GUID, _TRACK_TEAM = 0, 2
+
+
+def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
+    """Resolve `pov=team:AXIS` into that team's members, or None.
+
+    Returns None for the oracle view, for a single-player pov, and for a team
+    nobody played on — the caller distinguishes those, because "not a team
+    request" and "a team that was not there" need different answers.
+
+    ⛔ MEMBERSHIP COMES FROM THE TRACKS, NOT FROM THE SNAPSHOT. Reading
+    `snap.players` looked equivalent and fails open: when every player is stale
+    past `max_stale_ms` the snapshot has nobody, so a team request resolved to
+    None and quietly degraded to the ORACLE — `withheld_by_pov` empty, the gaps
+    listing both sides. A withholding guarantee that turns into full disclosure
+    the moment the data thins is not a guarantee. The tracks say who played on
+    which side whether or not they have a state at `t`.
+    """
+    if not pov or not pov.lower().startswith("team:"):
+        return None
+    wanted = pov[5:].strip().upper()
+    roster = {
+        t[_TRACK_GUID]: str(t[_TRACK_TEAM] or "").upper()
+        for lives in (tracks or {}).values() for t in lives
+    }
+    members = {g for g, team in roster.items() if team == wanted}
+    if not members:
+        return None
+    return {"team": wanted, "members": members, "all_guids": set(roster)}
+
+
+def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
+    """One synthetic holder carrying the union of the team's beliefs.
+
+    §6.3 is explicit that a belief set is per player and that team-level views
+    are DERIVED BY UNION — not modelled separately. Holding a team-wide set
+    directly would hand a player on the far side of the map the same knowledge
+    as the one standing next to the fight.
+
+    ⛔ Opponent holders are dropped, not kept alongside. Their beliefs are
+    "what the enemy knows about us", which this team cannot know; leaving them
+    in leaks no position but makes the view incoherent.
+
+    ⛔ `nearest_*_distance` is null for a team. A distance needs a holder's
+    position and a team has none; measuring from a team centroid would invent
+    exactly the kind of number this layer exists to refuse.
+    """
+    holders = information.get("holders") or {}
+    own = [holders[g] for g in pov_team["members"] if g in holders]
+
+    beliefs: list[dict] = []
+    unavailable: dict = {}
+    for h in own:
+        beliefs.extend(h.get("beliefs") or [])
+        unavailable.update(h.get("unavailable") or {})
+
+    named = {b.get("subject_guid") for b in beliefs
+             if b.get("counts_as_known") and b.get("subject_guid")}
+
+    return {
+        **information,
+        "holders": {
+            f"team:{pov_team['team']}": {
+                "holder_guid": f"team:{pov_team['team']}",
+                "known_enemy_count": len(named),
+                "nearest_known_enemy_distance": None,
+                "nearest_heard_activity_distance": None,
+                "beliefs": sorted(beliefs, key=lambda b: -(b.get("confidence") or 0)),
+                "unavailable": unavailable,
+                "position_claim_max_radius":
+                    (own[0].get("position_claim_max_radius") if own else None),
+                "notes": [
+                    ("this is the UNION of the team's per-player beliefs (§6.3); "
+                     "no team-wide belief set exists"),
+                    ("distances are null: a distance needs a holder position and "
+                     "a team has none"),
+                ],
+            }
+        },
+        "pov": f"team:{pov_team['team']}",
+        "pov_unavailable": None,
+        # ⚠️ Own-team positions are treated as known. §6 calls this a defensible
+        # simplification — teammates share a voice channel we cannot capture —
+        # and requires it to be STATED rather than assumed.
+        "own_team_positions_are_a_simplification": True,
+    }
+
+
 async def get_round_snapshot(
     db, round_id: int, t_ms: int, *, max_stale_ms: int | None = None,
     velocity_max_dt_ms: int | None = None, pov: str | None = None,
@@ -962,19 +1051,46 @@ async def get_round_snapshot(
     # ⛔ `world` is the oracle. It is a named diagnostic (§6.4) and never a
     # belief source — which is why it is spelled out rather than being the
     # silent default.
-    if pov and pov != "world":
-        holders = information.get("holders", {})
-        information = {
-            **information,
-            "holders": {pov: holders[pov]} if pov in holders else {},
-            "pov": pov,
-            "pov_unavailable": (
-                None if pov in holders
-                else f"{pov} has no reconstructed state in this round at t={t_ms}"
-            ),
-        }
+    pov_team = _pov_team(pov, tracks)
+    withheld: list[str] = []
+
+    if pov_team is not None:
+        # ⛔ THE WITHHOLDING HAPPENS HERE, NOT IN THE RENDERER.
+        #
+        # VALORANT's replay hides an enemy outline and admits it cannot hide the
+        # minimap: the client is handed the truth and chooses not to draw it.
+        # Filtering in the page would leave us with the same limitation while
+        # claiming otherwise, and one look at devtools would disprove the claim.
+        # This page is also due to be rewritten in React, and a guarantee that
+        # lives in a renderer does not survive its replacement.
+        #
+        # ⭐ Identities stay. Who played is public through the scoreboard and
+        # the kill feed; where they stood is not.
+        own = pov_team["members"]
+        withheld = sorted(g for g in pov_team["all_guids"] if g not in own)
+        snap_players = [p for p in snap.players.values() if p.guid in own]
+        information = _team_information(information, pov_team, t_ms)
     else:
-        information = {**information, "pov": pov or "world"}
+        snap_players = list(snap.players.values())
+        if pov and pov != "world":
+            holders = information.get("holders", {})
+            information = {
+                **information,
+                "holders": {pov: holders[pov]} if pov in holders else {},
+                "pov": pov,
+                "pov_unavailable": (
+                    None if pov in holders
+                    else f"{pov} has no reconstructed state in this round at t={t_ms}"
+                ),
+            }
+        elif pov and pov.lower().startswith("team:"):
+            # A team nobody played on. Named, not silently treated as the oracle.
+            information = {
+                **information, "holders": {}, "pov": pov,
+                "pov_unavailable": f"no players on team {pov[5:]!r} in this round",
+            }
+        else:
+            information = {**information, "pov": pov or "world"}
     payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
@@ -1019,14 +1135,27 @@ async def get_round_snapshot(
         "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
         "player_count": len(snap.players),
         "overlap_conflicts": snap.overlap_conflicts,
-        "gaps": snap.gaps,
-        "players": [_player_to_dict(p) for p in snap.players.values()],
+        # `gaps` reasons name tracking state, not position — but under a team
+        # view they would still enumerate the other side, so they follow the
+        # same boundary as everything else.
+        "gaps": {g: why for g, why in snap.gaps.items() if g not in withheld},
+        "players": [_player_to_dict(p) for p in snap_players],
+        # ⛔ Named, not vanished. Layer 1 promises every player is either placed
+        # or in `gaps` with a reason; a withheld enemy is neither, so leaving
+        # him out of both would break one contract to keep another.
+        "withheld_by_pov": withheld,
         "nearest_teammate_separation": separation,
+        # 🔴 An opponent edge carries `distance`, computed from the real
+        # positions — one leaks the range to an enemy, several across time
+        # trilaterate him. Withholding the positions and leaving the edges was
+        # the hole in the first version of this design (Fable's review).
         "edges": [
             {"a": e.a_guid, "b": e.b_guid, "kind": e.kind,
              "distance": round(e.distance, 1),
              "recently_contested": e.recently_contested}
             for e in snap.edges
+            if not withheld
+            or (e.a_guid not in withheld and e.b_guid not in withheld)
         ],
         # Each multi-line note is wrapped in its own parentheses. Inside a list
         # of strings, an implicit concatenation is indistinguishable from a

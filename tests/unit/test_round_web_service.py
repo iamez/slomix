@@ -696,25 +696,44 @@ class _SnapshotStubDb:
     have nothing to do with ordering.
     """
 
-    def __init__(self, tracks=(), duration_s=None):
+    def __init__(self, tracks=(), duration_s=None, deaths=(), engagements=()):
         self._tracks = list(tracks)
         self._duration_s = duration_s
+        # ⚠️ Contact is the channel that differs PER HOLDER. A public obituary
+        # reaches everyone, so a fixture built only from deaths cannot tell a
+        # union from any single member's beliefs — that is an equivalent mutant,
+        # not a passing test.
+        self._engagements = list(engagements)
+        # ⚠️ Deaths are what give the holders anything to believe. A fixture
+        # with none cannot tell a union of beliefs from the first holder's
+        # beliefs, which is how three mutations survived a green suite.
+        self._deaths = list(deaths)
 
     async def fetch_all(self, sql, _params=None):
         if "death_time_ms IS NOT NULL" in sql:
-            return []                       # Layer 3 deaths
+            return self._deaths             # Layer 3 deaths
         if "FROM player_track pt" in sql:
             return self._tracks
         if "FROM rounds r" in sql:
             return [(self._duration_s,)] if self._duration_s else []
+        if "FROM combat_engagement" in sql:
+            # ⚠️ TWO different queries read this table with DIFFERENT shapes:
+            # the edge builder selects (start, end, target, attackers) and
+            # Layer 3 selects (target, attackers). Answering both with one
+            # shape raises IndexError deep inside the edge builder, which
+            # reads as a code bug rather than a fixture that lied.
+            if "start_time_ms, end_time_ms" in sql:
+                return [(s0, e0, t0, a0) for t0, a0, s0, e0 in
+                        ((t, a, 0, 10_000) for t, a in self._engagements)]
+            return self._engagements
         return []
 
 
-def _stub_track(guid: str, x: float) -> tuple:
+def _stub_track(guid: str, x: float, team: str = "AXIS") -> tuple:
     """One life, in `load_round_tracks` column order."""
     path = [{"x": x, "y": 0.0, "z": 0.0, "time": 0},
             {"x": x, "y": 0.0, "z": 0.0, "time": 10_000}]
-    return (guid, guid, "AXIS", "soldier", 0, None, path, "supply", hash(guid) % 1000)
+    return (guid, guid, team, "soldier", 0, None, path, "supply", hash(guid) % 1000)
 
 
 class TestPointOfView:
@@ -803,6 +822,173 @@ class TestTheSnapshotSaysWhereAndHowLong:
     async def test_an_unknown_map_is_null_not_invented(self):
         payload = await get_round_snapshot(_SnapshotStubDb(), 1, 5_000)
         assert payload["map_name"] is None
+
+
+class TestATeamPovWithholdsTheTruthItHas:
+    """⛔ The guarantee has to live in the payload, not in the drawing.
+
+    VALORANT's replay can hide an enemy outline and admits it cannot hide the
+    minimap: the client is handed the truth and chooses not to draw it. If we
+    filter in the renderer we have the same limitation while claiming we do
+    not, and one look at devtools disproves the claim. The page is also due to
+    be rewritten in React — a guarantee that lives in this renderer is lost the
+    day that happens.
+
+    ⭐ Enemy IDENTITIES stay: they are public through the scoreboard and the
+    kill feed. Only where they were is withheld.
+    """
+
+    async def _snapshot(self, pov):
+        db = _SnapshotStubDb(tracks=[_stub_track("AX1", 0.0, team="AXIS"),
+                                     _stub_track("AL1", 500.0, team="ALLIES")])
+        return await get_round_snapshot(db, 1, 5_000, pov=pov)
+
+    @pytest.mark.asyncio
+    async def test_the_oracle_still_sees_everyone(self):
+        payload = await self._snapshot("world")
+        assert {p["guid"] for p in payload["players"]} == {"AX1", "AL1"}
+        assert payload.get("withheld_by_pov") in (None, [])
+
+    @pytest.mark.asyncio
+    async def test_a_team_pov_drops_the_enemy_from_players(self):
+        payload = await self._snapshot("team:AXIS")
+        assert [p["guid"] for p in payload["players"]] == ["AX1"]
+
+    @pytest.mark.asyncio
+    async def test_the_dropped_enemy_is_named_rather_than_vanished(self):
+        """Layer 1 promises every player is either placed or in `gaps` with a
+        reason. A withheld enemy is neither, so it needs its own bucket —
+        otherwise the contract is quietly broken to keep a different promise."""
+        payload = await self._snapshot("team:AXIS")
+        assert payload["withheld_by_pov"] == ["AL1"]
+
+    @pytest.mark.asyncio
+    async def test_opponent_edges_go_too(self):
+        """🔴 An opponent edge carries `distance`, computed from the real
+        positions. One of them leaks the range to an enemy; several across time
+        trilaterate him. Found by Fable's review — the first version of this
+        plan withheld positions and left the edges in."""
+        payload = await self._snapshot("team:AXIS")
+        for edge in payload["edges"]:
+            assert edge["kind"] == "teammate", f"leaked {edge['kind']} edge"
+
+    @pytest.mark.asyncio
+    async def test_no_enemy_coordinate_leaks_outside_a_belief(self):
+        """⭐ The test that catches the field nobody thought of.
+
+        Takes the enemy's real position from the oracle view and asserts those
+        numbers appear nowhere in the team view OUTSIDE a belief region —
+        whatever shape a future field might take: a panel, a tooltip, a debug
+        key. Fable's idea, and stronger than checking the keys we happen to
+        know about today.
+        """
+        oracle = await self._snapshot("world")
+        enemy = next(p for p in oracle["players"] if p["guid"] == "AL1")
+        team = await self._snapshot("team:AXIS")
+
+        # ⚠️ EVERYWHERE EXCEPT A BELIEF REGION. The first version of this scan
+        # asserted the coordinates appear nowhere at all, and a real round
+        # failed it 8 times — every hit inside `beliefs[].region`. Those are
+        # not leaks: a belief region IS what the holder inferred about where an
+        # enemy was, and it equals the truth whenever the enemy has not moved
+        # since. Publishing it is the page's purpose. Asserting otherwise would
+        # have forced the feature to hide the very thing it exists to show.
+        without_beliefs = {k: v for k, v in team.items() if k != "information_state"}
+        blob = json.dumps(without_beliefs)
+        for axis in ("x", "y", "z"):
+            value = enemy[axis]
+            if value in (0, 0.0, None):
+                continue          # 0 is everywhere; it proves nothing
+            assert str(value) not in blob, (
+                f"enemy {axis}={value} leaked outside the belief regions")
+
+    @pytest.mark.asyncio
+    async def test_an_unknown_team_explains_itself(self):
+        payload = await self._snapshot("team:NOBODY")
+        assert payload["information_state"]["pov_unavailable"]
+
+    @pytest.mark.asyncio
+    async def test_the_team_name_is_case_insensitive(self):
+        lower = await self._snapshot("team:axis")
+        assert [p["guid"] for p in lower["players"]] == ["AX1"]
+
+
+class TestTheTeamViewIsAUnion:
+    """§6.3: a team view is DERIVED BY UNION of its members' beliefs.
+
+    ⚠️ The first version of these tests had one player per team and no deaths,
+    so nothing could tell a union from "the first holder's beliefs" — three
+    mutations survived a green suite on a fixture too thin to distinguish them.
+    Two members per side, each learning about a different enemy.
+    """
+
+    async def _team(self, pov="team:AXIS", t_ms=40_000):
+        # ⭐ Each AXIS member hit a DIFFERENT enemy, and nobody died. Contact is
+        # attacker-specific, so AX1 knows only AL1 and AX2 knows only AL2 — the
+        # union is 2 and any single member is 1. Built this way on purpose: with
+        # deaths instead, a public obituary gives both members the same set and
+        # "first holder only" becomes indistinguishable from the union.
+        db = _SnapshotStubDb(
+            tracks=[_stub_track("AX1", 0.0, team="AXIS"),
+                    _stub_track("AX2", 100.0, team="AXIS"),
+                    _stub_track("AL1", 500.0, team="ALLIES"),
+                    _stub_track("AL2", 600.0, team="ALLIES")],
+            engagements=[
+                ("AL1", [{"guid": "AX1", "weapons": {"3": 1}, "first_hit_ms": 1000}]),
+                ("AL2", [{"guid": "AX2", "weapons": {"3": 1}, "first_hit_ms": 1200}]),
+            ],
+        )
+        payload = await get_round_snapshot(db, 1, t_ms, pov=pov)
+        holders = payload["information_state"]["holders"]
+        return payload, next(iter(holders.values()))
+
+    @pytest.mark.asyncio
+    async def test_the_union_covers_every_member_not_just_the_first(self):
+        _payload, team = await self._team(t_ms=2_000)
+        # AX1 knows AL1, AX2 knows AL2, neither knows the other's. Only the
+        # union sees two.
+        assert team["known_enemy_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_the_holder_is_the_team_and_no_individual_leaks_in(self):
+        payload, _team = await self._team()
+        holders = payload["information_state"]["holders"]
+        assert list(holders) == ["team:AXIS"]
+
+    @pytest.mark.asyncio
+    async def test_a_team_has_no_position_so_it_has_no_distance(self):
+        """⛔ A distance needs a holder's position. Measuring from a team
+        centroid would invent exactly the kind of number this layer refuses."""
+        _payload, team = await self._team()
+        assert team["nearest_known_enemy_distance"] is None
+        assert team["nearest_heard_activity_distance"] is None
+
+    @pytest.mark.asyncio
+    async def test_the_simplification_about_own_positions_is_stated(self):
+        """§6: treating own-team positions as known is defensible *and must be
+        stated*. An unstated simplification is just an error."""
+        payload, _team = await self._team()
+        assert payload["information_state"]["own_team_positions_are_a_simplification"]
+
+    @pytest.mark.asyncio
+    async def test_gaps_never_enumerate_the_other_side(self):
+        """A gap reason names tracking state rather than position, but under a
+        team view it would still list who the other side even was at `t`.
+
+        ⚠️ `max_stale_ms` is what forces the gaps. Without it nobody in this
+        fixture is ever missing, the filter never runs, and the test passes
+        while proving nothing — which is how it first went green with the
+        filter deleted.
+        """
+        db = _SnapshotStubDb(
+            tracks=[_stub_track("AX1", 0.0, team="AXIS"),
+                    _stub_track("AL1", 500.0, team="ALLIES")])
+        payload = await get_round_snapshot(db, 1, 40_000, pov="team:AXIS",
+                                           max_stale_ms=100)
+        assert payload["gaps"], "the fixture produced no gaps to filter"
+        assert payload["withheld_by_pov"] == ["AL1"], (
+            "the team view fell back to the oracle when nobody had a state")
+        assert not (set(payload["gaps"]) & set(payload["withheld_by_pov"]))
 
 
 class TestAnEmptyRoundKeepsTheContract:
