@@ -51,6 +51,7 @@
 /api/proximity/v7-status
 /api/proximity/vehicle-progress
 /api/records/maps/segments
+/api/replay/round
 /api/rivalries/h2h
 /api/rivalries/leaderboard
 /api/rivalries/player
