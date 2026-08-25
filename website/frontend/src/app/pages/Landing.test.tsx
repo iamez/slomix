@@ -247,6 +247,10 @@ describe('Landing', () => {
     // never "unavailable", the endpoint answered fine (Codex wave 3).
     await waitFor(() => expect(screen.getAllByText(/no sessions recorded yet/).length).toBe(2));
     expect(screen.queryByText(/last session: unavailable/)).not.toBeInTheDocument();
+    // The heading stays neutral — "last night" would assert a session that
+    // never happened (wave 7).
+    expect(screen.getByText('latest session')).toBeInTheDocument();
+    expect(screen.queryByText('last night')).not.toBeInTheDocument();
   });
 
   it('renders a dash for a single zeroed overview metric instead of claiming 0 kills', async () => {

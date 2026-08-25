@@ -141,10 +141,13 @@ function LivePanel() {
 }
 
 function LastNightPanel({ session, pending, empty }: { session: SessionSummary | undefined; pending: boolean; empty: boolean }) {
+  // Neutral heading until a session exists: "last night" above an empty or
+  // still-loading panel asserts a session that may never have happened
+  // (Codex on #806, wave 7) — only sessionRecency() may earn the label.
   if (pending) {
     return (
       <div style={{ marginTop: 22 }}>
-        <div style={S.lbl}>last night</div>
+        <div style={S.lbl}>latest session</div>
         <div style={{ marginTop: 8 }}><Pending label="last session" /></div>
       </div>
     );
@@ -154,7 +157,7 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
     // a fresh database has no last session, but the endpoint is fine.
     return (
       <div style={{ marginTop: 22 }}>
-        <div style={S.lbl}>last night</div>
+        <div style={S.lbl}>latest session</div>
         <div style={{ marginTop: 8 }}>
           {empty
             ? <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no sessions recorded yet</span>
