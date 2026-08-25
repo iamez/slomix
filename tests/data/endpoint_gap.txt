@@ -11,7 +11,6 @@
 /api/bets/market
 /api/bets/market/current
 /api/bets/wallet
-/api/challenges/current
 /api/live/feed
 /api/monitoring/status
 /api/planning
@@ -59,17 +58,10 @@
 /api/rivalries/leaderboard
 /api/rivalries/player
 /api/seasons/current/awards
-/api/seasons/current/leaders
-/api/seasons/current/summary
 /api/server-activity/history
-/api/skill/movers
 /api/skill/ssr
-/api/stats/activity-calendar
-/api/stats/last-session
 /api/stats/live-session
-/api/stats/matches
 /api/stats/session-leaderboard
-/api/stats/tonight
 /api/stats/weapons/by_player
 /api/storytelling/best-lives
 /api/storytelling/formula

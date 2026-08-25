@@ -153,3 +153,21 @@ body {
   .about-grid-4, .about-grid-5, .about-grid-6 { grid-template-columns: repeat(2, 1fr); }
   .diag-boards { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Home (phase 2): the canon's three-column mid band and five-across figure
+ * strip, with the same phone collapses as every other page. */
+.home-cols3 {
+  display: grid;
+  grid-template-columns: 1fr 1.15fr 1fr;
+  gap: 40px;
+}
+
+.home-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); }
+
+@media (max-width: 900px) {
+  .home-cols3 { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+}
+
+@media (max-width: 760px) {
+  .home-grid-5 { grid-template-columns: repeat(2, 1fr); }
+}
