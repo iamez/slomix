@@ -36,13 +36,14 @@ export function SessionsList({ box }: { box: boolean }) {
             : <Link to="/sessions2" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>box view →</Link>}
         />
         <div style={{ marginTop: 10 }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 14, padding: '6px 0' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 14, padding: '6px 0' }}>
             <Lbl style={{ fontSize: 9 }}>evening</Lbl>
             <Lbl style={{ fontSize: 9 }}>rd</Lbl>
             <Lbl style={{ fontSize: 9 }}>pl</Lbl>
             <Lbl style={{ fontSize: 9 }}>kills</Lbl>
             {box && <Lbl style={{ fontSize: 9 }}>allies</Lbl>}
             {box && <Lbl style={{ fontSize: 9 }}>axis</Lbl>}
+            {box && <Lbl style={{ fontSize: 9 }}>draw</Lbl>}
             <Lbl style={{ fontSize: 9, textAlign: 'right' }}>box</Lbl>
           </div>
           {sessions.isPending && <div style={{ padding: '10px 0' }}><Pending label="sessions" /></div>}
@@ -56,7 +57,7 @@ export function SessionsList({ box }: { box: boolean }) {
             <Link
               key={row.session_id}
               to={`/session-detail/${row.session_id}`}
-              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 14, alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 14, alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
             >
               <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.formatted_date}
@@ -66,8 +67,11 @@ export function SessionsList({ box }: { box: boolean }) {
               <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.total_kills.toLocaleString('en-US')}</span>
               {box && <span className="m" style={{ fontSize: 12, color: 'var(--color-accent)' }}>{row.allies_wins}</span>}
               {box && <span className="m" style={{ fontSize: 12, color: 'var(--color-accent-warm)' }}>{row.axis_wins}</span>}
+              {box && <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.draws}</span>}
               <span className="m" style={{ fontSize: 14, minWidth: 58, textAlign: 'right' }}>
-                {row.team_1_score != null && row.team_2_score != null
+                {/* 0/0 with an aggregate row present means NO map was
+                  * attributed — a dash, not a claimed tie (Codex wave 2). */}
+                {row.team_1_score != null && row.team_2_score != null && row.team_1_score + row.team_2_score > 0
                   ? `${row.team_1_score} / ${row.team_2_score}`
                   : '—'}
               </span>

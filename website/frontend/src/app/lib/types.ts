@@ -253,7 +253,9 @@ export interface MatchRow {
   outcome: string;
   date: string;
   time_ago: string;
-  gaming_session_id: number;
+  /** null when the round could not be attributed to a session — the link
+   * then falls back to the date route (Codex on #811, wave 2). */
+  gaming_session_id: number | null;
   team1_players: string[];
   team2_players: string[];
   team1_name: string;
