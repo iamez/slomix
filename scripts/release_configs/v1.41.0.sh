@@ -46,6 +46,24 @@
 #   install -d -o slomix_web -g slomix -m 2750 /var/lib/slomix/uploads
 #   rsync -a --remove-source-files /opt/slomix/website/data/uploads/ /var/lib/slomix/uploads/
 #   set UPLOAD_STORAGE_ROOT=/var/lib/slomix/uploads in /opt/slomix/.env, restart web
+# ⛔ THESE NOTES ASSUME #807 IS IN THE TAG. Checked against main as it stands
+# and two of them are not true without it:
+#
+#   * SPIDER WEB HAS NO ENTRY POINT. `route-registry.js` defines its
+#     `buildHash` and nothing calls it — the only route to the page is typing
+#     `#/spider-web/round/<id>` by hand. #807 adds the link from the replay
+#     view. Tag without it and the release announces a page nobody can reach.
+#
+#   * THE TEAM-POV BOUNDARY STILL LEAKS. On main, `"clock": clock` and
+#     `"nearest_teammate_separation": separation` go into the payload
+#     unfiltered (round_web_service.py:1156, 1170), so a team view is handed
+#     the enemy's wave phase and formation. #807 closes both, plus the belief
+#     expiry that kept time with the enemy clock.
+#
+# If #807 is NOT in the tag, cut the last two sentences of RELEASE_NOTES and
+# say the page is reachable by URL only. Announcing a guarantee the code does
+# not keep is worse than announcing less.
+#
 # shellcheck shell=bash
 # shellcheck disable=SC2034
 MIGRATIONS=(
