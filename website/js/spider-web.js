@@ -1067,6 +1067,20 @@ export async function loadSpiderWebView(params = {}) {
                 'zmožnosti zajema');
             capHead.style.color = THEME.label;
             integrityPanel.appendChild(capHead);
+            // ⚠️ A6 asks every semantic sensor to declare its schedule,
+            // interval, integration rule, version and completeness. The
+            // manifest records NONE of those — it carries `flag -> state` and
+            // nothing else — so the panel cannot publish them without
+            // inventing them. Naming the gap is the only honest option: an
+            // unqualified list would imply the requirement is met
+            // (Codex, #804).
+            const capGap = _el('p', 'text-[10px] mb-1 leading-relaxed',
+                '⚠️ Manifest beleži samo stanje zastavice. Razpored senzorja '
+                + '(dogodkovni/fiksni/prilagodljivi), interval, pravilo '
+                + 'integracije, verzija in popolnost NISO zajeti, zato jih tu '
+                + 'ni — to je vrzel v zajemu (A6), ne v tem panelu.');
+            capGap.style.color = THEME.label;
+            integrityPanel.appendChild(capGap);
             for (const c of caps) {
                 const row = _el('div', 'flex justify-between text-[11px] font-mono');
                 const a = _el('span', '', c.name); a.style.color = THEME.textDim;
