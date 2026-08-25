@@ -1,9 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { createBrowserRouter, RouterProvider } from 'react-router';
+import { QueryClientProvider } from '@tanstack/react-query';
 import './tokens.css';
 import { applyHashShim } from './hashShim';
 import { AppShell } from './components/AppShell';
+import { Landing } from './pages/Landing';
+import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
 
 // Must run before the router reads window.location (docs/design/06 §3).
@@ -36,6 +39,11 @@ function Stub({ label, phase }: { label: string; phase: number }) {
   );
 }
 
+/** Built pages replace their stubs route by route as phases land. */
+const PAGES: Record<string, React.ReactElement> = {
+  landing: <Landing />,
+};
+
 const router = createBrowserRouter(
   [
     {
@@ -43,7 +51,7 @@ const router = createBrowserRouter(
       children: [
         ...APP_ROUTES.map((r) => ({
           path: r.path,
-          element: <Stub label={r.label} phase={r.phase} />,
+          element: PAGES[r.key] ?? <Stub label={r.label} phase={r.phase} />,
         })),
         { path: '*', element: <Stub label="Not found" phase={0} /> },
       ],
@@ -52,10 +60,14 @@ const router = createBrowserRouter(
   { basename: '/app' },
 );
 
+const queryClient = makeQueryClient();
+
 const rootElement = document.getElementById('root');
 if (!rootElement) throw new Error('app.html is missing #root');
 ReactDOM.createRoot(rootElement).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </React.StrictMode>,
 );
