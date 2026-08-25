@@ -1,0 +1,22 @@
+{
+ "rounds": 1948,
+ "players": 19,
+ "sessions": 147,
+ "total_kills": 122999,
+ "rounds_since": "2025-01-01",
+ "rounds_latest": "2026-08-23",
+ "rounds_14d": 90,
+ "players_all_time": 67,
+ "players_14d": 19,
+ "sessions_14d": 8,
+ "total_kills_14d": 5309,
+ "most_active_overall": {
+  "name": ".olz",
+  "rounds": 1793
+ },
+ "most_active_14d": {
+  "name": ".lgz",
+  "rounds": 72
+ },
+ "window_days": 14
+}

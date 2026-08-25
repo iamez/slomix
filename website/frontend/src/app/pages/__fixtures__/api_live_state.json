@@ -1,0 +1,22 @@
+{
+ "status": "ok",
+ "is_live": false,
+ "game_state": "idle",
+ "current_map": "supply",
+ "previous_map": "te_escape2",
+ "round_number": null,
+ "round_elapsed_seconds": null,
+ "roster": {
+  "axis": [],
+  "allies": [],
+  "spectators": [],
+  "player_count": 0,
+  "roster_age_seconds": null,
+  "has_bots": false
+ },
+ "session_start_seconds": null,
+ "recent_objectives": [],
+ "recent_roster_changes": [],
+ "last_event_age_seconds": 450391,
+ "server_time": 1787578534.7393756
+}
