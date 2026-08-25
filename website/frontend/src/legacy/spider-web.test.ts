@@ -829,6 +829,51 @@ describe('opening a different round', () => {
     expect(asked).not.toContain('77000');
   });
 
+  it('opens a new round from the oracle, not from the previous POV', async () => {
+    // ⛔ `state.pov` used to persist across rounds as "a viewing preference".
+    // The team list is rebuilt from `snapshot.players`, so a carried
+    // `team:AXIS` made the FIRST request team-filtered and the rebuild saw
+    // one side — permanently, since goTo does not recreate the buttons. And
+    // once an unresolvable team fails CLOSED, carrying it into a round with
+    // no AXIS side opens the page empty (Codex, PR #807).
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      asked.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          round_id: 1, t_ms: 0, map_name: null, first_position_ms: 0,
+          round_duration_ms: 600_000,
+          players: [{ guid: 'G0', name: 'p', team: 'AXIS', alive: true,
+                      x: 0, y: 0, z: 0, stale_ms: 0 }],
+          edges: [], gaps: {}, withheld_by_pov: [],
+          nearest_teammate_separation: {}, clock: {},
+          information_state: { holders: {} }, capture_policy: { capabilities: {} },
+          reconstruction_accuracy: {}, player_count: 1, overlap_conflicts: 0,
+          notes: [],
+        }),
+      } as Response);
+    }));
+
+    await loadSpiderWebView({ roundId: '11700' });
+    // Simulate the viewer choosing a team POV on that round.
+    const teamButton = [...document.querySelectorAll('button')]
+      .find((b) => b.textContent === 'AXIS');
+    teamButton?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    asked.length = 0;
+    await loadSpiderWebView({ roundId: '11701' });
+
+    // The first request for the new round must carry no pov at all.
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked[0]).not.toContain('pov=');
+  });
+
   it('rebuilds the team list for the new round', async () => {
     // ⛔ `state.teams` is rebuilt only when EMPTY, so a round whose
     // reconstruction resolved one side left that single team cached and the

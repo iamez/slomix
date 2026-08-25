@@ -637,14 +637,24 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
         JOIN proximity_processed_files f
           ON split_part(f.round_key, '|', 4) = r.round_start_unix::text
         WHERE r.id = $1
-          AND f.capabilities IS NOT NULL
+          -- ⛔ NULL manifests are SELECTED, not filtered out. Excluding them
+          -- made a file with no manifest invisible to the agreement checks
+          -- below, so one file declaring 200 ms was "unanimous" while its
+          -- sibling had declared nothing at all (Codex, PR #807).
           AND r.round_start_unix IS NOT NULL
           AND r.round_start_unix > 0
         ORDER BY f.filename
     """, (round_id,))
     manifests: list[dict] = []
+    #: Files this round resolved to that carry no usable manifest — NULL, or
+    #: text that will not parse. They cannot AGREE about anything, so they
+    #: block unanimity rather than being quietly absent from the vote.
+    unusable = 0
     for row in rows:
         value = row[0]
+        if value is None:
+            unusable += 1
+            continue
         if isinstance(value, str):
             # A value that will not parse is not a manifest. Dropping it leaves
             # the round `unknown`, which is the truth about a round we cannot
@@ -657,9 +667,12 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
                 logger.warning(
                     "round %s: unparseable capabilities manifest, ignoring", round_id
                 )
+                unusable += 1
                 continue
         if isinstance(value, dict):
             manifests.append(value)
+        else:
+            unusable += 1
     if not manifests:
         return CapturePolicy()
 
@@ -692,9 +705,16 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     # agreement. That matters more now that the velocity bound is derived from
     # this number: a round would get `2 * 200` applied to samples whose actual
     # cadence was never declared (Codex, PR #807).
+    #
+    # ⛔ AND A FILE WITH NO MANIFEST AT ALL COUNTS AGAINST UNANIMITY. It never
+    # reached `manifests`, so `all(declared)` could not see it — the check was
+    # unanimous among the files that happened to have something to say
+    # (Codex, PR #807). `unusable` puts them back in the denominator.
     declared = [m.get("position_sample_interval_ms") for m in manifests]
     interval = (
-        declared[0] if all(declared) and len(set(declared)) == 1 else None
+        declared[0]
+        if not unusable and all(declared) and len(set(declared)) == 1
+        else None
     )
     sources = {m.get("source") for m in manifests if m.get("source")}
     # Same rule for every scalar, `manifest_version` included: one answer or
@@ -1081,13 +1101,29 @@ def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
     the moment the data thins is not a guarantee. The tracks say who played on
     which side whether or not they have a state at `t`.
     """
-    if not pov or not pov.lower().startswith("team:"):
+    if not pov or pov.lower() == "world":
         return None
-    wanted = pov[5:].strip().upper()
     roster = {
         t[_TRACK_GUID]: str(t[_TRACK_TEAM] or "").upper()
         for lives in (tracks or {}).values() for t in lives
     }
+    if pov.lower().startswith("team:"):
+        wanted = pov[5:].strip().upper()
+    else:
+        # ⛔ A PLAYER POV IS A TEAM POV, RESOLVED THROUGH ITS HOLDER.
+        #
+        # It used to fall through to None — the oracle — so `pov=<guid>` was
+        # handed every enemy position and both clocks whole, while
+        # `pov=team:AXIS` was denied them. The MORE specific view got MORE,
+        # and the withholding was bypassable by asking with a player id
+        # instead of a team name (Codex, PR #807).
+        #
+        # The holder's own team is what they may see: a player knows where
+        # their teammates are and their own reinforcement timer, and neither
+        # for the other side.
+        wanted = roster.get(pov, "")
+        if not wanted:
+            return None
     members = {g for g, team in roster.items() if team == wanted}
     if not members:
         return None
@@ -1215,6 +1251,14 @@ async def get_round_snapshot(
     # stays None because there is no roster to filter by, so the withholding
     # below cannot use it — the flag carries the request instead.
     unresolved_team = pov_team is None and _requests_a_team(pov)
+    # ⭐ TWO DIFFERENT QUESTIONS, and conflating them broke the player view.
+    # `pov_team` answers WHOSE POSITIONS AND CLOCK may be seen — always a
+    # team, because a player knows where their own side is. This flag answers
+    # WHOSE BELIEFS are returned: for `pov=<guid>` that is one holder, not the
+    # union. Routing a player pov through `_team_information` would hand them
+    # their whole side's knowledge, which is the opposite of what a per-player
+    # view is for.
+    single_holder = bool(pov) and pov.lower() != "world" and not _requests_a_team(pov)
 
     # 🔴 RESOLVED BEFORE THE BELIEFS, because the clock does not only get
     # PUBLISHED — it decides when "he is down" stops being true. `resolve_expiry`
@@ -1256,7 +1300,19 @@ async def get_round_snapshot(
         own = pov_team["members"]
         withheld = sorted(g for g in pov_team["all_guids"] if g not in own)
         snap_players = [p for p in snap.players.values() if p.guid in own]
-        information = _team_information(information, pov_team, t_ms)
+        if single_holder:
+            holders = information.get("holders", {})
+            information = {
+                **information,
+                "holders": {pov: holders[pov]} if pov in holders else {},
+                "pov": pov,
+                "pov_unavailable": (
+                    None if pov in holders
+                    else f"{pov} has no reconstructed state in this round at t={t_ms}"
+                ),
+            }
+        else:
+            information = _team_information(information, pov_team, t_ms)
     elif unresolved_team:
         # ⛔ FAIL CLOSED. Everyone is withheld and everyone is named — the same
         # contract a resolved team view keeps, applied to a request we could

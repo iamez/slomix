@@ -1043,6 +1043,44 @@ class TestTheCadenceNeedsEVERYManifestToDeclareIt:
         assert policy.mode == "unknown"
 
     @pytest.mark.asyncio
+    async def test_a_file_with_NO_manifest_also_blocks_agreement(self):
+        """⛔ The version the first fix could not see.
+
+        The query filtered `capabilities IS NOT NULL` and the parser skipped
+        unparseable text, so a file with no manifest at all never reached the
+        list — `all(declared)` was unanimous among the files that happened to
+        have something to say. A round with one 200 ms manifest and one NULL
+        sibling reported "200, known" and the velocity bound followed
+        (Codex, PR #807).
+        """
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({"position_sample_interval_ms": 200}),),
+                            (None,)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_unparseable_text_blocks_it_too(self):
+        """Same reasoning: text that will not parse is not a vote for anything.
+        It is still dropped from the capability merge — one corrupt row must
+        not 500 a page whose job is to keep working — but it no longer
+        disappears from the denominator."""
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({"position_sample_interval_ms": 200}),),
+                            ("{not json",)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.observation_interval_ms is None
+
+    @pytest.mark.asyncio
     async def test_silence_from_one_file_is_NOT_agreement(self):
         """The case that shipped wrong. A file that never declared a cadence
         does not vote for the one that did."""
@@ -1324,6 +1362,43 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert oracle["clock"]["ALLIES"]["status"] != "unknown_to_this_pov"
         assert team["clock"]["ALLIES"]["status"] == "unknown_to_this_pov"
         assert team["clock"]["AXIS"] == oracle["clock"]["AXIS"]
+
+    @pytest.mark.asyncio
+    async def test_a_player_pov_gets_the_same_boundary_as_their_team(self):
+        """⛔ THE MORE SPECIFIC VIEW USED TO GET MORE.
+
+        `_pov_team` returned None for a player GUID, so `pov=<guid>` fell
+        through to the ORACLE: every enemy position, both clocks whole, and
+        the phase-driven belief transitions the team view is denied. Measured
+        on round 11321 before the fix — `team:AXIS` withheld 3 players and the
+        ALLIES clock, the AXIS player's own GUID withheld nothing.
+
+        ⭐ That also made the guarantee BYPASSABLE. Anything that could be
+        hidden from `team:AXIS` was one differently-spelled request away
+        (Codex, PR #807).
+        """
+        team = await self._snapshot("team:AXIS", pairs=True)
+        player = await self._snapshot("AX1", pairs=True)
+
+        assert set(player["withheld_by_pov"]) == set(team["withheld_by_pov"])
+        assert {p["guid"] for p in player["players"]} == {
+            p["guid"] for p in team["players"]
+        }
+
+    @pytest.mark.asyncio
+    async def test_but_a_player_still_gets_their_OWN_beliefs_not_the_union(self):
+        """⭐ TWO DIFFERENT QUESTIONS, and the first fix conflated them.
+
+        The boundary is a TEAM question — a player knows where their own side
+        is. Whose BELIEFS come back is a per-holder question, and routing a
+        player pov through `_team_information` handed them their whole side's
+        knowledge, which is the opposite of what a per-player view is for.
+        """
+        player = await self._snapshot("AX1", pairs=True)
+        info = player["information_state"]
+
+        assert info["pov"] == "AX1"
+        assert set(info["holders"]) == {"AX1"}
 
     @pytest.mark.asyncio
     async def test_no_withheld_guid_is_named_anywhere_it_should_not_be(self):

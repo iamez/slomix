@@ -754,7 +754,21 @@ export async function loadSpiderWebView(params = {}) {
     // Everything below works on locals; shared state is committed once, after
     // the last await, and only by the load that is still current.
     const roundChanged = String(roundId) !== String(state.roundId);
-    const pov = state.pov;
+    // ⛔ AND THE POINT OF VIEW GOES BACK TO THE ORACLE ON A NEW ROUND.
+    //
+    // It used to persist as "a viewing preference", which broke twice over.
+    // The team list is rebuilt from `snapshot.players`, so a carried
+    // `team:AXIS` made the FIRST request for the new round team-filtered —
+    // the rebuild then saw one side and permanently omitted the other,
+    // because `goTo` updates panels without recreating the POV buttons
+    // (Codex, PR #807).
+    //
+    // ⭐ And it got worse the moment an unresolvable team started failing
+    // CLOSED: carrying `team:AXIS` into a round with no AXIS side used to
+    // fall back to the oracle, and now withholds everyone — the page would
+    // open empty with no way back except reloading. A point of view belongs
+    // to a round's roster, so it does not outlive it.
+    const pov = roundChanged ? 'world' : state.pov;
     let tMs = roundChanged ? 0 : (state.tMs || 0);
 
     container.appendChild(_el('p', 'text-slate-400 text-sm py-12 text-center',
@@ -789,6 +803,7 @@ export async function loadSpiderWebView(params = {}) {
     // reached only by the winning load.
     state.roundId = roundId;
     state.tMs = tMs;
+    state.pov = pov;
     state.snapshot = snapshot;
     // ⛔ The team list belongs to the round, and is rebuilt only when empty:
     // a round whose reconstruction resolved one side left that single team
