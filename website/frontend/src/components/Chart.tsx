@@ -1,17 +1,15 @@
 import { useRef, useEffect } from 'react';
+// chart.js/auto registers every controller/scale/plugin — the exact behaviour
+// of the UMD bundle the legacy shell loads from jsdelivr, so swapping the
+// source cannot change what renders. Pinned to the same version (4.4.7) as
+// website/index.html:1256 until switchover retires the CDN tag entirely
+// (docs/design/06 §2: bundling removes the last non-SRI supply chain and the
+// dependence on the legacy shell having loaded window.Chart first).
+import ChartJS from 'chart.js/auto';
+import type { ChartConfiguration, ChartType } from 'chart.js';
 
-/** Minimal Chart.js types for global CDN usage. */
-interface ChartInstance { destroy(): void }
-interface ChartConstructor {
-  new (ctx: CanvasRenderingContext2D | null, config: { type: string; data: ChartData; options?: ChartOptions }): ChartInstance;
-}
 type ChartData = Record<string, unknown>;
 type ChartOptions = Record<string, unknown>;
-
-function getChart(): ChartConstructor | null {
-  const w = window as unknown as Record<string, unknown>;
-  return typeof window !== 'undefined' && w.Chart ? w.Chart as ChartConstructor : null;
-}
 
 interface ChartProps {
   type: string;
@@ -23,15 +21,17 @@ interface ChartProps {
 
 export function ChartCanvas({ type, data, options, height, className }: ChartProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const chartRef = useRef<ChartInstance | null>(null);
+  const chartRef = useRef<ChartJS | null>(null);
 
   useEffect(() => {
-    const ChartJS = getChart();
-    if (!ChartJS || !canvasRef.current) return;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
 
-    chartRef.current = new ChartJS(canvasRef.current.getContext('2d'), {
-      type,
-      data,
+    chartRef.current = new ChartJS(ctx, {
+      type: type as ChartType,
+      // Callers pass loose records (the component's public contract since the
+      // CDN days); the runtime shape is what Chart.js validates.
+      data: data as unknown as ChartConfiguration['data'],
       options: { responsive: true, maintainAspectRatio: false, ...options },
     });
 
@@ -40,14 +40,6 @@ export function ChartCanvas({ type, data, options, height, className }: ChartPro
       chartRef.current = null;
     };
   }, [type, data, options]);
-
-  if (!getChart()) {
-    return (
-      <div className="flex items-center justify-center h-full text-slate-500 text-sm">
-        Chart library unavailable
-      </div>
-    );
-  }
 
   return (
     <div className={className} style={height ? { height } : undefined} role="img" aria-label={`${type} chart`}>
