@@ -12,7 +12,6 @@
 /api/bets/market/current
 /api/bets/wallet
 /api/challenges/current
-/api/diagnostics/storytelling-completeness
 /api/live/feed
 /api/monitoring/status
 /api/planning
@@ -80,6 +79,5 @@
 /api/storytelling/movement
 /api/storytelling/useless-defense-deaths
 /api/storytelling/win-contribution/formula
-/api/system/overview
 /api/uploads/resumable
 /api/voice-activity/history

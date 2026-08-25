@@ -73,6 +73,13 @@ def _extract_new_frontend_paths() -> tuple[set[str], set[str]]:
     for ts_file in sorted(FRONTEND_SRC.rglob("*.ts")) + sorted(FRONTEND_SRC.rglob("*.tsx")):
         if "generated" in ts_file.parts or ts_file.name.endswith((".test.ts", ".test.tsx")):
             continue
+        # probes.ts is the About page's diagnostics table: it PINGS endpoints
+        # to report reachability, it does not render their data — counting it
+        # would clear ~10 gap lines for pages that don't exist (measured
+        # while building About). test_probe_registry_paths_exist keeps the
+        # excluded file from rotting.
+        if ts_file.name == "probes.ts":
+            continue
         text = _strip_comments(ts_file.read_text(encoding="utf-8"))
         for rx in (_NEW_WRAPPER_RE, _NEW_TEMPLATE_RE):
             for match in rx.finditer(text):
@@ -186,6 +193,25 @@ def test_endpoint_gap_matches_reality():
         "call it once (docs/design/07 §C.1), then remove:\n"
         + "\n".join(stale)
     )
+
+
+def test_probe_registry_paths_exist():
+    """probes.ts is excluded from the extractor above, and this is the guard
+    that keeps the exclusion honest: every probed path must exist in the
+    committed OpenAPI snapshot, so the file cannot rot into probing
+    endpoints that are gone (nor grow into a side channel for real data
+    calls — anything worth typing goes through apiGet and IS counted)."""
+    import json
+
+    probes_file = FRONTEND_SRC / "app" / "lib" / "probes.ts"
+    assert probes_file.exists(), "probes.ts moved — update the extractor exclusion too"
+    endpoints = re.findall(r"endpoint:\s*'([^']+)'", probes_file.read_text(encoding="utf-8"))
+    assert len(endpoints) == 12, "the probe table is diagnostics.js:15-26 verbatim (12 rows)"
+    spec_paths = set(
+        json.loads((REPO_ROOT / "docs" / "api" / "openapi.json").read_text(encoding="utf-8"))["paths"]
+    )
+    missing = sorted({e.split("?")[0] for e in endpoints} - spec_paths)
+    assert not missing, f"probe path(s) not in the OpenAPI snapshot: {missing}"
 
 
 def test_gap_only_shrinks_to_zero_goal():
