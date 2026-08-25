@@ -512,6 +512,20 @@ describe('clockBadge', () => {
     expect(reason).toMatch(/offset/);
   });
 
+  it('does not let an unchecked clock stand on its interval alone', () => {
+    // ⛔ An internally consistent clock with zero qualifying landings keeps a
+    // non-null `interval_ms` and a null `pass_ratio`. Treating it as "inferred"
+    // showed the interval and suppressed the explanation, so the row read like
+    // an ordinary validated one (Codex, #804). The badge stays UNVALIDATED and
+    // its reason must be the one that names the missing check.
+    const b = clockBadge({
+      status: 'internally_consistent_unvalidated',
+      interval_ms: 30000, pass_ratio: null, landing_clusters: 0,
+    });
+    expect(b.badge).toBe('UNVALIDATED');
+    expect(b.reason).toMatch(/landing clusters/);
+  });
+
   it('keeps the three verdicts apart', () => {
     // ⛔ `inconsistent` is not a weaker `unvalidated`: the candidates disagree
     // and the value is published as null, never averaged into one.

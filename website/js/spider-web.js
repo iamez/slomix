@@ -964,8 +964,12 @@ export async function loadSpiderWebView(params = {}) {
             // `interval_ms` — so a truthiness test rendered the interval,
             // skipped the badge's explanation, and made a sparse clock look
             // like an ordinarily inferred one (Codex, #804).
-            const inferred = badge === 'VALIDATED' || badge === 'FAILED'
-                || team.status === 'internally_consistent_unvalidated';
+            // ⛔ Only a CHECKED verdict may stand on its numbers alone. An
+            // internally consistent clock with zero qualifying landings still
+            // carries a non-null `interval_ms` (and `pass_ratio: null`), so
+            // including it here left a row showing an interval with nothing to
+            // say it was never checked (Codex, #804).
+            const inferred = badge === 'VALIDATED' || badge === 'FAILED';
             const numbers = team && team.interval_ms
                 ? `interval ${(team.interval_ms / 1000).toFixed(0)} s`
                   + (typeof team.time_to_next_wave_ms === 'number'
@@ -1040,7 +1044,11 @@ export async function loadSpiderWebView(params = {}) {
             ['verzija manifesta', policy.manifest_version ?? 'unknown'],
             ['manifestov', String(policy.manifest_count ?? 'unknown')],
             ['nasprotujočih zastavic', String(policy.conflicting_flags ?? 'unknown')],
-            ['prekrivajoča življenja', String(snap.overlap_conflicts ?? 'unknown')],
+            // ⚠️ PLAYERS, not lives or pairs. `Snapshot.overlap_conflicts`
+            // counts each player whose life was ambiguous once, however many
+            // candidates they had — the field's own docstring says so, and the
+            // old label gave the number the wrong unit (Codex, #804).
+            ['igralci s spornim življenjem', String(snap.overlap_conflicts ?? 'unknown')],
             ['igralci brez stanja', String(Object.keys(snap.gaps || {}).length)],
         ];
         if (Array.isArray(snap.withheld_by_pov) && snap.withheld_by_pov.length) {
