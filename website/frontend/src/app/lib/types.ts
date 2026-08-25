@@ -37,8 +37,10 @@ export interface StatsOverview {
   players: number;
   sessions: number;
   total_kills: number;
-  rounds_since: string;
-  rounds_latest: string;
+  /** MIN/MAX over the filtered rounds — None on a fresh database, passed
+   * through as null (records_overview.py; Codex on #806, wave 3). */
+  rounds_since: string | null;
+  rounds_latest: string | null;
   rounds_14d: number;
   players_14d: number;
   sessions_14d: number;

@@ -11,7 +11,12 @@ import type { LiveState, QuickLeaders, SessionSummary, StatsOverview, VoiceCurre
 export function makeQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: {
-      queries: { staleTime: 5 * 60_000, retry: 1, refetchOnWindowFocus: false },
+      // refetchOnWindowFocus stays ON: with staleTime as the gate it fires
+      // only when the tab returns after data went stale — without it the
+      // non-live sections (overview, sessions, leaders) would never update
+      // on a long-mounted page while the live panel keeps polling (Codex
+      // on #806, wave 3).
+      queries: { staleTime: 5 * 60_000, retry: 1 },
     },
   });
 }
