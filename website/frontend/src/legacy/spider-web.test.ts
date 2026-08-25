@@ -473,6 +473,20 @@ describe('clockBadge', () => {
       .toBe('VALIDATED');
   });
 
+  it('separates "could not check" from "checked and contradicted"', () => {
+    // ⛔ `validate_clock` assigns `validation_failed` only when the landing
+    // clusters EXIST and too few residuals fall inside the frozen tolerance —
+    // evidence against the offset, not missing evidence. Sharing a word with
+    // "unvalidated" would hide the strongest thing known about those groups.
+    const failed = clockBadge({ status: 'validation_failed' });
+    const unchecked = clockBadge({ status: 'internally_consistent_unvalidated' });
+    expect(failed.badge).toBe('FAILED');
+    expect(unchecked.badge).toBe('UNVALIDATED');
+    expect(failed.badge).not.toBe(unchecked.badge);
+    expect(failed.reason).toMatch(/CONTRADICT/);
+    expect(unchecked.reason).toMatch(/too few/);
+  });
+
   it('keeps the three verdicts apart', () => {
     // ⛔ `inconsistent` is not a weaker `unvalidated`: the candidates disagree
     // and the value is published as null, never averaged into one.

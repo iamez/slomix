@@ -568,10 +568,27 @@ export function clockBadge(team) {
                 || 'candidate offsets disagree; published as null, never averaged',
         };
     }
+    // ⛔ "We could not check" and "we checked and it failed" are different
+    // facts and must not share a word. `validate_clock` assigns
+    // `validation_failed` only when at least MIN_VALIDATION_LANDINGS clusters
+    // EXIST and fewer than MIN_VALIDATION_PASS_RATIO of them fall inside the
+    // frozen residual tolerance — evidence that CONTRADICTS the inferred
+    // clock, not evidence that is missing. Reporting the 126 measured failure
+    // groups as merely unsupported would hide the strongest thing we know
+    // about them (Codex, #804).
+    if (team.status === 'validation_failed') {
+        return {
+            badge: 'FAILED',
+            reason: reason(team.reason)
+                || 'independent spawn landings exist and CONTRADICT this offset; '
+                   + 'too few residuals inside the frozen tolerance (§5.3)',
+        };
+    }
     return {
         badge: 'UNVALIDATED',
         reason: reason(team.reason)
-            || 'no independent spawn support; internally consistent at most',
+            || 'too few independent landing clusters to check; internally '
+               + 'consistent at most',
     };
 }
 
@@ -937,13 +954,17 @@ export async function loadSpiderWebView(params = {}) {
         // (Codex, #804).
         const badges = Object.values(snap.clock || {}).map((t) => clockBadge(t).badge);
         const note = _el('p', 'text-[10px] leading-relaxed mt-1',
-            badges.includes('VALIDATED')
+            badges.includes('VALIDATED') && !badges.includes('FAILED')
                 ? 'VALIDATED pomeni: prestala neodvisno preverbo proti spawn '
                   + 'pristankom iz player_track (§5.3), z zamrznjenim pragom — '
                   + 'ne proti vrsticam, iz katerih je odmik nastal. Neposreden '
                   + 'zajem semena (C2) je močnejša potrditev in še ni na voljo.'
-                : 'Nobena ura tu ni prestala neodvisne preverbe; odstotek '
-                  + 'skladnosti je ujemanje z lastnim izvorom, ne dokaz.');
+                : badges.includes('FAILED')
+                    ? 'FAILED pomeni, da neodvisni pristanki OBSTAJAJO in odmik '
+                      + 'ovržejo — ne da jih ni. To je močnejša ugotovitev od '
+                      + 'nepreverjenosti in je ni mogoče brati kot »morda drži«.'
+                    : 'Nobena ura tu ni prestala neodvisne preverbe; odstotek '
+                      + 'skladnosti je ujemanje z lastnim izvorom, ne dokaz.');
         note.style.color = THEME.label;
         clockPanel.appendChild(note);
 
