@@ -60,9 +60,26 @@
 #     the enemy's wave phase and formation. #807 closes both, plus the belief
 #     expiry that kept time with the enemy clock.
 #
-# If #807 is NOT in the tag, cut the last two sentences of RELEASE_NOTES and
-# say the page is reachable by URL only. Announcing a guarantee the code does
-# not keep is worse than announcing less.
+# ⛔ AND MY OWN FALLBACK INSTRUCTION WAS WRONG. It said "cut the last two
+# sentences", which removes the CLOCK and /app sentences — both TRUE — and
+# leaves the team-POV guarantee, which is the THIRD of five and the false one
+# (Codex, PR #810). Counting sentences is the wrong instrument; here is the
+# replacement text instead, so nobody has to count anything:
+#
+#   RELEASE_NOTES="A round can now be looked at. Spider Web draws one moment
+#   of a match over the map's real floor geometry — where everyone stood, what
+#   each player could plausibly have known, and how far off the reconstruction
+#   is, measured rather than asserted. The page is reachable by URL only in
+#   this tag (#/spider-web/round/<id>) and its team point of view still
+#   publishes the other side's wave phase and formation — both are closed by
+#   #807. The reinforcement clock is reconstructed and independently
+#   validated, and every round now declares what it was able to capture in the
+#   first place, with 'unknown' kept distinct from 'off'. The new design's
+#   first page ships in this tag but is NOT served: /app stays dormant on
+#   production until it reaches parity, and building it is the switchover, not
+#   this release."
+#
+# Announcing a guarantee the code does not keep is worse than announcing less.
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034
