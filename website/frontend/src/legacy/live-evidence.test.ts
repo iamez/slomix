@@ -61,6 +61,22 @@ describe('voiceRowKind', () => {
     expect(voiceRowKind({ status: 'ok', total_count: 3 })).toBe('members');
   });
 
+  it('stops a stale report from being counted as the present', () => {
+    // ⛔ The bot writes every 30 s and its last row stays in the table. With
+    // only `ok` and `unavailable`, an hours-old member list rendered as
+    // "3 in voice" indefinitely (Codex, PR #808).
+    expect(voiceRowKind({ status: 'stale', total_count: 3, age_seconds: 3600 }))
+      .toBe('stale');
+    expect(voiceRowKind({ status: 'stale', total_count: 0 })).toBe('stale');
+  });
+
+  it('keeps stale and unavailable apart', () => {
+    // Read-but-old and could-not-read need different fixes: the bot stopped,
+    // versus the row is unreadable.
+    expect(voiceRowKind({ status: 'stale', total_count: 3 }))
+      .not.toBe(voiceRowKind({ status: 'unavailable', total_count: 0 }));
+  });
+
   it('treats a payload without status as the old behaviour', () => {
     expect(voiceRowKind({ total_count: 0 })).toBe('empty');
     expect(voiceRowKind({ total_count: 2 })).toBe('members');

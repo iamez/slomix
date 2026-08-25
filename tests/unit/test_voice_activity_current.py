@@ -44,13 +44,17 @@ class TestAnEmptyChannelIsAnAnswer:
     async def test_nobody_in_voice_is_reported_as_ok(self):
         """⭐ The case the whole change turns on: zero is a MEASUREMENT here,
         and it must not wear the same clothes as a failure."""
-        db = _Db(row=(json.dumps(_status([])), dt.datetime(2026, 8, 25, 12, 0)))
+        # ⚠️ A FRESH timestamp, computed rather than written down. A literal
+        # date ages into staleness and the test starts failing on a day nobody
+        # touched the code.
+        fresh = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
+        db = _Db(row=(json.dumps(_status([])), fresh))
         payload = await get_current_voice_activity(db=db)
 
         assert payload["status"] == "ok"
         assert payload["total_count"] == 0
         assert payload["members"] == []
-        assert "reason" not in payload
+        assert payload["reason"] is None
 
     @pytest.mark.asyncio
     async def test_members_come_back_sanitised(self):
@@ -115,3 +119,85 @@ class TestTheReportCarriesItsAge:
     async def test_an_unavailable_report_has_no_age_to_give(self):
         payload = await get_current_voice_activity(db=_Db(row=None))
         assert payload["updated_at"] is None
+
+
+class TestAReportThatStoppedIsNotARoomThatEmptied:
+    """⛔ The bot writes every 30 s and its last row stays in the table.
+
+    Nothing compared that row's age to anything, so when the bot stopped the
+    member list was presented as current indefinitely — hours later, still
+    "3 in voice" (Codex on PR #808).
+
+    ⭐ The threshold is not chosen here. `monitor_tasks_mixin` writes on a
+    `@tasks.loop(seconds=30)` and that same service refuses to act on its own
+    status rows past 180 s; re-deriving a different number would give the
+    system two opinions about one staleness.
+    """
+
+    def _row(self, age_s: float, tz_aware: bool = True):
+        now = (dt.datetime.now(dt.timezone.utc) if tz_aware
+               else dt.datetime.now(dt.timezone.utc).replace(tzinfo=None))
+        return (_status(["ciril", "jakazc"]), now - dt.timedelta(seconds=age_s))
+
+    @pytest.mark.asyncio
+    async def test_a_fresh_report_is_ok(self):
+        payload = await get_current_voice_activity(db=_Db(row=self._row(20)))
+        assert payload["status"] == "ok"
+        assert payload["total_count"] == 2
+        assert payload["reason"] is None
+
+    @pytest.mark.asyncio
+    async def test_a_report_past_the_threshold_is_stale(self):
+        payload = await get_current_voice_activity(db=_Db(row=self._row(3600)))
+
+        assert payload["status"] == "stale"
+        assert payload["age_seconds"] >= 3599
+        assert "30 s" in payload["reason"]
+        # ⭐ The members STAY. The page decides not to present them as
+        # current; deleting them here would throw away the last thing we know.
+        assert payload["total_count"] == 2
+
+    @pytest.mark.asyncio
+    async def test_stale_is_not_unavailable(self):
+        """We read the row — that is a different fact from not reading it, and
+        a different fix: the bot stopped, versus the row is unreadable."""
+        stale = await get_current_voice_activity(db=_Db(row=self._row(3600)))
+        gone = await get_current_voice_activity(db=_Db(row=None))
+
+        assert stale["status"] != gone["status"]
+
+    @pytest.mark.asyncio
+    async def test_the_boundary_is_the_bots_own_number(self):
+        from website.backend.routers.diagnostics_router import (
+            VOICE_REPORT_STALE_AFTER_S,
+        )
+        assert VOICE_REPORT_STALE_AFTER_S == 180
+
+        under = await get_current_voice_activity(
+            db=_Db(row=self._row(VOICE_REPORT_STALE_AFTER_S - 10)))
+        over = await get_current_voice_activity(
+            db=_Db(row=self._row(VOICE_REPORT_STALE_AFTER_S + 10)))
+        assert under["status"] == "ok"
+        assert over["status"] == "stale"
+
+    @pytest.mark.asyncio
+    async def test_a_naive_timestamp_is_read_as_utc_not_as_an_error(self):
+        """⚠️ Subtracting a naive datetime from an aware one raises
+        TypeError, which the endpoint's own `except` would catch — turning a
+        perfectly readable row into `unavailable`. The column the bot writes
+        is UTC either way."""
+        payload = await get_current_voice_activity(
+            db=_Db(row=self._row(20, tz_aware=False)))
+
+        assert payload["status"] == "ok"
+        assert payload["age_seconds"] is not None
+
+    @pytest.mark.asyncio
+    async def test_an_unreadable_timestamp_gives_no_age_rather_than_zero(self):
+        """⛔ Zero would say "just written", which is the one thing an
+        unparseable timestamp cannot support."""
+        payload = await get_current_voice_activity(
+            db=_Db(row=(_status(["ciril"]), "not a timestamp")))
+
+        assert payload["status"] == "ok"
+        assert payload["age_seconds"] is None
