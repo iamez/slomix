@@ -189,6 +189,24 @@ describe('Landing', () => {
     await waitFor(() => expect(screen.getByText(/5 players · seen 4 min ago/)).toBeInTheDocument());
   });
 
+  it('qualifies the map the moment is_live is false — no second threshold', async () => {
+    // The backend flips is_live at 180 s; a frontend threshold beside it
+    // left a window showing SERVER IDLE next to a bare map.
+    const justIdle = { ...(liveState as Record<string, unknown>), is_live: false, last_event_age_seconds: 200 };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/live/state') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(justIdle) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText('supply · 3 min ago')).toBeInTheDocument());
+  });
+
   it('qualifies a voice snapshot whose updated_at is stale', async () => {
     // The endpoint does not expose updated_at TODAY — this asserts the
     // defensive path is live the moment the backend starts sending it.

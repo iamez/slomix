@@ -89,13 +89,20 @@ function LivePanel() {
             </span>
             {/* The reducer keeps _current_map indefinitely after events
               * stop (the recording itself is 5 days stale) — while idle the
-              * map is a memory, not a state, and says so (Codex wave 5). */}
+              * map is a memory, not a state, and says so (Codex wave 5).
+              * The tier is is_live ITSELF, no second threshold: the backend
+              * flips it at _LIVE_WINDOW_SECONDS=180 and a frontend number
+              * beside it would be the same rule in two places with two
+              * values (brother's review — the 300 here left a 180–300 s
+              * window showing SERVER IDLE next to a bare map). */}
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>
               {liveData.current_map == null
                 ? 'unknown map'
-                : liveData.is_live || liveData.last_event_age_seconds == null || liveData.last_event_age_seconds < 300
+                : liveData.is_live
                   ? liveData.current_map
-                  : `${liveData.current_map} · ${ageOf(liveData.last_event_age_seconds)}`}
+                  : liveData.last_event_age_seconds != null
+                    ? `${liveData.current_map} · ${ageOf(liveData.last_event_age_seconds)}`
+                    : `${liveData.current_map} · last seen`}
             </span>
             {/* After a delivery gap the reducer keeps the old lineup for up
               * to 600 s and exposes its age — an aged count says so instead
