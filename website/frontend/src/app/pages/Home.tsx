@@ -636,10 +636,8 @@ export function Home() {
       <div data-parity="home.standing" className="landing-quad" style={{ marginTop: 56, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
         <StandingFigures />
       </div>
-      <div className="m" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 22, fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#4c4a45' }}>
-        <span>slomix · kept since january 2025</span>
-        <span>et:legacy stopwatch</span>
-      </div>
+      {/* The canon's page footer is omitted: AppShell already renders the
+        * same line globally — two of them stacked read as a bug. */}
     </div>
   );
 }
