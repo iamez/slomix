@@ -263,3 +263,79 @@ def test_live_ladder_folds_aggregate_deltas_and_alive():
     assert r.snapshot()["roster"]["allies"][0]["live"]["alive"] is True
     r.apply({"type": "ROUND_START", "received_at": now})
     assert "live" not in (r.snapshot()["roster"]["allies"][0])
+
+
+class TestTheMapCarriesItsOwnEvidence:
+    """⛔ A map that survived a session boundary looked brand new.
+
+    The idle reset clears the roster, the objectives and the round — but not
+    the map, and not the game state. After a long gap the first event is
+    usually a CONNECT rather than a MAP, so `is_live` flipped back to true
+    and `last_event_age_seconds` read seconds while `current_map` still held
+    the PREVIOUS session's map, with no field a client could use to doubt it
+    (Codex on PR #806, via Fable).
+
+    ⭐ The map is not cleared. A restarted server usually returns on the same
+    map, so blanking it trades a stale answer for no answer. What is cleared
+    is the ASSERTION — the map keeps its value and loses its evidence.
+    """
+
+    def _played(self, now):
+        r = LiveStateReducer()
+        r.apply(_ev("MAP", now, map_name="supply"))
+        r.apply(_ev("TEAM_CHANGE", now + 1, slot=1, name="ciril", team=1))
+        return r
+
+    def test_a_map_confirmed_by_an_event_says_so(self):
+        now = time.time()
+        snap = self._played(now).snapshot()
+        assert snap["current_map"] == "supply"
+        assert snap["map_confirmed"] is True
+        assert snap["map_age_seconds"] is not None
+
+    def test_a_session_gap_leaves_the_map_unconfirmed(self):
+        now = time.time()
+        r = self._played(now - 6000)
+        r.apply(_ev("CONNECT", now, slot=7, name="nekdo"))
+        snap = r.snapshot()
+
+        # The trap in full: live again, seconds old, wrong map.
+        assert snap["is_live"] is True
+        assert snap["last_event_age_seconds"] < 60
+        assert snap["current_map"] == "supply"
+        # …and now it admits it.
+        assert snap["map_confirmed"] is False
+        assert snap["map_age_seconds"] is None
+
+    def test_the_stale_game_state_goes_with_it(self):
+        """`game_state` survived too, so the previous session's `mapchange`
+        or `live` was served beside the stale map."""
+        now = time.time()
+        r = self._played(now - 6000)
+        r.apply(_ev("LIVE", now - 5999))
+        r.apply(_ev("CONNECT", now, slot=7, name="nekdo"))
+        assert r.snapshot()["game_state"] == "unknown"
+
+    def test_a_map_event_confirms_it_again(self):
+        now = time.time()
+        r = self._played(now - 6000)
+        r.apply(_ev("CONNECT", now - 30, slot=7, name="nekdo"))
+        r.apply(_ev("MAP", now, map_name="te_escape2"))
+        snap = r.snapshot()
+        assert snap["current_map"] == "te_escape2"
+        assert snap["map_confirmed"] is True
+
+    def test_an_event_naming_the_SAME_map_is_a_confirmation(self):
+        """⭐ CHANGED and ASSERTED are different questions. The map handler
+        returns early when the name has not changed, so a re-assertion used to
+        leave no trace — and `_map_changed_at` would have reported the age of
+        the last CHANGE, which on a long map is hours."""
+        now = time.time()
+        r = self._played(now - 6000)
+        r.apply(_ev("CONNECT", now - 30, slot=7, name="nekdo"))
+        assert r.snapshot()["map_confirmed"] is False
+
+        r.apply(_ev("MAP", now, map_name="supply"))       # same map as before
+        snap = r.snapshot()
+        assert snap["map_confirmed"] is True
+        assert snap["map_age_seconds"] < 60

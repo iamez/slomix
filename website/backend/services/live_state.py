@@ -67,6 +67,12 @@ class LiveStateReducer:
         self._current_map: str | None = None
         self._previous_map: str | None = None
         self._map_changed_at: float | None = None
+        # ⭐ CHANGED and ASSERTED are different questions. `_map_changed_at`
+        # only moves when the map is a NEW one, so a map confirmed by events
+        # for twenty minutes would report a twenty-minute-old "change". This
+        # moves on every map event, including one naming the map we already
+        # hold, because that is a fresh assertion that it is still the map.
+        self._map_asserted_at: float | None = None
         self._game_state: str = "unknown"  # warmup|live|between|mapchange|unknown
         self._round_number: int | None = None
         self._round_started_at: float | None = None
@@ -146,6 +152,21 @@ class LiveStateReducer:
             self._live_stats.clear()
             self._round_number = None
             self._round_started_at = None
+            # ⛔ THE MAP AND THE GAME STATE SURVIVED THIS RESET, and that made
+            # a stale map look brand new. After a session gap the first event
+            # is usually a CONNECT, not a MAP: `is_live` flips back to true,
+            # `last_event_age_seconds` reads 1, and the snapshot presented the
+            # PREVIOUS session's map with no field a client could use to doubt
+            # it. Reproduced: 5,000 s of silence + one CONNECT gave
+            # `is_live=True, current_map='supply', game_state='mapchange'`
+            # (Codex on PR #806, via Fable).
+            #
+            # ⭐ The map is NOT cleared. A server that restarts usually comes
+            # back on the same map, and blanking it would trade a stale answer
+            # for no answer — this module's rule is to keep the value and
+            # publish its age. Clearing the ASSERTION is what makes it stale.
+            self._map_asserted_at = None
+            self._game_state = "unknown"
 
         self._last_event_at = at
 
@@ -194,6 +215,10 @@ class LiveStateReducer:
 
         elif etype in ("MAP", "LIVE_MAP"):
             new_map = (ev.get("map_name") or "").strip()
+            if new_map:
+                # Before the change check: an event naming the map we already
+                # hold changes nothing and CONFIRMS everything.
+                self._map_asserted_at = at
             if new_map and new_map != self._current_map:
                 # Anti ping-pong: two sources report the map (legacy3 `MAP`,
                 # LIVEX `LIVE_MAP`). A "change" straight back to the previous
@@ -207,6 +232,7 @@ class LiveStateReducer:
                 self._previous_map = self._current_map
                 self._current_map = new_map
                 self._map_changed_at = at
+                self._map_asserted_at = at
                 self._game_state = "mapchange"
                 self._round_number = None
                 self._objectives = []
@@ -349,6 +375,14 @@ class LiveStateReducer:
             "is_live": is_live,
             "game_state": self._game_state if is_live else "idle",
             "current_map": self._current_map,
+            # ⭐ The map's own evidence, so a client can qualify it the way it
+            # already qualifies the roster. `map_confirmed` is false when the
+            # map has not been asserted by an event since the last session
+            # boundary — the case where `is_live` is true, the event age is
+            # seconds, and the map is still the previous session's.
+            "map_confirmed": self._map_asserted_at is not None,
+            "map_age_seconds": (int(now - self._map_asserted_at)
+                                if self._map_asserted_at is not None else None),
             "previous_map": self._previous_map,
             "round_number": self._round_number if is_live else None,
             "round_elapsed_seconds": round_elapsed,
