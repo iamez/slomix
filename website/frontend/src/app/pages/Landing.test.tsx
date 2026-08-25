@@ -240,12 +240,15 @@ describe('Landing', () => {
     expect(screen.queryByText('No one in voice')).not.toBeInTheDocument();
   });
 
-  it('qualifies a voice snapshot whose updated_at is stale', async () => {
-    // The endpoint does not expose updated_at TODAY — this asserts the
-    // defensive path is live the moment the backend starts sending it.
+  it('relays the backend staleness verdict on a voice snapshot (#808)', async () => {
+    // The endpoint does not expose these fields TODAY — this asserts the
+    // defensive path is live the moment the backend starts sending them.
+    // The verdict and the age are both the SERVER's; nothing here reads
+    // the client clock.
     const stale = {
       ...(voice as Record<string, unknown>),
-      updated_at: new Date(Date.now() - 3600_000).toISOString(),
+      status: 'stale',
+      age_seconds: 3600,
     };
     vi.stubGlobal(
       'fetch',
