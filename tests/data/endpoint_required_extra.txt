@@ -1,0 +1,6 @@
+# Deliberately-adopted endpoints beyond legacy parity (owner decision O9,
+# 2026-08-24, docs/design/17 §2): live today, shown by NOBODY — the new site
+# adopts them. The ratchet in test_endpoint_gap.py treats these as required.
+/api/storytelling/kill-matrix
+/api/storytelling/movement
+/api/storytelling/win-contribution/formula
