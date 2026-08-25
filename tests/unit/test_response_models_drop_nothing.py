@@ -1,0 +1,170 @@
+"""⛔ THE GUARD THAT MAKES `response_model` SAFE TO ADD AT ALL.
+
+FastAPI does not merely DOCUMENT a response model — it FILTERS the response
+through it. A field the handler returns and the model omits disappears from
+the payload, silently, with a 200. Adding schemas to 272 endpoints without
+this test would be a slow, quiet way to delete data from every client.
+
+So each model is checked against what its handler actually produced: call the
+real handler with a stubbed database, serialise through the model, and compare
+the key sets — including nested objects.
+
+⚠️ THIS CANNOT PROVE COMPLETENESS ON ITS OWN, and saying so is part of the
+test. It sees the keys THIS stub produced; a branch that adds a key under
+conditions the stub does not reproduce is invisible to it. That is why every
+model in this PR was also read off a LIVE response before it was written, and
+why the stubs below aim at the branch that returns the MOST keys rather than
+the most convenient one.
+"""
+
+from __future__ import annotations
+
+import pytest
+from pydantic import create_model
+
+from website.backend.routers.players_router import QuickLeaders, get_quick_leaders
+from website.backend.routers.records_overview import (
+    StatsOverview,
+    get_stats_overview,
+)
+
+
+def missing_keys(raw, modelled, path: str = "") -> list[str]:
+    """Keys present in the handler output and absent after the model.
+
+    Recursive, because dropping a nested field is the same defect one level
+    down and the flat comparison would call it a pass.
+    """
+    lost: list[str] = []
+    if isinstance(raw, dict):
+        if not isinstance(modelled, dict):
+            return [f"{path or '<root>'}: became {type(modelled).__name__}"]
+        for key, value in raw.items():
+            here = f"{path}.{key}" if path else str(key)
+            if key not in modelled:
+                lost.append(here)
+                continue
+            lost.extend(missing_keys(value, modelled[key], here))
+    elif isinstance(raw, list) and isinstance(modelled, list):
+        for i, value in enumerate(raw[:3]):
+            if i < len(modelled):
+                lost.extend(missing_keys(value, modelled[i], f"{path}[{i}]"))
+    return lost
+
+
+class _OverviewDb:
+    """Answers every aggregate the overview asks for, on the RICH branch.
+
+    ⚠️ Rich on purpose: `most_active_overall` and `most_active_14d` are null
+    when their query returns nothing, and a stub that returned nothing would
+    let a model omitting them pass — the null branch hides the shape.
+    """
+
+    async def fetch_val(self, query, _params=None):
+        # ⚠️ Type-plausible per query, not one number for everything. The
+        # first version answered 7 to every aggregate including
+        # `MIN(SUBSTR(round_date…))`, and the model rejected it — which is the
+        # model doing its job, and a stub that lies about types cannot check a
+        # schema.
+        # ⚠️ `MIN(`/`MAX(`, not "round_date": the COUNT queries filter on
+        # round_date too, so the broader test made every count a date string.
+        if "MIN(" in query or "MAX(" in query:
+            return "2025-01-01"
+        return 7
+
+    async def fetch_one(self, query, _params=None):
+        if "player_guid" in query or "MAX(" in query:
+            return ("E587CA5F", "ciril", 42)
+        return ("2025-01-01",)
+
+    async def fetch_all(self, _query, _params=None):
+        return [("E587CA5F", "ciril")]
+
+
+@pytest.mark.asyncio
+async def test_stats_overview_model_drops_nothing():
+    raw = await get_stats_overview(db=_OverviewDb())
+    modelled = StatsOverview.model_validate(raw).model_dump()
+
+    lost = missing_keys(raw, modelled)
+    assert lost == [], "response_model dropped: " + ", ".join(lost)
+
+
+@pytest.mark.asyncio
+async def test_the_stub_reaches_the_branch_that_carries_the_most_keys():
+    """⭐ THE TEST ABOVE IS ONLY AS GOOD AS THIS.
+
+    If the stub returned no most-active row, both nested objects would be
+    null, the recursion would never descend into them, and a model that
+    omitted `name` or `rounds` would pass. Asserting the premise keeps the
+    guard from quietly weakening the day the stub changes.
+    """
+    raw = await get_stats_overview(db=_OverviewDb())
+
+    assert raw["most_active_overall"] is not None
+    assert raw["most_active_14d"] is not None
+    assert set(raw["most_active_overall"]) == {"name", "rounds"}
+
+
+@pytest.mark.asyncio
+async def test_a_model_missing_a_field_is_actually_caught():
+    """⛔ The guard has to be able to fail. A comparison that always passes is
+    the failure mode this whole file exists to prevent, so it is exercised
+    directly: build a model that omits a field the handler really returns and
+    confirm the comparison names it."""
+    raw = await get_stats_overview(db=_OverviewDb())
+
+    dropped = "window_days"
+    truncated = create_model(
+        "Truncated",
+        **{
+            name: (field.annotation, ...)
+            for name, field in StatsOverview.model_fields.items()
+            if name != dropped
+        },
+    )
+
+    modelled = truncated.model_validate(raw).model_dump()
+    assert missing_keys(raw, modelled) == [dropped]
+
+
+class _LeadersDb:
+    """Both boards populated, and both `errors` empty — the RICH branch again.
+
+    ⚠️ A stub returning no rows would leave both lists empty, the recursion
+    would never enter a row, and a model that dropped `label` or `rounds`
+    would pass. The two boards carry DIFFERENT participation fields, so both
+    must be non-empty for the comparison to see either.
+    """
+
+    async def fetch_all(self, query, _params=None):
+        if "batch" in query.lower() or "player_links" in query:
+            return []
+        if "session" in query.lower() and "damage" in query.lower():
+            return [("2B5938F5", "bronze", 341.7, 1)]
+        return [("1C747DF1", "proner", 2880.0, 42)]
+
+    async def fetch_one(self, _query, _params=None):
+        return None
+
+
+@pytest.mark.asyncio
+async def test_quick_leaders_model_drops_nothing():
+    raw = await get_quick_leaders(db=_LeadersDb())
+    modelled = QuickLeaders.model_validate(raw).model_dump()
+
+    lost = missing_keys(raw, modelled)
+    assert lost == [], "response_model dropped: " + ", ".join(lost)
+
+
+@pytest.mark.asyncio
+async def test_both_boards_are_populated_so_the_comparison_can_see_them():
+    """⭐ The premise, asserted. Empty boards would make the test above vacuous
+    for every field inside a row."""
+    raw = await get_quick_leaders(db=_LeadersDb())
+
+    assert raw["xp"], "the XP board is empty; the row shape is unchecked"
+    assert raw["dpm_sessions"], "the DPM board is empty; its row shape is unchecked"
+    # The asymmetry is the reason there are two row models.
+    assert "rounds" in raw["xp"][0]
+    assert "sessions" in raw["dpm_sessions"][0]
