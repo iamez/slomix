@@ -495,11 +495,23 @@ class TestLoadCapturePolicy:
 
     @pytest.mark.asyncio
     async def test_no_manifest_stays_unknown(self):
+        """⛔ Unknown is SAID, not left as an empty map.
+
+        This used to assert `capabilities == {}`, and an empty map made the
+        consumer's capability section disappear entirely for exactly the
+        historical rounds where the backend deliberately reports an absent
+        policy — the page stopped mentioning `shot_fired` and `aim_lock`
+        rather than saying it could not tell. Silence reads as "nothing to
+        report" (Codex, PR #804).
+        """
+        from proximity.parser.capability_manifest import FEATURE_FLAGS
+
         policy = await load_capture_policy(_StubDb([]), 1)
         assert policy.mode == "unknown"
         assert policy.source == "absent"
         assert policy.observation_interval_ms is None
-        assert policy.capabilities == {}
+        assert set(policy.capabilities) == set(FEATURE_FLAGS)
+        assert set(policy.capabilities.values()) == {"unknown"}
 
     @pytest.mark.asyncio
     async def test_cadence_comes_from_the_manifest(self):

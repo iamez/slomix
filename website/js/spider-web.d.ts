@@ -104,6 +104,23 @@ export function alphaHex(a: number): string;
 
 export function mixHex(from: string, to: string, t: number): string;
 
+export interface ClockBadge {
+  badge: string;
+  reason?: string;
+}
+
+export function clockBadge(team: Record<string, unknown> | null | undefined): ClockBadge;
+
+export interface CapabilityRow {
+  name: string;
+  state: 'enabled' | 'disabled' | 'unknown';
+  known: boolean;
+}
+
+export function capabilityRows(
+  policy: { capabilities?: Record<string, string> } | null | undefined,
+): CapabilityRow[];
+
 export function statusLine(snapshot: Record<string, unknown> | null): string;
 
 export function loadSpiderWebView(params?: Record<string, string>): Promise<void>;

@@ -526,6 +526,117 @@ function render(canvas) {
     if (Array.isArray(players)) drawPlayers(ctx, players, state.camera, view);
 }
 
+/**
+ * What the clock panel may say about a team's reinforcement wave.
+ *
+ * ⭐ IT REPORTS THE BACKEND'S VERDICT. An earlier version forced UNVALIDATED
+ * for every team on the belief that `validated` meant "internally consistent
+ * only". It does not. §5.3 and acceptance criterion B1 define `validated` as
+ * having passed against **independent** `player_track` spawn landings —
+ * explicitly not the `time_to_next_spawn` values that produced the candidate
+ * offset, precisely so the check is not circular — with a frozen residual
+ * tolerance and a minimum support count. `validate_clock` implements exactly
+ * that, and only promotes a clock that was already
+ * `internally_consistent_unvalidated`.
+ *
+ * ⚠️ So overriding the verdict was itself the overclaim, in the other
+ * direction: it called a clock unproven that had passed the gate the spec
+ * defines. C2 is a future DIRECT seed capture — a stronger confirmation still
+ * to come — not the only independent validation that exists (Codex, #804).
+ *
+ * ⛔ `UNAVAILABLE` stays distinct from `UNVALIDATED`: one means the round had
+ * nothing to reconstruct from, the other that a reconstruction exists and did
+ * not pass.
+ */
+export function clockBadge(team) {
+    const reason = (t) => (typeof t === 'string' && t ? t : undefined);
+    if (!team || team.status === 'unavailable') {
+        return { badge: 'UNAVAILABLE', reason: reason(team && team.reason) };
+    }
+    if (team.status === 'validated') {
+        return {
+            badge: 'VALIDATED',
+            reason: reason(team.reason)
+                || 'passed against independent spawn landings (§5.3); direct '
+                   + 'seed capture (C2) is a stronger confirmation still pending',
+        };
+    }
+    if (team.status === 'inconsistent') {
+        return {
+            badge: 'INCONSISTENT',
+            reason: reason(team.reason)
+                // ⚠️ EITHER cause. `infer_clock` rejects multiple intervals as
+                // well as multiple offsets, and observations can disagree on
+                // the interval while producing the same modular offset. Naming
+                // only the offsets states a cause the payload may contradict —
+                // and such a payload carries `interval_ms: null`, so the panel
+                // printed the wrong explanation beside an empty value
+                // (Codex, #804).
+                || 'eligible observations disagree on the interval or the '
+                   + 'offset; published as null, never averaged into one',
+        };
+    }
+    // ⛔ "We could not check" and "we checked and it failed" are different
+    // facts and must not share a word. `validate_clock` assigns
+    // `validation_failed` only when at least MIN_VALIDATION_LANDINGS clusters
+    // EXIST and fewer than MIN_VALIDATION_PASS_RATIO of them fall inside the
+    // frozen residual tolerance — evidence that CONTRADICTS the inferred
+    // clock, not evidence that is missing. Reporting the 126 measured failure
+    // groups as merely unsupported would hide the strongest thing we know
+    // about them (Codex, #804).
+    if (team.status === 'validation_failed') {
+        return {
+            badge: 'FAILED',
+            reason: reason(team.reason)
+                || 'independent spawn landings exist and CONTRADICT this offset; '
+                   + 'too few residuals inside the frozen tolerance (§5.3)',
+        };
+    }
+    // ⛔ `insufficient` comes from a DIFFERENT stage. `infer_clock` assigns it
+    // when there are fewer than MIN_INTERNAL_OBSERVATIONS eligible timing
+    // observations — before independent validation is ever attempted, and
+    // before there is an offset to validate. Describing it as missing landing
+    // clusters points at the wrong stage, and hinting at internal consistency
+    // asserts something that was never established: with one or two
+    // observations at differing intervals `interval_ms` is null (Codex, #804).
+    if (team.status === 'insufficient') {
+        return {
+            badge: 'UNVALIDATED',
+            reason: reason(team.reason)
+                || 'too few eligible timing observations to infer an offset at '
+                   + 'all; nothing was validated because nothing was inferred',
+        };
+    }
+    return {
+        badge: 'UNVALIDATED',
+        reason: reason(team.reason)
+            || 'offset inferred, but too few independent landing clusters to '
+               + 'check it; internally consistent at most',
+    };
+}
+
+/**
+ * The capture policy, as three states per capability — never two.
+ *
+ * ⛔ `unknown` IS NOT `disabled`. For every round captured before the tracker
+ * began declaring its flags, an absent section is equally consistent with the
+ * capture being off and with it being on and having nothing to report. A panel
+ * that renders the two the same way turns "we do not know" into "it was off",
+ * which is the single claim the manifest exists to prevent.
+ */
+export function capabilityRows(policy) {
+    const caps = (policy && policy.capabilities) || {};
+    const names = Object.keys(caps).sort();
+    return names.map((name) => {
+        const state = caps[name];
+        return {
+            name,
+            state: state === 'enabled' || state === 'disabled' ? state : 'unknown',
+            known: state === 'enabled' || state === 'disabled',
+        };
+    });
+}
+
 // ── Data ──────────────────────────────────────────────────────────────────────
 
 async function loadMesh(mapName) {
@@ -795,6 +906,7 @@ export async function loadSpiderWebView(params = {}) {
         state.snapshot = fresh;
         status.textContent = statusLine(state.snapshot);
         paintPovNote();
+        paintPanels();
         redraw();
     };
 
@@ -810,6 +922,200 @@ export async function loadSpiderWebView(params = {}) {
     slider.addEventListener('change', () => goTo(Number(slider.value)));
     container.appendChild(controls);
 
+    // ── The clock, and the snapshot's own integrity ──────────────────────────
+    const panels = _el('div', 'grid gap-4 mt-4 md:grid-cols-2');
+
+    const clockPanel = _el('div', 'rounded border p-3');
+    clockPanel.style.borderColor = THEME.hairline;
+    clockPanel.dataset.parity = 'spider-web.clock';
+    const integrityPanel = _el('div', 'rounded border p-3');
+    integrityPanel.style.borderColor = THEME.hairline;
+    integrityPanel.dataset.parity = 'spider-web.snapshot-integrity';
+    panels.appendChild(clockPanel);
+    panels.appendChild(integrityPanel);
+    container.appendChild(panels);
+
+    const paintPanels = () => {
+        const snap = state.snapshot || {};
+        clockPanel.textContent = '';
+        integrityPanel.textContent = '';
+
+        clockPanel.appendChild(_el('h3',
+            'text-[11px] uppercase tracking-wider mb-2', 'ura — tretji nasprotnik'));
+        clockPanel.lastChild.style.color = THEME.label;
+        for (const [name, team] of Object.entries(snap.clock || {})) {
+            const { badge, reason } = clockBadge(team);
+            const row = _el('div', 'mb-2');
+            const head = _el('div', 'flex items-baseline justify-between gap-2');
+            const label = _el('span', 'font-mono text-sm', name);
+            label.style.color = name.toUpperCase() === 'AXIS' ? THEME.axis : THEME.allies;
+            const tag = _el('span', 'text-[10px] font-mono px-1 rounded', badge);
+            tag.style.color = THEME.textDim;
+            tag.style.border = `1px solid ${THEME.hairline}`;
+            head.appendChild(label);
+            head.appendChild(tag);
+            row.appendChild(head);
+
+            const detail = _el('p', 'text-[11px] font-mono');
+            detail.style.color = THEME.textDim;
+            // ⛔ Driven by the VERDICT, not by whether `interval_ms` happens to
+            // be set. With one or two observations at the same interval,
+            // `infer_clock` returns `insufficient` and still keeps
+            // `interval_ms` — so a truthiness test rendered the interval,
+            // skipped the badge's explanation, and made a sparse clock look
+            // like an ordinarily inferred one (Codex, #804).
+            // ⛔ Only a CHECKED verdict may stand on its numbers alone. An
+            // internally consistent clock with zero qualifying landings still
+            // carries a non-null `interval_ms` (and `pass_ratio: null`), so
+            // including it here left a row showing an interval with nothing to
+            // say it was never checked (Codex, #804).
+            const inferred = badge === 'VALIDATED' || badge === 'FAILED';
+            const numbers = team && team.interval_ms
+                ? `interval ${(team.interval_ms / 1000).toFixed(0)} s`
+                  + (typeof team.time_to_next_wave_ms === 'number'
+                      ? ` · do naslednjega vala ${(team.time_to_next_wave_ms / 1000).toFixed(1)} s`
+                      : '')
+                  // ⚠️ A ratio without its denominator is not evidence: 100%
+                  // from two landings and 100% from thirty are different
+                  // claims, and the payload carries the counts that separate
+                  // them (Codex, #804).
+                  + (typeof team.pass_ratio === 'number'
+                      ? ` · preverba ${(team.pass_ratio * 100).toFixed(1)} %`
+                        + (typeof team.landing_clusters === 'number'
+                            ? ` (${team.passing_landing_clusters ?? '?'}/`
+                              + `${team.landing_clusters} pristankov`
+                              + (typeof team.timing_observations === 'number'
+                                  ? `, ${team.timing_observations} opazovanj)`
+                                  : ')')
+                            : '')
+                      : '')
+                : '';
+            detail.textContent = inferred && numbers
+                ? numbers
+                : [reason, numbers && `(${numbers})`].filter(Boolean).join(' ')
+                  || 'ure za to ekipo ni bilo mogoče ugotoviti';
+            row.appendChild(detail);
+            clockPanel.appendChild(row);
+        }
+        // ⚠️ Derived from the actual verdicts. An unconditional sentence here
+        // claimed both teams were UNVALIDATED and internally consistent, which
+        // contradicted the badges above it whenever a team was UNAVAILABLE and
+        // asserted the opposite of the backend for an INCONSISTENT one
+        // (Codex, #804).
+        const badges = Object.values(snap.clock || {}).map((t) => clockBadge(t).badge);
+        const note = _el('p', 'text-[10px] leading-relaxed mt-1',
+            badges.includes('VALIDATED') && !badges.includes('FAILED')
+                ? 'VALIDATED pomeni: prestala neodvisno preverbo proti spawn '
+                  + 'pristankom iz player_track (§5.3), z zamrznjenim pragom — '
+                  + 'ne proti vrsticam, iz katerih je odmik nastal. Neposreden '
+                  + 'zajem semena (C2) je močnejša potrditev in še ni na voljo.'
+                : badges.includes('FAILED')
+                    ? 'FAILED pomeni, da neodvisni pristanki OBSTAJAJO in odmik '
+                      + 'ovržejo — ne da jih ni. To je močnejša ugotovitev od '
+                      + 'nepreverjenosti in je ni mogoče brati kot »morda drži«.'
+                // ⚠️ Nothing to reconstruct from is not the same as a
+                // reconstruction that failed a check, and the sentence must
+                // not mention an agreement figure that does not exist for this
+                // round. Caught here rather than by a fifth review round, but
+                // it is the same class as the two before it.
+                : badges.every((x) => x === 'UNAVAILABLE')
+                    ? 'Za to rundo ni upravičenih vrstic o spawn času, zato ura '
+                      + 'ni bila niti izpeljana — to ni neuspela preverba, ampak '
+                      + 'odsotnost vhoda.'
+                    : 'Nobena ura tu ni prestala neodvisne preverbe; kjer je '
+                      + 'odstotek skladnosti prikazan, je to ujemanje z lastnim '
+                      + 'izvorom, ne dokaz.');
+        note.style.color = THEME.label;
+        clockPanel.appendChild(note);
+
+        integrityPanel.appendChild(_el('h3',
+            'text-[11px] uppercase tracking-wider mb-2', 'integriteta posnetka'));
+        integrityPanel.lastChild.style.color = THEME.label;
+        const policy = snap.capture_policy || {};
+        // ⚠️ The WHOLE provenance. `manifest_version`, `manifest_count` and
+        // `conflicting_flags` were dropped, so a reader could not tell a normal
+        // single manifest from an ambiguous multi-manifest result — which is
+        // exactly what decides whether a capability state can be trusted
+        // (acceptance A6; Codex, #804).
+        const facts = [
+            ['zajem', `${policy.mode || 'unknown'}`
+                + (policy.observation_interval_ms ? ` · ${policy.observation_interval_ms} ms` : '')],
+            ['vir politike', policy.source || 'unknown'],
+            ['verzija manifesta', policy.manifest_version ?? 'unknown'],
+            ['manifestov', String(policy.manifest_count ?? 'unknown')],
+            ['nasprotujočih zastavic', String(policy.conflicting_flags ?? 'unknown')],
+            // ⚠️ PLAYERS, not lives or pairs. `Snapshot.overlap_conflicts`
+            // counts each player whose life was ambiguous once, however many
+            // candidates they had — the field's own docstring says so, and the
+            // old label gave the number the wrong unit (Codex, #804).
+            ['igralci s spornim življenjem', String(snap.overlap_conflicts ?? 'unknown')],
+            ['igralci brez stanja', String(Object.keys(snap.gaps || {}).length)],
+        ];
+        if (Array.isArray(snap.withheld_by_pov) && snap.withheld_by_pov.length) {
+            facts.push(['zadržani po pogledu', String(snap.withheld_by_pov.length)]);
+        }
+        for (const [k, v] of facts) {
+            const row = _el('div', 'flex justify-between text-[11px] font-mono');
+            const a = _el('span', '', k); a.style.color = THEME.textDim;
+            const b = _el('span', '', v); b.style.color = THEME.text;
+            row.appendChild(a); row.appendChild(b);
+            integrityPanel.appendChild(row);
+        }
+        const caps = capabilityRows(policy);
+        if (caps.length) {
+            const capHead = _el('p', 'text-[10px] uppercase tracking-wider mt-2 mb-1',
+                'zmožnosti zajema');
+            capHead.style.color = THEME.label;
+            integrityPanel.appendChild(capHead);
+            // ⚠️ A6 asks every semantic sensor to declare its schedule,
+            // interval, integration rule, version and completeness. The
+            // manifest records NONE of those — it carries `flag -> state` and
+            // nothing else — so the panel cannot publish them without
+            // inventing them. Naming the gap is the only honest option: an
+            // unqualified list would imply the requirement is met
+            // (Codex, #804).
+            const capGap = _el('p', 'text-[10px] mb-1 leading-relaxed',
+                '⚠️ Manifest beleži samo stanje zastavice. Razpored senzorja '
+                + '(dogodkovni/fiksni/prilagodljivi), interval, pravilo '
+                + 'integracije, verzija in popolnost NISO zajeti, zato jih tu '
+                + 'ni — to je vrzel v zajemu (A6), ne v tem panelu.');
+            capGap.style.color = THEME.label;
+            integrityPanel.appendChild(capGap);
+            for (const c of caps) {
+                const row = _el('div', 'flex justify-between text-[11px] font-mono');
+                const a = _el('span', '', c.name); a.style.color = THEME.textDim;
+                const b = _el('span', '', c.state);
+                // ⛔ `unknown` gets its own colour, never the one `disabled`
+                // gets: rendering them alike turns "we do not know" into "it
+                // was off", which is the claim the manifest exists to prevent.
+                b.style.color = c.state === 'enabled' ? THEME.positive
+                    : c.state === 'disabled' ? THEME.negative : THEME.label;
+                row.appendChild(a); row.appendChild(b);
+                integrityPanel.appendChild(row);
+            }
+        }
+        const acc = snap.reconstruction_accuracy || {};
+        if (acc.measured_at) {
+            // ⚠️ Including what was EXCLUDED and what it was checked against.
+            // Dropping `excluded` hid that the victim coordinate was left out
+            // because it shares a writer with the reconstructed track — the
+            // single fact that keeps the measurement from being circular — and
+            // dropping `sources` hid that two separately written pipelines
+            // agreed (Codex, #804).
+            const samples = acc.samples && typeof acc.samples === 'object'
+                ? Object.entries(acc.samples).map(([k, v]) => `${k} ${v}`).join(', ')
+                : null;
+            const prov = _el('p', 'text-[10px] mt-2 leading-relaxed',
+                `Napaka lege izmerjena ${acc.measured_at} na ${acc.rounds} rundah `
+                + `(${acc.script}). Enota: ${acc.unit}.`
+                + (samples ? ` Vzorci: ${samples}.` : '')
+                + (Array.isArray(acc.sources) ? ` Viri: ${acc.sources.join(', ')}.` : '')
+                + (acc.excluded ? ` Izključeno: ${acc.excluded}.` : ''));
+            prov.style.color = THEME.label;
+            integrityPanel.appendChild(prov);
+        }
+    };
+
     const legend = _el('p', 'text-[11px] text-slate-500 mt-2 leading-relaxed',
         'Obroč okoli igralca je IZMERJENA negotovost lege (p90 za starost vzorca); '
         + 'črtkan pomeni sporno življenje, kjer rekonstrukcija ne ve, katero od '
@@ -823,5 +1129,6 @@ export async function loadSpiderWebView(params = {}) {
     bindCamera(canvas, redraw);
     paintPov();
     paintPovNote();
+    paintPanels();
     redraw();
 }
