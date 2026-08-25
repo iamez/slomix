@@ -226,9 +226,12 @@ function LeaderBoard({ title, rows, hadErrors }: { title: string; rows: QuickLea
         : <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>no data in this window</div>
       )}
       {rows.map((row) => (
-        <div key={row.guid} style={{ ...S.row, display: 'grid', gridTemplateColumns: '22px 1fr auto', gap: 10, alignItems: 'baseline', padding: '7px 0' }}>
+        /* minmax(0,1fr): a 1fr track keeps min-content width, so one long
+         * stored name forced the row past a phone viewport (Codex wave 9);
+         * the name itself ellipsizes rather than pushing the value out. */
+        <div key={row.guid} style={{ ...S.row, display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) auto', gap: 10, alignItems: 'baseline', padding: '7px 0' }}>
           <span className="m" style={{ ...S.lbl, fontSize: 10 }}>{String(row.rank).padStart(2, '0')}</span>
-          <span className="m" style={{ fontSize: 13 }}>{row.name}</span>
+          <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
           <span className="m" style={{ fontSize: 12, color: 'var(--color-text-300)' }}>
             {figure(row.value)}
           </span>
