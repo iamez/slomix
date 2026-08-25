@@ -59,15 +59,34 @@
 # (`upload_store.py:112`, `mkdir(parents=True, exist_ok=True)`) and serves
 # nothing, while the old files sit unreferenced. Move first, then point.
 #
-#   1. install -d -o slomix_web -g slomix -m 2750 /var/lib/slomix/uploads
-#   2. rsync -a --remove-source-files \
-#        /opt/slomix/website/data/uploads/ /var/lib/slomix/uploads/
-#   3. set UPLOAD_STORAGE_ROOT=/var/lib/slomix/uploads in BOTH
-#        /opt/slomix/.env AND /opt/slomix/website/.env (if it exists)
-#   4. systemctl restart slomix-web
+# ⛔ AND MY "UNTIL ALL FOUR ARE DONE, NOTHING CHANGES" WAS FALSE. Step 2 uses
+# `--remove-source-files`: the moment it runs, the directory the RUNNING
+# service still points at is empty. An interrupted procedure is not a safe
+# one, and saying it was made a half-finished move sound survivable
+# (Codex, PR #810).
 #
-# Until all four are done, nothing changes: the default names the same
-# directory the uploads are already in.
+# ⛔ THE SERVICE MUST BE DOWN FOR THE MOVE. `slomix-web` accepts uploads while
+# it runs, and a file written after rsync has scanned that part of the tree
+# stays under `website/data/uploads` — where step 3 then stops looking.
+# Resumable chunks make the window worse, not better.
+#
+# So: ONE window, service stopped, and nothing half-done left overnight.
+#
+#   1. install -d -o slomix_web -g slomix -m 2750 /var/lib/slomix/uploads
+#   2. systemctl stop slomix-web
+#   3. rsync -a --remove-source-files \
+#        /opt/slomix/website/data/uploads/ /var/lib/slomix/uploads/
+#   4. set UPLOAD_STORAGE_ROOT=/var/lib/slomix/uploads in BOTH
+#        /opt/slomix/.env AND /opt/slomix/website/.env (if it exists)
+#   5. systemctl start slomix-web
+#
+# ROLLBACK, if step 3 or 4 fails: rsync the files back
+#   (`rsync -a --remove-source-files /var/lib/slomix/uploads/ \
+#     /opt/slomix/website/data/uploads/`), remove the variable from both
+#   files, and start the service. The old default names the original
+#   directory, so a clean revert is a revert of steps 3 and 4 only.
+#
+# Not starting the move at all is safe. STOPPING PART-WAY IS NOT.
 # ⛔ THESE NOTES ASSUME #807 IS IN THE TAG. Checked against main as it stands
 # and two of them are not true without it:
 #
