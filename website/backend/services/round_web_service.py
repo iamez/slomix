@@ -790,14 +790,33 @@ def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
         if team == own or not isinstance(entry, dict):
             out[team] = entry
             continue
-        kept = {k: v for k, v in entry.items()
-                if k not in ("phase_ms", "time_to_next_wave_ms", "offset_ms")}
-        kept["status"] = "unknown_to_this_pov"
-        kept["reason"] = (
-            "the enemy reinforcement phase is oracle truth: this team had no "
-            "observed cue to infer it from (spec §5.6, §6.3)"
-        )
-        out[team] = kept
+        # ⛔ BUILT FROM AN ALLOWLIST, NOT STRIPPED WITH A DENYLIST.
+        #
+        # The first version removed `phase_ms`, `time_to_next_wave_ms` and
+        # `offset_ms` and copied everything else — which left the whole
+        # validation diagnostic in place: `timing_observations`,
+        # `landing_clusters`, `spawn_callbacks`,
+        # `post_revive_spawn_callbacks`, `passing_landing_clusters`,
+        # `pass_ratio`. Those are computed over the ENTIRE round and never
+        # look at `t_ms`, so a snapshot at 30 seconds handed a team the number
+        # of enemy spawn waves and revives for the rest of the match —
+        # measured identical at t=30,000 and t=600,000 — inside an entry
+        # labelled `unknown_to_this_pov` (Codex, PR #807).
+        #
+        # A denylist is a list of the leaks somebody has already thought of.
+        # Anything added to `clock_validation_payload` later would cross this
+        # boundary by default; with an allowlist it cannot.
+        out[team] = {
+            "status": "unknown_to_this_pov",
+            # §6.3 treats the interval as known ("constrains phase modulo the
+            # KNOWN interval") — it is a server setting, not a measurement of
+            # what the enemy did this round.
+            "interval_ms": entry.get("interval_ms"),
+            "reason": (
+                "the enemy reinforcement phase is oracle truth: this team had "
+                "no observed cue to infer it from (spec §5.6, §6.3)"
+            ),
+        }
     return out
 
 
