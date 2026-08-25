@@ -281,8 +281,12 @@ async def add_static_cache_headers(request, call_next):
     path = routed_path(request)
     if path in _ENTRYPOINT_NO_CACHE_PATHS:
         response.headers["Cache-Control"] = "no-cache"
-    elif path.startswith("/static/modern/chunks/"):
+    elif path.startswith(("/static/modern/chunks/", "/app/assets/")):
+        # Content-hashed filenames on both build outputs — safe to pin forever.
         response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif path == "/app" or path.startswith("/app/"):
+        # Every other /app path serves the SPA's HTML shell and must revalidate.
+        response.headers["Cache-Control"] = "no-cache"
     elif path.endswith(_CACHE_1D_EXTS):
         response.headers["Cache-Control"] = "public, max-age=86400"
     elif path.endswith(_CACHE_7D_EXTS):
@@ -414,6 +418,30 @@ app.add_middleware(StrictTrustedHostMiddleware, allowed_hosts=TRUSTED_HOSTS)
 async def greatshot_spa_entry(demo_id: str | None = None):
     index_path = os.path.join(project_root, "website", "index.html")
     return FileResponse(index_path)
+
+
+# Standalone app (docs/design/06 §2): the new-design SPA lives at /app/ while
+# the legacy site keeps /. Guarded on the build output existing, so a checkout
+# without `npm run build:app` — production today — never grows these routes.
+_APP_DIST = os.path.join(project_root, "website", "static", "app")
+# Both artifacts, not just the directory: an interrupted build that left an
+# empty output dir must degrade exactly like a no-build checkout, not raise
+# on import (assets missing) or 500 at response time (app.html missing).
+if os.path.isdir(os.path.join(_APP_DIST, "assets")) and os.path.isfile(
+    os.path.join(_APP_DIST, "app.html")
+):
+    app.mount(
+        "/app/assets",
+        StaticFiles(directory=os.path.join(_APP_DIST, "assets")),
+        name="app-assets",
+    )
+
+    @app.get("/app", include_in_schema=False)
+    @app.get("/app/{full_path:path}", include_in_schema=False)
+    async def app_spa_entry(full_path: str = ""):
+        # Vite names the emitted entry after its input file: app.html, not
+        # index.html (measured — docs/design/13 §S1).
+        return FileResponse(os.path.join(_APP_DIST, "app.html"))
 
 
 @app.get("/share/{upload_id}", include_in_schema=False)

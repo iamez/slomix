@@ -151,7 +151,8 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.13.1"
+          # react-router 8 declares engines.node >=22.22.0 — track latest 22.x
+          node-version: "22.x"
           cache: "npm"
       - name: Install frontend tooling
         run: npm ci
@@ -168,15 +169,32 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: "22.13.1"
+          # react-router 8 declares engines.node >=22.22.0 — track latest 22.x
+          node-version: "22.x"
           cache: "npm"
           cache-dependency-path: website/frontend/package-lock.json
       - name: Install React frontend dependencies
         run: npm ci
       - name: Typecheck (tsc --noEmit)
         run: npm run typecheck
+      - name: Generated API types match the openapi snapshot
+        # docs/api/openapi.json is ratcheted by tests/integration/
+        # test_openapi_snapshot.py; this closes the OTHER half — a refreshed
+        # JSON with a forgotten `npm run generate:api` would leave apiGet
+        # compiling against stale paths (Codex review on #802).
+        run: |
+          npm run generate:api
+          git diff --exit-code -- src/api/generated/openapi.d.ts
       - name: Unit tests (vitest)
         run: npm test
+      - name: Standalone app build (vite.app.config.ts)
+        # tsc validates neither app.html nor the app Vite/Tailwind config nor
+        # the emitted /app/assets layout the backend mounts — only the build
+        # itself does (Codex on #802).
+        run: |
+          npm run build:app
+          test -f ../static/app/app.html
+          ls ../static/app/assets/*.js >/dev/null
 
   shellcheck:
     name: ShellCheck (deploy + ops scripts)
