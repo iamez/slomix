@@ -127,8 +127,8 @@ function Counted() {
     { k: 'rounds', v: d.rounds.toLocaleString('en-US') },
     { k: 'sessions', v: d.sessions.toLocaleString('en-US') },
     { k: 'players, all time', v: d.players_all_time.toLocaleString('en-US') },
-    { k: 'first round kept', v: d.rounds_since },
-    { k: 'latest round', v: d.rounds_latest },
+    { k: 'first round kept', v: d.rounds_since ?? '—' },
+    { k: 'latest round', v: d.rounds_latest ?? '—' },
   ];
   return (
     <>
