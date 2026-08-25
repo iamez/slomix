@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../lib/api';
@@ -11,7 +11,7 @@ import {
 import type { LastSession, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
   ActLink, Lbl, Pending, SectionHead, StatusDot, Unavailable,
-  actStyle, figure, lblStyle, rowStyle,
+  figure, lblStyle, rowStyle,
 } from '../components/ui';
 
 /**
@@ -102,14 +102,19 @@ function Hero() {
   return (
     <div data-parity="home.hero" className="landing-split" style={{ paddingTop: 52, alignItems: 'end' }}>
       <div>
-        <Lbl>Last night · session {d.gaming_session_id}</Lbl>
+        <Lbl>Last night{d.gaming_session_id != null ? ` · session ${d.gaming_session_id}` : ''}</Lbl>
         <div style={{ fontSize: 40, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.05, marginTop: 12 }}>
           {when.day}<br />{when.date}
         </div>
         <div className="m" style={{ fontSize: 13, color: 'var(--color-text-400)', marginTop: 12 }}>
           {d.rounds} rounds · {d.maps.length} maps · {d.player_count} players
         </div>
-        <ActLink to={`/session-detail/${d.gaming_session_id}`} style={{ display: 'inline-block', marginTop: 18 }}>
+        {/* No session id on the latest rounds is a supported backend state —
+          * the date route is the fallback that still identifies the evening. */}
+        <ActLink
+          to={d.gaming_session_id != null ? `/session-detail/${d.gaming_session_id}` : `/session-detail/date/${d.date}`}
+          style={{ display: 'inline-block', marginTop: 18 }}
+        >
           Open the evening →
         </ActLink>
       </div>
@@ -145,12 +150,17 @@ function EveningFigures() {
   if (last.isPending) return <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>;
   if (!last.isSuccess) return <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>;
   const d = last.data;
-  const players = d.teams.flatMap((t) => t.players);
+  // Substitutes live in unassigned_players — leaving them out silently
+  // shrinks the evening (Codex on #811).
+  const players = [...d.teams.flatMap((t) => t.players), ...(d.unassigned_players ?? [])];
   const sum = (pick: (p: LastSession['teams'][number]['players'][number]) => number) =>
     players.reduce((acc, p) => acc + pick(p), 0);
+  // Maps PLAYED, not distinct names: the fixture itself replays maps
+  // (4 names over 5 pairings) — an R1 row marks each map started.
+  const mapsPlayed = d.matches.filter((m) => m.round_number === 1).length;
   const cells = [
     { k: 'rounds', v: String(d.rounds) },
-    { k: 'maps', v: String(d.maps.length) },
+    { k: 'maps played', v: String(mapsPlayed) },
     { k: 'kills', v: sum((p) => p.kills).toLocaleString('en-US') },
     { k: 'headshot kills', v: sum((p) => p.headshot_kills).toLocaleString('en-US') },
     { k: 'revives', v: sum((p) => p.revives_given).toLocaleString('en-US') },
@@ -399,7 +409,12 @@ function MoverLine({ row, dir }: { row: SkillMoverRow; dir: 'up' | 'down' | 'new
         </svg>
       ) : <span />}
       <span className="m" style={{ fontSize: 11, color }}>
-        {row.is_new ? 'new' : row.delta_pct != null ? `${row.delta_pct > 0 ? '+' : ''}${row.delta_pct.toFixed(1)}%` : '—'}
+        {/* A linked sick-leave alternate is a KNOWN player on a spare
+          * account — calling them new is false (skill_router sends the
+          * link precisely so the UI does not). */}
+        {row.sick_leave
+          ? `alt · ${row.sick_leave.primary_name}`
+          : row.is_new ? 'new' : row.delta_pct != null ? `${row.delta_pct > 0 ? '+' : ''}${row.delta_pct.toFixed(1)}%` : '—'}
       </span>
     </div>
   );
@@ -455,13 +470,19 @@ function Tonight() {
   return (
     <div data-parity="home.tonight">
       <Lbl>tonight</Lbl>
-      <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
-        {activeNow
-          ? 'Playing right now'
-          : (live.data?.voice_channel.count ?? 0) > 0
-            ? `${live.data?.voice_channel.count} in voice`
-            : 'Nobody in voice'}
-      </div>
+      {/* While the tonight check is pending or failed, an idle claim would
+        * be a guess — 'Nobody in voice' only after the endpoint answered. */}
+      {tonight.isPending && <div style={{ marginTop: 10 }}><Pending label="tonight" /></div>}
+      {tonight.isError && <div style={{ marginTop: 10 }}><Unavailable what="tonight" /></div>}
+      {tonight.isSuccess && (
+        <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
+          {activeNow
+            ? 'Playing right now'
+            : (live.data?.voice_channel.count ?? 0) > 0
+              ? `${live.data?.voice_channel.count} in voice`
+              : 'Nobody in voice'}
+        </div>
+      )}
       {availability.isPending && <div style={{ marginTop: 12 }}><Pending label="availability" /></div>}
       {availability.isError && <div style={{ marginTop: 12 }}><Unavailable what="availability" /></div>}
       {availability.isSuccess && (nextMarked ? (
@@ -488,7 +509,15 @@ interface SearchHit { guid: string; name: string }
 function FindYourStats() {
   const overview = useOverview();
   const [query, setQuery] = useState('');
-  const trimmed = query.trim();
+  // 300 ms debounce, the legacy value: /auth/players/search is rate-limited
+  // to 30/min, so a query key per keystroke would burn the budget in one
+  // typed name (Codex on #811).
+  const [debounced, setDebounced] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const trimmed = debounced;
   const search = useQuery({
     queryKey: ['player-search', trimmed],
     enabled: trimmed.length >= 2,
