@@ -1676,6 +1676,41 @@ async def get_voice_activity_history(
         }
 
 
+#: How old a voice report may be and still describe the present.
+#:
+#: NOT CHOSEN HERE. `bot/services/monitor_tasks_mixin.py` writes the row on a
+#: 30-second loop and that same service refuses to act on its own status rows
+#: once they pass 180 seconds. Re-deriving a different number on this side
+#: would give the system two opinions about the same staleness.
+VOICE_REPORT_STALE_AFTER_S = 180
+
+
+def _voice_report_age_seconds(updated_at: object) -> int | None:
+    """Seconds since the bot wrote this row, or None if it cannot be told.
+
+    ⚠️ Naive and aware datetimes both arrive here: PostgreSQL returns an aware
+    value, the SQLite dev path a string, and older rows a naive datetime.
+    Subtracting across that boundary raises TypeError, so a missing timezone
+    is read as UTC — the column the bot writes is UTC either way.
+
+    ⛔ None on anything unparseable, never 0. Zero would say "just written",
+    which is the one thing an unreadable timestamp cannot support.
+    """
+    if updated_at is None:
+        return None
+    stamp = updated_at
+    if isinstance(stamp, str):
+        try:
+            stamp = datetime.fromisoformat(stamp)
+        except ValueError:
+            return None
+    if not hasattr(stamp, "tzinfo"):
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return max(0, int((datetime.now(timezone.utc) - stamp).total_seconds()))
+
+
 @router.get("/voice-activity/current")
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
@@ -1711,11 +1746,23 @@ async def get_current_voice_activity(
                 {"name": m.get("name", "Unknown"), "channel_name": channel_name}
                 for m in members
             ]
+            age = _voice_report_age_seconds(row[1])
             return {
-                # ⭐ "ok" means WE READ IT, not that anybody is in voice. An
-                # empty channel is a real, reportable answer and must not look
-                # like a failure.
-                "status": "ok",
+                # ⭐ "ok" means WE READ IT AND IT IS CURRENT, not that anybody
+                # is in voice. An empty channel is a real, reportable answer
+                # and must not look like a failure.
+                #
+                # ⛔ "stale" is its own answer, not a flavour of unavailable.
+                # The writer loops every 30 s
+                # (`bot/services/monitor_tasks_mixin.py`, `@tasks.loop(seconds=30)`)
+                # and that same service already discards its own reports past
+                # 180 s — so a row older than that means the bot stopped, and
+                # its member list could otherwise be presented as current
+                # indefinitely (Codex on PR #808). The threshold is the
+                # project's own, not a number chosen here.
+                "status": ("stale" if age is not None
+                           and age > VOICE_REPORT_STALE_AFTER_S else "ok"),
+                "age_seconds": age,
                 # Already selected by the query above and then discarded, so a
                 # client could not tell a fresh report from one the bot stopped
                 # updating hours ago (Codex on PR #806, via Fable).
@@ -1728,6 +1775,11 @@ async def get_current_voice_activity(
                 "updated_at": (
                     row[1].isoformat() if hasattr(row[1], "isoformat")
                     else (str(row[1]) if row[1] is not None else None)
+                ),
+                "reason": (
+                    f"the bot last published {age} s ago; it writes every 30 s"
+                    if age is not None and age > VOICE_REPORT_STALE_AFTER_S
+                    else None
                 ),
                 "total_count": len(safe_members),
                 "members": safe_members,
@@ -1753,6 +1805,7 @@ async def get_current_voice_activity(
         "status": "unavailable",
         "reason": reason,
         "updated_at": None,
+        "age_seconds": None,
         "total_count": 0,
         "members": [],
         "channels": [],
