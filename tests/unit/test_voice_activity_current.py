@@ -1,0 +1,117 @@
+"""`/api/voice-activity/current` must be able to say it cannot see voice.
+
+⛔ THREE SITUATIONS RETURNED ONE PAYLOAD. Nobody in voice, no row written by
+the bot, and a row that would not parse all produced `total_count: 0` with an
+empty member list — so a page had nothing to branch on and "voice is quiet"
+rendered identically to "we cannot see voice". The only distinguishing field
+was an `error` key that appeared ONLY in the failure cases and whose value was
+`None`, which reads as "no error" (Codex on PR #806, via Fable).
+
+The endpoint is a plain async function taking a db, so these call it directly
+rather than through the app — no client, no lifespan, no event loop of its own
+beyond the one pytest-asyncio provides.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+
+import pytest
+
+from website.backend.routers.diagnostics_router import get_current_voice_activity
+
+
+class _Db:
+    """Answers one query with whatever the test wants back."""
+
+    def __init__(self, row=None, raises: Exception | None = None):
+        self._row = row
+        self._raises = raises
+
+    async def fetch_one(self, _query, _params=None):
+        if self._raises is not None:
+            raise self._raises
+        return self._row
+
+
+def _status(members):
+    return {"channel_name": "Gaming", "members": [{"name": n} for n in members]}
+
+
+class TestAnEmptyChannelIsAnAnswer:
+    @pytest.mark.asyncio
+    async def test_nobody_in_voice_is_reported_as_ok(self):
+        """⭐ The case the whole change turns on: zero is a MEASUREMENT here,
+        and it must not wear the same clothes as a failure."""
+        db = _Db(row=(json.dumps(_status([])), dt.datetime(2026, 8, 25, 12, 0)))
+        payload = await get_current_voice_activity(db=db)
+
+        assert payload["status"] == "ok"
+        assert payload["total_count"] == 0
+        assert payload["members"] == []
+        assert "reason" not in payload
+
+    @pytest.mark.asyncio
+    async def test_members_come_back_sanitised(self):
+        db = _Db(row=(_status(["ciril", "jakazc"]), None))
+        payload = await get_current_voice_activity(db=db)
+
+        assert payload["status"] == "ok"
+        assert [m["name"] for m in payload["members"]] == ["ciril", "jakazc"]
+        assert all(set(m) == {"name", "channel_name"} for m in payload["members"])
+
+
+class TestAFailureSaysSo:
+    @pytest.mark.asyncio
+    async def test_no_row_is_unavailable_not_an_empty_room(self):
+        payload = await get_current_voice_activity(db=_Db(row=None))
+
+        assert payload["status"] == "unavailable"
+        assert "not published" in payload["reason"]
+        assert payload["total_count"] == 0
+
+    @pytest.mark.asyncio
+    async def test_unparseable_status_is_unavailable_and_names_the_fault(self):
+        db = _Db(row=("{not json", None))
+        payload = await get_current_voice_activity(db=db)
+
+        assert payload["status"] == "unavailable"
+        assert "could not be read" in payload["reason"]
+        assert "JSONDecodeError" in payload["reason"]
+
+    @pytest.mark.asyncio
+    async def test_the_two_failures_are_told_apart(self):
+        """A missing row and a corrupt row need different fixes — one is the
+        bot not writing, the other is what it wrote."""
+        missing = await get_current_voice_activity(db=_Db(row=None))
+        corrupt = await get_current_voice_activity(db=_Db(row=("{", None)))
+
+        assert missing["reason"] != corrupt["reason"]
+
+
+class TestTheReportCarriesItsAge:
+    @pytest.mark.asyncio
+    async def test_a_datetime_is_published_as_iso(self):
+        stamp = dt.datetime(2026, 8, 25, 12, 34, 56)
+        db = _Db(row=(_status(["ciril"]), stamp))
+        payload = await get_current_voice_activity(db=db)
+
+        assert payload["updated_at"] == stamp.isoformat()
+
+    @pytest.mark.asyncio
+    async def test_a_string_timestamp_does_not_turn_a_good_row_into_a_failure(self):
+        """⚠️ PostgreSQL returns a datetime; the SQLite dev path returns a
+        string. Calling `.isoformat()` on the string raises AttributeError —
+        which the endpoint's own `except` catches, so a working row would have
+        been reported as unavailable. A timestamp is not worth that."""
+        db = _Db(row=(_status(["ciril"]), "2026-08-25 12:34:56"))
+        payload = await get_current_voice_activity(db=db)
+
+        assert payload["status"] == "ok"
+        assert payload["updated_at"] == "2026-08-25 12:34:56"
+
+    @pytest.mark.asyncio
+    async def test_an_unavailable_report_has_no_age_to_give(self):
+        payload = await get_current_voice_activity(db=_Db(row=None))
+        assert payload["updated_at"] is None

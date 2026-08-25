@@ -1712,6 +1712,23 @@ async def get_current_voice_activity(
                 for m in members
             ]
             return {
+                # ⭐ "ok" means WE READ IT, not that anybody is in voice. An
+                # empty channel is a real, reportable answer and must not look
+                # like a failure.
+                "status": "ok",
+                # Already selected by the query above and then discarded, so a
+                # client could not tell a fresh report from one the bot stopped
+                # updating hours ago (Codex on PR #806, via Fable).
+                #
+                # ⚠️ `isoformat()` only when there is one to call. PostgreSQL
+                # hands back a datetime, the SQLite dev path a string — and an
+                # AttributeError here lands in the `except` below, which would
+                # report a perfectly good row as unavailable. A timestamp is
+                # not worth turning a working answer into a failure.
+                "updated_at": (
+                    row[1].isoformat() if hasattr(row[1], "isoformat")
+                    else (str(row[1]) if row[1] is not None else None)
+                ),
                 "total_count": len(safe_members),
                 "members": safe_members,
                 "channels": (
@@ -1720,12 +1737,23 @@ async def get_current_voice_activity(
                     else []
                 ),
             }
+        reason = "the bot has not published a voice-channel status row"
     except (json.JSONDecodeError, KeyError, AttributeError, TypeError) as e:
         logger.debug(f"Voice status parse failed: {e}")
+        reason = f"the stored voice status could not be read ({type(e).__name__})"
 
+    # ⛔ A FAILURE IS NOT AN EMPTY ROOM. This used to return the same
+    # `total_count: 0` payload for three different situations — nobody in
+    # voice, no row written, and a row that would not parse — with an
+    # `error: None` key that appeared ONLY in the failure cases and whose
+    # value said there was no error. A client had nothing to branch on, so
+    # "voice is quiet" and "we cannot see voice" rendered identically
+    # (Codex on PR #806, via Fable).
     return {
+        "status": "unavailable",
+        "reason": reason,
+        "updated_at": None,
         "total_count": 0,
         "members": [],
         "channels": [],
-        "error": None,
     }
