@@ -142,8 +142,11 @@ describe('Landing', () => {
     await waitFor(() => expect(screen.getByText(/figures: unavailable/)).toBeInTheDocument());
   });
 
-  it('reports an empty board as a failure when the payload carries errors', async () => {
-    const broken = { ...(leaders as Record<string, unknown>), dpm_sessions: [], errors: ['dpm query failed'] };
+  it('attributes a board failure to the board that failed, not its neighbour', async () => {
+    // The backend's error tokens are per board — exactly 'xp_query_failed' /
+    // 'dpm_query_failed' (players_router). Here xp is legitimately empty
+    // while dpm failed: only the dpm board may say unavailable.
+    const broken = { ...(leaders as Record<string, unknown>), xp: [], dpm_sessions: [], errors: ['dpm_query_failed'] };
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
@@ -155,7 +158,29 @@ describe('Landing', () => {
       }),
     );
     renderLanding();
-    await waitFor(() => expect(screen.getByText(/board: unavailable/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getAllByText(/board: unavailable/).length).toBe(1));
+    expect(screen.getByText(/no data in this window/)).toBeInTheDocument();
+  });
+
+  it('labels a session dated today as tonight, not last night', async () => {
+    const first = (sessions as Array<Record<string, unknown>>)[0];
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const fresh = [{ ...first, date: iso, time_ago: 'Today' }];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/sessions') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(fresh) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText('tonight')).toBeInTheDocument());
+    expect(screen.getByText(/See tonight/)).toBeInTheDocument();
+    expect(screen.queryByText('last night')).not.toBeInTheDocument();
   });
 
   it('says so when no sessions exist at all', async () => {

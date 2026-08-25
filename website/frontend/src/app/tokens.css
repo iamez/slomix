@@ -94,3 +94,19 @@ body {
     gap: 36px;
   }
 }
+
+/* The lower two-column pair (recent evenings · leaders) needs the same
+ * treatment as the hero: fixed 56px gap over two 1fr panes cannot fit the
+ * session rows' fixed columns on a phone (Codex on #806, second wave). */
+.landing-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
+}
+
+@media (max-width: 760px) {
+  .landing-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+}

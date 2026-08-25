@@ -49,11 +49,15 @@ function monthDay(date: string): string {
 /** "last night" only when it really was — otherwise the honest label plus
  * the API's own distance ("2 weeks ago"). Gatherings happen a few times a
  * week, so the no-game-yesterday case is the normal one (Codex on #806). */
-function sessionRecency(session: SessionSummary): { label: string; fresh: boolean } {
+function sessionRecency(session: SessionSummary): { label: string; cta: string } {
   const parsed = new Date(`${session.date}T00:00:00`);
   const days = (Date.now() - parsed.getTime()) / 86_400_000;
-  if (Number.isFinite(days) && days < 2) return { label: 'last night', fresh: true };
-  return { label: `last session · ${session.time_ago}`, fresh: false };
+  // Today is not "last night" (Codex on #806, second wave): a session dated
+  // today is the evening in progress, yesterday's is last night, anything
+  // older says how old it is in the API's own words.
+  if (Number.isFinite(days) && days < 1) return { label: 'tonight', cta: 'See tonight' };
+  if (Number.isFinite(days) && days < 2) return { label: 'last night', cta: 'See last night' };
+  return { label: `last session · ${session.time_ago}`, cta: 'See the last session' };
 }
 
 function LivePanel() {
@@ -167,9 +171,10 @@ function LastNightPanel({ session, pending }: { session: SessionSummary | undefi
 }
 
 /** A board can fail INSIDE a 200: the endpoint answers ok with an empty
- * array and a note in `errors` (players_router; Codex on #806) — so an
- * empty board with errors present reports the failure, and an empty board
- * without them says "no data", never a silent blank. */
+ * array and a per-board token in `errors` — exactly "xp_query_failed" or
+ * "dpm_query_failed" (players_router; Codex on #806, both waves) — so each
+ * board reports only ITS OWN failure, and an empty board without its token
+ * says "no data", never a silent blank. */
 function LeaderBoard({ title, rows, hadErrors }: { title: string; rows: QuickLeaderRow[]; hadErrors: boolean }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -196,14 +201,17 @@ export function Landing() {
   const sessions = useSessions(6);
   const leaders = useQuickLeaders();
   const lastNight = sessions.data?.[0];
+  // Same rule as the live panel: a failed refetch must not present the
+  // cached figures as current next to the error message (Codex on #806).
+  const overviewData = overview.isError ? undefined : overview.data;
   // The overview endpoint substitutes 0 per failed aggregate and still
   // answers 200 (records_overview.py; Codex on #806). Four zeroes at once
   // is that failure mode, not a deployment with an empty database worth a
   // hero row — say unavailable rather than presenting zeros as the record.
   const overviewSuspect =
-    overview.data != null
-    && overview.data.rounds === 0 && overview.data.total_kills === 0
-    && overview.data.sessions === 0 && overview.data.players_all_time === 0;
+    overviewData != null
+    && overviewData.rounds === 0 && overviewData.total_kills === 0
+    && overviewData.sessions === 0 && overviewData.players_all_time === 0;
 
   return (
     <div style={{ paddingBottom: 40 }}>
@@ -222,7 +230,7 @@ export function Landing() {
             </a>
             {lastNight && (
               <Link to={`/session-detail/${lastNight.session_id}`} style={S.act}>
-                See {sessionRecency(lastNight).fresh ? 'last night' : 'the last session'} →
+                {sessionRecency(lastNight).cta} →
               </Link>
             )}
           </div>
@@ -243,12 +251,12 @@ export function Landing() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginTop: 48, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
         {overview.isPending && <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>}
         {(overview.isError || overviewSuspect) && <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>}
-        {overview.data && !overviewSuspect && (
+        {overviewData && !overviewSuspect && (
           [
-            { v: overview.data.rounds.toLocaleString('en-US'), k: 'rounds kept' },
-            { v: overview.data.total_kills.toLocaleString('en-US'), k: 'kills recorded' },
-            { v: overview.data.sessions.toLocaleString('en-US'), k: 'sessions' },
-            { v: overview.data.players_all_time.toLocaleString('en-US'), k: 'players known' },
+            { v: overviewData.rounds.toLocaleString('en-US'), k: 'rounds kept' },
+            { v: overviewData.total_kills.toLocaleString('en-US'), k: 'kills recorded' },
+            { v: overviewData.sessions.toLocaleString('en-US'), k: 'sessions' },
+            { v: overviewData.players_all_time.toLocaleString('en-US'), k: 'players known' },
           ].map((f) => (
             <div key={f.k} style={{ padding: '18px 0 16px' }}>
               <div className="m" style={{ fontSize: 28, lineHeight: 1 }}>{f.v}</div>
@@ -276,7 +284,7 @@ export function Landing() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, marginTop: 48 }}>
+      <div className="landing-split" style={{ marginTop: 48 }}>
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
             <span style={{ ...S.lbl, fontSize: 9 }}>recent evenings</span>
@@ -320,12 +328,12 @@ export function Landing() {
               <LeaderBoard
                 title={`top xp · ${leaders.data.window_days} days`}
                 rows={leaders.data.xp.slice(0, 3)}
-                hadErrors={leaders.data.errors.length > 0}
+                hadErrors={leaders.data.errors.includes('xp_query_failed')}
               />
               <LeaderBoard
                 title={`top dpm per session · ${leaders.data.window_days} days`}
                 rows={leaders.data.dpm_sessions.slice(0, 3)}
-                hadErrors={leaders.data.errors.length > 0}
+                hadErrors={leaders.data.errors.includes('dpm_query_failed')}
               />
             </div>
           )}
