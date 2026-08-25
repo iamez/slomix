@@ -162,6 +162,27 @@ describe('Landing', () => {
     expect(screen.getByText(/no data in this window/)).toBeInTheDocument();
   });
 
+  it('qualifies an aged roster count instead of presenting it as current', async () => {
+    // The reducer keeps the lineup up to 600 s after is_live flips off and
+    // exposes roster_age_seconds for exactly this (Codex wave 4).
+    const aged = {
+      ...(liveState as Record<string, unknown>),
+      roster: { axis: [], allies: [], spectators: [], player_count: 5, roster_age_seconds: 240, has_bots: false },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/live/state') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(aged) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/5 players · seen 4 min ago/)).toBeInTheDocument());
+  });
+
   it('labels a session dated today as tonight, not last night', async () => {
     const first = (sessions as Array<Record<string, unknown>>)[0];
     const today = new Date();

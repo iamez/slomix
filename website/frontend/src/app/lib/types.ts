@@ -19,6 +19,10 @@ export interface LiveState {
     allies: unknown[];
     spectators: unknown[];
     player_count: number;
+    /** Age of the retained roster: the reducer flips is_live off after 180 s
+     * but keeps the lineup up to 600 s for clients to QUALIFY, not present
+     * as current (LiveStateReducer; Codex on #806, wave 4). */
+    roster_age_seconds: number | null;
     has_bots: boolean;
   };
   last_event_age_seconds: number | null;
