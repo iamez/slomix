@@ -115,11 +115,14 @@ function LivePanel() {
               * instead of posing as live. */}
             <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
               {voiceData.total_count > 0 ? `${voiceData.total_count} in voice` : 'No one in voice'}
-              {(() => {
-                if (!voiceData.updated_at) return '';
-                const age = (Date.now() - Date.parse(voiceData.updated_at)) / 1000;
-                return Number.isFinite(age) && age > 120 ? ` · as of ${ageOf(age)}` : '';
-              })()}
+              {/* The STALENESS VERDICT is the backend's (#808): status
+                * 'stale' at its own 180 s threshold, age measured on the
+                * server. Recomputing from updated_at here had two opinions
+                * on one datum (120 vs 180) and trusted the client clock —
+                * the same two-thresholds shape as the idle-map fix. */}
+              {voiceData.status === 'stale' && typeof voiceData.age_seconds === 'number'
+                ? ` · as of ${ageOf(voiceData.age_seconds)}`
+                : ''}
             </span>
           </>
         )}
