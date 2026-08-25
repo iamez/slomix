@@ -92,6 +92,10 @@ export interface SessionSummary {
   team_1_score: number | null;
   team_2_score: number | null;
   winning_team: number | null;
+  /** Map wins by SIDE (sides swap every map) — the sessions2 BOX columns. */
+  allies_wins: number;
+  axis_wins: number;
+  draws: number;
   time_ago: string;
   formatted_date: string;
 }
@@ -180,4 +184,175 @@ export interface BuildInfo {
   api_contract: string;
   /** null when migrations are not packaged with the deployment. */
   schema_ledger_max_file: string | null;
+}
+
+/* ---------- phase 2: home + sessions core (fixtures named per type) ---------- */
+
+/** One R1/R2 row of the last session — corpus: api_stats_last_session.json */
+export interface LastSessionMatch {
+  id: number;
+  map_name: string;
+  round_number: number;
+  duration: string;
+  winner: string;
+  outcome: string;
+  date: string;
+}
+
+/** Per-player line inside last-session teams — only the fields home sums. */
+export interface LastSessionPlayer {
+  name: string;
+  guid: string;
+  kills: number;
+  headshot_kills: number;
+  revives_given: number;
+}
+
+/** GET /api/stats/last-session — corpus: api_stats_last_session.json.
+ * scoring is the real BOX (2/1/0 per map) with per-map rows. */
+export interface LastSession {
+  date: string;
+  gaming_session_id: number;
+  player_count: number;
+  rounds: number;
+  maps: string[];
+  matches: LastSessionMatch[];
+  teams: { name: string; players: LastSessionPlayer[] }[];
+  scoring: {
+    available: boolean;
+    team_a_name: string;
+    team_b_name: string;
+    team_a_score: number;
+    team_b_score: number;
+  };
+  warnings: unknown[];
+}
+
+/** GET /api/stats/trends?days= — corpus: api_stats_trends.json */
+export interface StatsTrends {
+  dates: string[];
+  rounds: number[];
+  active_players: number[];
+  kills: number[];
+  map_distribution: Record<string, number>;
+}
+
+/** One row of GET /api/stats/matches — corpus: api_stats_matches.json.
+ * axis/allies score fields are null in the recording — read as nullable. */
+export interface MatchRow {
+  id: number;
+  map_name: string;
+  round_number: number;
+  duration: string;
+  winner: string;
+  outcome: string;
+  date: string;
+  time_ago: string;
+  gaming_session_id: number;
+  team1_players: string[];
+  team2_players: string[];
+  team1_name: string;
+  team2_name: string;
+  player_count: number;
+  format: string;
+}
+
+/** GET /api/seasons/current — corpus: api_seasons_current.json */
+export interface SeasonCurrent {
+  id: string;
+  name: string;
+  days_left: number;
+  start_date: string;
+  end_date: string;
+  next_season_name: string;
+  next_season_start: string;
+}
+
+/** GET /api/seasons/current/leaders — corpus: api_seasons_current_leaders.json.
+ * A metric can be null (longest_session in the recording). */
+export interface SeasonLeaders {
+  leaders: Record<string, { player: string; value: number } | null>;
+}
+
+/** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
+export interface SeasonSummary {
+  season_id: string;
+  totals: {
+    rounds: number;
+    players: number;
+    sessions: number;
+    maps: number;
+    kills: number;
+  };
+  top_map: { name: string; plays: number } | null;
+}
+
+/** GET /api/availability — corpus: api_availability.json. Day counts only —
+ * names per day live behind a different endpoint, so home shows counts. */
+export interface AvailabilityOverview {
+  from: string;
+  to: string;
+  statuses: string[];
+  days: { date: string; counts: Record<string, number>; total: number }[];
+}
+
+/** One mover row — corpus: api_skill_movers.json */
+export interface SkillMoverRow {
+  guid: string;
+  name: string;
+  latest: number | null;
+  baseline: number;
+  delta_pct: number | null;
+  series: number[];
+  is_new: boolean;
+}
+
+/** GET /api/skill/movers — corpus: api_skill_movers.json */
+export interface SkillMovers {
+  status: string;
+  session_date: string | null;
+  metric_label: string;
+  movers_up: SkillMoverRow[];
+  movers_down: SkillMoverRow[];
+  new_players: SkillMoverRow[];
+}
+
+/** GET /api/challenges/current — corpus: api_challenges_current.json
+ * (challenge is null most weeks — the card renders only when it exists). */
+export interface ChallengeCurrent {
+  status: string;
+  week_start_date: string;
+  challenge: { title?: string; description?: string } | null;
+}
+
+/** GET /api/stats/tonight — corpus: api_stats_tonight.json */
+export interface TonightStatus {
+  status: string;
+  active: boolean;
+}
+
+/** GET /api/live-status — fixture api_live_status.json RECORDED FRESH from
+ * the live backend on 2026-08-25: the corpus copy from 24. 8. held a feed
+ * -buffer shape ({buffered,last_seq}), not this one — measured, not
+ * assumed. One endpoint carries both the game server and the voice room. */
+export interface LiveStatus {
+  voice_channel: {
+    members: unknown[];
+    count: number;
+    channel_name: string;
+  };
+  game_server: {
+    online: boolean;
+    hostname: string;
+    map: string | null;
+    player_count: number;
+    max_players: number;
+    ping_ms: number | null;
+  };
+}
+
+/** GET /api/stats/activity-calendar?days= — corpus: api_stats_activity_calendar.json */
+export interface ActivityCalendar {
+  days: number;
+  activity: Record<string, number>;
 }
