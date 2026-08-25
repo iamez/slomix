@@ -466,3 +466,131 @@ export interface AwardLeaderRow {
 export interface AwardsLeaderboard {
   leaderboard: AwardLeaderRow[];
 }
+
+/* ---------- phase 2, batch 3: maps · weapons · form · retro-viz ---------- */
+
+/** Full map row (widening batch-2's MapRow) — corpus: api_stats_maps.json.
+ * Win rates are null when no side ever won — legacy defaulted them to 50,
+ * an invented middle; here null renders a dash. */
+export interface MapStatsRow {
+  name: string;
+  total_rounds: number;
+  matches_played: number;
+  allies_wins: number;
+  axis_wins: number;
+  allies_win_rate: number | null;
+  axis_win_rate: number | null;
+  avg_duration: number;
+  last_played: string;
+  total_kills: number;
+  avg_dpm: number;
+  unique_players: number;
+  grenade_kills: number;
+  panzer_kills: number;
+  mortar_kills: number;
+}
+
+/** GET /api/records/maps/segments — corpus: api_records_maps_segments.json.
+ * winner_side is the SERVER's string; winner_team numeric semantics differ
+ * per endpoint family, so this page never interprets the number. */
+export interface MapSegmentRecord {
+  map_name: string;
+  fastest_seconds: number;
+  fastest_time: string;
+  played: string;
+  winner_side: string;
+  gaming_session_id: number | null;
+}
+export interface MapSegments {
+  status: string;
+  records: MapSegmentRecord[];
+}
+
+/** One weapon row — corpus: api_stats_weapons.json. `headshots` are HIT
+ * LOCATIONS, not headshot kills (they exceed kills: Mp40 110k kills /
+ * 129k head hits) — the label must say 'head hits'. */
+export interface WeaponRow {
+  name: string;
+  weapon_key: string;
+  kills: number;
+  headshots: number;
+  hs_rate: number;
+  accuracy: number;
+}
+
+/** GET /api/stats/weapons/hall-of-fame — corpus:
+ * api_stats_weapons_hall_of_fame.json (object keyed by weapon_key). */
+export interface WeaponsHallOfFame {
+  period: string;
+  leaders: Record<string, {
+    weapon: string;
+    weapon_key: string;
+    player_guid: string;
+    player_name: string;
+    kills: number;
+    headshots: number;
+    accuracy: number;
+  }>;
+}
+
+/** GET /api/stats/weapons/by_player — corpus:
+ * api_stats_weapons_by_player.json. The by-player hs_rate is headshots/hits
+ * — a HEAD-HIT rate, never a kill rate (records_weapons.py:150). */
+export interface WeaponsByPlayer {
+  period: string;
+  player_count: number;
+  players: {
+    player_guid: string;
+    player_name: string;
+    total_kills: number;
+    weapons: (WeaponRow & { deaths: number; shots: number; hits: number })[];
+  }[];
+}
+
+/** One round in the retro-viz picker — corpus: api_rounds_recent.json.
+ * round_number 0 is the legacy Match Summary aggregate and is filtered out. */
+export interface RecentRound {
+  id: number;
+  map_name: string;
+  round_date: string;
+  round_number: number;
+  round_label: string;
+  player_count: number;
+}
+
+/** One player of GET /api/rounds/{round_id}/viz — corpus:
+ * api_rounds_round_id_viz.json. */
+export interface VizPlayer {
+  name: string;
+  guid: string;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  team_damage_given: number;
+  team_damage_received: number;
+  time_played_seconds: number;
+  time_dead_seconds: number;
+  revives_given: number;
+  denied_playtime: number;
+  gibs: number;
+  dpm: number;
+  efficiency: number;
+  xp: number;
+}
+
+/** GET /api/rounds/{round_id}/viz. In THIS endpoint's convention
+ * winner_team 1 = Axis, 2 = Allies (retro-viz.js mapping) — other
+ * families disagree on the number, so it never leaves this page. */
+export interface RoundViz {
+  round_id: number;
+  map_name: string;
+  round_date: string;
+  round_number: number;
+  round_label: string;
+  winner_team: number | null;
+  duration_seconds: number;
+  player_count: number;
+  players: VizPlayer[];
+  highlights?: { label?: string; player?: string; value?: string }[];
+}

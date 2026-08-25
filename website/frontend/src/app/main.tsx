@@ -14,6 +14,10 @@ import { SessionsList } from './pages/SessionsList';
 import { Leaderboards } from './pages/Leaderboards';
 import { RecordBook } from './pages/RecordBook';
 import { Awards } from './pages/Awards';
+import { MapsPage } from './pages/MapsPage';
+import { WeaponsPage } from './pages/WeaponsPage';
+import { FormPage } from './pages/FormPage';
+import { RetroViz } from './pages/RetroViz';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
 
@@ -59,6 +63,10 @@ const PAGES: Record<string, React.ReactElement> = {
   leaderboards: <Leaderboards />,
   'record-book': <RecordBook />,
   awards: <Awards />,
+  maps: <MapsPage />,
+  weapons: <WeaponsPage />,
+  form: <FormPage />,
+  'retro-viz': <RetroViz />,
 };
 
 const router = createBrowserRouter(

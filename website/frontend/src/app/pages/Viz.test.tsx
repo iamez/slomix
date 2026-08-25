@@ -1,0 +1,144 @@
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter } from 'react-router';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { makeQueryClient } from '../lib/queries';
+import { MapsPage } from './MapsPage';
+import { WeaponsPage } from './WeaponsPage';
+import { FormPage } from './FormPage';
+import { RetroViz } from './RetroViz';
+import maps from './__fixtures__/api_stats_maps.json';
+import segments from './__fixtures__/api_records_maps_segments.json';
+import weapons from './__fixtures__/api_stats_weapons.json';
+import weaponsHof from './__fixtures__/api_stats_weapons_hall_of_fame.json';
+import weaponsByPlayer from './__fixtures__/api_stats_weapons_by_player.json';
+import movers from './__fixtures__/api_skill_movers.json';
+import recentRounds from './__fixtures__/api_rounds_recent.json';
+import roundViz from './__fixtures__/api_rounds_round_id_viz.json';
+
+/** Batch-3 pages against RECORDED responses (docs/design/09 §H4). */
+const FIXTURES = new Map<string, unknown>([
+  ['/api/stats/maps', maps],
+  ['/api/records/maps/segments', segments],
+  ['/api/stats/weapons', weapons],
+  ['/api/stats/weapons/hall-of-fame', weaponsHof],
+  ['/api/stats/weapons/by_player', weaponsByPlayer],
+  ['/api/skill/movers', movers],
+  ['/api/rounds/recent', recentRounds],
+]);
+
+function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
+  const pathname = String(input).split('?')[0];
+  if (/^\/api\/rounds\/\d+\/viz$/.test(pathname)) {
+    return Promise.resolve({ ok: true, json: () => Promise.resolve(roundViz) } as Response);
+  }
+  const body = FIXTURES.get(pathname);
+  if (body === undefined) {
+    return Promise.reject(new Error(`unexpected endpoint: ${pathname}`));
+  }
+  return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+}
+
+function renderPage(el: React.ReactElement) {
+  const client = makeQueryClient();
+  client.setDefaultOptions({ queries: { retry: false } });
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>{el}</MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('MapsPage', () => {
+  it('renders summary, objective records and the sorted grid from recorded data', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<MapsPage />);
+    // Recorded top by matches_played: te_escape2 (287) — label is prettified.
+    await waitFor(() => expect(screen.getAllByText('te escape2').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('287 matches').length).toBeGreaterThan(0);
+    // Objective record row from the recording (server's winner_side word).
+    expect((await screen.findAllByText('3:25')).length).toBeGreaterThan(0);
+    // Win-rate renders the recorded split, not an invented 50/50.
+    expect(screen.getByText(/allies 72\.5%/)).toBeInTheDocument();
+  });
+
+  it('re-sorts client-side without refetching', async () => {
+    const fetchSpy = vi.fn(fixtureFetch);
+    vi.stubGlobal('fetch', fetchSpy);
+    renderPage(<MapsPage />);
+    await waitFor(() => expect(screen.getAllByText('te escape2').length).toBeGreaterThan(0));
+    const calls = fetchSpy.mock.calls.length;
+    fireEvent.click(screen.getByRole('button', { name: 'Nade spam' }));
+    expect(fetchSpy.mock.calls.length).toBe(calls);
+  });
+});
+
+describe('WeaponsPage', () => {
+  it('renders hof, grid with GLOBAL share, and mastery with honest labels', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<WeaponsPage />);
+    await waitFor(() => expect(screen.getAllByText('Mp40').length).toBeGreaterThan(0));
+    // 'head hits' label is load-bearing (hit locations exceed kills).
+    expect(screen.getAllByText(/head hits/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/head-hit/).length).toBeGreaterThan(0);
+    // Category filter narrows client-side; the share text stays global.
+    fireEvent.click(screen.getByRole('button', { name: 'smg' }));
+    // The grid heading counts the filtered rows (smg = mp40/thompson/sten);
+    // the mastery panel below keeps every weapon — the filter is the
+    // grid's, exactly like legacy.
+    expect(screen.getByText(/^3 weapons/)).toBeInTheDocument();
+  });
+
+  it('all eight categories have buttons (legacy UI offered five)', () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<WeaponsPage />);
+    for (const c of ['smg', 'rifle', 'heavy', 'pistol', 'melee', 'explosive', 'support', 'other']) {
+      expect(screen.getByRole('button', { name: c })).toBeInTheDocument();
+    }
+  });
+});
+
+describe('FormPage', () => {
+  it('renders the three sections with sparklines and the rank-vs-self note', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<FormPage />);
+    await waitFor(() => expect(screen.getByText('#smetarski.proner')).toBeInTheDocument());
+    expect(screen.getByText(/heating up · above own average/)).toBeInTheDocument();
+    expect(screen.getByText(/▲ \+36\.4%/)).toBeInTheDocument();
+    // First-night section from the recording (JaKaZc is_new).
+    expect(screen.getByText('JaKaZc')).toBeInTheDocument();
+    expect(screen.getByText(/rank-vs-self, not a ranking/)).toBeInTheDocument();
+  });
+
+  it('switching metric refetches with the metric key', async () => {
+    const fetchSpy = vi.fn(fixtureFetch);
+    vi.stubGlobal('fetch', fetchSpy);
+    renderPage(<FormPage />);
+    await waitFor(() => expect(screen.getByText('#smetarski.proner')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Accuracy' }));
+    await waitFor(() => {
+      expect(fetchSpy.mock.calls.map((c) => String(c[0])).some((u) => u.includes('metric=acc'))).toBe(true);
+    });
+  });
+});
+
+describe('RetroViz', () => {
+  it('filters R0, autoloads the newest round and renders the six panels', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<RetroViz />);
+    // Picker options come from the recording; none may be a Match Summary.
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(0));
+    for (const opt of screen.getAllByRole('option')) {
+      expect(opt.textContent).not.toMatch(/match summary/i);
+    }
+    // Recorded round 11277: supply R1, winner_team 2 = Allies.
+    await waitFor(() => expect(screen.getByText('Allies')).toBeInTheDocument());
+    expect(screen.getByText('11:54')).toBeInTheDocument();
+    // Damage table sorted by damage_given — vid (4116) present.
+    expect(screen.getByText('4,116')).toBeInTheDocument();
+  });
+});
