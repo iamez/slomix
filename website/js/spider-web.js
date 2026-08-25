@@ -971,8 +971,19 @@ export async function loadSpiderWebView(params = {}) {
                   + (typeof team.time_to_next_wave_ms === 'number'
                       ? ` · do naslednjega vala ${(team.time_to_next_wave_ms / 1000).toFixed(1)} s`
                       : '')
+                  // ⚠️ A ratio without its denominator is not evidence: 100%
+                  // from two landings and 100% from thirty are different
+                  // claims, and the payload carries the counts that separate
+                  // them (Codex, #804).
                   + (typeof team.pass_ratio === 'number'
-                      ? ` · notranja skladnost ${(team.pass_ratio * 100).toFixed(1)} %`
+                      ? ` · preverba ${(team.pass_ratio * 100).toFixed(1)} %`
+                        + (typeof team.landing_clusters === 'number'
+                            ? ` (${team.passing_landing_clusters ?? '?'}/`
+                              + `${team.landing_clusters} pristankov`
+                              + (typeof team.timing_observations === 'number'
+                                  ? `, ${team.timing_observations} opazovanj)`
+                                  : ')')
+                            : '')
                       : '')
                 : '';
             detail.textContent = inferred && numbers
