@@ -5,7 +5,13 @@
  */
 
 import { API_BASE, fetchJSON } from './utils.js';
-import { getRouteHash } from './route-registry.js';
+// ⚠️ THE SAME SPECIFIER app.js USES, version query included. In ES modules
+// the URL is the identity: './route-registry.js' and
+// './route-registry.js?v=…' are two different modules with two sets of
+// state. The registry is frozen data today so a duplicate would only waste a
+// fetch — but the day it holds anything mutable, two copies is a bug nobody
+// would look for.
+import { getRouteHash } from './route-registry.js?v=20260720-ssd-gsid';
 
 function stripEtColors(text) {
     if (!text) return '';

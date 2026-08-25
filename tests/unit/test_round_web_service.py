@@ -1106,6 +1106,44 @@ class TestTheEnemyClockIsNotOursToPublish:
         out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
         assert out["ALLIES"]["interval_ms"] == 20_000
 
+    def test_the_withheld_entry_is_exactly_the_allowlist(self):
+        """⛔ THE DENYLIST LET THE WHOLE DIAGNOSTIC THROUGH.
+
+        The first version removed three phase fields and copied the rest, so a
+        withheld entry still carried `timing_observations`, `landing_clusters`,
+        `spawn_callbacks`, `post_revive_spawn_callbacks`,
+        `passing_landing_clusters` and `pass_ratio` — every one computed over
+        the ENTIRE round without looking at `t_ms`. Measured on round 11321:
+        identical numbers at t=30,000 and t=600,000, so a team thirty seconds
+        in was handed the enemy's spawn and revive counts for the rest of the
+        match (Codex, PR #807).
+
+        ⭐ ASSERTED AS EQUALITY, not as absence of the six names we know
+        about. A field added to `clock_validation_payload` tomorrow must fail
+        this test rather than cross the boundary by default — that is the
+        whole difference between an allowlist and a denylist.
+        """
+        rich = dict(self.VALIDATED["ALLIES"])
+        rich.update({
+            "timing_observations": 14, "landing_clusters": 8,
+            "spawn_callbacks": 16, "post_revive_spawn_callbacks": 1,
+            "passing_landing_clusters": 8, "pass_ratio": 1.0,
+        })
+        out = restrict_clock_to_pov(
+            {"AXIS": self.VALIDATED["AXIS"], "ALLIES": rich}, {"team": "AXIS"},
+        )
+
+        assert set(out["ALLIES"]) == {"status", "interval_ms", "reason"}
+
+    def test_the_holders_own_diagnostics_are_untouched(self):
+        """The allowlist applies to the OTHER side only. A team may read every
+        diagnostic about its own clock — that is its own HUD."""
+        rich = dict(self.VALIDATED["AXIS"])
+        rich["pass_ratio"] = 0.97
+        out = restrict_clock_to_pov({"AXIS": rich}, {"team": "AXIS"})
+
+        assert out["AXIS"] == rich
+
     def test_an_unavailable_enemy_clock_still_reports_as_restricted(self):
         """⚠️ Otherwise the two cases are distinguishable: "unavailable" would
         tell this team that the other side produced no usable spawn timings,
