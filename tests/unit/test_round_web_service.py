@@ -1001,6 +1001,59 @@ class TestTheEnemyClockDoesNotLeakThroughBeliefTiming:
         assert basis == EXPIRY_VALIDATED_WAVE
 
 
+class TestTheCadenceNeedsEVERYManifestToDeclareIt:
+    """⛔ Absence counted as agreement, and the velocity bound rides on it.
+
+    `load_capture_policy` built the interval from a comprehension that FILTERED
+    OUT files declaring no cadence, so one manifest saying 200 and another
+    saying nothing produced "200, known". The block's own comment says two
+    files disagreeing means we do not know — the rule was simply never applied
+    to silence (Codex, PR #807).
+    """
+
+    async def _policy(self, *manifests):
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps(m),) for m in manifests]
+                return []
+        return await load_capture_policy(_Db(), 1)
+
+    @pytest.mark.asyncio
+    async def test_one_manifest_declaring_it_is_known(self):
+        policy = await self._policy({"position_sample_interval_ms": 200})
+        assert policy.observation_interval_ms == 200
+        assert policy.mode == "fixed"
+
+    @pytest.mark.asyncio
+    async def test_agreement_across_two_manifests_is_known(self):
+        policy = await self._policy(
+            {"position_sample_interval_ms": 200},
+            {"position_sample_interval_ms": 200},
+        )
+        assert policy.observation_interval_ms == 200
+
+    @pytest.mark.asyncio
+    async def test_disagreement_is_unknown(self):
+        policy = await self._policy(
+            {"position_sample_interval_ms": 200},
+            {"position_sample_interval_ms": 500},
+        )
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_silence_from_one_file_is_NOT_agreement(self):
+        """The case that shipped wrong. A file that never declared a cadence
+        does not vote for the one that did."""
+        policy = await self._policy(
+            {"position_sample_interval_ms": 200},
+            {"source": "sections_observed"},
+        )
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+
 class TestACausalVelocityIsBoundedByTheRoundsOwnCadence:
     """§4.4.1 requires `0 < dt <= velocity_max_dt_ms`. Nothing supplied it.
 

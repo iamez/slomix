@@ -746,6 +746,12 @@ export async function loadSpiderWebView(params = {}) {
     if (String(roundId) !== String(state.roundId)) {
         state.tMs = 0;
         state.snapshot = null;
+        // ⛔ THE TEAM LIST TOO. It is rebuilt only when empty, so a round
+        // whose reconstruction resolved one side left that single team cached
+        // and the NEXT round permanently offered one POV button — and the
+        // reverse, a two-team list surviving into a one-team round, offers a
+        // view that cannot resolve (Codex, PR #807).
+        state.teams = [];
     }
     state.roundId = roundId;
 
