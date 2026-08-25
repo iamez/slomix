@@ -58,22 +58,29 @@ export interface SessionSummary {
   players: number;
   total_kills: number;
   maps_played: string[];
-  team_1_name: string;
-  team_2_name: string;
-  team_1_score: number;
-  team_2_score: number;
+  /** Team attribution comes from the session's `map_name = 'ALL'` row in
+   * session_results — when that row is missing the API deliberately returns
+   * null for all four team fields (sessions_router.py; Codex on #806). */
+  team_1_name: string | null;
+  team_2_name: string | null;
+  team_1_score: number | null;
+  team_2_score: number | null;
   winning_team: number | null;
   time_ago: string;
   formatted_date: string;
 }
 
-/** One row of the quick-leaders boards. */
+/** One row of the quick-leaders boards. The participation field differs per
+ * board — xp rows carry `rounds`, dpm_sessions rows carry `sessions`
+ * (players_router; Codex on #806) — so both are optional here rather than
+ * one board lying about the other's shape. */
 export interface QuickLeaderRow {
   rank: number;
   guid: string;
   name: string;
   value: number;
-  rounds: number;
+  rounds?: number;
+  sessions?: number;
   label: string;
 }
 
