@@ -624,6 +624,35 @@ class TestCapabilityIsNotSilence:
         assert set(states["H"].unavailable) == set(UNREAD_CHANNELS)
         assert [b for b in states["H"].beliefs if b.source == "gunfire"]
 
+    def test_a_holder_already_in_states_is_marked_too(self):
+        """⛔ `states` can hold a holder who is NOT in `holders`.
+
+        An attacker whose life ended before `t` still carries a contact
+        belief; `group_by_holder` keeps that state and the payload serialises
+        it. Marking only the passed-in list left such a holder with an EMPTY
+        `unavailable` — indistinguishable from a player whose every channel
+        worked and who learned nothing (Codex, PR #807).
+        """
+        states = {"DEAD_ATTACKER": HolderState(holder_guid="DEAD_ATTACKER")}
+        apply_capability(
+            states,
+            {"capabilities": {"shot_fired": "enabled", "aim_lock": "enabled"}},
+            ["ALIVE"],
+        )
+
+        assert set(states) == {"DEAD_ATTACKER", "ALIVE"}
+        for guid, state in states.items():
+            assert "comm_events" in state.unavailable, guid
+
+    def test_the_gated_channels_reach_those_holders_as_well(self):
+        """The same hole applied to `shot_fired`/`aim_lock`, which predate
+        this change — a holder outside the list kept beliefs from a channel
+        the round cannot prove."""
+        states = {"DEAD_ATTACKER": HolderState(holder_guid="DEAD_ATTACKER")}
+        apply_capability(states, None, ["ALIVE"])
+
+        assert {"gunfire", "aim_lock"} <= set(states["DEAD_ATTACKER"].unavailable)
+
     def test_a_channel_we_do_not_read_is_named_even_when_the_flag_is_on(self):
         """⛔ Gating `comm_events` on the manifest would be the worse bug: the
         flag could say `enabled` and we would claim a channel with no

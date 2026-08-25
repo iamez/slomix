@@ -753,7 +753,14 @@ def apply_capability(
     # a generator is exhausted by the first. That left the second channel
     # untouched — no reason recorded, no beliefs dropped — and the payload then
     # looked like a proven capture (CodeRabbit, PR #799).
-    holders = tuple(holders)
+    # ⛔ THE UNION, NOT THE ARGUMENT. `states` can already hold a holder who is
+    # NOT in `holders` — an attacker whose life ended before `t` still has a
+    # contact belief, `group_by_holder` keeps that state and the payload
+    # serialises it. Marking only the passed-in list left those holders with an
+    # EMPTY `unavailable`, i.e. looking like players whose every channel worked
+    # and who learned nothing from it — which is the one thing §6.2 forbids,
+    # and the reason this function exists (Codex, PR #807).
+    holders = tuple(dict.fromkeys((*holders, *states)))
     for holder in holders:
         holder_state = states.setdefault(holder, HolderState(holder_guid=holder))
         holder_state.unavailable.update(UNREAD_CHANNELS)

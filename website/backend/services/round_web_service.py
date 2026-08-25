@@ -685,12 +685,17 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
 
     # The cadence is a fact about the file, so two files disagreeing about it
     # means we do not know this round's cadence — not that one of them wins.
-    intervals = {
-        m.get("position_sample_interval_ms")
-        for m in manifests
-        if m.get("position_sample_interval_ms")
-    }
-    interval = intervals.pop() if len(intervals) == 1 else None
+    #
+    # ⛔ AND EVERY MANIFEST MUST SUPPLY IT. The comprehension used to FILTER
+    # OUT the files that declared no cadence, so one file saying 200 and
+    # another saying nothing produced "200, known" — absence counted as
+    # agreement. That matters more now that the velocity bound is derived from
+    # this number: a round would get `2 * 200` applied to samples whose actual
+    # cadence was never declared (Codex, PR #807).
+    declared = [m.get("position_sample_interval_ms") for m in manifests]
+    interval = (
+        declared[0] if all(declared) and len(set(declared)) == 1 else None
+    )
     sources = {m.get("source") for m in manifests if m.get("source")}
     # Same rule for every scalar, `manifest_version` included: one answer or
     # none. Taking this one from `head` while the others fell back to unknown

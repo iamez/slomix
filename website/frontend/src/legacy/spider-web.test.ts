@@ -771,4 +771,44 @@ describe('opening a different round', () => {
     expect(document.getElementById('spider-web-container')?.textContent)
       .toContain('t = 42000 ms');
   });
+
+
+  it('rebuilds the team list for the new round', async () => {
+    // ⛔ `state.teams` is rebuilt only when EMPTY, so a round whose
+    // reconstruction resolved one side left that single team cached and the
+    // next round permanently offered one POV button — and the reverse, a
+    // two-team list surviving into a one-team round, offers a view that
+    // cannot resolve (Codex, PR #807).
+    const rosters: Record<string, string[]> = { '11500': ['AXIS'], '11501': ['AXIS', 'ALLIES'] };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      const round = url.split('/round/')[1].split('/')[0];
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          round_id: Number(round), t_ms: 0, map_name: null,
+          first_position_ms: 0, round_duration_ms: 600_000,
+          players: rosters[round].map((team, i) => ({
+            guid: `G${i}`, name: `p${i}`, team, alive: true,
+            x: i * 100, y: 0, z: 0, stale_ms: 0,
+          })),
+          edges: [], gaps: {}, withheld_by_pov: [],
+          nearest_teammate_separation: {}, clock: {},
+          information_state: { holders: {} }, capture_policy: { capabilities: {} },
+          reconstruction_accuracy: {}, player_count: 1, overlap_conflicts: 0,
+          notes: [],
+        }),
+      } as Response);
+    }));
+
+    await loadSpiderWebView({ roundId: '11500' });
+    const host = document.getElementById('spider-web-container');
+    expect(host?.textContent).not.toContain('ALLIES');
+
+    await loadSpiderWebView({ roundId: '11501' });
+    expect(host?.textContent).toContain('ALLIES');
+  });
 });
