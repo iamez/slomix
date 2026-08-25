@@ -584,11 +584,26 @@ export function clockBadge(team) {
                    + 'too few residuals inside the frozen tolerance (§5.3)',
         };
     }
+    // ⛔ `insufficient` comes from a DIFFERENT stage. `infer_clock` assigns it
+    // when there are fewer than MIN_INTERNAL_OBSERVATIONS eligible timing
+    // observations — before independent validation is ever attempted, and
+    // before there is an offset to validate. Describing it as missing landing
+    // clusters points at the wrong stage, and hinting at internal consistency
+    // asserts something that was never established: with one or two
+    // observations at differing intervals `interval_ms` is null (Codex, #804).
+    if (team.status === 'insufficient') {
+        return {
+            badge: 'UNVALIDATED',
+            reason: reason(team.reason)
+                || 'too few eligible timing observations to infer an offset at '
+                   + 'all; nothing was validated because nothing was inferred',
+        };
+    }
     return {
         badge: 'UNVALIDATED',
         reason: reason(team.reason)
-            || 'too few independent landing clusters to check; internally '
-               + 'consistent at most',
+            || 'offset inferred, but too few independent landing clusters to '
+               + 'check it; internally consistent at most',
     };
 }
 
