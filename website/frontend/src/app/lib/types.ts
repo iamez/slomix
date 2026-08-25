@@ -369,3 +369,96 @@ export interface ActivityCalendar {
   days: number;
   activity: Record<string, number>;
 }
+
+/* ---------- phase 2, batch 2: leaderboards · record-book · awards ---------- */
+
+/** One row of GET /api/stats/leaderboard — corpus: api_stats_leaderboard.json.
+ * `deaths` exists in the payload; legacy never rendered it. */
+export interface LeaderboardRow {
+  rank: number;
+  guid: string;
+  name: string;
+  value: number;
+  rounds: number;
+  kills: number;
+  deaths: number;
+  kd: number;
+}
+
+/** One record holder — corpus: api_stats_records.json (map of category →
+ * top-N rows, FE orders the categories itself). */
+export interface RecordEntry {
+  player: string;
+  value: number;
+  map: string;
+  date: string;
+}
+export type StatsRecords = Record<string, RecordEntry[]>;
+
+/** One map row of GET /api/stats/maps — corpus: api_stats_maps.json (only
+ * the fields this batch reads; the maps PAGE in batch 3 will widen it). */
+export interface MapRow {
+  name: string;
+  total_rounds: number;
+}
+
+/** GET /api/hall-of-fame — corpus: api_hall_of_fame.json. rank_delta/is_new
+ * appear only when delta_window_days is set (recording has null). */
+export interface HallOfFameEntry {
+  rank: number;
+  player_guid: string;
+  player_name: string;
+  value: number;
+  unit: string;
+  rank_delta?: number;
+  is_new?: boolean;
+}
+export interface HallOfFame {
+  categories: Record<string, HallOfFameEntry[]>;
+  period: string;
+  delta_window_days: number | null;
+}
+
+/** GET /api/seasons/current/awards — corpus: api_seasons_current_awards.json
+ * (engraved awards are [] until a season is closed — empty is the NORMAL
+ * state, not a failure). */
+export interface SeasonAwards {
+  status: string;
+  season_id: string;
+  season_name: string;
+  awards: { award_key?: string; key?: string; player_guid?: string; player_name?: string; value_text?: string }[];
+}
+
+/** One row of GET /api/awards — corpus: api_awards.json. value is a STRING
+ * ("48.54 percent", "2") — the backend formats it. */
+export interface AwardRow {
+  award: string;
+  player: string;
+  guid: string;
+  value: string;
+  date: string;
+  map: string;
+  round_number: number;
+  round_id: number | null;
+}
+export interface AwardsPage {
+  awards: AwardRow[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+/** One row of GET /api/awards/leaderboard — corpus:
+ * api_awards_leaderboard.json. The field is top_award — legacy read
+ * favorite_award and silently got an empty dropdown out of it. */
+export interface AwardLeaderRow {
+  rank: number;
+  player: string;
+  guid: string;
+  award_count: number;
+  top_award: string;
+  top_award_count: number;
+}
+export interface AwardsLeaderboard {
+  leaderboard: AwardLeaderRow[];
+}
