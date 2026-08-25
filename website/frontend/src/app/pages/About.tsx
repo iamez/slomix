@@ -183,13 +183,16 @@ function ThisBuild() {
 
 function Health() {
   const overview = useSystemOverview();
+  // A failed 30 s poll must not keep green rows under the error message —
+  // same derived-value rule as the full /system page.
+  const data = overview.isError ? undefined : overview.data;
   return (
     <div data-parity="admin.health" style={{ marginTop: 26 }}>
       <Lbl>health</Lbl>
       <div style={{ marginTop: 12 }}>
         {overview.isPending && <Pending label="health" />}
         {overview.isError && <Unavailable what="health" />}
-        {overview.data?.stages.map((s) => (
+        {data?.stages.map((s) => (
           <div key={s.key} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 10, padding: '8px 0' }}>
             <StatusDot state={s.state === 'ok' ? 'ok' : s.state === 'warn' ? 'warn' : s.state === 'down' ? 'error' : 'idle'} />
             <span style={{ fontSize: 15, color: 'var(--color-text-300)' }}>{s.label}</span>
@@ -256,7 +259,7 @@ export function About() {
         </p>
       </div>
 
-      <div data-parity="admin.figures" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginTop: 44, borderTop: '1px solid var(--color-rule-700)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div data-parity="admin.figures" className="about-grid-4" style={{ marginTop: 44, borderTop: '1px solid var(--color-rule-700)', borderBottom: '1px solid var(--color-rule-800)' }}>
         <HeadlineFigures />
       </div>
 

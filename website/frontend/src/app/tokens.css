@@ -135,6 +135,7 @@ body {
   gap: 56px;
 }
 
+.about-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); }
 .about-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
 .about-grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; }
 
@@ -149,6 +150,6 @@ body {
 }
 
 @media (max-width: 760px) {
-  .about-grid-5, .about-grid-6 { grid-template-columns: repeat(2, 1fr); }
+  .about-grid-4, .about-grid-5, .about-grid-6 { grid-template-columns: repeat(2, 1fr); }
   .diag-boards { grid-template-columns: minmax(0, 1fr); }
 }
