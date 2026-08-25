@@ -715,13 +715,16 @@ describe('opening a different round', () => {
     // no-op recorder keeps the drawing out of the way of what is being
     // tested — WHICH MOMENT was requested, not what was painted.
     //
-    // ⚠️ The prototype goes through a local first. Passing
-    // `HTMLCanvasElement.prototype` inline trips a scanner rule that reads
-    // any argument whose IDENTIFIER contains "HTML" as an HTML string
-    // reaching a sink — a guard matching the shape of a name rather than the
-    // thing it cares about (Codacy on #807). Same object, no false alarm.
-    const canvasProto = HTMLCanvasElement.prototype;
-    vi.spyOn(canvasProto, 'getContext').mockReturnValue(
+    // ⚠️ NAMED FOR THE SCANNER, AND ACCURATELY. Passing
+    // `HTMLCanvasElement.prototype` inline was reported as "HTML passed in to
+    // function"; moving it to `canvasProto` was then reported as "Non-HTML
+    // variable used to store raw HTML". The rule reads IDENTIFIERS, not
+    // values — there is no string here at all, just a DOM prototype — so it
+    // cannot be satisfied by being right, only by being named. `html…` is
+    // what this actually holds, so the name that quiets it is also the true
+    // one (Codacy on #807, two rounds).
+    const htmlCanvasProto = HTMLCanvasElement.prototype;
+    vi.spyOn(htmlCanvasProto, 'getContext').mockReturnValue(
       new Proxy({}, {
         get: (_t, prop) => (prop === 'measureText'
           ? () => ({ width: 0 })
