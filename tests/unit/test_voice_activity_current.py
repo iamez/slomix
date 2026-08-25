@@ -105,7 +105,12 @@ class TestTheReportCarriesItsAge:
         db = _Db(row=(_status(["ciril"]), stamp))
         payload = await get_current_voice_activity(db=db)
 
-        assert payload["updated_at"] == stamp.isoformat()
+        # ⛔ WITH AN OFFSET. The naive value the database hands back is
+        # published as UTC-bearing, because a zone-less string reaches
+        # `Date.parse` in a browser as LOCAL time and the same row would read
+        # fresh here and hours old there (Codex, PR #808).
+        assert payload["updated_at"] == stamp.replace(tzinfo=dt.timezone.utc).isoformat()
+        assert payload["updated_at"].endswith("+00:00")
 
     @pytest.mark.asyncio
     async def test_a_string_timestamp_does_not_turn_a_good_row_into_a_failure(self):
@@ -129,7 +134,14 @@ class TestTheReportCarriesItsAge:
         payload = await get_current_voice_activity(db=db)
 
         assert payload["status"] == "ok"
-        assert payload["updated_at"] == as_string
+        # Normalised, not echoed: the same instant, now carrying its zone.
+        # ⚠️ Compared against the STRING that was stored, not the datetime it
+        # came from — `strftime("%H:%M:%S")` drops microseconds, so the
+        # datetime is a different instant to the second decimal place.
+        assert payload["updated_at"] == (
+            dt.datetime.fromisoformat(as_string)
+            .replace(tzinfo=dt.timezone.utc).isoformat()
+        )
 
     @pytest.mark.asyncio
     async def test_an_unavailable_report_has_no_age_to_give(self):
@@ -239,4 +251,44 @@ class TestAReportThatStoppedIsNotARoomThatEmptied:
             db=_Db(row=(_status(["ciril"]), None)))
 
         assert payload["status"] == "stale"
+        assert payload["age_seconds"] is None
+
+
+class TestTheTimestampCarriesItsZone:
+    """⛔ ONE VALUE, TWO CALENDARS — the failure this normalisation prevents.
+
+    `_voice_report_age_seconds` reads a naive timestamp as UTC. Publishing the
+    same value zone-less sent it to `Date.parse`, which reads a zone-less
+    date-time as LOCAL time. A report the server called fresh was therefore
+    labelled hours old by a browser two zones away, or dated in the future
+    (Codex, PR #808).
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_naive_string_is_published_as_utc(self):
+        payload = await get_current_voice_activity(
+            db=_Db(row=(_status(["ciril"]), "2026-08-25 12:34:56")))
+
+        assert payload["updated_at"] == "2026-08-25T12:34:56+00:00"
+
+    @pytest.mark.asyncio
+    async def test_an_aware_timestamp_keeps_its_own_offset(self):
+        """Not forced to UTC — an offset that is already there is already
+        unambiguous, and rewriting it would be a second opinion about an
+        instant somebody else already stated."""
+        stamp = dt.datetime(2026, 8, 25, 14, 34, 56,
+                            tzinfo=dt.timezone(dt.timedelta(hours=2)))
+        payload = await get_current_voice_activity(db=_Db(row=(_status([]), stamp)))
+
+        assert payload["updated_at"] == stamp.isoformat()
+        assert payload["updated_at"].endswith("+02:00")
+
+    @pytest.mark.asyncio
+    async def test_an_unparseable_string_is_published_rather_than_dropped(self):
+        """A string we cannot read is still evidence, and the age beside it is
+        already null — deleting it would remove the only clue to why."""
+        payload = await get_current_voice_activity(
+            db=_Db(row=(_status(["ciril"]), "not a timestamp")))
+
+        assert payload["updated_at"] == "not a timestamp"
         assert payload["age_seconds"] is None
