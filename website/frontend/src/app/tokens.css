@@ -76,3 +76,51 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
+
+/* Landing hero: fixed 360px side panel next to a fluid column. Inline styles
+ * cannot carry a media query, and below ~900px the fixed column plus the
+ * shell's padding overflows the viewport (Codex on #806) — so the one
+ * responsive rule lives here and the panel stacks under the hero. */
+.landing-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  gap: 56px;
+  padding-top: 48px;
+}
+
+@media (max-width: 900px) {
+  .landing-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+}
+
+/* The lower two-column pair (recent evenings · leaders) needs the same
+ * treatment as the hero: fixed 56px gap over two 1fr panes cannot fit the
+ * session rows' fixed columns on a phone (Codex on #806, second wave). */
+.landing-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 56px;
+}
+
+@media (max-width: 760px) {
+  .landing-split {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+}
+
+/* Both four-across grids (the figures band and the entry cards): a single
+ * 28px mono figure like 122,999 cannot fit a ~77px track on a phone, so
+ * they halve below 760px (Codex on #806, third wave). */
+.landing-quad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 760px) {
+  .landing-quad {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
