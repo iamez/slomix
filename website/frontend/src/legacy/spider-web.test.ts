@@ -17,7 +17,7 @@
  * is a rotation, and that the map fits on the screen.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Camera } from '../../../js/spider-web.js';
 
@@ -25,7 +25,7 @@ import {
   THEME, alphaHex, beliefRegions, boundsFromPlayers, capabilityRows, clockBadge,
   edgeStyle, horizonOf, mixHex,
   isTeamPov, placeLabels,
-  project, statusLine, viewportFor,
+  loadSpiderWebView, project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
 // @ts-expect-error plain-JS module with no declaration file of its own
 import { getRouteDefinition, getRouteHash } from '../../../js/route-registry.js';
@@ -664,5 +664,91 @@ describe('the way in', () => {
 
     expect(getRouteDefinition('spider-web').parseHash(hash))
       .toEqual({ roundId: '11321' });
+  });
+});
+
+describe('opening a different round', () => {
+  // ⛔ `state` in spider-web.js is module-level and survives navigation, so
+  // round B used to open at round A's moment. Two silent failures: the
+  // retained time is past B's end, or before anybody in B has spawned — and
+  // the empty map that follows is exactly what the first_position_ms logic
+  // exists to prevent (Codex, PR #807).
+  const requested: string[] = [];
+
+  function stubRound(firstPositionMs: number) {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      requested.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          round_id: 1, t_ms: 0, map_name: null,
+          first_position_ms: firstPositionMs, round_duration_ms: 600_000,
+          players: [], edges: [], gaps: {}, withheld_by_pov: [],
+          nearest_teammate_separation: {}, clock: {},
+          information_state: { holders: {} }, capture_policy: { capabilities: {} },
+          reconstruction_accuracy: {}, player_count: 0, overlap_conflicts: 0,
+          notes: [],
+        }),
+      } as Response);
+    }));
+  }
+
+  function tOf(url: string): string | null {
+    return new URL(url, 'http://x').searchParams.get('t');
+  }
+
+  beforeEach(() => {
+    requested.length = 0;
+    document.body.innerHTML = '<div id="spider-web-container"></div>';
+    // jsdom ships no 2D context, and the page draws as its last step. A
+    // no-op recorder keeps the drawing out of the way of what is being
+    // tested — WHICH MOMENT was requested, not what was painted.
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(
+      new Proxy({}, {
+        get: (_t, prop) => (prop === 'measureText'
+          ? () => ({ width: 0 })
+          : () => undefined),
+        set: () => true,
+      }) as unknown as CanvasRenderingContext2D,
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.innerHTML = '';
+  });
+
+  it('opens the second round at its own beginning, not the first round\'s moment', async () => {
+    stubRound(42_000);
+    await loadSpiderWebView({ roundId: '11321' });
+    // The first round settled on its own first position — that is the state
+    // that used to leak into the next one.
+    expect(requested.some((u) => tOf(u) === '42000')).toBe(true);
+
+    requested.length = 0;
+    await loadSpiderWebView({ roundId: '11322' });
+
+    expect(requested.length).toBeGreaterThan(0);
+    expect(tOf(requested[0])).toBe('0');
+  });
+
+  it('keeps the moment when the same round is opened again', async () => {
+    // Re-entering the same round (a re-render, a back button) is not a new
+    // round and must not throw the viewer back to the start.
+    //
+    // ⚠️ ASSERTED ON THE READOUT, NOT ON FETCH TRAFFIC. `utils.js` fetchJSON
+    // holds a module-level response cache, so re-opening the same round at
+    // the same `t` serves from it and issues NO request — a fetch-counting
+    // version of this test measured the cache and read as a regression.
+    stubRound(42_000);
+    await loadSpiderWebView({ roundId: '11399' });
+    await loadSpiderWebView({ roundId: '11399' });
+
+    expect(document.getElementById('spider-web-container')?.textContent)
+      .toContain('t = 42000 ms');
   });
 });

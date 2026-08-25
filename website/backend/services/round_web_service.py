@@ -1014,6 +1014,22 @@ def _ensure_attackers(value) -> list:
 _TRACK_GUID, _TRACK_TEAM = 0, 2
 
 
+def _requests_a_team(pov: str | None) -> bool:
+    """Did the caller ASK for a team view, whether or not one could be built?
+
+    ⛔ `_pov_team` returns None for three different situations and its own
+    docstring says "the caller distinguishes those". The caller did not. A
+    `team:` request naming a team nobody played on — a typo, a renamed side,
+    a round whose roster is thinner than the caller expected — landed in the
+    same branch as `pov=world` and got the ORACLE: every position, both
+    clocks, nothing withheld (Codex, PR #807).
+
+    That is the failure direction that matters. "We could not establish the
+    team you asked for" must never resolve to "here is everything".
+    """
+    return bool(pov) and pov.lower().startswith("team:")
+
+
 def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
     """Resolve `pov=team:AXIS` into that team's members, or None.
 
@@ -1159,6 +1175,10 @@ async def get_round_snapshot(
     # belief source — which is why it is spelled out rather than being the
     # silent default.
     pov_team = _pov_team(pov, tracks)
+    # A team was asked for and could not be resolved: fail CLOSED. `pov_team`
+    # stays None because there is no roster to filter by, so the withholding
+    # below cannot use it — the flag carries the request instead.
+    unresolved_team = pov_team is None and _requests_a_team(pov)
 
     # 🔴 RESOLVED BEFORE THE BELIEFS, because the clock does not only get
     # PUBLISHED — it decides when "he is down" stops being true. `resolve_expiry`
@@ -1172,7 +1192,13 @@ async def get_round_snapshot(
     # ⭐ The degraded clock keeps `interval_ms` and loses `offset_ms`, so
     # `resolve_expiry` falls to `interval_only`: "he is back somewhere inside
     # one interval", which is what §6.3 says a holder without a cue may hold.
-    pov_clock = restrict_clock_to_pov(clock, pov_team)
+    #
+    # ⛔ `{"team": None}` for an unresolved team request: no entry can equal a
+    # team named None, so every clock is restricted. A view that cannot name
+    # its own side has no side whose countdown it may read.
+    pov_clock = restrict_clock_to_pov(
+        clock, {"team": None} if unresolved_team else pov_team
+    )
     information = await load_round_information_state(
         db, round_id, t_ms, snap, pov_clock, policy, tracks
     ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
@@ -1195,6 +1221,23 @@ async def get_round_snapshot(
         withheld = sorted(g for g in pov_team["all_guids"] if g not in own)
         snap_players = [p for p in snap.players.values() if p.guid in own]
         information = _team_information(information, pov_team, t_ms)
+    elif unresolved_team:
+        # ⛔ FAIL CLOSED. Everyone is withheld and everyone is named — the same
+        # contract a resolved team view keeps, applied to a request we could
+        # not resolve. Previously this fell through to the oracle: every
+        # position, both clocks, `withheld_by_pov` empty (Codex, PR #807).
+        withheld = sorted({t[_TRACK_GUID] for lives in (tracks or {}).values()
+                           for t in lives})
+        snap_players = []
+        # ⚠️ And the message. A branch below was written to say "no players on
+        # team X" and could never run: `if pov and pov != "world"` catches
+        # every `team:` string first, so an unrostered team got the
+        # SINGLE-PLAYER wording — "team:NOBODY has no reconstructed state" —
+        # which describes a GUID lookup, not a roster miss.
+        information = {
+            **information, "holders": {}, "pov": pov,
+            "pov_unavailable": f"no players on team {pov[5:]!r} in this round",
+        }
     else:
         snap_players = list(snap.players.values())
         if pov and pov != "world":
@@ -1207,12 +1250,6 @@ async def get_round_snapshot(
                     None if pov in holders
                     else f"{pov} has no reconstructed state in this round at t={t_ms}"
                 ),
-            }
-        elif pov and pov.lower().startswith("team:"):
-            # A team nobody played on. Named, not silently treated as the oracle.
-            information = {
-                **information, "holders": {}, "pov": pov,
-                "pov_unavailable": f"no players on team {pov[5:]!r} in this round",
             }
         else:
             information = {**information, "pov": pov or "world"}

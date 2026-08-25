@@ -1264,6 +1264,43 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert payload["information_state"]["pov_unavailable"]
 
     @pytest.mark.asyncio
+    async def test_a_team_that_cannot_be_resolved_withholds_everything(self):
+        """⛔ FAIL CLOSED, and it did not.
+
+        `_pov_team` returns None for three different situations — the oracle,
+        a single-player pov, and a team nobody played on — and its docstring
+        says the caller distinguishes them. The caller did not: a `team:` name
+        that matched no roster landed in the same branch as `pov=world` and
+        got EVERY position, BOTH clocks and an empty `withheld_by_pov`.
+
+        A typo, a renamed side, or a round with a thinner roster than expected
+        all take this path. "We could not establish the team you asked for"
+        must never resolve to "here is everything" (Codex, PR #807).
+        """
+        payload = await self._snapshot("team:NOBODY", pairs=True)
+
+        assert payload["players"] == []
+        assert set(payload["withheld_by_pov"]) == {"AX1", "AX2", "AL1", "AL2"}
+        for team, entry in payload["clock"].items():
+            assert entry["status"] == "unknown_to_this_pov", team
+
+    @pytest.mark.asyncio
+    async def test_the_unresolved_team_says_it_is_a_ROSTER_miss(self):
+        """⚠️ The branch written for this could never run.
+
+        `if pov and pov != "world"` catches every `team:` string first, so the
+        team-specific message below it was dead code and an unrostered team
+        got the SINGLE-PLAYER wording — "team:NOBODY has no reconstructed
+        state in this round at t=..." — which describes a GUID lookup.
+        """
+        payload = await self._snapshot("team:NOBODY")
+        reason = payload["information_state"]["pov_unavailable"]
+
+        assert "no players on team" in reason
+        assert "NOBODY" in reason
+        assert "reconstructed state" not in reason
+
+    @pytest.mark.asyncio
     async def test_the_team_name_is_case_insensitive(self):
         lower = await self._snapshot("team:axis")
         assert [p["guid"] for p in lower["players"]] == ["AX1"]
