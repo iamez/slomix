@@ -339,3 +339,31 @@ class TestTheMapCarriesItsOwnEvidence:
         snap = r.snapshot()
         assert snap["map_confirmed"] is True
         assert snap["map_age_seconds"] < 60
+
+    def test_a_rejected_ping_pong_event_is_not_evidence_for_the_map_we_hold(self):
+        """⚠️ Two sources report the map (legacy3 `MAP`, LIVEX `LIVE_MAP`) and
+        the lagging one flips straight back to the PREVIOUS map. That event is
+        rejected as a change — and must not count as evidence for the map we
+        kept either, because it did not name it (Codex, PR #808).
+
+        ⭐ THE CONSEQUENCE IS BOUNDED, and saying so is part of the finding.
+        The rejection only fires within `_MAP_FLIPBACK_SECONDS` of the last
+        change, so the wrongly-refreshed assertion can overstate the map's
+        freshness by at most that window. It can NEVER manufacture a
+        `map_confirmed: True` after a session gap, because a gap is ten times
+        longer than the flip-back window and no rejection can happen inside
+        one. Real, small, and worth fixing where it is cheap.
+        """
+        now = time.time()
+        r = LiveStateReducer()
+        r.apply(_ev("MAP", now - 100, map_name="supply"))
+        r.apply(_ev("MAP", now - 40, map_name="te_escape2"))     # real change
+        # The lagging source re-asserts the OLD map 30 s later — inside the
+        # flip-back window, so the handler rejects it.
+        r.apply(_ev("LIVE_MAP", now - 10, map_name="supply"))
+
+        snap = r.snapshot()
+        assert snap["current_map"] == "te_escape2", "the flip-back was accepted"
+        # Evidence dates from the CHANGE (40 s ago), not from the rejected
+        # event (10 s ago).
+        assert snap["map_age_seconds"] >= 39

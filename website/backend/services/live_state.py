@@ -215,11 +215,17 @@ class LiveStateReducer:
 
         elif etype in ("MAP", "LIVE_MAP"):
             new_map = (ev.get("map_name") or "").strip()
-            if new_map:
-                # Before the change check: an event naming the map we already
-                # hold changes nothing and CONFIRMS everything.
+            if new_map and new_map == self._current_map:
+                # An event naming the map we already hold changes nothing and
+                # CONFIRMS everything — that is the whole point of tracking
+                # assertion separately from change.
+                #
+                # ⚠️ ONLY for the map we hold. The first version asserted on
+                # any non-empty name, before the rejection below, so a lagging
+                # source ping-ponging back to the PREVIOUS map refreshed the
+                # evidence for a map that event did not name (Codex, PR #808).
                 self._map_asserted_at = at
-            if new_map and new_map != self._current_map:
+            elif new_map:
                 # Anti ping-pong: two sources report the map (legacy3 `MAP`,
                 # LIVEX `LIVE_MAP`). A "change" straight back to the previous
                 # map moments after the last change is the lagging source
