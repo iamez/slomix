@@ -78,6 +78,9 @@ interface BaseOptions<P extends GetPath> {
   // moment the intersection was added).
   query?: QueryOf<P>;
   signal?: AbortSignal;
+  /** Status surfaces pass 'no-store': a status page must never read a cached
+   * body from ANY layer — the legacy system.js lesson, kept verbatim. */
+  cache?: RequestCache;
 }
 
 export type ApiGetOptions<P extends GetPath> = ([RequiredQueryOf<P>] extends [never]
@@ -106,7 +109,7 @@ export async function apiGetResponse<P extends GetPath>(
     fillPath(path, options.pathParams) +
     buildQuery(options.query as Record<string, unknown> | undefined);
   // nosemgrep
-  const res = await fetch(url, { signal: options.signal });
+  const res = await fetch(url, { signal: options.signal, cache: options.cache });
   if (!res.ok) throw new ApiError(res.status, url);
   return res;
 }

@@ -284,6 +284,12 @@ async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
         breaches = linkage.get("breaches") or []
         linkage_out = {
             "available": True,
+            # The assessor's own verdict travels with the data: on a failed
+            # subquery it says "error" with PARTIAL metrics, and an empty
+            # breaches list then proves nothing — without this field the
+            # frontend's partial-assessment guard could never fire (Codex
+            # on #809).
+            "status": linkage.get("status"),
             "metrics": linkage.get("metrics") or {},
             "breach_count": len(breaches),
             "breaches": [
