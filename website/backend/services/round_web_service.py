@@ -59,9 +59,8 @@ from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Any
 
+from proximity.parser.capability_manifest import FEATURE_FLAGS, is_declared
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
-from proximity.parser.capability_manifest import is_declared
-from proximity.parser.capability_manifest import FEATURE_FLAGS
 from shared.round_time import round_duration_sql
 from website.backend.logging_config import get_app_logger
 from website.backend.services.clock_inputs import (
@@ -162,7 +161,7 @@ class CapturePolicy:
     # the payload still carried `{}` — and the runtime check missed it because
     # both rounds I tried HAVE manifests and never take this path.
     capabilities: dict[str, str] = field(
-        default_factory=lambda: {flag: "unknown" for flag in FEATURE_FLAGS})
+        default_factory=lambda: dict.fromkeys(FEATURE_FLAGS, "unknown"))
     #: How many manifests this round resolved to. Normally 1; a second means
     #: two processed files map to the same round (1 round in 776 on the dev
     #: corpus).
