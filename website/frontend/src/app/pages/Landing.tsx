@@ -87,8 +87,16 @@ function LivePanel() {
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>
               {liveData.current_map ?? 'unknown map'}
             </span>
+            {/* After a delivery gap the reducer keeps the old lineup for up
+              * to 600 s and exposes its age — an aged count says so instead
+              * of posing as current (Codex on #806, wave 4). */}
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)', marginLeft: 'auto' }}>
               {liveData.roster.player_count} players
+              {liveData.roster.player_count > 0
+                && liveData.roster.roster_age_seconds != null
+                && liveData.roster.roster_age_seconds > 60
+                ? ` · seen ${Math.round(liveData.roster.roster_age_seconds / 60)} min ago`
+                : ''}
             </span>
           </>
         )}
@@ -211,6 +219,7 @@ export function Landing() {
   // data as current next to the error message (Codex on #806).
   const sessionsData = sessions.isError ? undefined : sessions.data;
   const overviewData = overview.isError ? undefined : overview.data;
+  const leadersData = leaders.isError ? undefined : leaders.data;
   const lastNight = sessionsData?.[0];
   // The overview endpoint substitutes 0 per failed aggregate and still
   // answers 200 (records_overview.py; Codex on #806). Four zeroes at once
@@ -338,17 +347,17 @@ export function Landing() {
           </div>
           {leaders.isPending && <div style={{ marginTop: 10 }}><Pending label="leaders" /></div>}
           {leaders.isError && <div style={{ marginTop: 10 }}><Unavailable what="leaders" /></div>}
-          {leaders.data && (
+          {leadersData && (
             <div style={{ marginTop: 10 }}>
               <LeaderBoard
-                title={`top xp · ${leaders.data.window_days} days`}
-                rows={leaders.data.xp.slice(0, 3)}
-                hadErrors={leaders.data.errors.includes('xp_query_failed')}
+                title={`top xp · ${leadersData.window_days} days`}
+                rows={leadersData.xp.slice(0, 3)}
+                hadErrors={leadersData.errors.includes('xp_query_failed')}
               />
               <LeaderBoard
-                title={`top dpm per session · ${leaders.data.window_days} days`}
-                rows={leaders.data.dpm_sessions.slice(0, 3)}
-                hadErrors={leaders.data.errors.includes('dpm_query_failed')}
+                title={`top dpm per session · ${leadersData.window_days} days`}
+                rows={leadersData.dpm_sessions.slice(0, 3)}
+                hadErrors={leadersData.errors.includes('dpm_query_failed')}
               />
             </div>
           )}
