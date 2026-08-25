@@ -71,12 +71,106 @@ describe('Landing', () => {
     await waitFor(() => expect(screen.getByText('122,999')).toBeInTheDocument());
     expect(screen.getByText('rounds kept')).toBeInTheDocument();
 
-    // Last night = first /api/sessions row: 7 / 3 on 2026-08-23.
+    // Last night = first /api/sessions row: 7 / 3 on 2026-08-23. The label
+    // is honest about age (the recording is days old by the time any test
+    // runs) and the score is a BOX score, not maps won.
     expect(await screen.findByText('7')).toBeInTheDocument();
     expect(screen.getAllByText(/10 rd/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/last session · Yesterday/)).toBeInTheDocument();
+    expect(screen.getByText(/box score/)).toBeInTheDocument();
+
+    // Session links carry the stable session_id — a date URL would merge
+    // two same-day sessions into one page (Codex on #806).
+    const evening = screen.getByRole('link', { name: /open the evening/i });
+    expect(evening.getAttribute('href')).toBe('/session-detail/152');
 
     // Quick leaders from the recording.
     expect(await screen.findByText('vid')).toBeInTheDocument();
+  });
+
+  it('renders a session without team attribution instead of crashing on null', async () => {
+    const first = (sessions as Array<Record<string, unknown>>)[0];
+    const unattributed = [{
+      ...first, team_1_name: null, team_2_name: null, team_1_score: null, team_2_score: null,
+    }];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/sessions') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(unattributed) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/score not attributed/)).toBeInTheDocument());
+    expect(screen.getByText('—')).toBeInTheDocument();
+    expect(screen.queryByText(/box score/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the voice row alive when the live-state query fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/live/state') {
+          return Promise.resolve({ ok: false, status: 502 } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/game server: unavailable/)).toBeInTheDocument());
+    expect(await screen.findByText('No one in voice')).toBeInTheDocument();
+  });
+
+  it('treats an all-zero overview as unavailable, not as the record', async () => {
+    // The endpoint substitutes 0 per failed aggregate and still answers 200.
+    const zeroed = { ...(overview as Record<string, unknown>), rounds: 0, total_kills: 0, sessions: 0, players_all_time: 0 };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/stats/overview') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(zeroed) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/figures: unavailable/)).toBeInTheDocument());
+  });
+
+  it('reports an empty board as a failure when the payload carries errors', async () => {
+    const broken = { ...(leaders as Record<string, unknown>), dpm_sessions: [], errors: ['dpm query failed'] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/stats/quick-leaders') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(broken) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/board: unavailable/)).toBeInTheDocument());
+  });
+
+  it('says so when no sessions exist at all', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/sessions') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve([]) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/no sessions recorded yet/)).toBeInTheDocument());
   });
 
   it('says unavailable instead of rendering empty boxes when an endpoint fails', async () => {
