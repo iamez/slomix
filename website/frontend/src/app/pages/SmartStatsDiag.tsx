@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useSessions, useStorytellingCompleteness } from '../lib/queries';
+import { useSessions, useStorytellingCompleteness, type DiagScope } from '../lib/queries';
 import type { StorytellingCompleteness } from '../lib/types';
 import { Lbl, Pending, SectionHead, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
 
@@ -65,9 +65,20 @@ function boards(d: StorytellingCompleteness): Board[] {
 export function SmartStatsDiag() {
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const sessions = useSessions(1);
+  // The DEFAULT scope is the latest session's ID, not its date: the
+  // endpoint treats session_date as date-wide and merges every session on
+  // that calendar day (Codex on #809). A user-picked date keeps date
+  // semantics — that is what a date input asks for.
+  const defaultGsid = sessions.data?.[0]?.session_id;
+  const scope: DiagScope | null = pickedDate
+    ? { session_date: pickedDate }
+    : defaultGsid != null
+      ? { gaming_session_id: defaultGsid }
+      : null;
   const sessionDate = pickedDate ?? sessions.data?.[0]?.date ?? null;
-  const diag = useStorytellingCompleteness(sessionDate);
+  const diag = useStorytellingCompleteness(scope);
   const d = diag.data;
+  const sessionsEmpty = sessions.isSuccess && sessions.data.length === 0;
 
   return (
     <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 760 }}>
@@ -100,14 +111,33 @@ export function SmartStatsDiag() {
       {sessionDate === null && sessions.isError && (
         <div style={{ marginTop: 20 }}><Unavailable what="latest session date" /></div>
       )}
-      {(diag.isPending || (sessionDate === null && sessions.isPending)) && (
+      {/* A successful [] is an empty state, not eternal pending: with no
+        * default scope the diag query stays disabled, and disabled reads
+        * as isPending forever (Codex on #809). */}
+      {sessionsEmpty && pickedDate === null && (
+        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 20 }}>
+          no sessions recorded yet — pick a date to query one directly
+        </div>
+      )}
+      {((diag.isPending && scope !== null) || (sessionDate === null && sessions.isPending)) && (
         <div style={{ marginTop: 20 }}><Pending label="diagnostics" /></div>
       )}
       {diag.isError && <div style={{ marginTop: 20 }}><Unavailable what="diagnostics" /></div>}
 
-      {d && (
+      {/* status 'no_data' is a valid answer, not a failure: zeros through
+        * ratioState would paint three red boards for a date nobody played
+        * (Codex on #809). */}
+      {d && d.status === 'no_data' && (
+        <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 10, padding: '16px 0', marginTop: 20 }}>
+          <StatusDot state="idle" />
+          <span style={{ fontSize: 15, color: 'var(--color-text-300)' }}>
+            No kill records for this scope — nothing to diagnose.
+          </span>
+        </div>
+      )}
+      {d && d.status !== 'no_data' && (
         <>
-          <div data-parity="smart-stats-diag.boards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 28, marginTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+          <div data-parity="smart-stats-diag.boards" className="diag-boards" style={{ marginTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
             {boards(d).map((b) => (
               <div key={b.label} style={{ paddingTop: 16 }}>
                 <SectionHead label={b.label} aside={<StatusDot state={b.state} />} />

@@ -134,6 +134,10 @@ export interface SystemOverview {
   stages: SystemStage[];
   linkage: {
     available: boolean;
+    /** assess_round_linkage_anomalies returns 'error' with PARTIAL metrics
+     * when a subquery fails — an empty breaches list then proves nothing
+     * (Codex on #809). */
+    status?: string;
     metrics?: Record<string, number>;
     breach_count?: number;
     breaches?: { metric: string; value: number; threshold: number }[];
@@ -170,8 +174,10 @@ export interface StorytellingCompleteness {
  * Fixture recorded by hand from the live backend: api_build.json */
 export interface BuildInfo {
   revision: string;
-  revision_short: string;
+  /** null when the deployment has no .git directory (build_info.py). */
+  revision_short: string | null;
   started_at: string;
   api_contract: string;
-  schema_ledger_max_file: string;
+  /** null when migrations are not packaged with the deployment. */
+  schema_ledger_max_file: string | null;
 }

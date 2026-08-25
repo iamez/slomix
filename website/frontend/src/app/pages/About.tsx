@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useBuildInfo, useOverview, useSystemOverview } from '../lib/queries';
 import { API_PROBES, runProbes, type ProbeResult } from '../lib/probes';
-import { Lbl, Pending, SectionHead, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Lbl, Pending, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
 
 /**
  * About (docs/design/12 row 21, route /admin) — the about.dc.html transfer.
@@ -84,7 +84,7 @@ const THANKS = [
 ];
 
 const START = [
-  { to: '/last-session', k: 'Last night', body: 'The session that just happened, map by map, with who played.' },
+  { to: '/sessions2', k: 'Last night', body: 'The session that just happened, map by map, with who played.' },
   { to: '/profile', k: 'Your profile', body: 'Your own numbers against your own recent form, not a ladder.' },
   { to: '/proximity', k: 'Telemetry', body: 'The 200 ms feed: engagements, crossfire, trades, paths on the map.' },
   { to: '/uploads', k: 'Clips', body: 'Video from the group, plus what Greatshot cut out of uploaded demos.' },
@@ -101,9 +101,12 @@ function HeadlineFigures() {
   // of a successful answer renders as unavailable.
   if (!overview.isSuccess) return <div style={{ padding: '20px 0' }}><Unavailable what="figures" /></div>;
   const d = overview.data;
+  // _safe_val substitutes 0 per failed aggregate inside a 200 — same rule
+  // as the landing figures: a zero renders as a dash, never as a count.
+  const live = (n: number) => (n === 0 ? '—' : n.toLocaleString('en-US'));
   const tiles = [
-    { k: 'rounds parsed', v: d.rounds.toLocaleString('en-US') },
-    { k: 'players known', v: d.players_all_time.toLocaleString('en-US') },
+    { k: 'rounds parsed', v: live(d.rounds) },
+    { k: 'players known', v: live(d.players_all_time) },
     { k: 'fields per player, per round', v: '57' },
     { k: 'position samples', v: '200 ms' },
   ];
@@ -124,11 +127,12 @@ function Counted() {
   if (overview.isPending) return <div style={{ padding: '18px 0' }}><Pending label="counted" /></div>;
   if (!overview.isSuccess) return <div style={{ padding: '18px 0' }}><Unavailable what="counted" /></div>;
   const d = overview.data;
+  const live = (n: number) => (n === 0 ? '—' : n.toLocaleString('en-US'));
   const cells = [
-    { k: 'kills', v: d.total_kills.toLocaleString('en-US') },
-    { k: 'rounds', v: d.rounds.toLocaleString('en-US') },
-    { k: 'sessions', v: d.sessions.toLocaleString('en-US') },
-    { k: 'players, all time', v: d.players_all_time.toLocaleString('en-US') },
+    { k: 'kills', v: live(d.total_kills) },
+    { k: 'rounds', v: live(d.rounds) },
+    { k: 'sessions', v: live(d.sessions) },
+    { k: 'players, all time', v: live(d.players_all_time) },
     { k: 'first round kept', v: d.rounds_since ?? '—' },
     { k: 'latest round', v: d.rounds_latest ?? '—' },
   ];
@@ -154,10 +158,12 @@ function ThisBuild() {
         {build.isError && <Unavailable what="build info" />}
         {build.data && (
           [
-            { k: 'revision', v: build.data.revision_short },
+            // revision_short is null without a .git dir, the ledger null
+            // when migrations are not packaged — a dash, not 'null'.
+            { k: 'revision', v: build.data.revision_short ?? '—' },
             { k: 'started', v: build.data.started_at.replace('T', ' ').slice(0, 16) + ' utc' },
             { k: 'api contract', v: build.data.api_contract },
-            { k: 'schema ledger', v: build.data.schema_ledger_max_file },
+            { k: 'schema ledger', v: build.data.schema_ledger_max_file ?? '—' },
           ].map((b) => (
             <div key={b.k} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, padding: '7px 0' }}>
               <Lbl style={{ fontSize: 9 }}>{b.k}</Lbl>
@@ -254,7 +260,7 @@ export function About() {
         <HeadlineFigures />
       </div>
 
-      <div data-parity="admin.what-it-does" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 56, marginTop: 52 }}>
+      <div data-parity="admin.what-it-does" className="about-cols" style={{ marginTop: 52 }}>
         <div>
           <h2 style={H2}>What it does</h2>
           <p style={{ ...P, marginTop: 14 }}>
@@ -320,7 +326,7 @@ export function About() {
 
       <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
         <h2 style={H2} data-parity="admin.surfaces">The five surfaces</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 20, marginTop: 18 }}>
+        <div className="about-grid-5" style={{ marginTop: 18 }}>
           {SURFACES.map((s) => (
             <div key={s.k}>
               <div style={{ height: 2, background: s.color }} />
@@ -373,12 +379,12 @@ export function About() {
         <Lbl style={{ marginTop: 6 }}>
           not a public dataset — one group's games, straight from the database as you read this
         </Lbl>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 0, marginTop: 20, borderTop: '1px solid var(--color-rule-700)' }}>
+        <div className="about-grid-6" style={{ marginTop: 20, borderTop: '1px solid var(--color-rule-700)' }}>
           <Counted />
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 56, marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div className="about-cols" style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
         <div>
           <h2 style={H2} data-parity="admin.development">Development</h2>
           <p style={{ ...P, marginTop: 14 }}>

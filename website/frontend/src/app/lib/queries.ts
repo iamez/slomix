@@ -86,13 +86,17 @@ export function useSystemOverview() {
  * supplies the date; until it has one the query stays disabled. Note
  * session_dates[] in the response is the dates the CHOSEN session touches
  * (midnight crossover), not a picker list. */
-export function useStorytellingCompleteness(sessionDate: string | null) {
+export type DiagScope =
+  | { gaming_session_id: number }
+  | { session_date: string };
+
+export function useStorytellingCompleteness(scope: DiagScope | null) {
   return useQuery({
-    queryKey: ['storytelling-completeness', sessionDate],
-    enabled: sessionDate !== null,
+    queryKey: ['storytelling-completeness', scope],
+    enabled: scope !== null,
     queryFn: () =>
       apiGet('/api/diagnostics/storytelling-completeness', {
-        query: { session_date: sessionDate ?? undefined },
+        query: scope ?? {},
       }) as Promise<StorytellingCompleteness>,
   });
 }
@@ -108,5 +112,10 @@ export function useBuildInfo() {
       if (!res.ok) throw new Error(`API ${res.status}: /api/build`);
       return res.json() as Promise<BuildInfo>;
     },
+    // Identity, not an aggregate: after a backend restart the five-minute
+    // staleTime would keep showing the PREVIOUS process's revision (Codex
+    // on #809) — the whole point of /api/build is to never do that.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
