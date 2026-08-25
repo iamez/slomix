@@ -1,12 +1,16 @@
-import fs from 'node:fs';
-import path from 'node:path';
+/// <reference types="vite/client" />
 import { describe, expect, it } from 'vitest';
 
 /**
  * H4 as a test (docs/design/09 §H4): every endpoint the app tree calls must
  * have a recorded fixture — pages are developed and tested against what the
  * backend really said, never against an invented shape. Until now this held
- * by convention; this walks the sources and makes it hold by assertion.
+ * by convention; this makes it hold by assertion.
+ *
+ * Enumeration is Vite's `import.meta.glob` with literal patterns — the
+ * bundler resolves the tree at build time, so there is no filesystem walk
+ * and no dynamically constructed path anywhere (the first version used
+ * node:fs and Codacy rightly asked why a test builds paths at runtime).
  *
  * Excluded: probes.ts (reachability pings, no data rendered — same reasoning
  * as its endpoint-ratchet exclusion in test_endpoint_gap.py) and templated
@@ -15,33 +19,25 @@ import { describe, expect, it } from 'vitest';
  * force that decision).
  */
 
-// jsdom rewrites import.meta.url to an http: scheme, so anchor on vitest's
-// cwd (the frontend package root) instead.
-const APP_SRC = path.resolve(process.cwd(), 'src', 'app');
-const FIXTURES_DIR = path.join(APP_SRC, 'pages', '__fixtures__');
+const SOURCES = import.meta.glob('../**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
+
+const FIXTURES = import.meta.glob('../pages/__fixtures__/*.json');
 
 const CALL_RES = [
   /\bapiGet(?:<[^>]{0,200}>)?\(\s*'([^']+)'/g,
   /\bfetch\(\s*'(\/api\/[^'?]+)'/g,
 ];
 
-function sourceFiles(dir: string): string[] {
-  return fs.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      return entry.name === '__fixtures__' ? [] : sourceFiles(full);
-    }
-    if (!/\.tsx?$/.test(entry.name)) return [];
-    if (entry.name.endsWith('.test.ts') || entry.name.endsWith('.test.tsx')) return [];
-    if (entry.name === 'probes.ts') return [];
-    return [full];
-  });
-}
-
 function calledPaths(): string[] {
   const paths = new Set<string>();
-  for (const file of sourceFiles(APP_SRC)) {
-    const text = fs.readFileSync(file, 'utf8');
+  for (const [file, text] of Object.entries(SOURCES)) {
+    if (file.includes('/__fixtures__/')) continue;
+    if (file.endsWith('.test.ts') || file.endsWith('.test.tsx')) continue;
+    if (file.endsWith('/probes.ts')) continue;
     for (const re of CALL_RES) {
       for (const match of text.matchAll(re)) {
         paths.add(match[1]);
@@ -62,7 +58,7 @@ describe('H4 — fixture coverage', () => {
     expect(paths.length).toBeGreaterThan(0);
     const missing = paths
       .filter((p) => !p.includes('{'))
-      .filter((p) => !fs.existsSync(path.join(FIXTURES_DIR, fixtureNameFor(p))));
+      .filter((p) => !(`../pages/__fixtures__/${fixtureNameFor(p)}` in FIXTURES));
     expect(missing, `record these with scripts/record_api_corpus.py and copy into __fixtures__: ${missing.join(', ')}`).toEqual([]);
   });
 
