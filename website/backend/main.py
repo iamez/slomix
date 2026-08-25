@@ -423,6 +423,10 @@ async def greatshot_spa_entry(demo_id: str | None = None):
 # Standalone app (docs/design/06 §2): the new-design SPA lives at /app/ while
 # the legacy site keeps /. Guarded on the build output existing, so a checkout
 # without `npm run build:app` — production today — never grows these routes.
+# That absence is POLICY, not an oversight: deploy_release.sh deliberately
+# does not run build:app, because production stays vanilla-only until parity
+# is proven (P2), and the deploy script is off-limits until switchover day
+# (docs/design/08 »kaj se ne dela«). Adding the build there IS the switchover.
 _APP_DIST = os.path.join(project_root, "website", "static", "app")
 # Both artifacts, not just the directory: an interrupted build that left an
 # empty output dir must degrade exactly like a no-build checkout, not raise

@@ -73,7 +73,7 @@ function LivePanel() {
   const voiceData = voice.isError ? undefined : voice.data;
   return (
     <div style={{ border: '1px solid var(--color-rule-700)', padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         {live.isPending && <Pending label="live" />}
         {live.isError && <Unavailable what="game server" />}
         {liveData && (
@@ -113,7 +113,7 @@ function LivePanel() {
       </div>
       {/* The voice row renders from its own query — a dead game server must
         * not silence a perfectly healthy voice report (Codex on #806). */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', flex: 'none', alignSelf: 'center', background: (voiceData?.total_count ?? 0) > 0 ? 'var(--color-pos)' : '#454340' }} />
         {voice.isPending && <Pending label="voice" />}
         {voice.isError && <Unavailable what="voice" />}
