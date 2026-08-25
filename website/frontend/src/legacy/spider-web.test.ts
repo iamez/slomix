@@ -502,6 +502,16 @@ describe('clockBadge', () => {
     expect(unchecked.reason).toMatch(/landing clusters/);
   });
 
+  it('blames the interval as well as the offset when they disagree', () => {
+    // ⚠️ `infer_clock` rejects multiple INTERVALS as well as multiple offsets,
+    // and observations can disagree on the interval while producing the same
+    // modular offset. Such a payload carries `interval_ms: null`, so naming
+    // only the offsets printed a wrong cause beside an empty value.
+    const reason = clockBadge({ status: 'inconsistent', interval_ms: null }).reason;
+    expect(reason).toMatch(/interval/);
+    expect(reason).toMatch(/offset/);
+  });
+
   it('keeps the three verdicts apart', () => {
     // ⛔ `inconsistent` is not a weaker `unvalidated`: the candidates disagree
     // and the value is published as null, never averaged into one.
