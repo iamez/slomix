@@ -142,14 +142,7 @@ class CapturePolicy:
 
     mode: str = "unknown"
     observation_interval_ms: int | None = None
-    # ⛔ EVERY known flag, defaulting to `unknown` — not an empty map. An empty
-    # map made a consumer's capability section vanish entirely for rounds whose
-    # manifest could not be resolved, which is the exact failure the manifest
-    # exists to prevent: the page went quiet instead of saying it did not know
-    # whether `shot_fired` or `aim_lock` were on (Codex, #804). Silence reads
-    # as "nothing to report"; `unknown` reads as "we cannot tell".
-    enabled_capabilities: dict[str, Any] = field(
-        default_factory=lambda: {flag: "unknown" for flag in FEATURE_FLAGS})
+    enabled_capabilities: dict[str, Any] = field(default_factory=dict)
     policy_version: str | None = None
     source: str = "absent"
     #: flag -> "enabled" | "disabled" | "unknown". THREE states, never two: a
@@ -157,7 +150,19 @@ class CapturePolicy:
     #: capture was on (its section carried rows) but can never prove one was
     #: off, and collapsing that to a boolean turns missing telemetry into a
     #: claim about the match.
-    capabilities: dict[str, str] = field(default_factory=dict)
+    # ⛔ EVERY known flag, defaulting to `unknown` — not an empty map. An empty
+    # map made a consumer's capability section vanish entirely for rounds whose
+    # manifest could not be resolved, which is the exact failure the manifest
+    # exists to prevent: the page went quiet instead of saying it could not tell
+    # whether `shot_fired` or `aim_lock` were on. Silence reads as "nothing to
+    # report"; `unknown` reads as "we cannot tell" (Codex, #804).
+    #
+    # ⚠️ THIS is the field the endpoint serialises. The first attempt at this
+    # fix initialised `enabled_capabilities` above, which nothing publishes, so
+    # the payload still carried `{}` — and the runtime check missed it because
+    # both rounds I tried HAVE manifests and never take this path.
+    capabilities: dict[str, str] = field(
+        default_factory=lambda: {flag: "unknown" for flag in FEATURE_FLAGS})
     #: How many manifests this round resolved to. Normally 1; a second means
     #: two processed files map to the same round (1 round in 776 on the dev
     #: corpus).
