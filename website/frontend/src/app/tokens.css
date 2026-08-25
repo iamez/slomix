@@ -124,3 +124,32 @@ body {
     grid-template-columns: repeat(2, 1fr);
   }
 }
+
+/* About's two prose+sidebar grids fix a 380px column; the diag page fixes
+ * three boards. All of them stack on phones (Codex on #809) — same reason
+ * as .landing-hero. The wide About strips (5 surfaces, 6 counted cells)
+ * halve as well. */
+.about-cols {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 56px;
+}
+
+.about-grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); }
+.about-grid-5 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 20px; }
+.about-grid-6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 0; }
+
+.diag-boards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 28px;
+}
+
+@media (max-width: 900px) {
+  .about-cols { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+}
+
+@media (max-width: 760px) {
+  .about-grid-4, .about-grid-5, .about-grid-6 { grid-template-columns: repeat(2, 1fr); }
+  .diag-boards { grid-template-columns: minmax(0, 1fr); }
+}
