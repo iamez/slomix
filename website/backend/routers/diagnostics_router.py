@@ -1691,6 +1691,33 @@ async def get_voice_activity_history(
 VOICE_REPORT_STALE_AFTER_S = 180
 
 
+def _voice_report_iso(updated_at: object) -> str | None:
+    """The report's timestamp as an OFFSET-BEARING ISO string, or None.
+
+    ⛔ Never the stored value verbatim. PostgreSQL hands back an aware
+    datetime, the SQLite dev path a zone-less string, and older rows a naive
+    datetime — and `Date.parse` in a browser reads a zone-less date-time as
+    LOCAL time. The same row would then be "fresh" to the server's age
+    calculation (which reads naive as UTC) and hours old to a client outside
+    UTC. Anything we cannot parse is published as-is rather than dropped: a
+    string we do not understand is still evidence, and the age beside it is
+    already null.
+    """
+    if updated_at is None:
+        return None
+    stamp = updated_at
+    if isinstance(stamp, str):
+        try:
+            stamp = datetime.fromisoformat(stamp)
+        except ValueError:
+            return updated_at
+    if not hasattr(stamp, "isoformat"):
+        return str(updated_at)
+    if getattr(stamp, "tzinfo", None) is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.isoformat()
+
+
 def _voice_report_age_seconds(updated_at: object) -> int | None:
     """Seconds since the bot wrote this row, or None if it cannot be told.
 
@@ -1785,10 +1812,15 @@ async def get_current_voice_activity(
                 # AttributeError here lands in the `except` below, which would
                 # report a perfectly good row as unavailable. A timestamp is
                 # not worth turning a working answer into a failure.
-                "updated_at": (
-                    row[1].isoformat() if hasattr(row[1], "isoformat")
-                    else (str(row[1]) if row[1] is not None else None)
-                ),
+                #
+                # ⛔ AND IT CARRIES ITS ZONE. Publishing the stored value
+                # verbatim meant a naive `2026-08-25 12:34:56` reached the
+                # page, where `Date.parse` reads a zone-less date-time as
+                # LOCAL time — so `_voice_report_age_seconds` called it fresh
+                # (it reads naive as UTC) while a browser two zones away
+                # labelled the same report hours old, or dated it in the
+                # future (Codex, PR #808). One value, two calendars.
+                "updated_at": _voice_report_iso(row[1]),
                 "reason": (
                     None if age is not None and age <= VOICE_REPORT_STALE_AFTER_S
                     else (
