@@ -110,3 +110,17 @@ body {
     gap: 36px;
   }
 }
+
+/* Both four-across grids (the figures band and the entry cards): a single
+ * 28px mono figure like 122,999 cannot fit a ~77px track on a phone, so
+ * they halve below 760px (Codex on #806, third wave). */
+.landing-quad {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+
+@media (max-width: 760px) {
+  .landing-quad {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

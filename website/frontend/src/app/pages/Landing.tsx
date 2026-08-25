@@ -101,11 +101,12 @@ function LivePanel() {
         {voice.isError && <Unavailable what="voice" />}
         {voiceData && (
           <>
+            {/* total_count counts the tracked voice channel only
+              * (diagnostics_router; Codex on #806, wave 3) — calling it
+              * "online" claimed nobody is online anywhere. One label, the
+              * honest one. */}
             <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
               {voiceData.total_count > 0 ? `${voiceData.total_count} in voice` : 'No one in voice'}
-            </span>
-            <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginLeft: 'auto' }}>
-              {voiceData.total_count} online
             </span>
           </>
         )}
@@ -114,7 +115,7 @@ function LivePanel() {
   );
 }
 
-function LastNightPanel({ session, pending }: { session: SessionSummary | undefined; pending: boolean }) {
+function LastNightPanel({ session, pending, empty }: { session: SessionSummary | undefined; pending: boolean; empty: boolean }) {
   if (pending) {
     return (
       <div style={{ marginTop: 22 }}>
@@ -124,10 +125,16 @@ function LastNightPanel({ session, pending }: { session: SessionSummary | undefi
     );
   }
   if (!session) {
+    // A successful empty answer is not a failure (Codex on #806, wave 3):
+    // a fresh database has no last session, but the endpoint is fine.
     return (
       <div style={{ marginTop: 22 }}>
         <div style={S.lbl}>last night</div>
-        <div style={{ marginTop: 8 }}><Unavailable what="last session" /></div>
+        <div style={{ marginTop: 8 }}>
+          {empty
+            ? <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no sessions recorded yet</span>
+            : <Unavailable what="last session" />}
+        </div>
       </div>
     );
   }
@@ -200,10 +207,11 @@ export function Landing() {
   const overview = useOverview();
   const sessions = useSessions(6);
   const leaders = useQuickLeaders();
-  const lastNight = sessions.data?.[0];
-  // Same rule as the live panel: a failed refetch must not present the
-  // cached figures as current next to the error message (Codex on #806).
+  // Same rule as the live panel: a failed refetch must not present cached
+  // data as current next to the error message (Codex on #806).
+  const sessionsData = sessions.isError ? undefined : sessions.data;
   const overviewData = overview.isError ? undefined : overview.data;
+  const lastNight = sessionsData?.[0];
   // The overview endpoint substitutes 0 per failed aggregate and still
   // answers 200 (records_overview.py; Codex on #806). Four zeroes at once
   // is that failure mode, not a deployment with an empty database worth a
@@ -244,22 +252,29 @@ export function Landing() {
             <span style={{ ...S.lbl, fontSize: 9 }}>live now</span>
           </div>
           <LivePanel />
-          <LastNightPanel session={lastNight} pending={sessions.isPending} />
+          <LastNightPanel session={lastNight} pending={sessions.isPending} empty={sessionsData?.length === 0} />
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginTop: 48, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div className="landing-quad" style={{ marginTop: 48, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
         {overview.isPending && <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>}
         {(overview.isError || overviewSuspect) && <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>}
         {overviewData && !overviewSuspect && (
           [
-            { v: overviewData.rounds.toLocaleString('en-US'), k: 'rounds kept' },
-            { v: overviewData.total_kills.toLocaleString('en-US'), k: 'kills recorded' },
-            { v: overviewData.sessions.toLocaleString('en-US'), k: 'sessions' },
-            { v: overviewData.players_all_time.toLocaleString('en-US'), k: 'players known' },
+            { v: overviewData.rounds, k: 'rounds kept' },
+            { v: overviewData.total_kills, k: 'kills recorded' },
+            { v: overviewData.sessions, k: 'sessions' },
+            { v: overviewData.players_all_time, k: 'players known' },
           ].map((f) => (
             <div key={f.k} style={{ padding: '18px 0 16px' }}>
-              <div className="m" style={{ fontSize: 28, lineHeight: 1 }}>{f.v}</div>
+              {/* _safe_val substitutes 0 PER METRIC on a failed aggregate
+                * (records_overview.py; Codex on #806, wave 3) — and in this
+                * dataset none of these four figures can genuinely be zero
+                * while the site is serving, so a zero is a failed query and
+                * renders as a dash, never as "0 kills recorded". */}
+              <div className="m" style={{ fontSize: 28, lineHeight: 1 }}>
+                {f.v === 0 ? '—' : f.v.toLocaleString('en-US')}
+              </div>
               <div style={{ ...S.lbl, marginTop: 6 }}>{f.k}</div>
             </div>
           ))
@@ -268,7 +283,7 @@ export function Landing() {
 
       <div style={{ marginTop: 40 }}>
         <div style={{ ...S.lbl, fontSize: 9 }}>where to go</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 28, marginTop: 14 }}>
+        <div className="landing-quad" style={{ gap: 28, marginTop: 14 }}>
           {[
             { to: '/profile', title: 'Your profile', body: 'Your rounds, against your own form.', bar: 'var(--color-accent)' },
             { to: '/sessions2', title: 'The evenings', body: 'Maps, teams, how the night went.', bar: 'var(--color-accent-warm)' },
@@ -293,12 +308,12 @@ export function Landing() {
           <div style={{ marginTop: 10 }}>
             {sessions.isPending && <Pending label="sessions" />}
             {sessions.isError && <Unavailable what="sessions" />}
-            {sessions.data?.length === 0 && (
+            {sessionsData?.length === 0 && (
               <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>
                 no sessions recorded yet
               </div>
             )}
-            {sessions.data?.slice(0, 5).map((row) => (
+            {sessionsData?.slice(0, 5).map((row) => (
               <Link
                 key={row.session_id}
                 to={`/session-detail/${row.session_id}`}

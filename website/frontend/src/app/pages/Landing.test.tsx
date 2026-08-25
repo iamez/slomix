@@ -183,7 +183,7 @@ describe('Landing', () => {
     expect(screen.queryByText('last night')).not.toBeInTheDocument();
   });
 
-  it('says so when no sessions exist at all', async () => {
+  it('says so when no sessions exist at all — in both places, without a false error', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn((input: RequestInfo | URL) => {
@@ -195,7 +195,30 @@ describe('Landing', () => {
       }),
     );
     renderLanding();
-    await waitFor(() => expect(screen.getByText(/no sessions recorded yet/)).toBeInTheDocument());
+    // A successful [] is an empty state in the hero panel AND the list —
+    // never "unavailable", the endpoint answered fine (Codex wave 3).
+    await waitFor(() => expect(screen.getAllByText(/no sessions recorded yet/).length).toBe(2));
+    expect(screen.queryByText(/last session: unavailable/)).not.toBeInTheDocument();
+  });
+
+  it('renders a dash for a single zeroed overview metric instead of claiming 0 kills', async () => {
+    // _safe_val substitutes 0 PER METRIC — one failed aggregate must not
+    // publish "0 kills recorded" next to real figures (Codex wave 3).
+    const partial = { ...(overview as Record<string, unknown>), total_kills: 0 };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/stats/overview') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(partial) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText('1,948')).toBeInTheDocument());
+    expect(screen.queryByText('122,999')).not.toBeInTheDocument();
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('says unavailable instead of rendering empty boxes when an endpoint fails', async () => {
