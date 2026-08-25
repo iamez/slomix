@@ -196,21 +196,57 @@ def test_endpoint_gap_matches_reality():
 
 
 def test_probe_registry_paths_exist():
-    """probes.ts is excluded from the extractor above, and this is the guard
-    that keeps the exclusion honest: every probed path must exist in the
-    committed OpenAPI snapshot, so the file cannot rot into probing
-    endpoints that are gone (nor grow into a side channel for real data
-    calls — anything worth typing goes through apiGet and IS counted)."""
+    """probes.ts is excluded from the extractor above AND from the H4
+    fixture-coverage test — it is invisible to both ratchets, so the
+    exclusion needs guards that actually hold what its docstring claims
+    (brother's review on #809: the original asserted a row COUNT while
+    claiming 'verbatim', and asserted nothing about data calls at all):
+
+    - pings only: the file must never call apiGet nor read a body — a data
+      call added here would count NOWHERE;
+    - verbatim means verbatim: the (endpoint, required) pairs must equal
+      the legacy diagnostics.js API table, read from the source;
+    - every probed path must exist in the committed OpenAPI snapshot, so
+      the table cannot rot into probing endpoints that are gone."""
     import json
 
     probes_file = FRONTEND_SRC / "app" / "lib" / "probes.ts"
-    assert probes_file.exists(), "probes.ts moved — update the extractor exclusion too"
-    endpoints = re.findall(r"endpoint:\s*'([^']+)'", probes_file.read_text(encoding="utf-8"))
-    assert len(endpoints) == 12, "the probe table is diagnostics.js:15-26 verbatim (12 rows)"
+    assert probes_file.exists(), "probes.ts moved — update BOTH ratchet exclusions too"
+    probes_text = probes_file.read_text(encoding="utf-8")
+
+    assert "apiGet" not in probes_text, (
+        "probes.ts is excluded from both ratchets; an apiGet here counts nowhere"
+    )
+    assert ".json(" not in probes_text, (
+        "a probe reports reachability — reading a body makes it a data call "
+        "that neither ratchet can see"
+    )
+
+    probe_rows = {
+        (m.group(1), m.group(2) == "true")
+        for m in re.finditer(
+            r"endpoint:\s*'([^']+)',\s*required:\s*(true|false)", probes_text
+        )
+    }
+    legacy_text = (WEBSITE_JS_DIR / "diagnostics.js").read_text(encoding="utf-8")
+    api_block = legacy_text.split("api: [", 1)[1].split("]", 1)[0]
+    legacy_rows = {
+        (m.group(1), m.group(2) == "true")
+        for m in re.finditer(
+            r"endpoint:\s*'([^']+)',\s*required:\s*(true|false)", api_block
+        )
+    }
+    assert legacy_rows, "diagnostics.js API table not found — extraction broke"
+    assert probe_rows == legacy_rows, (
+        "the probe table must be diagnostics.js's API table verbatim; diff: "
+        f"only-in-probes={sorted(probe_rows - legacy_rows)}, "
+        f"only-in-legacy={sorted(legacy_rows - probe_rows)}"
+    )
+
     spec_paths = set(
         json.loads((REPO_ROOT / "docs" / "api" / "openapi.json").read_text(encoding="utf-8"))["paths"]
     )
-    missing = sorted({e.split("?")[0] for e in endpoints} - spec_paths)
+    missing = sorted({e.split("?")[0] for e, _ in probe_rows} - spec_paths)
     assert not missing, f"probe path(s) not in the OpenAPI snapshot: {missing}"
 
 
