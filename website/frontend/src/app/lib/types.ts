@@ -36,10 +36,15 @@ export interface LiveState {
 
 /** GET /api/voice-activity/current — corpus: api_voice_activity_current.json */
 export interface VoiceCurrent {
-  /** From #808 (defensive until response_model): 'ok' | 'unavailable' —
-   * a malformed live_status row used to return the same empty 200 as a
-   * genuinely empty channel. */
+  /** From #808 (defensive until response_model): 'ok' | 'stale' |
+   * 'unavailable' — a malformed live_status row used to return the same
+   * empty 200 as a genuinely empty channel, and a bot outage used to
+   * present the last row as current forever. */
   status?: string;
+  /** Server-measured snapshot age (#808) — the backend's own 180 s
+   * staleness verdict travels with it, so the frontend never re-decides
+   * freshness with the CLIENT's clock. */
+  age_seconds?: number | null;
   total_count: number;
   /** Not returned by the endpoint today — the row's updated_at exists in the
    * database but is neither exposed nor validated (diagnostics_router;
