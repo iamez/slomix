@@ -1144,6 +1144,22 @@ class TestTheEnemyClockIsNotOursToPublish:
 
         assert out["AXIS"] == rich
 
+    def test_an_entry_we_cannot_inspect_is_withheld_rather_than_copied(self):
+        """⛔ Fail-OPEN by default is still fail-open when it is unreachable.
+
+        The loop copied any non-dict entry verbatim, reasoning that
+        `load_round_clock` only builds dicts — true today. But "we could not
+        read this, so we published it" is the wrong direction for a boundary,
+        and the day the shape changes nobody re-reads this function.
+        """
+        out = restrict_clock_to_pov(
+            {"AXIS": self.VALIDATED["AXIS"], "ALLIES": ["landing", "landing"]},
+            {"team": "AXIS"},
+        )
+
+        assert out["ALLIES"]["status"] == "unknown_to_this_pov"
+        assert "landing" not in str(out["ALLIES"])
+
     def test_an_unavailable_enemy_clock_still_reports_as_restricted(self):
         """⚠️ Otherwise the two cases are distinguishable: "unavailable" would
         tell this team that the other side produced no usable spawn timings,

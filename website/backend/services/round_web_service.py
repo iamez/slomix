@@ -787,8 +787,20 @@ def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
     own = pov_team["team"]
     out: dict[str, dict] = {}
     for team, entry in clock.items():
-        if team == own or not isinstance(entry, dict):
+        if team == own:
             out[team] = entry
+            continue
+        # ⛔ A NON-DICT ENTRY IS WITHHELD TOO. The first version copied it
+        # verbatim on the grounds that `load_round_clock` only ever builds
+        # dicts — true today, and a fail-OPEN default: whatever a future shape
+        # turned out to carry would cross the boundary because we could not
+        # read it. Not being able to inspect something is the last reason to
+        # publish it.
+        if not isinstance(entry, dict):
+            out[team] = {
+                "status": "unknown_to_this_pov",
+                "reason": "the enemy clock is oracle truth (spec §5.6, §6.3)",
+            }
             continue
         # ⛔ BUILT FROM AN ALLOWLIST, NOT STRIPPED WITH A DENYLIST.
         #
