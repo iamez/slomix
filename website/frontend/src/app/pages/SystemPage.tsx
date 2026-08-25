@@ -29,8 +29,8 @@ function dotState(state: string): string {
 }
 
 /** "2 h ago" / "3 d ago" from a seconds count the API already computed. */
-function age(seconds: unknown): string {
-  if (typeof seconds !== 'number' || !Number.isFinite(seconds)) return '';
+function age(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '';
   if (seconds < 90) return 'just now';
   if (seconds < 5400) return `${Math.round(seconds / 60)} min ago`;
   if (seconds < 172800) return `${Math.round(seconds / 3600)} h ago`;
@@ -40,30 +40,37 @@ function age(seconds: unknown): string {
 /** The one detail line per stage that is worth reading at a glance —
  * legacy's _stageFacts, same keys, same order. */
 function stageFacts(stage: SystemStage): string[] {
-  const d = stage.detail ?? {};
+  // detail values are `unknown` on purpose (the shape differs per stage and
+  // has no response_model) — every read narrows by typeof, so a backend
+  // shape change degrades to a missing fact, never to '[object Object]'.
+  const d = stage.detail;
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
   const facts: string[] = [];
+  const push = (v: number | null, render: (n: number) => string) => {
+    if (v != null) facts.push(render(v));
+  };
   switch (stage.key) {
     case 'game_server':
-      if (d.ping_ms != null) facts.push(`${d.ping_ms} ms`);
+      push(num(d.ping_ms), (n) => `${n} ms`);
       break;
     case 'capture':
-      if (d.age_seconds != null) facts.push(`last capture ${age(d.age_seconds)}`);
-      if (d.unlinked_last_48h) facts.push(`${d.unlinked_last_48h} unlinked`);
+      push(num(d.age_seconds), (n) => `last capture ${age(n)}`);
+      push(num(d.unlinked_last_48h), (n) => (n > 0 ? `${n} unlinked` : ''));
       break;
     case 'parser':
-      if (d.age_seconds != null) facts.push(`last round ${age(d.age_seconds)}`);
-      if (d.last_round_at) facts.push(String(d.last_round_at).replace('T', ' ').slice(0, 16));
+      push(num(d.age_seconds), (n) => `last round ${age(n)}`);
+      if (typeof d.last_round_at === 'string') facts.push(d.last_round_at.replace('T', ' ').slice(0, 16));
       break;
     case 'derived':
-      if (d.gaming_session_id != null) facts.push(`session ${d.gaming_session_id}`);
-      if (d.rounds != null) facts.push(`${d.rounds} rounds`);
-      if (d.kill_impact_rows != null) facts.push(`${d.kill_impact_rows} KIS rows`);
-      if (d.proximity_kills != null) facts.push(`${d.proximity_kills} tracked kills`);
+      push(num(d.gaming_session_id), (n) => `session ${n}`);
+      push(num(d.rounds), (n) => `${n} rounds`);
+      push(num(d.kill_impact_rows), (n) => `${n} KIS rows`);
+      push(num(d.proximity_kills), (n) => `${n} tracked kills`);
       break;
     default:
       break;
   }
-  return facts;
+  return facts.filter(Boolean);
 }
 
 function StageRow({ stage }: { stage: SystemStage }) {
@@ -92,7 +99,7 @@ function StageRow({ stage }: { stage: SystemStage }) {
 }
 
 function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['linkage'] }) {
-  if (!linkage || linkage.available !== true) {
+  if (linkage.available !== true) {
     return (
       <div style={{ marginTop: 40 }}>
         <SectionHead label="data integrity" parity="system.linkage" />
@@ -101,11 +108,11 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
     );
   }
   const m = linkage.metrics ?? {};
-  const ratio = Number(m.unlinked_lua_ratio);
+  const ratio = m.unlinked_lua_ratio;
   const cells: { k: string; v: string }[] = [];
-  if (Number.isFinite(ratio)) cells.push({ k: 'unlinked captures', v: `${(ratio * 100).toFixed(1)}%` });
-  if (m.total_lua_rows != null) cells.push({ k: 'captured rounds', v: String(m.total_lua_rows) });
-  if (m.wrong_start_lua_rows != null) cells.push({ k: 'wrong-round links', v: String(m.wrong_start_lua_rows) });
+  if (typeof ratio === 'number' && Number.isFinite(ratio)) cells.push({ k: 'unlinked captures', v: `${(ratio * 100).toFixed(1)}%` });
+  if (typeof m.total_lua_rows === 'number') cells.push({ k: 'captured rounds', v: String(m.total_lua_rows) });
+  if (typeof m.wrong_start_lua_rows === 'number') cells.push({ k: 'wrong-round links', v: String(m.wrong_start_lua_rows) });
   const breaches = linkage.breaches ?? [];
   return (
     <div style={{ marginTop: 40 }}>
