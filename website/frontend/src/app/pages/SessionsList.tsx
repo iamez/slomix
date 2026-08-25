@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { useSessions } from '../lib/queries';
 import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
@@ -10,11 +11,17 @@ import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../c
  * route merges same-day sessions (the #806 lesson, kept).
  */
 
-const LIMIT = 200;
+const PAGE = 200;
 
 export function SessionsList({ box }: { box: boolean }) {
-  const sessions = useSessions(LIMIT);
+  // The archive must never silently truncate: when a full page comes back,
+  // a 'show older' control raises the limit (the endpoint supports
+  // limit/offset; one growing limit keeps a single cache entry and no
+  // stitching) — Codex on #811.
+  const [limit, setLimit] = useState(PAGE);
+  const sessions = useSessions(limit);
   const data = sessions.isError ? undefined : sessions.data;
+  const maybeMore = data != null && data.length >= limit;
   return (
     <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: box ? 900 : 760 }}>
       <Lbl>{box ? 'the evenings · box score' : 'the evenings'}</Lbl>
@@ -67,6 +74,19 @@ export function SessionsList({ box }: { box: boolean }) {
             </Link>
           ))}
         </div>
+        {maybeMore && (
+          <button
+            type="button"
+            onClick={() => setLimit((l) => l + PAGE)}
+            style={{
+              marginTop: 14, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+              border: '1px solid var(--color-rule-700)', background: 'transparent',
+              color: 'var(--color-text-300)', padding: '6px 12px', cursor: 'pointer',
+            }}
+          >
+            show older evenings →
+          </button>
+        )}
         {box && (
           <Lbl style={{ fontSize: 9, marginTop: 10 }}>
             box = 2 points per map won, 1–1 on a draw · allies/axis = map wins by the side, sides swap every map

@@ -212,12 +212,17 @@ export interface LastSessionPlayer {
  * scoring is the real BOX (2/1/0 per map) with per-map rows. */
 export interface LastSession {
   date: string;
-  gaming_session_id: number;
+  /** null when the latest rounds carry no session id (sessions_router) —
+   * the hero then links by DATE instead. */
+  gaming_session_id: number | null;
   player_count: number;
   rounds: number;
   maps: string[];
   matches: LastSessionMatch[];
   teams: { name: string; players: LastSessionPlayer[] }[];
+  /** Substitutes and players mapped to neither persistent team — the
+   * evening totals must include them (Codex on #811). */
+  unassigned_players: LastSessionPlayer[];
   scoring: {
     available: boolean;
     team_a_name: string;
@@ -305,6 +310,9 @@ export interface SkillMoverRow {
   delta_pct: number | null;
   series: number[];
   is_new: boolean;
+  /** Present when a new-looking GUID is a linked sick-leave alternate of a
+   * known player (skill_router:934) — the UI must not call them new. */
+  sick_leave?: { primary_name: string; active?: boolean } | null;
 }
 
 /** GET /api/skill/movers — corpus: api_skill_movers.json */

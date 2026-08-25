@@ -90,8 +90,11 @@ describe('Home', () => {
     // Evening figures are SUMS of the session's own player rows — recompute
     // from the fixture rather than hard-coding, so the fixture stays the
     // single source.
-    const players = (lastSession as { teams: { players: { kills: number }[] }[] }).teams
-      .flatMap((t) => t.players);
+    const fixture = lastSession as {
+      teams: { players: { kills: number }[] }[];
+      unassigned_players?: { kills: number }[];
+    };
+    const players = [...fixture.teams.flatMap((t) => t.players), ...(fixture.unassigned_players ?? [])];
     const kills = players.reduce((a, p) => a + p.kills, 0);
     expect(screen.getByText(kills.toLocaleString('en-US'))).toBeInTheDocument();
 
