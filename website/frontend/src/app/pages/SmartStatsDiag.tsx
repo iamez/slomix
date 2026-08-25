@@ -76,7 +76,7 @@ export function SmartStatsDiag() {
         Is the storytelling data complete?
       </h1>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 18, flexWrap: 'wrap' }}>
+      <div data-parity="smart-stats-diag.picker" style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 18, flexWrap: 'wrap' }}>
         <Lbl style={{ fontSize: 9 }}>session date</Lbl>
         <input
           type="date"
@@ -107,7 +107,7 @@ export function SmartStatsDiag() {
 
       {d && (
         <>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 28, marginTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+          <div data-parity="smart-stats-diag.boards" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 28, marginTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
             {boards(d).map((b) => (
               <div key={b.label} style={{ paddingTop: 16 }}>
                 <SectionHead label={b.label} aside={<StatusDot state={b.state} />} />
@@ -123,7 +123,7 @@ export function SmartStatsDiag() {
             ))}
           </div>
 
-          <div style={{ marginTop: 30 }}>
+          <div data-parity="smart-stats-diag.warnings" style={{ marginTop: 30 }}>
             {d.warnings.length === 0 ? (
               <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 10, padding: '10px 0' }}>
                 <StatusDot state="ok" />
@@ -144,7 +144,7 @@ export function SmartStatsDiag() {
 
           {d.known_issues.length > 0 && (
             <div style={{ marginTop: 34 }}>
-              <SectionHead label="systemic caveats · affect every date" />
+              <SectionHead label="systemic caveats · affect every date" parity="smart-stats-diag.known-issues" />
               <div style={{ marginTop: 6 }}>
                 {d.known_issues.map((issue) => (
                   <div key={issue.key} style={{ ...rowStyle, padding: '12px 0' }}>
@@ -159,7 +159,7 @@ export function SmartStatsDiag() {
             </div>
           )}
 
-          <details style={{ marginTop: 34 }}>
+          <details data-parity="smart-stats-diag.raw" style={{ marginTop: 34 }}>
             <summary style={{ ...lblStyle, fontSize: 9, cursor: 'pointer' }}>raw json response</summary>
             <pre className="m" style={{ fontSize: 11, color: 'var(--color-text-300)', overflowX: 'auto', marginTop: 10, border: '1px solid var(--color-rule-700)', padding: 12 }}>
               {JSON.stringify(d, null, 2)}

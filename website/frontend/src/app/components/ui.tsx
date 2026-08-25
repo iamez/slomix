@@ -42,9 +42,12 @@ export function ActLink({ to, children, style }: { to: string; children: ReactNo
   return <Link to={to} style={{ ...actStyle, ...style }}>{children}</Link>;
 }
 
-export function SectionHead({ label, aside }: { label: ReactNode; aside?: ReactNode }) {
+/** `parity` renders as data-parity="route.panel" (docs/design/16:59) — the
+ * frozen-inventory diff and the H3 sweep key on these attributes, so every
+ * section head can carry its identity without extra markup. */
+export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?: ReactNode; parity?: string }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+    <div data-parity={parity} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
       <span style={{ ...lblStyle, fontSize: 9 }}>{label}</span>
       {aside}
     </div>
