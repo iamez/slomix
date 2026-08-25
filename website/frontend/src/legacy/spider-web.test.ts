@@ -703,7 +703,14 @@ describe('opening a different round', () => {
 
   beforeEach(() => {
     requested.length = 0;
-    document.body.innerHTML = '<div id="spider-web-container"></div>';
+    // ⚠️ Built through the DOM API rather than `innerHTML`. The string is a
+    // constant and harmless, but the security scanner matches the SINK, not
+    // the value, and a red CI over a test fixture teaches everyone to ignore
+    // the scanner (Codacy on #807).
+    document.body.replaceChildren();
+    const host = document.createElement('div');
+    host.id = 'spider-web-container';
+    document.body.appendChild(host);
     // jsdom ships no 2D context, and the page draws as its last step. A
     // no-op recorder keeps the drawing out of the way of what is being
     // tested — WHICH MOMENT was requested, not what was painted.
@@ -719,7 +726,7 @@ describe('opening a different round', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    document.body.innerHTML = '';
+    document.body.replaceChildren();
   });
 
   it('opens the second round at its own beginning, not the first round\'s moment', async () => {
