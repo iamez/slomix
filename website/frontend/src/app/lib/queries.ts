@@ -1,8 +1,11 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import { apiGet } from './api';
 import type {
-  BuildInfo, LiveState, QuickLeaders, SessionSummary, StatsOverview,
-  StorytellingCompleteness, SystemOverview, VoiceCurrent,
+  ActivityCalendar, AvailabilityOverview, BuildInfo, ChallengeCurrent,
+  LastSession, LiveState, LiveStatus, MatchRow, QuickLeaders, SeasonCurrent,
+  SeasonLeaders, SeasonSummary, SessionSummary, SkillMovers, StatsOverview,
+  StatsTrends, StorytellingCompleteness, SystemOverview, TonightStatus,
+  VoiceCurrent,
 } from './types';
 
 /**
@@ -117,5 +120,99 @@ export function useBuildInfo() {
     // on #809) — the whole point of /api/build is to never do that.
     staleTime: 0,
     refetchOnMount: 'always',
+  });
+}
+
+
+/* ---------- phase 2: home + sessions core ---------- */
+
+/** Legacy polls this at 60/300 s while home is visible; one endpoint carries
+ * both the game-server line and the voice line of the top band. */
+export function useLiveStatus() {
+  return useQuery({
+    queryKey: ['live-status'],
+    queryFn: () => apiGet('/api/live-status', { cache: 'no-store' }) as Promise<LiveStatus>,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useLastSession() {
+  return useQuery({
+    queryKey: ['last-session'],
+    queryFn: () => apiGet('/api/stats/last-session') as Promise<LastSession>,
+  });
+}
+
+export function useTrends(days: number) {
+  return useQuery({
+    queryKey: ['trends', days],
+    queryFn: () => apiGet('/api/stats/trends', { query: { days } }) as Promise<StatsTrends>,
+  });
+}
+
+export function useSeasonCurrent() {
+  return useQuery({
+    queryKey: ['season-current'],
+    queryFn: () => apiGet('/api/seasons/current') as Promise<SeasonCurrent>,
+  });
+}
+
+export function useSeasonSummary() {
+  return useQuery({
+    queryKey: ['season-summary'],
+    queryFn: () => apiGet('/api/seasons/current/summary') as Promise<SeasonSummary>,
+  });
+}
+
+export function useSeasonLeaders() {
+  return useQuery({
+    queryKey: ['season-leaders'],
+    queryFn: () => apiGet('/api/seasons/current/leaders') as Promise<SeasonLeaders>,
+  });
+}
+
+export function useRecentMatches(limit = 5) {
+  return useQuery({
+    queryKey: ['recent-matches', limit],
+    queryFn: () => apiGet('/api/stats/matches', { query: { limit } }) as Promise<MatchRow[]>,
+  });
+}
+
+export function useAvailabilityOverview() {
+  return useQuery({
+    queryKey: ['availability-overview'],
+    queryFn: () => apiGet('/api/availability') as Promise<AvailabilityOverview>,
+  });
+}
+
+export function useSkillMovers() {
+  return useQuery({
+    queryKey: ['skill-movers'],
+    queryFn: () => apiGet('/api/skill/movers') as Promise<SkillMovers>,
+  });
+}
+
+export function useChallengeCurrent() {
+  return useQuery({
+    queryKey: ['challenge-current'],
+    queryFn: () => apiGet('/api/challenges/current') as Promise<ChallengeCurrent>,
+  });
+}
+
+/** no-store like legacy: an active evening must appear without a reload. */
+export function useTonight() {
+  return useQuery({
+    queryKey: ['tonight'],
+    queryFn: () => apiGet('/api/stats/tonight', { cache: 'no-store' }) as Promise<TonightStatus>,
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useActivityCalendar(days = 90) {
+  return useQuery({
+    queryKey: ['activity-calendar', days],
+    queryFn: () => apiGet('/api/stats/activity-calendar', { query: { days } }) as Promise<ActivityCalendar>,
   });
 }
