@@ -73,11 +73,15 @@ function TopBand() {
             <StatusDot state={(data?.voice_channel.count ?? 0) > 0 ? 'ok' : 'idle'} />
             <span style={{ ...lblStyle, fontSize: 9 }}>voice</span>
           </span>
-          {data && (
-            <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
-              {data.voice_channel.count > 0 ? `${data.voice_channel.count} in voice` : 'No one in voice'}
-            </span>
-          )}
+          {/* voice_channel.error is a failure INSIDE the 200 — its zero is
+            * an initialization, not an empty room (Codex wave 3). */}
+          {data && (data.voice_channel.error
+            ? <Unavailable what="voice" />
+            : (
+              <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
+                {data.voice_channel.count > 0 ? `${data.voice_channel.count} in voice` : 'No one in voice'}
+              </span>
+            ))}
         </div>
       </div>
     </div>
@@ -156,6 +160,12 @@ function EveningFigures() {
   // Substitutes live in unassigned_players — leaving them out silently
   // shrinks the evening (Codex on #811).
   const players = [...d.teams.flatMap((t) => t.players), ...(d.unassigned_players ?? [])];
+  // player_count > 0 with ZERO player rows is the aggregation-failure
+  // shape inside a 200 — sums over nobody would publish zero kills for a
+  // played evening (Codex wave 3).
+  if (players.length === 0 && d.player_count > 0) {
+    return <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>;
+  }
   const sum = (pick: (p: LastSession['teams'][number]['players'][number]) => number) =>
     players.reduce((acc, p) => acc + pick(p), 0);
   // Maps PLAYED, not distinct names: the fixture itself replays maps
@@ -279,8 +289,10 @@ function SeasonBlock() {
         { k: 'sessions', v: figure(totals.sessions) },
         { k: 'kills', v: figure(totals.kills) },
         {
-          k: summary.data?.top_map ? `top map · ${summary.data.top_map.name}` : 'top map',
-          v: summary.data?.top_map ? figure(summary.data.top_map.plays) : '—',
+          // {name: null, plays: 0} is the endpoint's EMPTY season shape —
+          // the object is truthy, the name is the gate (Codex wave 3).
+          k: summary.data?.top_map?.name ? `top map · ${summary.data.top_map.name}` : 'top map',
+          v: summary.data?.top_map?.name ? figure(summary.data.top_map.plays) : '—',
         },
       ]
     : [];
@@ -290,7 +302,11 @@ function SeasonBlock() {
     { k: 'dpm', row: lead?.dpm },
     { k: 'xp', row: lead?.xp },
   ].filter((r) => r.row != null);
-  const activeDays = calendar.data ? Object.keys(calendar.data.activity).length : null;
+  // An empty activity object is the endpoint's failure shape inside a 200
+  // (and a 90-day window with zero active days does not happen in this
+  // dataset) — no line beats a false 'active on 0 days' (Codex wave 3).
+  const activeDaysCount = calendar.data ? Object.keys(calendar.data.activity).length : 0;
+  const activeDays = activeDaysCount > 0 ? activeDaysCount : null;
   return (
     <div data-parity="home.season">
       <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 9 }}>{s.days_left} days left</span>} />
@@ -491,9 +507,17 @@ function Tonight() {
           </div>
         ) : live.isSuccess ? (
           <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
-            {(live.data?.voice_channel.count ?? 0) > 0
-              ? `${live.data?.voice_channel.count} in voice`
-              : 'Nobody in voice'}
+            {/* tonight is deliberately false until the first Lua row lands —
+              * players already on the server outrank a voice-based idle
+              * claim, and an in-band voice error forbids the claim entirely
+              * (Codex wave 3). */}
+            {(live.data?.game_server.player_count ?? 0) > 0
+              ? `${live.data?.game_server.player_count} on the server`
+              : live.data?.voice_channel.error
+                ? 'Voice state unknown'
+                : (live.data?.voice_channel.count ?? 0) > 0
+                  ? `${live.data?.voice_channel.count} in voice`
+                  : 'Nobody in voice'}
           </div>
         ) : (
           // 'Nobody in voice' is a claim about the room — it needs the
@@ -583,7 +607,12 @@ function FindYourStats() {
 
 function EarlierEvenings() {
   const sessions = useSessions(6);
+  const last = useLastSession();
   const data = sessions.isError ? undefined : sessions.data;
+  // The newest row is skipped ONLY because the hero shows it — when the
+  // hero's endpoint failed, dropping it would hide the newest evening
+  // entirely (Codex wave 3).
+  const skipFirst = last.isSuccess ? 1 : 0;
   return (
     <div data-parity="home.earlier">
       <Lbl>earlier evenings</Lbl>
@@ -591,7 +620,7 @@ function EarlierEvenings() {
         {sessions.isPending && <Pending label="sessions" />}
         {sessions.isError && <Unavailable what="sessions" />}
         {data?.length === 0 && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no sessions recorded yet</div>}
-        {data?.slice(1, 6).map((row) => (
+        {data?.slice(skipFirst, skipFirst + 5).map((row) => (
           <Link key={row.session_id} to={`/session-detail/${row.session_id}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'baseline', gap: 14, padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
             <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{row.formatted_date.replace(/,.*$/, '')} {row.date.slice(5)}</span>
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.rounds} rd</span>

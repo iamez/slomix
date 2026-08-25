@@ -350,6 +350,9 @@ export interface LiveStatus {
     members: unknown[];
     count: number;
     channel_name: string;
+    /** true when the voice read failed INSIDE a 200 — count is then an
+     * initialized zero, not a measurement (Codex on #811, wave 3). */
+    error?: boolean;
   };
   game_server: {
     online: boolean;
