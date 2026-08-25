@@ -99,6 +99,9 @@ function Hero() {
   if (last.isError || !last.isSuccess) return <div style={{ paddingTop: 52 }}><Unavailable what="last session" /></div>;
   const d = last.data;
   const when = evening(d);
+  // Played pairings, not unique names — the fixture has 4 names over 5
+  // R1 rows (same rule as the figures strip).
+  const mapsPlayed = d.matches.filter((m) => m.round_number === 1).length;
   return (
     <div data-parity="home.hero" className="landing-split" style={{ paddingTop: 52, alignItems: 'end' }}>
       <div>
@@ -107,7 +110,7 @@ function Hero() {
           {when.day}<br />{when.date}
         </div>
         <div className="m" style={{ fontSize: 13, color: 'var(--color-text-400)', marginTop: 12 }}>
-          {d.rounds} rounds · {d.maps.length} maps · {d.player_count} players
+          {d.rounds} rounds · {mapsPlayed} maps · {d.player_count} players
         </div>
         {/* No session id on the latest rounds is a supported backend state —
           * the date route is the fallback that still identifies the evening. */}
@@ -275,7 +278,10 @@ function SeasonBlock() {
         { k: 'maps', v: figure(totals.maps) },
         { k: 'sessions', v: figure(totals.sessions) },
         { k: 'kills', v: figure(totals.kills) },
-        { k: 'top map', v: summary.data?.top_map ? figure(summary.data.top_map.plays) : '—' },
+        {
+          k: summary.data?.top_map ? `top map · ${summary.data.top_map.name}` : 'top map',
+          v: summary.data?.top_map ? figure(summary.data.top_map.plays) : '—',
+        },
       ]
     : [];
   const lead = leaders.data?.leaders;
@@ -339,7 +345,11 @@ function LatestGames() {
         {matches.isError && <Unavailable what="matches" />}
         {data?.length === 0 && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no matches recorded yet</div>}
         {data?.map((m) => (
-          <Link key={m.id} to={`/session-detail/${m.gaming_session_id}`} style={{ ...rowStyle, display: 'block', padding: '11px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
+          <Link
+            key={m.id}
+            to={m.gaming_session_id != null ? `/session-detail/${m.gaming_session_id}` : `/session-detail/date/${m.date}`}
+            style={{ ...rowStyle, display: 'block', padding: '11px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+          >
             <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
               <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {m.team1_players.join(' · ')} vs {m.team2_players.join(' · ')}
@@ -475,13 +485,23 @@ function Tonight() {
       {tonight.isPending && <div style={{ marginTop: 10 }}><Pending label="tonight" /></div>}
       {tonight.isError && <div style={{ marginTop: 10 }}><Unavailable what="tonight" /></div>}
       {tonight.isSuccess && (
-        <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
-          {activeNow
-            ? 'Playing right now'
-            : (live.data?.voice_channel.count ?? 0) > 0
+        activeNow ? (
+          <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
+            Playing right now
+          </div>
+        ) : live.isSuccess ? (
+          <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
+            {(live.data?.voice_channel.count ?? 0) > 0
               ? `${live.data?.voice_channel.count} in voice`
               : 'Nobody in voice'}
-        </div>
+          </div>
+        ) : (
+          // 'Nobody in voice' is a claim about the room — it needs the
+          // voice query to have ANSWERED, not defaulted (Codex wave 2).
+          <div style={{ marginTop: 10 }}>
+            {live.isPending ? <Pending label="voice" /> : <Unavailable what="voice" />}
+          </div>
+        )
       )}
       {availability.isPending && <div style={{ marginTop: 12 }}><Pending label="availability" /></div>}
       {availability.isError && <div style={{ marginTop: 12 }}><Unavailable what="availability" /></div>}
@@ -577,7 +597,9 @@ function EarlierEvenings() {
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.players} pl</span>
             <span className="m" style={{ fontSize: 14, minWidth: 58, textAlign: 'right' }}>
-              {row.team_1_score != null && row.team_2_score != null ? `${row.team_1_score} / ${row.team_2_score}` : '—'}
+              {row.team_1_score != null && row.team_2_score != null && row.team_1_score + row.team_2_score > 0
+                ? `${row.team_1_score} / ${row.team_2_score}`
+                : '—'}
             </span>
           </Link>
         ))}
