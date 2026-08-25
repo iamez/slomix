@@ -736,6 +736,17 @@ export async function loadSpiderWebView(params = {}) {
             'Izberi rundo: #/spider-web/round/<id>'));
         return;
     }
+    // ⛔ A NEW ROUND STARTS AT ITS OWN BEGINNING. `state` is module-level and
+    // survives navigation, so opening round B after round A kept A's `tMs`.
+    // Two ways that goes wrong, both silent: the retained moment is past B's
+    // end, or it is before anybody in B has spawned — and the empty map that
+    // follows is exactly what the `first_position_ms` logic below exists to
+    // prevent (Codex, PR #807). `pov` deliberately persists: it is a viewing
+    // preference, not a property of the round.
+    if (String(roundId) !== String(state.roundId)) {
+        state.tMs = 0;
+        state.snapshot = null;
+    }
     state.roundId = roundId;
 
     container.appendChild(_el('p', 'text-slate-400 text-sm py-12 text-center',
