@@ -57,7 +57,6 @@
 /api/rivalries/h2h
 /api/rivalries/leaderboard
 /api/rivalries/player
-/api/seasons/current/awards
 /api/server-activity/history
 /api/skill/ssr
 /api/stats/live-session
