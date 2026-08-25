@@ -31,6 +31,11 @@ export interface LiveState {
 /** GET /api/voice-activity/current — corpus: api_voice_activity_current.json */
 export interface VoiceCurrent {
   total_count: number;
+  /** Not returned by the endpoint today — the row's updated_at exists in the
+   * database but is neither exposed nor validated (diagnostics_router;
+   * Codex on #806, wave 5). Read defensively so the page starts qualifying
+   * staleness the moment the backend exposes it (response_model work). */
+  updated_at?: string | null;
   members: unknown[];
   channels: unknown[];
 }

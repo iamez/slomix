@@ -38,6 +38,13 @@ function figure(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1);
 }
 
+/** "34 min ago" / "5 d ago" from a seconds count. */
+function ageOf(seconds: number): string {
+  if (seconds < 5400) return `${Math.round(seconds / 60)} min ago`;
+  if (seconds < 172800) return `${Math.round(seconds / 3600)} h ago`;
+  return `${Math.round(seconds / 86400)} d ago`;
+}
+
 function monthDay(date: string): string {
   const parsed = new Date(`${date}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
@@ -46,17 +53,13 @@ function monthDay(date: string): string {
     .toUpperCase();
 }
 
-/** "last night" only when it really was — otherwise the honest label plus
- * the API's own distance ("2 weeks ago"). Gatherings happen a few times a
- * week, so the no-game-yesterday case is the normal one (Codex on #806). */
+/** "last night" only when it really was. The tiers come from the API's own
+ * time_ago classification, not from browser-local elapsed milliseconds —
+ * around midnight or a DST shift the two disagree, and the backend's
+ * calendar is the one the data lives in (Codex on #806, waves 2 and 5). */
 function sessionRecency(session: SessionSummary): { label: string; cta: string } {
-  const parsed = new Date(`${session.date}T00:00:00`);
-  const days = (Date.now() - parsed.getTime()) / 86_400_000;
-  // Today is not "last night" (Codex on #806, second wave): a session dated
-  // today is the evening in progress, yesterday's is last night, anything
-  // older says how old it is in the API's own words.
-  if (Number.isFinite(days) && days < 1) return { label: 'tonight', cta: 'See tonight' };
-  if (Number.isFinite(days) && days < 2) return { label: 'last night', cta: 'See last night' };
+  if (session.time_ago === 'Today') return { label: 'tonight', cta: 'See tonight' };
+  if (session.time_ago === 'Yesterday') return { label: 'last night', cta: 'See last night' };
   return { label: `last session · ${session.time_ago}`, cta: 'See the last session' };
 }
 
@@ -84,8 +87,15 @@ function LivePanel() {
             <span className="m" style={{ fontSize: 13, color: 'var(--color-text-100)' }}>
               {liveData.is_live ? 'LIVE' : 'SERVER IDLE'}
             </span>
+            {/* The reducer keeps _current_map indefinitely after events
+              * stop (the recording itself is 5 days stale) — while idle the
+              * map is a memory, not a state, and says so (Codex wave 5). */}
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>
-              {liveData.current_map ?? 'unknown map'}
+              {liveData.current_map == null
+                ? 'unknown map'
+                : liveData.is_live || liveData.last_event_age_seconds == null || liveData.last_event_age_seconds < 300
+                  ? liveData.current_map
+                  : `${liveData.current_map} · ${ageOf(liveData.last_event_age_seconds)}`}
             </span>
             {/* After a delivery gap the reducer keeps the old lineup for up
               * to 600 s and exposes its age — an aged count says so instead
@@ -112,9 +122,16 @@ function LivePanel() {
             {/* total_count counts the tracked voice channel only
               * (diagnostics_router; Codex on #806, wave 3) — calling it
               * "online" claimed nobody is online anywhere. One label, the
-              * honest one. */}
+              * honest one. When the endpoint starts exposing updated_at
+              * (wave 5 — today it does not), a stale snapshot says its age
+              * instead of posing as live. */}
             <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
               {voiceData.total_count > 0 ? `${voiceData.total_count} in voice` : 'No one in voice'}
+              {(() => {
+                if (!voiceData.updated_at) return '';
+                const age = (Date.now() - Date.parse(voiceData.updated_at)) / 1000;
+                return Number.isFinite(age) && age > 120 ? ` · as of ${ageOf(age)}` : '';
+              })()}
             </span>
           </>
         )}
