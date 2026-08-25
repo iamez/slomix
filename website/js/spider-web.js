@@ -553,6 +553,19 @@ export function clockBadge(team) {
     if (!team || team.status === 'unavailable') {
         return { badge: 'UNAVAILABLE', reason: reason(team && team.reason) };
     }
+    // ⛔ A TEAM VIEW DOES NOT GET THE OTHER SIDE'S CLOCK, and this is not the
+    // same as "we could not establish one". §5.6 and §6.3 make the enemy
+    // reinforcement phase an oracle diagnostic: without an observed cue this
+    // team had no way to know it. The backend strips the phase; the badge has
+    // to say WHY, or a reader takes the blank for a measurement failure.
+    if (team.status === 'unknown_to_this_pov') {
+        return {
+            badge: 'WITHHELD',
+            reason: reason(team.reason)
+                || 'the enemy reinforcement phase is oracle truth; this team '
+                   + 'had no observed cue to infer it from (§5.6, §6.3)',
+        };
+    }
     if (team.status === 'validated') {
         return {
             badge: 'VALIDATED',
