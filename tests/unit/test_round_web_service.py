@@ -1384,6 +1384,13 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert {p["guid"] for p in player["players"]} == {
             p["guid"] for p in team["players"]
         }
+        # ⭐ AND THE CLOCK, which is where the inversion was actually measured:
+        # the player path returned `ALLIES validated, phase=3000` while the
+        # team path withheld it. Without this line a regression that lets the
+        # clock back through the player branch survives both asserts above —
+        # a guard shaped like the fix instead of like the defect (Fable's
+        # review of this PR).
+        assert player["clock"] == team["clock"]
 
     @pytest.mark.asyncio
     async def test_but_a_player_still_gets_their_OWN_beliefs_not_the_union(self):
@@ -1401,7 +1408,8 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert set(info["holders"]) == {"AX1"}
 
     @pytest.mark.asyncio
-    async def test_no_withheld_guid_is_named_anywhere_it_should_not_be(self):
+    @pytest.mark.parametrize("pov", ["team:AXIS", "AX1"])
+    async def test_no_withheld_guid_is_named_anywhere_it_should_not_be(self, pov):
         """⭐⭐ The scan above looks for the shape of the LAST leak.
 
         It searches for the enemy's coordinates, and it passed while
@@ -1420,7 +1428,11 @@ class TestATeamPovWithholdsTheTruthItHas:
         - `information_state` is the holder's beliefs, whose whole purpose is
           to say what this team inferred about that enemy.
         """
-        payload = await self._snapshot("team:AXIS", pairs=True)
+        # ⭐ BOTH POVs. The player path is a SEPARATE branch through
+        # `get_round_snapshot` now — it takes the team boundary but keeps its
+        # own holder — so a leak specific to it would be invisible to a scan
+        # that only ever ran under `team:` (Fable's review of this PR).
+        payload = await self._snapshot(pov, pairs=True)
         withheld = set(payload["withheld_by_pov"])
         assert withheld, "the fixture must actually withhold somebody"
 
