@@ -1,6 +1,9 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import { apiGet } from './api';
-import type { LiveState, QuickLeaders, SessionSummary, StatsOverview, VoiceCurrent } from './types';
+import type {
+  BuildInfo, LiveState, QuickLeaders, SessionSummary, StatsOverview,
+  StorytellingCompleteness, SystemOverview, VoiceCurrent,
+} from './types';
 
 /**
  * React Query owns caching in the standalone app (docs/design/06 §4c — the
@@ -57,5 +60,62 @@ export function useQuickLeaders() {
   return useQuery({
     queryKey: ['quick-leaders'],
     queryFn: () => apiGet('/api/stats/quick-leaders') as Promise<QuickLeaders>,
+  });
+}
+
+/**
+ * A status page must never read from a cache — legacy system.js carried
+ * that rule through two layers and it holds here: staleTime 0 defeats React
+ * Query's memory, cache 'no-store' defeats the browser's, and the 30 s
+ * interval is the page's acceptance test (a stage going bad shows up
+ * without a manual reload).
+ */
+export function useSystemOverview() {
+  return useQuery({
+    queryKey: ['system-overview'],
+    queryFn: () => apiGet('/api/system/overview', { cache: 'no-store' }) as Promise<SystemOverview>,
+    staleTime: 0,
+    refetchInterval: 30_000,
+    refetchOnMount: 'always',
+  });
+}
+
+/** The endpoint 422s without a scope ("One of gaming_session_id or
+ * session_date is required" — measured live; the spec's `required: false`
+ * on both params only means EITHER may be omitted, not both). The caller
+ * supplies the date; until it has one the query stays disabled. Note
+ * session_dates[] in the response is the dates the CHOSEN session touches
+ * (midnight crossover), not a picker list. */
+export type DiagScope =
+  | { gaming_session_id: number }
+  | { session_date: string };
+
+export function useStorytellingCompleteness(scope: DiagScope | null) {
+  return useQuery({
+    queryKey: ['storytelling-completeness', scope],
+    enabled: scope !== null,
+    queryFn: () =>
+      apiGet('/api/diagnostics/storytelling-completeness', {
+        query: scope ?? {},
+      }) as Promise<StorytellingCompleteness>,
+  });
+}
+
+/** /api/build is deliberately outside the OpenAPI contract
+ * (include_in_schema=False) — a raw fetch, typed by the hand-recorded
+ * fixture, is the honest shape here. */
+export function useBuildInfo() {
+  return useQuery({
+    queryKey: ['build-info'],
+    queryFn: async (): Promise<BuildInfo> => {
+      const res = await fetch('/api/build', { cache: 'no-store' });
+      if (!res.ok) throw new Error(`API ${res.status}: /api/build`);
+      return res.json() as Promise<BuildInfo>;
+    },
+    // Identity, not an aggregate: after a backend restart the five-minute
+    // staleTime would keep showing the PREVIOUS process's revision (Codex
+    // on #809) — the whole point of /api/build is to never do that.
+    staleTime: 0,
+    refetchOnMount: 'always',
   });
 }
