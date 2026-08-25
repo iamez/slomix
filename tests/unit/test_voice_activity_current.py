@@ -58,7 +58,8 @@ class TestAnEmptyChannelIsAnAnswer:
 
     @pytest.mark.asyncio
     async def test_members_come_back_sanitised(self):
-        db = _Db(row=(_status(["ciril", "jakazc"]), None))
+        fresh = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=5)
+        db = _Db(row=(_status(["ciril", "jakazc"]), fresh))
         payload = await get_current_voice_activity(db=db)
 
         assert payload["status"] == "ok"
@@ -193,11 +194,34 @@ class TestAReportThatStoppedIsNotARoomThatEmptied:
         assert payload["age_seconds"] is not None
 
     @pytest.mark.asyncio
-    async def test_an_unreadable_timestamp_gives_no_age_rather_than_zero(self):
-        """⛔ Zero would say "just written", which is the one thing an
-        unparseable timestamp cannot support."""
+    async def test_an_undateable_report_is_not_presented_as_current(self):
+        """⛔ TWO WAYS TO GET THIS WRONG, and the first version got the second.
+
+        Zero would say "just written", which is the one thing an unparseable
+        timestamp cannot support — so the age is None. But answering `ok`
+        alongside it claims currency from a timestamp we could not read, which
+        is the same failure with a different face: an undateable row could be
+        from a minute ago or from March.
+
+        `stale` here means READ BUT NOT ESTABLISHED AS CURRENT, which is what
+        both the too-old case and this one have in common.
+        """
         payload = await get_current_voice_activity(
             db=_Db(row=(_status(["ciril"]), "not a timestamp")))
 
-        assert payload["status"] == "ok"
+        assert payload["age_seconds"] is None
+        assert payload["status"] == "stale"
+        assert "no usable timestamp" in payload["reason"]
+        # The members still travel — the page decides not to present them.
+        assert payload["total_count"] == 1
+
+    @pytest.mark.asyncio
+    async def test_a_missing_timestamp_is_treated_the_same_way(self):
+        """`live_status.updated_at` is nullable (default `now()`, so NULL is
+        unusual rather than impossible). A row with no timestamp cannot be
+        dated either, and gets the same answer as one that cannot be parsed."""
+        payload = await get_current_voice_activity(
+            db=_Db(row=(_status(["ciril"]), None)))
+
+        assert payload["status"] == "stale"
         assert payload["age_seconds"] is None

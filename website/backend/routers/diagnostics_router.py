@@ -1760,8 +1760,15 @@ async def get_current_voice_activity(
                 # its member list could otherwise be presented as current
                 # indefinitely (Codex on PR #808). The threshold is the
                 # project's own, not a number chosen here.
-                "status": ("stale" if age is not None
-                           and age > VOICE_REPORT_STALE_AFTER_S else "ok"),
+                # ⛔ "stale" means READ BUT NOT ESTABLISHED AS CURRENT, which
+                # covers two things: a report older than the threshold, and a
+                # report whose age cannot be determined at all. The second
+                # case used to answer "ok" — claiming currency from a
+                # timestamp we could not read, which is the exact failure this
+                # endpoint was changed to stop. An undateable row could be
+                # from a minute ago or from March.
+                "status": ("ok" if age is not None
+                           and age <= VOICE_REPORT_STALE_AFTER_S else "stale"),
                 "age_seconds": age,
                 # Already selected by the query above and then discarded, so a
                 # client could not tell a fresh report from one the bot stopped
@@ -1777,9 +1784,13 @@ async def get_current_voice_activity(
                     else (str(row[1]) if row[1] is not None else None)
                 ),
                 "reason": (
-                    f"the bot last published {age} s ago; it writes every 30 s"
-                    if age is not None and age > VOICE_REPORT_STALE_AFTER_S
-                    else None
+                    None if age is not None and age <= VOICE_REPORT_STALE_AFTER_S
+                    else (
+                        f"the bot last published {age} s ago; it writes every 30 s"
+                        if age is not None
+                        else "the report carries no usable timestamp, so it "
+                             "cannot be shown as current"
+                    )
                 ),
                 "total_count": len(safe_members),
                 "members": safe_members,
