@@ -27,6 +27,8 @@ import {
   isTeamPov, placeLabels,
   project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
+// @ts-expect-error plain-JS module with no declaration file of its own
+import { getRouteDefinition, getRouteHash } from '../../../js/route-registry.js';
 
 const VIEW = { cx: 500, cy: 300, scale: 0.1, midX: 0, midY: 0, midZ: 0 };
 const CAM = { yaw: 0.6, pitch: 0.9, zoom: 1, panX: 0, panY: 0 };
@@ -561,8 +563,29 @@ describe('clockBadge', () => {
     expect(clockBadge(null).badge).toBe('UNAVAILABLE');
   });
 
+  it('separates "withheld from this view" from "we could not measure it"', () => {
+    // ⛔ The enemy clock under a team POV is stripped by the BACKEND, not
+    // hidden by the renderer — §5.6 and §6.3 make the enemy phase oracle
+    // truth. If that arrived as UNAVAILABLE or UNVALIDATED, a reader would
+    // blame our reconstruction for a boundary we drew on purpose.
+    const withheld = clockBadge({ status: 'unknown_to_this_pov' });
+    expect(withheld.badge).toBe('WITHHELD');
+    expect(withheld.reason).toMatch(/oracle/);
+    expect(withheld.badge).not.toBe(clockBadge({ status: 'unavailable' }).badge);
+    expect(withheld.badge)
+      .not.toBe(clockBadge({ status: 'internally_consistent_unvalidated' }).badge);
+  });
+
+  it('carries the backend reason when it sends one', () => {
+    // The backend writes the sentence that names the spec sections; the
+    // fallback exists for a payload that omits it, not to overwrite one.
+    const b = clockBadge({ status: 'unknown_to_this_pov', reason: 'spec §6.3' });
+    expect(b.reason).toBe('spec §6.3');
+  });
+
   it('says why, so the badge is never bare', () => {
-    for (const status of ['validated', 'insufficient', 'inconsistent']) {
+    for (const status of ['validated', 'insufficient', 'inconsistent',
+                          'unknown_to_this_pov']) {
       expect(clockBadge({ status }).reason).toBeTruthy();
     }
   });
@@ -608,5 +631,38 @@ describe('capabilityRows', () => {
     const rows = capabilityRows(absent);
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.state === 'unknown' && !r.known)).toBe(true);
+  });
+});
+
+describe('the way in', () => {
+  // ⛔ The page shipped with no entry point. `route-registry.js` defined
+  // `spider-web.buildHash` and nothing in the codebase called it, so a page
+  // with map geometry, belief regions and a validated clock could only be
+  // reached by typing the hash. The replay view now links to it, and these
+  // pin the two halves that have to agree for that link to land.
+  it('builds a hash its own parser accepts', () => {
+    const hash = getRouteHash('spider-web', { roundId: '11321' });
+
+    expect(hash).toBe('#/spider-web/round/11321');
+    expect(getRouteDefinition('spider-web').parseHash(hash))
+      .toEqual({ roundId: '11321' });
+  });
+
+  it('rejects a hash with no round rather than opening an empty page', () => {
+    // `buildHash({})` yields '#/spider-web/round/' — the shape a button would
+    // produce with nothing selected. `parseHash` requires digits, so it
+    // matches nothing, and the caller must not navigate there.
+    const empty = getRouteHash('spider-web', {});
+
+    expect(getRouteDefinition('spider-web').parseHash(empty)).toBeNull();
+  });
+
+  it('round-trips a numeric id, not only a string one', () => {
+    // The replay view holds `roundId` as whatever the API gave it. A number
+    // that stringified to '1.1e3' would build a hash the parser drops.
+    const hash = getRouteHash('spider-web', { roundId: 11321 });
+
+    expect(getRouteDefinition('spider-web').parseHash(hash))
+      .toEqual({ roundId: '11321' });
   });
 });

@@ -718,6 +718,25 @@ def aim_lock_beliefs(
     ]
 
 
+#: Channels §6.1 names that this implementation does not read at all.
+#:
+#: ⛔ A channel the spec lists and the payload never mentions is the exact
+#: failure §6.2 forbids: the holder looks like someone who had that channel and
+#: learned nothing from it. Gating it on the manifest would be worse, not
+#: better — the manifest could say `enabled` and we would then claim a channel
+#: we have no generator for.
+#:
+#: `comm_events`: 96 rows across 2 rounds in the whole corpus, measured today
+#: and unchanged since the spec was written. There is nothing to build a
+#: belief from even where the flag is on.
+UNREAD_CHANNELS = {
+    "comm_events": (
+        "voice macros are not read: proximity_comm_event holds 96 rows across "
+        "2 rounds in the entire corpus, so no round can support this channel"
+    ),
+}
+
+
 def apply_capability(
     states: dict[str, HolderState],
     manifest: dict | None,
@@ -735,6 +754,9 @@ def apply_capability(
     # untouched — no reason recorded, no beliefs dropped — and the payload then
     # looked like a proven capture (CodeRabbit, PR #799).
     holders = tuple(holders)
+    for holder in holders:
+        holder_state = states.setdefault(holder, HolderState(holder_guid=holder))
+        holder_state.unavailable.update(UNREAD_CHANNELS)
     gated = {"gunfire": "shot_fired", "aim_lock": "aim_lock"}
     for source, flag in gated.items():
         state = _capability_state(manifest, flag)

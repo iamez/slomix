@@ -42,12 +42,24 @@ fatal to a relational layer:
    lives, never looking ahead (§4.4.1). When it cannot be derived honestly the
    answer is null plus a machine-readable reason, never a clamped guess.
 
-⚠️ CAPTURE POLICY IS UNKNOWN FOR EVERY HISTORICAL ROUND, and that is the normal
-case, not an edge case. `proximity_processed_files.capabilities` is NULL in all
-828 rows and the per-file `position_sample_interval` is parsed but never
-persisted. So `mode = "unknown"` and the staleness tolerance has no default the
-data can justify — the caller supplies one or gets everything back with its
-staleness stated. Absence of a capability is `unavailable`, never zero (§6.2).
+⚠️ CAPTURE POLICY IS PARTLY KNOWN, AND NEVER DECLARED. This paragraph used to
+say `proximity_processed_files.capabilities` was NULL in all 828 rows. That
+stopped being true the day #795 landed and the sentence stayed — measured
+today, **798 of 838 files carry a manifest** (back to 2026-03-24) and 40 do
+not, the most recent of those from 2026-08-23, so a missing manifest is not
+simply "an old file".
+
+⭐ And every one of the 798 has `source = "sections_observed"` — ZERO are
+`declared`. The manifest is INFERRED from which sections produced rows, which
+is why a capability has three states and not two: a section with no rows means
+"nothing happened" or "the sensor was off", and the file cannot tell you which.
+That is also the whole of A6 that exists; per-sensor schedule, interval,
+integration rule and completeness are still absent (spec §12, A6).
+
+So `mode` is `"unknown"` for a real minority rather than for everything, the
+staleness tolerance still has no default the data can justify — the caller
+supplies one or gets everything back with its staleness stated — and absence
+of a capability is `unavailable`, never zero (§6.2).
 """
 
 from __future__ import annotations
@@ -744,6 +756,63 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
     return clock
 
 
+def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
+    """The opposing team's clock is an oracle diagnostic, so a team view loses it.
+
+    §6.3: "The holder's enemy clock begins `unknown`; it may become a phase
+    distribution only after a timestamped cue that this recipient could
+    observe... With no recipient-specific cue, exact enemy phase and
+    reachability remain oracle-only." §5.6 says the same from the other end.
+
+    We have no such cue: no capability-proven sight of an enemy wave, no
+    captured communication. So the enemy clock is not ours to publish here.
+
+    ⛔ NAMED, NOT DELETED — the same rule `withheld_by_pov` follows. A missing
+    key reads as "this team had no clock", which is a different and false
+    statement. `interval_ms` stays because §6.3 itself treats the interval as
+    known ("constrains phase modulo the KNOWN interval"); what a cue would buy
+    you is the phase, and the phase is what goes.
+    """
+    if not pov_team:
+        return clock
+    own = pov_team["team"]
+    out: dict[str, dict] = {}
+    for team, entry in clock.items():
+        if team == own or not isinstance(entry, dict):
+            out[team] = entry
+            continue
+        kept = {k: v for k, v in entry.items()
+                if k not in ("phase_ms", "time_to_next_wave_ms", "offset_ms")}
+        kept["status"] = "unknown_to_this_pov"
+        kept["reason"] = (
+            "the enemy reinforcement phase is oracle truth: this team had no "
+            "observed cue to infer it from (spec §5.6, §6.3)"
+        )
+        out[team] = kept
+    return out
+
+
+#: How many capture intervals a causal velocity pair may span.
+#:
+#: §4.4.1 requires `0 < dt <= velocity_max_dt_ms`, and this bound was simply
+#: never supplied: the router did not pass one, so `max_dt_ms` was always None
+#: and a velocity could be derived across an arbitrarily large gap inside one
+#: life. Direction from two samples 30 seconds apart is not a direction.
+#:
+#: ⛔ THE BOUND COMES FROM THE ROUND, NOT FROM THIS NUMBER. Measured on rounds
+#: whose manifest declares a 200 ms interval: of 410,832 consecutive sample
+#: gaps, **zero exceed 200 ms** — the declared interval IS the observed
+#: maximum. The multiplier only leaves room for one dropped sample.
+#:
+#: ⚠️ AND THE FIRST MEASUREMENT SAID SOMETHING ELSE. Sampling the most RECENT
+#: tracks gave max = 200 ms across 503,552 gaps, which would have justified
+#: hard-coding 200. The second measurement, by a different path (oldest tracks
+#: first), found max = 30,595 ms and 20.2% of gaps above 200 — because older
+#: rounds were captured at 500 ms. A global constant would have declared the
+#: entire older regime unusable. Rounds without a manifest therefore get NO
+#: bound rather than an invented one, and the snapshot publishes which.
+VELOCITY_MAX_DT_INTERVALS = 2
+
 #: How far a shot carries, in game units — DERIVED FROM THE ENGINE, not chosen.
 #:
 #: This was 1,500: a plausible-sounding number with nothing behind it, sitting
@@ -1055,16 +1124,22 @@ async def get_round_snapshot(
     # data was thinnest — the worst possible moment to change the contract
     # (CodeRabbit, PR #792). `unavailable` is added alongside, never instead.
     engagements = await load_round_engagements(db, round_id) if tracks else []
+    # ⭐ Loaded BEFORE the snapshot, because the round's own capture interval is
+    # what bounds a causal velocity pair — see VELOCITY_MAX_DT_INTERVALS. A
+    # round that never declared its interval gets no bound, which is the same
+    # answer this module gives everywhere else: unknown is published, not
+    # replaced by a default that looks like evidence.
+    policy = await load_capture_policy(db, round_id)
+    if velocity_max_dt_ms is None and policy.observation_interval_ms:
+        velocity_max_dt_ms = (
+            policy.observation_interval_ms * VELOCITY_MAX_DT_INTERVALS
+        )
     snap = build_snapshot(
         tracks, t_ms, engagements=engagements,
         max_stale_ms=max_stale_ms, velocity_max_dt_ms=velocity_max_dt_ms,
     )
     separation = nearest_teammate_separation(snap)
-    policy = await load_capture_policy(db, round_id)
     clock = await load_round_clock(db, round_id, t_ms)
-    information = await load_round_information_state(
-        db, round_id, t_ms, snap, clock, policy, tracks
-    ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
 
     # ⭐ `pov` selects WHOSE picture is returned, the interaction VALORANT's
     # replay tool settled on: switch between a player and the omniscient view.
@@ -1075,6 +1150,24 @@ async def get_round_snapshot(
     # belief source — which is why it is spelled out rather than being the
     # silent default.
     pov_team = _pov_team(pov, tracks)
+
+    # 🔴 RESOLVED BEFORE THE BELIEFS, because the clock does not only get
+    # PUBLISHED — it decides when "he is down" stops being true. `resolve_expiry`
+    # reads the SUBJECT's team clock, so with the oracle clock an enemy belief
+    # flipped to `uncertain_after_down` at the precise instant the enemy wave
+    # landed. Measured on 25 rounds: 46 of 449 beliefs (10.2%) expired on
+    # `validated_wave`. Withholding the number from the panel while letting the
+    # beliefs keep time with it would publish the same fact as a behaviour —
+    # scrub the slider and read the enemy phase off when the circles change.
+    #
+    # ⭐ The degraded clock keeps `interval_ms` and loses `offset_ms`, so
+    # `resolve_expiry` falls to `interval_only`: "he is back somewhere inside
+    # one interval", which is what §6.3 says a holder without a cue may hold.
+    pov_clock = restrict_clock_to_pov(clock, pov_team)
+    information = await load_round_information_state(
+        db, round_id, t_ms, snap, pov_clock, policy, tracks
+    ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
+
     withheld: list[str] = []
 
     if pov_team is not None:
@@ -1153,7 +1246,10 @@ async def get_round_snapshot(
             "manifest_count": policy.manifest_count,
             "conflicting_flags": policy.conflicting_flags,
         },
-        "clock": clock,
+        # Published so a reader can tell "no gap was too large" from "no
+        # bound was applied": null means the round never declared an interval.
+        "velocity_max_dt_ms": velocity_max_dt_ms,
+        "clock": pov_clock,
         "information_state": information,
         "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
         "player_count": len(snap.players),
@@ -1167,7 +1263,14 @@ async def get_round_snapshot(
         # or in `gaps` with a reason; a withheld enemy is neither, so leaving
         # him out of both would break one contract to keep another.
         "withheld_by_pov": withheld,
-        "nearest_teammate_separation": separation,
+        # 🔴 A separation is not a coordinate, which is exactly why it slipped
+        # past the guard that scans for coordinates. Keyed by guid, it told a
+        # team WHICH enemies were alive and placed and HOW TIGHTLY THE OTHER
+        # SIDE WAS GROUPED — the shape of their formation, from the field that
+        # was supposed to describe your own.
+        "nearest_teammate_separation": {
+            g: d for g, d in separation.items() if g not in withheld
+        },
         # 🔴 An opponent edge carries `distance`, computed from the real
         # positions — one leaks the range to an enemy, several across time
         # trilaterate him. Withholding the positions and leaving the edges was
