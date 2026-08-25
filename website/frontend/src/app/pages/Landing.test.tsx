@@ -16,17 +16,17 @@ import sessions from './__fixtures__/api_sessions.json';
  * really said. Fetch is routed by pathname; an unexpected call fails loudly
  * instead of resolving to something invented.
  */
-const FIXTURES: Record<string, unknown> = {
-  '/api/live/state': liveState,
-  '/api/voice-activity/current': voice,
-  '/api/stats/overview': overview,
-  '/api/stats/quick-leaders': leaders,
-  '/api/sessions': sessions,
-};
+const FIXTURES = new Map<string, unknown>([
+  ['/api/live/state', liveState],
+  ['/api/voice-activity/current', voice],
+  ['/api/stats/overview', overview],
+  ['/api/stats/quick-leaders', leaders],
+  ['/api/sessions', sessions],
+]);
 
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   const pathname = String(input).split('?')[0];
-  const body = FIXTURES[pathname];
+  const body = FIXTURES.get(pathname);
   if (body === undefined) {
     return Promise.reject(new Error(`Landing called an unexpected endpoint: ${pathname}`));
   }
