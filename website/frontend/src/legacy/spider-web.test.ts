@@ -484,7 +484,22 @@ describe('clockBadge', () => {
     expect(unchecked.badge).toBe('UNVALIDATED');
     expect(failed.badge).not.toBe(unchecked.badge);
     expect(failed.reason).toMatch(/CONTRADICT/);
-    expect(unchecked.reason).toMatch(/too few/);
+    expect(unchecked.reason).toMatch(/too few independent landing/);
+  });
+
+  it('separates "nothing to infer from" from "inferred but unchecked"', () => {
+    // ⛔ `insufficient` comes from `infer_clock`, before validation is even
+    // attempted: fewer than MIN_INTERNAL_OBSERVATIONS timing rows, so there is
+    // no offset to check. Blaming missing landing clusters points at the wrong
+    // stage, and implying internal consistency asserts something never
+    // established — with one or two observations `interval_ms` is null.
+    const nothing = clockBadge({ status: 'insufficient' });
+    const unchecked = clockBadge({ status: 'internally_consistent_unvalidated' });
+    expect(nothing.badge).toBe('UNVALIDATED');
+    expect(unchecked.badge).toBe('UNVALIDATED');
+    expect(nothing.reason).not.toBe(unchecked.reason);
+    expect(nothing.reason).toMatch(/nothing was inferred/);
+    expect(unchecked.reason).toMatch(/landing clusters/);
   });
 
   it('keeps the three verdicts apart', () => {
@@ -492,7 +507,6 @@ describe('clockBadge', () => {
     // and the value is published as null, never averaged into one.
     expect(clockBadge({ status: 'internally_consistent_unvalidated' }).badge)
       .toBe('UNVALIDATED');
-    expect(clockBadge({ status: 'insufficient' }).badge).toBe('UNVALIDATED');
     expect(clockBadge({ status: 'inconsistent' }).badge).toBe('INCONSISTENT');
   });
 
