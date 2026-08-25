@@ -779,7 +779,15 @@ describe('opening a different round', () => {
     // next round permanently offered one POV button — and the reverse, a
     // two-team list surviving into a one-team round, offers a view that
     // cannot resolve (Codex, PR #807).
-    const rosters: Record<string, string[]> = { '11500': ['AXIS'], '11501': ['AXIS', 'ALLIES'] };
+    // ⚠️ A Map, not an object keyed by a string taken from the URL — bare
+    // object indexing on a non-literal key is a prototype-pollution sink and
+    // the scanner is right to say so. Fable reached the same fix on #806
+    // (`87f3086a`, "fixture lookup via Map, not bare object indexing"), so
+    // this is the house answer rather than a workaround.
+    const rosters = new Map<string, string[]>([
+      ['11500', ['AXIS']],
+      ['11501', ['AXIS', 'ALLIES']],
+    ]);
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
       if (url.includes('/assets/maps/')) {
@@ -791,7 +799,7 @@ describe('opening a different round', () => {
         json: () => Promise.resolve({
           round_id: Number(round), t_ms: 0, map_name: null,
           first_position_ms: 0, round_duration_ms: 600_000,
-          players: rosters[round].map((team, i) => ({
+          players: (rosters.get(round) ?? []).map((team, i) => ({
             guid: `G${i}`, name: `p${i}`, team, alive: true,
             x: i * 100, y: 0, z: 0, stale_ms: 0,
           })),
