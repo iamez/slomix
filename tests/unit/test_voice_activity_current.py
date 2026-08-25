@@ -98,6 +98,9 @@ class TestAFailureSaysSo:
 class TestTheReportCarriesItsAge:
     @pytest.mark.asyncio
     async def test_a_datetime_is_published_as_iso(self):
+        # A literal is safe HERE because this asserts formatting only and
+        # makes no claim about freshness — unlike the test below, which one
+        # expired on CI.
         stamp = dt.datetime(2026, 8, 25, 12, 34, 56)
         db = _Db(row=(_status(["ciril"]), stamp))
         payload = await get_current_voice_activity(db=db)
@@ -109,12 +112,24 @@ class TestTheReportCarriesItsAge:
         """⚠️ PostgreSQL returns a datetime; the SQLite dev path returns a
         string. Calling `.isoformat()` on the string raises AttributeError —
         which the endpoint's own `except` catches, so a working row would have
-        been reported as unavailable. A timestamp is not worth that."""
-        db = _Db(row=(_status(["ciril"]), "2026-08-25 12:34:56"))
+        been reported as unavailable. A timestamp is not worth that.
+
+        ⛔ THE STRING IS COMPUTED, and this test is why the rule matters. It
+        carried a literal `"2026-08-25 12:34:56"` and asserted `ok`: it passed
+        locally because I happened to run it within three minutes of that
+        wall-clock time, and failed on CI seven minutes later. I had fixed the
+        SAME defect in a neighbouring test an hour earlier and left this one —
+        a literal timestamp in a test that asserts freshness is a test that
+        expires.
+        """
+        written = (dt.datetime.now(dt.timezone.utc)
+                   .replace(tzinfo=None) - dt.timedelta(seconds=5))
+        as_string = written.strftime("%Y-%m-%d %H:%M:%S")
+        db = _Db(row=(_status(["ciril"]), as_string))
         payload = await get_current_voice_activity(db=db)
 
         assert payload["status"] == "ok"
-        assert payload["updated_at"] == "2026-08-25 12:34:56"
+        assert payload["updated_at"] == as_string
 
     @pytest.mark.asyncio
     async def test_an_unavailable_report_has_no_age_to_give(self):
