@@ -60,6 +60,21 @@ describe('SystemPage', () => {
     expect(screen.getByText('no thresholds breached')).toBeInTheDocument();
   });
 
+  it('reports a partial linkage check as unavailable, never as clean', async () => {
+    // assess_round_linkage_anomalies returns status 'error' with PARTIAL
+    // metrics and an empty breaches list when a subquery fails — 'no
+    // thresholds breached' would be a claim the data cannot support.
+    const broken = {
+      ...(systemOverview as Record<string, unknown>),
+      linkage: { available: true, status: 'error', metrics: { total_lua_rows: 12 }, breaches: [] },
+    };
+    vi.stubGlobal('fetch', vi.fn(() =>
+      Promise.resolve({ ok: true, json: () => Promise.resolve(broken) } as Response)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/linkage check: unavailable/)).toBeInTheDocument());
+    expect(screen.queryByText('no thresholds breached')).not.toBeInTheDocument();
+  });
+
   it('states that the API not answering IS the status', async () => {
     vi.stubGlobal('fetch', vi.fn(() => Promise.resolve({ ok: false, status: 503 } as Response)));
     renderPage();

@@ -99,7 +99,10 @@ function StageRow({ stage }: { stage: SystemStage }) {
 }
 
 function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['linkage'] }) {
-  if (linkage.available !== true) {
+  // status 'error' means a subquery failed and the metrics are PARTIAL —
+  // an empty breaches list then proves nothing, so the card says
+  // unavailable instead of 'no thresholds breached' (Codex on #809).
+  if (linkage.available !== true || linkage.status === 'error') {
     return (
       <div style={{ marginTop: 40 }}>
         <SectionHead label="data integrity" parity="system.linkage" />
@@ -144,6 +147,9 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
 
 export function SystemPage() {
   const overview = useSystemOverview();
+  // A failed 30 s refetch must not show the stale healthy chain under the
+  // error message — same derived-value rule as every landing panel.
+  const data = overview.isError ? undefined : overview.data;
 
   return (
     <div data-parity="system.headline" style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 760 }}>
@@ -159,23 +165,23 @@ export function SystemPage() {
           </p>
         </div>
       )}
-      {overview.data && (
+      {data && (
         <>
           <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
-            {OVERALL_HEADLINE[overview.data.overall] ?? OVERALL_HEADLINE.unknown}
+            {OVERALL_HEADLINE[data.overall] ?? OVERALL_HEADLINE.unknown}
           </h1>
           <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>
-            checked {String(overview.data.generated_at).replace('T', ' ').slice(0, 19)} utc
+            checked {String(data.generated_at).replace('T', ' ').slice(0, 19)} utc
           </div>
           <div style={{ marginTop: 28 }}>
             <SectionHead label="the chain · game server → capture → parser → smart stats → api" parity="system.chain" />
             <div style={{ marginTop: 6 }}>
-              {overview.data.stages.length === 0
+              {data.stages.length === 0
                 ? <div style={{ marginTop: 10 }}><Unavailable what="stages" /></div>
-                : overview.data.stages.map((s) => <StageRow key={s.key} stage={s} />)}
+                : data.stages.map((s) => <StageRow key={s.key} stage={s} />)}
             </div>
           </div>
-          <Linkage linkage={overview.data.linkage} />
+          <Linkage linkage={data.linkage} />
         </>
       )}
     </div>
