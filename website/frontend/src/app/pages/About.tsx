@@ -97,7 +97,9 @@ const BOX: React.CSSProperties = { border: '1px solid var(--color-rule-700)', ba
 function HeadlineFigures() {
   const overview = useOverview();
   if (overview.isPending) return <div style={{ padding: '20px 0' }}><Pending label="figures" /></div>;
-  if (overview.isError || overview.data == null) return <div style={{ padding: '20px 0' }}><Unavailable what="figures" /></div>;
+  // isSuccess (not a null check the types already forbid): anything short
+  // of a successful answer renders as unavailable.
+  if (!overview.isSuccess) return <div style={{ padding: '20px 0' }}><Unavailable what="figures" /></div>;
   const d = overview.data;
   const tiles = [
     { k: 'rounds parsed', v: d.rounds.toLocaleString('en-US') },
@@ -120,7 +122,7 @@ function HeadlineFigures() {
 function Counted() {
   const overview = useOverview();
   if (overview.isPending) return <div style={{ padding: '18px 0' }}><Pending label="counted" /></div>;
-  if (overview.isError || overview.data == null) return <div style={{ padding: '18px 0' }}><Unavailable what="counted" /></div>;
+  if (!overview.isSuccess) return <div style={{ padding: '18px 0' }}><Unavailable what="counted" /></div>;
   const d = overview.data;
   const cells = [
     { k: 'kills', v: d.total_kills.toLocaleString('en-US') },
