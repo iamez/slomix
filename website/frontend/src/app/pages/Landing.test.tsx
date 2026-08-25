@@ -207,6 +207,39 @@ describe('Landing', () => {
     await waitFor(() => expect(screen.getByText('supply · 3 min ago')).toBeInTheDocument());
   });
 
+  it('marks an unconfirmed map as a guess even while live (#808 fields)', async () => {
+    const unconfirmed = { ...(liveState as Record<string, unknown>), is_live: true, map_confirmed: false, map_age_seconds: null };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/live/state') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(unconfirmed) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText('supply · unconfirmed')).toBeInTheDocument());
+  });
+
+  it('treats an in-band voice failure as unavailable, not as an empty room (#808)', async () => {
+    const broken = { status: 'unavailable', reason: 'malformed status_data', total_count: 0, members: [] };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/voice-activity/current') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(broken) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/voice: unavailable/)).toBeInTheDocument());
+    expect(screen.queryByText('No one in voice')).not.toBeInTheDocument();
+  });
+
   it('qualifies a voice snapshot whose updated_at is stale', async () => {
     // The endpoint does not expose updated_at TODAY — this asserts the
     // defensive path is live the moment the backend starts sending it.

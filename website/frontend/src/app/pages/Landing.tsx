@@ -70,7 +70,10 @@ function LivePanel() {
   // error flag — showing "unavailable" ALONGSIDE stale numbers would be two
   // contradictory claims at once, so the error wins (Codex on #806).
   const liveData = live.isError ? undefined : live.data;
-  const voiceData = voice.isError ? undefined : voice.data;
+  // status === 'unavailable' (#808) is an in-band failure: the endpoint
+  // answers 200 whether the row is empty or unreadable, and only this
+  // field says which.
+  const voiceData = voice.isError || voice.data?.status === 'unavailable' ? undefined : voice.data;
   return (
     <div style={{ border: '1px solid var(--color-rule-700)', padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
@@ -98,11 +101,16 @@ function LivePanel() {
             <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>
               {liveData.current_map == null
                 ? 'unknown map'
-                : liveData.is_live
-                  ? liveData.current_map
-                  : liveData.last_event_age_seconds != null
-                    ? `${liveData.current_map} · ${ageOf(liveData.last_event_age_seconds)}`
-                    : `${liveData.current_map} · last seen`}
+                : liveData.map_confirmed === false
+                  // #808: nothing since the session boundary confirmed this
+                  // map — a restarted server usually returns to it, so it
+                  // is shown, but as a guess, even while is_live.
+                  ? `${liveData.current_map} · unconfirmed`
+                  : liveData.is_live
+                    ? liveData.current_map
+                    : liveData.last_event_age_seconds != null
+                      ? `${liveData.current_map} · ${ageOf(liveData.last_event_age_seconds)}`
+                      : `${liveData.current_map} · last seen`}
             </span>
             {/* After a delivery gap the reducer keeps the old lineup for up
               * to 600 s and exposes its age — an aged count says so instead
@@ -123,7 +131,7 @@ function LivePanel() {
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
         <span style={{ width: 6, height: 6, borderRadius: '50%', flex: 'none', alignSelf: 'center', background: (voiceData?.total_count ?? 0) > 0 ? 'var(--color-pos)' : '#454340' }} />
         {voice.isPending && <Pending label="voice" />}
-        {voice.isError && <Unavailable what="voice" />}
+        {(voice.isError || voice.data?.status === 'unavailable') && <Unavailable what="voice" />}
         {voiceData && (
           <>
             {/* total_count counts the tracked voice channel only

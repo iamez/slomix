@@ -12,6 +12,12 @@ export interface LiveState {
   is_live: boolean;
   game_state: string;
   current_map: string | null;
+  /** From #808, not yet in the OpenAPI spec — read defensively. false means
+   * no event since the last session boundary has confirmed the retained
+   * map; the age is since the last CONFIRMATION (any map event, including
+   * one naming the same map), null while unconfirmed. */
+  map_confirmed?: boolean;
+  map_age_seconds?: number | null;
   round_number: number | null;
   round_elapsed_seconds: number | null;
   roster: {
@@ -30,6 +36,10 @@ export interface LiveState {
 
 /** GET /api/voice-activity/current — corpus: api_voice_activity_current.json */
 export interface VoiceCurrent {
+  /** From #808 (defensive until response_model): 'ok' | 'unavailable' —
+   * a malformed live_status row used to return the same empty 200 as a
+   * genuinely empty channel. */
+  status?: string;
   total_count: number;
   /** Not returned by the endpoint today — the row's updated_at exists in the
    * database but is neither exposed nor validated (diagnostics_router;
