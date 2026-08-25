@@ -9,6 +9,8 @@ import { Landing } from './pages/Landing';
 import { About } from './pages/About';
 import { SystemPage } from './pages/SystemPage';
 import { SmartStatsDiag } from './pages/SmartStatsDiag';
+import { Home } from './pages/Home';
+import { SessionsList } from './pages/SessionsList';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
 
@@ -48,6 +50,9 @@ const PAGES: Record<string, React.ReactElement> = {
   admin: <About />,
   system: <SystemPage />,
   'smart-stats-diag': <SmartStatsDiag />,
+  home: <Home />,
+  sessions: <SessionsList box={false} />,
+  sessions2: <SessionsList box />,
 };
 
 const router = createBrowserRouter(
