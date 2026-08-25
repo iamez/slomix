@@ -565,7 +565,15 @@ export function clockBadge(team) {
         return {
             badge: 'INCONSISTENT',
             reason: reason(team.reason)
-                || 'candidate offsets disagree; published as null, never averaged',
+                // ⚠️ EITHER cause. `infer_clock` rejects multiple intervals as
+                // well as multiple offsets, and observations can disagree on
+                // the interval while producing the same modular offset. Naming
+                // only the offsets states a cause the payload may contradict —
+                // and such a payload carries `interval_ms: null`, so the panel
+                // printed the wrong explanation beside an empty value
+                // (Codex, #804).
+                || 'eligible observations disagree on the interval or the '
+                   + 'offset; published as null, never averaged into one',
         };
     }
     // ⛔ "We could not check" and "we checked and it failed" are different
@@ -950,7 +958,15 @@ export async function loadSpiderWebView(params = {}) {
 
             const detail = _el('p', 'text-[11px] font-mono');
             detail.style.color = THEME.textDim;
-            detail.textContent = team && team.interval_ms
+            // ⛔ Driven by the VERDICT, not by whether `interval_ms` happens to
+            // be set. With one or two observations at the same interval,
+            // `infer_clock` returns `insufficient` and still keeps
+            // `interval_ms` — so a truthiness test rendered the interval,
+            // skipped the badge's explanation, and made a sparse clock look
+            // like an ordinarily inferred one (Codex, #804).
+            const inferred = badge === 'VALIDATED' || badge === 'FAILED'
+                || team.status === 'internally_consistent_unvalidated';
+            const numbers = team && team.interval_ms
                 ? `interval ${(team.interval_ms / 1000).toFixed(0)} s`
                   + (typeof team.time_to_next_wave_ms === 'number'
                       ? ` · do naslednjega vala ${(team.time_to_next_wave_ms / 1000).toFixed(1)} s`
@@ -958,7 +974,11 @@ export async function loadSpiderWebView(params = {}) {
                   + (typeof team.pass_ratio === 'number'
                       ? ` · notranja skladnost ${(team.pass_ratio * 100).toFixed(1)} %`
                       : '')
-                : (reason || 'ure za to ekipo ni bilo mogoče ugotoviti');
+                : '';
+            detail.textContent = inferred && numbers
+                ? numbers
+                : [reason, numbers && `(${numbers})`].filter(Boolean).join(' ')
+                  || 'ure za to ekipo ni bilo mogoče ugotoviti';
             row.appendChild(detail);
             clockPanel.appendChild(row);
         }
@@ -978,8 +998,18 @@ export async function loadSpiderWebView(params = {}) {
                     ? 'FAILED pomeni, da neodvisni pristanki OBSTAJAJO in odmik '
                       + 'ovržejo — ne da jih ni. To je močnejša ugotovitev od '
                       + 'nepreverjenosti in je ni mogoče brati kot »morda drži«.'
-                    : 'Nobena ura tu ni prestala neodvisne preverbe; odstotek '
-                      + 'skladnosti je ujemanje z lastnim izvorom, ne dokaz.');
+                // ⚠️ Nothing to reconstruct from is not the same as a
+                // reconstruction that failed a check, and the sentence must
+                // not mention an agreement figure that does not exist for this
+                // round. Caught here rather than by a fifth review round, but
+                // it is the same class as the two before it.
+                : badges.every((x) => x === 'UNAVAILABLE')
+                    ? 'Za to rundo ni upravičenih vrstic o spawn času, zato ura '
+                      + 'ni bila niti izpeljana — to ni neuspela preverba, ampak '
+                      + 'odsotnost vhoda.'
+                    : 'Nobena ura tu ni prestala neodvisne preverbe; kjer je '
+                      + 'odstotek skladnosti prikazan, je to ujemanje z lastnim '
+                      + 'izvorom, ne dokaz.');
         note.style.color = THEME.label;
         clockPanel.appendChild(note);
 
