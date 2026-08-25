@@ -743,17 +743,19 @@ export async function loadSpiderWebView(params = {}) {
     // follows is exactly what the `first_position_ms` logic below exists to
     // prevent (Codex, PR #807). `pov` deliberately persists: it is a viewing
     // preference, not a property of the round.
-    if (String(roundId) !== String(state.roundId)) {
-        state.tMs = 0;
-        state.snapshot = null;
-        // ⛔ THE TEAM LIST TOO. It is rebuilt only when empty, so a round
-        // whose reconstruction resolved one side left that single team cached
-        // and the NEXT round permanently offered one POV button — and the
-        // reverse, a two-team list surviving into a one-team round, offers a
-        // view that cannot resolve (Codex, PR #807).
-        state.teams = [];
-    }
-    state.roundId = roundId;
+    // ⛔ AND THE RESET IS LOCAL UNTIL THE LOAD WINS. Writing it to `state`
+    // here was a race: two overlapping loads for different rounds, the newer
+    // one zeroes the shared time, then the OLDER request resolves and writes
+    // its own snapshot and `first_position_ms` back — before any `myLoad`
+    // check. The newer load then sees a nonzero `state.tMs`, skips its own
+    // first-position reload, and renders its round at t=0 under the previous
+    // round's slider and readout (Codex, PR #807).
+    //
+    // Everything below works on locals; shared state is committed once, after
+    // the last await, and only by the load that is still current.
+    const roundChanged = String(roundId) !== String(state.roundId);
+    const pov = state.pov;
+    let tMs = roundChanged ? 0 : (state.tMs || 0);
 
     container.appendChild(_el('p', 'text-slate-400 text-sm py-12 text-center',
         'Nalagam rundo…'));
@@ -763,16 +765,16 @@ export async function loadSpiderWebView(params = {}) {
     // first has anybody, so the first frame is a moment that exists.
     let snapshot;
     try {
-        snapshot = await loadMoment(roundId, state.tMs || 0, state.pov);
-        state.snapshot = snapshot;
-        if (!state.tMs && snapshot && snapshot.first_position_ms) {
+        snapshot = await loadMoment(roundId, tMs, pov);
+        if (myLoad !== loadId) return;
+        if (!tMs && snapshot && snapshot.first_position_ms) {
             // Clamped here too. The payload is fixed, but the endpoint answers
             // `t < 0` with a 422 and this page's only response to that is
             // "could not load" — a floor the caller can enforce for itself
             // costs one call to Math.max.
-            state.tMs = Math.max(0, snapshot.first_position_ms);
-            snapshot = await loadMoment(roundId, state.tMs, state.pov);
-            state.snapshot = snapshot;
+            tMs = Math.max(0, snapshot.first_position_ms);
+            snapshot = await loadMoment(roundId, tMs, pov);
+            if (myLoad !== loadId) return;
         }
     } catch {
         if (myLoad !== loadId) return;
@@ -782,6 +784,18 @@ export async function loadSpiderWebView(params = {}) {
         return;
     }
     if (myLoad !== loadId) return;
+
+    // ⭐ THE COMMIT. One place, after the last await that could be superseded,
+    // reached only by the winning load.
+    state.roundId = roundId;
+    state.tMs = tMs;
+    state.snapshot = snapshot;
+    // ⛔ The team list belongs to the round, and is rebuilt only when empty:
+    // a round whose reconstruction resolved one side left that single team
+    // cached and the NEXT round permanently offered one POV button — and the
+    // reverse, a two-team list surviving into a one-team round, offers a view
+    // that cannot resolve (Codex, PR #807).
+    if (roundChanged) state.teams = [];
 
     const mapName = (snapshot.players || []).length ? snapshot.map_name : snapshot.map_name;
     await loadMesh(mapName || '');

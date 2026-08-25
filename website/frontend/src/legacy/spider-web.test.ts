@@ -773,6 +773,62 @@ describe('opening a different round', () => {
   });
 
 
+  it('a superseded load does not write its round into shared state', async () => {
+    // ⛔ THE RACE. Two overlapping loads for different rounds: the newer one
+    // resets the time, then the OLDER request resolves and writes its own
+    // snapshot and first_position_ms back. The newer load then sees a nonzero
+    // time, skips its own first-position reload, and renders its round at
+    // t=0 under the previous round's slider (Codex, PR #807).
+    const gate: Record<string, (v: unknown) => void> = {};
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      seen.push(url);
+      const round = url.split('/round/')[1].split('/')[0];
+      const body = {
+        round_id: Number(round), t_ms: 0, map_name: null,
+        // The SLOW round claims a late first position — the value that used
+        // to leak into the other round's state.
+        first_position_ms: round === '11600' ? 77_000 : 0,
+        round_duration_ms: 600_000, players: [], edges: [], gaps: {},
+        withheld_by_pov: [], nearest_teammate_separation: {}, clock: {},
+        information_state: { holders: {} }, capture_policy: { capabilities: {} },
+        reconstruction_accuracy: {}, player_count: 0, overlap_conflicts: 0,
+        notes: [],
+      };
+      const res = { ok: true, json: () => Promise.resolve(body) } as Response;
+      // Hold the first round's response until the second load has started.
+      if (round === '11600' && !gate.released) {
+        return new Promise<Response>((resolve) => { gate.released = () => resolve(res); });
+      }
+      return Promise.resolve(res);
+    }));
+
+    const slow = loadSpiderWebView({ roundId: '11600' });   // starts, blocks
+    const fast = loadSpiderWebView({ roundId: '11601' });   // supersedes it
+    await fast;
+    gate.released?.(undefined);
+    await slow;
+
+    // ⚠️ ASSERTED ON THE NEXT LOAD, NOT ON THE DOM. The first version checked
+    // the readout right after the race and passed even with the bug restored:
+    // the loser corrupts `state`, not the pixels — the winner had already
+    // rendered, and the loser returns at a later `myLoad` check before it
+    // redraws. The damage only shows when something READS the shared time
+    // again, which is the next load. The mutation proved that; the assertion
+    // moved.
+    seen.length = 0;
+    await loadSpiderWebView({ roundId: '11601' });
+
+    // Re-opening the round the winner rendered must ask for its own moment.
+    // With the leak, `state.tMs` holds the superseded round's 77,000.
+    const asked = seen.map((u) => new URL(u, 'http://x').searchParams.get('t'));
+    expect(asked).not.toContain('77000');
+  });
+
   it('rebuilds the team list for the new round', async () => {
     // ⛔ `state.teams` is rebuilt only when EMPTY, so a round whose
     // reconstruction resolved one side left that single team cached and the
