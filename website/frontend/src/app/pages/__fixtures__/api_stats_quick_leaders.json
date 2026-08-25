@@ -1,0 +1,88 @@
+{
+ "window_days": 7,
+ "xp": [
+  {
+   "rank": 1,
+   "guid": "D8423F90",
+   "name": "vid",
+   "value": 3845.0,
+   "rounds": 54,
+   "label": "XP"
+  },
+  {
+   "rank": 2,
+   "guid": "1C747DF1",
+   "name": "#smetarski.proner",
+   "value": 3687.0,
+   "rounds": 58,
+   "label": "XP"
+  },
+  {
+   "rank": 3,
+   "guid": "5D989160",
+   "name": ".olz",
+   "value": 3149.0,
+   "rounds": 54,
+   "label": "XP"
+  },
+  {
+   "rank": 4,
+   "guid": "FDA127DF",
+   "name": "wiseBoy",
+   "value": 2705.0,
+   "rounds": 46,
+   "label": "XP"
+  },
+  {
+   "rank": 5,
+   "guid": "EF561EAA",
+   "name": "carniee",
+   "value": 2550.0,
+   "rounds": 46,
+   "label": "XP"
+  }
+ ],
+ "dpm_sessions": [
+  {
+   "rank": 1,
+   "guid": "3C0354D3",
+   "name": "SHIFT+W squAzE__",
+   "value": 387.65492957746477,
+   "sessions": 1,
+   "label": "DPM/session"
+  },
+  {
+   "rank": 2,
+   "guid": "2B5938F5",
+   "name": "bronze",
+   "value": 341.7067345964019,
+   "sessions": 1,
+   "label": "DPM/session"
+  },
+  {
+   "rank": 3,
+   "guid": "EDBB5DA9",
+   "name": "SuperBoyy",
+   "value": 336.86498500664163,
+   "sessions": 3,
+   "label": "DPM/session"
+  },
+  {
+   "rank": 4,
+   "guid": "D8423F90",
+   "name": "vid",
+   "value": 331.09393877218605,
+   "sessions": 4,
+   "label": "DPM/session"
+  },
+  {
+   "rank": 5,
+   "guid": "42E142B3",
+   "name": "immoo{",
+   "value": 312.2007042253521,
+   "sessions": 1,
+   "label": "DPM/session"
+  }
+ ],
+ "errors": []
+}
