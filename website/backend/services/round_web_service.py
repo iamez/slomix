@@ -61,6 +61,7 @@ from typing import Any
 
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
 from proximity.parser.capability_manifest import is_declared
+from proximity.parser.capability_manifest import FEATURE_FLAGS
 from shared.round_time import round_duration_sql
 from website.backend.logging_config import get_app_logger
 from website.backend.services.clock_inputs import (
@@ -141,7 +142,14 @@ class CapturePolicy:
 
     mode: str = "unknown"
     observation_interval_ms: int | None = None
-    enabled_capabilities: dict[str, Any] = field(default_factory=dict)
+    # ⛔ EVERY known flag, defaulting to `unknown` — not an empty map. An empty
+    # map made a consumer's capability section vanish entirely for rounds whose
+    # manifest could not be resolved, which is the exact failure the manifest
+    # exists to prevent: the page went quiet instead of saying it did not know
+    # whether `shot_fired` or `aim_lock` were on (Codex, #804). Silence reads
+    # as "nothing to report"; `unknown` reads as "we cannot tell".
+    enabled_capabilities: dict[str, Any] = field(
+        default_factory=lambda: {flag: "unknown" for flag in FEATURE_FLAGS})
     policy_version: str | None = None
     source: str = "absent"
     #: flag -> "enabled" | "disabled" | "unknown". THREE states, never two: a

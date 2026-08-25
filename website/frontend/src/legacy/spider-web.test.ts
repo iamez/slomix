@@ -580,8 +580,19 @@ describe('capabilityRows', () => {
     expect(rows.map((r) => r.known)).toEqual([true, false]);
   });
 
-  it('is empty rather than throwing when there is no policy', () => {
+  it('is empty rather than throwing when there is no policy at all', () => {
+    // ⚠️ A null policy is a missing payload, not a round with an absent
+    // manifest. The backend now fills every known flag with `unknown` for the
+    // latter, so the panel says "we cannot tell" instead of going silent — an
+    // empty section reads as "nothing to report" (Codex, #804).
     expect(capabilityRows(null)).toEqual([]);
     expect(capabilityRows({})).toEqual([]);
+  });
+
+  it('keeps every flag an absent manifest reports as unknown', () => {
+    const absent = { capabilities: { shot_fired: 'unknown', aim_lock: 'unknown' } };
+    const rows = capabilityRows(absent);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.state === 'unknown' && !r.known)).toBe(true);
   });
 });
