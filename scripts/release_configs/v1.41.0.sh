@@ -43,9 +43,31 @@
 # Spider Web fetches it same-origin.
 #
 # POST-DEPLOY (owner, still outstanding from v1.40.0 — see PR #781):
-#   install -d -o slomix_web -g slomix -m 2750 /var/lib/slomix/uploads
-#   rsync -a --remove-source-files /opt/slomix/website/data/uploads/ /var/lib/slomix/uploads/
-#   set UPLOAD_STORAGE_ROOT=/var/lib/slomix/uploads in /opt/slomix/.env, restart web
+#
+# ⛔ THE v1.40.0 VERSION OF THIS NOTE IS WRONG AND I COPIED IT. It says to set
+# the variable in `/opt/slomix/.env`. On a VM provisioned by
+# `slomix_vm_setup.sh` the web unit runs with `EnvironmentFile=website/.env`,
+# and `main.py:35-39` reads the ROOT file only when the website file is
+# ABSENT — so the web process never sees it. Since the rsync step empties the
+# old directory first, following the old instruction leaves existing uploads
+# unserved and sends new ones back into the checkout (Codex, PR #810). The
+# deploy script already learned this once: its FLAGS upsert writes BOTH files
+# for exactly this reason (`deploy_release.sh`, "Codex on #516").
+#
+# ⛔ AND THE ORDER MATTERS. Setting the variable before the move points the
+# service at an empty directory — `UploadStorageService` creates it
+# (`upload_store.py:112`, `mkdir(parents=True, exist_ok=True)`) and serves
+# nothing, while the old files sit unreferenced. Move first, then point.
+#
+#   1. install -d -o slomix_web -g slomix -m 2750 /var/lib/slomix/uploads
+#   2. rsync -a --remove-source-files \
+#        /opt/slomix/website/data/uploads/ /var/lib/slomix/uploads/
+#   3. set UPLOAD_STORAGE_ROOT=/var/lib/slomix/uploads in BOTH
+#        /opt/slomix/.env AND /opt/slomix/website/.env (if it exists)
+#   4. systemctl restart slomix-web
+#
+# Until all four are done, nothing changes: the default names the same
+# directory the uploads are already in.
 # ⛔ THESE NOTES ASSUME #807 IS IN THE TAG. Checked against main as it stands
 # and two of them are not true without it:
 #
