@@ -22,7 +22,8 @@ import { describe, expect, it } from 'vitest';
 import type { Camera } from '../../../js/spider-web.js';
 
 import {
-  THEME, alphaHex, beliefRegions, boundsFromPlayers, edgeStyle, horizonOf, mixHex,
+  THEME, alphaHex, beliefRegions, boundsFromPlayers, capabilityRows, clockBadge,
+  edgeStyle, horizonOf, mixHex,
   isTeamPov, placeLabels,
   project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
@@ -456,5 +457,156 @@ describe('mixHex', () => {
   it('clamps rather than extrapolating past an endpoint', () => {
     expect(mixHex('#000000', '#ffffff', 5)).toBe('#ffffff');
     expect(mixHex('#000000', '#ffffff', -2)).toBe('#000000');
+  });
+});
+
+describe('clockBadge', () => {
+  it('reports the backend verdict rather than overriding it', () => {
+    // ⭐ An earlier version forced UNVALIDATED everywhere, believing
+    // `validated` meant "internally consistent only". It does not: §5.3 and
+    // acceptance B1 define it as having passed against INDEPENDENT
+    // `player_track` spawn landings — explicitly not the rows that produced
+    // the offset — with a frozen residual tolerance. Overriding it was itself
+    // an overclaim, in the other direction: it called a clock unproven that
+    // had passed the gate the spec defines.
+    expect(clockBadge({ status: 'validated', interval_ms: 30000 }).badge)
+      .toBe('VALIDATED');
+  });
+
+  it('separates "could not check" from "checked and contradicted"', () => {
+    // ⛔ `validate_clock` assigns `validation_failed` only when the landing
+    // clusters EXIST and too few residuals fall inside the frozen tolerance —
+    // evidence against the offset, not missing evidence. Sharing a word with
+    // "unvalidated" would hide the strongest thing known about those groups.
+    const failed = clockBadge({ status: 'validation_failed' });
+    const unchecked = clockBadge({ status: 'internally_consistent_unvalidated' });
+    expect(failed.badge).toBe('FAILED');
+    expect(unchecked.badge).toBe('UNVALIDATED');
+    expect(failed.badge).not.toBe(unchecked.badge);
+    expect(failed.reason).toMatch(/CONTRADICT/);
+    expect(unchecked.reason).toMatch(/too few independent landing/);
+  });
+
+  it('separates "nothing to infer from" from "inferred but unchecked"', () => {
+    // ⛔ `insufficient` comes from `infer_clock`, before validation is even
+    // attempted: fewer than MIN_INTERNAL_OBSERVATIONS timing rows, so there is
+    // no offset to check. Blaming missing landing clusters points at the wrong
+    // stage, and implying internal consistency asserts something never
+    // established — with one or two observations `interval_ms` is null.
+    const nothing = clockBadge({ status: 'insufficient' });
+    const unchecked = clockBadge({ status: 'internally_consistent_unvalidated' });
+    expect(nothing.badge).toBe('UNVALIDATED');
+    expect(unchecked.badge).toBe('UNVALIDATED');
+    expect(nothing.reason).not.toBe(unchecked.reason);
+    expect(nothing.reason).toMatch(/nothing was inferred/);
+    expect(unchecked.reason).toMatch(/landing clusters/);
+  });
+
+  it('blames the interval as well as the offset when they disagree', () => {
+    // ⚠️ `infer_clock` rejects multiple INTERVALS as well as multiple offsets,
+    // and observations can disagree on the interval while producing the same
+    // modular offset. Such a payload carries `interval_ms: null`, so naming
+    // only the offsets printed a wrong cause beside an empty value.
+    const reason = clockBadge({ status: 'inconsistent', interval_ms: null }).reason;
+    expect(reason).toMatch(/interval/);
+    expect(reason).toMatch(/offset/);
+  });
+
+  it('does not let an unchecked clock stand on its interval alone', () => {
+    // ⛔ An internally consistent clock with zero qualifying landings keeps a
+    // non-null `interval_ms` and a null `pass_ratio`. Treating it as "inferred"
+    // showed the interval and suppressed the explanation, so the row read like
+    // an ordinary validated one (Codex, #804). The badge stays UNVALIDATED and
+    // its reason must be the one that names the missing check.
+    const b = clockBadge({
+      status: 'internally_consistent_unvalidated',
+      interval_ms: 30000, pass_ratio: null, landing_clusters: 0,
+    });
+    expect(b.badge).toBe('UNVALIDATED');
+    expect(b.reason).toMatch(/landing clusters/);
+  });
+
+  it('keeps the three verdicts apart', () => {
+    // ⛔ `inconsistent` is not a weaker `unvalidated`: the candidates disagree
+    // and the value is published as null, never averaged into one.
+    expect(clockBadge({ status: 'internally_consistent_unvalidated' }).badge)
+      .toBe('UNVALIDATED');
+    expect(clockBadge({ status: 'inconsistent' }).badge).toBe('INCONSISTENT');
+  });
+
+  it('says C2 is a stronger confirmation still pending, not the only one', () => {
+    expect(clockBadge({ status: 'validated' }).reason).toMatch(/C2/);
+    expect(clockBadge({ status: 'validated' }).reason).toMatch(/§5\.3/);
+  });
+
+  it('never returns a non-string reason, whatever the payload holds', () => {
+    // ⛔ The type promises `string | undefined`. `team && team.reason` handed
+    // back `null` for the explicitly supported `clockBadge(null)` call, and a
+    // consumer narrowing on `!== undefined` would then treat null as a string
+    // (Codex, #804).
+    for (const team of [null, undefined, { status: 'unavailable' },
+                        { status: 'unavailable', reason: null },
+                        { status: 'unavailable', reason: 42 }]) {
+      const { reason } = clockBadge(team as never);
+      expect(reason === undefined || typeof reason === 'string').toBe(true);
+    }
+  });
+
+  it('distinguishes "no clock at all" from "not independently confirmed"', () => {
+    // These are different facts and a reader needs them apart: one means the
+    // round had nothing to reconstruct from, the other that the reconstruction
+    // exists and has not been checked from outside.
+    expect(clockBadge({ status: 'unavailable', reason: 'no rows' }).badge)
+      .toBe('UNAVAILABLE');
+    expect(clockBadge(null).badge).toBe('UNAVAILABLE');
+  });
+
+  it('says why, so the badge is never bare', () => {
+    for (const status of ['validated', 'insufficient', 'inconsistent']) {
+      expect(clockBadge({ status }).reason).toBeTruthy();
+    }
+  });
+});
+
+describe('capabilityRows', () => {
+  it('keeps three states and never folds unknown into disabled', () => {
+    // ⛔ For every round captured before the tracker declared its flags, an
+    // absent section is equally consistent with the capture being off and with
+    // it being on and having nothing to report. Rendering them alike turns "we
+    // do not know" into "it was off".
+    const rows = capabilityRows({ capabilities: {
+      shot_fired: 'enabled', aim_lock: 'disabled', comm_events: 'unknown',
+    } });
+    // Sorted by name, so the order is aim_lock, comm_events, shot_fired —
+    // stable output matters more than input order for a panel a human reads.
+    expect(rows.map((r) => `${r.name}=${r.state}`)).toEqual([
+      'aim_lock=disabled', 'comm_events=unknown', 'shot_fired=enabled',
+    ]);
+  });
+
+  it('treats an unrecognised value as unknown rather than guessing', () => {
+    const rows = capabilityRows({ capabilities: { odd: 'maybe', missing: '' } });
+    expect(rows.every((r) => r.state === 'unknown' && r.known === false)).toBe(true);
+  });
+
+  it('marks only enabled and disabled as known', () => {
+    const rows = capabilityRows({ capabilities: { a: 'enabled', b: 'unknown' } });
+    expect(rows.map((r) => r.known)).toEqual([true, false]);
+  });
+
+  it('is empty rather than throwing when there is no policy at all', () => {
+    // ⚠️ A null policy is a missing payload, not a round with an absent
+    // manifest. The backend now fills every known flag with `unknown` for the
+    // latter, so the panel says "we cannot tell" instead of going silent — an
+    // empty section reads as "nothing to report" (Codex, #804).
+    expect(capabilityRows(null)).toEqual([]);
+    expect(capabilityRows({})).toEqual([]);
+  });
+
+  it('keeps every flag an absent manifest reports as unknown', () => {
+    const absent = { capabilities: { shot_fired: 'unknown', aim_lock: 'unknown' } };
+    const rows = capabilityRows(absent);
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.state === 'unknown' && !r.known)).toBe(true);
   });
 });
