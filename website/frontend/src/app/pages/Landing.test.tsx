@@ -64,7 +64,9 @@ describe('Landing', () => {
 
     // Live panel: the recording says idle, 0 players, supply, nobody in voice.
     await waitFor(() => expect(screen.getByText('SERVER IDLE')).toBeInTheDocument());
-    expect(screen.getByText('supply')).toBeInTheDocument();
+    // The recording's last event is ~5 days old — while idle the retained
+    // map is a memory and carries its age (Codex wave 5).
+    expect(screen.getByText('supply · 5 d ago')).toBeInTheDocument();
     expect(screen.getByText('No one in voice')).toBeInTheDocument();
 
     // Standing figures straight from /api/stats/overview.
@@ -76,7 +78,11 @@ describe('Landing', () => {
     // runs) and the score is a BOX score, not maps won.
     expect(await screen.findByText('7')).toBeInTheDocument();
     expect(screen.getAllByText(/10 rd/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/last session · Yesterday/)).toBeInTheDocument();
+    // Recency comes from the API's own classification: the recording says
+    // time_ago 'Yesterday', so the panel says last night — regardless of
+    // how many browser-local days have elapsed since the fixture was cut.
+    expect(screen.getByText('last night')).toBeInTheDocument();
+    expect(screen.getByText(/See last night/)).toBeInTheDocument();
     expect(screen.getByText(/box score/)).toBeInTheDocument();
 
     // Session links carry the stable session_id — a date URL would merge
@@ -181,6 +187,27 @@ describe('Landing', () => {
     );
     renderLanding();
     await waitFor(() => expect(screen.getByText(/5 players · seen 4 min ago/)).toBeInTheDocument());
+  });
+
+  it('qualifies a voice snapshot whose updated_at is stale', async () => {
+    // The endpoint does not expose updated_at TODAY — this asserts the
+    // defensive path is live the moment the backend starts sending it.
+    const stale = {
+      ...(voice as Record<string, unknown>),
+      updated_at: new Date(Date.now() - 3600_000).toISOString(),
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const pathname = String(input).split('?')[0];
+        if (pathname === '/api/voice-activity/current') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve(stale) } as Response);
+        }
+        return fixtureFetch(input);
+      }),
+    );
+    renderLanding();
+    await waitFor(() => expect(screen.getByText(/No one in voice · as of 60 min ago/)).toBeInTheDocument());
   });
 
   it('labels a session dated today as tonight, not last night', async () => {
