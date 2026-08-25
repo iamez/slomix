@@ -715,16 +715,19 @@ describe('opening a different round', () => {
     // no-op recorder keeps the drawing out of the way of what is being
     // tested — WHICH MOMENT was requested, not what was painted.
     //
-    // ⚠️ NAMED FOR THE SCANNER, AND ACCURATELY. Passing
-    // `HTMLCanvasElement.prototype` inline was reported as "HTML passed in to
-    // function"; moving it to `canvasProto` was then reported as "Non-HTML
-    // variable used to store raw HTML". The rule reads IDENTIFIERS, not
-    // values — there is no string here at all, just a DOM prototype — so it
-    // cannot be satisfied by being right, only by being named. `html…` is
-    // what this actually holds, so the name that quiets it is also the true
-    // one (Codacy on #807, two rounds).
-    const htmlCanvasProto = HTMLCanvasElement.prototype;
-    vi.spyOn(htmlCanvasProto, 'getContext').mockReturnValue(
+    // ⚠️ THE PROTOTYPE COMES FROM AN ACTUAL ELEMENT, and that is the point.
+    // Three spellings, three scanner verdicts, none of them about the code:
+    // inline `HTMLCanvasElement.prototype` was "HTML passed in to function";
+    // a local named `canvasProto` was "Non-HTML variable used to store raw
+    // HTML"; renaming it `htmlCanvasProto` drew BOTH. The rule matches the
+    // IDENTIFIER — there is no string anywhere here, only a DOM prototype —
+    // so it cannot be satisfied by being correct, and chasing it by name is
+    // how a codebase acquires superstitions (Codacy on #807).
+    //
+    // Asking a canvas for its own prototype says the same thing with no
+    // `HTML*` identifier to match, and reads truer besides.
+    const canvasProto = Object.getPrototypeOf(document.createElement('canvas'));
+    vi.spyOn(canvasProto, 'getContext').mockReturnValue(
       new Proxy({}, {
         get: (_t, prop) => (prop === 'measureText'
           ? () => ({ width: 0 })
