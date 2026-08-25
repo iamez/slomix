@@ -145,7 +145,7 @@ function Counted() {
 function ThisBuild() {
   const build = useBuildInfo();
   return (
-    <div>
+    <div data-parity="admin.build">
       <Lbl>this build</Lbl>
       <div style={{ ...BOX, marginTop: 12 }}>
         {build.isPending && <Pending label="build" />}
@@ -176,7 +176,7 @@ function ThisBuild() {
 function Health() {
   const overview = useSystemOverview();
   return (
-    <div style={{ marginTop: 26 }}>
+    <div data-parity="admin.health" style={{ marginTop: 26 }}>
       <Lbl>health</Lbl>
       <div style={{ marginTop: 12 }}>
         {overview.isPending && <Pending label="health" />}
@@ -207,7 +207,7 @@ function ProbeTable() {
     return () => { cancelled = true; };
   }, []);
   return (
-    <div style={{ marginTop: 26 }}>
+    <div data-parity="admin.probes" style={{ marginTop: 26 }}>
       <Lbl>endpoint probes · live, fired on load</Lbl>
       <div style={{ marginTop: 12 }}>
         {API_PROBES.map((probe) => {
@@ -234,7 +234,7 @@ function ProbeTable() {
 export function About() {
   return (
     <div style={{ paddingBottom: 40 }}>
-      <div style={{ paddingTop: 52, maxWidth: '74ch' }}>
+      <div data-parity="admin.hero" style={{ paddingTop: 52, maxWidth: '74ch' }}>
         <Lbl>about</Lbl>
         <h1 style={{ fontSize: 44, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.08, margin: '14px 0 0', fontWeight: 500 }}>
           Slomix keeps the record of our games.
@@ -248,11 +248,11 @@ export function About() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginTop: 44, borderTop: '1px solid var(--color-rule-700)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div data-parity="admin.figures" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', marginTop: 44, borderTop: '1px solid var(--color-rule-700)', borderBottom: '1px solid var(--color-rule-800)' }}>
         <HeadlineFigures />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 56, marginTop: 52 }}>
+      <div data-parity="admin.what-it-does" style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 56, marginTop: 52 }}>
         <div>
           <h2 style={H2}>What it does</h2>
           <p style={{ ...P, marginTop: 14 }}>
@@ -270,7 +270,7 @@ export function About() {
             wins.
           </p>
 
-          <div style={{ marginTop: 34 }}>
+          <div data-parity="admin.problems" style={{ marginTop: 34 }}>
             <Lbl>the four things stopwatch makes hard</Lbl>
             <div style={{ marginTop: 14 }}>
               {PROBLEMS.map((p) => (
@@ -286,7 +286,7 @@ export function About() {
           </div>
         </div>
 
-        <div>
+        <div data-parity="admin.pipeline">
           <Lbl>the pipeline</Lbl>
           <div style={{ marginTop: 14 }}>
             {PIPELINE.map((s) => (
@@ -301,7 +301,7 @@ export function About() {
           </div>
 
           <Lbl style={{ marginTop: 26 }}>six checks before a row is kept</Lbl>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginTop: 12 }}>
+          <div data-parity="admin.checks" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6, marginTop: 12 }}>
             {CHECKS.map((c) => (
               <div key={c.k} style={{ ...BOX, padding: 10 }}>
                 <div className="m" style={{ fontSize: 11, color: c.ok ? 'var(--color-pos)' : 'var(--color-accent-warm)' }}>{c.state}</div>
@@ -317,7 +317,7 @@ export function About() {
       </div>
 
       <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
-        <h2 style={H2}>The five surfaces</h2>
+        <h2 style={H2} data-parity="admin.surfaces">The five surfaces</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 20, marginTop: 18 }}>
           {SURFACES.map((s) => (
             <div key={s.k}>
@@ -332,7 +332,7 @@ export function About() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
         <div>
-          <h2 style={H2}>What we built on purpose</h2>
+          <h2 style={H2} data-parity="admin.principles">What we built on purpose</h2>
           <p style={{ ...P, marginTop: 14 }}>
             The project is built for a fixed group of players, not for growth, and that shapes what
             gets built.
@@ -347,7 +347,7 @@ export function About() {
           </div>
         </div>
         <div>
-          <h2 style={H2}>And what we left out</h2>
+          <h2 style={H2} data-parity="admin.not-built">And what we left out</h2>
           <p style={{ ...P, marginTop: 14 }}>
             Removing a page is as valuable as adding one, so these were decided against rather than
             postponed.
@@ -367,7 +367,7 @@ export function About() {
       </div>
 
       <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
-        <h2 style={H2}>Counted, live</h2>
+        <h2 style={H2} data-parity="admin.counted">Counted, live</h2>
         <Lbl style={{ marginTop: 6 }}>
           not a public dataset — one group's games, straight from the database as you read this
         </Lbl>
@@ -378,7 +378,7 @@ export function About() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', gap: 56, marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
         <div>
-          <h2 style={H2}>Development</h2>
+          <h2 style={H2} data-parity="admin.development">Development</h2>
           <p style={{ ...P, marginTop: 14 }}>
             Written and run by one person, with the group testing it every time we play.
           </p>
@@ -394,7 +394,7 @@ export function About() {
             ))}
           </div>
 
-          <h2 style={{ ...H2, marginTop: 34 }}>Thanks</h2>
+          <h2 style={{ ...H2, marginTop: 34 }} data-parity="admin.thanks">Thanks</h2>
           <p style={{ ...P, marginTop: 14 }}>For the pieces this was built on top of.</p>
           <div style={{ marginTop: 16 }}>
             {THANKS.map((t) => (
@@ -414,7 +414,7 @@ export function About() {
       </div>
 
       <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
-        <h2 style={H2}>Where to start</h2>
+        <h2 style={H2} data-parity="admin.start">Where to start</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginTop: 18 }}>
           {START.map((s) => (
             <Link key={s.k} to={s.to} style={{ display: 'block', textDecoration: 'none', color: 'var(--color-text-100)' }}>

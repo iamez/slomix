@@ -53,7 +53,7 @@ function LivePanel() {
   // field says which.
   const voiceData = voice.isError || voice.data?.status === 'unavailable' ? undefined : voice.data;
   return (
-    <div style={{ border: '1px solid var(--color-rule-700)', padding: '14px 16px' }}>
+    <div data-parity="landing.live" style={{ border: '1px solid var(--color-rule-700)', padding: '14px 16px' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
         {live.isPending && <Pending label="live" />}
         {live.isError && <Unavailable what="game server" />}
@@ -134,7 +134,7 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
   // (Codex on #806, wave 7) — only sessionRecency() may earn the label.
   if (pending) {
     return (
-      <div style={{ marginTop: 22 }}>
+      <div data-parity="landing.last-night" style={{ marginTop: 22 }}>
         <Lbl>latest session</Lbl>
         <div style={{ marginTop: 8 }}><Pending label="last session" /></div>
       </div>
@@ -144,7 +144,7 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
     // A successful empty answer is not a failure (Codex on #806, wave 3):
     // a fresh database has no last session, but the endpoint is fine.
     return (
-      <div style={{ marginTop: 22 }}>
+      <div data-parity="landing.last-night" style={{ marginTop: 22 }}>
         <Lbl>latest session</Lbl>
         <div style={{ marginTop: 8 }}>
           {empty
@@ -158,7 +158,7 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
     session.team_1_name != null && session.team_2_name != null
     && session.team_1_score != null && session.team_2_score != null;
   return (
-    <div style={{ marginTop: 22 }}>
+    <div data-parity="landing.last-night" style={{ marginTop: 22 }}>
       <Lbl>{sessionRecency(session).label}</Lbl>
       <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 8 }}>
         {session.formatted_date.replace(/,.*$/, '')} {monthDay(session.date).split(' ').slice(1).join(' ')}
@@ -244,7 +244,7 @@ export function Landing() {
   return (
     <div style={{ paddingBottom: 40 }}>
       <div className="landing-hero">
-        <div>
+        <div data-parity="landing.hero">
           <Lbl>enemy territory: legacy · stopwatch · since january 2025</Lbl>
           <h1 style={{ fontSize: 52, fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.04, margin: '14px 0 0', maxWidth: '13em' }}>
             Every round we play, written down.
@@ -269,14 +269,14 @@ export function Landing() {
 
         <div>
           <div style={{ marginBottom: 8 }}>
-            <SectionHead label="live now" />
+            <SectionHead label="live now" parity="landing.live-head" />
           </div>
           <LivePanel />
           <LastNightPanel session={lastNight} pending={sessions.isPending} empty={sessionsData?.length === 0} />
         </div>
       </div>
 
-      <div className="landing-quad" style={{ marginTop: 48, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div className="landing-quad" data-parity="landing.figures" style={{ marginTop: 48, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
         {overview.isPending && <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>}
         {(overview.isError || overviewSuspect) && <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>}
         {overviewData && !overviewSuspect && (
@@ -297,7 +297,7 @@ export function Landing() {
       </div>
 
       <div style={{ marginTop: 40 }}>
-        <SectionHead label="where to go" />
+        <SectionHead label="where to go" parity="landing.where-to-go" />
         <div className="landing-quad" style={{ gap: 28, marginTop: 14 }}>
           {[
             { to: '/profile', title: 'Your profile', body: 'Your rounds, against your own form.', bar: 'var(--color-accent)' },
@@ -318,6 +318,7 @@ export function Landing() {
         <div>
           <SectionHead
             label="recent evenings"
+            parity="landing.recent-evenings"
             aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>all sessions →</Link>}
           />
           <div style={{ marginTop: 10 }}>
@@ -349,6 +350,7 @@ export function Landing() {
         <div>
           <SectionHead
             label="leading this week"
+            parity="landing.leaders"
             aside={<Link to="/leaderboards" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>leaderboards →</Link>}
           />
           {leaders.isPending && <div style={{ marginTop: 10 }}><Pending label="leaders" /></div>}
@@ -370,7 +372,7 @@ export function Landing() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, marginTop: 56, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div data-parity="landing.cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, marginTop: 56, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
         <div>
           <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             Played with us? Your stats are already in here.

@@ -95,7 +95,7 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
   if (!linkage || linkage.available !== true) {
     return (
       <div style={{ marginTop: 40 }}>
-        <SectionHead label="data integrity" />
+        <SectionHead label="data integrity" parity="system.linkage" />
         <div style={{ marginTop: 10 }}><Unavailable what="linkage check" /></div>
       </div>
     );
@@ -109,7 +109,7 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
   const breaches = linkage.breaches ?? [];
   return (
     <div style={{ marginTop: 40 }}>
-      <SectionHead label="data integrity" />
+      <SectionHead label="data integrity" parity="system.linkage" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 10, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
         {cells.map((c) => (
           <div key={c.k} style={{ padding: '14px 0 12px' }}>
@@ -139,7 +139,7 @@ export function SystemPage() {
   const overview = useSystemOverview();
 
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 760 }}>
+    <div data-parity="system.headline" style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 760 }}>
       <Lbl>system · refreshed every 30 s · never from a cache</Lbl>
       {overview.isPending && <div style={{ marginTop: 16 }}><Pending label="checking the chain" /></div>}
       {overview.isError && (
@@ -161,7 +161,7 @@ export function SystemPage() {
             checked {String(overview.data.generated_at).replace('T', ' ').slice(0, 19)} utc
           </div>
           <div style={{ marginTop: 28 }}>
-            <SectionHead label="the chain · game server → capture → parser → smart stats → api" />
+            <SectionHead label="the chain · game server → capture → parser → smart stats → api" parity="system.chain" />
             <div style={{ marginTop: 6 }}>
               {overview.data.stages.length === 0
                 ? <div style={{ marginTop: 10 }}><Unavailable what="stages" /></div>
