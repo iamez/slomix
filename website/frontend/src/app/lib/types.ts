@@ -112,3 +112,61 @@ export interface QuickLeaders {
   dpm_sessions: QuickLeaderRow[];
   errors: unknown[];
 }
+
+/** One stage of the capture chain. detail keys vary per stage. */
+export interface SystemStage {
+  key: string;
+  label: string;
+  state: 'ok' | 'idle' | 'warn' | 'down' | 'unknown' | string;
+  summary: string;
+  detail: Record<string, unknown>;
+}
+
+/** GET /api/system/overview — corpus: api_system_overview.json */
+export interface SystemOverview {
+  generated_at: string;
+  overall: SystemStage['state'];
+  stages: SystemStage[];
+  linkage: {
+    available: boolean;
+    metrics?: Record<string, number>;
+    breach_count?: number;
+    breaches?: { metric: string; value: number; threshold: number }[];
+  };
+}
+
+/** GET /api/diagnostics/storytelling-completeness — corpus:
+ * api_diagnostics_storytelling_completeness.json */
+export interface StorytellingCompleteness {
+  session_date: string;
+  session_dates: string[];
+  gaming_session_id: number | null;
+  scope: string;
+  status: string;
+  kills_total: number;
+  kills_with_round: number;
+  unlinked_kills: number;
+  wrong_round_kills: number;
+  distinct_rounds_in_kills: number;
+  kis_rows: number;
+  kis_computed: boolean;
+  rounds_total: number;
+  rounds_correlated: number;
+  completeness_ratio: number | null;
+  linkage_ratio: number | null;
+  correlation_ratio: number | null;
+  kis_total_impact_sum: number | null;
+  warnings: { level: string; message: string }[];
+  known_issues: { key: string; title: string; detail: string }[];
+}
+
+/** GET /api/build — NOT in the OpenAPI spec (include_in_schema=False, by
+ * design: it identifies the process, it is not part of the data contract).
+ * Fixture recorded by hand from the live backend: api_build.json */
+export interface BuildInfo {
+  revision: string;
+  revision_short: string;
+  started_at: string;
+  api_contract: string;
+  schema_ledger_max_file: string;
+}

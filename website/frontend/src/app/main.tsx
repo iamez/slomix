@@ -6,6 +6,9 @@ import './tokens.css';
 import { applyHashShim } from './hashShim';
 import { AppShell } from './components/AppShell';
 import { Landing } from './pages/Landing';
+import { About } from './pages/About';
+import { SystemPage } from './pages/SystemPage';
+import { SmartStatsDiag } from './pages/SmartStatsDiag';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
 
@@ -42,6 +45,9 @@ function Stub({ label, phase }: { label: string; phase: number }) {
 /** Built pages replace their stubs route by route as phases land. */
 const PAGES: Record<string, React.ReactElement> = {
   landing: <Landing />,
+  admin: <About />,
+  system: <SystemPage />,
+  'smart-stats-diag': <SmartStatsDiag />,
 };
 
 const router = createBrowserRouter(
