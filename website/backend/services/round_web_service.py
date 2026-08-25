@@ -772,6 +772,15 @@ def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
     statement. `interval_ms` stays because §6.3 itself treats the interval as
     known ("constrains phase modulo the KNOWN interval"); what a cue would buy
     you is the phase, and the phase is what goes.
+
+    ⭐⭐ `unknown_to_this_pov` IS NOT A SIXTH QUALITY STATE. The other five —
+    `validated`, `internally_consistent_unvalidated`, `validation_failed`,
+    `inconsistent`, `unavailable` — all answer "how good is this measurement".
+    This one answers "who is allowed to see it", which is a different axis
+    entirely. A consumer that folds it into a switch over measurement quality
+    will read a deliberate boundary as a degraded reconstruction (Fable's
+    review of this PR). The renderer keeps them apart: WITHHELD is its own
+    badge, not a shade of UNVALIDATED.
     """
     if not pov_team:
         return clock

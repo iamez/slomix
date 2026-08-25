@@ -920,6 +920,12 @@ def _mentions_of(node, guids: set[str], path: str = "") -> list[str]:
     Returns human-readable paths ("nearest_teammate_separation.AL1") rather
     than a bare boolean, because a guard that only says "something leaked" is
     a guard someone will spend an hour arguing with.
+
+    ⚠️ EXACT MATCHES ONLY, which is why it is not used alone. A composite key
+    (`"AL1:AX2"`) or a guid inside a sentence (`"AL1 down"`) walks straight
+    past it — Fable's review of this very PR, and the same narrowness the
+    guard was written to fix one level up. `_substring_mentions` covers that
+    half; this one exists for the PATH it can name when it does match.
     """
     found: list[str] = []
     if isinstance(node, dict):
@@ -934,6 +940,18 @@ def _mentions_of(node, guids: set[str], path: str = "") -> list[str]:
     elif isinstance(node, str) and node in guids:
         found.append(path)
     return found
+
+
+def _substring_mentions(node, guids: set[str]) -> list[str]:
+    """The other half: a guid ANYWHERE in the serialised payload.
+
+    Catches what structure-aware matching cannot — a guid built into a key,
+    embedded in a message, or concatenated into an id. Cannot say WHERE, so
+    the two run together: the structural scan names the path when it can, and
+    this one refuses to let a new shape through when it cannot.
+    """
+    blob = json.dumps(node, default=str)
+    return sorted(g for g in guids if g in blob)
 
 
 class TestTheEnemyClockDoesNotLeakThroughBeliefTiming:
@@ -1224,14 +1242,20 @@ class TestATeamPovWithholdsTheTruthItHas:
         withheld = set(payload["withheld_by_pov"])
         assert withheld, "the fixture must actually withhold somebody"
 
-        leaks = _mentions_of(
-            {k: v for k, v in payload.items()
-             if k not in ("withheld_by_pov", "information_state")},
-            withheld,
-        )
-        assert leaks == [], (
+        allowed = {k: v for k, v in payload.items()
+                   if k not in ("withheld_by_pov", "information_state")}
+
+        assert _mentions_of(allowed, withheld) == [], (
             "withheld players are named outside their bucket: "
-            + "; ".join(leaks)
+            + "; ".join(_mentions_of(allowed, withheld))
+        )
+        # ⭐ AND THE SUBSTRING HALF. Exact key/value matching is itself a shape
+        # — a composite key or a guid inside a sentence slips past it, which is
+        # precisely the narrowness this whole guard exists to correct one level
+        # up (Fable's review). Two scans, because either alone is a guard
+        # tuned to the leaks we have already seen.
+        assert _substring_mentions(allowed, withheld) == [], (
+            "a withheld guid appears somewhere in the payload text"
         )
 
     @pytest.mark.asyncio
