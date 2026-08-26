@@ -89,6 +89,43 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
 
 SPATIAL_FILTER = " AND EXISTS (SELECT 1 FROM player_track t WHERE t.round_id = r.id)"
 
+# §8.3 requires the OUTCOME DEFINITION to be frozen with the family, and win/loss
+# is not the only defensible one. A stopwatch match is decided by a margin in
+# SECONDS: R1 sets a time, R2 attacks it. `rounds.time_to_beat_seconds` would say
+# so directly but is populated on 33 of 2,007 eligible rounds, so the margin is
+# derived from the pair instead — R1 duration minus R2 duration, both from
+# `actual_duration_seconds`, the MEASURED clock (`actual_time` is the stopwatch
+# TARGET and overstates ~15% of rounds; see shared/round_time.py).
+#
+# Sign convention: positive margin means the side that attacked in R2 was the
+# faster one. A player's signed margin is + if their team attacked in R2, - if
+# it defended. Rounds whose pair cannot be resolved get NULL and are EXCLUDED
+# under --outcome seconds rather than scored as zero.
+MARGIN_CTE = """
+WITH pair_margin AS (
+  SELECT r1.id AS r1id, r2.id AS r2id, r1.defender_team AS r2_attacker,
+         (r1.actual_duration_seconds - r2.actual_duration_seconds)::float AS margin
+  FROM rounds r1
+  JOIN rounds r2
+    ON r2.gaming_session_id = r1.gaming_session_id
+   AND r2.map_name = r1.map_name
+   AND r1.round_number = 1 AND r2.round_number = 2
+   AND r2.created_at > r1.created_at
+   AND r2.created_at < r1.created_at + interval '45 minutes'
+  WHERE r1.is_valid AND r2.is_valid
+    AND r1.defender_team IN (1, 2)
+    AND r1.actual_duration_seconds IS NOT NULL
+    AND r2.actual_duration_seconds IS NOT NULL
+)
+"""
+
+MARGIN_SELECT = """,
+       pm.margin        AS margin,
+       pm.r2_attacker   AS r2_attacker"""
+
+MARGIN_JOIN = """
+LEFT JOIN pair_margin pm ON r.id IN (pm.r1id, pm.r2id)"""
+
 
 @dataclass(frozen=True)
 class Candidate:
@@ -109,6 +146,7 @@ class Family:
     name: str
     candidates: list[Candidate]
     filters: str
+    outcome: str = "win"          # §8.3: the outcome definition is frozen too
     split_fraction: float = DISCOVERY_FRACTION
     resamples: int = RESAMPLES
     seed: int = SEED
@@ -119,6 +157,7 @@ class Family:
             "family": self.name,
             "candidates": [c.manifest_entry() for c in self.candidates],
             "filters": self.filters,
+            "outcome": self.outcome,
             "split_fraction": self.split_fraction,
             "resamples": self.resamples,
             "seed": self.seed,
@@ -132,7 +171,28 @@ class Family:
 
 
 # --- §8.1 + §8.6: the measurement --------------------------------------------
-def within_round_spread(rows_by_round: dict, metric: Callable) -> float | None:
+def outcome_win(p: dict) -> float | None:
+    """§8.6 reference outcome: did this player's side win the round."""
+    return 1.0 if p["team"] == p["winner"] else 0.0
+
+
+def outcome_seconds(p: dict) -> float | None:
+    """Signed stopwatch margin in seconds for this player's side.
+
+    None when the match pair could not be resolved — the round is then dropped,
+    not scored as a zero margin. A missing measurement and a dead heat have the
+    same shape here and must not be confused.
+    """
+    if p.get("margin") is None or p.get("r2_attacker") is None:
+        return None
+    return float(p["margin"]) * (1.0 if p["team"] == p["r2_attacker"] else -1.0)
+
+
+OUTCOMES = {"win": outcome_win, "seconds": outcome_seconds}
+
+
+def within_round_spread(rows_by_round: dict, metric: Callable,
+                        outcome: Callable = outcome_win) -> float | None:
     """§8.6 reference implementation, kept within round (§8.1).
 
     Per round: rank that round's players by the metric, split at the median,
@@ -149,15 +209,80 @@ def within_round_spread(rows_by_round: dict, metric: Callable) -> float | None:
         vals = [(v, p) for v, p in vals if v is not None]
         if len(vals) < MIN_PLAYERS_PER_ROUND:
             continue
+        # a player whose outcome is unmeasurable takes the whole round with it:
+        # a half-measured round would compare two different populations
+        outs = [outcome(p) for _, p in vals]
+        if any(o is None for o in outs):
+            continue
         vals.sort(key=lambda vp: vp[0])
         half = len(vals) // 2
         lo, hi = vals[:half], vals[-half:]
-        lo_wins = sum(1.0 for _, p in lo if p["team"] == p["winner"]) / len(lo)
-        hi_wins = sum(1.0 for _, p in hi if p["team"] == p["winner"]) / len(hi)
-        diffs.append(hi_wins - lo_wins)
+        lo_mean = sum(outcome(p) for _, p in lo) / len(lo)
+        hi_mean = sum(outcome(p) for _, p in hi) / len(hi)
+        diffs.append(hi_mean - lo_mean)
     if len(diffs) < 2:
         return None
     return statistics.mean(diffs)
+
+
+def within_round_point_biserial(rows_by_round: dict, metric: Callable,
+                                outcome: Callable = outcome_win) -> float | None:
+    """Same question as §8.6, without throwing the magnitudes away.
+
+    §8.6's median split reduces each player to above/below and each round to a
+    difference of two proportions. That is a deliberately blunt instrument, and
+    bluntness costs power: the floor a sample can reach is a property of the
+    ESTIMATOR as much as of the sample size. This is the continuous form —
+    standardise the metric within the round (§8.1 still holds: the comparison
+    never leaves the round) and correlate it with who won.
+
+    Reported as a within-round point-biserial correlation, so it is NOT on the
+    win-rate-difference scale of within_round_spread(). Compare the two by their
+    t = effect / bootstrap SD, never by their raw size.
+
+    ⚠️ MEASURED 2026-08-26, AND THE HYPOTHESIS LOST. The idea above — that the
+    median split wastes power and a continuous estimator would lower the floor —
+    is wrong on this data. Ratio of t (continuous / median split), 600 block
+    resamples on the confirmation half:
+
+        all rounds       kpr 0.94x   kd_ratio 0.57x   dpm 0.67x   dmg_ratio 0.65x
+        rounds w/tracks  kpr 1.75x   kd_ratio 0.77x   dpm 0.70x   dmg_ratio 1.02x
+
+    Rounds hold 4-12 players, so the per-round standard deviations this estimator
+    divides by are themselves noisy; that noise costs more than the magnitudes
+    buy back. The median split is the more robust statistic at this roster size.
+
+    Kept — not deleted — so the next person reads a measurement instead of
+    re-running the idea. It is not the lever; the denominator is.
+    """
+    rs = []
+    for players in rows_by_round.values():
+        pairs = [(metric(p), outcome(p)) for p in players]
+        pairs = [(v, w) for v, w in pairs if v is not None and w is not None]
+        if len(pairs) < MIN_PLAYERS_PER_ROUND:
+            continue
+        vs = [v for v, _ in pairs]
+        ws = [w for _, w in pairs]
+        # a round where everyone shares an outcome carries no within-round
+        # information about winning — it is skipped, not scored as zero
+        if len(set(ws)) < 2:
+            continue
+        mv, mw = statistics.mean(vs), statistics.mean(ws)
+        sv = statistics.pstdev(vs)
+        sw = statistics.pstdev(ws)
+        if sv == 0 or sw == 0:
+            continue
+        cov = sum((v - mv) * (w - mw) for v, w in pairs) / len(pairs)
+        rs.append(cov / (sv * sw))
+    if len(rs) < 2:
+        return None
+    return statistics.mean(rs)
+
+
+ESTIMATORS = {
+    "median_split": within_round_spread,          # §8.6 reference
+    "point_biserial": within_round_point_biserial,
+}
 
 
 # --- §8.2: the resampling unit is the match block -----------------------------
@@ -182,8 +307,9 @@ class _Rng:
         return self._r.randrange(n)
 
 
-def block_bootstrap(blocks: dict, metric: Callable, resamples: int,
-                    seed: int) -> list[float]:
+def block_bootstrap(blocks: dict, metric: Callable, resamples: int, seed: int,
+                    estimator: Callable = None,
+                    outcome: Callable = outcome_win) -> list[float]:
     """Resample WHOLE blocks with replacement (§8.2).
 
     Teammates share an outcome, and R1/R2 plus several maps in one session share
@@ -201,7 +327,7 @@ def block_bootstrap(blocks: dict, metric: Callable, resamples: int,
             for rid, players in blocks[k].items():
                 # a round drawn twice counts twice: give it a fresh key
                 merged[(k, rid, len(merged))] = players
-        s = within_round_spread(merged, metric)
+        s = (estimator or within_round_spread)(merged, metric, outcome)
         if s is not None:
             out.append(s)
     return out
@@ -318,7 +444,12 @@ DEFAULT_FAMILY = [
 
 async def load(spatial: bool) -> tuple[dict, dict]:
     """Returns (blocks -> rid -> [player rows], block -> earliest timestamp)."""
-    sql = ROWS_SQL + (SPATIAL_FILTER if spatial else "")
+    sql = (MARGIN_CTE + ROWS_SQL.replace("       pcs.time_played_seconds           AS secs",
+                                         "       pcs.time_played_seconds           AS secs"
+                                         + MARGIN_SELECT)
+           .replace("JOIN rounds r ON r.id = pcs.round_id",
+                    "JOIN rounds r ON r.id = pcs.round_id" + MARGIN_JOIN)
+           + (SPATIAL_FILTER if spatial else ""))
     conn = await asyncpg.connect(
         host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
         port=int(os.environ.get("POSTGRES_PORT", "5432")),
@@ -360,13 +491,14 @@ def analyse(blocks: dict, keep: set, family: Family) -> dict:
     sub = {b: blocks[b] for b in keep if b in blocks}
     point, boot = {}, {}
     for i, c in enumerate(family.candidates):
-        p = within_round_spread(flat, c.fn)
+        oc = OUTCOMES[family.outcome]
+        p = within_round_spread(flat, c.fn, oc)
         if p is None:
             continue
         point[c.cid] = p
         # a per-candidate seed offset keeps members from sharing one draw
         boot[c.cid] = block_bootstrap(sub, c.fn, family.resamples,
-                                      family.seed + i * 7919)
+                                      family.seed + i * 7919, outcome=oc)
     return {"point": point, "boot": boot, "rounds": len(flat)}
 
 
@@ -382,6 +514,9 @@ def report(family: Family, disc: dict, conf: dict,
     print(f"§8 VALIDATION — family '{family.name}'")
     print(f"manifest sha256 : {family.manifest_hash()}")
     print("protocol        : docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md §8")
+    print(f"outcome         : {family.outcome}"
+          + ("  (win-rate difference)" if family.outcome == "win"
+             else "  (signed stopwatch margin, seconds)"))
     print(f"resamples       : {family.resamples} block resamples, seed {family.seed}")
     print(f"split           : {d_counts[0]} discovery blocks / {c_counts[0]} confirmation blocks")
     print(f"                  {d_counts[1]} rounds / {c_counts[1]} rounds")
@@ -449,6 +584,8 @@ async def main() -> int:
     ap.add_argument("--spatial", action="store_true",
                     help="restrict to rounds carrying position tracks (Layer 4 universe)")
     ap.add_argument("--resamples", type=int, default=RESAMPLES)
+    ap.add_argument("--outcome", choices=sorted(OUTCOMES), default="win",
+                    help="win = §8.6 reference; seconds = stopwatch margin")
     ap.add_argument("--seed", type=int, default=SEED,
                     help="published seed; changing it changes the manifest hash")
     args = ap.parse_args()
@@ -459,11 +596,13 @@ async def main() -> int:
         return 1
 
     family = Family(
-        name="foundations-2026-08" + ("-spatial" if args.spatial else ""),
+        name=("foundations-2026-08" + ("-spatial" if args.spatial else "")
+              + ("" if args.outcome == "win" else f"-{args.outcome}")),
         candidates=DEFAULT_FAMILY,
         filters=ROWS_SQL.strip() + (SPATIAL_FILTER if args.spatial else ""),
         resamples=args.resamples,
         seed=args.seed,
+        outcome=args.outcome,
     )
 
     disc_b, conf_b, ordered, cut = chronological_split(times, family.split_fraction)
@@ -475,16 +614,32 @@ async def main() -> int:
                      _counts(blocks, disc_b), _counts(blocks, conf_b), cutoff)
 
     # The instrument must fail its own controls before anyone trusts its verdict
-    # on an unknown metric. `kpr` was retired in #556; `null` has no signal by
-    # construction. Either one shipping means the harness is broken.
+    # on an unknown metric.
+    #
+    # `null` is pure noise by construction: it must fail under EVERY outcome
+    # definition. If noise ships, the harness is broken, full stop.
+    #
+    # `kpr` is a calibration point, not a universal control, and conflating the
+    # two was a design error here. #556 retired it against the WIN outcome; it
+    # says nothing about whether kill count tracks a stopwatch MARGIN. Enforcing
+    # it under --outcome seconds would be asserting a result nobody measured, so
+    # it is checked only for the outcome it was retired under and reported as
+    # information otherwise.
     by_id = {r["id"]: r["verdict"] for r in results}
-    print("\nINSTRUMENT CHECK — both controls must FAIL:")
+    controls = ["null"] + (["kpr"] if family.outcome == "win" else [])
+    print("\nINSTRUMENT CHECK — these controls must FAIL:")
     broken = False
     for cid in ("kpr", "null"):
         got = by_id.get(cid, "MISSING")
+        enforced = cid in controls
         ok = got == "FAILS"
-        broken = broken or not ok
-        print(f"  {cid:<6} {got:<9} {'ok' if ok else 'INSTRUMENT IS BROKEN'}")
+        if enforced:
+            broken = broken or not ok
+            note = "ok" if ok else "INSTRUMENT IS BROKEN"
+        else:
+            note = (f"not a control under outcome '{family.outcome}' "
+                    f"— #556 retired it against 'win' only")
+        print(f"  {cid:<6} {got:<9} {note}")
     if broken:
         print("\nRefusing to report this run as valid: a control passed. Do not "
               "use these verdicts.")

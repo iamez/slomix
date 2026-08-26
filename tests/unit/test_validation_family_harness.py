@@ -35,6 +35,9 @@ from validation_family import (  # noqa: E402 - path set above
     detectable_effect,
     holm,
     max_t_intervals,
+    outcome_seconds,
+    outcome_win,
+    within_round_point_biserial,
     within_round_spread,
 )
 
@@ -180,3 +183,69 @@ class TestTheFloorIsPublished:
 
     def test_an_unmeasurable_sd_gives_no_false_comfort(self):
         assert math.isnan(detectable_effect(float("nan")))
+
+
+class TestTheAlternativeEstimator:
+    """`within_round_point_biserial` exists as a measured alternative, not a
+    replacement — see its docstring for why it lost. These tests pin its
+    behaviour so it stays honest if anyone revisits it."""
+
+    def test_it_agrees_with_the_reference_on_direction(self):
+        rounds = {i: _round([(9, 1), (8, 1), (2, 2), (1, 2)], winner=1)
+                  for i in range(10)}
+        assert within_round_point_biserial(rounds, _metric) > 0
+        assert within_round_spread(rounds, _metric) > 0
+
+    def test_a_round_where_everyone_shares_an_outcome_is_skipped(self):
+        """No within-round information about winning exists there. Scoring it as
+        zero would be an absence read as evidence."""
+        same = [{"guid": f"p{i}", "rid": 1, "team": 1, "winner": 1, "v": i}
+                for i in range(6)]
+        assert within_round_point_biserial({1: same}, _metric) is None
+
+    def test_a_constant_metric_carries_no_signal(self):
+        rounds = {i: _round([(5, 1), (5, 1), (5, 2), (5, 2)], winner=1)
+                  for i in range(5)}
+        assert within_round_point_biserial(rounds, _metric) is None
+
+
+class TestTheOutcomeDefinition:
+    """§8.3 freezes the OUTCOME as well as the formula. Win/loss is one bit per
+    round; the stopwatch margin is a continuous measurement of the same match.
+    Which one is used changes the answer, so it changes the manifest hash."""
+
+    def _p(self, team, winner=1, margin=None, r2_attacker=None):
+        return {"guid": "g", "rid": 1, "team": team, "winner": winner,
+                "margin": margin, "r2_attacker": r2_attacker, "v": 1}
+
+    def test_win_outcome_is_one_for_the_winning_side(self):
+        assert outcome_win(self._p(1, winner=1)) == 1.0
+        assert outcome_win(self._p(2, winner=1)) == 0.0
+
+    def test_the_margin_is_signed_by_which_side_attacked_in_r2(self):
+        """Positive margin means the R2 attack was faster. That side gains it;
+        the other side loses exactly as much."""
+        fast = self._p(1, margin=40.0, r2_attacker=1)
+        slow = self._p(2, margin=40.0, r2_attacker=1)
+        assert outcome_seconds(fast) == +40.0
+        assert outcome_seconds(slow) == -40.0
+
+    def test_an_unresolved_pair_is_unmeasurable_not_a_dead_heat(self):
+        """A missing measurement and a zero margin have the same shape. Reading
+        the first as the second would invent evidence."""
+        assert outcome_seconds(self._p(1, margin=None, r2_attacker=1)) is None
+        assert outcome_seconds(self._p(1, margin=10.0, r2_attacker=None)) is None
+
+    def test_a_round_with_any_unmeasurable_player_is_dropped_whole(self):
+        """Half a round would compare two different populations."""
+        players = [self._p(1, margin=40.0, r2_attacker=1) for _ in range(3)]
+        players.append(self._p(2, margin=None, r2_attacker=1))
+        for i, p in enumerate(players):
+            p["v"] = i
+        assert within_round_spread({1: players}, _metric, outcome_seconds) is None
+
+    def test_changing_the_outcome_moves_the_manifest_hash(self):
+        cands = [Candidate("x", "d", "higher_is_better", _metric)]
+        a = Family(name="t", candidates=cands, filters="f", outcome="win")
+        b = Family(name="t", candidates=cands, filters="f", outcome="seconds")
+        assert a.manifest_hash() != b.manifest_hash()
