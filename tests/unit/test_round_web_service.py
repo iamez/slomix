@@ -1597,6 +1597,33 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert "LATE" in payload["withheld_by_pov"]
 
     @pytest.mark.asyncio
+    async def test_withheld_is_the_same_at_every_moment(self):
+        """⭐⭐ THE PROPERTY THAT MAKES NAMING THE WITHHELD SAFE.
+
+        A client that diffs `withheld_by_pov` across `t` must learn nothing.
+        Derived from the roster AT `t` it would have grown as opponents first
+        spawned — precise per moment, and an enemy spawn TIMELINE in
+        aggregate, which is exactly what the boundary exists to withhold.
+
+        Verified on the real round 11321: 3 withheld at t=1,000 through
+        t=600,000, unchanged. Here the fixture makes the same statement with
+        a player whose first life starts late.
+        """
+        late = _stub_track("LATE", 900.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  _stub_track("AL1", 500.0, team="ALLIES"),
+                  late[:4] + (120_000, None) + late[6:]]
+
+        seen = set()
+        for t_ms in (0, 5_000, 60_000, 119_999, 120_000, 200_000):
+            payload = await get_round_snapshot(
+                _SnapshotStubDb(tracks=tracks), 1, t_ms, pov="team:AXIS")
+            seen.add(tuple(sorted(payload["withheld_by_pov"])))
+
+        assert len(seen) == 1, f"withheld changed with t: {seen}"
+        assert seen.pop() == ("AL1", "LATE")
+
+    @pytest.mark.asyncio
     async def test_the_player_count_is_the_filtered_one(self):
         """⛔ `len(snap.players)` counted every resolved enemy, so subtracting
         the visible list told a caller how many withheld opponents had a

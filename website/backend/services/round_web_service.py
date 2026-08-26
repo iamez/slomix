@@ -1231,6 +1231,18 @@ def _pov_team(pov: str | None, tracks: dict[str, list], t_ms: int) -> dict | Non
     # Current membership decides what you SEE; the universe decides what must
     # be WITHHELD. They are different questions and this used to answer both
     # with one set.
+    #
+    # ⭐⭐ AND THE UNIVERSE IS TIME-INVARIANT ON PURPOSE. `withheld_by_pov`
+    # must be the SAME at every `t` of the round, because a client that diffs
+    # it across time would otherwise read the exact moment an opponent first
+    # spawned — an enemy spawn event, which is the thing this whole boundary
+    # exists to withhold. Deriving it from `_roster_at` looked more precise
+    # and was strictly worse: precise per moment, and a timeline in aggregate.
+    #
+    # What it does disclose is round-level: "these players' positions are not
+    # in this view". Not when they joined, not when they spawned, not whether
+    # they are alive. Identities are public through the scoreboard and the
+    # kill feed either way (Fable's question on PR #807).
     everyone = {t[_TRACK_GUID] for lives in (tracks or {}).values() for t in lives}
     return {"team": wanted, "members": members, "all_guids": everyone}
 
