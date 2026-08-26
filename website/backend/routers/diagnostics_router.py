@@ -1682,6 +1682,90 @@ async def get_voice_activity_history(
         }
 
 
+#: How old a voice report may be and still describe the present.
+#:
+#: NOT CHOSEN HERE. `bot/services/monitor_tasks_mixin.py` writes the row on a
+#: 30-second loop and that same service refuses to act on its own status rows
+#: once they pass 180 seconds. Re-deriving a different number on this side
+#: would give the system two opinions about the same staleness.
+VOICE_REPORT_STALE_AFTER_S = 180
+
+#: How far ahead of us a timestamp may sit and still count as clock skew.
+#:
+#: ⚠️ CHOSEN, NOT MEASURED, and worth saying so. The bot and the web process
+#: read the same PostgreSQL clock on NTP-synced hosts, where drift is
+#: sub-second — there is nothing here to derive a number FROM. Five seconds is
+#: wide enough that ordinary skew never trips it and narrow enough that a row
+#: dated minutes ahead is treated as what it is: undateable.
+VOICE_CLOCK_SKEW_GRACE_S = 5
+
+
+def _voice_report_iso(updated_at: object) -> str | None:
+    """The report's timestamp as an OFFSET-BEARING ISO string, or None.
+
+    ⛔ Never the stored value verbatim. PostgreSQL hands back an aware
+    datetime, the SQLite dev path a zone-less string, and older rows a naive
+    datetime — and `Date.parse` in a browser reads a zone-less date-time as
+    LOCAL time. The same row would then be "fresh" to the server's age
+    calculation (which reads naive as UTC) and hours old to a client outside
+    UTC. Anything we cannot parse is published as-is rather than dropped: a
+    string we do not understand is still evidence, and the age beside it is
+    already null.
+    """
+    if updated_at is None:
+        return None
+    stamp = updated_at
+    if isinstance(stamp, str):
+        try:
+            stamp = datetime.fromisoformat(stamp)
+        except ValueError:
+            return updated_at
+    if not hasattr(stamp, "isoformat"):
+        return str(updated_at)
+    if getattr(stamp, "tzinfo", None) is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    return stamp.isoformat()
+
+
+def _voice_report_age_seconds(updated_at: object) -> int | None:
+    """Seconds since the bot wrote this row, or None if it cannot be told.
+
+    ⚠️ Naive and aware datetimes both arrive here: PostgreSQL returns an aware
+    value, the SQLite dev path a string, and older rows a naive datetime.
+    Subtracting across that boundary raises TypeError, so a missing timezone
+    is read as UTC — the column the bot writes is UTC either way.
+
+    ⛔ None on anything unparseable, never 0. Zero would say "just written",
+    which is the one thing an unreadable timestamp cannot support.
+    """
+    if updated_at is None:
+        return None
+    stamp = updated_at
+    if isinstance(stamp, str):
+        try:
+            stamp = datetime.fromisoformat(stamp)
+        except ValueError:
+            return None
+    if not hasattr(stamp, "tzinfo"):
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - stamp).total_seconds()
+    # ⛔ A FUTURE TIMESTAMP IS NOT EVIDENCE THAT THE BOT JUST PUBLISHED.
+    # `max(0, …)` normalised every negative age to zero, so a row dated ahead
+    # of the web process — a clock that drifted, a migrated or malformed row —
+    # reported `ok` and kept an old member list "current" until wall time
+    # caught up to that timestamp plus the whole staleness window
+    # (Codex, PR #808). Undateable is the honest answer, and it reads `stale`.
+    if age < -VOICE_CLOCK_SKEW_GRACE_S:
+        logger.warning(
+            "voice status timestamp is %.0fs in the future; treating as undateable",
+            -age,
+        )
+        return None
+    return max(0, int(age))
+
+
 @router.get("/voice-activity/current")
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
@@ -1717,7 +1801,57 @@ async def get_current_voice_activity(
                 {"name": m.get("name", "Unknown"), "channel_name": channel_name}
                 for m in members
             ]
+            age = _voice_report_age_seconds(row[1])
             return {
+                # ⭐ "ok" means WE READ IT AND IT IS CURRENT, not that anybody
+                # is in voice. An empty channel is a real, reportable answer
+                # and must not look like a failure.
+                #
+                # ⛔ "stale" is its own answer, not a flavour of unavailable.
+                # The writer loops every 30 s
+                # (`bot/services/monitor_tasks_mixin.py`, `@tasks.loop(seconds=30)`)
+                # and that same service already discards its own reports past
+                # 180 s — so a row older than that means the bot stopped, and
+                # its member list could otherwise be presented as current
+                # indefinitely (Codex on PR #808). The threshold is the
+                # project's own, not a number chosen here.
+                # ⛔ "stale" means READ BUT NOT ESTABLISHED AS CURRENT, which
+                # covers two things: a report older than the threshold, and a
+                # report whose age cannot be determined at all. The second
+                # case used to answer "ok" — claiming currency from a
+                # timestamp we could not read, which is the exact failure this
+                # endpoint was changed to stop. An undateable row could be
+                # from a minute ago or from March.
+                "status": ("ok" if age is not None
+                           and age <= VOICE_REPORT_STALE_AFTER_S else "stale"),
+                "age_seconds": age,
+                # Already selected by the query above and then discarded, so a
+                # client could not tell a fresh report from one the bot stopped
+                # updating hours ago (Codex on PR #806, via Fable).
+                #
+                # ⚠️ `isoformat()` only when there is one to call. PostgreSQL
+                # hands back a datetime, the SQLite dev path a string — and an
+                # AttributeError here lands in the `except` below, which would
+                # report a perfectly good row as unavailable. A timestamp is
+                # not worth turning a working answer into a failure.
+                #
+                # ⛔ AND IT CARRIES ITS ZONE. Publishing the stored value
+                # verbatim meant a naive `2026-08-25 12:34:56` reached the
+                # page, where `Date.parse` reads a zone-less date-time as
+                # LOCAL time — so `_voice_report_age_seconds` called it fresh
+                # (it reads naive as UTC) while a browser two zones away
+                # labelled the same report hours old, or dated it in the
+                # future (Codex, PR #808). One value, two calendars.
+                "updated_at": _voice_report_iso(row[1]),
+                "reason": (
+                    None if age is not None and age <= VOICE_REPORT_STALE_AFTER_S
+                    else (
+                        f"the bot last published {age} s ago; it writes every 30 s"
+                        if age is not None
+                        else "the report carries no usable timestamp, so it "
+                             "cannot be shown as current"
+                    )
+                ),
                 "total_count": len(safe_members),
                 "members": safe_members,
                 "channels": (
@@ -1726,12 +1860,24 @@ async def get_current_voice_activity(
                     else []
                 ),
             }
+        reason = "the bot has not published a voice-channel status row"
     except (json.JSONDecodeError, KeyError, AttributeError, TypeError) as e:
         logger.debug(f"Voice status parse failed: {e}")
+        reason = f"the stored voice status could not be read ({type(e).__name__})"
 
+    # ⛔ A FAILURE IS NOT AN EMPTY ROOM. This used to return the same
+    # `total_count: 0` payload for three different situations — nobody in
+    # voice, no row written, and a row that would not parse — with an
+    # `error: None` key that appeared ONLY in the failure cases and whose
+    # value said there was no error. A client had nothing to branch on, so
+    # "voice is quiet" and "we cannot see voice" rendered identically
+    # (Codex on PR #806, via Fable).
     return {
+        "status": "unavailable",
+        "reason": reason,
+        "updated_at": None,
+        "age_seconds": None,
         "total_count": 0,
         "members": [],
         "channels": [],
-        "error": None,
     }
