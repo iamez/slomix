@@ -6,6 +6,38 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.41.0](https://github.com/iamez/slomix/compare/v1.40.0...v1.41.0) (2026-08-26)
+
+
+### Features
+
+* **proximity:** Layer 3 — what each player could plausibly have known ([#799](https://github.com/iamez/slomix/issues/799)) ([0f642f6](https://github.com/iamez/slomix/commit/0f642f64f46b0ced0908fd92978d23b2838ad751))
+* **proximity:** let a round say what it was able to record ([#795](https://github.com/iamez/slomix/issues/795)) ([a18c5b2](https://github.com/iamez/slomix/commit/a18c5b21588f49bc4da40b994036e12e3700cd76))
+* **proximity:** put the W6 evidence in the repository, dormant ([#797](https://github.com/iamez/slomix/issues/797)) ([874e3c5](https://github.com/iamez/slomix/commit/874e3c5ee202f4b3756a9b69f7f734513f5a2673))
+* **proximity:** reconstruct a round moment by moment, without inventing any of it ([#792](https://github.com/iamez/slomix/issues/792)) ([1fb5060](https://github.com/iamez/slomix/commit/1fb506035b7c6908d13880a79e0c865f1548df99))
+* **proximity:** the page states its own error, and the clock joins the web ([#796](https://github.com/iamez/slomix/issues/796)) ([9bf6b56](https://github.com/iamez/slomix/commit/9bf6b566d8580809f1336c27a87989ba34f434db))
+* **website:** bundle Chart.js instead of reading window.Chart ([#805](https://github.com/iamez/slomix/issues/805)) ([1a7b7c2](https://github.com/iamez/slomix/commit/1a7b7c275438796fce47cf7dcae94d9030dbb00a))
+* **website:** home, sessions and sessions2 — phase 2 begins ([#811](https://github.com/iamez/slomix/issues/811)) ([423c87b](https://github.com/iamez/slomix/commit/423c87bfe6a9bf3a675f0724a4afcf196526a046))
+* **website:** landing — the first page of the new design ([#806](https://github.com/iamez/slomix/issues/806)) ([a0d1fe7](https://github.com/iamez/slomix/commit/a0d1fe75f51dc2725113395a2e56bec7b1fd3412))
+* **website:** leaderboards, record-book and awards — phase 2, batch 2 ([#813](https://github.com/iamez/slomix/issues/813)) ([f014afe](https://github.com/iamez/slomix/commit/f014afe8162fca5e5892d6c8aef4e502c046a643))
+* **website:** maps, weapons, form and retro-viz — phase 2 complete ([#814](https://github.com/iamez/slomix/issues/814)) ([58fbc41](https://github.com/iamez/slomix/commit/58fbc41a600fa18bb4685842f3e28442452dd177))
+* **website:** one palette, parity keys, and the guard Fable asked for ([#803](https://github.com/iamez/slomix/issues/803)) ([b15965a](https://github.com/iamez/slomix/commit/b15965a58fadaf53c05c451711cee9b2aa1b90e5))
+* **website:** Spider Web — draw the round in the place it happened ([#800](https://github.com/iamez/slomix/issues/800)) ([a8bf2ca](https://github.com/iamez/slomix/commit/a8bf2ca58a9f4eb3e7e24eb33b335c93304a347f))
+* **website:** standalone app shell at /app — phase 0 skeleton ([#802](https://github.com/iamez/slomix/issues/802)) ([19c6184](https://github.com/iamez/slomix/commit/19c6184788eb7df562deae4e2102bceaddf5d5f3))
+* **website:** system, smart-stats-diag and About — phase 1 complete ([#809](https://github.com/iamez/slomix/issues/809)) ([f8027f0](https://github.com/iamez/slomix/commit/f8027f09a5b4e8863d8c17100515985a63f2f06b))
+* **website:** the API starts describing what it returns — first two endpoints ([#812](https://github.com/iamez/slomix/issues/812)) ([e59c00c](https://github.com/iamez/slomix/commit/e59c00c59a0ed8bb3f23642901c1c1b879af74f1))
+* **website:** the clock and the snapshot's own integrity ([#804](https://github.com/iamez/slomix/issues/804)) ([ad98d5e](https://github.com/iamez/slomix/commit/ad98d5ebfee908ba35ba1620c535f44aa6058497))
+
+
+### Bug Fixes
+
+* **ci:** stop the pre-push guard from counting files inherited from main ([#790](https://github.com/iamez/slomix/issues/790)) ([66eafb3](https://github.com/iamez/slomix/commit/66eafb38ea540b75d8c67009804fa60f05304545))
+* **ci:** the pre-push guard could not see the shape credentials actually take ([#798](https://github.com/iamez/slomix/issues/798)) ([8b50266](https://github.com/iamez/slomix/commit/8b50266a628c65688da9832560905a3aa70baf83))
+* **lua:** capture what we thought we were capturing ([#794](https://github.com/iamez/slomix/issues/794)) ([0cb4d52](https://github.com/iamez/slomix/commit/0cb4d5251f5773ebeea77e87aa94bd71b574b4f2))
+* **proximity:** name what cannot be read instead of going dark over it ([#793](https://github.com/iamez/slomix/issues/793)) ([f5c2d36](https://github.com/iamez/slomix/commit/f5c2d361af4f2fe30b54f6f6540649dc5e50555d))
+* **website:** the live surfaces can be told apart from their own failures ([#808](https://github.com/iamez/slomix/issues/808)) ([2753d34](https://github.com/iamez/slomix/commit/2753d34b31a3cbc3b3c0ed7ad540a87f8e4421fd))
+* **website:** the team view leaked three more things, and the page had no way in ([#807](https://github.com/iamez/slomix/issues/807)) ([83e777a](https://github.com/iamez/slomix/commit/83e777a8c2c490d8aab4ba05e34d5d12852801b2))
+
 ## [1.40.0](https://github.com/iamez/slomix/compare/v1.39.0...v1.40.0) (2026-08-20)
 
 
