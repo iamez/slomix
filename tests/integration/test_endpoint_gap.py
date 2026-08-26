@@ -35,8 +35,11 @@ EXTRA_FILE = REPO_ROOT / "tests" / "data" / "endpoint_required_extra.txt"
 # `${API_BASE}/...` template and hardcoded `/api/...` literals the legacy
 # extractor knows. Captured up to the first `?`, quote or interpolation:
 # static prefixes, same contract as test_route_contract.
+# Braces included: a typed template call — apiGet('/api/seasons/{season_id}/
+# awards') — must be captured WHOLE, or the capture stops at '{' and
+# registers a bare two-segment prefix (found in phase 2, batch 2).
 _NEW_WRAPPER_RE = re.compile(
-    r"\b(?:get|post|put|patch|del|apiGet|apiFetch)(?:<[^>]{0,200}>)?\(\s*[`'\"](/[a-zA-Z0-9/_-]+)"
+    r"\b(?:get|post|put|patch|del|apiGet|apiFetch)(?:<[^>]{0,200}>)?\(\s*[`'\"](/[a-zA-Z0-9/_{}-]+)"
 )
 _NEW_TEMPLATE_RE = re.compile(r"\$\{API(?:_BASE)?\}(/[a-zA-Z0-9/_-]+)")
 _NEW_LITERAL_RE = re.compile(r"(?<=['\"`}])/(?:api|auth)/[a-zA-Z0-9/_-]+")
@@ -131,14 +134,34 @@ def _read_path_list(file: Path) -> set[str]:
 _MIN_COVERING_SEGMENTS = 3
 
 
+def _template_matches(template: str, path: str) -> bool:
+    """A spec-templated app call (apiGet('/api/seasons/{season_id}/awards'))
+    covers a legacy literal (/api/seasons/current/awards) when the concrete
+    path instantiates the template — segment count equal, non-parameter
+    segments identical. Without this, calling THROUGH the typed template
+    would leave the legacy line stale forever (hit in phase 2, batch 2)."""
+    if "{" not in template:
+        return False
+    t_segs = [s for s in template.split("/") if s]
+    p_segs = [s for s in path.split("/") if s]
+    if len(t_segs) != len(p_segs):
+        return False
+    return all(
+        ts.startswith("{") and ts.endswith("}") or ts == ps
+        for ts, ps in zip(t_segs, p_segs)
+    )
+
+
 def _covered(required: str, required_is_dynamic: bool, exact: set[str], dynamic: set[str]) -> bool:
-    """Covered when: a call equals it; a call is DEEPER than it AND the
-    required capture itself was a truncated dynamic prefix; or a DYNAMIC
-    new-tree prefix of sufficient specificity leads into it. An exact
-    literal never covers a deeper required path in either direction (Codex,
-    twice), and a dynamic family stub never clears a whole family
-    (CodeRabbit)."""
+    """Covered when: a call equals it; a spec template instantiates it; a
+    call is DEEPER than it AND the required capture itself was a truncated
+    dynamic prefix; or a DYNAMIC new-tree prefix of sufficient specificity
+    leads into it. An exact literal never covers a deeper required path in
+    either direction (Codex, twice), and a dynamic family stub never clears
+    a whole family (CodeRabbit)."""
     if required in exact or required in dynamic:
+        return True
+    if any(_template_matches(candidate, required) for candidate in exact):
         return True
     if required_is_dynamic:
         for candidate in exact | dynamic:
