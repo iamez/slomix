@@ -14,9 +14,15 @@ import pytest
 
 from website.backend.services import replay_service
 from website.backend.services.reconstruction_accuracy import position_error
+from website.backend.services.information_state import (
+    EXPIRY_INTERVAL_ONLY,
+    EXPIRY_VALIDATED_WAVE,
+    resolve_expiry,
+)
 from website.backend.services.round_web_service import (
     AUDIBLE_GUNFIRE_RADIUS,
     VELOCITY_SANITY_CAP_UPS,
+    VELOCITY_MAX_DT_INTERVALS,
     CapturePolicy,
     Edge,
     PlayerState,
@@ -31,7 +37,10 @@ from website.backend.services.round_web_service import (
     load_capture_policy,
     load_round_clock,
     load_round_information_state,
+    restrict_clock_to_pov,
     make_locator,
+    _pov_team,
+    _roster_at,
     nearest_teammate_separation,
     select_life,
 )
@@ -771,8 +780,11 @@ class _SnapshotStubDb:
     have nothing to do with ordering.
     """
 
-    def __init__(self, tracks=(), duration_s=None, deaths=(), engagements=()):
+    def __init__(self, tracks=(), duration_s=None, deaths=(), engagements=(),
+                 capabilities=None):
         self._tracks = list(tracks)
+        # The round's capability manifest, as `load_capture_policy` reads it.
+        self._capabilities = capabilities
         self._duration_s = duration_s
         # ⚠️ Contact is the channel that differs PER HOLDER. A public obituary
         # reaches everyone, so a fixture built only from deaths cannot tell a
@@ -785,6 +797,11 @@ class _SnapshotStubDb:
         self._deaths = list(deaths)
 
     async def fetch_all(self, sql, _params=None):
+        # ⚠️ BEFORE the "FROM rounds r" branch: the capture-policy query joins
+        # `rounds` too, so the generic marker would swallow it and every round
+        # would look like one that never declared a manifest.
+        if "f.capabilities" in sql:
+            return [(json.dumps(self._capabilities),)] if self._capabilities else []
         if "death_time_ms IS NOT NULL" in sql:
             return self._deaths             # Layer 3 deaths
         if "FROM player_track pt" in sql:
@@ -899,6 +916,538 @@ class TestTheSnapshotSaysWhereAndHowLong:
         assert payload["map_name"] is None
 
 
+def _mentions_of(node, guids: set[str], path: str = "") -> list[str]:
+    """Every place in `node` where one of `guids` is used as a key or a value.
+
+    Returns human-readable paths ("nearest_teammate_separation.AL1") rather
+    than a bare boolean, because a guard that only says "something leaked" is
+    a guard someone will spend an hour arguing with.
+
+    ⚠️ EXACT MATCHES ONLY, which is why it is not used alone. A composite key
+    (`"AL1:AX2"`) or a guid inside a sentence (`"AL1 down"`) walks straight
+    past it — Fable's review of this very PR, and the same narrowness the
+    guard was written to fix one level up. `_substring_mentions` covers that
+    half; this one exists for the PATH it can name when it does match.
+    """
+    found: list[str] = []
+    if isinstance(node, dict):
+        for key, value in node.items():
+            here = f"{path}.{key}" if path else str(key)
+            if key in guids:
+                found.append(here)
+            found.extend(_mentions_of(value, guids, here))
+    elif isinstance(node, (list, tuple)):
+        for i, value in enumerate(node):
+            found.extend(_mentions_of(value, guids, f"{path}[{i}]"))
+    elif isinstance(node, str) and node in guids:
+        found.append(path)
+    return found
+
+
+def _substring_mentions(node, guids: set[str]) -> list[str]:
+    """The other half: a guid ANYWHERE in the serialised payload.
+
+    Catches what structure-aware matching cannot — a guid built into a key,
+    embedded in a message, or concatenated into an id. Cannot say WHERE, so
+    the two run together: the structural scan names the path when it can, and
+    this one refuses to let a new shape through when it cannot.
+    """
+    blob = json.dumps(node, default=str)
+    return sorted(g for g in guids if g in blob)
+
+
+class TestTheEnemyClockDoesNotLeakThroughBeliefTiming:
+    """🔴 The second-order leak: the clock does not only get printed.
+
+    `resolve_expiry` reads the SUBJECT's team clock to decide when "he is
+    down" stops being true. With the oracle clock, a belief about an enemy
+    flipped to `uncertain_after_down` at the exact instant the enemy wave
+    landed — so a viewer scrubbing the slider could read the enemy phase off
+    the moment the circles changed, while the panel beside it said the phase
+    was withheld.
+
+    Measured across 25 rounds before the fix: 46 of 449 beliefs (10.2%) under
+    a team POV expired on `validated_wave`. After: 10 of 449, and all ten have
+    OWN-TEAM subjects — which is correct, because a player does know their own
+    reinforcement timer.
+    """
+
+    ENEMY = {"status": "validated", "interval_ms": 20_000, "offset_ms": 800}
+
+    def test_the_oracle_expiry_lands_on_the_exact_wave(self):
+        """The premise. If this stops holding, the test below proves nothing."""
+        _at, basis = resolve_expiry(self.ENEMY, death_ms=30_000)
+        assert basis == EXPIRY_VALIDATED_WAVE
+
+    def test_a_restricted_clock_degrades_the_expiry_instead_of_removing_it(self):
+        restricted = restrict_clock_to_pov(
+            {"AXIS": {"status": "validated", "interval_ms": 30_000, "offset_ms": 0},
+             "ALLIES": self.ENEMY},
+            {"team": "AXIS"},
+        )["ALLIES"]
+        at, basis = resolve_expiry(restricted, death_ms=30_000)
+
+        # ⭐ `interval_only`, not `bound`: §6.3 lets a holder hold "he is back
+        # somewhere inside one interval". Losing the interval too would throw
+        # away something the spec calls known and make every enemy belief last
+        # the maximum instead.
+        assert basis == EXPIRY_INTERVAL_ONLY
+        assert at == 30_000 + 20_000
+
+    def test_the_holders_own_clock_is_untouched(self):
+        # ⚠️ `phase_ms` present: a HUD exists only where a countdown was
+        # reconstructed, and `restrict_clock_to_pov` now refuses to call an
+        # entry `own_hud` without one (Codex, PR #807).
+        restricted = restrict_clock_to_pov(
+            {"AXIS": {"status": "validated", "interval_ms": 30_000,
+                      "offset_ms": 0, "phase_ms": 0,
+                      "time_to_next_wave_ms": 30_000}},
+            {"team": "AXIS"},
+        )["AXIS"]
+        _at, basis = resolve_expiry(restricted, death_ms=30_000)
+        assert basis == EXPIRY_VALIDATED_WAVE
+
+
+class TestTheCadenceNeedsEVERYManifestToDeclareIt:
+    """⛔ Absence counted as agreement, and the velocity bound rides on it.
+
+    `load_capture_policy` built the interval from a comprehension that FILTERED
+    OUT files declaring no cadence, so one manifest saying 200 and another
+    saying nothing produced "200, known". The block's own comment says two
+    files disagreeing means we do not know — the rule was simply never applied
+    to silence (Codex, PR #807).
+    """
+
+    async def _policy(self, *manifests):
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps(m),) for m in manifests]
+                return []
+        return await load_capture_policy(_Db(), 1)
+
+    @pytest.mark.asyncio
+    async def test_one_manifest_declaring_it_is_known(self):
+        policy = await self._policy({"position_sample_interval_ms": 200})
+        assert policy.observation_interval_ms == 200
+        assert policy.mode == "fixed"
+
+    @pytest.mark.asyncio
+    async def test_agreement_across_two_manifests_is_known(self):
+        policy = await self._policy(
+            {"position_sample_interval_ms": 200},
+            {"position_sample_interval_ms": 200},
+        )
+        assert policy.observation_interval_ms == 200
+
+    @pytest.mark.asyncio
+    async def test_disagreement_is_unknown(self):
+        policy = await self._policy(
+            {"position_sample_interval_ms": 200},
+            {"position_sample_interval_ms": 500},
+        )
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_a_file_with_NO_manifest_also_blocks_agreement(self):
+        """⛔ The version the first fix could not see.
+
+        The query filtered `capabilities IS NOT NULL` and the parser skipped
+        unparseable text, so a file with no manifest at all never reached the
+        list — `all(declared)` was unanimous among the files that happened to
+        have something to say. A round with one 200 ms manifest and one NULL
+        sibling reported "200, known" and the velocity bound followed
+        (Codex, PR #807).
+        """
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({"position_sample_interval_ms": 200}),),
+                            (None,)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_unparseable_text_blocks_it_too(self):
+        """Same reasoning: text that will not parse is not a vote for anything.
+        It is still dropped from the capability merge — one corrupt row must
+        not 500 a page whose job is to keep working — but it no longer
+        disappears from the denominator."""
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({"position_sample_interval_ms": 200}),),
+                            ("{not json",)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.observation_interval_ms is None
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [-200, 0, "200", 200.5, True, [200]])
+    async def test_a_malformed_cadence_is_not_a_cadence(self, bad):
+        """⛔ "Truthy" is not "valid", and a manifest is a file the tracker
+        wrote, not trusted input.
+
+        `all(declared)` accepted anything non-falsy: a negative integer became
+        a NEGATIVE velocity bound that rejects every causal pair, a string was
+        multiplied into another string and blew up on a later comparison, and
+        an unhashable value raised inside `set()` before anyone could look at
+        it (Codex, PR #807).
+
+        ⚠️ `True` is in the list on purpose — `isinstance(True, int)` is True
+        in Python, so a bool would have passed a naive integer check and given
+        a 2 ms bound.
+        """
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({"position_sample_interval_ms": bad},
+                                        default=str),)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_an_unusable_sibling_downgrades_the_FLAGS_too(self):
+        """⛔ `unusable` was consulted only for the cadence.
+
+        A round with one valid manifest and one NULL sibling still published
+        `shot_fired: enabled` — and `apply_capability` then treated the
+        channel as PROVEN for the whole round on the word of one of two files
+        (Codex, PR #807). A file that cannot speak does not agree, and that
+        rule is not about the interval specifically.
+        """
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({
+                        "position_sample_interval_ms": 200,
+                        "capabilities": {"shot_fired": "enabled",
+                                         "aim_lock": "enabled"},
+                    }),), (None,)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.capabilities["aim_lock"] == "unknown"
+        # ⭐ `unknown` is not `disabled` — it is "we cannot tell", which is
+        # what §6.2 asks for and what keeps the channel from being reported
+        # as deliberately off.
+        assert "disabled" not in policy.capabilities.values()
+
+    @pytest.mark.asyncio
+    async def test_silence_from_one_file_is_NOT_agreement(self):
+        """The case that shipped wrong. A file that never declared a cadence
+        does not vote for the one that did."""
+        policy = await self._policy(
+            {"position_sample_interval_ms": 200},
+            {"source": "sections_observed"},
+        )
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+
+class TestACausalVelocityIsBoundedByTheRoundsOwnCadence:
+    """§4.4.1 requires `0 < dt <= velocity_max_dt_ms`. Nothing supplied it.
+
+    `derive_velocity` checked the bound, `build_snapshot` forwarded it and
+    `get_round_snapshot` accepted it — but the router never passed one, so it
+    was None on every real request and a direction could be derived across any
+    gap inside a life. A parameter that no caller can set is not a limit.
+    """
+
+    async def _payload(self, capabilities=None, t_ms=5_000, **kw):
+        db = _SnapshotStubDb(tracks=[_stub_track("AX1", 0.0)],
+                             capabilities=capabilities)
+        return await get_round_snapshot(db, 1, t_ms, **kw)
+
+    @pytest.mark.asyncio
+    async def test_a_round_that_declared_its_interval_gets_a_bound(self):
+        payload = await self._payload(
+            {"source": "sections_observed", "position_sample_interval_ms": 200})
+        assert payload["velocity_max_dt_ms"] == 200 * VELOCITY_MAX_DT_INTERVALS
+
+    @pytest.mark.asyncio
+    async def test_a_round_without_a_manifest_gets_no_invented_bound(self):
+        """⛔ The measurement that forced this. Recent tracks alone say the gap
+        never exceeds 200 ms; the oldest tracks say it reaches 30,595 ms,
+        because those rounds sampled at 500. A constant fitted to the first
+        measurement would have declared the whole older corpus unusable."""
+        payload = await self._payload(None)
+        assert payload["velocity_max_dt_ms"] is None
+
+    @pytest.mark.asyncio
+    async def test_the_caller_can_still_override(self):
+        payload = await self._payload(
+            {"source": "sections_observed", "position_sample_interval_ms": 200},
+            velocity_max_dt_ms=1_000)
+        assert payload["velocity_max_dt_ms"] == 1_000
+
+    @pytest.mark.asyncio
+    async def test_the_bound_actually_reaches_the_derivation(self):
+        """⭐ The one that proves the wiring rather than the arithmetic.
+
+        The stub's two samples are 10 seconds apart, so `t` has to sit ON the
+        later one for a causal pair to exist at all — at 5,000 ms the floor is
+        the FIRST sample and the honest answer is `no_causal_predecessor`,
+        which both cases give and which would have made this test pass without
+        the bound doing anything.
+        """
+        loose = await self._payload(None, t_ms=10_000)
+        assert loose["players"][0]["velocity_reason"] is None
+        assert loose["players"][0]["vx"] is not None
+
+        tight = await self._payload(
+            {"source": "sections_observed", "position_sample_interval_ms": 200},
+            t_ms=10_000)
+        assert tight["players"][0]["velocity_reason"] == "gap_exceeds_max_dt_10000ms"
+        assert tight["players"][0]["vx"] is None
+
+
+class TestASideSwitchIsResolvedAtTheMOMENT:
+    """⛔ A flat dict comprehension kept each player's LAST side.
+
+    Rows arrive ordered by spawn time, so `{guid: team for ...}` resolved a
+    player who switched teams mid-round to the side they would join LATER —
+    even for a snapshot taken before the switch. That request was handed the
+    future side's positions and clock while withholding the player's actual
+    teammates (Codex, PR #807).
+    """
+
+    def _tracks(self):
+        # AX1 starts on AXIS and switches to ALLIES at 60 s.
+        return {
+            "AX1": [_stub_track("AX1", 0.0, team="AXIS")[:4]
+                    + (0, 60_000) + _stub_track("AX1", 0.0)[6:],
+                    _stub_track("AX1", 10.0, team="ALLIES")[:4]
+                    + (60_000, None) + _stub_track("AX1", 10.0)[6:]],
+            "AL1": [_stub_track("AL1", 500.0, team="ALLIES")],
+        }
+
+    def test_before_the_switch_the_earlier_side_wins(self):
+        roster = _roster_at(self._tracks(), 30_000)
+        assert roster["AX1"] == "AXIS"
+
+    def test_after_the_switch_the_later_side_wins(self):
+        roster = _roster_at(self._tracks(), 90_000)
+        assert roster["AX1"] == "ALLIES"
+
+    def test_before_a_players_first_life_they_are_on_no_side(self):
+        """⛔ A late joiner used to resolve to their FUTURE team.
+
+        The fallback handed back the earliest life's side when `select_life`
+        found nothing, so `_pov_team` treated the request as resolved and
+        returned that side's positions and exact friendly clock — while
+        `information_state.pov_unavailable` said the holder had no
+        reconstructed state (Codex, PR #807). Absent from the roster means
+        unresolved, and unresolved fails closed.
+        """
+        tracks = {"LATE": [_stub_track("LATE", 0.0, team="AXIS")[:4]
+                           + (120_000, None) + _stub_track("LATE", 0.0)[6:]]}
+
+        assert _roster_at(tracks, 30_000) == {}
+        assert _pov_team("LATE", tracks, 30_000) is None
+        # …and once they have spawned, they resolve normally.
+        assert _pov_team("LATE", tracks, 150_000)["team"] == "AXIS"
+
+    def test_the_pov_boundary_follows_the_moment(self):
+        """⭐ The consequence, not just the lookup: which side the boundary
+        protects changes with `t`."""
+        early = _pov_team("AX1", self._tracks(), 30_000)
+        late = _pov_team("AX1", self._tracks(), 90_000)
+
+        assert early["team"] == "AXIS"
+        assert late["team"] == "ALLIES"
+        # AL1 is an opponent early and a teammate late.
+        assert "AL1" not in early["members"]
+        assert "AL1" in late["members"]
+
+
+class TestTheEnemyClockIsNotOursToPublish:
+    """§5.6 and §6.3: exact enemy phase is an ORACLE diagnostic.
+
+    ⚠️ This shipped wrong. `"clock": clock` went into the payload unfiltered
+    while `players`, `gaps` and `edges` were all filtered — so a team view
+    handed over the moment the other side's reinforcements land, which is
+    roughly the single most valuable thing a player can not know.
+
+    The coordinate scan could never have caught it: a wave phase is a number
+    of milliseconds, not a position.
+    """
+
+    VALIDATED = {
+        "AXIS": {"status": "validated", "interval_ms": 30_000,
+                 "offset_ms": 1_200, "phase_ms": 4_000,
+                 "time_to_next_wave_ms": 26_000},
+        "ALLIES": {"status": "validated", "interval_ms": 20_000,
+                   "offset_ms": 800, "phase_ms": 9_000,
+                   "time_to_next_wave_ms": 11_000},
+    }
+
+    def test_the_oracle_keeps_both_clocks_whole(self):
+        assert restrict_clock_to_pov(self.VALIDATED, None) == self.VALIDATED
+
+    def test_a_team_keeps_its_own_HUD(self):
+        """⚠️ The HUD, not the whole entry — this test used to assert equality.
+
+        `status: "validated"` is not a fact about the game: it is
+        `validate_round_clocks` saying the FULL ROUND produced at least
+        MIN_VALIDATION_LANDINGS clusters, so publishing it at an early
+        snapshot told the holder how often their own side would still spawn
+        (Codex, PR #807). The countdown stays; the grade goes to the oracle.
+        """
+        out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
+
+        assert out["AXIS"]["phase_ms"] == self.VALIDATED["AXIS"]["phase_ms"]
+        assert out["AXIS"]["interval_ms"] == self.VALIDATED["AXIS"]["interval_ms"]
+        assert out["AXIS"]["status"] == "own_hud"
+
+    def test_there_is_no_HUD_without_a_countdown(self):
+        """⛔ `own_hud` was applied unconditionally.
+
+        `load_round_clock` deliberately publishes no phase for an
+        unavailable, inconsistent, validation-failed or merely
+        internally-consistent clock — yet the entry was relabelled as a HUD
+        that had never been reconstructed, while keeping the candidate
+        `offset_ms` the protocol refused to turn into a phase (Codex, PR
+        #807).
+        """
+        for status in ("unavailable", "inconsistent", "validation_failed",
+                       "internally_consistent_unvalidated"):
+            entry = {"status": status, "interval_ms": 30_000, "offset_ms": 1_200}
+            out = restrict_clock_to_pov({"AXIS": entry}, {"team": "AXIS"})["AXIS"]
+
+            assert out["status"] == "unknown_to_this_pov", status
+            # The offset the protocol would not publish as a phase does not
+            # sneak out through the own-side branch either.
+            assert "offset_ms" not in out, status
+            assert out["interval_ms"] == 30_000, status
+
+    def test_the_oracle_keeps_the_grade(self):
+        """It is not deleted — it is an analyst fact and `world` is the named
+        diagnostic (§6.4)."""
+        assert restrict_clock_to_pov(self.VALIDATED, None) == self.VALIDATED
+
+    def test_the_enemy_phase_and_next_wave_are_gone(self):
+        out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
+        for field in ("phase_ms", "time_to_next_wave_ms", "offset_ms"):
+            assert field not in out["ALLIES"], f"{field} survived the boundary"
+
+    def test_the_enemy_clock_is_named_rather_than_dropped(self):
+        """A missing key would read as "ALLIES had no clock", which is false
+        and worse than saying nothing — the same reason `withheld_by_pov`
+        exists instead of quietly shorter `players`."""
+        out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
+        assert "ALLIES" in out
+        assert out["ALLIES"]["status"] == "unknown_to_this_pov"
+        assert "oracle" in out["ALLIES"]["reason"]
+
+    def test_the_interval_stays_because_the_spec_calls_it_known(self):
+        """§6.3: an observed wave "constrains phase modulo the KNOWN
+        interval". The interval is not the secret; the phase is."""
+        out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
+        assert out["ALLIES"]["interval_ms"] == 20_000
+
+    def test_the_withheld_entry_is_exactly_the_allowlist(self):
+        """⛔ THE DENYLIST LET THE WHOLE DIAGNOSTIC THROUGH.
+
+        The first version removed three phase fields and copied the rest, so a
+        withheld entry still carried `timing_observations`, `landing_clusters`,
+        `spawn_callbacks`, `post_revive_spawn_callbacks`,
+        `passing_landing_clusters` and `pass_ratio` — every one computed over
+        the ENTIRE round without looking at `t_ms`. Measured on round 11321:
+        identical numbers at t=30,000 and t=600,000, so a team thirty seconds
+        in was handed the enemy's spawn and revive counts for the rest of the
+        match (Codex, PR #807).
+
+        ⭐ ASSERTED AS EQUALITY, not as absence of the six names we know
+        about. A field added to `clock_validation_payload` tomorrow must fail
+        this test rather than cross the boundary by default — that is the
+        whole difference between an allowlist and a denylist.
+        """
+        rich = dict(self.VALIDATED["ALLIES"])
+        rich.update({
+            "timing_observations": 14, "landing_clusters": 8,
+            "spawn_callbacks": 16, "post_revive_spawn_callbacks": 1,
+            "passing_landing_clusters": 8, "pass_ratio": 1.0,
+        })
+        out = restrict_clock_to_pov(
+            {"AXIS": self.VALIDATED["AXIS"], "ALLIES": rich}, {"team": "AXIS"},
+        )
+
+        assert set(out["ALLIES"]) == {"status", "interval_ms", "reason"}
+
+    def test_the_holders_own_clock_keeps_only_what_is_causal(self):
+        """⛔ THIS TEST USED TO PIN THE DEFECT.
+
+        It asserted `out["AXIS"] == rich` — "a team may read every diagnostic
+        about its own clock, that is its own HUD". It is not: `pass_ratio`,
+        `timing_observations`, `landing_clusters`, `spawn_callbacks`,
+        `post_revive_spawn_callbacks` and `passing_landing_clusters` are built
+        from every life, revive and timing row in the ROUND, without ever
+        looking at `t_ms`. A snapshot at 30 seconds therefore told a player
+        how many times their own side would die, spawn and be revived for the
+        rest of the match (Codex, PR #807).
+
+        ⭐ The HUD is the status, the interval and the phase/countdown —
+        `wave_position` computes the last two AT `t_ms`. Those stay. The
+        whole-round aggregates do not, on EITHER side.
+        """
+        rich = dict(self.VALIDATED["AXIS"])
+        rich.update({"pass_ratio": 0.97, "timing_observations": 14,
+                     "landing_clusters": 8, "spawn_callbacks": 16})
+        out = restrict_clock_to_pov({"AXIS": rich}, {"team": "AXIS"})
+
+        assert set(out["AXIS"]) <= {
+            "status", "reason", "interval_ms", "offset_ms",
+            "phase_ms", "time_to_next_wave_ms",
+        }
+        # The HUD itself is untouched.
+        assert out["AXIS"]["phase_ms"] == rich["phase_ms"]
+        assert out["AXIS"]["time_to_next_wave_ms"] == rich["time_to_next_wave_ms"]
+        assert out["AXIS"]["interval_ms"] == rich["interval_ms"]
+
+    def test_the_oracle_still_sees_the_diagnostics(self):
+        """They are not deleted — they are an ANALYST view. `pov=world` is the
+        named diagnostic (§6.4) and keeps everything."""
+        rich = dict(self.VALIDATED["AXIS"])
+        rich["pass_ratio"] = 0.97
+
+        assert restrict_clock_to_pov({"AXIS": rich}, None)["AXIS"] == rich
+
+    def test_an_entry_we_cannot_inspect_is_withheld_rather_than_copied(self):
+        """⛔ Fail-OPEN by default is still fail-open when it is unreachable.
+
+        The loop copied any non-dict entry verbatim, reasoning that
+        `load_round_clock` only builds dicts — true today. But "we could not
+        read this, so we published it" is the wrong direction for a boundary,
+        and the day the shape changes nobody re-reads this function.
+        """
+        out = restrict_clock_to_pov(
+            {"AXIS": self.VALIDATED["AXIS"], "ALLIES": ["landing", "landing"]},
+            {"team": "AXIS"},
+        )
+
+        assert out["ALLIES"]["status"] == "unknown_to_this_pov"
+        assert "landing" not in str(out["ALLIES"])
+
+    def test_an_unavailable_enemy_clock_still_reports_as_restricted(self):
+        """⚠️ Otherwise the two cases are distinguishable: "unavailable" would
+        tell this team that the other side produced no usable spawn timings,
+        which is itself a fact about the enemy they did not observe."""
+        clock = {"AXIS": self.VALIDATED["AXIS"],
+                 "ALLIES": {"status": "unavailable", "reason": "no rows"}}
+        out = restrict_clock_to_pov(clock, {"team": "AXIS"})
+        assert out["ALLIES"]["status"] == "unknown_to_this_pov"
+
+
 class TestATeamPovWithholdsTheTruthItHas:
     """⛔ The guarantee has to live in the payload, not in the drawing.
 
@@ -913,9 +1462,16 @@ class TestATeamPovWithholdsTheTruthItHas:
     kill feed. Only where they were is withheld.
     """
 
-    async def _snapshot(self, pov):
-        db = _SnapshotStubDb(tracks=[_stub_track("AX1", 0.0, team="AXIS"),
-                                     _stub_track("AL1", 500.0, team="ALLIES")])
+    async def _snapshot(self, pov, pairs=False):
+        # ⚠️ `pairs` puts TWO players on each side. With one per side nobody
+        # has a teammate, so every separation is None and a leak of the
+        # distance itself cannot be distinguished from "no teammate".
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  _stub_track("AL1", 500.0, team="ALLIES")]
+        if pairs:
+            tracks += [_stub_track("AX2", 100.0, team="AXIS"),
+                       _stub_track("AL2", 620.0, team="ALLIES")]
+        db = _SnapshotStubDb(tracks=tracks)
         return await get_round_snapshot(db, 1, 5_000, pov=pov)
 
     @pytest.mark.asyncio
@@ -978,9 +1534,299 @@ class TestATeamPovWithholdsTheTruthItHas:
                 f"enemy {axis}={value} leaked outside the belief regions")
 
     @pytest.mark.asyncio
+    async def test_the_payload_actually_applies_the_clock_boundary(self):
+        """⚠️ THE TEST THAT WAS MISSING, AND THE MUTATION PROVED IT.
+
+        `restrict_clock_to_pov` had five unit tests of its own and all of them
+        passed against the pure function. Replacing the call in
+        `get_round_snapshot` with `pov_clock = clock` left the whole suite
+        green: nothing asserted the boundary was ever REACHED. A rule tested
+        only where it is defined is a rule the caller can quietly stop using.
+        """
+        oracle = await self._snapshot("world")
+        team = await self._snapshot("team:AXIS")
+
+        assert oracle["clock"]["ALLIES"]["status"] != "unknown_to_this_pov"
+        assert team["clock"]["ALLIES"]["status"] == "unknown_to_this_pov"
+        # The own entry is the HUD, not a copy of the oracle's — the grade is
+        # a full-round verdict and stays in the oracle view.
+        # ⚠️ The stub round reconstructs no clock at all, so the own entry
+        # has no countdown — and an entry without one is NOT a HUD. It says
+        # `unknown_to_this_pov` for its own side too, because WHY there is no
+        # countdown is a full-round verdict (Codex, PR #807).
+        assert team["clock"]["AXIS"]["status"] == "unknown_to_this_pov"
+        assert oracle["clock"]["AXIS"]["status"] != "unknown_to_this_pov"
+
+    @pytest.mark.asyncio
+    async def test_an_unresolvable_player_pov_fails_closed_too(self):
+        """⛔ The fail-closed rule covered `team:` and not a player GUID.
+
+        An unknown or differently-cased GUID left `unresolved_team` false —
+        the request reached the ORACLE branch with positions, separations,
+        edges and both clocks unfiltered, while `information_state` reported
+        the player unavailable. The payload disagreed with itself, in the
+        direction that hands over everything (Codex, PR #807).
+        """
+        payload = await self._snapshot("NOSUCHPLAYER", pairs=True)
+
+        assert payload["players"] == []
+        assert set(payload["withheld_by_pov"]) == {"AX1", "AX2", "AL1", "AL2"}
+        for team, entry in payload["clock"].items():
+            assert entry["status"] == "unknown_to_this_pov", team
+
+    @pytest.mark.asyncio
+    async def test_a_player_pov_gets_the_same_boundary_as_their_team(self):
+        """⛔ THE MORE SPECIFIC VIEW USED TO GET MORE.
+
+        `_pov_team` returned None for a player GUID, so `pov=<guid>` fell
+        through to the ORACLE: every enemy position, both clocks whole, and
+        the phase-driven belief transitions the team view is denied. Measured
+        on round 11321 before the fix — `team:AXIS` withheld 3 players and the
+        ALLIES clock, the AXIS player's own GUID withheld nothing.
+
+        ⭐ That also made the guarantee BYPASSABLE. Anything that could be
+        hidden from `team:AXIS` was one differently-spelled request away
+        (Codex, PR #807).
+        """
+        team = await self._snapshot("team:AXIS", pairs=True)
+        player = await self._snapshot("AX1", pairs=True)
+
+        assert set(player["withheld_by_pov"]) == set(team["withheld_by_pov"])
+        assert {p["guid"] for p in player["players"]} == {
+            p["guid"] for p in team["players"]
+        }
+        # ⭐ AND THE CLOCK, which is where the inversion was actually measured:
+        # the player path returned `ALLIES validated, phase=3000` while the
+        # team path withheld it. Without this line a regression that lets the
+        # clock back through the player branch survives both asserts above —
+        # a guard shaped like the fix instead of like the defect (Fable's
+        # review of this PR).
+        assert player["clock"] == team["clock"]
+
+    @pytest.mark.asyncio
+    async def test_but_a_player_still_gets_their_OWN_beliefs_not_the_union(self):
+        """⭐ TWO DIFFERENT QUESTIONS, and the first fix conflated them.
+
+        The boundary is a TEAM question — a player knows where their own side
+        is. Whose BELIEFS come back is a per-holder question, and routing a
+        player pov through `_team_information` handed them their whole side's
+        knowledge, which is the opposite of what a per-player view is for.
+        """
+        player = await self._snapshot("AX1", pairs=True)
+        info = player["information_state"]
+
+        assert info["pov"] == "AX1"
+        assert set(info["holders"]) == {"AX1"}
+        # ⚠️ AND IT STATES THE SIMPLIFICATION, like the team view does. This
+        # branch returns every member of the holder's team, and §6 asks that
+        # own-team knowledge be declared rather than assumed — the omission
+        # was invisible because the team view said it and this one did not
+        # (Codex, PR #807).
+        assert info["own_team_positions_are_a_simplification"] is True
+
+    @pytest.mark.asyncio
+    async def test_both_views_declare_it_or_neither_does(self):
+        """⭐ Compared, not asserted twice. A disclosure that one branch makes
+        and its sibling omits is exactly how this went unnoticed."""
+        team = await self._snapshot("team:AXIS", pairs=True)
+        player = await self._snapshot("AX1", pairs=True)
+        key = "own_team_positions_are_a_simplification"
+
+        assert team["information_state"][key] == player["information_state"][key]
+
+    @pytest.mark.asyncio
+    async def test_a_future_participant_is_withheld_not_reported_as_a_gap(self):
+        """⛔ Excluding them from the roster removed them from `withheld` too.
+
+        `_roster_at` drops players who have not spawned yet, and `withheld`
+        was derived from that same set — so a not-yet-joined participant fell
+        out of BOTH and reappeared in `gaps` as `no_life_at_or_before_t`,
+        revealing a future participant to a team that could not yet know of
+        them (Codex, PR #807). Current membership decides what you SEE; the
+        universe decides what must be WITHHELD.
+        """
+        late = _stub_track("LATE", 900.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  late[:4] + (120_000, None) + late[6:]]
+        db = _SnapshotStubDb(tracks=tracks)
+        payload = await get_round_snapshot(db, 1, 5_000, pov="team:AXIS")
+
+        assert "LATE" not in payload["gaps"], "a future participant leaked via gaps"
+        assert "LATE" in payload["withheld_by_pov"]
+
+    @pytest.mark.asyncio
+    async def test_the_round_names_its_sides_at_every_moment(self):
+        """⛔ The POV buttons were built from a TIME SLICE.
+
+        `snapshot.players` at `first_position_ms` guarantees only that the
+        FIRST player exists, so a round whose teams begin spawning at
+        different moments built one button and never gained the other —
+        `goTo` updates panels without recreating them (Codex, PR #807).
+
+        `teams` is round-level and identical at every `t`, for the same
+        reason `withheld_by_pov` is: a list that grows with time is a spawn
+        timeline.
+        """
+        late = _stub_track("AL1", 500.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  late[:4] + (300_000, None) + late[6:]]
+        db = _SnapshotStubDb(tracks=tracks)
+
+        seen = set()
+        for t_ms in (0, 5_000, 299_999, 300_000, 400_000):
+            payload = await get_round_snapshot(db, 1, t_ms, pov="world")
+            seen.add(tuple(payload["teams"]))
+            # The time slice really is partial early on — the premise.
+            if t_ms < 300_000:
+                assert {p["team"] for p in payload["players"]} == {"AXIS"}
+
+        assert seen == {("ALLIES", "AXIS")}, f"teams changed with t: {seen}"
+
+    @pytest.mark.asyncio
+    async def test_withheld_is_the_same_at_every_moment(self):
+        """⭐⭐ THE PROPERTY THAT MAKES NAMING THE WITHHELD SAFE.
+
+        A client that diffs `withheld_by_pov` across `t` must learn nothing.
+        Derived from the roster AT `t` it would have grown as opponents first
+        spawned — precise per moment, and an enemy spawn TIMELINE in
+        aggregate, which is exactly what the boundary exists to withhold.
+
+        Verified on the real round 11321: 3 withheld at t=1,000 through
+        t=600,000, unchanged. Here the fixture makes the same statement with
+        a player whose first life starts late.
+        """
+        late = _stub_track("LATE", 900.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  _stub_track("AL1", 500.0, team="ALLIES"),
+                  late[:4] + (120_000, None) + late[6:]]
+
+        seen = set()
+        for t_ms in (0, 5_000, 60_000, 119_999, 120_000, 200_000):
+            payload = await get_round_snapshot(
+                _SnapshotStubDb(tracks=tracks), 1, t_ms, pov="team:AXIS")
+            seen.add(tuple(sorted(payload["withheld_by_pov"])))
+
+        assert len(seen) == 1, f"withheld changed with t: {seen}"
+        assert seen.pop() == ("AL1", "LATE")
+
+    @pytest.mark.asyncio
+    async def test_overlap_conflicts_are_counted_over_the_visible_players(self):
+        """⛔ The sibling of the `player_count` leak.
+
+        The oracle aggregate let a caller subtract the visible per-player
+        flags and learn that a WITHHELD opponent had overlapping lives —
+        tracking state the filtered `gaps` conceals (Codex, PR #807).
+        """
+        # AL1 has two overlapping lives at t; AX1 has one.
+        al1 = _stub_track("AL1", 500.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  al1, al1[:8] + ((al1[8] or 0) + 1,)]
+        db = _SnapshotStubDb(tracks=tracks)
+
+        oracle = await get_round_snapshot(db, 1, 5_000, pov="world")
+        team = await get_round_snapshot(db, 1, 5_000, pov="team:AXIS")
+
+        assert oracle["overlap_conflicts"] >= 1, "the fixture must create one"
+        assert team["overlap_conflicts"] == 0, (
+            "a withheld opponent's overlapping lives were still counted"
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_player_count_is_the_filtered_one(self):
+        """⛔ `len(snap.players)` counted every resolved enemy, so subtracting
+        the visible list told a caller how many withheld opponents had a
+        usable state at `t` — exactly what filtering `gaps` prevents."""
+        payload = await self._snapshot("team:AXIS", pairs=True)
+
+        assert payload["player_count"] == len(payload["players"])
+        assert payload["player_count"] == 2
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("pov", ["team:AXIS", "AX1"])
+    async def test_no_withheld_guid_is_named_anywhere_it_should_not_be(self, pov):
+        """⭐⭐ The scan above looks for the shape of the LAST leak.
+
+        It searches for the enemy's coordinates, and it passed while
+        `nearest_teammate_separation` published a distance keyed by every
+        withheld guid. A distance is not a coordinate, so the guard could not
+        see it — the third field in a row to carry the enemy past the boundary
+        after `edges` was fixed and `gaps` was fixed.
+
+        This one asks a different question: does a withheld guid appear as a
+        KEY or a VALUE anywhere it is not explicitly allowed? That catches a
+        field nobody has written yet, whatever it chooses to publish about
+        him — a distance, a count, a timestamp, a boolean.
+
+        Two allowances, both deliberate:
+        - `withheld_by_pov` exists to name him; that IS the contract.
+        - `information_state` is the holder's beliefs, whose whole purpose is
+          to say what this team inferred about that enemy.
+        """
+        # ⭐ BOTH POVs. The player path is a SEPARATE branch through
+        # `get_round_snapshot` now — it takes the team boundary but keeps its
+        # own holder — so a leak specific to it would be invisible to a scan
+        # that only ever ran under `team:` (Fable's review of this PR).
+        payload = await self._snapshot(pov, pairs=True)
+        withheld = set(payload["withheld_by_pov"])
+        assert withheld, "the fixture must actually withhold somebody"
+
+        allowed = {k: v for k, v in payload.items()
+                   if k not in ("withheld_by_pov", "information_state")}
+
+        assert _mentions_of(allowed, withheld) == [], (
+            "withheld players are named outside their bucket: "
+            + "; ".join(_mentions_of(allowed, withheld))
+        )
+        # ⭐ AND THE SUBSTRING HALF. Exact key/value matching is itself a shape
+        # — a composite key or a guid inside a sentence slips past it, which is
+        # precisely the narrowness this whole guard exists to correct one level
+        # up (Fable's review). Two scans, because either alone is a guard
+        # tuned to the leaks we have already seen.
+        assert _substring_mentions(allowed, withheld) == [], (
+            "a withheld guid appears somewhere in the payload text"
+        )
+
+    @pytest.mark.asyncio
     async def test_an_unknown_team_explains_itself(self):
         payload = await self._snapshot("team:NOBODY")
         assert payload["information_state"]["pov_unavailable"]
+
+    @pytest.mark.asyncio
+    async def test_a_team_that_cannot_be_resolved_withholds_everything(self):
+        """⛔ FAIL CLOSED, and it did not.
+
+        `_pov_team` returns None for three different situations — the oracle,
+        a single-player pov, and a team nobody played on — and its docstring
+        says the caller distinguishes them. The caller did not: a `team:` name
+        that matched no roster landed in the same branch as `pov=world` and
+        got EVERY position, BOTH clocks and an empty `withheld_by_pov`.
+
+        A typo, a renamed side, or a round with a thinner roster than expected
+        all take this path. "We could not establish the team you asked for"
+        must never resolve to "here is everything" (Codex, PR #807).
+        """
+        payload = await self._snapshot("team:NOBODY", pairs=True)
+
+        assert payload["players"] == []
+        assert set(payload["withheld_by_pov"]) == {"AX1", "AX2", "AL1", "AL2"}
+        for team, entry in payload["clock"].items():
+            assert entry["status"] == "unknown_to_this_pov", team
+
+    @pytest.mark.asyncio
+    async def test_the_unresolved_team_says_it_is_a_ROSTER_miss(self):
+        """⚠️ The branch written for this could never run.
+
+        `if pov and pov != "world"` catches every `team:` string first, so the
+        team-specific message below it was dead code and an unrostered team
+        got the SINGLE-PLAYER wording — "team:NOBODY has no reconstructed
+        state in this round at t=..." — which describes a GUID lookup.
+        """
+        payload = await self._snapshot("team:NOBODY")
+        reason = payload["information_state"]["pov_unavailable"]
+
+        assert "no players on team" in reason
+        assert "NOBODY" in reason
+        assert "reconstructed state" not in reason
 
     @pytest.mark.asyncio
     async def test_the_team_name_is_case_insensitive(self):
@@ -1143,7 +1989,9 @@ class TestInformationStateLoader:
         result = await load_round_information_state(
             _InfoStubDb(), 1, 1000, _snapshot_of("A", "B"), {}, CapturePolicy())
         for holder in result["holders"].values():
-            assert set(holder["unavailable"]) == {"gunfire", "aim_lock"}
+            # Superset: `comm_events` is always named too, because this
+            # implementation reads no voice macros at all (UNREAD_CHANNELS).
+            assert {"gunfire", "aim_lock"} <= set(holder["unavailable"])
 
     @pytest.mark.asyncio
     async def test_a_death_reaches_the_other_players(self):
