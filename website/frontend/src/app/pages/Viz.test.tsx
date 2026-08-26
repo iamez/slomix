@@ -167,6 +167,20 @@ describe('WeaponsPage', () => {
     // Grenade, Grenadelauncher, Landmine, Dynamite — the calls left with Support.
     expect(screen.getByText(/^4 weapons/)).toBeInTheDocument();
   });
+
+  it('a smoke grenade is Support even though its key contains "grenade"', async () => {
+    const w = weapons as Record<string, unknown>[];
+    const smoke = { ...w[0], name: 'Smokegrenade', weapon_key: 'smokegrenade', kills: 3 };
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/stats/weapons': [...w, smoke] })));
+    renderPage(<WeaponsPage />);
+    await waitFor(() => expect(screen.getAllByText('Mp40').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'support' }));
+    expect(screen.getByText(/^3 weapons/)).toBeInTheDocument();
+    expect(screen.getAllByText('Smokegrenade').length).toBeGreaterThan(0);
+    // …and explosive did NOT absorb it.
+    fireEvent.click(screen.getByRole('button', { name: 'explosive' }));
+    expect(screen.getByText(/^4 weapons/)).toBeInTheDocument();
+  });
 });
 
 describe('FormPage', () => {
