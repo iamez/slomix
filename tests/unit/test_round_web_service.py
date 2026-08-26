@@ -1206,6 +1206,24 @@ class TestASideSwitchIsResolvedAtTheMOMENT:
         roster = _roster_at(self._tracks(), 90_000)
         assert roster["AX1"] == "ALLIES"
 
+    def test_before_a_players_first_life_they_are_on_no_side(self):
+        """⛔ A late joiner used to resolve to their FUTURE team.
+
+        The fallback handed back the earliest life's side when `select_life`
+        found nothing, so `_pov_team` treated the request as resolved and
+        returned that side's positions and exact friendly clock — while
+        `information_state.pov_unavailable` said the holder had no
+        reconstructed state (Codex, PR #807). Absent from the roster means
+        unresolved, and unresolved fails closed.
+        """
+        tracks = {"LATE": [_stub_track("LATE", 0.0, team="AXIS")[:4]
+                           + (120_000, None) + _stub_track("LATE", 0.0)[6:]]}
+
+        assert _roster_at(tracks, 30_000) == {}
+        assert _pov_team("LATE", tracks, 30_000) is None
+        # …and once they have spawned, they resolve normally.
+        assert _pov_team("LATE", tracks, 150_000)["team"] == "AXIS"
+
     def test_the_pov_boundary_follows_the_moment(self):
         """⭐ The consequence, not just the lookup: which side the boundary
         protects changes with `t`."""
@@ -1296,14 +1314,43 @@ class TestTheEnemyClockIsNotOursToPublish:
 
         assert set(out["ALLIES"]) == {"status", "interval_ms", "reason"}
 
-    def test_the_holders_own_diagnostics_are_untouched(self):
-        """The allowlist applies to the OTHER side only. A team may read every
-        diagnostic about its own clock — that is its own HUD."""
+    def test_the_holders_own_clock_keeps_only_what_is_causal(self):
+        """⛔ THIS TEST USED TO PIN THE DEFECT.
+
+        It asserted `out["AXIS"] == rich` — "a team may read every diagnostic
+        about its own clock, that is its own HUD". It is not: `pass_ratio`,
+        `timing_observations`, `landing_clusters`, `spawn_callbacks`,
+        `post_revive_spawn_callbacks` and `passing_landing_clusters` are built
+        from every life, revive and timing row in the ROUND, without ever
+        looking at `t_ms`. A snapshot at 30 seconds therefore told a player
+        how many times their own side would die, spawn and be revived for the
+        rest of the match (Codex, PR #807).
+
+        ⭐ The HUD is the status, the interval and the phase/countdown —
+        `wave_position` computes the last two AT `t_ms`. Those stay. The
+        whole-round aggregates do not, on EITHER side.
+        """
         rich = dict(self.VALIDATED["AXIS"])
-        rich["pass_ratio"] = 0.97
+        rich.update({"pass_ratio": 0.97, "timing_observations": 14,
+                     "landing_clusters": 8, "spawn_callbacks": 16})
         out = restrict_clock_to_pov({"AXIS": rich}, {"team": "AXIS"})
 
-        assert out["AXIS"] == rich
+        assert set(out["AXIS"]) <= {
+            "status", "reason", "interval_ms", "offset_ms",
+            "phase_ms", "time_to_next_wave_ms",
+        }
+        # The HUD itself is untouched.
+        assert out["AXIS"]["phase_ms"] == rich["phase_ms"]
+        assert out["AXIS"]["time_to_next_wave_ms"] == rich["time_to_next_wave_ms"]
+        assert out["AXIS"]["interval_ms"] == rich["interval_ms"]
+
+    def test_the_oracle_still_sees_the_diagnostics(self):
+        """They are not deleted — they are an ANALYST view. `pov=world` is the
+        named diagnostic (§6.4) and keeps everything."""
+        rich = dict(self.VALIDATED["AXIS"])
+        rich["pass_ratio"] = 0.97
+
+        assert restrict_clock_to_pov({"AXIS": rich}, None)["AXIS"] == rich
 
     def test_an_entry_we_cannot_inspect_is_withheld_rather_than_copied(self):
         """⛔ Fail-OPEN by default is still fail-open when it is unreachable.
