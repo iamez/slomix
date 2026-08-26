@@ -84,7 +84,17 @@ class _PgAdapter:
 
 @pytest.mark.asyncio
 async def test_active_days_is_counted_not_silently_null():
-    conn = await asyncpg.connect(**TEST_DB)
+    try:
+        conn = await asyncpg.connect(**TEST_DB, timeout=5)
+    except Exception as exc:
+        # Local dev has no etlegacy_test database (and its server rejects
+        # the test credentials), so ANY connect error means "not this box"
+        # — skip, like the sibling _pg tests. But ON CI the database is
+        # provisioned, so the same error is a broken pipeline and must
+        # fail loudly rather than silently skip the regression.
+        if os.environ.get("CI"):
+            raise
+        pytest.skip(f"Test database unavailable: {exc}")
     schema = f"season_summary_{uuid.uuid4().hex[:12]}"
     try:
         await conn.execute(f'CREATE SCHEMA "{schema}"')
