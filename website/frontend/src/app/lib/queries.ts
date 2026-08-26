@@ -1,7 +1,9 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import { apiGet } from './api';
 import type {
-  ActivityCalendar, AvailabilityOverview, BuildInfo, ChallengeCurrent,
+  ActivityCalendar, AvailabilityOverview, AwardsLeaderboard, AwardsPage,
+  BuildInfo, ChallengeCurrent, HallOfFame, LeaderboardRow, MapRow,
+  SeasonAwards, StatsRecords,
   LastSession, LiveState, LiveStatus, MatchRow, QuickLeaders, SeasonCurrent,
   SeasonLeaders, SeasonSummary, SessionSummary, SkillMovers, StatsOverview,
   StatsTrends, StorytellingCompleteness, SystemOverview, TonightStatus,
@@ -214,5 +216,84 @@ export function useActivityCalendar(days = 90) {
   return useQuery({
     queryKey: ['activity-calendar', days],
     queryFn: () => apiGet('/api/stats/activity-calendar', { query: { days } }) as Promise<ActivityCalendar>,
+  });
+}
+
+
+/* ---------- phase 2, batch 2 ---------- */
+
+export function useLeaderboard(stat: string, period: string) {
+  return useQuery({
+    queryKey: ['leaderboard', stat, period],
+    queryFn: () =>
+      apiGet('/api/stats/leaderboard', { query: { stat, period, limit: 50 } }) as Promise<LeaderboardRow[]>,
+  });
+}
+
+export function useRecords(mapName: string | null) {
+  return useQuery({
+    queryKey: ['records', mapName],
+    queryFn: () =>
+      apiGet('/api/stats/records', {
+        // encodeURIComponent happens in buildQuery — the legacy call sent
+        // the raw name (records.js:95).
+        query: mapName ? { limit: 5, map_name: mapName } : { limit: 5 },
+      }) as Promise<StatsRecords>,
+  });
+}
+
+export function useMaps() {
+  return useQuery({
+    queryKey: ['maps'],
+    queryFn: () => apiGet('/api/stats/maps') as Promise<MapRow[]>,
+  });
+}
+
+export function useHallOfFame(period: string) {
+  return useQuery({
+    queryKey: ['hall-of-fame', period],
+    queryFn: () =>
+      apiGet('/api/hall-of-fame', { query: { period, limit: 50 } }) as Promise<HallOfFame>,
+  });
+}
+
+export function useSeasonAwards() {
+  return useQuery({
+    queryKey: ['season-awards'],
+    // The spec's shape is /api/seasons/{season_id}/awards; 'current'
+    // resolves server-side via SeasonManager (season_awards_router).
+    queryFn: () =>
+      apiGet('/api/seasons/{season_id}/awards', {
+        pathParams: { season_id: 'current' },
+      }) as Promise<SeasonAwards>,
+  });
+}
+
+export function useAwards(page: number, days: number | null, awardType: string | null) {
+  return useQuery({
+    queryKey: ['awards', page, days, awardType],
+    queryFn: () =>
+      apiGet('/api/awards', {
+        query: {
+          limit: 20,
+          offset: page * 20,
+          ...(days != null ? { days } : {}),
+          ...(awardType ? { award_type: awardType } : {}),
+        },
+      }) as Promise<AwardsPage>,
+  });
+}
+
+export function useAwardsLeaderboard(days: number | null, awardType: string | null) {
+  return useQuery({
+    queryKey: ['awards-leaderboard', days, awardType],
+    queryFn: () =>
+      apiGet('/api/awards/leaderboard', {
+        query: {
+          limit: 50,
+          ...(days != null ? { days } : {}),
+          ...(awardType ? { award_type: awardType } : {}),
+        },
+      }) as Promise<AwardsLeaderboard>,
   });
 }
