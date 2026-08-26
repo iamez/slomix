@@ -25,8 +25,16 @@ import { loadRecordsView } from './records.js?v=20260817-match';
 import { loadAwardsView } from './awards.js';
 import { loadProximityView } from './proximity.js?v=20260812-b3';
 import { loadStoryView } from './story.js?v=20260817-restore';
-import { loadReplayView } from './replay.js';
-import { loadSpiderWebView } from './spider-web.js?v=20260824-panels2';
+// ⚠️ THESE VERSIONS MATTER ON DEV, NOT ON PRODUCTION — and the difference is
+// worth knowing before anyone treats a bump as the fix for a stale client.
+// `scripts/deploy_release.sh` step 3b rewrites EVERY `?v=` on the VM to the
+// release SHA and injects one into bare imports, so a production deploy busts
+// every module whether or not it is versioned here. The dev server serves the
+// repo as-is with `max-age=86400`, so on dev this string is the only buster
+// there is. Keeping them explicit also states the intent in the source rather
+// than leaving it to a sed line in a deploy script.
+import { loadReplayView } from './replay.js?v=20260825-spiderweb-link';
+import { loadSpiderWebView } from './spider-web.js?v=20260825-pov-boundary';
 import { loadRivalriesView } from './rivalries.js';
 import { loadSystemView } from './system.js?v=20260815-system';
 import { loadSmartStatsDiagView } from './smart-stats-diag.js?v=20260607-aim';
