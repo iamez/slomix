@@ -41,10 +41,11 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
 
 /** fixtureFetch with per-path replacements for shape-variant tests. */
 function overrideFetch(overrides: Record<string, unknown>) {
+  const table = new Map(Object.entries(overrides));
   return (input: RequestInfo | URL): Promise<Response> => {
     const pathname = String(input).split('?')[0];
-    if (pathname in overrides) {
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(overrides[pathname]) } as Response);
+    if (table.has(pathname)) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(table.get(pathname)) } as Response);
     }
     return fixtureFetch(input);
   };
