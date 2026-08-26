@@ -818,6 +818,9 @@ docs/skill-rating-redesign-brief.md
 # results live as constants in code comments, and unreferenced docs.
 # Ignored so they cannot be re-added by a sweep. ---
 scripts/archive/
+!scripts/archive/__init__.py
+!scripts/archive/backfill_gametimes.py
+!scripts/archive/proximity_objective_coords_gate.py
 scripts/backfill_bot_round_flags.sql
 scripts/backfill_box_scale_session_results.py
 scripts/backfill_match_id_stopwatch.py
