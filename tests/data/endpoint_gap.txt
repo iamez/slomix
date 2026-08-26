@@ -52,7 +52,6 @@
 /api/proximity/trades/player-stats
 /api/proximity/v7-status
 /api/proximity/vehicle-progress
-/api/records/maps/segments
 /api/replay/round
 /api/rivalries/h2h
 /api/rivalries/leaderboard
@@ -61,7 +60,6 @@
 /api/skill/ssr
 /api/stats/live-session
 /api/stats/session-leaderboard
-/api/stats/weapons/by_player
 /api/storytelling/best-lives
 /api/storytelling/formula
 /api/storytelling/kill-impact/details
