@@ -266,17 +266,24 @@ function ChampionsBand() {
     <div data-parity="record-book.champions" style={{ marginBottom: 18 }}>
       <SectionHead label={`${awards.data?.season_name ?? 'season'} · champions`} />
       <div className="landing-quad" style={{ gap: 10, marginTop: 10 }}>
-        {list.map((a, i) => (
-          // Multiple recipients of one award_key are a valid state — the
-          // conflict key is (season, award, PLAYER) (Codex on #813 wave 2).
-          <div key={`${a.award_key ?? a.key ?? i}:${a.player_guid ?? i}`} style={{ borderLeft: '2px solid var(--color-accent-warm)', paddingLeft: 10 }}>
+        {list.map((a, i) => {
+          const inner = (<>
             {/* The backend supplies a display label ('Season MVP') —
               * deriving from award_key rendered 'mvp' (Codex on #813). */}
             <Lbl style={{ fontSize: 9 }}>{a.label ?? (a.award_key ?? a.key ?? '').replace(/_/g, ' ')}</Lbl>
             <div className="m" style={{ fontSize: 13, marginTop: 3 }}>{a.player_name ?? '—'}</div>
             {a.value_text && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>{a.value_text}</div>}
-          </div>
-        ))}
+          </>);
+          // Multiple recipients of one award_key are a valid state — the
+          // conflict key is (season, award, PLAYER) (wave 2). A champion
+          // WITH a guid links to their profile like legacy did (wave 3);
+          // without one, a plain card.
+          const key = `${a.award_key ?? a.key ?? i}:${a.player_guid ?? i}`;
+          const style = { borderLeft: '2px solid var(--color-accent-warm)', paddingLeft: 10 } as const;
+          return a.player_guid
+            ? <Link key={key} to={`/profile/${a.player_guid}`} style={{ ...style, textDecoration: 'none', color: 'var(--color-text-100)', display: 'block' }}>{inner}</Link>
+            : <div key={key} style={style}>{inner}</div>;
+        })}
       </div>
     </div>
   );
