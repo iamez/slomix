@@ -821,7 +821,6 @@ scripts/archive/
 !scripts/archive/__init__.py
 !scripts/archive/backfill_gametimes.py
 !scripts/archive/proximity_objective_coords_gate.py
-scripts/backfill_bot_round_flags.sql
 scripts/backfill_box_scale_session_results.py
 scripts/backfill_match_id_stopwatch.py
 scripts/backfill_player_track_metrics.py
@@ -851,8 +850,6 @@ scripts/backtest_carrier_context.py
 scripts/backtest_clutch_v1.py
 scripts/backtest_good_night.py
 scripts/backtest_help_harm_ledger.py
-scripts/backtest_kis_v6.py
-scripts/backtest_metric_foundations.py
 scripts/backtest_museum_memory_card.py
 scripts/backtest_objective_pressure.py
 scripts/backtest_s_effort.py
