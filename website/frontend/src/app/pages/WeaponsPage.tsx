@@ -19,7 +19,9 @@ import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../c
 
 const WEAPON_CATEGORIES = new Map<string, string>(Object.entries({
   mp40: 'smg', thompson: 'smg', sten: 'smg',
-  garand: 'rifle', k43: 'rifle', kar98: 'rifle', fg42: 'rifle',
+  // carbine = 'M1 Garand (Carbine)' in the canonical weapon table
+  // (player_profile_metrics:187) — without the alias it fell to Other.
+  garand: 'rifle', carbine: 'rifle', k43: 'rifle', kar98: 'rifle', fg42: 'rifle',
   panzerfaust: 'heavy', mortar: 'heavy', flamethrower: 'heavy', mg42: 'heavy',
   luger: 'pistol', colt: 'pistol', akimbo: 'pistol', silencer: 'pistol',
   knife: 'melee',
