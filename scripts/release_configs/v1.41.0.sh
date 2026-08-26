@@ -22,6 +22,9 @@
 #         the clock panel and the snapshot's own integrity
 #   #802, #805, #806  the standalone /app shell, Chart.js bundled, and the
 #         first page of the new design
+#   #807  the team view stopped leaking: separation, the enemy wave phase and
+#         the belief timing that kept step with it — plus the entry point the
+#         Spider Web page had never had
 #   #808  the live surfaces can be told apart from their own failures: a map
 #         that outlived its evidence, a voice report that stopped, a
 #         timestamp that travelled without its zone
@@ -30,10 +33,21 @@
 #         maps/weapons/form/retro-viz. ⛔ NONE OF IT IS SERVED (see /app note)
 #   #786  docs/ boundary: publish what code points at, retire 121 others
 #   #801  the contract said R0 rows had stopped; they had not
+#   #812  the API starts describing what it returns: response_model on
+#         /api/stats/overview and /api/stats/quick-leaders, plus the guard
+#         that makes adding schemas safe at all (response_model FILTERS —
+#         a field the handler returns and the model omits is dropped
+#         silently, with a 200)
 #
 # ⛔ REGENERATE THIS LIST AT TAG TIME, do not extend it by hand:
 #
-#   git log --oneline v1.40.0..main | grep -oE "#[0-9]+" | sort -u
+#   diff <(git log --oneline v1.40.0..main | grep -oE "#[0-9]+" | sort -u) \
+#        <(sed -n '/^# Ships/,/REGENERATE/p' "$0" | grep -oE "#[0-9]+" | sort -u)
+#
+# ⛔ SCOPED TO THE Ships BLOCK, not the whole file. The plain grep reported
+# "nothing missing" for BOTH #812 and #807 while each appeared only in prose
+# elsewhere — a grep finds the NUMBER, not the entry. Mentioned is not
+# shipped, and the check that cannot tell them apart is not a check.
 #
 # It was written when #806 was the tip and had missed EIGHT merges by the
 # time anyone looked (#786, #801, #808, #809, #811, #813, #814 — and #807,
@@ -41,8 +55,6 @@
 # "what is here now" misses everything that arrives after, every time. The
 # command above cannot go stale; a hand-kept list always does.
 #
-# ⚠️ #812 (response_model, first two endpoints) was still OPEN when this was
-# refreshed. If it lands before the tag is cut, re-run the command.
 #
 # ⛔ /app IS NOT BUILT BY THIS DEPLOY, AND THAT IS THE POLICY, NOT AN
 # OVERSIGHT. `deploy_release.sh` deliberately does not run `npm run
