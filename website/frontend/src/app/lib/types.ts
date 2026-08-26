@@ -426,7 +426,7 @@ export interface SeasonAwards {
   status: string;
   season_id: string;
   season_name: string;
-  awards: { award_key?: string; key?: string; player_guid?: string; player_name?: string; value_text?: string }[];
+  awards: { award_key?: string; key?: string; label?: string; player_guid?: string; player_name?: string; value_text?: string }[];
 }
 
 /** One row of GET /api/awards — corpus: api_awards.json. value is a STRING
@@ -454,7 +454,9 @@ export interface AwardsPage {
 export interface AwardLeaderRow {
   rank: number;
   player: string;
-  guid: string;
+  /** null when neither alias map resolves the historical winner
+   * (records_awards.py) — no profile link then. */
+  guid: string | null;
   award_count: number;
   top_award: string;
   top_award_count: number;

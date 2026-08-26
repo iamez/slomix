@@ -117,8 +117,11 @@ export function Leaderboards() {
             </Link>
           ))}
         </div>
+        {/* Measured against players_router:1132 — the 50-bullet/rate-cap
+          * claim belonged to the RECORDS endpoint, not this one (Codex on
+          * #813; my own confident-half). */}
         <Lbl style={{ fontSize: 9, marginTop: 10 }}>
-          bots excluded · halves only (r1+r2) · accuracy needs 50+ bullets within the physical rate cap
+          bots excluded · halves only (r1+r2) · accuracy needs 100+ bullets
         </Lbl>
       </div>
     </div>
