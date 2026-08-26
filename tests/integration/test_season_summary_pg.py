@@ -86,9 +86,11 @@ class _PgAdapter:
 async def test_active_days_is_counted_not_silently_null():
     try:
         conn = await asyncpg.connect(**TEST_DB)
-    except (OSError, asyncpg.PostgresError) as exc:
-        # Same courtesy as the sibling _pg tests: no local etlegacy_test
-        # database means SKIP, not FAIL — CI provisions the real one.
+    except (OSError, asyncpg.InvalidCatalogNameError) as exc:
+        # No server listening / no etlegacy_test database = the local-dev
+        # case, SKIP like the sibling _pg tests. Anything else (bad
+        # credentials, protocol errors) must FAIL — on CI a misconfigured
+        # database would otherwise silently skip this regression test.
         pytest.skip(f"Test database unavailable: {exc}")
     schema = f"season_summary_{uuid.uuid4().hex[:12]}"
     try:

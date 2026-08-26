@@ -830,6 +830,7 @@ scripts/archive/
 !scripts/archive/objective_coords_to_lua.py
 !scripts/archive/update_proximity_objectives_from_json.py
 !scripts/archive/sync_objective_placeholders.py
+!scripts/archive/relink_lua_round_teams.py
 scripts/backtest_krogt_tds.sql
 scripts/backtest_life_cards.py
 scripts/backtest_moment_director.py
