@@ -1655,6 +1655,34 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert "LATE" in payload["withheld_by_pov"]
 
     @pytest.mark.asyncio
+    async def test_the_round_names_its_sides_at_every_moment(self):
+        """⛔ The POV buttons were built from a TIME SLICE.
+
+        `snapshot.players` at `first_position_ms` guarantees only that the
+        FIRST player exists, so a round whose teams begin spawning at
+        different moments built one button and never gained the other —
+        `goTo` updates panels without recreating them (Codex, PR #807).
+
+        `teams` is round-level and identical at every `t`, for the same
+        reason `withheld_by_pov` is: a list that grows with time is a spawn
+        timeline.
+        """
+        late = _stub_track("AL1", 500.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  late[:4] + (300_000, None) + late[6:]]
+        db = _SnapshotStubDb(tracks=tracks)
+
+        seen = set()
+        for t_ms in (0, 5_000, 299_999, 300_000, 400_000):
+            payload = await get_round_snapshot(db, 1, t_ms, pov="world")
+            seen.add(tuple(payload["teams"]))
+            # The time slice really is partial early on — the premise.
+            if t_ms < 300_000:
+                assert {p["team"] for p in payload["players"]} == {"AXIS"}
+
+        assert seen == {("ALLIES", "AXIS")}, f"teams changed with t: {seen}"
+
+    @pytest.mark.asyncio
     async def test_withheld_is_the_same_at_every_moment(self):
         """⭐⭐ THE PROPERTY THAT MAKES NAMING THE WITHHELD SAFE.
 

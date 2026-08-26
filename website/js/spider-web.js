@@ -845,10 +845,22 @@ export async function loadSpiderWebView(params = {}) {
 
     container.textContent = '';
 
-    // Teams are learned from the oracle load and kept: under a team view the
-    // payload no longer contains the other side, so the switch would lose its
-    // own options after the first click.
-    if (!state.teams.length) {
+    // ⭐ THE SIDES COME FROM THE PAYLOAD, NOT FROM WHO IS ON SCREEN.
+    //
+    // This used to read `snapshot.players`, which is a TIME SLICE: at
+    // `first_position_ms` only the first player is guaranteed to exist, so a
+    // round whose teams begin spawning at different moments built one POV
+    // button and never gained the other — `goTo` updates panels without
+    // recreating them (Codex, PR #807). And under a team view the payload
+    // deliberately omits the other side, so the switch would lose its own
+    // options after the first click.
+    //
+    // `teams` is round-level and the same at every `t`, which is what a
+    // switch needs. The fallback keeps an older backend working rather than
+    // rendering a bar with no sides at all.
+    if (Array.isArray(snapshot.teams) && snapshot.teams.length) {
+        state.teams = snapshot.teams;
+    } else if (!state.teams.length) {
         state.teams = [...new Set((snapshot.players || [])
             .map((p) => p.team).filter(Boolean))].sort();
     }
