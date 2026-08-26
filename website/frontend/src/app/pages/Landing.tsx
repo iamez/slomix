@@ -106,9 +106,13 @@ function LivePanel() {
           * so an undateable report — `status: "stale"` with `age_seconds:
           * null` — rendered a green dot beside a bare "3 in voice" (Codex on
           * #808). The dot follows the verdict, not the number. */}
+        {/* ⚠️ No `?? 0`: `total_count` is a required number in the schema
+          * and the endpoint always sends it, so the fallback was dead code
+          * that read as defensiveness (Codacy). `voiceData` itself is the
+          * only thing that can be absent, and it is checked. */}
         <StatusDot
-          state={voiceData && voiceData.status !== 'stale'
-            && (voiceData.total_count ?? 0) > 0 ? 'ok' : 'idle'}
+          state={voiceData && voiceData.status !== 'stale' && voiceData.total_count > 0
+            ? 'ok' : 'idle'}
         />
         {voice.isPending && <Pending label="voice" />}
         {(voice.isError || voice.data?.status === 'unavailable') && <Unavailable what="voice" />}
