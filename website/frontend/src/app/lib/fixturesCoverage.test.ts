@@ -47,9 +47,14 @@ function calledPaths(): string[] {
   return [...paths].sort();
 }
 
-/** '/api/voice-activity/current' -> 'api_voice_activity_current.json' */
+/** '/api/voice-activity/current' -> 'api_voice_activity_current.json'.
+ * Templated paths drop the braces, matching the corpus recorder's own
+ * slugs: '/api/seasons/{season_id}/awards' ->
+ * 'api_seasons_season_id_awards.json' — the naming decision phase 2's
+ * first parameterised call forced (this test failed loudly until it was
+ * made, exactly as designed). */
 function fixtureNameFor(apiPath: string): string {
-  return `${apiPath.replace(/^\//, '').replace(/[/-]/g, '_')}.json`;
+  return `${apiPath.replace(/^\//, '').replace(/[{}]/g, '').replace(/[/-]/g, '_')}.json`;
 }
 
 describe('H4 — fixture coverage', () => {
@@ -57,16 +62,7 @@ describe('H4 — fixture coverage', () => {
     const paths = calledPaths();
     expect(paths.length).toBeGreaterThan(0);
     const missing = paths
-      .filter((p) => !p.includes('{'))
       .filter((p) => !(`../pages/__fixtures__/${fixtureNameFor(p)}` in FIXTURES));
     expect(missing, `record these with scripts/record_api_corpus.py and copy into __fixtures__: ${missing.join(', ')}`).toEqual([]);
-  });
-
-  it('templated paths are not silently exempt', () => {
-    // The moment a page calls a parameterised path, decide the fixture
-    // naming for it and extend fixtureNameFor — this failing test is the
-    // reminder mechanism, not an error.
-    const templated = calledPaths().filter((p) => p.includes('{'));
-    expect(templated).toEqual([]);
   });
 });
