@@ -69,6 +69,11 @@ async def get_round_web(
         None, ge=0,
         description="Exclude states older than this; omit to get everything "
                     "with its staleness stated"),
+    velocity_max_dt_ms: int | None = Query(
+        None, gt=0,
+        description="Longest gap a causal velocity pair may span; omit to use "
+                    "the round's own declared capture interval, or no bound "
+                    "at all when the round never declared one"),
     pov: str | None = Query(
         None, max_length=64,
         description="Whose information state to return: a player GUID, or "
@@ -100,4 +105,5 @@ async def get_round_web(
         raise HTTPException(status_code=404, detail=f"round {round_id} not found")
     return await round_web_service.get_round_snapshot(
         db, round_id, t, max_stale_ms=max_stale_ms, pov=pov,
+        velocity_max_dt_ms=velocity_max_dt_ms,
     )
