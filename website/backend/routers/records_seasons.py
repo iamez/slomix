@@ -114,11 +114,14 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """,
             (start_str, end_str),
         )
+        # No bot filter here: `rounds` has no player dimension — a pasted
+        # player_name clause made this raise "column does not exist" and the
+        # endpoint answered 200 with active_days silently null.
         active_days = await db.fetch_val(
             f"""
             SELECT COUNT(DISTINCT SUBSTR(CAST(round_date AS TEXT), 1, 10))
             FROM rounds
-            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
               {round_status_clause}
             """,
             (start_str, end_str),
@@ -169,11 +172,13 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             (start_str, end_str),
             default=None,
         )
+        # Same shape as the primary variant: rounds has no player columns,
+        # so the bot filter never belonged on this query.
         active_days = await safe_val(
             """
             SELECT COUNT(DISTINCT SUBSTR(CAST(round_date AS TEXT), 1, 10))
             FROM rounds
-            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
             """,
             (start_str, end_str),
             default=None,
