@@ -1493,6 +1493,22 @@ class TestATeamPovWithholdsTheTruthItHas:
 
         assert info["pov"] == "AX1"
         assert set(info["holders"]) == {"AX1"}
+        # ⚠️ AND IT STATES THE SIMPLIFICATION, like the team view does. This
+        # branch returns every member of the holder's team, and §6 asks that
+        # own-team knowledge be declared rather than assumed — the omission
+        # was invisible because the team view said it and this one did not
+        # (Codex, PR #807).
+        assert info["own_team_positions_are_a_simplification"] is True
+
+    @pytest.mark.asyncio
+    async def test_both_views_declare_it_or_neither_does(self):
+        """⭐ Compared, not asserted twice. A disclosure that one branch makes
+        and its sibling omits is exactly how this went unnoticed."""
+        team = await self._snapshot("team:AXIS", pairs=True)
+        player = await self._snapshot("AX1", pairs=True)
+        key = "own_team_positions_are_a_simplification"
+
+        assert team["information_state"][key] == player["information_state"][key]
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("pov", ["team:AXIS", "AX1"])
