@@ -84,7 +84,12 @@ class _PgAdapter:
 
 @pytest.mark.asyncio
 async def test_active_days_is_counted_not_silently_null():
-    conn = await asyncpg.connect(**TEST_DB)
+    try:
+        conn = await asyncpg.connect(**TEST_DB)
+    except (OSError, asyncpg.PostgresError) as exc:
+        # Same courtesy as the sibling _pg tests: no local etlegacy_test
+        # database means SKIP, not FAIL — CI provisions the real one.
+        pytest.skip(f"Test database unavailable: {exc}")
     schema = f"season_summary_{uuid.uuid4().hex[:12]}"
     try:
         await conn.execute(f'CREATE SCHEMA "{schema}"')
