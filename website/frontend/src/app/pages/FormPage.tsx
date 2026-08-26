@@ -39,31 +39,50 @@ function sparkPath(values: number[], w: number, h: number, pad: number): string 
 function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; tone: 'up' | 'down' | 'new' }) {
   const color = tone === 'up' ? 'var(--color-pos)' : tone === 'down' ? 'var(--color-neg)' : 'var(--color-text-400)';
   const flat = row.delta_pct === 0;
+  // A null baseline is a MISSING one (no prior sessions) — the legacy view
+  // omitted the comparison rather than printing "vs null".
   const baseline = metric === 'overall'
     ? `${row.latest ?? '—'}% vs 100%`
-    : `${row.latest ?? '—'} vs ${row.baseline}`;
+    : row.baseline != null
+      ? `${row.latest ?? '—'} vs ${row.baseline}`
+      : `${row.latest ?? '—'}`;
   return (
-    <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 90px auto', gap: 12, alignItems: 'center', padding: '8px 0' }}>
-      <span>
-        <Link to={`/profile/${row.guid}`} className="m" style={{ fontSize: 13, textDecoration: 'none', color: 'var(--color-text-100)' }}>
-          {row.sick_leave ? `${row.name} · alt of ${row.sick_leave.primary_name}` : row.name}
-        </Link>
-      </span>
-      <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{baseline}</span>
-      {row.series.length > 1 ? (
-        <svg viewBox="0 0 84 22" style={{ width: 84, height: 22 }}>
-          <path d={sparkPath(row.series, 84, 22, 2)} fill="none" stroke={flat || row.is_new ? '#a78bfa' : color} strokeWidth="1.2" />
-        </svg>
-      ) : <span />}
-      <span className="m" style={{ fontSize: 11, color: flat ? 'var(--color-text-400)' : color, textAlign: 'right' }}>
-        {row.is_new
-          ? 'first night'
-          : flat
-            ? '±0%'
-            : row.delta_pct != null
-              ? `${row.delta_pct > 0 ? '▲ +' : '▼ '}${Math.abs(row.delta_pct).toFixed(1)}%`
-              : '—'}
-      </span>
+    <div style={rowStyle}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 90px auto', gap: 12, alignItems: 'center', padding: '8px 0' }}>
+        <span>
+          <Link to={`/profile/${row.guid}`} className="m" style={{ fontSize: 13, textDecoration: 'none', color: 'var(--color-text-100)' }}>
+            {row.sick_leave ? `${row.name} · alt of ${row.sick_leave.primary_name}` : row.name}
+          </Link>
+        </span>
+        <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{baseline}</span>
+        {row.series.length > 1 ? (
+          <svg viewBox="0 0 84 22" style={{ width: 84, height: 22 }}>
+            <path d={sparkPath(row.series, 84, 22, 2)} fill="none" stroke={flat || row.is_new ? '#a78bfa' : color} strokeWidth="1.2" />
+          </svg>
+        ) : <span />}
+        <span className="m" style={{ fontSize: 11, color: flat ? 'var(--color-text-400)' : color, textAlign: 'right' }}>
+          {row.is_new
+            /* A linked sick-leave alternate must never read as a genuine
+             * newcomer — the backend attaches the link for exactly this
+             * (skill_router:927). */
+            ? row.sick_leave ? 'on sick leave' : 'first night'
+            : flat
+              ? '±0%'
+              : row.delta_pct != null
+                ? `${row.delta_pct > 0 ? '▲ +' : '▼ '}${Math.abs(row.delta_pct).toFixed(1)}%`
+                : '—'}
+        </span>
+      </div>
+      {metric === 'overall' && row.breakdown.length > 0 && (
+        <div className="m" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 9, color: 'var(--color-text-500)', padding: '0 0 8px' }}>
+          {row.breakdown.map((b) => (
+            <span key={b.metric}>
+              {b.label.toLowerCase()}{' '}
+              {b.delta_pct != null ? `${b.delta_pct > 0 ? '+' : ''}${b.delta_pct.toFixed(1)}%` : '—'}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

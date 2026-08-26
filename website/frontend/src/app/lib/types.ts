@@ -303,15 +303,28 @@ export interface AvailabilityOverview {
   days: { date: string; counts: Record<string, number>; total: number }[];
 }
 
+/** One breakdown contribution (Overall only) — corpus: api_skill_movers.json */
+export interface SkillMoverBreakdown {
+  metric: string;
+  label: string;
+  delta_pct: number | null;
+  latest: number | null;
+  baseline: number | null;
+}
+
 /** One mover row — corpus: api_skill_movers.json */
 export interface SkillMoverRow {
   guid: string;
   name: string;
   latest: number | null;
-  baseline: number;
+  /** null when the player has no prior-session average for this metric
+   * (skill_router:792) — a missing baseline, not a zero one. */
+  baseline: number | null;
   delta_pct: number | null;
   series: number[];
   is_new: boolean;
+  /** Empty for new players; per-metric contributions otherwise. */
+  breakdown: SkillMoverBreakdown[];
   /** Present when a new-looking GUID is a linked sick-leave alternate of a
    * known player (skill_router:934) — the UI must not call them new. */
   sick_leave?: { primary_name: string; active?: boolean } | null;
@@ -589,8 +602,15 @@ export interface RoundViz {
   round_number: number;
   round_label: string;
   winner_team: number | null;
-  duration_seconds: number;
+  /** null for historical rounds without a measured duration — unknown,
+   * not zero (records_matches reads actual_duration_seconds raw). */
+  duration_seconds: number | null;
   player_count: number;
   players: VizPlayer[];
-  highlights?: { label?: string; player?: string; value?: string }[];
+  /** Keyed object, NOT an array (records_matches:446); {} for empty rounds. */
+  highlights: {
+    mvp?: { name: string; dpm: number };
+    most_kills?: { name: string; kills: number };
+    most_damage?: { name: string; damage_given: number };
+  };
 }

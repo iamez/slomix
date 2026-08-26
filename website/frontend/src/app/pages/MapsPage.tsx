@@ -71,12 +71,16 @@ function Summary({ maps }: { maps: MapStatsRow[] }) {
 function ObjectiveRecords() {
   const segments = useMapSegments();
   const rows = segments.data?.records ?? [];
+  // The endpoint catches its own query failures and answers 200 with
+  // {status: "error", records: []} — success + empty there is an OUTAGE,
+  // not an empty record book (same family as the #811 waves).
+  const failed = segments.isError || segments.data?.status === 'error';
   return (
     <div data-parity="maps.objective-records" style={{ marginTop: 34 }}>
       <SectionHead label="fastest objective completions · full map records" />
       {segments.isPending && <div style={{ marginTop: 10 }}><Pending label="records" /></div>}
-      {segments.isError && <div style={{ marginTop: 10 }}><Unavailable what="objective records" /></div>}
-      {segments.isSuccess && rows.length === 0 && (
+      {failed && <div style={{ marginTop: 10 }}><Unavailable what="objective records" /></div>}
+      {segments.isSuccess && !failed && rows.length === 0 && (
         <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 10 }}>no objective records yet</div>
       )}
       {rows.length > 0 && (
@@ -160,9 +164,11 @@ export function MapsPage() {
                       </div>
                     ))}
                   </div>
-                  {/* A null rate is NOT 50 — the legacy default painted an
-                    * invented middle for maps no side ever won. */}
-                  {m.allies_win_rate != null && m.axis_win_rate != null ? (
+                  {/* An undecided map is NOT 50/50 — but the endpoint
+                    * serializes exactly that (records_maps defaults both
+                    * rates to 50), so nullability can't detect it; the win
+                    * COUNTS can. */}
+                  {m.allies_wins + m.axis_wins > 0 && m.allies_win_rate != null && m.axis_win_rate != null ? (
                     <div style={{ marginTop: 10 }}>
                       <div style={{ display: 'flex', height: 5, background: 'var(--color-rule-800)' }}>
                         <span style={{ width: `${m.allies_win_rate}%`, background: 'var(--color-accent)', display: 'block' }} />

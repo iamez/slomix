@@ -25,7 +25,10 @@ function winnerLabel(team: number | null): { text: string; color: string } {
   return { text: 'Tied', color: 'var(--color-text-400)' };
 }
 
-function fmtDuration(s: number): string {
+function fmtDuration(s: number | null): string {
+  // A historical round without a webhook measurement has NO duration —
+  // arithmetic on null would show a false 0:00.
+  if (s == null) return 'unknown';
   return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 }
 
@@ -38,6 +41,11 @@ function SummaryPanel({ viz }: { viz: RoundViz }) {
     ['duration', fmtDuration(viz.duration_seconds)],
     ['players', String(viz.player_count)],
   ];
+  const highlights = [
+    viz.highlights.mvp && { k: 'mvp', name: viz.highlights.mvp.name, v: `${viz.highlights.mvp.dpm.toFixed(1)} dpm` },
+    viz.highlights.most_kills && { k: 'most kills', name: viz.highlights.most_kills.name, v: `${viz.highlights.most_kills.kills} kills` },
+    viz.highlights.most_damage && { k: 'most damage', name: viz.highlights.most_damage.name, v: `${viz.highlights.most_damage.damage_given.toLocaleString('en-US')} dmg` },
+  ].filter((h) => h != null);
   return (
     <div data-parity="retro-viz.summary" style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
       <div className="home-cols3" style={{ gap: 10 }}>
@@ -52,6 +60,17 @@ function SummaryPanel({ viz }: { viz: RoundViz }) {
           <div className="m" style={{ fontSize: 14, marginTop: 3, color: winner.color }}>{winner.text}</div>
         </div>
       </div>
+      {highlights.length > 0 && (
+        <div data-parity="retro-viz.highlights" className="home-cols3" style={{ gap: 10, marginTop: 12, borderTop: '1px solid var(--color-rule-800)', paddingTop: 10 }}>
+          {highlights.map((h) => (
+            <div key={h.k}>
+              <Lbl style={{ fontSize: 9 }}>{h.k}</Lbl>
+              <div className="m" style={{ fontSize: 13, marginTop: 3 }}>{h.name}</div>
+              <div className="m" style={{ fontSize: 10, color: 'var(--color-text-400)' }}>{h.v}</div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
