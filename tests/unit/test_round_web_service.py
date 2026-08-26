@@ -1261,9 +1261,25 @@ class TestTheEnemyClockIsNotOursToPublish:
     def test_the_oracle_keeps_both_clocks_whole(self):
         assert restrict_clock_to_pov(self.VALIDATED, None) == self.VALIDATED
 
-    def test_a_team_keeps_its_own_clock_whole(self):
+    def test_a_team_keeps_its_own_HUD(self):
+        """⚠️ The HUD, not the whole entry — this test used to assert equality.
+
+        `status: "validated"` is not a fact about the game: it is
+        `validate_round_clocks` saying the FULL ROUND produced at least
+        MIN_VALIDATION_LANDINGS clusters, so publishing it at an early
+        snapshot told the holder how often their own side would still spawn
+        (Codex, PR #807). The countdown stays; the grade goes to the oracle.
+        """
         out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
-        assert out["AXIS"] == self.VALIDATED["AXIS"]
+
+        assert out["AXIS"]["phase_ms"] == self.VALIDATED["AXIS"]["phase_ms"]
+        assert out["AXIS"]["interval_ms"] == self.VALIDATED["AXIS"]["interval_ms"]
+        assert out["AXIS"]["status"] == "own_hud"
+
+    def test_the_oracle_keeps_the_grade(self):
+        """It is not deleted — it is an analyst fact and `world` is the named
+        diagnostic (§6.4)."""
+        assert restrict_clock_to_pov(self.VALIDATED, None) == self.VALIDATED
 
     def test_the_enemy_phase_and_next_wave_are_gone(self):
         out = restrict_clock_to_pov(self.VALIDATED, {"team": "AXIS"})
@@ -1478,7 +1494,10 @@ class TestATeamPovWithholdsTheTruthItHas:
 
         assert oracle["clock"]["ALLIES"]["status"] != "unknown_to_this_pov"
         assert team["clock"]["ALLIES"]["status"] == "unknown_to_this_pov"
-        assert team["clock"]["AXIS"] == oracle["clock"]["AXIS"]
+        # The own entry is the HUD, not a copy of the oracle's — the grade is
+        # a full-round verdict and stays in the oracle view.
+        assert team["clock"]["AXIS"]["status"] == "own_hud"
+        assert oracle["clock"]["AXIS"]["status"] != "own_hud"
 
     @pytest.mark.asyncio
     async def test_an_unresolvable_player_pov_fails_closed_too(self):
@@ -1556,6 +1575,36 @@ class TestATeamPovWithholdsTheTruthItHas:
         key = "own_team_positions_are_a_simplification"
 
         assert team["information_state"][key] == player["information_state"][key]
+
+    @pytest.mark.asyncio
+    async def test_a_future_participant_is_withheld_not_reported_as_a_gap(self):
+        """⛔ Excluding them from the roster removed them from `withheld` too.
+
+        `_roster_at` drops players who have not spawned yet, and `withheld`
+        was derived from that same set — so a not-yet-joined participant fell
+        out of BOTH and reappeared in `gaps` as `no_life_at_or_before_t`,
+        revealing a future participant to a team that could not yet know of
+        them (Codex, PR #807). Current membership decides what you SEE; the
+        universe decides what must be WITHHELD.
+        """
+        late = _stub_track("LATE", 900.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  late[:4] + (120_000, None) + late[6:]]
+        db = _SnapshotStubDb(tracks=tracks)
+        payload = await get_round_snapshot(db, 1, 5_000, pov="team:AXIS")
+
+        assert "LATE" not in payload["gaps"], "a future participant leaked via gaps"
+        assert "LATE" in payload["withheld_by_pov"]
+
+    @pytest.mark.asyncio
+    async def test_the_player_count_is_the_filtered_one(self):
+        """⛔ `len(snap.players)` counted every resolved enemy, so subtracting
+        the visible list told a caller how many withheld opponents had a
+        usable state at `t` — exactly what filtering `gaps` prevents."""
+        payload = await self._snapshot("team:AXIS", pairs=True)
+
+        assert payload["player_count"] == len(payload["players"])
+        assert payload["player_count"] == 2
 
     @pytest.mark.asyncio
     @pytest.mark.parametrize("pov", ["team:AXIS", "AX1"])

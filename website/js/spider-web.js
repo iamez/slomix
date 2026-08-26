@@ -558,6 +558,20 @@ export function clockBadge(team) {
     // reinforcement phase an oracle diagnostic: without an observed cue this
     // team had no way to know it. The backend strips the phase; the badge has
     // to say WHY, or a reader takes the blank for a measurement failure.
+    // ⭐ The holder's OWN entry under a non-oracle view: the reinforcement
+    // countdown they saw on screen, without the grade of our reconstruction.
+    // That grade is a FULL-ROUND verdict — publishing it early told a holder
+    // how often their side would still spawn (Codex, #807) — so it stays in
+    // `pov=world`. Without this branch the badge fell through to UNVALIDATED
+    // and called a working HUD unverified.
+    if (team.status === 'own_hud') {
+        return {
+            badge: 'OWN HUD',
+            reason: reason(team.reason)
+                || 'the reinforcement countdown this side saw; the grade of '
+                   + 'the reconstruction behind it is an oracle diagnostic',
+        };
+    }
     if (team.status === 'unknown_to_this_pov') {
         return {
             badge: 'WITHHELD',

@@ -803,9 +803,25 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
 #: `t_ms`, and a field added to it tomorrow must fail this boundary rather
 #: than cross it by default.
 _OWN_CLOCK_FIELDS = frozenset({
-    "status", "reason", "interval_ms", "offset_ms",
-    "phase_ms", "time_to_next_wave_ms",
+    "interval_ms", "offset_ms", "phase_ms", "time_to_next_wave_ms",
 })
+
+#: What a POV-restricted own-team clock reports instead of a validation grade.
+#:
+#: ⛔ `status` LEFT THE ALLOWLIST. `validated` is not a fact about the game —
+#: it is `validate_round_clocks` reporting that the FULL ROUND produced at
+#: least `MIN_VALIDATION_LANDINGS` clusters. Publishing it at t=30s told a
+#: holder something about how often their side would still spawn (Codex, PR
+#: #807). The grade of our reconstruction is analyst metadata and belongs to
+#: `pov=world`.
+#:
+#: ⚠️ AND THE RESIDUAL IS NAMED RATHER THAN DENIED. `phase_ms` is computed
+#: only for a validated clock, so its PRESENCE still implies the validation
+#: passed. That is a consequence of publishing the HUD at all — and the HUD is
+#: precisely what §6.3 permits a holder to use once §5.3 validation has run.
+#: A player saw their own reinforcement countdown on screen; they did not see
+#: our verdict about it.
+_OWN_CLOCK_POV_STATUS = "own_hud"
 
 
 def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
@@ -855,10 +871,17 @@ def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
             # ⭐ What survives is what the holder is entitled to and what is
             # CAUSAL: the status, the interval, and the phase/countdown, which
             # `wave_position` computes AT `t_ms`. Those are the HUD.
-            out[team] = (
-                {k: v for k, v in entry.items() if k in _OWN_CLOCK_FIELDS}
-                if isinstance(entry, dict) else entry
+            if not isinstance(entry, dict):
+                out[team] = entry
+                continue
+            kept = {k: v for k, v in entry.items() if k in _OWN_CLOCK_FIELDS}
+            kept["status"] = _OWN_CLOCK_POV_STATUS
+            kept["reason"] = (
+                "this is the holder's own reinforcement HUD; the grade of our "
+                "reconstruction is a full-round verdict and stays in the "
+                "oracle view (spec §5.3, §6.3)"
             )
+            out[team] = kept
             continue
         # ⛔ A NON-DICT ENTRY IS WITHHELD TOO. The first version copied it
         # verbatim on the grounds that `load_round_clock` only ever builds
@@ -1199,7 +1222,17 @@ def _pov_team(pov: str | None, tracks: dict[str, list], t_ms: int) -> dict | Non
     members = {g for g, team in roster.items() if team == wanted}
     if not members:
         return None
-    return {"team": wanted, "members": members, "all_guids": set(roster)}
+    # ⛔ `all_guids` IS THE WHOLE UNIVERSE, not the roster at `t`. `_roster_at`
+    # drops players who have not spawned yet, and `withheld` is derived from
+    # this set — so a not-yet-joined participant fell out of BOTH and then
+    # reappeared in `gaps` as `no_life_at_or_before_t`, revealing a future
+    # participant to a team that could not yet know of them (Codex, PR #807).
+    #
+    # Current membership decides what you SEE; the universe decides what must
+    # be WITHHELD. They are different questions and this used to answer both
+    # with one set.
+    everyone = {t[_TRACK_GUID] for lives in (tracks or {}).values() for t in lives}
+    return {"team": wanted, "members": members, "all_guids": everyone}
 
 
 def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
@@ -1485,7 +1518,11 @@ async def get_round_snapshot(
         "clock": pov_clock,
         "information_state": information,
         "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
-        "player_count": len(snap.players),
+        # ⛔ COUNTED AFTER THE FILTER. `len(snap.players)` included every
+        # resolved enemy, so subtracting the visible `players.length` told a
+        # caller how many withheld opponents had a usable state at `t` —
+        # which is exactly what filtering `gaps` was for (Codex, PR #807).
+        "player_count": len(snap_players),
         "overlap_conflicts": snap.overlap_conflicts,
         # `gaps` reasons name tracking state, not position — but under a team
         # view they would still enumerate the other side, so they follow the
