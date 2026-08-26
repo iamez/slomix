@@ -779,7 +779,12 @@ describe('opening a different round', () => {
     // snapshot and first_position_ms back. The newer load then sees a nonzero
     // time, skips its own first-position reload, and renders its round at
     // t=0 under the previous round's slider (Codex, PR #807).
-    const gate: Record<string, (v: unknown) => void> = {};
+    // ⚠️ A PLAIN `let`, not a Record. The first version typed this as
+    // `Record<string, (v) => void>` — which says the key is ALWAYS present,
+    // so `!gate.released` read as always-falsy and `gate.released?.()` as an
+    // unnecessary optional chain (Codacy). The type was lying about the one
+    // thing the gate exists to express: at first it is not there.
+    let release: (() => void) | undefined;
     const seen: string[] = [];
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
@@ -801,8 +806,10 @@ describe('opening a different round', () => {
       };
       const res = { ok: true, json: () => Promise.resolve(body) } as Response;
       // Hold the first round's response until the second load has started.
-      if (round === '11600' && !gate.released) {
-        return new Promise<Response>((resolve) => { gate.released = () => resolve(res); });
+      if (round === '11600' && !release) {
+        return new Promise<Response>((resolve) => {
+          release = () => { resolve(res); };
+        });
       }
       return Promise.resolve(res);
     }));
@@ -810,7 +817,9 @@ describe('opening a different round', () => {
     const slow = loadSpiderWebView({ roundId: '11600' });   // starts, blocks
     const fast = loadSpiderWebView({ roundId: '11601' });   // supersedes it
     await fast;
-    gate.released?.(undefined);
+    // The gate is set by the handler above; if it were not, the awaited
+    // `slow` below would hang and the test would time out rather than pass.
+    release?.();
     await slow;
 
     // ⚠️ ASSERTED ON THE NEXT LOAD, NOT ON THE DOM. The first version checked
