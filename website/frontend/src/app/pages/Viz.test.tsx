@@ -166,6 +166,10 @@ describe('WeaponsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'explosive' }));
     // Grenade, Grenadelauncher, Landmine, Dynamite — the calls left with Support.
     expect(screen.getByText(/^4 weapons/)).toBeInTheDocument();
+    // Carbine is the canonical 'M1 Garand (Carbine)' — a Rifle, not Other:
+    // Garand, Carbine, Kar98, Fg42, K43.
+    fireEvent.click(screen.getByRole('button', { name: 'rifle' }));
+    expect(screen.getByText(/^5 weapons/)).toBeInTheDocument();
   });
 
   it('a smoke grenade is Support even though its key contains "grenade"', async () => {
@@ -222,14 +226,22 @@ describe('FormPage', () => {
       ...m.new_players[0], guid: 'ALT00001', name: 'ownator',
       sick_leave: { primary_name: 'carniee', active: true },
     };
+    // A HISTORICAL link (period_end set) still arrives, marked inactive —
+    // it must not read as a current sick leave (api_helpers:483-500).
+    const past = {
+      ...m.new_players[0], guid: 'ALT00002', name: 'oldalt',
+      sick_leave: { primary_name: 'carniee', active: false },
+    };
     vi.stubGlobal('fetch', vi.fn(overrideFetch({
-      '/api/skill/movers': { ...(movers as object), new_players: [...m.new_players, alt] },
+      '/api/skill/movers': { ...(movers as object), new_players: [...m.new_players, alt, past] },
     })));
     renderPage(<FormPage />);
     await waitFor(() => expect(screen.getByText(/ownator · alt of carniee/)).toBeInTheDocument());
-    expect(screen.getByText('on sick leave')).toBeInTheDocument();
-    // The genuine newcomer still gets the label — exactly once.
-    expect(screen.getAllByText('first night').length).toBeGreaterThan(0);
+    // Exactly the ACTIVE link earns the wording.
+    expect(screen.getAllByText('on sick leave')).toHaveLength(1);
+    // The genuine newcomer AND the expired alt both read first night
+    // (plus the section head carries the same label).
+    expect(screen.getAllByText('first night')).toHaveLength(3);
   });
 
   it('a missing baseline on a metric tab renders only the latest value', async () => {
@@ -269,8 +281,9 @@ describe('RetroViz', () => {
   });
 
   it('a round with the 0-sentinel duration says unknown, not 0:00', async () => {
-    // test_round_duration_truth defines zero as MISSING, not a measurement.
-    const noDuration = { ...(roundViz as object), duration_seconds: 0 };
+    // test_round_duration_truth defines zero as MISSING, not a measurement;
+    // winner_team 0 is a server-restart artifact, not a draw.
+    const noDuration = { ...(roundViz as object), duration_seconds: 0, winner_team: 0 };
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
       if (/^\/api\/rounds\/\d+\/viz$/.test(String(input).split('?')[0])) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(noDuration) } as Response);
@@ -280,5 +293,7 @@ describe('RetroViz', () => {
     renderPage(<RetroViz />);
     await waitFor(() => expect(screen.getByText('unknown')).toBeInTheDocument());
     expect(screen.queryByText('0:00')).toBeNull();
+    expect(screen.getByText('Unknown')).toBeInTheDocument();
+    expect(screen.queryByText('Tied')).toBeNull();
   });
 });

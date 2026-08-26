@@ -22,7 +22,10 @@ const RADAR_COLORS = ['rgba(96,165,250,0.6)', 'rgba(251,113,133,0.6)', 'rgba(52,
 function winnerLabel(team: number | null): { text: string; color: string } {
   if (team === 1) return { text: 'Axis', color: 'var(--color-accent-warm)' };
   if (team === 2) return { text: 'Allies', color: 'var(--color-accent)' };
-  return { text: 'Tied', color: 'var(--color-text-400)' };
+  // 0/null are server-restart artifacts, not a draw — the endpoint has no
+  // draw signal at all (test_website_session_helpers defines non-team
+  // values as unknown).
+  return { text: 'Unknown', color: 'var(--color-text-400)' };
 }
 
 function fmtDuration(s: number | null): string {
