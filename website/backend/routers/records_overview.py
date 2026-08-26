@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -215,7 +216,54 @@ async def _resolve_active_payload(db: DatabaseAdapter, row) -> dict | None:
     }
 
 
-@router.get("/stats/overview")
+class MostActivePlayer(BaseModel):
+    """Null when the window produced no rows at all, never a zero-round player."""
+
+    name: str
+    rounds: int
+
+
+class StatsOverview(BaseModel):
+    """The homepage figures, as this endpoint actually returns them.
+
+    ⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read
+    off a live response and cross-checked against the handler; the hand-written
+    client type in `website/frontend/src/app/lib/types.ts` was derived the same
+    way from a recorded fixture, and the two now check each other.
+
+    ⛔ `response_model` FILTERS. A field the handler returns and this model
+    omits is dropped from the response — silently, with a 200. That is why
+    `tests/unit/test_response_models_drop_nothing.py` compares the handler's
+    own keys against the serialised model rather than trusting this class to
+    be complete.
+
+    ⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per
+    metric when its aggregate raises, and the endpoint still answers 200 — so
+    a zero here means "none, or the query failed", and no schema can tell them
+    apart. Naming that is the honest thing a type can do about it; fixing it
+    means giving `_safe_val` a per-metric error flag, which is a separate
+    change.
+    """
+
+    rounds: int
+    players: int
+    sessions: int
+    total_kills: int
+    #: MIN/MAX over the filtered rounds — null on a database with none.
+    rounds_since: str | None
+    rounds_latest: str | None
+    rounds_14d: int
+    players_all_time: int
+    players_14d: int
+    sessions_14d: int
+    total_kills_14d: int
+    most_active_overall: MostActivePlayer | None
+    most_active_14d: MostActivePlayer | None
+    #: The lookback every `*_14d` field above is measured over.
+    window_days: int = Field(examples=[14])
+
+
+@router.get("/stats/overview", response_model=StatsOverview)
 async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
     """Get homepage overview statistics."""
     lookback_days = 14
