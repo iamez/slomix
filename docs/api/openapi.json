@@ -134,6 +134,45 @@
     "title": "ClientErrorReport",
     "type": "object"
    },
+   "DpmLeaderRow": {
+    "description": "One row of the DPM board. ⚠️ Its participation field is `sessions`.\n\n⛔ A SEPARATE MODEL, not one row type with both fields optional. The two\nboards genuinely differ, and a shared model with `rounds?`/`sessions?`\nwould let either board claim the other's shape — a client could then read\n`rounds` off a DPM row and get `undefined` with the type system's blessing.",
+    "properties": {
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "sessions": {
+      "title": "Sessions",
+      "type": "integer"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "rank",
+     "guid",
+     "name",
+     "value",
+     "sessions",
+     "label"
+    ],
+    "title": "DpmLeaderRow",
+    "type": "object"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -210,6 +249,63 @@
     "title": "LiveEventIn",
     "type": "object"
    },
+   "MostActivePlayer": {
+    "description": "Null when the window produced no rows at all, never a zero-round player.",
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "rounds"
+    ],
+    "title": "MostActivePlayer",
+    "type": "object"
+   },
+   "QuickLeaders": {
+    "description": "Two small boards for the homepage, and their own failures.\n\n⭐ `errors` IS THE POINT. Either board can fail INSIDE a 200: the query\nraises, the list comes back empty, and a token names which one. Without\nreading it, an empty board is indistinguishable from a quiet week — which\nis how \"no data in this window\" ended up on a page whose database was\nsimply unreachable.\n\n⚠️ `list[str]`, measured. The hand-written client type had `unknown[]`,\nwhich is weaker than the truth: the producer appends exactly\n`xp_query_failed` or `dpm_query_failed` and nothing else\n(`players_router`, the two `except` branches).",
+    "properties": {
+     "dpm_sessions": {
+      "items": {
+       "$ref": "#/components/schemas/DpmLeaderRow"
+      },
+      "title": "Dpm Sessions",
+      "type": "array"
+     },
+     "errors": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Errors",
+      "type": "array"
+     },
+     "window_days": {
+      "title": "Window Days",
+      "type": "integer"
+     },
+     "xp": {
+      "items": {
+       "$ref": "#/components/schemas/XpLeaderRow"
+      },
+      "title": "Xp",
+      "type": "array"
+     }
+    },
+    "required": [
+     "window_days",
+     "xp",
+     "dpm_sessions",
+     "errors"
+    ],
+    "title": "QuickLeaders",
+    "type": "object"
+   },
    "RenderRequest": {
     "properties": {
      "highlight_id": {
@@ -274,6 +370,114 @@
     "title": "ResumableInit",
     "type": "object"
    },
+   "StatsOverview": {
+    "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per\nmetric when its aggregate raises, and the endpoint still answers 200 — so\na zero here means \"none, or the query failed\", and no schema can tell them\napart. Naming that is the honest thing a type can do about it; fixing it\nmeans giving `_safe_val` a per-metric error flag, which is a separate\nchange.",
+    "properties": {
+     "most_active_14d": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/MostActivePlayer"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "most_active_overall": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/MostActivePlayer"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "players": {
+      "title": "Players",
+      "type": "integer"
+     },
+     "players_14d": {
+      "title": "Players 14D",
+      "type": "integer"
+     },
+     "players_all_time": {
+      "title": "Players All Time",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "rounds_14d": {
+      "title": "Rounds 14D",
+      "type": "integer"
+     },
+     "rounds_latest": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rounds Latest"
+     },
+     "rounds_since": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rounds Since"
+     },
+     "sessions": {
+      "title": "Sessions",
+      "type": "integer"
+     },
+     "sessions_14d": {
+      "title": "Sessions 14D",
+      "type": "integer"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "total_kills_14d": {
+      "title": "Total Kills 14D",
+      "type": "integer"
+     },
+     "window_days": {
+      "examples": [
+       14
+      ],
+      "title": "Window Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rounds",
+     "players",
+     "sessions",
+     "total_kills",
+     "rounds_since",
+     "rounds_latest",
+     "rounds_14d",
+     "players_all_time",
+     "players_14d",
+     "sessions_14d",
+     "total_kills_14d",
+     "most_active_overall",
+     "most_active_14d",
+     "window_days"
+    ],
+    "title": "StatsOverview",
+    "type": "object"
+   },
    "ValidationError": {
     "properties": {
      "ctx": {
@@ -312,6 +516,45 @@
      "type"
     ],
     "title": "ValidationError",
+    "type": "object"
+   },
+   "XpLeaderRow": {
+    "description": "One row of the XP board. ⚠️ Its participation field is `rounds`.",
+    "properties": {
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "rank",
+     "guid",
+     "name",
+     "value",
+     "rounds",
+     "label"
+    ],
+    "title": "XpLeaderRow",
     "type": "object"
    }
   }
@@ -12243,7 +12486,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StatsOverview"
+        }
        }
       },
       "description": "Successful Response"
@@ -12418,7 +12663,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/QuickLeaders"
+        }
        }
       },
       "description": "Successful Response"

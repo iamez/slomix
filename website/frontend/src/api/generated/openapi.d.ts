@@ -5341,6 +5341,29 @@ export interface components {
             /** User Agent */
             user_agent?: string | null;
         };
+        /**
+         * DpmLeaderRow
+         * @description One row of the DPM board. ⚠️ Its participation field is `sessions`.
+         *
+         *     ⛔ A SEPARATE MODEL, not one row type with both fields optional. The two
+         *     boards genuinely differ, and a shared model with `rounds?`/`sessions?`
+         *     would let either board claim the other's shape — a client could then read
+         *     `rounds` off a DPM row and get `undefined` with the type system's blessing.
+         */
+        DpmLeaderRow: {
+            /** Guid */
+            guid: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Rank */
+            rank: number;
+            /** Sessions */
+            sessions: number;
+            /** Value */
+            value: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -5372,6 +5395,41 @@ export interface components {
             /** Type */
             type: string;
         };
+        /**
+         * MostActivePlayer
+         * @description Null when the window produced no rows at all, never a zero-round player.
+         */
+        MostActivePlayer: {
+            /** Name */
+            name: string;
+            /** Rounds */
+            rounds: number;
+        };
+        /**
+         * QuickLeaders
+         * @description Two small boards for the homepage, and their own failures.
+         *
+         *     ⭐ `errors` IS THE POINT. Either board can fail INSIDE a 200: the query
+         *     raises, the list comes back empty, and a token names which one. Without
+         *     reading it, an empty board is indistinguishable from a quiet week — which
+         *     is how "no data in this window" ended up on a page whose database was
+         *     simply unreachable.
+         *
+         *     ⚠️ `list[str]`, measured. The hand-written client type had `unknown[]`,
+         *     which is weaker than the truth: the producer appends exactly
+         *     `xp_query_failed` or `dpm_query_failed` and nothing else
+         *     (`players_router`, the two `except` branches).
+         */
+        QuickLeaders: {
+            /** Dpm Sessions */
+            dpm_sessions: components["schemas"]["DpmLeaderRow"][];
+            /** Errors */
+            errors: string[];
+            /** Window Days */
+            window_days: number;
+            /** Xp */
+            xp: components["schemas"]["XpLeaderRow"][];
+        };
         /** RenderRequest */
         RenderRequest: {
             /** Highlight Id */
@@ -5401,6 +5459,59 @@ export interface components {
              */
             title: string;
         };
+        /**
+         * StatsOverview
+         * @description The homepage figures, as this endpoint actually returns them.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read
+         *     off a live response and cross-checked against the handler; the hand-written
+         *     client type in `website/frontend/src/app/lib/types.ts` was derived the same
+         *     way from a recorded fixture, and the two now check each other.
+         *
+         *     ⛔ `response_model` FILTERS. A field the handler returns and this model
+         *     omits is dropped from the response — silently, with a 200. That is why
+         *     `tests/unit/test_response_models_drop_nothing.py` compares the handler's
+         *     own keys against the serialised model rather than trusting this class to
+         *     be complete.
+         *
+         *     ⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per
+         *     metric when its aggregate raises, and the endpoint still answers 200 — so
+         *     a zero here means "none, or the query failed", and no schema can tell them
+         *     apart. Naming that is the honest thing a type can do about it; fixing it
+         *     means giving `_safe_val` a per-metric error flag, which is a separate
+         *     change.
+         */
+        StatsOverview: {
+            most_active_14d: components["schemas"]["MostActivePlayer"] | null;
+            most_active_overall: components["schemas"]["MostActivePlayer"] | null;
+            /** Players */
+            players: number;
+            /** Players 14D */
+            players_14d: number;
+            /** Players All Time */
+            players_all_time: number;
+            /** Rounds */
+            rounds: number;
+            /** Rounds 14D */
+            rounds_14d: number;
+            /** Rounds Latest */
+            rounds_latest: string | null;
+            /** Rounds Since */
+            rounds_since: string | null;
+            /** Sessions */
+            sessions: number;
+            /** Sessions 14D */
+            sessions_14d: number;
+            /** Total Kills */
+            total_kills: number;
+            /** Total Kills 14D */
+            total_kills_14d: number;
+            /**
+             * Window Days
+             * @example 14
+             */
+            window_days: number;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -5413,6 +5524,24 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * XpLeaderRow
+         * @description One row of the XP board. ⚠️ Its participation field is `rounds`.
+         */
+        XpLeaderRow: {
+            /** Guid */
+            guid: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Rank */
+            rank: number;
+            /** Rounds */
+            rounds: number;
+            /** Value */
+            value: number;
         };
     };
     responses: never;
@@ -11211,7 +11340,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StatsOverview"];
                 };
             };
         };
@@ -11330,7 +11459,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["QuickLeaders"];
                 };
             };
             /** @description Validation Error */

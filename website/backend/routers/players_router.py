@@ -1215,7 +1215,58 @@ async def get_leaderboard(
         )
     return leaderboard
 
-@router.get("/stats/quick-leaders")
+class XpLeaderRow(BaseModel):
+    """One row of the XP board. ⚠️ Its participation field is `rounds`."""
+
+    rank: int
+    guid: str
+    name: str
+    #: `SUM(xp)` — measured as a float on the live database, not an int.
+    value: float
+    rounds: int
+    label: str
+
+
+class DpmLeaderRow(BaseModel):
+    """One row of the DPM board. ⚠️ Its participation field is `sessions`.
+
+    ⛔ A SEPARATE MODEL, not one row type with both fields optional. The two
+    boards genuinely differ, and a shared model with `rounds?`/`sessions?`
+    would let either board claim the other's shape — a client could then read
+    `rounds` off a DPM row and get `undefined` with the type system's blessing.
+    """
+
+    rank: int
+    guid: str
+    name: str
+    value: float
+    sessions: int
+    label: str
+
+
+class QuickLeaders(BaseModel):
+    """Two small boards for the homepage, and their own failures.
+
+    ⭐ `errors` IS THE POINT. Either board can fail INSIDE a 200: the query
+    raises, the list comes back empty, and a token names which one. Without
+    reading it, an empty board is indistinguishable from a quiet week — which
+    is how "no data in this window" ended up on a page whose database was
+    simply unreachable.
+
+    ⚠️ `list[str]`, measured. The hand-written client type had `unknown[]`,
+    which is weaker than the truth: the producer appends exactly
+    `xp_query_failed` or `dpm_query_failed` and nothing else
+    (`players_router`, the two `except` branches).
+    """
+
+    #: Fixed at 7 in the handler, not a parameter — the label cannot lie.
+    window_days: int
+    xp: list[XpLeaderRow]
+    dpm_sessions: list[DpmLeaderRow]
+    errors: list[str]
+
+
+@router.get("/stats/quick-leaders", response_model=QuickLeaders)
 async def get_quick_leaders(
     limit: int = 5,
     db: DatabaseAdapter = Depends(get_db),
