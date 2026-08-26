@@ -666,20 +666,27 @@ export function capabilityRows(policy) {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
+/**
+ * ⛔ RETURNS THE MESH, WRITES NOTHING. It used to assign `state.mesh` before
+ * its caller's staleness check ran — so with round A's geometry still in
+ * flight and round B already rendered, the late A response painted B's
+ * players over A's floor on the next camera drag (Codex, PR #807). Same
+ * defect as the snapshot race, one await further down; the fix is the same
+ * one applied consistently: the load returns, the caller commits.
+ */
 async function loadMesh(mapName) {
-    if (state.meshMapName === mapName && state.mesh) return state.mesh;
+    if (state.meshMapName === mapName && state.mesh) {
+        return { mesh: state.mesh, mapName };
+    }
     try {
         const mesh = await fetchJSON(`${GEOMETRY_BASE}/${encodeURIComponent(mapName)}.json`);
-        state.mesh = mesh;
-        state.meshMapName = mapName;
+        return { mesh, mapName };
     } catch {
         // ⛔ Named, not silent. `etl_supply` has no BSP in etmain and a handful
         // of maps were never exported; drawing an empty stage would read as an
         // empty round.
-        state.mesh = null;
-        state.meshMapName = mapName;
+        return { mesh: null, mapName };
     }
-    return state.mesh;
 }
 
 async function loadMoment(roundId, tMs, pov) {
@@ -813,22 +820,28 @@ export async function loadSpiderWebView(params = {}) {
     }
     if (myLoad !== loadId) return;
 
-    // ⭐ THE COMMIT. One place, after the last await that could be superseded,
+    // ⚠️ THE GEOMETRY IS THE LAST AWAIT, so the commit waits for it too. An
+    // earlier version committed here and then awaited `loadMesh`, which wrote
+    // `state.mesh` itself — a superseded round's floor could land under the
+    // winning round's players (Codex, PR #807).
+    const mapName = snapshot.map_name || '';
+    const loaded = await loadMesh(mapName);
+    if (myLoad !== loadId) return;
+
+    // ⭐ THE COMMIT. One place, after the LAST await that could be superseded,
     // reached only by the winning load.
     state.roundId = roundId;
     state.tMs = tMs;
     state.pov = pov;
     state.snapshot = snapshot;
+    state.mesh = loaded.mesh;
+    state.meshMapName = loaded.mapName;
     // ⛔ The team list belongs to the round, and is rebuilt only when empty:
     // a round whose reconstruction resolved one side left that single team
     // cached and the NEXT round permanently offered one POV button — and the
     // reverse, a two-team list surviving into a one-team round, offers a view
     // that cannot resolve (Codex, PR #807).
     if (roundChanged) state.teams = [];
-
-    const mapName = (snapshot.players || []).length ? snapshot.map_name : snapshot.map_name;
-    await loadMesh(mapName || '');
-    if (myLoad !== loadId) return;
 
     container.textContent = '';
 
@@ -1095,6 +1108,16 @@ export async function loadSpiderWebView(params = {}) {
                     ? 'Za to rundo ni upravičenih vrstic o spawn času, zato ura '
                       + 'ni bila niti izpeljana — to ni neuspela preverba, ampak '
                       + 'odsotnost vhoda.'
+                // ⛔ POV-ONLY BADGES ARE NOT A VERDICT. Under a team or player
+                // view the grades are WITHHELD by design, and the oracle
+                // clocks behind them may well be validated — so the summary
+                // below would assert a result this payload cannot establish
+                // (Codex, PR #807). It says what is true instead: the grades
+                // are hidden, not failed.
+                : badges.some((x) => x === 'OWN HUD' || x === 'WITHHELD')
+                    ? 'V tem pogledu ocene preverbe niso prikazane — to ni '
+                      + 'neuspeh, ampak meja pogleda. Ocena je celorundna '
+                      + 'sodba in ostane v pogledu »world«.'
                     : 'Nobena ura tu ni prestala neodvisne preverbe; kjer je '
                       + 'odstotek skladnosti prikazan, je to ujemanje z lastnim '
                       + 'izvorom, ne dokaz.');

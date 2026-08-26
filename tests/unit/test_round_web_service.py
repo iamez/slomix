@@ -995,8 +995,13 @@ class TestTheEnemyClockDoesNotLeakThroughBeliefTiming:
         assert at == 30_000 + 20_000
 
     def test_the_holders_own_clock_is_untouched(self):
+        # ⚠️ `phase_ms` present: a HUD exists only where a countdown was
+        # reconstructed, and `restrict_clock_to_pov` now refuses to call an
+        # entry `own_hud` without one (Codex, PR #807).
         restricted = restrict_clock_to_pov(
-            {"AXIS": {"status": "validated", "interval_ms": 30_000, "offset_ms": 0}},
+            {"AXIS": {"status": "validated", "interval_ms": 30_000,
+                      "offset_ms": 0, "phase_ms": 0,
+                      "time_to_next_wave_ms": 30_000}},
             {"team": "AXIS"},
         )["AXIS"]
         _at, basis = resolve_expiry(restricted, death_ms=30_000)
@@ -1108,6 +1113,34 @@ class TestTheCadenceNeedsEVERYManifestToDeclareIt:
 
         assert policy.observation_interval_ms is None
         assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_an_unusable_sibling_downgrades_the_FLAGS_too(self):
+        """⛔ `unusable` was consulted only for the cadence.
+
+        A round with one valid manifest and one NULL sibling still published
+        `shot_fired: enabled` — and `apply_capability` then treated the
+        channel as PROVEN for the whole round on the word of one of two files
+        (Codex, PR #807). A file that cannot speak does not agree, and that
+        rule is not about the interval specifically.
+        """
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({
+                        "position_sample_interval_ms": 200,
+                        "capabilities": {"shot_fired": "enabled",
+                                         "aim_lock": "enabled"},
+                    }),), (None,)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.capabilities["shot_fired"] == "unknown"
+        assert policy.capabilities["aim_lock"] == "unknown"
+        # ⭐ `unknown` is not `disabled` — it is "we cannot tell", which is
+        # what §6.2 asks for and what keeps the channel from being reported
+        # as deliberately off.
+        assert "disabled" not in policy.capabilities.values()
 
     @pytest.mark.asyncio
     async def test_silence_from_one_file_is_NOT_agreement(self):
@@ -1275,6 +1308,27 @@ class TestTheEnemyClockIsNotOursToPublish:
         assert out["AXIS"]["phase_ms"] == self.VALIDATED["AXIS"]["phase_ms"]
         assert out["AXIS"]["interval_ms"] == self.VALIDATED["AXIS"]["interval_ms"]
         assert out["AXIS"]["status"] == "own_hud"
+
+    def test_there_is_no_HUD_without_a_countdown(self):
+        """⛔ `own_hud` was applied unconditionally.
+
+        `load_round_clock` deliberately publishes no phase for an
+        unavailable, inconsistent, validation-failed or merely
+        internally-consistent clock — yet the entry was relabelled as a HUD
+        that had never been reconstructed, while keeping the candidate
+        `offset_ms` the protocol refused to turn into a phase (Codex, PR
+        #807).
+        """
+        for status in ("unavailable", "inconsistent", "validation_failed",
+                       "internally_consistent_unvalidated"):
+            entry = {"status": status, "interval_ms": 30_000, "offset_ms": 1_200}
+            out = restrict_clock_to_pov({"AXIS": entry}, {"team": "AXIS"})["AXIS"]
+
+            assert out["status"] == "unknown_to_this_pov", status
+            # The offset the protocol would not publish as a phase does not
+            # sneak out through the own-side branch either.
+            assert "offset_ms" not in out, status
+            assert out["interval_ms"] == 30_000, status
 
     def test_the_oracle_keeps_the_grade(self):
         """It is not deleted — it is an analyst fact and `world` is the named
@@ -1496,8 +1550,12 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert team["clock"]["ALLIES"]["status"] == "unknown_to_this_pov"
         # The own entry is the HUD, not a copy of the oracle's — the grade is
         # a full-round verdict and stays in the oracle view.
-        assert team["clock"]["AXIS"]["status"] == "own_hud"
-        assert oracle["clock"]["AXIS"]["status"] != "own_hud"
+        # ⚠️ The stub round reconstructs no clock at all, so the own entry
+        # has no countdown — and an entry without one is NOT a HUD. It says
+        # `unknown_to_this_pov` for its own side too, because WHY there is no
+        # countdown is a full-round verdict (Codex, PR #807).
+        assert team["clock"]["AXIS"]["status"] == "unknown_to_this_pov"
+        assert oracle["clock"]["AXIS"]["status"] != "unknown_to_this_pov"
 
     @pytest.mark.asyncio
     async def test_an_unresolvable_player_pov_fails_closed_too(self):
@@ -1622,6 +1680,28 @@ class TestATeamPovWithholdsTheTruthItHas:
 
         assert len(seen) == 1, f"withheld changed with t: {seen}"
         assert seen.pop() == ("AL1", "LATE")
+
+    @pytest.mark.asyncio
+    async def test_overlap_conflicts_are_counted_over_the_visible_players(self):
+        """⛔ The sibling of the `player_count` leak.
+
+        The oracle aggregate let a caller subtract the visible per-player
+        flags and learn that a WITHHELD opponent had overlapping lives —
+        tracking state the filtered `gaps` conceals (Codex, PR #807).
+        """
+        # AL1 has two overlapping lives at t; AX1 has one.
+        al1 = _stub_track("AL1", 500.0, team="ALLIES")
+        tracks = [_stub_track("AX1", 0.0, team="AXIS"),
+                  al1, al1[:8] + ((al1[8] or 0) + 1,)]
+        db = _SnapshotStubDb(tracks=tracks)
+
+        oracle = await get_round_snapshot(db, 1, 5_000, pov="world")
+        team = await get_round_snapshot(db, 1, 5_000, pov="team:AXIS")
+
+        assert oracle["overlap_conflicts"] >= 1, "the fixture must create one"
+        assert team["overlap_conflicts"] == 0, (
+            "a withheld opponent's overlapping lives were still counted"
+        )
 
     @pytest.mark.asyncio
     async def test_the_player_count_is_the_filtered_one(self):

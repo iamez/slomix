@@ -696,6 +696,19 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
                 capabilities[flag] = UNKNOWN_STATE
                 conflicting_flags += 1
 
+    # ⛔ A FILE WITH NO USABLE MANIFEST DOWNGRADES EVERY FLAG, not just the
+    # cadence. `unusable` was consulted only when deriving the interval, so a
+    # round with one valid manifest and one NULL sibling still published
+    # `shot_fired: enabled` — and `apply_capability` then treated the channel
+    # as PROVEN for the whole round on the word of one of two files
+    # (Codex, PR #807).
+    #
+    # The rule this module states everywhere else: a file that cannot speak
+    # does not agree. It applies to the flags exactly as it applies to the
+    # cadence, and `unknown` is not `disabled` — it is "we cannot tell".
+    if unusable:
+        capabilities = dict.fromkeys(capabilities, UNKNOWN_STATE)
+
     # The cadence is a fact about the file, so two files disagreeing about it
     # means we do not know this round's cadence — not that one of them wins.
     #
@@ -873,6 +886,24 @@ def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
             # `wave_position` computes AT `t_ms`. Those are the HUD.
             if not isinstance(entry, dict):
                 out[team] = entry
+                continue
+            # ⛔ THERE IS ONLY A HUD IF THERE IS A COUNTDOWN. `own_hud` was
+            # applied unconditionally, so an unavailable, inconsistent or
+            # merely internally-consistent clock — for which
+            # `load_round_clock` deliberately publishes NO phase — was
+            # relabelled as a HUD that had never been reconstructed, while
+            # keeping the candidate `offset_ms` the protocol refused to turn
+            # into a phase (Codex, PR #807).
+            if entry.get("phase_ms") is None:
+                out[team] = {
+                    "status": "unknown_to_this_pov",
+                    "interval_ms": entry.get("interval_ms"),
+                    "reason": (
+                        "no reinforcement countdown was reconstructed for this "
+                        "side; why is a full-round verdict and stays in the "
+                        "oracle view (spec §5.3)"
+                    ),
+                }
                 continue
             kept = {k: v for k, v in entry.items() if k in _OWN_CLOCK_FIELDS}
             kept["status"] = _OWN_CLOCK_POV_STATUS
@@ -1535,7 +1566,16 @@ async def get_round_snapshot(
         # caller how many withheld opponents had a usable state at `t` —
         # which is exactly what filtering `gaps` was for (Codex, PR #807).
         "player_count": len(snap_players),
-        "overlap_conflicts": snap.overlap_conflicts,
+        # ⛔ COUNTED OVER THE VISIBLE PLAYERS UNDER A RESTRICTED VIEW. The
+        # oracle aggregate let a caller subtract the visible per-player flags
+        # and learn that a WITHHELD opponent had overlapping lives — tracking
+        # state the filtered `gaps` conceals. Same defect as `player_count`,
+        # in its sibling (Codex, PR #807).
+        "overlap_conflicts": (
+            sum(1 for p in snap_players if p.overlap_conflict)
+            if pov_team is not None or unresolved_team
+            else snap.overlap_conflicts
+        ),
         # `gaps` reasons name tracking state, not position — but under a team
         # view they would still enumerate the other side, so they follow the
         # same boundary as everything else.
