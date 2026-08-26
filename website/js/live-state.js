@@ -197,6 +197,31 @@ function _objLine(o) {
 }
 
 /** Render the current-state panel into the #live-state shell if present. */
+/**
+ * How much the map may be trusted, from the snapshot's own evidence.
+ *
+ * Exported and pure so the rule can be tested where it is DECIDED rather than
+ * through the polling loop that renders it — and so the React port inherits
+ * the decision instead of re-deriving it from a screenshot.
+ *
+ * `unconfirmed` is deliberately `=== false`, not falsy: an older backend that
+ * does not send the field at all must keep the previous behaviour rather than
+ * label every map as doubtful.
+ */
+export function mapEvidence(snapshot) {
+    const s = snapshot || {};
+    const age = s.map_age_seconds;
+    return {
+        unconfirmed: s.map_confirmed === false,
+        // Only worth saying once it is old enough to matter; below that the
+        // number is noise beside a map that is plainly current.
+        ageMinutes: (typeof age === 'number' && age > 300)
+            ? Math.round(age / 60)
+            : null,
+    };
+}
+
+
 export function renderLiveState() {
     const host = document.getElementById('live-state');
     if (!host) return;
@@ -205,8 +230,23 @@ export function renderLiveState() {
 
     const [dotColor, stateLabel] = _STATE_BADGE[s.game_state] || _STATE_BADGE.unknown;
     const r = s.roster || { axis: [], allies: [], spectators: [] };
+    // ⛔ THE MAP CAN OUTLIVE ITS EVIDENCE. The reducer keeps `current_map`
+    // across a session boundary on purpose — a restarted server usually comes
+    // back on the same map — but the first event after a gap is normally a
+    // CONNECT, not a MAP. `is_live` then reads true and the age reads seconds
+    // while the map is still the previous session's. `map_confirmed` is the
+    // only thing that knows, and rendering it in bold without reading that
+    // flag was the whole user-visible failure (Codex, PR #808).
+    //
+    // Same treatment as the roster two lines down: shown, dimmed, labelled.
+    // Blanking it would trade a stale answer for no answer.
+    const { unconfirmed: mapUnconfirmed, ageMinutes } = mapEvidence(s);
+    const mapAgeNote = ageMinutes != null
+        ? `<span class="text-slate-500 text-xs"> · seen ${ageMinutes}m ago</span>`
+        : '';
     const mapLine = s.current_map
-        ? `<span class="text-white font-bold">${escapeHtml(s.current_map)}</span>${
+        ? `<span class="${mapUnconfirmed ? 'text-slate-400 font-bold' : 'text-white font-bold'}">${escapeHtml(s.current_map)}</span>${
+            mapUnconfirmed ? '<span class="text-amber-400/80 text-[10px] ml-1 tracking-wider">UNCONFIRMED</span>' : mapAgeNote}${
             s.previous_map ? `<span class="text-slate-500 text-xs"> · prev ${escapeHtml(s.previous_map)}</span>` : ''}`
         : '<span class="text-slate-500">no map</span>';
     const roundTimer = s.round_elapsed_seconds != null

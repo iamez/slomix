@@ -553,6 +553,33 @@ export function clockBadge(team) {
     if (!team || team.status === 'unavailable') {
         return { badge: 'UNAVAILABLE', reason: reason(team && team.reason) };
     }
+    // ⛔ A TEAM VIEW DOES NOT GET THE OTHER SIDE'S CLOCK, and this is not the
+    // same as "we could not establish one". §5.6 and §6.3 make the enemy
+    // reinforcement phase an oracle diagnostic: without an observed cue this
+    // team had no way to know it. The backend strips the phase; the badge has
+    // to say WHY, or a reader takes the blank for a measurement failure.
+    // ⭐ The holder's OWN entry under a non-oracle view: the reinforcement
+    // countdown they saw on screen, without the grade of our reconstruction.
+    // That grade is a FULL-ROUND verdict — publishing it early told a holder
+    // how often their side would still spawn (Codex, #807) — so it stays in
+    // `pov=world`. Without this branch the badge fell through to UNVALIDATED
+    // and called a working HUD unverified.
+    if (team.status === 'own_hud') {
+        return {
+            badge: 'OWN HUD',
+            reason: reason(team.reason)
+                || 'the reinforcement countdown this side saw; the grade of '
+                   + 'the reconstruction behind it is an oracle diagnostic',
+        };
+    }
+    if (team.status === 'unknown_to_this_pov') {
+        return {
+            badge: 'WITHHELD',
+            reason: reason(team.reason)
+                || 'the enemy reinforcement phase is oracle truth; this team '
+                   + 'had no observed cue to infer it from (§5.6, §6.3)',
+        };
+    }
     if (team.status === 'validated') {
         return {
             badge: 'VALIDATED',
@@ -639,20 +666,27 @@ export function capabilityRows(policy) {
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
+/**
+ * ⛔ RETURNS THE MESH, WRITES NOTHING. It used to assign `state.mesh` before
+ * its caller's staleness check ran — so with round A's geometry still in
+ * flight and round B already rendered, the late A response painted B's
+ * players over A's floor on the next camera drag (Codex, PR #807). Same
+ * defect as the snapshot race, one await further down; the fix is the same
+ * one applied consistently: the load returns, the caller commits.
+ */
 async function loadMesh(mapName) {
-    if (state.meshMapName === mapName && state.mesh) return state.mesh;
+    if (state.meshMapName === mapName && state.mesh) {
+        return { mesh: state.mesh, mapName };
+    }
     try {
         const mesh = await fetchJSON(`${GEOMETRY_BASE}/${encodeURIComponent(mapName)}.json`);
-        state.mesh = mesh;
-        state.meshMapName = mapName;
+        return { mesh, mapName };
     } catch {
         // ⛔ Named, not silent. `etl_supply` has no BSP in etmain and a handful
         // of maps were never exported; drawing an empty stage would read as an
         // empty round.
-        state.mesh = null;
-        state.meshMapName = mapName;
+        return { mesh: null, mapName };
     }
-    return state.mesh;
 }
 
 async function loadMoment(roundId, tMs, pov) {
@@ -723,7 +757,40 @@ export async function loadSpiderWebView(params = {}) {
             'Izberi rundo: #/spider-web/round/<id>'));
         return;
     }
-    state.roundId = roundId;
+    // ⛔ A NEW ROUND STARTS AT ITS OWN BEGINNING. `state` is module-level and
+    // survives navigation, so opening round B after round A kept A's `tMs`.
+    // Two ways that goes wrong, both silent: the retained moment is past B's
+    // end, or it is before anybody in B has spawned — and the empty map that
+    // follows is exactly what the `first_position_ms` logic below exists to
+    // prevent (Codex, PR #807). `pov` deliberately persists: it is a viewing
+    // preference, not a property of the round.
+    // ⛔ AND THE RESET IS LOCAL UNTIL THE LOAD WINS. Writing it to `state`
+    // here was a race: two overlapping loads for different rounds, the newer
+    // one zeroes the shared time, then the OLDER request resolves and writes
+    // its own snapshot and `first_position_ms` back — before any `myLoad`
+    // check. The newer load then sees a nonzero `state.tMs`, skips its own
+    // first-position reload, and renders its round at t=0 under the previous
+    // round's slider and readout (Codex, PR #807).
+    //
+    // Everything below works on locals; shared state is committed once, after
+    // the last await, and only by the load that is still current.
+    const roundChanged = String(roundId) !== String(state.roundId);
+    // ⛔ AND THE POINT OF VIEW GOES BACK TO THE ORACLE ON A NEW ROUND.
+    //
+    // It used to persist as "a viewing preference", which broke twice over.
+    // The team list is rebuilt from `snapshot.players`, so a carried
+    // `team:AXIS` made the FIRST request for the new round team-filtered —
+    // the rebuild then saw one side and permanently omitted the other,
+    // because `goTo` updates panels without recreating the POV buttons
+    // (Codex, PR #807).
+    //
+    // ⭐ And it got worse the moment an unresolvable team started failing
+    // CLOSED: carrying `team:AXIS` into a round with no AXIS side used to
+    // fall back to the oracle, and now withholds everyone — the page would
+    // open empty with no way back except reloading. A point of view belongs
+    // to a round's roster, so it does not outlive it.
+    const pov = roundChanged ? 'world' : state.pov;
+    let tMs = roundChanged ? 0 : (state.tMs || 0);
 
     container.appendChild(_el('p', 'text-slate-400 text-sm py-12 text-center',
         'Nalagam rundo…'));
@@ -733,16 +800,16 @@ export async function loadSpiderWebView(params = {}) {
     // first has anybody, so the first frame is a moment that exists.
     let snapshot;
     try {
-        snapshot = await loadMoment(roundId, state.tMs || 0, state.pov);
-        state.snapshot = snapshot;
-        if (!state.tMs && snapshot && snapshot.first_position_ms) {
+        snapshot = await loadMoment(roundId, tMs, pov);
+        if (myLoad !== loadId) return;
+        if (!tMs && snapshot && snapshot.first_position_ms) {
             // Clamped here too. The payload is fixed, but the endpoint answers
             // `t < 0` with a 422 and this page's only response to that is
             // "could not load" — a floor the caller can enforce for itself
             // costs one call to Math.max.
-            state.tMs = Math.max(0, snapshot.first_position_ms);
-            snapshot = await loadMoment(roundId, state.tMs, state.pov);
-            state.snapshot = snapshot;
+            tMs = Math.max(0, snapshot.first_position_ms);
+            snapshot = await loadMoment(roundId, tMs, pov);
+            if (myLoad !== loadId) return;
         }
     } catch {
         if (myLoad !== loadId) return;
@@ -753,16 +820,47 @@ export async function loadSpiderWebView(params = {}) {
     }
     if (myLoad !== loadId) return;
 
-    const mapName = (snapshot.players || []).length ? snapshot.map_name : snapshot.map_name;
-    await loadMesh(mapName || '');
+    // ⚠️ THE GEOMETRY IS THE LAST AWAIT, so the commit waits for it too. An
+    // earlier version committed here and then awaited `loadMesh`, which wrote
+    // `state.mesh` itself — a superseded round's floor could land under the
+    // winning round's players (Codex, PR #807).
+    const mapName = snapshot.map_name || '';
+    const loaded = await loadMesh(mapName);
     if (myLoad !== loadId) return;
+
+    // ⭐ THE COMMIT. One place, after the LAST await that could be superseded,
+    // reached only by the winning load.
+    state.roundId = roundId;
+    state.tMs = tMs;
+    state.pov = pov;
+    state.snapshot = snapshot;
+    state.mesh = loaded.mesh;
+    state.meshMapName = loaded.mapName;
+    // ⛔ The team list belongs to the round, and is rebuilt only when empty:
+    // a round whose reconstruction resolved one side left that single team
+    // cached and the NEXT round permanently offered one POV button — and the
+    // reverse, a two-team list surviving into a one-team round, offers a view
+    // that cannot resolve (Codex, PR #807).
+    if (roundChanged) state.teams = [];
 
     container.textContent = '';
 
-    // Teams are learned from the oracle load and kept: under a team view the
-    // payload no longer contains the other side, so the switch would lose its
-    // own options after the first click.
-    if (!state.teams.length) {
+    // ⭐ THE SIDES COME FROM THE PAYLOAD, NOT FROM WHO IS ON SCREEN.
+    //
+    // This used to read `snapshot.players`, which is a TIME SLICE: at
+    // `first_position_ms` only the first player is guaranteed to exist, so a
+    // round whose teams begin spawning at different moments built one POV
+    // button and never gained the other — `goTo` updates panels without
+    // recreating them (Codex, PR #807). And under a team view the payload
+    // deliberately omits the other side, so the switch would lose its own
+    // options after the first click.
+    //
+    // `teams` is round-level and the same at every `t`, which is what a
+    // switch needs. The fallback keeps an older backend working rather than
+    // rendering a bar with no sides at all.
+    if (Array.isArray(snapshot.teams) && snapshot.teams.length) {
+        state.teams = snapshot.teams;
+    } else if (!state.teams.length) {
         state.teams = [...new Set((snapshot.players || [])
             .map((p) => p.team).filter(Boolean))].sort();
     }
@@ -1022,6 +1120,16 @@ export async function loadSpiderWebView(params = {}) {
                     ? 'Za to rundo ni upravičenih vrstic o spawn času, zato ura '
                       + 'ni bila niti izpeljana — to ni neuspela preverba, ampak '
                       + 'odsotnost vhoda.'
+                // ⛔ POV-ONLY BADGES ARE NOT A VERDICT. Under a team or player
+                // view the grades are WITHHELD by design, and the oracle
+                // clocks behind them may well be validated — so the summary
+                // below would assert a result this payload cannot establish
+                // (Codex, PR #807). It says what is true instead: the grades
+                // are hidden, not failed.
+                : badges.some((x) => x === 'OWN HUD' || x === 'WITHHELD')
+                    ? 'V tem pogledu ocene preverbe niso prikazane — to ni '
+                      + 'neuspeh, ampak meja pogleda. Ocena je celorundna '
+                      + 'sodba in ostane v pogledu »world«.'
                     : 'Nobena ura tu ni prestala neodvisne preverbe; kjer je '
                       + 'odstotek skladnosti prikazan, je to ujemanje z lastnim '
                       + 'izvorom, ne dokaz.');
