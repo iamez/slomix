@@ -1690,6 +1690,15 @@ async def get_voice_activity_history(
 #: would give the system two opinions about the same staleness.
 VOICE_REPORT_STALE_AFTER_S = 180
 
+#: How far ahead of us a timestamp may sit and still count as clock skew.
+#:
+#: ⚠️ CHOSEN, NOT MEASURED, and worth saying so. The bot and the web process
+#: read the same PostgreSQL clock on NTP-synced hosts, where drift is
+#: sub-second — there is nothing here to derive a number FROM. Five seconds is
+#: wide enough that ordinary skew never trips it and narrow enough that a row
+#: dated minutes ahead is treated as what it is: undateable.
+VOICE_CLOCK_SKEW_GRACE_S = 5
+
 
 def _voice_report_iso(updated_at: object) -> str | None:
     """The report's timestamp as an OFFSET-BEARING ISO string, or None.
@@ -1741,7 +1750,20 @@ def _voice_report_age_seconds(updated_at: object) -> int | None:
         return None
     if stamp.tzinfo is None:
         stamp = stamp.replace(tzinfo=timezone.utc)
-    return max(0, int((datetime.now(timezone.utc) - stamp).total_seconds()))
+    age = (datetime.now(timezone.utc) - stamp).total_seconds()
+    # ⛔ A FUTURE TIMESTAMP IS NOT EVIDENCE THAT THE BOT JUST PUBLISHED.
+    # `max(0, …)` normalised every negative age to zero, so a row dated ahead
+    # of the web process — a clock that drifted, a migrated or malformed row —
+    # reported `ok` and kept an old member list "current" until wall time
+    # caught up to that timestamp plus the whole staleness window
+    # (Codex, PR #808). Undateable is the honest answer, and it reads `stale`.
+    if age < -VOICE_CLOCK_SKEW_GRACE_S:
+        logger.warning(
+            "voice status timestamp is %.0fs in the future; treating as undateable",
+            -age,
+        )
+        return None
+    return max(0, int(age))
 
 
 @router.get("/voice-activity/current")

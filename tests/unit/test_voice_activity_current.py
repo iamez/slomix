@@ -292,3 +292,41 @@ class TestTheTimestampCarriesItsZone:
 
         assert payload["updated_at"] == "not a timestamp"
         assert payload["age_seconds"] is None
+
+
+class TestAFutureTimestampIsNotFreshness:
+    """⛔ `max(0, …)` called every future timestamp "just written".
+
+    A row dated ahead of the web process — a drifted clock, a migrated or
+    malformed row — normalised to age 0 and reported `ok`, keeping an old
+    member list current until wall time caught up to that timestamp plus the
+    whole 180 s window (Codex, PR #808).
+    """
+
+    def _ahead(self, seconds: float):
+        return (_status(["ciril"]),
+                dt.datetime.now(dt.timezone.utc) + dt.timedelta(seconds=seconds))
+
+    @pytest.mark.asyncio
+    async def test_ordinary_clock_skew_still_reads_fresh(self):
+        """⭐ The premise. If a second of skew tripped this, every deployment
+        with two processes would flap into `stale`."""
+        payload = await get_current_voice_activity(db=_Db(row=self._ahead(2)))
+
+        assert payload["status"] == "ok"
+        assert payload["age_seconds"] == 0
+
+    @pytest.mark.asyncio
+    async def test_a_timestamp_minutes_ahead_is_undateable_not_fresh(self):
+        payload = await get_current_voice_activity(db=_Db(row=self._ahead(600)))
+
+        assert payload["age_seconds"] is None
+        assert payload["status"] == "stale"
+        assert "no usable timestamp" in payload["reason"]
+
+    @pytest.mark.asyncio
+    async def test_the_members_still_travel(self):
+        """The page decides not to present them as current; the endpoint does
+        not delete the last thing it knows."""
+        payload = await get_current_voice_activity(db=_Db(row=self._ahead(600)))
+        assert payload["total_count"] == 1

@@ -102,7 +102,14 @@ function LivePanel() {
       {/* The voice row renders from its own query — a dead game server must
         * not silence a perfectly healthy voice report (Codex on #806). */}
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
-        <StatusDot state={(voiceData?.total_count ?? 0) > 0 ? 'ok' : 'idle'} />
+        {/* ⛔ A STALE REPORT IS NOT A GREEN DOT. The count alone drove this,
+          * so an undateable report — `status: "stale"` with `age_seconds:
+          * null` — rendered a green dot beside a bare "3 in voice" (Codex on
+          * #808). The dot follows the verdict, not the number. */}
+        <StatusDot
+          state={voiceData && voiceData.status !== 'stale'
+            && (voiceData.total_count ?? 0) > 0 ? 'ok' : 'idle'}
+        />
         {voice.isPending && <Pending label="voice" />}
         {(voice.isError || voice.data?.status === 'unavailable') && <Unavailable what="voice" />}
         {voiceData && (
@@ -120,8 +127,15 @@ function LivePanel() {
                 * server. Recomputing from updated_at here had two opinions
                 * on one datum (120 vs 180) and trusted the client clock —
                 * the same two-thresholds shape as the idle-map fix. */}
-              {voiceData.status === 'stale' && typeof voiceData.age_seconds === 'number'
-                ? ` · as of ${ageOf(voiceData.age_seconds)}`
+              {/* ⛔ THE VERDICT FIRST, THE AGE ONLY IF THERE IS ONE. Gating
+                * the whole qualifier on a numeric age meant an UNDATEABLE
+                * stale report — the backend cannot read its timestamp — lost
+                * the qualifier entirely and read as current (Codex on #808).
+                * "Stale" is the fact; the age is a detail it may not have. */}
+              {voiceData.status === 'stale'
+                ? (typeof voiceData.age_seconds === 'number'
+                  ? ` · as of ${ageOf(voiceData.age_seconds)}`
+                  : ' · age unknown')
                 : ''}
             </span>
           </>
