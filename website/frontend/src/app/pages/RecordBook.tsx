@@ -210,23 +210,32 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
       <Lbl style={{ fontSize: 9 }} >{label}</Lbl>
       <div style={{ fontSize: 12, color: 'var(--color-text-500)', marginTop: 3 }}>{desc}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 12 }}>
-        {podium.map((e) => (
-          <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={{ textDecoration: 'none', color: 'var(--color-text-100)' }}>
+        {podium.map((e) => {
+          const inner = (<>
             <div className="m" style={{ ...lblStyle, fontSize: 9 }}>#{e.rank} <MoveBadge e={e} /></div>
             <div className="m" style={{ fontSize: 12, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name}</div>
             <div className="m" style={{ fontSize: 13, marginTop: 2 }}>{fmt(e.value)}</div>
-          </Link>
-        ))}
+          </>);
+          // A null guid is a resolvable-by-nobody historical aggregate —
+          // a cell, not a /profile/null link (same rule as awards).
+          return e.player_guid
+            ? <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={{ textDecoration: 'none', color: 'var(--color-text-100)' }}>{inner}</Link>
+            : <div key={`${e.rank}-${e.player_name}`}>{inner}</div>;
+        })}
       </div>
       {rest.length > 0 && (
         <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
-          {visible.map((e) => (
-            <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '4px 0', textDecoration: 'none', color: 'var(--color-text-300)' }}>
+          {visible.map((e) => {
+            const inner = (<>
               <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{String(e.rank).padStart(2, '0')}</span>
               <span className="m" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name} <MoveBadge e={e} /></span>
               <span className="m" style={{ fontSize: 11 }}>{fmt(e.value)}</span>
-            </Link>
-          ))}
+            </>);
+            const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '4px 0', textDecoration: 'none', color: 'var(--color-text-300)' } as const;
+            return e.player_guid
+              ? <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={style}>{inner}</Link>
+              : <div key={`${e.rank}-${e.player_name}`} style={style}>{inner}</div>;
+          })}
           {!expanded && rest.length > 7 && (
             <button
               type="button"
@@ -245,6 +254,11 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
 function ChampionsBand() {
   const awards = useSeasonAwards();
   const list = awards.data?.awards ?? [];
+  // A FAILED request is not an empty season — silence would hide an
+  // outage as normalcy (Codex on #813, wave 2).
+  if (awards.isError) {
+    return <div style={{ marginBottom: 18 }}><Unavailable what="season champions" /></div>;
+  }
   // [] is the NORMAL state until a season is engraved — the band hides,
   // exactly like legacy (corpus recording proves the emptiness).
   if (!awards.isSuccess || list.length === 0) return null;
@@ -253,7 +267,9 @@ function ChampionsBand() {
       <SectionHead label={`${awards.data?.season_name ?? 'season'} · champions`} />
       <div className="landing-quad" style={{ gap: 10, marginTop: 10 }}>
         {list.map((a, i) => (
-          <div key={a.award_key ?? a.key ?? i} style={{ borderLeft: '2px solid var(--color-accent-warm)', paddingLeft: 10 }}>
+          // Multiple recipients of one award_key are a valid state — the
+          // conflict key is (season, award, PLAYER) (Codex on #813 wave 2).
+          <div key={`${a.award_key ?? a.key ?? i}:${a.player_guid ?? i}`} style={{ borderLeft: '2px solid var(--color-accent-warm)', paddingLeft: 10 }}>
             {/* The backend supplies a display label ('Season MVP') —
               * deriving from award_key rendered 'mvp' (Codex on #813). */}
             <Lbl style={{ fontSize: 9 }}>{a.label ?? (a.award_key ?? a.key ?? '').replace(/_/g, ' ')}</Lbl>
