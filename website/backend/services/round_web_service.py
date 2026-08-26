@@ -1353,6 +1353,15 @@ async def get_round_snapshot(
                     None if pov in holders
                     else f"{pov} has no reconstructed state in this round at t={t_ms}"
                 ),
+                # ⚠️ THE SAME DISCLOSURE THE TEAM VIEW CARRIES. This branch
+                # now returns every member of the holder's team, and §6 asks
+                # that own-team knowledge be STATED as a simplification —
+                # teammates share a voice channel we cannot capture — rather
+                # than assumed. Omitting it handed a consumer reconstructed
+                # teammate positions as if the holder were proven to know
+                # them, and the omission was invisible precisely because the
+                # team view said it and this one did not (Codex, PR #807).
+                "own_team_positions_are_a_simplification": True,
             }
         else:
             information = _team_information(information, pov_team, t_ms)
