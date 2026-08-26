@@ -143,7 +143,9 @@ function MasteryGrid({ period }: { period: string }) {
               {p.weapons.map((w) => (
                 <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 8, alignItems: 'baseline', padding: '4px 0' }}>
                   <span className="m" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
-                  <span className="m" style={{ fontSize: 11 }}>{w.kills.toLocaleString('en-US')}k</span>
+                  {/* w.kills is an ABSOLUTE count — a 'k' suffix would read
+                    * 16,148 as sixteen million. */}
+                  <span className="m" style={{ fontSize: 11 }}>{w.kills.toLocaleString('en-US')}</span>
                   <span className="m" style={{ fontSize: 10, color: 'var(--color-text-400)' }}>{w.accuracy.toFixed(1)}% acc</span>
                   {/* headshots/hits — a HEAD-HIT rate, never a kill rate. */}
                   <span className="m" style={{ fontSize: 10, color: 'var(--color-text-500)' }}>{w.hs_rate.toFixed(1)}% head-hit</span>

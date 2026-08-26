@@ -102,6 +102,24 @@ describe('MapsPage', () => {
     expect(screen.getByText(/no decided maps yet/)).toBeInTheDocument();
   });
 
+  it('unknown durations and null dates neither win Fastest nor crash Last played', async () => {
+    const real = (maps as Record<string, unknown>[])[0]; // te_escape2, avg 330
+    const hollow = {
+      ...real, name: 'sw_notime', matches_played: 1,
+      avg_duration: 0, last_played: null,
+    };
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/stats/maps': [real, hollow] })));
+    renderPage(<MapsPage />);
+    await waitFor(() => expect(screen.getAllByText('sw notime').length).toBeGreaterThan(0));
+    // The 0-sentinel is UNKNOWN — it must not outrank the measured 330s.
+    const fastestCard = screen.getByText('fastest avg').parentElement;
+    expect(fastestCard?.textContent).toContain('te escape2');
+    // Null last_played renders a dash and the sort survives it.
+    fireEvent.click(screen.getByRole('button', { name: 'Last played' }));
+    expect(screen.getAllByText('sw notime').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+  });
+
   it('a 200 with status:"error" from segments reads as an outage, not an empty record book', async () => {
     vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/records/maps/segments': { status: 'error', records: [] } })));
     renderPage(<MapsPage />);
@@ -118,6 +136,10 @@ describe('WeaponsPage', () => {
     // 'head hits' label is load-bearing (hit locations exceed kills).
     expect(screen.getAllByText(/head hits/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/head-hit/).length).toBeGreaterThan(0);
+    // Mastery counts are ABSOLUTE — vid's recorded Mp40 16,148 kills must
+    // never render as '16,148k'.
+    expect(screen.getByText('16,148')).toBeInTheDocument();
+    expect(screen.queryByText('16,148k')).toBeNull();
     // Category filter narrows client-side; the share text stays global.
     fireEvent.click(screen.getByRole('button', { name: 'smg' }));
     // The grid heading counts the filtered rows (smg = mp40/thompson/sten);
@@ -157,6 +179,8 @@ describe('FormPage', () => {
     // First-night section from the recording (JaKaZc is_new).
     expect(screen.getByText('JaKaZc')).toBeInTheDocument();
     expect(screen.getByText(/rank-vs-self, not a ranking/)).toBeInTheDocument();
+    // A newcomer's null composite omits the comparison — never '—% vs 100%'.
+    expect(screen.queryByText(/—% vs 100%/)).toBeNull();
   });
 
   it('switching metric refetches with the metric key', async () => {
@@ -230,8 +254,9 @@ describe('RetroViz', () => {
     expect(screen.getByText('26 kills')).toBeInTheDocument();
   });
 
-  it('a round without a measured duration says unknown, not 0:00', async () => {
-    const noDuration = { ...(roundViz as object), duration_seconds: null };
+  it('a round with the 0-sentinel duration says unknown, not 0:00', async () => {
+    // test_round_duration_truth defines zero as MISSING, not a measurement.
+    const noDuration = { ...(roundViz as object), duration_seconds: 0 };
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
       if (/^\/api\/rounds\/\d+\/viz$/.test(String(input).split('?')[0])) {
         return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(noDuration) } as Response);
