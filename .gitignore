@@ -821,15 +821,6 @@ scripts/archive/
 !scripts/archive/__init__.py
 !scripts/archive/backfill_gametimes.py
 !scripts/archive/proximity_objective_coords_gate.py
-scripts/backfill_box_scale_session_results.py
-scripts/backfill_match_id_stopwatch.py
-scripts/backfill_player_track_metrics.py
-scripts/backfill_proximity_capabilities.py
-scripts/backfill_proximity_player_track_metrics.py
-scripts/backfill_vs_stats_subjects.py
-scripts/repair_endstats_round_assignments.py
-scripts/repair_lua_late_links.py
-scripts/reprocess_missing_endstats.py
 scripts/backtest_krogt_tds.sql
 scripts/backtest_life_cards.py
 scripts/backtest_moment_director.py
