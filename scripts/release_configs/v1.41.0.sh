@@ -22,6 +22,27 @@
 #         the clock panel and the snapshot's own integrity
 #   #802, #805, #806  the standalone /app shell, Chart.js bundled, and the
 #         first page of the new design
+#   #808  the live surfaces can be told apart from their own failures: a map
+#         that outlived its evidence, a voice report that stopped, a
+#         timestamp that travelled without its zone
+#   #809, #811, #813, #814  the rest of the new design's phases 1 and 2 —
+#         system/diag/About, home/sessions, leaderboards/record-book/awards,
+#         maps/weapons/form/retro-viz. ⛔ NONE OF IT IS SERVED (see /app note)
+#   #786  docs/ boundary: publish what code points at, retire 121 others
+#   #801  the contract said R0 rows had stopped; they had not
+#
+# ⛔ REGENERATE THIS LIST AT TAG TIME, do not extend it by hand:
+#
+#   git log --oneline v1.40.0..main | grep -oE "#[0-9]+" | sort -u
+#
+# It was written when #806 was the tip and had missed EIGHT merges by the
+# time anyone looked (#786, #801, #808, #809, #811, #813, #814 — and #807,
+# added a round earlier). That is not one oversight: a list written from
+# "what is here now" misses everything that arrives after, every time. The
+# command above cannot go stale; a hand-kept list always does.
+#
+# ⚠️ #812 (response_model, first two endpoints) was still OPEN when this was
+# refreshed. If it lands before the tag is cut, re-run the command.
 #
 # ⛔ /app IS NOT BUILT BY THIS DEPLOY, AND THAT IS THE POLICY, NOT AN
 # OVERSIGHT. `deploy_release.sh` deliberately does not run `npm run
@@ -87,40 +108,19 @@
 #   directory, so a clean revert is a revert of steps 3 and 4 only.
 #
 # Not starting the move at all is safe. STOPPING PART-WAY IS NOT.
-# ⛔ THESE NOTES ASSUME #807 IS IN THE TAG. Checked against main as it stands
-# and two of them are not true without it:
+# ✅ #807 IS IN THE TAG (merged as `83e777a8`), so the two claims below that
+# depended on it now hold: Spider Web has an entry point from the replay
+# view, and the team point of view withholds the other side's positions,
+# wave phase and formation on the SERVER.
 #
-#   * SPIDER WEB HAS NO ENTRY POINT. `route-registry.js` defines its
-#     `buildHash` and nothing calls it — the only route to the page is typing
-#     `#/spider-web/round/<id>` by hand. #807 adds the link from the replay
-#     view. Tag without it and the release announces a page nobody can reach.
-#
-#   * THE TEAM-POV BOUNDARY STILL LEAKS. On main, `"clock": clock` and
-#     `"nearest_teammate_separation": separation` go into the payload
-#     unfiltered (round_web_service.py:1156, 1170), so a team view is handed
-#     the enemy's wave phase and formation. #807 closes both, plus the belief
-#     expiry that kept time with the enemy clock.
-#
-# ⛔ AND MY OWN FALLBACK INSTRUCTION WAS WRONG. It said "cut the last two
-# sentences", which removes the CLOCK and /app sentences — both TRUE — and
-# leaves the team-POV guarantee, which is the THIRD of five and the false one
-# (Codex, PR #810). Counting sentences is the wrong instrument; here is the
-# replacement text instead, so nobody has to count anything:
-#
-#   RELEASE_NOTES="A round can now be looked at. Spider Web draws one moment
-#   of a match over the map's real floor geometry — where everyone stood, what
-#   each player could plausibly have known, and how far off the reconstruction
-#   is, measured rather than asserted. The page is reachable by URL only in
-#   this tag (#/spider-web/round/<id>) and its team point of view still
-#   publishes the other side's wave phase and formation — both are closed by
-#   #807. The reinforcement clock is reconstructed and independently
-#   validated, and every round now declares what it was able to capture in the
-#   first place, with 'unknown' kept distinct from 'off'. The new design's
-#   first page ships in this tag but is NOT served: /app stays dormant on
-#   production until it reaches parity, and building it is the switchover, not
-#   this release."
-#
-# Announcing a guarantee the code does not keep is worse than announcing less.
+# ⚠️ THIS BLOCK USED TO SAY THE OPPOSITE, with a replacement paragraph to
+# paste if #807 was absent. That warning was correct when written and
+# FALSE the moment #807 landed — the same failure as the stale Ships list
+# above, in the other direction: a note written from "what is here now"
+# misleads once the world moves, and a note that OVERSTATES safety is the
+# worse half. Verified against main before deleting it:
+#   grep '"clock": clock' website/backend/services/round_web_service.py  -> gone
+#   grep getRouteHash website/js/replay.js                                -> present
 #
 # shellcheck shell=bash
 # shellcheck disable=SC2034
