@@ -11,6 +11,9 @@ import { SystemPage } from './pages/SystemPage';
 import { SmartStatsDiag } from './pages/SmartStatsDiag';
 import { Home } from './pages/Home';
 import { SessionsList } from './pages/SessionsList';
+import { Leaderboards } from './pages/Leaderboards';
+import { RecordBook } from './pages/RecordBook';
+import { Awards } from './pages/Awards';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
 
@@ -53,6 +56,9 @@ const PAGES: Record<string, React.ReactElement> = {
   home: <Home />,
   sessions: <SessionsList box={false} />,
   sessions2: <SessionsList box />,
+  leaderboards: <Leaderboards />,
+  'record-book': <RecordBook />,
+  awards: <Awards />,
 };
 
 const router = createBrowserRouter(
