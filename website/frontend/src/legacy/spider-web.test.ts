@@ -563,6 +563,19 @@ describe('clockBadge', () => {
     expect(clockBadge(null).badge).toBe('UNAVAILABLE');
   });
 
+  it('shows the holder their own HUD without our verdict about it', () => {
+    // ⛔ Without this branch the badge fell through to UNVALIDATED and called
+    // a working countdown unverified. The grade is a FULL-ROUND verdict and
+    // stays in the oracle view (Codex, #807).
+    const own = clockBadge({ status: 'own_hud', interval_ms: 30000, phase_ms: 15000 });
+
+    expect(own.badge).toBe('OWN HUD');
+    expect(own.reason).toBeTruthy();
+    expect(own.badge).not.toBe(clockBadge({ status: 'validated' }).badge);
+    expect(own.badge)
+      .not.toBe(clockBadge({ status: 'internally_consistent_unvalidated' }).badge);
+  });
+
   it('separates "withheld from this view" from "we could not measure it"', () => {
     // ⛔ The enemy clock under a team POV is stripped by the BACKEND, not
     // hidden by the renderer — §5.6 and §6.3 make the enemy phase oracle
