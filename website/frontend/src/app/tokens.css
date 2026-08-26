@@ -171,3 +171,12 @@ body {
 @media (max-width: 760px) {
   .home-grid-5 { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* Leaderboard rows keep six numeric columns on desktop; a phone gets
+ * rank · player · picked value, the rest hides (Codex on #813, wave 4).
+ * !important because the grid template is inline (it varies with the
+ * picked stat) and only a media rule may override it. */
+@media (max-width: 760px) {
+  .lb-table .lb-aux { display: none; }
+  .lb-table .lb-row { grid-template-columns: 34px minmax(0, 1fr) auto !important; }
+}

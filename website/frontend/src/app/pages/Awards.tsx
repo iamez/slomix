@@ -108,8 +108,23 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
       ))}
       {pages > 1 && (
         <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-          <Pill active={false} label="← newer" onClick={() => setPage((p) => Math.max(0, p - 1))} />
-          <Pill active={false} label="older →" onClick={() => setPage((p) => Math.min(pages - 1, p + 1))} />
+          {/* Boundary controls disable instead of silently clamping. */}
+          <button
+            type="button"
+            disabled={page === 0}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page === 0 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page === 0 ? 'default' : 'pointer' }}
+          >
+            ← newer
+          </button>
+          <button
+            type="button"
+            disabled={page >= pages - 1}
+            onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
+            style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page >= pages - 1 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page >= pages - 1 ? 'default' : 'pointer' }}
+          >
+            older →
+          </button>
         </div>
       )}
     </div>

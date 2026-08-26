@@ -119,9 +119,15 @@ function RecordCard({ label, rows }: { label: string; rows: RecordEntry[] }) {
       {open && rows.length > 1 && (
         <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
           {rows.slice(1).map((r, i) => (
+            /* Each rank can come from a DIFFERENT map and date — the legacy
+             * top-5 modal showed both, and dropping them made ranks 2-5
+             * unverifiable (Codex on #813, wave 4). */
             <div key={`${r.player}-${i}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '20px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '5px 0' }}>
               <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{String(i + 2).padStart(2, '0')}</span>
-              <span className="m" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player}</span>
+              <span style={{ minWidth: 0 }}>
+                <span className="m" style={{ fontSize: 11, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player}</span>
+                <span className="m" style={{ ...lblStyle, fontSize: 8 }}>{r.map} · {r.date}</span>
+              </span>
               <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)' }}>{recordValue(r.value)}</span>
             </div>
           ))}
@@ -204,7 +210,9 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
   const podium = entries.slice(0, 3);
   const rest = entries.slice(3);
   const visible = expanded ? rest : rest.slice(0, 7);
-  const fmt = (v: number) => (catKey === 'most_dpm' ? v.toFixed(1) : figure(v));
+  // DPM keeps the backend's two-decimal ranking precision — 374.01 and
+  // 374.0 are different ranks (Codex on #813, wave 4).
+  const fmt = (v: number) => (catKey === 'most_dpm' ? v.toFixed(2) : figure(v));
   return (
     <div style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
       <Lbl style={{ fontSize: 9 }} >{label}</Lbl>
@@ -214,7 +222,10 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
           const inner = (<>
             <div className="m" style={{ ...lblStyle, fontSize: 9 }}>#{e.rank} <MoveBadge e={e} /></div>
             <div className="m" style={{ fontSize: 12, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name}</div>
-            <div className="m" style={{ fontSize: 13, marginTop: 2 }}>{fmt(e.value)}</div>
+            <div className="m" style={{ fontSize: 13, marginTop: 2 }}>
+              {fmt(e.value)}{' '}
+              <span style={{ ...lblStyle, fontSize: 8 }}>{e.unit}</span>
+            </div>
           </>);
           // A null guid is a resolvable-by-nobody historical aggregate —
           // a cell, not a /profile/null link (same rule as awards).
