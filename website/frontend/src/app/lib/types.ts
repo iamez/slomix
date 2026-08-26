@@ -406,7 +406,9 @@ export interface MapRow {
  * appear only when delta_window_days is set (recording has null). */
 export interface HallOfFameEntry {
   rank: number;
-  player_guid: string;
+  /** null for historical aggregates no alias map resolves
+   * (valid_human_rows_gate permits them) — no profile link then. */
+  player_guid: string | null;
   player_name: string;
   value: number;
   unit: string;

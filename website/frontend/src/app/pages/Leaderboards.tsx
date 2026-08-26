@@ -64,6 +64,10 @@ export function Leaderboards() {
   const board = useLeaderboard(stat, period);
   const data = board.isError ? undefined : board.data;
   const statLabel = STATS.find((s) => s.key === stat)?.label ?? stat.toUpperCase();
+  // The picked stat already renders in the value column — repeating it in
+  // its fixed column showed the same number twice on the DEFAULT view
+  // (Codex on #813, wave 2). The fixed column hides instead.
+  const cols = `34px minmax(0,1fr) auto${stat === 'games' ? '' : ' auto'}${stat === 'kills' ? '' : ' auto'}${stat === 'kd' ? '' : ' auto'}`;
   return (
     <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 860 }}>
       <Lbl>leaderboards · top players by performance</Lbl>
@@ -87,13 +91,13 @@ export function Leaderboards() {
       <div data-parity="leaderboards.table" style={{ marginTop: 22 }}>
         <SectionHead label={`${statLabel.toLowerCase()} · ${PERIODS.find((p) => p.key === period)?.label.toLowerCase()}`} />
         <div style={{ marginTop: 8 }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto auto auto auto', gap: 14, padding: '6px 0' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 14, padding: '6px 0' }}>
             <Lbl style={{ fontSize: 9 }}>#</Lbl>
             <Lbl style={{ fontSize: 9 }}>player</Lbl>
             <Lbl style={{ fontSize: 9, textAlign: 'right' }}>{statLabel}</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>rounds</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>kills</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>k/d</Lbl>
+            {stat !== 'games' && <Lbl style={{ fontSize: 9, textAlign: 'right' }}>rounds</Lbl>}
+            {stat !== 'kills' && <Lbl style={{ fontSize: 9, textAlign: 'right' }}>kills</Lbl>}
+            {stat !== 'kd' && <Lbl style={{ fontSize: 9, textAlign: 'right' }}>k/d</Lbl>}
           </div>
           {board.isPending && <div style={{ padding: '10px 0' }}><Pending label="leaderboard" /></div>}
           {board.isError && <div style={{ padding: '10px 0' }}><Unavailable what="leaderboard" /></div>}
@@ -106,14 +110,14 @@ export function Leaderboards() {
             <Link
               key={row.guid}
               to={`/profile/${row.guid}`}
-              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto auto auto auto', gap: 14, alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 14, alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
             >
               <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{String(row.rank).padStart(2, '0')}</span>
               <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
               <span className="m" style={{ fontSize: 13, textAlign: 'right', color: 'var(--color-text-100)' }}>{formatValue(stat, row.value)}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right', color: stat === 'games' ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>{row.rounds}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right', color: stat === 'kills' ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>{row.kills}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right', color: stat === 'kd' ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>
+              {stat !== 'games' && <span className="m" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{row.rounds}</span>}
+              {stat !== 'kills' && <span className="m" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills}</span>}
+              {stat !== 'kd' && <span className="m" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>}
             </Link>
           ))}
         </div>
