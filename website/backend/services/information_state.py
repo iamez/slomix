@@ -718,6 +718,25 @@ def aim_lock_beliefs(
     ]
 
 
+#: Channels §6.1 names that this implementation does not read at all.
+#:
+#: ⛔ A channel the spec lists and the payload never mentions is the exact
+#: failure §6.2 forbids: the holder looks like someone who had that channel and
+#: learned nothing from it. Gating it on the manifest would be worse, not
+#: better — the manifest could say `enabled` and we would then claim a channel
+#: we have no generator for.
+#:
+#: `comm_events`: 96 rows across 2 rounds in the whole corpus, measured today
+#: and unchanged since the spec was written. There is nothing to build a
+#: belief from even where the flag is on.
+UNREAD_CHANNELS = {
+    "comm_events": (
+        "voice macros are not read: proximity_comm_event holds 96 rows across "
+        "2 rounds in the entire corpus, so no round can support this channel"
+    ),
+}
+
+
 def apply_capability(
     states: dict[str, HolderState],
     manifest: dict | None,
@@ -734,7 +753,17 @@ def apply_capability(
     # a generator is exhausted by the first. That left the second channel
     # untouched — no reason recorded, no beliefs dropped — and the payload then
     # looked like a proven capture (CodeRabbit, PR #799).
-    holders = tuple(holders)
+    # ⛔ THE UNION, NOT THE ARGUMENT. `states` can already hold a holder who is
+    # NOT in `holders` — an attacker whose life ended before `t` still has a
+    # contact belief, `group_by_holder` keeps that state and the payload
+    # serialises it. Marking only the passed-in list left those holders with an
+    # EMPTY `unavailable`, i.e. looking like players whose every channel worked
+    # and who learned nothing from it — which is the one thing §6.2 forbids,
+    # and the reason this function exists (Codex, PR #807).
+    holders = tuple(dict.fromkeys((*holders, *states)))
+    for holder in holders:
+        holder_state = states.setdefault(holder, HolderState(holder_guid=holder))
+        holder_state.unavailable.update(UNREAD_CHANNELS)
     gated = {"gunfire": "shot_fired", "aim_lock": "aim_lock"}
     for source, flag in gated.items():
         state = _capability_state(manifest, flag)

@@ -5,6 +5,13 @@
  */
 
 import { API_BASE, fetchJSON } from './utils.js';
+// ⚠️ THE SAME SPECIFIER app.js USES, version query included. In ES modules
+// the URL is the identity: './route-registry.js' and
+// './route-registry.js?v=…' are two different modules with two sets of
+// state. The registry is frozen data today so a duplicate would only waste a
+// fetch — but the day it holds anything mutable, two copies is a bug nobody
+// would look for.
+import { getRouteHash } from './route-registry.js?v=20260720-ssd-gsid';
 
 function stripEtColors(text) {
     if (!text) return '';
@@ -334,19 +341,36 @@ function renderShell(container) {
     // unambiguous subject. Hidden until a round is chosen.
     const proxLinks = _el('div', 'flex items-center gap-2 mb-2 hidden');
     proxLinks.id = 'replay-proximity-links';
-    for (const [id, label, suffix] of [
-        ['replay-open-proximity', 'Proximity replay', ''],
-        ['replay-open-teams', 'Team comparison', '/teams'],
+    // ⛔ THE SPIDER WEB PAGE HAD NO WAY IN. `route-registry.js` defined its
+    // `buildHash` and nothing ever called it, so the only route to a page with
+    // map geometry, belief regions and a validated clock was typing
+    // `#/spider-web/round/<id>` by hand. A round view is where the id lives,
+    // which makes this the one place the link costs nothing.
+    //
+    // ⚠️ Via `getRouteHash`, not a template string like the two beside it: the
+    // registry owns the shape, and a hash built here would go stale the day it
+    // changes — the registry's `parseHash` requires digits, so a wrong shape
+    // fails silently by matching nothing.
+    for (const [id, label, hashOf] of [
+        ['replay-open-proximity', 'Proximity replay',
+         (rid) => `#/proximity/round/${encodeURIComponent(rid)}`],
+        ['replay-open-teams', 'Team comparison',
+         (rid) => `#/proximity/round/${encodeURIComponent(rid)}/teams`],
+        ['replay-open-spider-web', 'Spider Web',
+         (rid) => getRouteHash('spider-web', { roundId: rid })],
     ]) {
         const btn = _el('button', 'text-[10px] font-bold px-2 py-1 rounded-lg border ' +
             'border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/20 transition', label);
         btn.type = 'button';
         btn.id = id;
         btn.addEventListener('click', () => {
-            if (replayState.roundId != null) {
-                window.location.hash =
-                    `#/proximity/round/${encodeURIComponent(replayState.roundId)}${suffix}`;
-            }
+            if (replayState.roundId == null) return;
+            const hash = hashOf(replayState.roundId);
+            // An empty hash means the registry has no such route any more.
+            // Navigating to '' would drop the user on the home view with no
+            // explanation, which reads as a broken button rather than a
+            // missing route.
+            if (hash) window.location.hash = hash;
         });
         proxLinks.appendChild(btn);
     }

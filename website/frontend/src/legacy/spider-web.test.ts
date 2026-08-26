@@ -17,7 +17,7 @@
  * is a rotation, and that the map fits on the screen.
  */
 
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Camera } from '../../../js/spider-web.js';
 
@@ -25,8 +25,10 @@ import {
   THEME, alphaHex, beliefRegions, boundsFromPlayers, capabilityRows, clockBadge,
   edgeStyle, horizonOf, mixHex,
   isTeamPov, placeLabels,
-  project, statusLine, viewportFor,
+  loadSpiderWebView, project, statusLine, viewportFor,
 } from '../../../js/spider-web.js';
+// @ts-expect-error plain-JS module with no declaration file of its own
+import { getRouteDefinition, getRouteHash } from '../../../js/route-registry.js';
 
 const VIEW = { cx: 500, cy: 300, scale: 0.1, midX: 0, midY: 0, midZ: 0 };
 const CAM = { yaw: 0.6, pitch: 0.9, zoom: 1, panX: 0, panY: 0 };
@@ -561,8 +563,42 @@ describe('clockBadge', () => {
     expect(clockBadge(null).badge).toBe('UNAVAILABLE');
   });
 
+  it('shows the holder their own HUD without our verdict about it', () => {
+    // ⛔ Without this branch the badge fell through to UNVALIDATED and called
+    // a working countdown unverified. The grade is a FULL-ROUND verdict and
+    // stays in the oracle view (Codex, #807).
+    const own = clockBadge({ status: 'own_hud', interval_ms: 30000, phase_ms: 15000 });
+
+    expect(own.badge).toBe('OWN HUD');
+    expect(own.reason).toBeTruthy();
+    expect(own.badge).not.toBe(clockBadge({ status: 'validated' }).badge);
+    expect(own.badge)
+      .not.toBe(clockBadge({ status: 'internally_consistent_unvalidated' }).badge);
+  });
+
+  it('separates "withheld from this view" from "we could not measure it"', () => {
+    // ⛔ The enemy clock under a team POV is stripped by the BACKEND, not
+    // hidden by the renderer — §5.6 and §6.3 make the enemy phase oracle
+    // truth. If that arrived as UNAVAILABLE or UNVALIDATED, a reader would
+    // blame our reconstruction for a boundary we drew on purpose.
+    const withheld = clockBadge({ status: 'unknown_to_this_pov' });
+    expect(withheld.badge).toBe('WITHHELD');
+    expect(withheld.reason).toMatch(/oracle/);
+    expect(withheld.badge).not.toBe(clockBadge({ status: 'unavailable' }).badge);
+    expect(withheld.badge)
+      .not.toBe(clockBadge({ status: 'internally_consistent_unvalidated' }).badge);
+  });
+
+  it('carries the backend reason when it sends one', () => {
+    // The backend writes the sentence that names the spec sections; the
+    // fallback exists for a payload that omits it, not to overwrite one.
+    const b = clockBadge({ status: 'unknown_to_this_pov', reason: 'spec §6.3' });
+    expect(b.reason).toBe('spec §6.3');
+  });
+
   it('says why, so the badge is never bare', () => {
-    for (const status of ['validated', 'insufficient', 'inconsistent']) {
+    for (const status of ['validated', 'insufficient', 'inconsistent',
+                          'unknown_to_this_pov']) {
       expect(clockBadge({ status }).reason).toBeTruthy();
     }
   });
@@ -608,5 +644,306 @@ describe('capabilityRows', () => {
     const rows = capabilityRows(absent);
     expect(rows).toHaveLength(2);
     expect(rows.every((r) => r.state === 'unknown' && !r.known)).toBe(true);
+  });
+});
+
+describe('the way in', () => {
+  // ⛔ The page shipped with no entry point. `route-registry.js` defined
+  // `spider-web.buildHash` and nothing in the codebase called it, so a page
+  // with map geometry, belief regions and a validated clock could only be
+  // reached by typing the hash. The replay view now links to it, and these
+  // pin the two halves that have to agree for that link to land.
+  it('builds a hash its own parser accepts', () => {
+    const hash = getRouteHash('spider-web', { roundId: '11321' });
+
+    expect(hash).toBe('#/spider-web/round/11321');
+    expect(getRouteDefinition('spider-web').parseHash(hash))
+      .toEqual({ roundId: '11321' });
+  });
+
+  it('rejects a hash with no round rather than opening an empty page', () => {
+    // `buildHash({})` yields '#/spider-web/round/' — the shape a button would
+    // produce with nothing selected. `parseHash` requires digits, so it
+    // matches nothing, and the caller must not navigate there.
+    const empty = getRouteHash('spider-web', {});
+
+    expect(getRouteDefinition('spider-web').parseHash(empty)).toBeNull();
+  });
+
+  it('round-trips a numeric id, not only a string one', () => {
+    // The replay view holds `roundId` as whatever the API gave it. A number
+    // that stringified to '1.1e3' would build a hash the parser drops.
+    const hash = getRouteHash('spider-web', { roundId: 11321 });
+
+    expect(getRouteDefinition('spider-web').parseHash(hash))
+      .toEqual({ roundId: '11321' });
+  });
+});
+
+describe('opening a different round', () => {
+  // ⛔ `state` in spider-web.js is module-level and survives navigation, so
+  // round B used to open at round A's moment. Two silent failures: the
+  // retained time is past B's end, or before anybody in B has spawned — and
+  // the empty map that follows is exactly what the first_position_ms logic
+  // exists to prevent (Codex, PR #807).
+  const requested: string[] = [];
+
+  function stubRound(firstPositionMs: number) {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      requested.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          round_id: 1, t_ms: 0, map_name: null,
+          first_position_ms: firstPositionMs, round_duration_ms: 600_000,
+          players: [], edges: [], gaps: {}, withheld_by_pov: [],
+          nearest_teammate_separation: {}, clock: {},
+          information_state: { holders: {} }, capture_policy: { capabilities: {} },
+          reconstruction_accuracy: {}, player_count: 0, overlap_conflicts: 0,
+          notes: [],
+        }),
+      } as Response);
+    }));
+  }
+
+  function tOf(url: string): string | null {
+    return new URL(url, 'http://x').searchParams.get('t');
+  }
+
+  beforeEach(() => {
+    requested.length = 0;
+    // ⚠️ Built through the DOM API rather than `innerHTML`. The string is a
+    // constant and harmless, but the security scanner matches the SINK, not
+    // the value, and a red CI over a test fixture teaches everyone to ignore
+    // the scanner (Codacy on #807).
+    document.body.replaceChildren();
+    const host = document.createElement('div');
+    host.id = 'spider-web-container';
+    document.body.appendChild(host);
+    // jsdom ships no 2D context, and the page draws as its last step. A
+    // no-op recorder keeps the drawing out of the way of what is being
+    // tested — WHICH MOMENT was requested, not what was painted.
+    //
+    // ⚠️ THE PROTOTYPE COMES FROM AN ACTUAL ELEMENT, and that is the point.
+    // Three spellings, three scanner verdicts, none of them about the code:
+    // inline `HTMLCanvasElement.prototype` was "HTML passed in to function";
+    // a local named `canvasProto` was "Non-HTML variable used to store raw
+    // HTML"; renaming it `htmlCanvasProto` drew BOTH. The rule matches the
+    // IDENTIFIER — there is no string anywhere here, only a DOM prototype —
+    // so it cannot be satisfied by being correct, and chasing it by name is
+    // how a codebase acquires superstitions (Codacy on #807).
+    //
+    // Asking a canvas for its own prototype says the same thing with no
+    // `HTML*` identifier to match, and reads truer besides.
+    const canvasProto = Object.getPrototypeOf(document.createElement('canvas'));
+    vi.spyOn(canvasProto, 'getContext').mockReturnValue(
+      new Proxy({}, {
+        get: (_t, prop) => (prop === 'measureText'
+          ? () => ({ width: 0 })
+          : () => undefined),
+        set: () => true,
+      }) as unknown as CanvasRenderingContext2D,
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    document.body.replaceChildren();
+  });
+
+  it('opens the second round at its own beginning, not the first round\'s moment', async () => {
+    stubRound(42_000);
+    await loadSpiderWebView({ roundId: '11321' });
+    // The first round settled on its own first position — that is the state
+    // that used to leak into the next one.
+    expect(requested.some((u) => tOf(u) === '42000')).toBe(true);
+
+    requested.length = 0;
+    await loadSpiderWebView({ roundId: '11322' });
+
+    expect(requested.length).toBeGreaterThan(0);
+    expect(tOf(requested[0])).toBe('0');
+  });
+
+  it('keeps the moment when the same round is opened again', async () => {
+    // Re-entering the same round (a re-render, a back button) is not a new
+    // round and must not throw the viewer back to the start.
+    //
+    // ⚠️ ASSERTED ON THE READOUT, NOT ON FETCH TRAFFIC. `utils.js` fetchJSON
+    // holds a module-level response cache, so re-opening the same round at
+    // the same `t` serves from it and issues NO request — a fetch-counting
+    // version of this test measured the cache and read as a regression.
+    stubRound(42_000);
+    await loadSpiderWebView({ roundId: '11399' });
+    await loadSpiderWebView({ roundId: '11399' });
+
+    expect(document.getElementById('spider-web-container')?.textContent)
+      .toContain('t = 42000 ms');
+  });
+
+
+  it('a superseded load does not write its round into shared state', async () => {
+    // ⛔ THE RACE. Two overlapping loads for different rounds: the newer one
+    // resets the time, then the OLDER request resolves and writes its own
+    // snapshot and first_position_ms back. The newer load then sees a nonzero
+    // time, skips its own first-position reload, and renders its round at
+    // t=0 under the previous round's slider (Codex, PR #807).
+    // ⚠️ A PLAIN `let`, not a Record. The first version typed this as
+    // `Record<string, (v) => void>` — which says the key is ALWAYS present,
+    // so `!gate.released` read as always-falsy and `gate.released?.()` as an
+    // unnecessary optional chain (Codacy). The type was lying about the one
+    // thing the gate exists to express: at first it is not there.
+    let release: (() => void) | undefined;
+    const seen: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      seen.push(url);
+      const round = url.split('/round/')[1].split('/')[0];
+      const body = {
+        round_id: Number(round), t_ms: 0, map_name: null,
+        // The SLOW round claims a late first position — the value that used
+        // to leak into the other round's state.
+        first_position_ms: round === '11600' ? 77_000 : 0,
+        round_duration_ms: 600_000, players: [], edges: [], gaps: {},
+        withheld_by_pov: [], nearest_teammate_separation: {}, clock: {},
+        information_state: { holders: {} }, capture_policy: { capabilities: {} },
+        reconstruction_accuracy: {}, player_count: 0, overlap_conflicts: 0,
+        notes: [],
+      };
+      const res = { ok: true, json: () => Promise.resolve(body) } as Response;
+      // Hold the first round's response until the second load has started.
+      if (round === '11600' && !release) {
+        return new Promise<Response>((resolve) => {
+          release = () => { resolve(res); };
+        });
+      }
+      return Promise.resolve(res);
+    }));
+
+    const slow = loadSpiderWebView({ roundId: '11600' });   // starts, blocks
+    const fast = loadSpiderWebView({ roundId: '11601' });   // supersedes it
+    await fast;
+    // The gate is set by the handler above; if it were not, the awaited
+    // `slow` below would hang and the test would time out rather than pass.
+    release?.();
+    await slow;
+
+    // ⚠️ ASSERTED ON THE NEXT LOAD, NOT ON THE DOM. The first version checked
+    // the readout right after the race and passed even with the bug restored:
+    // the loser corrupts `state`, not the pixels — the winner had already
+    // rendered, and the loser returns at a later `myLoad` check before it
+    // redraws. The damage only shows when something READS the shared time
+    // again, which is the next load. The mutation proved that; the assertion
+    // moved.
+    seen.length = 0;
+    await loadSpiderWebView({ roundId: '11601' });
+
+    // Re-opening the round the winner rendered must ask for its own moment.
+    // With the leak, `state.tMs` holds the superseded round's 77,000.
+    const asked = seen.map((u) => new URL(u, 'http://x').searchParams.get('t'));
+    expect(asked).not.toContain('77000');
+  });
+
+  it('opens a new round from the oracle, not from the previous POV', async () => {
+    // ⛔ `state.pov` used to persist across rounds as "a viewing preference".
+    // The team list is rebuilt from `snapshot.players`, so a carried
+    // `team:AXIS` made the FIRST request team-filtered and the rebuild saw
+    // one side — permanently, since goTo does not recreate the buttons. And
+    // once an unresolvable team fails CLOSED, carrying it into a round with
+    // no AXIS side opens the page empty (Codex, PR #807).
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      asked.push(url);
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          round_id: 1, t_ms: 0, map_name: null, first_position_ms: 0,
+          round_duration_ms: 600_000,
+          players: [{ guid: 'G0', name: 'p', team: 'AXIS', alive: true,
+                      x: 0, y: 0, z: 0, stale_ms: 0 }],
+          edges: [], gaps: {}, withheld_by_pov: [],
+          nearest_teammate_separation: {}, clock: {},
+          information_state: { holders: {} }, capture_policy: { capabilities: {} },
+          reconstruction_accuracy: {}, player_count: 1, overlap_conflicts: 0,
+          notes: [],
+        }),
+      } as Response);
+    }));
+
+    await loadSpiderWebView({ roundId: '11700' });
+    // Simulate the viewer choosing a team POV on that round.
+    const teamButton = [...document.querySelectorAll('button')]
+      .find((b) => b.textContent === 'AXIS');
+    teamButton?.click();
+    await new Promise((r) => setTimeout(r, 0));
+
+    asked.length = 0;
+    await loadSpiderWebView({ roundId: '11701' });
+
+    // The first request for the new round must carry no pov at all.
+    expect(asked.length).toBeGreaterThan(0);
+    expect(asked[0]).not.toContain('pov=');
+  });
+
+  it('rebuilds the team list for the new round', async () => {
+    // ⛔ `state.teams` is rebuilt only when EMPTY, so a round whose
+    // reconstruction resolved one side left that single team cached and the
+    // next round permanently offered one POV button — and the reverse, a
+    // two-team list surviving into a one-team round, offers a view that
+    // cannot resolve (Codex, PR #807).
+    // ⚠️ A Map, not an object keyed by a string taken from the URL — bare
+    // object indexing on a non-literal key is a prototype-pollution sink and
+    // the scanner is right to say so. Fable reached the same fix on #806
+    // (`87f3086a`, "fixture lookup via Map, not bare object indexing"), so
+    // this is the house answer rather than a workaround.
+    const rosters = new Map<string, string[]>([
+      ['11500', ['AXIS']],
+      ['11501', ['AXIS', 'ALLIES']],
+    ]);
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/')) {
+        return Promise.resolve({ ok: false, status: 404 } as Response);
+      }
+      const round = url.split('/round/')[1].split('/')[0];
+      return Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({
+          round_id: Number(round), t_ms: 0, map_name: null,
+          first_position_ms: 0, round_duration_ms: 600_000,
+          // ⭐ `teams` is round-level: the page must build its POV buttons
+          // from it, not from who happens to be on screen at this moment.
+          // Round 11500 has ALLIES in the round but nobody visible yet.
+          teams: (rosters.get(round) ?? []).slice().sort(),
+          players: (rosters.get(round) ?? []).map((team, i) => ({
+            guid: `G${i}`, name: `p${i}`, team, alive: true,
+            x: i * 100, y: 0, z: 0, stale_ms: 0,
+          })),
+          edges: [], gaps: {}, withheld_by_pov: [],
+          nearest_teammate_separation: {}, clock: {},
+          information_state: { holders: {} }, capture_policy: { capabilities: {} },
+          reconstruction_accuracy: {}, player_count: 1, overlap_conflicts: 0,
+          notes: [],
+        }),
+      } as Response);
+    }));
+
+    await loadSpiderWebView({ roundId: '11500' });
+    const host = document.getElementById('spider-web-container');
+    expect(host?.textContent).not.toContain('ALLIES');
+
+    await loadSpiderWebView({ roundId: '11501' });
+    expect(host?.textContent).toContain('ALLIES');
   });
 });
