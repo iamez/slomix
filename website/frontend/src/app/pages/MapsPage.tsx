@@ -15,15 +15,20 @@ import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../c
  * middle.
  */
 
+// avg_duration 0 = unknown (endpoint sentinel) — an unknown must never
+// outrank a measured time, so 'fastest' pushes it to the end.
+const knownDuration = (m: MapStatsRow) => (m.avg_duration > 0 ? m.avg_duration : Infinity);
+
 const SORTS: { key: string; label: string; cmp: (a: MapStatsRow, b: MapStatsRow) => number }[] = [
   { key: 'most-played', label: 'Most played', cmp: (a, b) => b.matches_played - a.matches_played },
-  { key: 'fastest', label: 'Fastest avg', cmp: (a, b) => a.avg_duration - b.avg_duration },
+  { key: 'fastest', label: 'Fastest avg', cmp: (a, b) => knownDuration(a) - knownDuration(b) },
   { key: 'longest', label: 'Longest avg', cmp: (a, b) => b.avg_duration - a.avg_duration },
-  { key: 'last-played', label: 'Last played', cmp: (a, b) => b.last_played.localeCompare(a.last_played) },
+  { key: 'last-played', label: 'Last played', cmp: (a, b) => (b.last_played ?? '').localeCompare(a.last_played ?? '') },
   { key: 'grenade-spam', label: 'Nade spam', cmp: (a, b) => b.grenade_kills - a.grenade_kills },
 ];
 
 function fmtSeconds(s: number): string {
+  if (s <= 0) return '—';
   const m = Math.floor(s / 60);
   return `${m}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 }
@@ -51,7 +56,7 @@ function Summary({ maps }: { maps: MapStatsRow[] }) {
   const by = (cmp: (a: MapStatsRow, b: MapStatsRow) => number) => [...maps].sort(cmp)[0];
   const cards = [
     { k: 'most played', m: by((a, b) => b.matches_played - a.matches_played), v: (m: MapStatsRow) => `${m.matches_played} matches` },
-    { k: 'fastest avg', m: by((a, b) => a.avg_duration - b.avg_duration), v: (m: MapStatsRow) => fmtSeconds(m.avg_duration) },
+    { k: 'fastest avg', m: by((a, b) => knownDuration(a) - knownDuration(b)), v: (m: MapStatsRow) => fmtSeconds(m.avg_duration) },
     { k: 'longest avg', m: by((a, b) => b.avg_duration - a.avg_duration), v: (m: MapStatsRow) => fmtSeconds(m.avg_duration) },
     { k: 'nade spam', m: by((a, b) => b.grenade_kills - a.grenade_kills), v: (m: MapStatsRow) => `${m.grenade_kills.toLocaleString('en-US')} nades` },
   ];
@@ -154,7 +159,7 @@ export function MapsPage() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
                     {[
                       ['avg time', fmtSeconds(m.avg_duration)],
-                      ['last played', m.last_played],
+                      ['last played', m.last_played ?? '—'],
                       ['players', String(m.unique_players)],
                       ['avg dpm', m.avg_dpm.toFixed(1)],
                     ].map(([k, v]) => (

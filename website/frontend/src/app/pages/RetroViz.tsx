@@ -26,9 +26,9 @@ function winnerLabel(team: number | null): { text: string; color: string } {
 }
 
 function fmtDuration(s: number | null): string {
-  // A historical round without a webhook measurement has NO duration —
-  // arithmetic on null would show a false 0:00.
-  if (s == null) return 'unknown';
+  // A round without a measurement has NO duration — null, and ALSO the
+  // stored sentinel 0 (test_round_duration_truth defines zero as missing).
+  if (s == null || s <= 0) return 'unknown';
   return `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 }
 

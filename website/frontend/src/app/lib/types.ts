@@ -493,8 +493,12 @@ export interface MapStatsRow {
   axis_wins: number;
   allies_win_rate: number | null;
   axis_win_rate: number | null;
+  /** 0 is the endpoint's sentinel for "no parseable duration", not a
+   * measured zero — keep it out of fastest-map math. */
   avg_duration: number;
-  last_played: string;
+  /** null when every valid row for the map has a null round_date — a
+   * supported historical state (records_maps MAX() passes it through). */
+  last_played: string | null;
   total_kills: number;
   avg_dpm: number;
   unique_players: number;

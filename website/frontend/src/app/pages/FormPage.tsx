@@ -39,10 +39,11 @@ function sparkPath(values: number[], w: number, h: number, pad: number): string 
 function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; tone: 'up' | 'down' | 'new' }) {
   const color = tone === 'up' ? 'var(--color-pos)' : tone === 'down' ? 'var(--color-neg)' : 'var(--color-text-400)';
   const flat = row.delta_pct === 0;
-  // A null baseline is a MISSING one (no prior sessions) — the legacy view
-  // omitted the comparison rather than printing "vs null".
+  // A null value is a MISSING one — the legacy view omitted the comparison
+  // rather than printing "vs null"; likewise a newcomer's null composite
+  // must not read as "—% vs 100%".
   const baseline = metric === 'overall'
-    ? `${row.latest ?? '—'}% vs 100%`
+    ? row.latest != null ? `${row.latest}% vs 100%` : '—'
     : row.baseline != null
       ? `${row.latest ?? '—'} vs ${row.baseline}`
       : `${row.latest ?? '—'}`;
