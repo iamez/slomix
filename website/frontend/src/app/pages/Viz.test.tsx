@@ -39,6 +39,17 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 }
 
+/** fixtureFetch with per-path replacements for shape-variant tests. */
+function overrideFetch(overrides: Record<string, unknown>) {
+  return (input: RequestInfo | URL): Promise<Response> => {
+    const pathname = String(input).split('?')[0];
+    if (pathname in overrides) {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(overrides[pathname]) } as Response);
+    }
+    return fixtureFetch(input);
+  };
+}
+
 function renderPage(el: React.ReactElement) {
   const client = makeQueryClient();
   client.setDefaultOptions({ queries: { retry: false } });
@@ -75,6 +86,27 @@ describe('MapsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Nade spam' }));
     expect(fetchSpy.mock.calls.length).toBe(calls);
   });
+
+  it('an undecided map shows no win bar even though the endpoint says 50/50', async () => {
+    // records_maps serializes BOTH rates as 50 for a map no side ever won —
+    // the win counts are the only honest detector.
+    const undecided = {
+      ...(maps as Record<string, unknown>[])[0],
+      name: 'sw_nowins', matches_played: 1, allies_wins: 0, axis_wins: 0,
+      allies_win_rate: 50, axis_win_rate: 50,
+    };
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/stats/maps': [...(maps as unknown[]), undecided] })));
+    renderPage(<MapsPage />);
+    await waitFor(() => expect(screen.getAllByText('sw nowins').length).toBeGreaterThan(0));
+    expect(screen.getByText(/no decided maps yet/)).toBeInTheDocument();
+  });
+
+  it('a 200 with status:"error" from segments reads as an outage, not an empty record book', async () => {
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/records/maps/segments': { status: 'error', records: [] } })));
+    renderPage(<MapsPage />);
+    await waitFor(() => expect(screen.getByText('objective records: unavailable')).toBeInTheDocument());
+    expect(screen.queryByText(/no objective records yet/)).toBeNull();
+  });
 });
 
 describe('WeaponsPage', () => {
@@ -100,6 +132,18 @@ describe('WeaponsPage', () => {
       expect(screen.getByRole('button', { name: c })).toBeInTheDocument();
     }
   });
+
+  it('airstrike and artillery are Support, so the filter is not empty', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<WeaponsPage />);
+    await waitFor(() => expect(screen.getAllByText('Mp40').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: 'support' }));
+    // Recorded corpus: exactly Airstrike + Artillery carry the fieldops calls.
+    expect(screen.getByText(/^2 weapons/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'explosive' }));
+    // Grenade, Grenadelauncher, Landmine, Dynamite — the calls left with Support.
+    expect(screen.getByText(/^4 weapons/)).toBeInTheDocument();
+  });
 });
 
 describe('FormPage', () => {
@@ -124,6 +168,45 @@ describe('FormPage', () => {
       expect(fetchSpy.mock.calls.map((c) => String(c[0])).some((u) => u.includes('metric=acc'))).toBe(true);
     });
   });
+
+  it('the Overall tab renders each mover\'s breakdown contributions', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<FormPage />);
+    await waitFor(() => expect(screen.getByText('#smetarski.proner')).toBeInTheDocument());
+    // Recorded breakdown[0] of the top mover: dpm +14.5%.
+    expect(screen.getAllByText(/damage \/ min \+14\.5%/).length).toBeGreaterThan(0);
+  });
+
+  it('a sick-leave alternate never reads as a first-night player', async () => {
+    const m = movers as { new_players: Record<string, unknown>[] };
+    const alt = {
+      ...m.new_players[0], guid: 'ALT00001', name: 'ownator',
+      sick_leave: { primary_name: 'carniee', active: true },
+    };
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({
+      '/api/skill/movers': { ...(movers as object), new_players: [...m.new_players, alt] },
+    })));
+    renderPage(<FormPage />);
+    await waitFor(() => expect(screen.getByText(/ownator · alt of carniee/)).toBeInTheDocument());
+    expect(screen.getByText('on sick leave')).toBeInTheDocument();
+    // The genuine newcomer still gets the label — exactly once.
+    expect(screen.getAllByText('first night').length).toBeGreaterThan(0);
+  });
+
+  it('a missing baseline on a metric tab renders only the latest value', async () => {
+    const m = movers as { movers_up: Record<string, unknown>[] };
+    const fresh = { ...m.movers_up[0], guid: 'NEW00001', name: 'freshEye', latest: 400, baseline: null, delta_pct: null };
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({
+      '/api/skill/movers': { ...(movers as object), movers_up: [...m.movers_up, fresh] },
+    })));
+    renderPage(<FormPage />);
+    await waitFor(() => expect(screen.getByText('freshEye')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Accuracy' }));
+    await waitFor(() => expect(screen.getByText('freshEye')).toBeInTheDocument());
+    // The legacy view omitted the comparison — never "400 vs null".
+    expect(screen.queryByText(/vs null/)).toBeNull();
+    expect(screen.getByText('400')).toBeInTheDocument();
+  });
 });
 
 describe('RetroViz', () => {
@@ -140,5 +223,22 @@ describe('RetroViz', () => {
     expect(screen.getByText('11:54')).toBeInTheDocument();
     // Damage table sorted by damage_given — vid (4116) present.
     expect(screen.getByText('4,116')).toBeInTheDocument();
+    // Highlight cards from the recorded keyed object (mvp/most_kills/most_damage).
+    expect(screen.getByText('mvp')).toBeInTheDocument();
+    expect(screen.getByText('354.3 dpm')).toBeInTheDocument();
+    expect(screen.getByText('26 kills')).toBeInTheDocument();
+  });
+
+  it('a round without a measured duration says unknown, not 0:00', async () => {
+    const noDuration = { ...(roundViz as object), duration_seconds: null };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (/^\/api\/rounds\/\d+\/viz$/.test(String(input).split('?')[0])) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(noDuration) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderPage(<RetroViz />);
+    await waitFor(() => expect(screen.getByText('unknown')).toBeInTheDocument());
+    expect(screen.queryByText('0:00')).toBeNull();
   });
 });

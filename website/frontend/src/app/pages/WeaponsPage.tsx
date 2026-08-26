@@ -23,8 +23,11 @@ const WEAPON_CATEGORIES: Record<string, string> = {
   panzerfaust: 'heavy', mortar: 'heavy', flamethrower: 'heavy', mg42: 'heavy',
   luger: 'pistol', colt: 'pistol', akimbo: 'pistol', silencer: 'pistol',
   knife: 'melee',
-  grenade: 'explosive', dynamite: 'explosive', landmine: 'explosive', satchel: 'explosive', airstrike: 'explosive', artillery: 'explosive',
-  syringe: 'support', smoke: 'support',
+  grenade: 'explosive', dynamite: 'explosive', landmine: 'explosive', satchel: 'explosive',
+  // Airstrike + Artillery are SUPPORT — the legacy and modern views both
+  // class the fieldops calls there; under 'explosive' the Support filter
+  // came up empty for the whole recorded corpus.
+  airstrike: 'support', artillery: 'support', syringe: 'support', smoke: 'support',
 };
 const CATEGORIES = ['all', 'smg', 'rifle', 'heavy', 'pistol', 'melee', 'explosive', 'support', 'other'];
 const PERIODS = ['all', 'season', '30d', '7d'];
