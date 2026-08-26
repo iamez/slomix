@@ -341,4 +341,33 @@ describe('Landing', () => {
     renderLanding();
     await waitFor(() => expect(screen.getByText(/figures: unavailable/)).toBeInTheDocument());
   });
+
+  it('an undateable stale report is not a green dot with a bare count', async () => {
+    // ⛔ The count alone drove the dot, and the qualifier was gated on a
+    // NUMERIC age — so `status: "stale"` with `age_seconds: null` (the
+    // backend cannot read its own timestamp) rendered green beside a bare
+    // "3 in voice" (Codex on #808). Stale is the fact; the age is a detail
+    // it may not have.
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/voice-activity/current') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({
+            status: 'stale',
+            reason: 'the report carries no usable timestamp',
+            updated_at: null, age_seconds: null,
+            total_count: 3,
+            members: [{ name: 'ciril', channel_name: 'Gaming' }],
+            channels: [],
+          }),
+        } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderLanding();
+
+    await waitFor(() => expect(screen.getByText(/3 in voice/)).toBeInTheDocument());
+    expect(screen.getByText(/age unknown/)).toBeInTheDocument();
+  });
 });
