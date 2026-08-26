@@ -42,12 +42,24 @@ fatal to a relational layer:
    lives, never looking ahead (§4.4.1). When it cannot be derived honestly the
    answer is null plus a machine-readable reason, never a clamped guess.
 
-⚠️ CAPTURE POLICY IS UNKNOWN FOR EVERY HISTORICAL ROUND, and that is the normal
-case, not an edge case. `proximity_processed_files.capabilities` is NULL in all
-828 rows and the per-file `position_sample_interval` is parsed but never
-persisted. So `mode = "unknown"` and the staleness tolerance has no default the
-data can justify — the caller supplies one or gets everything back with its
-staleness stated. Absence of a capability is `unavailable`, never zero (§6.2).
+⚠️ CAPTURE POLICY IS PARTLY KNOWN, AND NEVER DECLARED. This paragraph used to
+say `proximity_processed_files.capabilities` was NULL in all 828 rows. That
+stopped being true the day #795 landed and the sentence stayed — measured
+today, **798 of 838 files carry a manifest** (back to 2026-03-24) and 40 do
+not, the most recent of those from 2026-08-23, so a missing manifest is not
+simply "an old file".
+
+⭐ And every one of the 798 has `source = "sections_observed"` — ZERO are
+`declared`. The manifest is INFERRED from which sections produced rows, which
+is why a capability has three states and not two: a section with no rows means
+"nothing happened" or "the sensor was off", and the file cannot tell you which.
+That is also the whole of A6 that exists; per-sensor schedule, interval,
+integration rule and completeness are still absent (spec §12, A6).
+
+So `mode` is `"unknown"` for a real minority rather than for everything, the
+staleness tolerance still has no default the data can justify — the caller
+supplies one or gets everything back with its staleness stated — and absence
+of a capability is `unavailable`, never zero (§6.2).
 """
 
 from __future__ import annotations
@@ -625,14 +637,24 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
         JOIN proximity_processed_files f
           ON split_part(f.round_key, '|', 4) = r.round_start_unix::text
         WHERE r.id = $1
-          AND f.capabilities IS NOT NULL
+          -- ⛔ NULL manifests are SELECTED, not filtered out. Excluding them
+          -- made a file with no manifest invisible to the agreement checks
+          -- below, so one file declaring 200 ms was "unanimous" while its
+          -- sibling had declared nothing at all (Codex, PR #807).
           AND r.round_start_unix IS NOT NULL
           AND r.round_start_unix > 0
         ORDER BY f.filename
     """, (round_id,))
     manifests: list[dict] = []
+    #: Files this round resolved to that carry no usable manifest — NULL, or
+    #: text that will not parse. They cannot AGREE about anything, so they
+    #: block unanimity rather than being quietly absent from the vote.
+    unusable = 0
     for row in rows:
         value = row[0]
+        if value is None:
+            unusable += 1
+            continue
         if isinstance(value, str):
             # A value that will not parse is not a manifest. Dropping it leaves
             # the round `unknown`, which is the truth about a round we cannot
@@ -645,9 +667,12 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
                 logger.warning(
                     "round %s: unparseable capabilities manifest, ignoring", round_id
                 )
+                unusable += 1
                 continue
         if isinstance(value, dict):
             manifests.append(value)
+        else:
+            unusable += 1
     if not manifests:
         return CapturePolicy()
 
@@ -671,14 +696,54 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
                 capabilities[flag] = UNKNOWN_STATE
                 conflicting_flags += 1
 
+    # ⛔ A FILE WITH NO USABLE MANIFEST DOWNGRADES EVERY FLAG, not just the
+    # cadence. `unusable` was consulted only when deriving the interval, so a
+    # round with one valid manifest and one NULL sibling still published
+    # `shot_fired: enabled` — and `apply_capability` then treated the channel
+    # as PROVEN for the whole round on the word of one of two files
+    # (Codex, PR #807).
+    #
+    # The rule this module states everywhere else: a file that cannot speak
+    # does not agree. It applies to the flags exactly as it applies to the
+    # cadence, and `unknown` is not `disabled` — it is "we cannot tell".
+    if unusable:
+        capabilities = dict.fromkeys(capabilities, UNKNOWN_STATE)
+
     # The cadence is a fact about the file, so two files disagreeing about it
     # means we do not know this round's cadence — not that one of them wins.
-    intervals = {
-        m.get("position_sample_interval_ms")
-        for m in manifests
-        if m.get("position_sample_interval_ms")
-    }
-    interval = intervals.pop() if len(intervals) == 1 else None
+    #
+    # ⛔ AND EVERY MANIFEST MUST SUPPLY IT. The comprehension used to FILTER
+    # OUT the files that declared no cadence, so one file saying 200 and
+    # another saying nothing produced "200, known" — absence counted as
+    # agreement. That matters more now that the velocity bound is derived from
+    # this number: a round would get `2 * 200` applied to samples whose actual
+    # cadence was never declared (Codex, PR #807).
+    #
+    # ⛔ AND A FILE WITH NO MANIFEST AT ALL COUNTS AGAINST UNANIMITY. It never
+    # reached `manifests`, so `all(declared)` could not see it — the check was
+    # unanimous among the files that happened to have something to say
+    # (Codex, PR #807). `unusable` puts them back in the denominator.
+    #
+    # ⛔ AND "TRUTHY" IS NOT "VALID". `all(declared)` accepted anything that
+    # is not falsy: a negative integer became a negative velocity bound that
+    # rejects every causal pair, a string was multiplied into another string
+    # and blew up on a later comparison, and an unhashable value raised inside
+    # `set()` before anyone could look at it (Codex, PR #807). A manifest is
+    # not trusted input — it is a file the tracker wrote.
+    declared = [
+        m.get("position_sample_interval_ms") for m in manifests
+    ]
+    valid = [
+        d for d in declared
+        if isinstance(d, int) and not isinstance(d, bool) and d > 0
+    ]
+    interval = (
+        valid[0]
+        if not unusable
+        and len(valid) == len(declared) == len(manifests)
+        and len(set(valid)) == 1
+        else None
+    )
     sources = {m.get("source") for m in manifests if m.get("source")}
     # Same rule for every scalar, `manifest_version` included: one answer or
     # none. Taking this one from `head` while the others fell back to unknown
@@ -743,6 +808,174 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
         clock[team] = payload
     return clock
 
+
+#: What a holder may read off their OWN team's clock.
+#:
+#: An allowlist, for the same reason the enemy entry is one: everything else
+#: `clock_validation_payload` carries is a whole-round aggregate that ignores
+#: `t_ms`, and a field added to it tomorrow must fail this boundary rather
+#: than cross it by default.
+_OWN_CLOCK_FIELDS = frozenset({
+    "interval_ms", "offset_ms", "phase_ms", "time_to_next_wave_ms",
+})
+
+#: What a POV-restricted own-team clock reports instead of a validation grade.
+#:
+#: ⛔ `status` LEFT THE ALLOWLIST. `validated` is not a fact about the game —
+#: it is `validate_round_clocks` reporting that the FULL ROUND produced at
+#: least `MIN_VALIDATION_LANDINGS` clusters. Publishing it at t=30s told a
+#: holder something about how often their side would still spawn (Codex, PR
+#: #807). The grade of our reconstruction is analyst metadata and belongs to
+#: `pov=world`.
+#:
+#: ⚠️ AND THE RESIDUAL IS NAMED RATHER THAN DENIED. `phase_ms` is computed
+#: only for a validated clock, so its PRESENCE still implies the validation
+#: passed. That is a consequence of publishing the HUD at all — and the HUD is
+#: precisely what §6.3 permits a holder to use once §5.3 validation has run.
+#: A player saw their own reinforcement countdown on screen; they did not see
+#: our verdict about it.
+_OWN_CLOCK_POV_STATUS = "own_hud"
+
+
+def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
+    """The opposing team's clock is an oracle diagnostic, so a team view loses it.
+
+    §6.3: "The holder's enemy clock begins `unknown`; it may become a phase
+    distribution only after a timestamped cue that this recipient could
+    observe... With no recipient-specific cue, exact enemy phase and
+    reachability remain oracle-only." §5.6 says the same from the other end.
+
+    We have no such cue: no capability-proven sight of an enemy wave, no
+    captured communication. So the enemy clock is not ours to publish here.
+
+    ⛔ NAMED, NOT DELETED — the same rule `withheld_by_pov` follows. A missing
+    key reads as "this team had no clock", which is a different and false
+    statement. `interval_ms` stays because §6.3 itself treats the interval as
+    known ("constrains phase modulo the KNOWN interval"); what a cue would buy
+    you is the phase, and the phase is what goes.
+
+    ⭐⭐ `unknown_to_this_pov` IS NOT A SIXTH QUALITY STATE. The other five —
+    `validated`, `internally_consistent_unvalidated`, `validation_failed`,
+    `inconsistent`, `unavailable` — all answer "how good is this measurement".
+    This one answers "who is allowed to see it", which is a different axis
+    entirely. A consumer that folds it into a switch over measurement quality
+    will read a deliberate boundary as a degraded reconstruction (Fable's
+    review of this PR). The renderer keeps them apart: WITHHELD is its own
+    badge, not a shade of UNVALIDATED.
+    """
+    if not pov_team:
+        return clock
+    own = pov_team["team"]
+    out: dict[str, dict] = {}
+    for team, entry in clock.items():
+        if team == own:
+            # ⛔ THE OWN ENTRY LOSES ITS FULL-ROUND DIAGNOSTICS TOO.
+            #
+            # `load_round_clock` builds `timing_observations`,
+            # `landing_clusters`, `spawn_callbacks`,
+            # `post_revive_spawn_callbacks`, `passing_landing_clusters` and
+            # `pass_ratio` from every life, revive and timing row in the
+            # round, without ever looking at `t_ms`. I stripped them from the
+            # ENEMY entry and left them on the holder's own — so a snapshot at
+            # 30 seconds still told a player how many times their side would
+            # die, spawn and be revived for the rest of the match
+            # (Codex, PR #807).
+            #
+            # ⭐ What survives is what the holder is entitled to and what is
+            # CAUSAL: the status, the interval, and the phase/countdown, which
+            # `wave_position` computes AT `t_ms`. Those are the HUD.
+            if not isinstance(entry, dict):
+                out[team] = entry
+                continue
+            # ⛔ THERE IS ONLY A HUD IF THERE IS A COUNTDOWN. `own_hud` was
+            # applied unconditionally, so an unavailable, inconsistent or
+            # merely internally-consistent clock — for which
+            # `load_round_clock` deliberately publishes NO phase — was
+            # relabelled as a HUD that had never been reconstructed, while
+            # keeping the candidate `offset_ms` the protocol refused to turn
+            # into a phase (Codex, PR #807).
+            if entry.get("phase_ms") is None:
+                out[team] = {
+                    "status": "unknown_to_this_pov",
+                    "interval_ms": entry.get("interval_ms"),
+                    "reason": (
+                        "no reinforcement countdown was reconstructed for this "
+                        "side; why is a full-round verdict and stays in the "
+                        "oracle view (spec §5.3)"
+                    ),
+                }
+                continue
+            kept = {k: v for k, v in entry.items() if k in _OWN_CLOCK_FIELDS}
+            kept["status"] = _OWN_CLOCK_POV_STATUS
+            kept["reason"] = (
+                "this is the holder's own reinforcement HUD; the grade of our "
+                "reconstruction is a full-round verdict and stays in the "
+                "oracle view (spec §5.3, §6.3)"
+            )
+            out[team] = kept
+            continue
+        # ⛔ A NON-DICT ENTRY IS WITHHELD TOO. The first version copied it
+        # verbatim on the grounds that `load_round_clock` only ever builds
+        # dicts — true today, and a fail-OPEN default: whatever a future shape
+        # turned out to carry would cross the boundary because we could not
+        # read it. Not being able to inspect something is the last reason to
+        # publish it.
+        if not isinstance(entry, dict):
+            out[team] = {
+                "status": "unknown_to_this_pov",
+                "reason": "the enemy clock is oracle truth (spec §5.6, §6.3)",
+            }
+            continue
+        # ⛔ BUILT FROM AN ALLOWLIST, NOT STRIPPED WITH A DENYLIST.
+        #
+        # The first version removed `phase_ms`, `time_to_next_wave_ms` and
+        # `offset_ms` and copied everything else — which left the whole
+        # validation diagnostic in place: `timing_observations`,
+        # `landing_clusters`, `spawn_callbacks`,
+        # `post_revive_spawn_callbacks`, `passing_landing_clusters`,
+        # `pass_ratio`. Those are computed over the ENTIRE round and never
+        # look at `t_ms`, so a snapshot at 30 seconds handed a team the number
+        # of enemy spawn waves and revives for the rest of the match —
+        # measured identical at t=30,000 and t=600,000 — inside an entry
+        # labelled `unknown_to_this_pov` (Codex, PR #807).
+        #
+        # A denylist is a list of the leaks somebody has already thought of.
+        # Anything added to `clock_validation_payload` later would cross this
+        # boundary by default; with an allowlist it cannot.
+        out[team] = {
+            "status": "unknown_to_this_pov",
+            # §6.3 treats the interval as known ("constrains phase modulo the
+            # KNOWN interval") — it is a server setting, not a measurement of
+            # what the enemy did this round.
+            "interval_ms": entry.get("interval_ms"),
+            "reason": (
+                "the enemy reinforcement phase is oracle truth: this team had "
+                "no observed cue to infer it from (spec §5.6, §6.3)"
+            ),
+        }
+    return out
+
+
+#: How many capture intervals a causal velocity pair may span.
+#:
+#: §4.4.1 requires `0 < dt <= velocity_max_dt_ms`, and this bound was simply
+#: never supplied: the router did not pass one, so `max_dt_ms` was always None
+#: and a velocity could be derived across an arbitrarily large gap inside one
+#: life. Direction from two samples 30 seconds apart is not a direction.
+#:
+#: ⛔ THE BOUND COMES FROM THE ROUND, NOT FROM THIS NUMBER. Measured on rounds
+#: whose manifest declares a 200 ms interval: of 410,832 consecutive sample
+#: gaps, **zero exceed 200 ms** — the declared interval IS the observed
+#: maximum. The multiplier only leaves room for one dropped sample.
+#:
+#: ⚠️ AND THE FIRST MEASUREMENT SAID SOMETHING ELSE. Sampling the most RECENT
+#: tracks gave max = 200 ms across 503,552 gaps, which would have justified
+#: hard-coding 200. The second measurement, by a different path (oldest tracks
+#: first), found max = 30,595 ms and 20.2% of gaps above 200 — because older
+#: rounds were captured at 500 ms. A global constant would have declared the
+#: entire older regime unusable. Rounds without a manifest therefore get NO
+#: bound rather than an invented one, and the snapshot publishes which.
+VELOCITY_MAX_DT_INTERVALS = 2
 
 #: How far a shot carries, in game units — DERIVED FROM THE ENGINE, not chosen.
 #:
@@ -936,7 +1169,53 @@ def _ensure_attackers(value) -> list:
 _TRACK_GUID, _TRACK_TEAM = 0, 2
 
 
-def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
+def _requests_a_team(pov: str | None) -> bool:
+    """Did the caller ASK for a team view, whether or not one could be built?
+
+    ⛔ `_pov_team` returns None for three different situations and its own
+    docstring says "the caller distinguishes those". The caller did not. A
+    `team:` request naming a team nobody played on — a typo, a renamed side,
+    a round whose roster is thinner than the caller expected — landed in the
+    same branch as `pov=world` and got the ORACLE: every position, both
+    clocks, nothing withheld (Codex, PR #807).
+
+    That is the failure direction that matters. "We could not establish the
+    team you asked for" must never resolve to "here is everything".
+    """
+    return bool(pov) and pov.lower().startswith("team:")
+
+
+def _roster_at(tracks: dict[str, list], t_ms: int) -> dict[str, str]:
+    """Who was on which side AT `t_ms`, not at the end of the round.
+
+    ⛔ A FLAT DICT COMPREHENSION GETS THIS WRONG. Rows arrive ordered by spawn
+    time, so `{guid: team for ...}` keeps each player's LAST side — and a
+    player who switched teams mid-round then resolved, even for an early
+    snapshot, to the side they would join later. A `pov=<guid>` request before
+    the switch was handed the FUTURE side's positions and clock while
+    withholding the player's actual teammates (Codex, PR #807).
+
+    `select_life` already answers "which life was this player living at t",
+    including the fallback to the most recently ended one, so the side comes
+    from that life rather than from row order.
+    """
+    roster: dict[str, str] = {}
+    for guid, lives in (tracks or {}).items():
+        chosen, _alive, _conflict = select_life(lives, t_ms)
+        if chosen is None:
+            # ⛔ BEFORE THEIR FIRST LIFE THEY ARE ON NO SIDE. The fallback used
+            # to hand back the earliest life's team, so a late joiner resolved
+            # to their FUTURE side: `_pov_team` treated the request as
+            # resolved and returned that side's positions and exact friendly
+            # clock, while `information_state.pov_unavailable` said the holder
+            # had no reconstructed state (Codex, PR #807). Absent from the
+            # roster means unresolved, and unresolved fails closed.
+            continue
+        roster[guid] = str(chosen[_TRACK_TEAM] or "").upper()
+    return roster
+
+
+def _pov_team(pov: str | None, tracks: dict[str, list], t_ms: int) -> dict | None:
     """Resolve `pov=team:AXIS` into that team's members, or None.
 
     Returns None for the oracle view, for a single-player pov, and for a team
@@ -951,17 +1230,52 @@ def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
     the moment the data thins is not a guarantee. The tracks say who played on
     which side whether or not they have a state at `t`.
     """
-    if not pov or not pov.lower().startswith("team:"):
+    if not pov or pov.lower() == "world":
         return None
-    wanted = pov[5:].strip().upper()
-    roster = {
-        t[_TRACK_GUID]: str(t[_TRACK_TEAM] or "").upper()
-        for lives in (tracks or {}).values() for t in lives
-    }
+    roster = _roster_at(tracks, t_ms)
+    if pov.lower().startswith("team:"):
+        wanted = pov[5:].strip().upper()
+    else:
+        # ⛔ A PLAYER POV IS A TEAM POV, RESOLVED THROUGH ITS HOLDER.
+        #
+        # It used to fall through to None — the oracle — so `pov=<guid>` was
+        # handed every enemy position and both clocks whole, while
+        # `pov=team:AXIS` was denied them. The MORE specific view got MORE,
+        # and the withholding was bypassable by asking with a player id
+        # instead of a team name (Codex, PR #807).
+        #
+        # The holder's own team is what they may see: a player knows where
+        # their teammates are and their own reinforcement timer, and neither
+        # for the other side.
+        wanted = roster.get(pov, "")
+        if not wanted:
+            return None
     members = {g for g, team in roster.items() if team == wanted}
     if not members:
         return None
-    return {"team": wanted, "members": members, "all_guids": set(roster)}
+    # ⛔ `all_guids` IS THE WHOLE UNIVERSE, not the roster at `t`. `_roster_at`
+    # drops players who have not spawned yet, and `withheld` is derived from
+    # this set — so a not-yet-joined participant fell out of BOTH and then
+    # reappeared in `gaps` as `no_life_at_or_before_t`, revealing a future
+    # participant to a team that could not yet know of them (Codex, PR #807).
+    #
+    # Current membership decides what you SEE; the universe decides what must
+    # be WITHHELD. They are different questions and this used to answer both
+    # with one set.
+    #
+    # ⭐⭐ AND THE UNIVERSE IS TIME-INVARIANT ON PURPOSE. `withheld_by_pov`
+    # must be the SAME at every `t` of the round, because a client that diffs
+    # it across time would otherwise read the exact moment an opponent first
+    # spawned — an enemy spawn event, which is the thing this whole boundary
+    # exists to withhold. Deriving it from `_roster_at` looked more precise
+    # and was strictly worse: precise per moment, and a timeline in aggregate.
+    #
+    # What it does disclose is round-level: "these players' positions are not
+    # in this view". Not when they joined, not when they spawned, not whether
+    # they are alive. Identities are public through the scoreboard and the
+    # kill feed either way (Fable's question on PR #807).
+    everyone = {t[_TRACK_GUID] for lives in (tracks or {}).values() for t in lives}
+    return {"team": wanted, "members": members, "all_guids": everyone}
 
 
 def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
@@ -1055,16 +1369,22 @@ async def get_round_snapshot(
     # data was thinnest — the worst possible moment to change the contract
     # (CodeRabbit, PR #792). `unavailable` is added alongside, never instead.
     engagements = await load_round_engagements(db, round_id) if tracks else []
+    # ⭐ Loaded BEFORE the snapshot, because the round's own capture interval is
+    # what bounds a causal velocity pair — see VELOCITY_MAX_DT_INTERVALS. A
+    # round that never declared its interval gets no bound, which is the same
+    # answer this module gives everywhere else: unknown is published, not
+    # replaced by a default that looks like evidence.
+    policy = await load_capture_policy(db, round_id)
+    if velocity_max_dt_ms is None and policy.observation_interval_ms:
+        velocity_max_dt_ms = (
+            policy.observation_interval_ms * VELOCITY_MAX_DT_INTERVALS
+        )
     snap = build_snapshot(
         tracks, t_ms, engagements=engagements,
         max_stale_ms=max_stale_ms, velocity_max_dt_ms=velocity_max_dt_ms,
     )
     separation = nearest_teammate_separation(snap)
-    policy = await load_capture_policy(db, round_id)
     clock = await load_round_clock(db, round_id, t_ms)
-    information = await load_round_information_state(
-        db, round_id, t_ms, snap, clock, policy, tracks
-    ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
 
     # ⭐ `pov` selects WHOSE picture is returned, the interaction VALORANT's
     # replay tool settled on: switch between a player and the omniscient view.
@@ -1074,7 +1394,49 @@ async def get_round_snapshot(
     # ⛔ `world` is the oracle. It is a named diagnostic (§6.4) and never a
     # belief source — which is why it is spelled out rather than being the
     # silent default.
-    pov_team = _pov_team(pov, tracks)
+    pov_team = _pov_team(pov, tracks, t_ms)
+    # A team was asked for and could not be resolved: fail CLOSED. `pov_team`
+    # stays None because there is no roster to filter by, so the withholding
+    # below cannot use it — the flag carries the request instead.
+    # ⛔ ANY non-oracle pov we could not resolve, not just a `team:` one. An
+    # unknown or differently-cased player GUID left this false — the request
+    # then reached the ORACLE branch with positions, separations, edges and
+    # both clocks unfiltered, while `information_state` said the player was
+    # unavailable. The payload disagreed with itself, and it disagreed in the
+    # direction that hands over everything (Codex, PR #807).
+    unresolved_team = pov_team is None and bool(pov) and pov.lower() != "world"
+    # ⭐ TWO DIFFERENT QUESTIONS, and conflating them broke the player view.
+    # `pov_team` answers WHOSE POSITIONS AND CLOCK may be seen — always a
+    # team, because a player knows where their own side is. This flag answers
+    # WHOSE BELIEFS are returned: for `pov=<guid>` that is one holder, not the
+    # union. Routing a player pov through `_team_information` would hand them
+    # their whole side's knowledge, which is the opposite of what a per-player
+    # view is for.
+    single_holder = bool(pov) and pov.lower() != "world" and not _requests_a_team(pov)
+
+    # 🔴 RESOLVED BEFORE THE BELIEFS, because the clock does not only get
+    # PUBLISHED — it decides when "he is down" stops being true. `resolve_expiry`
+    # reads the SUBJECT's team clock, so with the oracle clock an enemy belief
+    # flipped to `uncertain_after_down` at the precise instant the enemy wave
+    # landed. Measured on 25 rounds: 46 of 449 beliefs (10.2%) expired on
+    # `validated_wave`. Withholding the number from the panel while letting the
+    # beliefs keep time with it would publish the same fact as a behaviour —
+    # scrub the slider and read the enemy phase off when the circles change.
+    #
+    # ⭐ The degraded clock keeps `interval_ms` and loses `offset_ms`, so
+    # `resolve_expiry` falls to `interval_only`: "he is back somewhere inside
+    # one interval", which is what §6.3 says a holder without a cue may hold.
+    #
+    # ⛔ `{"team": None}` for an unresolved team request: no entry can equal a
+    # team named None, so every clock is restricted. A view that cannot name
+    # its own side has no side whose countdown it may read.
+    pov_clock = restrict_clock_to_pov(
+        clock, {"team": None} if unresolved_team else pov_team
+    )
+    information = await load_round_information_state(
+        db, round_id, t_ms, snap, pov_clock, policy, tracks
+    ) if tracks else {"holders": {}, "audible_gunfire_radius": AUDIBLE_GUNFIRE_RADIUS}
+
     withheld: list[str] = []
 
     if pov_team is not None:
@@ -1092,7 +1454,53 @@ async def get_round_snapshot(
         own = pov_team["members"]
         withheld = sorted(g for g in pov_team["all_guids"] if g not in own)
         snap_players = [p for p in snap.players.values() if p.guid in own]
-        information = _team_information(information, pov_team, t_ms)
+        if single_holder:
+            holders = information.get("holders", {})
+            information = {
+                **information,
+                "holders": {pov: holders[pov]} if pov in holders else {},
+                "pov": pov,
+                "pov_unavailable": (
+                    None if pov in holders
+                    else f"{pov} has no reconstructed state in this round at t={t_ms}"
+                ),
+                # ⚠️ THE SAME DISCLOSURE THE TEAM VIEW CARRIES. This branch
+                # now returns every member of the holder's team, and §6 asks
+                # that own-team knowledge be STATED as a simplification —
+                # teammates share a voice channel we cannot capture — rather
+                # than assumed. Omitting it handed a consumer reconstructed
+                # teammate positions as if the holder were proven to know
+                # them, and the omission was invisible precisely because the
+                # team view said it and this one did not (Codex, PR #807).
+                "own_team_positions_are_a_simplification": True,
+            }
+        else:
+            information = _team_information(information, pov_team, t_ms)
+    elif unresolved_team:
+        # ⛔ FAIL CLOSED. Everyone is withheld and everyone is named — the same
+        # contract a resolved team view keeps, applied to a request we could
+        # not resolve. Previously this fell through to the oracle: every
+        # position, both clocks, `withheld_by_pov` empty (Codex, PR #807).
+        withheld = sorted({t[_TRACK_GUID] for lives in (tracks or {}).values()
+                           for t in lives})
+        snap_players = []
+        # ⚠️ And the message. A branch below was written to say "no players on
+        # team X" and could never run: `if pov and pov != "world"` catches
+        # every `team:` string first, so an unrostered team got the
+        # SINGLE-PLAYER wording — "team:NOBODY has no reconstructed state" —
+        # which describes a GUID lookup, not a roster miss.
+        # ⚠️ `pov[5:]` ONLY when there is a `team:` to strip. This branch now
+        # also catches an unresolved PLAYER pov, and slicing five characters
+        # off a GUID reported `'OST'` for `GHOST` — a message that names
+        # something the caller never asked about.
+        information = {
+            **information, "holders": {}, "pov": pov,
+            "pov_unavailable": (
+                f"no players on team {pov[5:]!r} in this round"
+                if _requests_a_team(pov)
+                else f"{pov} has no reconstructed state in this round at t={t_ms}"
+            ),
+        }
     else:
         snap_players = list(snap.players.values())
         if pov and pov != "world":
@@ -1105,12 +1513,6 @@ async def get_round_snapshot(
                     None if pov in holders
                     else f"{pov} has no reconstructed state in this round at t={t_ms}"
                 ),
-            }
-        elif pov and pov.lower().startswith("team:"):
-            # A team nobody played on. Named, not silently treated as the oracle.
-            information = {
-                **information, "holders": {}, "pov": pov,
-                "pov_unavailable": f"no players on team {pov[5:]!r} in this round",
             }
         else:
             information = {**information, "pov": pov or "world"}
@@ -1129,6 +1531,21 @@ async def get_round_snapshot(
             (t[7] for lives in (tracks or {}).values() for t in lives if t[7]), None
         ),
         "round_duration_ms": await load_round_end_ms(db, round_id, tracks or {}),
+        # ⭐ THE ROUND'S SIDES, not the sides visible at `t`. The page built its
+        # POV buttons from `snapshot.players`, which is a TIME SLICE: at
+        # `first_position_ms` only the first player is guaranteed to exist, so
+        # a round whose teams begin spawning at different moments produced one
+        # button and never gained the other — `goTo` updates panels without
+        # recreating them (Codex, PR #807).
+        #
+        # Time-invariant for the same reason `withheld_by_pov` is: a list that
+        # grows with `t` is a spawn timeline. Side names are public — the
+        # scoreboard shows them — so this discloses nothing a viewer lacks.
+        "teams": sorted({
+            str(t[_TRACK_TEAM]).upper()
+            for lives in (tracks or {}).values() for t in lives
+            if t[_TRACK_TEAM]
+        }),
         # ⚠️ When the round first HAS anybody. At t=0 no player has spawned, so
         # a viewer opening at zero sees an empty map and reads it as "nobody was
         # there" — the warmup trap this project has already been caught by once
@@ -1153,11 +1570,27 @@ async def get_round_snapshot(
             "manifest_count": policy.manifest_count,
             "conflicting_flags": policy.conflicting_flags,
         },
-        "clock": clock,
+        # Published so a reader can tell "no gap was too large" from "no
+        # bound was applied": null means the round never declared an interval.
+        "velocity_max_dt_ms": velocity_max_dt_ms,
+        "clock": pov_clock,
         "information_state": information,
         "reconstruction_accuracy": dict(ACCURACY_MEASUREMENT),
-        "player_count": len(snap.players),
-        "overlap_conflicts": snap.overlap_conflicts,
+        # ⛔ COUNTED AFTER THE FILTER. `len(snap.players)` included every
+        # resolved enemy, so subtracting the visible `players.length` told a
+        # caller how many withheld opponents had a usable state at `t` —
+        # which is exactly what filtering `gaps` was for (Codex, PR #807).
+        "player_count": len(snap_players),
+        # ⛔ COUNTED OVER THE VISIBLE PLAYERS UNDER A RESTRICTED VIEW. The
+        # oracle aggregate let a caller subtract the visible per-player flags
+        # and learn that a WITHHELD opponent had overlapping lives — tracking
+        # state the filtered `gaps` conceals. Same defect as `player_count`,
+        # in its sibling (Codex, PR #807).
+        "overlap_conflicts": (
+            sum(1 for p in snap_players if p.overlap_conflict)
+            if pov_team is not None or unresolved_team
+            else snap.overlap_conflicts
+        ),
         # `gaps` reasons name tracking state, not position — but under a team
         # view they would still enumerate the other side, so they follow the
         # same boundary as everything else.
@@ -1167,7 +1600,14 @@ async def get_round_snapshot(
         # or in `gaps` with a reason; a withheld enemy is neither, so leaving
         # him out of both would break one contract to keep another.
         "withheld_by_pov": withheld,
-        "nearest_teammate_separation": separation,
+        # 🔴 A separation is not a coordinate, which is exactly why it slipped
+        # past the guard that scans for coordinates. Keyed by guid, it told a
+        # team WHICH enemies were alive and placed and HOW TIGHTLY THE OTHER
+        # SIDE WAS GROUPED — the shape of their formation, from the field that
+        # was supposed to describe your own.
+        "nearest_teammate_separation": {
+            g: d for g, d in separation.items() if g not in withheld
+        },
         # 🔴 An opponent edge carries `distance`, computed from the real
         # positions — one leaks the range to an enemy, several across time
         # trilaterate him. Withholding the positions and leaving the edges was

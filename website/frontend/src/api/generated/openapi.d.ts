@@ -10181,6 +10181,8 @@ export interface operations {
                 t: number;
                 /** @description Exclude states older than this; omit to get everything with its staleness stated */
                 max_stale_ms?: number | null;
+                /** @description Longest gap a causal velocity pair may span; omit to use the round's own declared capture interval, or no bound at all when the round never declared one */
+                velocity_max_dt_ms?: number | null;
                 /** @description Whose information state to return: a player GUID, or 'world' for the oracle view. Omitted means 'world'. */
                 pov?: string | null;
             };
