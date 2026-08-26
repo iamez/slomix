@@ -10634,6 +10634,25 @@
       }
      },
      {
+      "description": "Longest gap a causal velocity pair may span; omit to use the round's own declared capture interval, or no bound at all when the round never declared one",
+      "in": "query",
+      "name": "velocity_max_dt_ms",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "exclusiveMinimum": 0,
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Longest gap a causal velocity pair may span; omit to use the round's own declared capture interval, or no bound at all when the round never declared one",
+       "title": "Velocity Max Dt Ms"
+      }
+     },
+     {
       "description": "Whose information state to return: a player GUID, or 'world' for the oracle view. Omitted means 'world'.",
       "in": "query",
       "name": "pov",
