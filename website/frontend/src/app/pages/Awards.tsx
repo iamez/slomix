@@ -86,8 +86,11 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
         <div key={key} style={{ marginTop: 16, border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
             <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{rows[0].map}</span>
+            {/* The endpoint paginates ROWS, so a big round can straddle
+              * pages — the caption counts what is SHOWN, never claims the
+              * round's total (Codex on #813). */}
             <span className="m" style={{ ...lblStyle, fontSize: 9 }}>
-              round {rows[0].round_number} · {rows[0].date} · {rows.length} awards
+              round {rows[0].round_number} · {rows[0].date} · {rows.length} shown
             </span>
           </div>
           <div className="home-cols3" style={{ gap: 10, marginTop: 10 }}>
@@ -133,20 +136,22 @@ function ByPlayer({ days, awardType }: { days: number | null; awardType: string 
             no player awards found for this selection
           </div>
         )}
-        {data?.leaderboard.map((row) => (
-          <Link
-            key={row.guid}
-            to={`/profile/${row.guid}`}
-            style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 14, alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
-          >
+        {data?.leaderboard.map((row) => {
+          const inner = (<>
             <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{String(row.rank).padStart(2, '0')}</span>
             <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
             <span className="m" style={{ fontSize: 13, textAlign: 'right' }}>{row.award_count.toLocaleString('en-US')}</span>
             <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {row.top_award.toLowerCase()} ({row.top_award_count}×)
             </span>
-          </Link>
-        ))}
+          </>);
+          const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 14, alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' } as const;
+          // A null guid is a historical winner neither alias map resolves —
+          // a row, not a /profile/null link (Codex on #813).
+          return row.guid
+            ? <Link key={row.guid} to={`/profile/${row.guid}`} style={style}>{inner}</Link>
+            : <div key={`${row.rank}-${row.player}`} style={style}>{inner}</div>;
+        })}
       </div>
     </div>
   );
@@ -157,13 +162,17 @@ export function Awards() {
   // Legacy default: last 30 days.
   const [days, setDays] = useState<number | null>(30);
   const [awardType, setAwardType] = useState<string | null>(null);
-  // The dropdown lists REAL award names: the leaderboard's top_award values
-  // (legacy read favorite_award, got nothing, and silently fell back to a
-  // hardcoded twelve — those stay as the floor so the list is never empty).
+  // The dropdown lists REAL award names from every source this page has:
+  // the legacy twelve as the floor, the leaderboard's top_award values, and
+  // the award names on the first unfiltered awards page — top_award alone
+  // cannot enumerate types nobody tops (Codex on #813). Full enumeration
+  // needs a backend types endpoint; noted for the response_model batch.
   const allBoard = useAwardsLeaderboard(null, null);
+  const firstPage = useAwards(0, null, null);
   const types = [...new Set([
     ...LEGACY_TYPES,
     ...(allBoard.data?.leaderboard.map((r) => r.top_award) ?? []),
+    ...(firstPage.data?.awards.map((a) => a.award) ?? []),
   ])].sort();
   return (
     <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 980 }}>
@@ -193,8 +202,11 @@ export function Awards() {
         </select>
       </div>
       <div style={{ marginTop: 20 }}>
+        {/* key remounts ByRound when filters change, so its page state
+          * resets — a narrower result must never inherit an out-of-range
+          * offset (Codex on #813). */}
         {tab === 'round'
-          ? <ByRound days={days} awardType={awardType} />
+          ? <ByRound key={`${days ?? 'all'}:${awardType ?? 'all'}`} days={days} awardType={awardType} />
           : <ByPlayer days={days} awardType={awardType} />}
       </div>
     </div>

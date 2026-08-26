@@ -166,7 +166,14 @@ function RecordsTab() {
       </div>
       {records.isPending && <div style={{ marginTop: 16 }}><Pending label="records" /></div>}
       {records.isError && <div style={{ marginTop: 16 }}><Unavailable what="records" /></div>}
-      {data && (
+      {/* An empty OBJECT is truthy — two headings over empty grids would
+        * claim records that do not exist (Codex on #813). */}
+      {data && Object.values(data).every((rows) => !rows?.length) && (
+        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 16 }}>
+          no records for this selection yet
+        </div>
+      )}
+      {data && Object.values(data).some((rows) => rows?.length) && (
         <>
           {section('single round · click a card for the top 5', RECORD_ORDER)}
           {section('full map · both rounds combined', MATCH_RECORD_ORDER)}
@@ -174,6 +181,22 @@ function RecordsTab() {
       )}
     </div>
   );
+}
+
+/** ↗/↘/NEW movement, present only when the period carries a delta window —
+ * the legacy HoF showed these and the recording's all_time null hides them
+ * (Codex on #813). */
+function MoveBadge({ e }: { e: HallOfFameEntry }) {
+  if (e.is_new) return <span className="m" style={{ fontSize: 9, color: 'var(--color-accent-warm)' }}>NEW</span>;
+  if (e.rank_delta != null && e.rank_delta !== 0) {
+    const up = e.rank_delta > 0;
+    return (
+      <span className="m" style={{ fontSize: 9, color: up ? 'var(--color-pos)' : 'var(--color-neg)' }}>
+        {up ? '↗' : '↘'}{Math.abs(e.rank_delta)}
+      </span>
+    );
+  }
+  return null;
 }
 
 function HofList({ catKey, label, desc, entries }: { catKey: string; label: string; desc: string; entries: HallOfFameEntry[] }) {
@@ -189,7 +212,7 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 12 }}>
         {podium.map((e) => (
           <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={{ textDecoration: 'none', color: 'var(--color-text-100)' }}>
-            <div className="m" style={{ ...lblStyle, fontSize: 9 }}>#{e.rank}</div>
+            <div className="m" style={{ ...lblStyle, fontSize: 9 }}>#{e.rank} <MoveBadge e={e} /></div>
             <div className="m" style={{ fontSize: 12, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name}</div>
             <div className="m" style={{ fontSize: 13, marginTop: 2 }}>{fmt(e.value)}</div>
           </Link>
@@ -200,7 +223,7 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
           {visible.map((e) => (
             <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '4px 0', textDecoration: 'none', color: 'var(--color-text-300)' }}>
               <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{String(e.rank).padStart(2, '0')}</span>
-              <span className="m" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name}</span>
+              <span className="m" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name} <MoveBadge e={e} /></span>
               <span className="m" style={{ fontSize: 11 }}>{fmt(e.value)}</span>
             </Link>
           ))}
@@ -231,7 +254,9 @@ function ChampionsBand() {
       <div className="landing-quad" style={{ gap: 10, marginTop: 10 }}>
         {list.map((a, i) => (
           <div key={a.award_key ?? a.key ?? i} style={{ borderLeft: '2px solid var(--color-accent-warm)', paddingLeft: 10 }}>
-            <Lbl style={{ fontSize: 9 }}>{(a.award_key ?? a.key ?? '').replace(/_/g, ' ')}</Lbl>
+            {/* The backend supplies a display label ('Season MVP') —
+              * deriving from award_key rendered 'mvp' (Codex on #813). */}
+            <Lbl style={{ fontSize: 9 }}>{a.label ?? (a.award_key ?? a.key ?? '').replace(/_/g, ' ')}</Lbl>
             <div className="m" style={{ fontSize: 13, marginTop: 3 }}>{a.player_name ?? '—'}</div>
             {a.value_text && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>{a.value_text}</div>}
           </div>
