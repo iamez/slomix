@@ -1531,6 +1531,21 @@ async def get_round_snapshot(
             (t[7] for lives in (tracks or {}).values() for t in lives if t[7]), None
         ),
         "round_duration_ms": await load_round_end_ms(db, round_id, tracks or {}),
+        # ⭐ THE ROUND'S SIDES, not the sides visible at `t`. The page built its
+        # POV buttons from `snapshot.players`, which is a TIME SLICE: at
+        # `first_position_ms` only the first player is guaranteed to exist, so
+        # a round whose teams begin spawning at different moments produced one
+        # button and never gained the other — `goTo` updates panels without
+        # recreating them (Codex, PR #807).
+        #
+        # Time-invariant for the same reason `withheld_by_pov` is: a list that
+        # grows with `t` is a spawn timeline. Side names are public — the
+        # scoreboard shows them — so this discloses nothing a viewer lacks.
+        "teams": sorted({
+            str(t[_TRACK_TEAM]).upper()
+            for lives in (tracks or {}).values() for t in lives
+            if t[_TRACK_TEAM]
+        }),
         # ⚠️ When the round first HAS anybody. At t=0 no player has spawned, so
         # a viewer opening at zero sees an empty map and reads it as "nobody was
         # there" — the warmup trap this project has already been caught by once

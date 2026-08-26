@@ -922,6 +922,10 @@ describe('opening a different round', () => {
         json: () => Promise.resolve({
           round_id: Number(round), t_ms: 0, map_name: null,
           first_position_ms: 0, round_duration_ms: 600_000,
+          // ⭐ `teams` is round-level: the page must build its POV buttons
+          // from it, not from who happens to be on screen at this moment.
+          // Round 11500 has ALLIES in the round but nobody visible yet.
+          teams: (rosters.get(round) ?? []).slice().sort(),
           players: (rosters.get(round) ?? []).map((team, i) => ({
             guid: `G${i}`, name: `p${i}`, team, alive: true,
             x: i * 100, y: 0, z: 0, stale_ms: 0,
