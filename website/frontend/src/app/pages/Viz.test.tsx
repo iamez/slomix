@@ -232,16 +232,22 @@ describe('FormPage', () => {
       ...m.new_players[0], guid: 'ALT00002', name: 'oldalt',
       sick_leave: { primary_name: 'carniee', active: false },
     };
+    // An ABSENT flag (older backend) must not claim a leave we don't know
+    // about — home.js:69 parity: truthy gate, not not-false.
+    const unflagged = {
+      ...m.new_players[0], guid: 'ALT00003', name: 'mystery',
+      sick_leave: { primary_name: 'carniee' },
+    };
     vi.stubGlobal('fetch', vi.fn(overrideFetch({
-      '/api/skill/movers': { ...(movers as object), new_players: [...m.new_players, alt, past] },
+      '/api/skill/movers': { ...(movers as object), new_players: [...m.new_players, alt, past, unflagged] },
     })));
     renderPage(<FormPage />);
     await waitFor(() => expect(screen.getByText(/ownator · alt of carniee/)).toBeInTheDocument());
     // Exactly the ACTIVE link earns the wording.
     expect(screen.getAllByText('on sick leave')).toHaveLength(1);
-    // The genuine newcomer AND the expired alt both read first night
-    // (plus the section head carries the same label).
-    expect(screen.getAllByText('first night')).toHaveLength(3);
+    // The genuine newcomer, the expired alt AND the unflagged alt all read
+    // first night (plus the section head carries the same label).
+    expect(screen.getAllByText('first night')).toHaveLength(4);
   });
 
   it('a missing baseline on a metric tab renders only the latest value', async () => {
