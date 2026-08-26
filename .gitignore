@@ -350,8 +350,7 @@ WEBSITE_STAT_BUGS_FOUND.md
 !/scripts/
 !/tools/
 !/scripts/__init__.py
-!/scripts/backfill_gametimes.py
-!/tools/__init__.py
+!/!/tools/__init__.py
 !/tools/simple_bulk_import.py
 !/tools/verify_pipeline.py
 
@@ -845,8 +844,6 @@ scripts/smoke_pipeline.py
 scripts/check_ws11_objective_coords_gate.sh
 scripts/check_ws12_single_trigger_path.sh
 scripts/check_ws1_ws1c_gates.sh
-scripts/proximity_objective_coords_gate.py
-scripts/backfill_gametimes.py
 scripts/backtest_carrier_context.py
 scripts/backtest_clutch_detector.py
 scripts/backtest_clutch_v1.py
