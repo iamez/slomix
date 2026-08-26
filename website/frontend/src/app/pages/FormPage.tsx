@@ -65,10 +65,11 @@ function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; t
           {row.is_new
             /* A linked sick-leave alternate must never read as a genuine
              * newcomer — the backend attaches the link for exactly this
-             * (skill_router:927). Gated on `active`: a historical link with
-             * a period_end still arrives, marked inactive (home.js:69 does
-             * the same). */
-            ? row.sick_leave != null && row.sick_leave.active !== false ? 'on sick leave' : 'first night'
+             * (skill_router:927). Gated on `active === true`, parity with
+             * home.js:69: a historical link (period_end set) arrives marked
+             * inactive, and an ABSENT flag must not claim a sick leave we
+             * do not know about (the type allows absence for a reason). */
+            ? row.sick_leave?.active === true ? 'on sick leave' : 'first night'
             : flat
               ? '±0%'
               : row.delta_pct != null
