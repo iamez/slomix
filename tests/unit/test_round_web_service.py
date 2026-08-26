@@ -39,6 +39,8 @@ from website.backend.services.round_web_service import (
     load_round_information_state,
     restrict_clock_to_pov,
     make_locator,
+    _pov_team,
+    _roster_at,
     nearest_teammate_separation,
     select_life,
 )
@@ -1081,6 +1083,33 @@ class TestTheCadenceNeedsEVERYManifestToDeclareIt:
         assert policy.observation_interval_ms is None
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("bad", [-200, 0, "200", 200.5, True, [200]])
+    async def test_a_malformed_cadence_is_not_a_cadence(self, bad):
+        """⛔ "Truthy" is not "valid", and a manifest is a file the tracker
+        wrote, not trusted input.
+
+        `all(declared)` accepted anything non-falsy: a negative integer became
+        a NEGATIVE velocity bound that rejects every causal pair, a string was
+        multiplied into another string and blew up on a later comparison, and
+        an unhashable value raised inside `set()` before anyone could look at
+        it (Codex, PR #807).
+
+        ⚠️ `True` is in the list on purpose — `isinstance(True, int)` is True
+        in Python, so a bool would have passed a naive integer check and given
+        a 2 ms bound.
+        """
+        class _Db:
+            async def fetch_all(self, sql, _p=None):
+                if "f.capabilities" in sql:
+                    return [(json.dumps({"position_sample_interval_ms": bad},
+                                        default=str),)]
+                return []
+        policy = await load_capture_policy(_Db(), 1)
+
+        assert policy.observation_interval_ms is None
+        assert policy.mode == "unknown"
+
+    @pytest.mark.asyncio
     async def test_silence_from_one_file_is_NOT_agreement(self):
         """The case that shipped wrong. A file that never declared a cadence
         does not vote for the one that did."""
@@ -1147,6 +1176,47 @@ class TestACausalVelocityIsBoundedByTheRoundsOwnCadence:
             t_ms=10_000)
         assert tight["players"][0]["velocity_reason"] == "gap_exceeds_max_dt_10000ms"
         assert tight["players"][0]["vx"] is None
+
+
+class TestASideSwitchIsResolvedAtTheMOMENT:
+    """⛔ A flat dict comprehension kept each player's LAST side.
+
+    Rows arrive ordered by spawn time, so `{guid: team for ...}` resolved a
+    player who switched teams mid-round to the side they would join LATER —
+    even for a snapshot taken before the switch. That request was handed the
+    future side's positions and clock while withholding the player's actual
+    teammates (Codex, PR #807).
+    """
+
+    def _tracks(self):
+        # AX1 starts on AXIS and switches to ALLIES at 60 s.
+        return {
+            "AX1": [_stub_track("AX1", 0.0, team="AXIS")[:4]
+                    + (0, 60_000) + _stub_track("AX1", 0.0)[6:],
+                    _stub_track("AX1", 10.0, team="ALLIES")[:4]
+                    + (60_000, None) + _stub_track("AX1", 10.0)[6:]],
+            "AL1": [_stub_track("AL1", 500.0, team="ALLIES")],
+        }
+
+    def test_before_the_switch_the_earlier_side_wins(self):
+        roster = _roster_at(self._tracks(), 30_000)
+        assert roster["AX1"] == "AXIS"
+
+    def test_after_the_switch_the_later_side_wins(self):
+        roster = _roster_at(self._tracks(), 90_000)
+        assert roster["AX1"] == "ALLIES"
+
+    def test_the_pov_boundary_follows_the_moment(self):
+        """⭐ The consequence, not just the lookup: which side the boundary
+        protects changes with `t`."""
+        early = _pov_team("AX1", self._tracks(), 30_000)
+        late = _pov_team("AX1", self._tracks(), 90_000)
+
+        assert early["team"] == "AXIS"
+        assert late["team"] == "ALLIES"
+        # AL1 is an opponent early and a teammate late.
+        assert "AL1" not in early["members"]
+        assert "AL1" in late["members"]
 
 
 class TestTheEnemyClockIsNotOursToPublish:
@@ -1362,6 +1432,23 @@ class TestATeamPovWithholdsTheTruthItHas:
         assert oracle["clock"]["ALLIES"]["status"] != "unknown_to_this_pov"
         assert team["clock"]["ALLIES"]["status"] == "unknown_to_this_pov"
         assert team["clock"]["AXIS"] == oracle["clock"]["AXIS"]
+
+    @pytest.mark.asyncio
+    async def test_an_unresolvable_player_pov_fails_closed_too(self):
+        """⛔ The fail-closed rule covered `team:` and not a player GUID.
+
+        An unknown or differently-cased GUID left `unresolved_team` false —
+        the request reached the ORACLE branch with positions, separations,
+        edges and both clocks unfiltered, while `information_state` reported
+        the player unavailable. The payload disagreed with itself, in the
+        direction that hands over everything (Codex, PR #807).
+        """
+        payload = await self._snapshot("NOSUCHPLAYER", pairs=True)
+
+        assert payload["players"] == []
+        assert set(payload["withheld_by_pov"]) == {"AX1", "AX2", "AL1", "AL2"}
+        for team, entry in payload["clock"].items():
+            assert entry["status"] == "unknown_to_this_pov", team
 
     @pytest.mark.asyncio
     async def test_a_player_pov_gets_the_same_boundary_as_their_team(self):

@@ -710,10 +710,25 @@ async def load_capture_policy(db, round_id: int) -> CapturePolicy:
     # reached `manifests`, so `all(declared)` could not see it — the check was
     # unanimous among the files that happened to have something to say
     # (Codex, PR #807). `unusable` puts them back in the denominator.
-    declared = [m.get("position_sample_interval_ms") for m in manifests]
+    #
+    # ⛔ AND "TRUTHY" IS NOT "VALID". `all(declared)` accepted anything that
+    # is not falsy: a negative integer became a negative velocity bound that
+    # rejects every causal pair, a string was multiplied into another string
+    # and blew up on a later comparison, and an unhashable value raised inside
+    # `set()` before anyone could look at it (Codex, PR #807). A manifest is
+    # not trusted input — it is a file the tracker wrote.
+    declared = [
+        m.get("position_sample_interval_ms") for m in manifests
+    ]
+    valid = [
+        d for d in declared
+        if isinstance(d, int) and not isinstance(d, bool) and d > 0
+    ]
     interval = (
-        declared[0]
-        if not unusable and all(declared) and len(set(declared)) == 1
+        valid[0]
+        if not unusable
+        and len(valid) == len(declared) == len(manifests)
+        and len(set(valid)) == 1
         else None
     )
     sources = {m.get("source") for m in manifests if m.get("source")}
@@ -1086,7 +1101,32 @@ def _requests_a_team(pov: str | None) -> bool:
     return bool(pov) and pov.lower().startswith("team:")
 
 
-def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
+def _roster_at(tracks: dict[str, list], t_ms: int) -> dict[str, str]:
+    """Who was on which side AT `t_ms`, not at the end of the round.
+
+    ⛔ A FLAT DICT COMPREHENSION GETS THIS WRONG. Rows arrive ordered by spawn
+    time, so `{guid: team for ...}` keeps each player's LAST side — and a
+    player who switched teams mid-round then resolved, even for an early
+    snapshot, to the side they would join later. A `pov=<guid>` request before
+    the switch was handed the FUTURE side's positions and clock while
+    withholding the player's actual teammates (Codex, PR #807).
+
+    `select_life` already answers "which life was this player living at t",
+    including the fallback to the most recently ended one, so the side comes
+    from that life rather than from row order.
+    """
+    roster: dict[str, str] = {}
+    for guid, lives in (tracks or {}).items():
+        chosen, _alive, _conflict = select_life(lives, t_ms)
+        if chosen is None:
+            # Nobody's life had begun yet at `t`. The earliest one is the only
+            # side they are ever known to have had before now.
+            chosen = min(lives, key=lambda t: ((t[4] or 0), (t[8] or 0)))
+        roster[guid] = str(chosen[_TRACK_TEAM] or "").upper()
+    return roster
+
+
+def _pov_team(pov: str | None, tracks: dict[str, list], t_ms: int) -> dict | None:
     """Resolve `pov=team:AXIS` into that team's members, or None.
 
     Returns None for the oracle view, for a single-player pov, and for a team
@@ -1103,10 +1143,7 @@ def _pov_team(pov: str | None, tracks: dict[str, list]) -> dict | None:
     """
     if not pov or pov.lower() == "world":
         return None
-    roster = {
-        t[_TRACK_GUID]: str(t[_TRACK_TEAM] or "").upper()
-        for lives in (tracks or {}).values() for t in lives
-    }
+    roster = _roster_at(tracks, t_ms)
     if pov.lower().startswith("team:"):
         wanted = pov[5:].strip().upper()
     else:
@@ -1246,11 +1283,17 @@ async def get_round_snapshot(
     # ⛔ `world` is the oracle. It is a named diagnostic (§6.4) and never a
     # belief source — which is why it is spelled out rather than being the
     # silent default.
-    pov_team = _pov_team(pov, tracks)
+    pov_team = _pov_team(pov, tracks, t_ms)
     # A team was asked for and could not be resolved: fail CLOSED. `pov_team`
     # stays None because there is no roster to filter by, so the withholding
     # below cannot use it — the flag carries the request instead.
-    unresolved_team = pov_team is None and _requests_a_team(pov)
+    # ⛔ ANY non-oracle pov we could not resolve, not just a `team:` one. An
+    # unknown or differently-cased player GUID left this false — the request
+    # then reached the ORACLE branch with positions, separations, edges and
+    # both clocks unfiltered, while `information_state` said the player was
+    # unavailable. The payload disagreed with itself, and it disagreed in the
+    # direction that hands over everything (Codex, PR #807).
+    unresolved_team = pov_team is None and bool(pov) and pov.lower() != "world"
     # ⭐ TWO DIFFERENT QUESTIONS, and conflating them broke the player view.
     # `pov_team` answers WHOSE POSITIONS AND CLOCK may be seen — always a
     # team, because a player knows where their own side is. This flag answers
@@ -1326,9 +1369,17 @@ async def get_round_snapshot(
         # every `team:` string first, so an unrostered team got the
         # SINGLE-PLAYER wording — "team:NOBODY has no reconstructed state" —
         # which describes a GUID lookup, not a roster miss.
+        # ⚠️ `pov[5:]` ONLY when there is a `team:` to strip. This branch now
+        # also catches an unresolved PLAYER pov, and slicing five characters
+        # off a GUID reported `'OST'` for `GHOST` — a message that names
+        # something the caller never asked about.
         information = {
             **information, "holders": {}, "pov": pov,
-            "pov_unavailable": f"no players on team {pov[5:]!r} in this round",
+            "pov_unavailable": (
+                f"no players on team {pov[5:]!r} in this round"
+                if _requests_a_team(pov)
+                else f"{pov} has no reconstructed state in this round at t={t_ms}"
+            ),
         }
     else:
         snap_players = list(snap.players.values())
