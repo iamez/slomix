@@ -796,6 +796,18 @@ async def load_round_clock(db, round_id: int, t_ms: int) -> dict:
     return clock
 
 
+#: What a holder may read off their OWN team's clock.
+#:
+#: An allowlist, for the same reason the enemy entry is one: everything else
+#: `clock_validation_payload` carries is a whole-round aggregate that ignores
+#: `t_ms`, and a field added to it tomorrow must fail this boundary rather
+#: than cross it by default.
+_OWN_CLOCK_FIELDS = frozenset({
+    "status", "reason", "interval_ms", "offset_ms",
+    "phase_ms", "time_to_next_wave_ms",
+})
+
+
 def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
     """The opposing team's clock is an oracle diagnostic, so a team view loses it.
 
@@ -828,7 +840,25 @@ def restrict_clock_to_pov(clock: dict, pov_team: dict | None) -> dict:
     out: dict[str, dict] = {}
     for team, entry in clock.items():
         if team == own:
-            out[team] = entry
+            # ⛔ THE OWN ENTRY LOSES ITS FULL-ROUND DIAGNOSTICS TOO.
+            #
+            # `load_round_clock` builds `timing_observations`,
+            # `landing_clusters`, `spawn_callbacks`,
+            # `post_revive_spawn_callbacks`, `passing_landing_clusters` and
+            # `pass_ratio` from every life, revive and timing row in the
+            # round, without ever looking at `t_ms`. I stripped them from the
+            # ENEMY entry and left them on the holder's own — so a snapshot at
+            # 30 seconds still told a player how many times their side would
+            # die, spawn and be revived for the rest of the match
+            # (Codex, PR #807).
+            #
+            # ⭐ What survives is what the holder is entitled to and what is
+            # CAUSAL: the status, the interval, and the phase/countdown, which
+            # `wave_position` computes AT `t_ms`. Those are the HUD.
+            out[team] = (
+                {k: v for k, v in entry.items() if k in _OWN_CLOCK_FIELDS}
+                if isinstance(entry, dict) else entry
+            )
             continue
         # ⛔ A NON-DICT ENTRY IS WITHHELD TOO. The first version copied it
         # verbatim on the grounds that `load_round_clock` only ever builds
@@ -1119,9 +1149,14 @@ def _roster_at(tracks: dict[str, list], t_ms: int) -> dict[str, str]:
     for guid, lives in (tracks or {}).items():
         chosen, _alive, _conflict = select_life(lives, t_ms)
         if chosen is None:
-            # Nobody's life had begun yet at `t`. The earliest one is the only
-            # side they are ever known to have had before now.
-            chosen = min(lives, key=lambda t: ((t[4] or 0), (t[8] or 0)))
+            # ⛔ BEFORE THEIR FIRST LIFE THEY ARE ON NO SIDE. The fallback used
+            # to hand back the earliest life's team, so a late joiner resolved
+            # to their FUTURE side: `_pov_team` treated the request as
+            # resolved and returned that side's positions and exact friendly
+            # clock, while `information_state.pov_unavailable` said the holder
+            # had no reconstructed state (Codex, PR #807). Absent from the
+            # roster means unresolved, and unresolved fails closed.
+            continue
         roster[guid] = str(chosen[_TRACK_TEAM] or "").upper()
     return roster
 
