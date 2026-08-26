@@ -3,7 +3,8 @@ import { apiGet } from './api';
 import type {
   ActivityCalendar, AvailabilityOverview, AwardsLeaderboard, AwardsPage,
   BuildInfo, ChallengeCurrent, HallOfFame, LeaderboardRow, MapRow,
-  SeasonAwards, StatsRecords,
+  MapSegments, MapStatsRow, RecentRound, RoundViz, SeasonAwards,
+  StatsRecords, WeaponRow, WeaponsByPlayer, WeaponsHallOfFame,
   LastSession, LiveState, LiveStatus, MatchRow, QuickLeaders, SeasonCurrent,
   SeasonLeaders, SeasonSummary, SessionSummary, SkillMovers, StatsOverview,
   StatsTrends, StorytellingCompleteness, SystemOverview, TonightStatus,
@@ -237,6 +238,9 @@ export function useRecords(mapName: string | null) {
       apiGet('/api/stats/records', {
         // encodeURIComponent happens in buildQuery — the legacy call sent
         // the raw name (records.js:95).
+        // limit=5 is load-bearing: the endpoint DEFAULTS to limit=1, and the
+        // record book renders rows.slice(1) as the expanded ranks 2-5 — with
+        // the default they would always be empty.
         query: mapName ? { limit: 5, map_name: mapName } : { limit: 5 },
       }) as Promise<StatsRecords>,
   });
@@ -295,5 +299,78 @@ export function useAwardsLeaderboard(days: number | null, awardType: string | nu
           ...(awardType ? { award_type: awardType } : {}),
         },
       }) as Promise<AwardsLeaderboard>,
+  });
+}
+
+
+/* ---------- phase 2, batch 3 ---------- */
+
+/** Full map statistics (the maps PAGE view of /api/stats/maps — batch 2's
+ * useMaps() reads the same endpoint for the slim dropdown shape). */
+export function useMapStats() {
+  return useQuery({
+    queryKey: ['map-stats'],
+    queryFn: () => apiGet('/api/stats/maps') as Promise<MapStatsRow[]>,
+  });
+}
+
+export function useMapSegments() {
+  return useQuery({
+    queryKey: ['map-segments'],
+    queryFn: () => apiGet('/api/records/maps/segments') as Promise<MapSegments>,
+  });
+}
+
+export function useWeapons(period: string) {
+  return useQuery({
+    queryKey: ['weapons', period],
+    queryFn: () =>
+      apiGet('/api/stats/weapons', { query: { limit: 200, period } }) as Promise<WeaponRow[]>,
+  });
+}
+
+export function useWeaponsHof(period: string) {
+  return useQuery({
+    queryKey: ['weapons-hof', period],
+    queryFn: () =>
+      apiGet('/api/stats/weapons/hall-of-fame', { query: { period } }) as Promise<WeaponsHallOfFame>,
+  });
+}
+
+/** by_player FIXED (underscore): the legacy 404-fallback to by-player is
+ * not carried — one path, one truth. */
+export function useWeaponsByPlayer(period: string) {
+  return useQuery({
+    queryKey: ['weapons-by-player', period],
+    queryFn: () =>
+      apiGet('/api/stats/weapons/by_player', {
+        query: { period, player_limit: 24, weapon_limit: 4 },
+      }) as Promise<WeaponsByPlayer>,
+  });
+}
+
+export function useFormMovers(metric: string) {
+  return useQuery({
+    queryKey: ['form-movers', metric],
+    queryFn: () =>
+      apiGet('/api/skill/movers', { query: { full: true, metric } }) as Promise<SkillMovers>,
+  });
+}
+
+export function useRecentRounds() {
+  return useQuery({
+    queryKey: ['recent-rounds'],
+    queryFn: () => apiGet('/api/rounds/recent', { query: { limit: 50 } }) as Promise<RecentRound[]>,
+  });
+}
+
+export function useRoundViz(roundId: number | null) {
+  return useQuery({
+    queryKey: ['round-viz', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/viz', {
+        pathParams: { round_id: roundId! },
+      }) as Promise<RoundViz>,
   });
 }
