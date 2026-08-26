@@ -17,7 +17,7 @@ import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../c
  * legitimately exceed kills (Mp40: 110k kills, 129k head hits).
  */
 
-const WEAPON_CATEGORIES: Record<string, string> = {
+const WEAPON_CATEGORIES = new Map<string, string>(Object.entries({
   mp40: 'smg', thompson: 'smg', sten: 'smg',
   garand: 'rifle', k43: 'rifle', kar98: 'rifle', fg42: 'rifle',
   panzerfaust: 'heavy', mortar: 'heavy', flamethrower: 'heavy', mg42: 'heavy',
@@ -27,15 +27,21 @@ const WEAPON_CATEGORIES: Record<string, string> = {
   // Airstrike + Artillery are SUPPORT — the legacy and modern views both
   // class the fieldops calls there; under 'explosive' the Support filter
   // came up empty for the whole recorded corpus.
-  airstrike: 'support', artillery: 'support', syringe: 'support', smoke: 'support',
-};
+  // 'smokegrenade' needs its own EXACT entry: substring matching finds
+  // 'grenade' in it and would file the support smoke under explosive.
+  smokegrenade: 'support', airstrike: 'support', artillery: 'support', syringe: 'support', smoke: 'support',
+}));
 const CATEGORIES = ['all', 'smg', 'rifle', 'heavy', 'pistol', 'melee', 'explosive', 'support', 'other'];
 const PERIODS = ['all', 'season', '30d', '7d'];
 
 function categoryOf(weaponKey: string): string {
   const key = weaponKey.toLowerCase().replace(/^ws[_ ]/, '').replace(/[_ ]/g, '');
-  for (const [name, cat] of Object.entries(WEAPON_CATEGORIES)) {
-    if (key.includes(name.replace(/_/g, ''))) return cat;
+  // Exact key first — the substring pass picks whichever entry iterates
+  // first, which misfiles keys that contain another entry's name.
+  const exact = WEAPON_CATEGORIES.get(key);
+  if (exact) return exact;
+  for (const [name, cat] of WEAPON_CATEGORIES) {
+    if (key.includes(name)) return cat;
   }
   return 'other';
 }
