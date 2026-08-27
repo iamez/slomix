@@ -480,3 +480,43 @@ class TestTheCallSiteNotJustTheHelper:
             "identical candidates got different bootstrap sequences — the draws "
             "are not shared across the family, so the max-T interval is not "
             "family-wise")
+
+
+class TestTiesAtTheMedianValue:
+    """The tie fix took three attempts, so each failure mode gets a test.
+
+    v1 sliced a sorted list: row order decided who was 'above'.
+    v2 compared the two slice boundaries: caught a tie spanning lo|hi, but in an
+       ODD-sized round the dropped centre player means a tie can span lo|centre
+       instead — [1, 2, 2, 3, 4] has boundaries 2 and 3, so v2 saw nothing.
+    v3 splits on the median VALUE: no boundaries, no odd/even case.
+    """
+
+    def test_the_odd_sized_tie_v2_could_not_see(self):
+        """Values [1, 2, 2, 3, 4] with the two 2s on opposite teams. Whichever
+        arrives first used to land in the lower half and decide the sign."""
+        def r(order):
+            vals = [(1, 2), (3, 1), (4, 1)] + order
+            return [{"guid": f"p{i}", "rid": 1, "team": t, "winner": 1, "v": v}
+                    for i, (v, t) in enumerate(vals)]
+        a = r([(2, 1), (2, 2)])
+        b = r([(2, 2), (2, 1)])
+        assert (within_round_spread({1: a, 2: a}, _metric)
+                == within_round_spread({1: b, 2: b}, _metric)), \
+            "row order among tied players changed the answer"
+
+    def test_a_constant_metric_never_carries_signal(self):
+        const = lambda p: 7.0  # noqa: E731
+        for order in ([(1, 1), (1, 1), (1, 2), (1, 2), (1, 1)],
+                      [(1, 2), (1, 2), (1, 1), (1, 1), (1, 2)]):
+            rounds = {i: [{"guid": f"p{j}", "rid": 1, "team": t, "winner": 1,
+                           "v": v} for j, (v, t) in enumerate(order)]
+                      for i in range(3)}
+            assert within_round_spread(rounds, const) is None
+
+    def test_an_exact_zero_estimate_has_no_direction(self):
+        """A negatively skewed bootstrap could otherwise publish a small p-value
+        for a statistic sitting exactly on the null."""
+        skewed = [-0.04] * 100 + [0.01] * 400
+        assert boot_p_value(skewed, 0.0) == 1.0
+        assert boot_p_value(skewed, 0.01) < 1.0

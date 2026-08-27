@@ -373,22 +373,23 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
         outs = [outcome(p) for _, p in vals]
         if any(o is None for o in outs):
             continue
-        vals.sort(key=lambda vp: vp[0])
-        half = len(vals) // 2
-        lo, hi = vals[:half], vals[-half:]
-        # ⛔ TIES MUST NOT BE SPLIT. Kills and deaths are small integers, so the
-        # value at the median is routinely shared. Slicing a sorted list puts
-        # equal-valued players on opposite sides according to the order the
-        # database happened to return them — and rows arrive grouped by round
-        # and guid, which correlates with team. A CONSTANT metric could then
-        # score +1 or -1 instead of carrying no signal at all. Players holding
-        # the boundary value are dropped from both halves; if that empties
-        # either half, the round has no median to split on and is skipped.
-        boundary_lo, boundary_hi = lo[-1][0], hi[0][0]
-        if boundary_lo == boundary_hi:
-            tied = boundary_lo
-            lo = [vp for vp in lo if vp[0] != tied]
-            hi = [vp for vp in hi if vp[0] != tied]
+        # ⛔ NOBODY AT THE MEDIAN VALUE IS ASSIGNED A SIDE.
+        # Kills and deaths are small integers, so the median value is routinely
+        # shared. Slicing a sorted list puts equal-valued players on opposite
+        # sides according to the order rows arrived in — and rows arrive grouped
+        # by round and guid, which correlates with team, so a CONSTANT metric
+        # could score +1 or -1 instead of nothing.
+        #
+        # An earlier fix compared the two slice boundaries, which only catches a
+        # tie spanning lo|hi. In an odd-sized round the centre player is dropped
+        # and a tie can span lo|centre instead: [1, 2, 2, 3, 4] has boundaries 2
+        # and 3, so that check saw nothing while one of the 2s stayed in `lo`.
+        # Splitting on the median VALUE has no boundaries to compare and no odd
+        # or even case — everyone holding it is simply out.
+        values = [v for v, _ in vals]
+        median_value = statistics.median(values)
+        lo = [vp for vp in vals if vp[0] < median_value]
+        hi = [vp for vp in vals if vp[0] > median_value]
         if not lo or not hi:
             continue
         lo_mean = sum(outcome(p) for _, p in lo) / len(lo)
@@ -621,6 +622,11 @@ def boot_p_value(vals: list[float], point: float) -> float:
     """Two-sided bootstrap p: how often the resampled effect crosses zero."""
     if not vals:
         return float("nan")
+    if point == 0:
+        # Exactly the null value, which these discrete round spreads can hit.
+        # Picking either directional tail would let a skewed bootstrap publish a
+        # small p-value for a statistic that IS the null.
+        return 1.0
     # count resamples that land on the far side of zero from the point estimate
     side = (sum(1 for v in vals if v <= 0) if point > 0
             else sum(1 for v in vals if v >= 0))
