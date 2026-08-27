@@ -301,7 +301,11 @@ class _Rng:
     """
 
     def __init__(self, seed: int):
-        self._r = random.Random(seed)  # noqa: S311 - resampling, not crypto
+        # Statistical resampling, not cryptography: a PUBLISHED seed must
+        # reproduce the published table, which is the opposite of what a
+        # cryptographic generator provides. Suppressions must sit on the
+        # flagged line itself — a comment block above it is not read.
+        self._r = random.Random(seed)  # noqa: S311  # nosec B311
 
     def next_below(self, n: int) -> int:
         return self._r.randrange(n)

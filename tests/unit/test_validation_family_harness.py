@@ -128,7 +128,7 @@ class TestFamilyWiseError:
         BOUNDED distribution can sit below 1.96 and still be the correct
         family-wise value. What must hold is that five costs more than one.
         """
-        rng = random.Random(4242)  # noqa: S311 - test fixture, not crypto
+        rng = random.Random(4242)  # noqa: S311  # nosec B311 - test fixture
         draws = {i: [rng.gauss(0.0, 1.0) for _ in range(4000)] for i in range(5)}
         point = {f"c{i}": 0.0 for i in range(5)}
 
