@@ -567,13 +567,15 @@ class _ProximityRelinkerMixin:
             FROM player_comprehensive_stats p
             JOIN lua_round_teams l ON l.round_id = p.round_id
             WHERE l.round_start_unix >= ?
-              AND p.player_name NOT LIKE '[BOT]%'
+              AND p.player_name NOT ILIKE '[BOT]%'
+              AND p.player_guid NOT ILIKE 'OMNIBOT%'
               AND p.team IN (1, 2)
               AND NOT EXISTS (
                   SELECT 1 FROM jsonb_array_elements(
                       CASE WHEN p.team = 1 THEN l.axis_players
                            ELSE l.allies_players END) x
-                  WHERE UPPER(LEFT(x->>'guid', 8)) = UPPER(p.player_guid)
+                  WHERE UPPER(LEFT(x->>'guid', 8))
+                        = UPPER(LEFT(p.player_guid, 8))
               )
             GROUP BY p.round_id, p.team, UPPER(p.player_guid)
             """,

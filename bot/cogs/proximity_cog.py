@@ -110,6 +110,8 @@ class ProximityCog(
             self.scan_engagement_files.cancel()
         if self.relink_null_rounds.is_running():
             self.relink_null_rounds.cancel()
+        if self.heal_lua_rosters.is_running():
+            self.heal_lua_rosters.cancel()
 
     async def cog_command_error(self, ctx, error):
         """Handle errors without crashing bot"""

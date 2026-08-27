@@ -848,10 +848,18 @@ end
 -- round runs, reset on round start.
 local roster_seen = {}
 local roster_seen_last_scan = 0
+-- On the map_restart FALLBACK start path the engine already reports
+-- GS_PLAYING during the 15-40 s pre-clock warmup, so players seen ONLY in
+-- that window may never take part in the real round. The fallback path
+-- sets this to round_start + 45; entries whose last sighting predates it
+-- are dropped at collection. The normal WARMUP->PLAYING path leaves it 0,
+-- so nothing is ever dropped there.
+local roster_grace_until = 0
 
-local function roster_reset()
+local function roster_reset(grace_until)
     roster_seen = {}
     roster_seen_last_scan = 0
+    roster_grace_until = grace_until or 0
 end
 
 local function roster_scan()
@@ -878,6 +886,7 @@ local function roster_scan()
                     guid = guid:sub(1, 32),  -- First 32 chars of GUID
                     name = strip_color_codes(name),
                     team = team,
+                    last_seen = now,
                 }
             end
         end
@@ -894,6 +903,12 @@ local function collect_team_data()
     roster_scan()
 
     for _, p in pairs(roster_seen) do
+        -- Fallback-start rounds: skip players seen only during the
+        -- pre-clock window who never reappeared once play began.
+        if roster_grace_until > 0 and (p.last_seen or 0) < roster_grace_until then
+            log(string.format("Roster: dropping pre-clock-only %s", p.name))
+            goto continue
+        end
         local player_data = { guid = p.guid, name = p.name }
         if p.team == TEAM_AXIS then
             table.insert(axis_players, player_data)
@@ -902,6 +917,7 @@ local function collect_team_data()
             table.insert(allies_players, player_data)
             log(string.format("Allies player: %s (%s)", p.name, p.guid:sub(1,8)))
         end
+        ::continue::
     end
 
     return axis_players, allies_players
@@ -1707,7 +1723,9 @@ function et_RunFrame(levelTime)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()
-        roster_reset()           -- v1.7.3: cumulative roster starts fresh
+        -- v1.7.3: fresh cumulative roster; the fallback path may fire
+        -- during the pre-clock warmup, so give it the 45 s grace window.
+        roster_reset(round_start_unix + 45)
         intermission_handled = false
         round_started = true
         log(string.format("Round started at %d (fallback)", round_start_unix))
