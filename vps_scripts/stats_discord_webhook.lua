@@ -854,13 +854,19 @@ local function roster_reset()
     roster_seen_last_scan = 0
 end
 
-local function roster_scan()
+local function roster_scan(force)
     -- Not during a pause: gamestate stays GS_PLAYING while paused, and a
     -- spectator who joins a side mid-pause and leaves before the resume
     -- was never a participant. Players already seen keep their entries.
-    if paused then return end
+    -- `force` (the intermission collection) bypasses both gates: the
+    -- 1-second throttle would otherwise swallow the FINAL scan whenever a
+    -- frame scan already ran in the same os.time() second, losing a
+    -- last-moment join or team switch.
     local now = os.time()
-    if now == roster_seen_last_scan then return end
+    if not force then
+        if paused then return end
+        if now == roster_seen_last_scan then return end
+    end
     roster_seen_last_scan = now
     local max_clients = get_max_clients()
     for clientNum = 0, max_clients - 1 do
@@ -901,8 +907,8 @@ local function collect_team_data()
 
     -- One final scan so the intermission state itself is captured; the
     -- accumulated roster_seen then also contributes everyone who played
-    -- this round but already left.
-    roster_scan()
+    -- this round but already left. Forced: the throttle must not swallow it.
+    roster_scan(true)
 
     -- NO pre-clock heuristic, deliberately (three review rounds proved
     -- every span/grace variant re-loses some real participant in a corner
