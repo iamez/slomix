@@ -949,7 +949,17 @@ local function format_player_names(players)
     -- reconnect-heavy round could overflow the field and fail the webhook;
     -- truncate the DISPLAY string only — the JSON payload stays complete.
     if #joined > 1000 then
-        joined = joined:sub(1, 997) .. "..."
+        -- Do not split a UTF-8 code point: sub() is byte-oriented and
+        -- json_escape passes non-ASCII through, so a cut inside a
+        -- multibyte name would make the whole webhook body invalid UTF-8.
+        -- Back up over continuation bytes (0x80-0xBF) to a boundary.
+        local cut = 997
+        while cut > 1 do
+            local b = joined:byte(cut + 1)
+            if b == nil or b < 0x80 or b > 0xBF then break end
+            cut = cut - 1
+        end
+        joined = joined:sub(1, cut) .. "..."
     end
     return joined
 end
