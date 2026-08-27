@@ -6,7 +6,7 @@ import type {
   MapSegments, MapStatsRow, RecentRound, RoundViz, SeasonAwards,
   StatsRecords, WeaponRow, WeaponsByPlayer, WeaponsHallOfFame,
   LastSession, LiveState, LiveStatus, MatchRow, QuickLeaders, SeasonCurrent,
-  SeasonLeaders, SeasonSummary, SessionLineups, SessionSummary, SkillMovers, StatsOverview,
+  PlayerProfile, SeasonLeaders, SeasonSummary, SessionLineups, SessionSummary, SkillMovers, StatsOverview,
   StatsTrends, StorytellingCompleteness, SystemOverview, TonightStatus,
   VoiceCurrent,
 } from './types';
@@ -52,6 +52,21 @@ export function useOverview() {
   return useQuery({
     queryKey: ['stats-overview'],
     queryFn: () => apiGet('/api/stats/overview') as Promise<StatsOverview>,
+  });
+}
+
+/** The profile is ONE endpoint with sections (players_profile_router): the
+ * legacy page fanned out to a dozen calls; `sections=all` is a single
+ * request whose parts each declare their own availability. */
+export function usePlayerProfile(playerId: string) {
+  return useQuery({
+    queryKey: ['player-profile', playerId],
+    enabled: playerId.length > 0,
+    queryFn: () =>
+      apiGet('/api/players/{identifier}/profile', {
+        pathParams: { identifier: playerId },
+        query: { sections: 'all' },
+      }) as Promise<PlayerProfile>,
   });
 }
 

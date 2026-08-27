@@ -674,3 +674,172 @@ export interface SessionLineups {
    * stretch, never "no changes". */
   rounds_without_roster: number;
 }
+
+/* ---------- phase 3: the player ---------- */
+
+/** GET /api/players/{id}/profile — corpus:
+ * api_players_identifier_profile.json (recorded with sections=all for vid).
+ * EVERY section carries `available`: a section can be off (no capture, no
+ * rows, a failed sub-query) while the response is a 200, so the page must
+ * read the flag rather than the emptiness of the list below it. */
+export interface ProfileSection {
+  available: boolean;
+}
+
+export interface ProfileIdentity extends ProfileSection {
+  guid: string;
+  name: string;
+  aliases: string[];
+  first_seen: string | null;
+  last_seen: string | null;
+  rounds: number;
+  discord_linked: boolean;
+  country: string | null;
+  twitch: string | null;
+}
+
+export interface ProfileLifetime extends ProfileSection {
+  rounds: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  kills: number;
+  deaths: number;
+  kd: number;
+  gibs: number;
+  headshots: number;
+  headshot_kills: number;
+  damage_given: number;
+  damage_received: number;
+  time_played_seconds: number;
+  xp: number;
+}
+
+export interface ProfileSkill extends ProfileSection {
+  et_rating: number | null;
+  tier: string | null;
+  games_rated: number;
+  rank: number | null;
+  total_rated: number | null;
+  percentile: number | null;
+}
+
+export interface ProfileStreaks extends ProfileSection {
+  current_streak: number;
+  /** 'W' | 'L' — the side of the current run. */
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+
+export interface ProfileWeaponRow {
+  weapon: string;
+  kills: number;
+  deaths: number;
+  /** HIT LOCATIONS, not headshot kills — they legitimately exceed kills. */
+  headshots: number;
+  shots: number;
+  hits: number;
+  accuracy: number;
+  hs_accuracy: number;
+}
+
+export interface ProfileWeapons extends ProfileSection {
+  weapons: ProfileWeaponRow[];
+  overall_accuracy: number | null;
+  overall_hs_accuracy: number | null;
+}
+
+export interface ProfileHitRegions extends ProfileSection {
+  totals: {
+    head: number; arms: number; body: number; legs: number;
+    head_pct: number; arms_pct: number; body_pct: number; legs_pct: number;
+  } | null;
+}
+
+export interface ProfileMovement extends ProfileSection {
+  tracks: number;
+  avg_speed: number | null;
+  peak_speed: number | null;
+  sprint_pct: number | null;
+  avg_distance_per_life: number | null;
+  stance: {
+    standing_pct: number; crouching_pct: number; prone_pct: number;
+  } | null;
+}
+
+export interface ProfileOpponent {
+  guid: string;
+  name: string;
+  kills_by_player: number;
+  kills_on_player: number;
+  total_encounters: number;
+  /** 0..1 from this endpoint (NOT a percentage) — the page formats it. */
+  win_rate: number | null;
+  classification?: string;
+}
+
+export interface ProfileTeammate {
+  guid: string;
+  name: string;
+  rounds_together: number;
+  dpm_with: number | null;
+  synergy: number | null;
+  /** percent here, unlike ProfileOpponent.win_rate — measured, not assumed. */
+  win_rate_with: number | null;
+}
+
+export interface ProfileRelationships extends ProfileSection {
+  top_killers: ProfileOpponent[];
+  top_victims: ProfileOpponent[];
+  best_teammates: ProfileTeammate[];
+  worst_teammates: ProfileTeammate[];
+  baseline_dpm: number | null;
+}
+
+export interface ProfileMapRow {
+  map: string;
+  rounds: number;
+  wins: number;
+  win_rate: number | null;
+  kd: number | null;
+  dpm: number | null;
+}
+
+export interface ProfileMaps extends ProfileSection {
+  maps: ProfileMapRow[];
+}
+
+export interface ProfileMatchRow {
+  round_id: number;
+  date: string;
+  map: string;
+  round_number: number;
+  kills: number;
+  deaths: number;
+  kd: number | null;
+  dpm: number | null;
+  /** 'W' | 'L' | null — null when the round has no attributed winner. */
+  result: string | null;
+}
+
+export interface ProfileRecentMatches extends ProfileSection {
+  matches: ProfileMatchRow[];
+}
+
+export interface PlayerProfile {
+  guid: string;
+  generated_at: string;
+  /** Which sections this response actually carries (sorted, server-side). */
+  sections: string[];
+  identity: ProfileIdentity;
+  lifetime: ProfileLifetime;
+  skill: ProfileSkill;
+  streaks: ProfileStreaks;
+  weapons: ProfileWeapons;
+  hit_regions: ProfileHitRegions;
+  movement: ProfileMovement;
+  relationships: ProfileRelationships;
+  maps: ProfileMaps;
+  recent_matches: ProfileRecentMatches;
+}
