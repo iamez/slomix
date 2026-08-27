@@ -72,7 +72,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.7.2"
+local version = "1.7.3"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -838,34 +838,61 @@ end
 -- TEAM DATA COLLECTION
 -- ============================================================================
 
+-- v1.7.3: the roster is CUMULATIVE over the round, not a snapshot at
+-- intermission. The old collect-at-intermission call said "before players
+-- disconnect" — but a player who quits mid-round beats it (goldrush R2
+-- 2026-08-26: two quits ~30 s before the end left allies_players with ONE
+-- name of three; the stats file kept their stats fine, the roster lied).
+-- roster_seen maps guid -> {guid, name, team}: last-known PLAYING team
+-- wins (going spectator never erases it), scanned once a second while a
+-- round runs, reset on round start.
+local roster_seen = {}
+local roster_seen_last_scan = 0
+
+local function roster_reset()
+    roster_seen = {}
+    roster_seen_last_scan = 0
+end
+
+local function roster_scan()
+    local now = os.time()
+    if now == roster_seen_last_scan then return end
+    roster_seen_last_scan = now
+    local max_clients = get_max_clients()
+    for clientNum = 0, max_clients - 1 do
+        local connected = safe_gentity_get(clientNum, "pers.connected")
+        if connected == CON_CONNECTED then
+            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+            if team == TEAM_AXIS or team == TEAM_ALLIES then
+                local guid = get_client_guid(clientNum)
+                local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+                roster_seen[guid:sub(1, 32)] = {
+                    guid = guid:sub(1, 32),  -- First 32 chars of GUID
+                    name = strip_color_codes(name),
+                    team = team,
+                }
+            end
+        end
+    end
+end
+
 local function collect_team_data()
     local axis_players = {}
     local allies_players = {}
 
-    local max_clients = get_max_clients()
-    for clientNum = 0, max_clients - 1 do
-        -- Check if player is connected
-        local connected = safe_gentity_get(clientNum, "pers.connected")
-        if connected == CON_CONNECTED then
-            local guid = get_client_guid(clientNum)
-            local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
-            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+    -- One final scan so the intermission state itself is captured; the
+    -- accumulated roster_seen then also contributes everyone who played
+    -- this round but already left.
+    roster_scan()
 
-            -- Clean the name (remove color codes for cleaner display)
-            local clean_name = strip_color_codes(name)
-
-            local player_data = {
-                guid = guid:sub(1, 32),  -- First 32 chars of GUID
-                name = clean_name
-            }
-
-            if team == TEAM_AXIS then
-                table.insert(axis_players, player_data)
-                log(string.format("Axis player: %s (%s)", clean_name, guid:sub(1,8)))
-            elseif team == TEAM_ALLIES then
-                table.insert(allies_players, player_data)
-                log(string.format("Allies player: %s (%s)", clean_name, guid:sub(1,8)))
-            end
+    for _, p in pairs(roster_seen) do
+        local player_data = { guid = p.guid, name = p.name }
+        if p.team == TEAM_AXIS then
+            table.insert(axis_players, player_data)
+            log(string.format("Axis player: %s (%s)", p.name, p.guid:sub(1,8)))
+        elseif p.team == TEAM_ALLIES then
+            table.insert(allies_players, player_data)
+            log(string.format("Allies player: %s (%s)", p.name, p.guid:sub(1,8)))
         end
     end
 
@@ -1494,6 +1521,7 @@ local function handle_gamestate_change(new_gamestate)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()   -- Reset surrender vote for new round (v1.4.0)
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         round_started = true
         log(string.format("Round started at %d", round_start_unix))
         intermission_handled = false
@@ -1632,6 +1660,12 @@ function et_RunFrame(levelTime)
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
     handle_gamestate_change(gamestate)
 
+    -- v1.7.3: accumulate the round roster (throttled to once per second
+    -- inside roster_scan) so mid-round quitters stay in the team lists.
+    if round_started and gamestate == GS_PLAYING then
+        roster_scan()
+    end
+
     -- Fallback: detect round start reliably (even if gamestate transition is missed)
     if gamestate == GS_PLAYING and not round_started then
         round_start_unix = os.time()
@@ -1657,6 +1691,7 @@ function et_RunFrame(levelTime)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         intermission_handled = false
         round_started = true
         log(string.format("Round started at %d (fallback)", round_start_unix))
