@@ -1,6 +1,7 @@
 """Records sub-router: Season endpoints."""
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
 from website.backend.dependencies import get_db
@@ -12,7 +13,31 @@ router = APIRouter()
 logger = get_app_logger("api.records.seasons")
 
 
-@router.get("/seasons/current")
+class CurrentSeason(BaseModel):
+    """The current season and the one after it.
+
+    ⚠️ MEASURED, NOT DESIGNED — read off a live response and cross-checked
+    against the handler, which has a single return with eight literal keys.
+
+    ⛔ `response_model` FILTERS: a field the handler returns and this model
+    omits is dropped silently with a 200.
+    """
+
+    #: Season identifier in `YYYY-QN` form, e.g. "2026-Q3".
+    id: str
+    name: str
+    #: Whole days remaining; 0 on the final day, never negative.
+    days_left: int
+    #: `YYYY-MM-DD`, not a datetime — the handler formats before returning.
+    start_date: str
+    end_date: str
+    next_season_id: str
+    next_season_name: str
+    next_season_start: str
+
+
+
+@router.get("/seasons/current", response_model=CurrentSeason)
 async def get_current_season():
     sm = SeasonManager()
     current_id = sm.get_current_season()

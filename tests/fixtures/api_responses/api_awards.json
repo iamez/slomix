@@ -1,0 +1,72 @@
+{
+ "awards": [
+  {
+   "award": "Most playtime denied",
+   "date": "2026-08-26",
+   "guid": "00000000000000000000000000000000",
+   "map": "sw_goldrush_te",
+   "player": "player1",
+   "round_id": 11347,
+   "round_number": 2,
+   "value": "225 seconds"
+  },
+  {
+   "award": "Most team damage given",
+   "date": "2026-08-26",
+   "guid": "00000001000000000000000000000000",
+   "map": "sw_goldrush_te",
+   "player": "player2",
+   "round_id": 11347,
+   "round_number": 2,
+   "value": "157"
+  },
+  {
+   "award": "Full respawn king",
+   "date": "2026-08-26",
+   "guid": "00000002000000000000000000000000",
+   "map": "sw_goldrush_te",
+   "player": "player3",
+   "round_id": 11347,
+   "round_number": 2,
+   "value": "14.54 percent, 3.14 min"
+  },
+  {
+   "award": "Least time dead (What spawn?)",
+   "date": "2026-08-26",
+   "guid": "00000001000000000000000000000000",
+   "map": "sw_goldrush_te",
+   "player": "player2",
+   "round_id": 11347,
+   "round_number": 2,
+   "value": "8.23 percent, 1.78 min"
+  },
+  {
+   "award": "Most pistol kills",
+   "date": "2026-08-26",
+   "guid": "00000000000000000000000000000000",
+   "map": "sw_goldrush_te",
+   "player": "player1",
+   "round_id": 11347,
+   "round_number": 2,
+   "value": "4"
+  },
+  {
+   "award": "Most damage received",
+   "date": "2026-08-26",
+   "guid": "00000002000000000000000000000000",
+   "map": "sw_goldrush_te",
+   "player": "player3",
+   "round_id": 11347,
+   "round_number": 2,
+   "value": "6120"
+  }
+ ],
+ "filters": {
+  "award_type": null,
+  "days": 0,
+  "player": null
+ },
+ "limit": 50,
+ "offset": 0,
+ "total": 25255
+}
