@@ -882,10 +882,12 @@ local function roster_scan()
                 if key == "" then
                     key = "noguid:" .. clientNum
                 end
+                local prev = roster_seen[key]
                 roster_seen[key] = {
                     guid = guid:sub(1, 32),  -- First 32 chars of GUID
                     name = strip_color_codes(name),
                     team = team,
+                    first_seen = prev and prev.first_seen or now,
                     last_seen = now,
                 }
             end
@@ -903,13 +905,18 @@ local function collect_team_data()
     roster_scan()
 
     for _, p in pairs(roster_seen) do
-        -- Fallback-start rounds: skip players seen only during the
-        -- pre-clock window who never reappeared once play began.
-        if roster_grace_until > 0 and (p.last_seen or 0) < roster_grace_until then
+        -- Fallback-start rounds: skip only FLEETING pre-clock sightings —
+        -- gone before the grace boundary AND present under 10 s total. A
+        -- player who genuinely played 15 s..40 s has a longer span and is
+        -- kept; losing a real participant is the failure mode this whole
+        -- feature exists to fix, so the filter errs toward keeping.
+        local span = (p.last_seen or 0) - (p.first_seen or p.last_seen or 0)
+        if roster_grace_until > 0 and (p.last_seen or 0) < roster_grace_until
+                and span < 10 then
             log(string.format("Roster: dropping pre-clock-only %s", p.name))
             goto continue
         end
-        local player_data = { guid = p.guid, name = p.name }
+        local player_data = { guid = p.guid, name = p.name, last_seen = p.last_seen or 0 }
         if p.team == TEAM_AXIS then
             table.insert(axis_players, player_data)
             log(string.format("Axis player: %s (%s)", p.name, p.guid:sub(1,8)))
@@ -948,16 +955,36 @@ local function format_player_json(players)
         return "[]"
     end
 
+    -- ⚠️ This string is a DATA channel: the bot parses Axis_JSON /
+    -- Allies_JSON out of the Discord embed fields, and a field over 1024
+    -- chars fails the whole webhook. The cumulative roster (v1.7.3) is no
+    -- longer bounded by simultaneous client count, so cap by WHOLE entries
+    -- with the most recently seen players first — anyone dropped here is
+    -- the oldest sighting, and the bot's pcs-based roster healing restores
+    -- them on the database side.
+    local ordered = {}
+    for _, p in ipairs(players) do table.insert(ordered, p) end
+    table.sort(ordered, function(a, b)
+        return (a.last_seen or 0) > (b.last_seen or 0)
+    end)
+
     local parts = {}
-    for _, p in ipairs(players) do
+    local total_len = 2  -- brackets
+    for _, p in ipairs(ordered) do
         -- Use the RFC 8259-compliant escape (v1.6.4): names can contain raw
         -- control bytes from clipboard paste / binary corruption, and the
         -- prior inline `\` and `"` only escape let those through.
-        table.insert(parts, string.format(
+        local entry = string.format(
             '{"guid":"%s","name":"%s"}',
             json_escape(p.guid),
             json_escape(p.name)
-        ))
+        )
+        if total_len + #entry + 1 > 1000 then
+            log(string.format("Roster JSON cap: dropping oldest entry %s", p.name))
+        else
+            table.insert(parts, entry)
+            total_len = total_len + #entry + 1
+        end
     end
     return "[" .. table.concat(parts, ",") .. "]"
 end
