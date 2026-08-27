@@ -72,6 +72,17 @@ function Header({ p }: { p: Profile }) {
           <div style={{ marginTop: 6 }}><Unavailable what="identity" /></div>
         )}
       </div>
+      {/* An unrated player gets {available:false, reason:"not rated"} — the
+        * rating area must say that, not vanish (Codex, #822 wave 4): a
+        * missing panel and a missing rating are different facts. */}
+      {!(skill.available && skill.et_rating != null) && (
+        <div style={{ textAlign: 'right' }}>
+          <Lbl style={{ fontSize: 9 }}>et rating</Lbl>
+          <div className="m" style={{ fontSize: 13, color: 'var(--color-text-500)', marginTop: 6 }}>
+            {skill.available ? 'not rated yet' : (skill.reason === 'not rated' ? 'not rated yet' : 'unavailable')}
+          </div>
+        </div>
+      )}
       {skill.available && skill.et_rating != null && (
         <div style={{ textAlign: 'right' }}>
           <Lbl style={{ fontSize: 9 }}>et rating</Lbl>
@@ -118,8 +129,17 @@ function Lifetime({ p }: { p: Profile }) {
 
 function Streaks({ p }: { p: Profile }) {
   const s = p.streaks;
-  if (!s.available) return null;
   const onLoss = s.current_type === 'L';
+  if (!s.available) {
+    return (
+      <div data-parity="profile.streaks" style={{ marginTop: 26 }}>
+        <Lbl style={{ fontSize: 9 }}>current run</Lbl>
+        <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginLeft: 10 }}>
+          no decided rounds yet
+        </span>
+      </div>
+    );
+  }
   return (
     <div data-parity="profile.streaks" style={{ marginTop: 26, display: 'flex', gap: 26, alignItems: 'baseline', flexWrap: 'wrap' }}>
       <span>

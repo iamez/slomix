@@ -199,4 +199,24 @@ describe('PlayerProfilePage', () => {
     // The recording carries `vid` as both the name and the only alias.
     expect(screen.queryByText(/also vid/)).toBeNull();
   });
+
+  it('an unrated player and an undecided record are named, not hidden', async () => {
+    const bare = {
+      ...(profile as object),
+      skill: { available: false, reason: 'not rated' },
+      streaks: { available: false, reason: 'no decided rounds' },
+    };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(bare) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+    // The rating area stays put and explains itself instead of vanishing.
+    expect(screen.getByText('not rated yet')).toBeInTheDocument();
+    expect(screen.getByText('no decided rounds yet')).toBeInTheDocument();
+    expect(screen.getAllByText('et rating').length).toBe(1);
+  });
 });
