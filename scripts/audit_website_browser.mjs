@@ -34,6 +34,7 @@ const { chromium } = await import(
 
 const BASE_URL = process.env.AUDIT_BASE_URL ?? 'http://127.0.0.1:8000';
 const ANON_ONLY = process.argv.includes('--anon-only');
+const MANIFEST = process.argv.includes('--manifest');
 const OWNER_ONLY = process.argv.includes('--owner-only');
 const OUT_DIR = (() => {
     const i = process.argv.indexOf('--out');
@@ -299,6 +300,107 @@ async function collectPageFindings(page) {
 
         return out;
     }, RENDER_ROT);
+}
+
+// --- H2 manifest mode (docs/design/09): one evaluate per route that freezes
+// what the page SHOWS — api paths, panel titles, table columns, canvases,
+// tabs, data-parity keys. Run once against legacy to produce
+// docs/parity/inventory.json; run against /app and feed both to
+// scripts/parity_diff.mjs.
+async function collectManifest(page) {
+    return page.evaluate(() => {
+        const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
+        // The legacy SPA keeps every view's panels in the DOM and hides the
+        // inactive ones — without a visibility walk the manifest freezes the
+        // UNION of all routes (measured: 17 identical panels everywhere).
+        const visCache = new WeakMap();
+        const isUserVisible = (el) => {
+            if (!el) return false;
+            if (visCache.has(el)) return visCache.get(el);
+            let ok = true;
+            for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+                if (n.hasAttribute && n.hasAttribute('hidden')) { ok = false; break; }
+                const cs = getComputedStyle(n);
+                if (cs.display === 'none' || cs.visibility === 'hidden') { ok = false; break; }
+            }
+            visCache.set(el, ok);
+            return ok;
+        };
+        const out = { panelTitles: [], tableColumns: {}, canvasCount: 0, tabs: [], dataParityKeys: [] };
+        // Panels: legacy glass-cards key by heading text; new pages carry
+        // data-parity keys (collected separately below).
+        for (const card of document.querySelectorAll('.glass-card, .card, section')) {
+            if (!isUserVisible(card)) continue;
+            const h = card.querySelector('h1,h2,h3,h4,.card-title,.section-title');
+            const t = norm(h && h.textContent);
+            if (t) out.panelTitles.push(t);
+        }
+        let anonTable = 0;
+        for (const table of document.querySelectorAll('table')) {
+            if (!isUserVisible(table)) continue;
+            const cols = [...table.querySelectorAll('thead th, tr:first-child th')].map((th) => norm(th.textContent)).filter(Boolean);
+            if (!cols.length) continue;
+            const key = table.id || `table-${anonTable++}`;
+            out.tableColumns[key] = cols;
+        }
+        out.canvasCount = [...document.querySelectorAll('canvas')].filter(isUserVisible).length;
+        for (const tab of document.querySelectorAll('[role="tab"], .tab, .tab-button, .nav-tabs a')) {
+            if (!isUserVisible(tab)) continue;
+            const t = norm(tab.textContent);
+            if (t) out.tabs.push(t);
+        }
+        for (const el of document.querySelectorAll('[data-parity]')) {
+            if (!isUserVisible(el)) continue;
+            out.dataParityKeys.push(el.getAttribute('data-parity'));
+        }
+        out.panelTitles = [...new Set(out.panelTitles)].sort();
+        out.tabs = [...new Set(out.tabs)].sort();
+        out.dataParityKeys = [...new Set(out.dataParityKeys)].sort();
+        return out;
+    });
+}
+
+async function manifestRoute(context, route) {
+    const page = await context.newPage();
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const apiPaths = new Set();
+    page.on('request', (req) => {
+        try {
+            const u = new URL(req.url());
+            if (u.pathname.startsWith('/api/')) apiPaths.add(u.pathname);
+        } catch { /* data: etc. */ }
+    });
+    try {
+        await page.goto(`${BASE_URL}/${route.hash}`, { waitUntil: 'networkidle', timeout: 30_000 });
+    } catch { /* manifest still collects what rendered */ }
+    await page.waitForTimeout(2500);
+    const dom = await collectManifest(page);
+    await page.close();
+    return { apiPaths: [...apiPaths].sort(), ...dom };
+}
+
+if (MANIFEST) {
+    const browser = await chromium.launch();
+    const context = await browser.newContext();
+    const ownerCookie = mintOwnerSession();
+    if (ownerCookie) {
+        const { hostname } = new URL(BASE_URL);
+        await context.addCookies([
+            { name: 'session', value: ownerCookie, domain: hostname, path: '/' },
+        ]);
+    }
+    const routesOut = {};
+    for (const route of ROUTES) {
+        routesOut[route.name] = await manifestRoute(context, route);
+        process.stdout.write(`  manifest ${route.name.padEnd(38)} ${routesOut[route.name].apiPaths.length} api, ${routesOut[route.name].panelTitles.length} panels\n`);
+    }
+    await context.close();
+    await browser.close();
+    mkdirSync(OUT_DIR, { recursive: true });
+    const outFile = path.join(OUT_DIR, 'inventory.json');
+    writeFileSync(outFile, JSON.stringify({ baseUrl: BASE_URL, generated: new Date().toISOString(), routes: routesOut }, null, 2));
+    process.stdout.write(`\n  manifest -> ${outFile}\n`);
+    process.exit(0);
 }
 
 async function auditRoute(context, route, viewport, pass, outDir) {
