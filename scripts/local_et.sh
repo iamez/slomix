@@ -244,6 +244,7 @@ cmd_verify() {
     echo "── Naloženi Lua moduli ────────────────────────────────"
     local loaded
     loaded=$(grep -a "loaded into Lua VM" "${CONSOLE_LOG}" | tail -10)
+    # shellcheck disable=SC2001 # multiline prefix: ${var//} cannot anchor per-line ^
     [ -n "${loaded}" ] && echo "${loaded}" | sed 's/^/  /' || echo "  (nobenega!)"
     local n; n=$(grep -ac "loaded into Lua VM" "${CONSOLE_LOG}")
     echo
@@ -255,6 +256,7 @@ cmd_verify() {
     local errs
     errs=$(grep -aiE "error running lua|attempt to (index|call|compare|perform)|stack traceback|bad argument" \
            "${CONSOLE_LOG}" | tail -10)
+    # shellcheck disable=SC2001 # multiline prefix, same as above
     if [ -n "${errs}" ]; then echo "${errs}" | sed 's/^/  ❌ /'
     else echo "  ✅ nobene"; fi
 }

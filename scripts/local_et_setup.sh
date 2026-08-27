@@ -110,6 +110,8 @@ install -d -o "${ET_USER}" -g "${ET_USER}" "${GAME_DIR}"
 # `command -v rsync` → nič), tar pa je povsod. Izključitve so iste kot v
 # prejšnji rsync različici. Idempotentno: tar -x povozi obstoječe datoteke,
 # ničesar ne briše (namerno — nikoli --delete semantike).
+# shellcheck disable=SC2029 # client-side expansion is the point: the local
+# vars name the remote paths
 ssh "${SSH_OPTS[@]}" "et@${PURAN_HOST}" \
     "cd '${PURAN_GAME_DIR}' && tar -cf - \
         --exclude='*.bak' --exclude='*.bak_*' --exclude='*.bak-*' \
@@ -140,6 +142,7 @@ for f in stats_discord_webhook.lua live_events_config.lua; do
     # ssh+cat, ne scp: SSH_OPTS nosi `-p <port>` za ssh, scp pa vrata bere iz
     # `-P` — z `-p` je scp tiho ciljal privzeta vrata in oba prenosa sta padla
     # (ujeto ob prvem zagonu 17. 8.).
+    # shellcheck disable=SC2029 # ${f} expands locally on purpose
     if ssh "${SSH_OPTS[@]}" "et@${PURAN_HOST}" \
         "cat '/home/et/.etlegacy/legacy/luascripts/${f}'" \
         > "${HOME_PATH}/luascripts/${f}" 2>/dev/null \
