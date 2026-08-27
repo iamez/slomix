@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 
 from shared.config import load_config
 from shared.services.session_stats_aggregator import SessionStatsAggregator
@@ -2052,4 +2053,219 @@ async def post_session_mvp(
         "my_vote": nominated,
         "votes_for_pick": tally.get(nominated, 0),
         "total_votes": sum(tally.values()),
+    }
+
+
+# ── Session lineups ──────────────────────────────────────────────────────────
+# Owner request 2026-08-27: the site shows every advanced stat but never the
+# BASIC one — who played with whom. This endpoint derives it from
+# lua_round_teams (cumulative rosters since v1.7.3, healed by the bot for
+# older rounds): the two persistent teams of a session, and every membership
+# change between consecutive rounds, including who replaced whom.
+
+
+class LineupPlayer(BaseModel):
+    guid: str  # 8-char prefix — the site's public player identity
+    name: str
+
+
+class LineupSwap(BaseModel):
+    out: LineupPlayer
+    incoming: LineupPlayer
+
+
+class LineupChange(BaseModel):
+    """Membership delta of ONE team between two consecutive rounds."""
+
+    map_name: str
+    round_number: int
+    round_id: int
+    team: str  # 'a' | 'b'
+    joined: list[LineupPlayer]
+    left: list[LineupPlayer]
+    #: When exactly one player left and one joined the same team in the same
+    #: round, that is a substitution and named as such.
+    swaps: list[LineupSwap]
+
+
+class TeamLineup(BaseModel):
+    key: str  # 'a' | 'b'
+    #: session_teams name when the bot recorded one, else Team A/Team B.
+    name: str
+    #: Everyone who EVER appeared for this team in the session, in first-seen
+    #: order — the session's roster, not one round's.
+    players: list[LineupPlayer]
+
+
+class SessionLineups(BaseModel):
+    gaming_session_id: int
+    teams: list[TeamLineup]
+    changes: list[LineupChange]
+    #: Rounds that had no lua roster (pre-webhook history) — named so an
+    #: incomplete timeline reads as "unmeasured", never as "no changes".
+    rounds_without_roster: int
+
+
+def _lineup_players(raw) -> list[dict]:
+    import json as _json
+
+    if isinstance(raw, str):
+        try:
+            raw = _json.loads(raw)
+        except (ValueError, TypeError):
+            return []
+    out = []
+    for p in raw or []:
+        if not isinstance(p, dict):
+            continue
+        guid = str(p.get("guid") or "")[:8].upper()
+        name = str(p.get("name") or "").strip()
+        if guid or name:
+            out.append({"guid": guid, "name": name})
+    return out
+
+
+@router.get(
+    "/stats/session/{gaming_session_id}/lineups",
+    response_model=SessionLineups,
+)
+async def get_session_lineups(
+    gaming_session_id: int, db: DatabaseAdapter = Depends(get_db)
+):
+    rows = await db.fetch_all(
+        """
+        SELECT r.id, r.map_name, r.round_number,
+               l.axis_players, l.allies_players
+        FROM rounds r
+        LEFT JOIN lua_round_teams l ON l.round_id = r.id
+        WHERE r.gaming_session_id = ?
+          AND r.round_number IN (1, 2)
+          AND (r.round_status IN ('completed', 'substitution')
+               OR r.round_status IS NULL)
+        ORDER BY r.round_date, CAST(REPLACE(r.round_time, ':', '') AS INTEGER)
+        """,
+        (gaming_session_id,),
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Anchor the two persistent teams on the first round that has a roster;
+    # every later round maps its axis/allies onto them by guid overlap (the
+    # sides swap every stopwatch round, so the side label is never the team).
+    team_sets: dict[str, set] = {"a": set(), "b": set()}
+    players_seen: dict[str, dict] = {}
+    order: dict[str, list] = {"a": [], "b": []}
+    membership_prev: dict[str, set] | None = None
+    changes: list[dict] = []
+    rounds_without_roster = 0
+
+    for rid, map_name, round_number, axis_raw, allies_raw in rows:
+        axis = _lineup_players(axis_raw)
+        allies = _lineup_players(allies_raw)
+        if not axis and not allies:
+            rounds_without_roster += 1
+            continue
+        for p in axis + allies:
+            players_seen.setdefault(p["guid"] or p["name"], p)
+
+        axis_g = {p["guid"] or p["name"] for p in axis}
+        allies_g = {p["guid"] or p["name"] for p in allies}
+        if not team_sets["a"] and not team_sets["b"]:
+            assign = {"a": axis_g, "b": allies_g}
+        else:
+            # Larger overlap wins; ties keep axis->a so a fully swapped
+            # roster still produces a deterministic mapping.
+            a_axis = len(team_sets["a"] & axis_g)
+            a_allies = len(team_sets["a"] & allies_g)
+            if a_axis >= a_allies:
+                assign = {"a": axis_g, "b": allies_g}
+            else:
+                assign = {"a": allies_g, "b": axis_g}
+
+        current = {"a": assign["a"], "b": assign["b"]}
+        if membership_prev is not None:
+            for key in ("a", "b"):
+                joined = sorted(current[key] - membership_prev[key])
+                left = sorted(membership_prev[key] - current[key])
+                # A player who moved BETWEEN teams is a move, not a swap pair.
+                moved = {
+                    g for g in joined
+                    if g in membership_prev["a"] | membership_prev["b"]
+                }
+                swap_in = [g for g in joined if g not in moved]
+                swap_left = [
+                    g for g in left if g not in current["a"] | current["b"]
+                ]
+                swaps = []
+                if len(swap_in) == 1 and len(swap_left) == 1:
+                    swaps.append({
+                        "out": players_seen[swap_left[0]],
+                        "incoming": players_seen[swap_in[0]],
+                    })
+                if joined or left:
+                    changes.append({
+                        "map_name": map_name,
+                        "round_number": round_number,
+                        "round_id": rid,
+                        "team": key,
+                        "joined": [players_seen[g] for g in joined],
+                        "left": [players_seen[g] for g in left],
+                        "swaps": swaps,
+                    })
+        membership_prev = current
+        for key in ("a", "b"):
+            for g in sorted(current[key]):
+                if g not in team_sets[key] and g not in order[key]:
+                    order[key].append(g)
+            team_sets[key] |= current[key]
+
+    if not team_sets["a"] and not team_sets["b"]:
+        # Every round predates the lua webhook — an unmeasured session.
+        return {
+            "gaming_session_id": gaming_session_id,
+            "teams": [],
+            "changes": [],
+            "rounds_without_roster": rounds_without_roster,
+        }
+
+    # Best-effort display names, same convention as _tonight_team_names in
+    # players_router: session_teams stores 8-char guids.
+    names = {"a": "Team A", "b": "Team B"}
+    try:
+        team_rows = await db.fetch_all(
+            "SELECT team_name, player_guids FROM session_teams "
+            "WHERE gaming_session_id = ?",
+            (gaming_session_id,),
+        )
+        import json as _json
+
+        for team_name, guids_raw in team_rows or []:
+            guids = guids_raw
+            if isinstance(guids, str):
+                try:
+                    guids = _json.loads(guids)
+                except (ValueError, TypeError):
+                    continue
+            gset = {str(g)[:8].upper() for g in guids or []}
+            overlap_a = len(gset & team_sets["a"])
+            overlap_b = len(gset & team_sets["b"])
+            if overlap_a > overlap_b and team_name:
+                names["a"] = str(team_name)
+            elif overlap_b > overlap_a and team_name:
+                names["b"] = str(team_name)
+    except Exception:  # nosec B110 — cosmetic names; rosters are the identity
+        logger.debug("session_teams name lookup failed", exc_info=True)
+
+    return {
+        "gaming_session_id": gaming_session_id,
+        "teams": [
+            {
+                "key": key,
+                "name": names[key],
+                "players": [players_seen[g] for g in order[key]],
+            }
+            for key in ("a", "b")
+        ],
+        "changes": changes,
+        "rounds_without_roster": rounds_without_roster,
     }

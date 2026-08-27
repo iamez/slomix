@@ -633,3 +633,44 @@ export interface RoundViz {
     most_damage?: { name: string; damage_given: number };
   };
 }
+
+/** GET /api/stats/session/{id}/lineups — corpus: api_stats_session_gaming_session_id_lineups.json
+ * (session 153: two trios, and a real mid-evening team switch). Derived from
+ * lua_round_teams per-round rosters (cumulative since webhook v1.7.3). */
+export interface LineupPlayer {
+  guid: string;
+  name: string;
+}
+
+export interface LineupSwap {
+  out: LineupPlayer;
+  incoming: LineupPlayer;
+}
+
+/** Membership delta of ONE team between two consecutive rounds. A player
+ * moving BETWEEN teams appears as joined on one team and left on the other
+ * in the same round — the UI folds that mirror pair into a single switch. */
+export interface LineupChange {
+  map_name: string;
+  round_number: number;
+  round_id: number;
+  team: 'a' | 'b' | string;
+  joined: LineupPlayer[];
+  left: LineupPlayer[];
+  swaps: LineupSwap[];
+}
+
+export interface TeamLineup {
+  key: 'a' | 'b' | string;
+  name: string;
+  players: LineupPlayer[];
+}
+
+export interface SessionLineups {
+  gaming_session_id: number;
+  teams: TeamLineup[];
+  changes: LineupChange[];
+  /** Rounds with no lua roster (pre-webhook history) — an unmeasured
+   * stretch, never "no changes". */
+  rounds_without_roster: number;
+}
