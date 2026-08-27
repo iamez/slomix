@@ -41,6 +41,9 @@ class _StubDb:
             return self.team_rows
         return self.rounds
 
+    async def fetch_val(self, query, params=None):
+        return 0  # default: the session has no rounds at all -> 404
+
 
 def _client(db):
     app = FastAPI()
@@ -85,9 +88,9 @@ async def test_substitution_is_a_named_out_in_pair():
         {"out": {"guid": "AAAA0003", "name": "cvet"},
          "incoming": {"guid": "CCCC0001", "name": "gal"}}
     ]
-    # The session roster keeps BOTH — everyone who ever played for a.
+    # The roster is the STARTING lineup; the substitution lives in changes.
     a_names = {p["name"] for t in body["teams"] if t["key"] == "a" for p in t["players"]}
-    assert {"cvet", "gal"} <= a_names
+    assert a_names == {"ana", "bor", "cvet"}
 
 
 @pytest.mark.asyncio
@@ -125,3 +128,49 @@ async def test_unmeasured_history_is_counted_not_silent():
 async def test_unknown_session_is_404():
     async with _client(_StubDb([])) as c:
         assert (await c.get("/api/stats/session/999/lineups")).status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_bots_never_reach_the_lineup():
+    bot = _p("OMNIBOT0", "[BOT]carniee")
+    bot2 = _p("OMNIBOT1", "[bot]lower")
+    db = _StubDb([
+        _round(1, "supply", 1, [A1, A2, bot], [B1, B2, bot2]),
+        # The historical bot->human turnover shape (sessions 104/116):
+        # without the filter this was the only full-overlap tie the team
+        # mapping ever hit.
+        _round(2, "supply", 2, [B1, B2], [A1, A2]),
+    ])
+    async with _client(db) as c:
+        body = (await c.get("/api/stats/session/7/lineups")).json()
+    names = {p["name"] for t in body["teams"] for p in t["players"]}
+    assert names == {"ana", "bor", "dane", "eva"}
+    assert body["changes"] == []
+
+
+@pytest.mark.asyncio
+async def test_cancelled_only_session_is_unmeasured_not_404():
+    class _CancelledOnlyDb(_StubDb):
+        async def fetch_val(self, query, params=None):
+            return 3  # the session exists; its rounds are all cancelled
+
+    db = _CancelledOnlyDb([])
+    async with _client(db) as c:
+        resp = await c.get("/api/stats/session/7/lineups")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["teams"] == [] and body["rounds_without_roster"] == 0
+
+
+@pytest.mark.asyncio
+async def test_starting_lineup_survives_a_team_switch():
+    db = _StubDb([
+        _round(1, "supply", 1, [A1, A2, A3], [B1, B2, B3]),
+        _round(2, "escape", 1, [A1, A2, B3], [B1, B2, A3]),
+    ])
+    async with _client(db) as c:
+        body = (await c.get("/api/stats/session/7/lineups")).json()
+    teams = {t["key"]: sorted(p["name"] for p in t["players"]) for t in body["teams"]}
+    # 3v3 stays 3v3 — the switch is narrated, not folded into the roster.
+    assert teams["a"] == ["ana", "bor", "cvet"]
+    assert teams["b"] == ["dane", "eva", "fran"]

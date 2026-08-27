@@ -30,7 +30,7 @@ function foldChanges(changes: LineupChange[]) {
     const consumed = new Set<string>();
     for (const c of group) {
       for (const s of c.swaps) {
-        out.push({ key: `${c.round_id}:${s.out.guid}`, label: where, text: `${s.out.name} \u2192 ${s.incoming.name}` });
+        out.push({ key: `${c.round_id}:${s.out.guid || s.out.name}`, label: where, text: `${s.out.name} \u2192 ${s.incoming.name}` });
         consumed.add(s.out.guid);
         consumed.add(s.incoming.guid);
       }
@@ -40,17 +40,17 @@ function foldChanges(changes: LineupChange[]) {
       for (const p of c.joined) {
         if (consumed.has(p.guid)) continue;
         if (sibling?.left.some((l) => l.guid === p.guid)) {
-          out.push({ key: `${c.round_id}:sw:${p.guid}`, label: where, text: `${p.name} \u21c4 switched to team ${c.team}` });
+          out.push({ key: `${c.round_id}:sw:${p.guid || p.name}`, label: where, text: `${p.name} \u21c4 switched to team ${c.team}` });
           consumed.add(p.guid);
         }
       }
     }
     for (const c of group) {
       for (const p of c.joined) {
-        if (!consumed.has(p.guid)) out.push({ key: `${c.round_id}:+${p.guid}`, label: where, text: `+ ${p.name} (team ${c.team})` });
+        if (!consumed.has(p.guid)) out.push({ key: `${c.round_id}:+${p.guid || p.name}`, label: where, text: `+ ${p.name} (team ${c.team})` });
       }
       for (const p of c.left) {
-        if (!consumed.has(p.guid)) out.push({ key: `${c.round_id}:-${p.guid}`, label: where, text: `\u2212 ${p.name} (team ${c.team})` });
+        if (!consumed.has(p.guid)) out.push({ key: `${c.round_id}:-${p.guid || p.name}`, label: where, text: `\u2212 ${p.name} (team ${c.team})` });
       }
     }
   }

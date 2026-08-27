@@ -2092,8 +2092,8 @@ class TeamLineup(BaseModel):
     key: str  # 'a' | 'b'
     #: session_teams name when the bot recorded one, else Team A/Team B.
     name: str
-    #: Everyone who EVER appeared for this team in the session, in first-seen
-    #: order — the session's roster, not one round's.
+    #: The STARTING lineup (first measured round); later arrivals and
+    #: switches are narrated by `changes`, never folded in here.
     players: list[LineupPlayer]
 
 
@@ -2120,6 +2120,12 @@ def _lineup_players(raw) -> list[dict]:
             continue
         guid = str(p.get("guid") or "")[:8].upper()
         name = str(p.get("name") or "").strip()
+        # Bots out, same convention as the roster healer (#819): the local
+        # test server (docs/LOCAL_ET_SERVER.md) fills evenings with OMNIBOT
+        # rosters, and without this filter the two bot->human turnovers in
+        # history were the only full-overlap ties the team mapping ever hit.
+        if name.upper().startswith("[BOT]") or guid.startswith("OMNIBOT"):
+            continue
         if guid or name:
             out.append({"guid": guid, "name": name})
     return out
@@ -2147,7 +2153,20 @@ async def get_session_lineups(
         (gaming_session_id,),
     )
     if not rows:
-        raise HTTPException(status_code=404, detail="Session not found")
+        exists = await db.fetch_val(
+            "SELECT COUNT(*) FROM rounds WHERE gaming_session_id = ?",
+            (gaming_session_id,),
+        )
+        if not exists:
+            raise HTTPException(status_code=404, detail="Session not found")
+        # The session exists but every round is cancelled/filler — an
+        # unmeasured evening, not a missing one.
+        return {
+            "gaming_session_id": gaming_session_id,
+            "teams": [],
+            "changes": [],
+            "rounds_without_roster": 0,
+        }
 
     # Anchor the two persistent teams on the first round that has a roster;
     # every later round maps its axis/allies onto them by guid overlap (the
@@ -2214,9 +2233,12 @@ async def get_session_lineups(
                     })
         membership_prev = current
         for key in ("a", "b"):
-            for g in sorted(current[key]):
-                if g not in team_sets[key] and g not in order[key]:
-                    order[key].append(g)
+            if not order[key]:
+                # The STARTING lineup — "what were the teams" means the
+                # first measured round; everything after is told by
+                # `changes`, so a mid-evening switch does not inflate a
+                # 3v3 into apparent 4v4 rosters.
+                order[key] = sorted(current[key])
             team_sets[key] |= current[key]
 
     if not team_sets["a"] and not team_sets["b"]:
