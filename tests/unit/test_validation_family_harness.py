@@ -221,7 +221,8 @@ class TestTheOutcomeDefinition:
 
     def _p(self, team, winner=1, margin=None, defender=None, half=2):
         return {"guid": "g", "rid": 1, "team": team, "winner": winner,
-                "margin": margin, "defender": defender, "half": half, "v": 1}
+                "margin": margin, "r2_defender": defender, "half": half,
+                "map_winner_side": winner, "v": 1}
 
     def test_win_outcome_is_one_for_the_winning_side(self):
         assert outcome_win(self._p(1, winner=1)) == 1.0
@@ -368,9 +369,10 @@ class TestTheSecondCodexRound:
     """Seven more findings on the fixes themselves. The margin one is the reason
     this class matters: it did not tighten a guard, it retired a conclusion."""
 
-    def _p(self, team, defender, half, margin, winner=1):
-        return {"guid": "g", "rid": 1, "team": team, "winner": winner,
-                "defender": defender, "half": half, "margin": margin, "v": 1}
+    def _p(self, team, defender, half, margin, winner=1, map_winner=None, rid=1):
+        return {"guid": "g", "rid": rid, "team": team, "winner": winner,
+                "r2_defender": defender, "half": half, "margin": margin,
+                "map_winner_side": map_winner if map_winner else winner, "v": 1}
 
     def test_the_sign_flips_between_the_halves(self):
         """The side swaps between R1 and R2 (1,130 of 1,383 paired rows). Taking
@@ -388,20 +390,34 @@ class TestTheSecondCodexRound:
     def test_an_unknown_defender_is_unmeasurable(self):
         assert outcome_seconds(self._p(1, defender=0, half=2, margin=10.0)) is None
 
-    def test_margin_agreement_detects_a_sign_that_carries_no_result(self):
-        """The gate that retired the seconds outcome. A real stopwatch margin IS
-        the result, so agreement is near total; ours agreed 48.5% of the time,
-        which is chance."""
-        # a coherent margin: the winner always has the positive sign
-        good = {i: [self._p(2, 1, 2, +30.0, winner=2),
-                    self._p(1, 1, 2, +30.0, winner=2)] for i in range(5)}
+    def test_margin_agreement_compares_against_the_MAP_winner(self):
+        """⚠️ THE GATE ITSELF WAS WRONG FIRST.
+
+        It compared the margin against `rounds.winner_team` — the winner of that
+        individual attack/defence round. In stopwatch the two halves normally
+        have different round winners while the margin favours one persistent
+        side, so even a PERFECT margin scores ~50% against that label. It scored
+        48.5%, and reading that as "the margin is noise" repeated the very error
+        the margin's own sign had: a map-level quantity judged by a round-level
+        label. Against the map winner the real figure is 71.4%.
+
+        One vote per matched half, not one per player, so a full roster cannot
+        outvote a small one.
+        """
+        # margin > 0 means the R2 ATTACKER (side 2 when R2's defender is 1) took
+        # the map; a coherent pair agrees.
+        good = {i: [self._p(2, 1, 2, +30.0, map_winner=2, rid=i)] for i in range(5)}
         agree, total = margin_agreement(good)
-        assert total and agree == total
-        # an incoherent one: the sign says nothing about who won
-        bad = {i: [self._p(2, 1, 2, +30.0, winner=1),
-                   self._p(1, 1, 2, +30.0, winner=1)] for i in range(5)}
+        assert total == 5 and agree == 5
+        # same margin, map actually taken by the defender: disagreement
+        bad = {i: [self._p(2, 1, 2, +30.0, map_winner=1, rid=i)] for i in range(5)}
         agree, total = margin_agreement(bad)
-        assert total and agree == 0
+        assert total == 5 and agree == 0
+
+    def test_one_vote_per_half_not_per_player(self):
+        crowd = {1: [self._p(2, 1, 2, +30.0, map_winner=2) for _ in range(9)]}
+        agree, total = margin_agreement(crowd)
+        assert total == 1, f"a 9-player half cast {total} votes"
 
     def test_a_helper_change_moves_the_fingerprint(self, tmp_path):
         """`dpm` calls `_minutes`; changing that helper changes the executable

@@ -33,12 +33,22 @@ before it judges an unknown one. Two candidates in the default family must FAIL:
 `--outcome seconds` was added on the theory that win/loss is one bit per round
 while a stopwatch match is decided by a margin in seconds, and it appeared to
 clear the family floor by 2.4-8.7 SD where win/loss cleared by 0.18. That
-conclusion is WITHDRAWN. The quantity it used, `r1.actual_duration_seconds -
-r2.actual_duration_seconds`, agrees with who actually won the round 48.5% of the
-time — chance. A real stopwatch margin is not a correlate of the result, it IS
-the result, so agreement should be near total. `actual_duration_seconds` is wall
-clock, and an R1 fullhold runs to the timelimit rather than to an objective, so
-the difference is not "how much faster the second attack was".
+conclusion is WITHDRAWN, and the first attempt to withdraw it was wrong too.
+
+The gate initially compared the margin against `rounds.winner_team` and scored
+48.5%. That figure was itself an artefact: `winner_team` is the winner of one
+attack/defence round, and in stopwatch the two halves normally have DIFFERENT
+round winners while the margin favours one persistent side — so even a perfect
+margin scores ~50% against that label. Judged against the MAP winner, which is
+the thing a margin actually decides, the real figure is 72.4%.
+
+72.4% is well above chance, so the quantity carries real information. It is
+simply not the margin it is named after: `actual_duration_seconds` is wall
+clock, an R1 fullhold runs to the timelimit rather than to an objective, and a
+surrender ends a half early, so `T1 - T2` is not "how much faster the second
+attack was". A stopwatch margin is not a correlate of the result — it IS the
+result — so 72.4% retires it just as surely, for a reason that is now the
+correct one.
 
 The outcome is kept, gated, and refuses to run below MARGIN_AGREEMENT_FLOOR, so
 the next person meets the measurement instead of the idea. `time_to_beat_seconds`
@@ -113,10 +123,18 @@ WITH candidate_pairs AS (
   -- other R1, fabricating an outcome for a round that never had one.
   SELECT a.r1id, a.r2id, a.margin
   FROM r1_choice a JOIN r2_choice b ON b.r2id = a.r2id AND b.r1id = a.r1id
+), map_result AS (
+  -- In stopwatch the SECOND round decides the map: R1 sets a time, R2 tries to
+  -- beat it. So R2's winner is the map winner, and R2's defender identifies
+  -- which side that was. Both are carried onto BOTH halves.
+  SELECT m.r1id, m.r2id, m.margin,
+         r2.winner_team AS map_winner_side, r2.defender_team AS r2_defender
+  FROM matched m JOIN rounds r2 ON r2.id = m.r2id
+  WHERE r2.winner_team IN (1, 2) AND r2.defender_team IN (1, 2)
 ), pair_margin AS (
-  SELECT r1id AS rid, margin, 1 AS half FROM matched
+  SELECT r1id AS rid, margin, 1 AS half, map_winner_side, r2_defender FROM map_result
   UNION ALL
-  SELECT r2id AS rid, margin, 2 AS half FROM matched
+  SELECT r2id AS rid, margin, 2 AS half, map_winner_side, r2_defender FROM map_result
 )
 SELECT pcs.round_id                      AS rid,
        r.gaming_session_id               AS block,
@@ -131,7 +149,9 @@ SELECT pcs.round_id                      AS rid,
        pcs.damage_received               AS dr,
        pcs.time_played_seconds           AS secs,
        pm.margin                         AS margin,
-       pm.half                           AS half
+       pm.half                           AS half,
+       pm.map_winner_side                AS map_winner_side,
+       pm.r2_defender                    AS r2_defender
 FROM player_comprehensive_stats pcs
 JOIN rounds r ON r.id = pcs.round_id
 LEFT JOIN pair_margin pm ON pm.rid = r.id
@@ -141,7 +161,12 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
   AND pcs.time_played_seconds > 0
+  -- Bot identity is the UNION of an OMNIBOT guid and a [BOT] name: the
+  -- bot-round backfill only invalidated bot-MAJORITY rounds, so a mixed round
+  -- can still be valid and carry a [BOT] player with an ordinary guid. One
+  -- predicate would let that player into the median split.
   AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+  AND COALESCE(pcs.player_name, '') NOT LIKE '[BOT]%'
   -- $1 restricts to rounds carrying position tracks (the Layer 4 universe).
   -- A bound parameter rather than string concatenation: the query text is one
   -- constant, which is both what the SQL-injection scanners want to see and
@@ -216,6 +241,24 @@ class Family:
     seed: int = SEED
     alpha: float = ALPHA
 
+    def protocol_fingerprint(self) -> str:
+        """Hash of the analysis code itself, not just its name.
+
+        The manifest recorded `"protocol": "SPIDER_WEB_SPEC ... §8"` — a string
+        that stays identical while `outcome_seconds`, `within_round_spread`,
+        `max_t_intervals` or a threshold like MARGIN_AGREEMENT_FLOOR changes
+        underneath it. Two materially different experiments could then publish
+        the same digest. Hashing this module's source covers all of them at
+        once, at the cost of moving on cosmetic edits — the right way round for
+        a freeze.
+        """
+        try:
+            import inspect
+            src = inspect.getsource(sys.modules[__name__])
+        except (OSError, KeyError, TypeError):   # pragma: no cover
+            return "unavailable"
+        return hashlib.sha256(src.encode()).hexdigest()[:16]
+
     def frozen(self) -> dict:
         return {
             "family": self.name,
@@ -228,6 +271,7 @@ class Family:
             "seed": self.seed,
             "alpha": self.alpha,
             "protocol": "SPIDER_WEB_SPEC_2026-07 §8",
+            "protocol_fingerprint": self.protocol_fingerprint(),
         }
 
     def manifest_hash(self) -> str:
@@ -247,12 +291,13 @@ def outcome_seconds(p: dict) -> float | None:
     ⛔ THE SIDE SWAPS BETWEEN THE HALVES. `player_comprehensive_stats.team` is
     the side a player occupied in THAT round, and stopwatch teams change ends
     between R1 and R2 — measured here: 1,130 of 1,383 paired player rows sit on
-    a different `team` in R2 than in R1. Deriving the sign from R1's defender
-    for both halves therefore labels the real R2 attackers negative and their
-    opponents positive, so the two halves of one match carry contradictory
-    labels. The sign is taken per round instead: within any round the attacker
-    is the side that is not `rounds.defender_team`, and the margin favours the
-    R2 attacker.
+    a different `team` in R2 than in R1. So the sign cannot be taken from one
+    half's defender and reused for both.
+
+    The margin belongs to the MAP: positive means the R2 attack was faster, so
+    the R2 attacker took it. Within R2 that side is `3 - r2_defender`; within R1
+    the same persistent side is the one defending, i.e. `r2_defender` — because
+    the ends have swapped.
 
     None when the pair could not be resolved — the round is dropped, not scored
     as a zero margin. A missing measurement and a dead heat have the same shape
@@ -260,34 +305,44 @@ def outcome_seconds(p: dict) -> float | None:
     """
     if p.get("margin") is None or p.get("half") is None:
         return None
-    if p.get("defender") not in (1, 2):
+    if p.get("r2_defender") not in (1, 2):
         return None
-    attacks_this_round = p["team"] != p["defender"]
-    # margin > 0 means the R2 attack was faster, which is a win for whoever
-    # attacks in R2. In R1 the same persistent team is the one DEFENDING.
-    favours_r2_attacker = float(p["margin"])
-    if p["half"] == 2:
-        return favours_r2_attacker if attacks_this_round else -favours_r2_attacker
-    return -favours_r2_attacker if attacks_this_round else favours_r2_attacker
+    r2_attacker_side_here = (3 - p["r2_defender"]) if p["half"] == 2 \
+        else p["r2_defender"]
+    is_r2_attacker = p["team"] == r2_attacker_side_here
+    m = float(p["margin"])
+    return m if is_r2_attacker else -m
 
 
 def margin_agreement(rows_by_round: dict) -> tuple[int, int]:
-    """How often the margin's sign agrees with who actually won the round.
+    """How often the margin's sign agrees with who won THE MAP.
 
-    A real stopwatch margin is not a correlate of the result — it IS the result,
-    so agreement should be near total. Anything else means the quantity is not
-    what its name says, and every verdict computed from it is measuring
-    something nobody has identified.
+    ⚠️ The first version of this gate compared against `rounds.winner_team`,
+    which is the winner of that individual attack/defence round. In stopwatch
+    both halves normally have different round winners while the margin favours
+    one persistent side, so even a perfect margin would agree in exactly one of
+    the two halves and score ~50%. That is what it scored, and reading it as
+    "the margin is noise" was wrong for the same reason the margin's own sign
+    was wrong: comparing a map-level quantity against a round-level label.
+
+    The comparison is per MAP: one vote per matched pair, not one per player.
     """
+    seen: set = set()
     agree = total = 0
     for players in rows_by_round.values():
         for p in players:
-            v = outcome_seconds(p)
-            if v is None or v == 0:
+            if (p.get("margin") is None or p.get("map_winner_side") not in (1, 2)
+                    or p.get("r2_defender") not in (1, 2) or p["margin"] == 0):
                 continue
+            key = (p["rid"], p["half"])
+            if key in seen:
+                continue
+            seen.add(key)
             total += 1
-            won = p["team"] == p["winner"]
-            if (v > 0) == won:
+            # margin > 0: the R2 attack was faster, so the R2 ATTACKER took the
+            # map. The R2 attacker is the side that is not R2's defender.
+            predicted = (3 - p["r2_defender"]) if p["margin"] > 0 else p["r2_defender"]
+            if predicted == p["map_winner_side"]:
                 agree += 1
     return agree, total
 
@@ -537,18 +592,23 @@ def max_t_intervals(boot: dict, point: dict, alpha: float):
     measurable = [c for c in ids
                   if sds[c] and not math.isnan(sds[c]) and sds[c] > 0]
 
+    # ⛔ JOINTLY USABLE REPLICATES ONLY. Taking the maximum over whichever
+    # members happen to be measurable on replicate i mixes maxima of DIFFERENT
+    # family sizes into one distribution: two candidates with non-overlapping
+    # gaps would each contribute single-candidate maxima, and the resulting
+    # critical value would be the one for a family of one — too small, and
+    # SHIPS follows. A replicate counts only when every measurable member has a
+    # value for it.
+    if not measurable:
+        return {}, float("nan"), sds
     n = min((len(boot[c]) for c in ids), default=0)
     maxts = []
     for i in range(n):
-        t, ok = 0.0, False
-        for cid in measurable:
-            v = boot[cid][i]
-            if v is None:
-                continue
-            t = max(t, abs(v - point[cid]) / sds[cid])
-            ok = True
-        if ok:
-            maxts.append(t)
+        vals = [boot[cid][i] for cid in measurable]
+        if any(v is None for v in vals):
+            continue
+        maxts.append(max(abs(v - point[cid]) / sds[cid]
+                         for cid, v in zip(measurable, vals)))
     if len(maxts) < MIN_USABLE_REPLICATES:
         return {}, float("nan"), sds
     maxts.sort()
@@ -707,6 +767,12 @@ def report(family: Family, disc: dict, conf: dict,
     print(f"cutoff          : {cutoff}")
     print(f"max-T crit      : {crit:.3f}  (family-wise {int((1-family.alpha)*100)}%)")
     print("=" * 108)
+    # §8.5: a one-way digest nobody can expand is not a published manifest.
+    print("frozen family manifest (this is the artifact §8.5 requires):")
+    for line in json.dumps(family.frozen(), indent=2,
+                           sort_keys=True).splitlines():
+        print(f"  {line}")
+    print("=" * 108)
     hdr = (f"{'candidate':<12}{'disc':>9}{'conf':>9}{'sd':>8}"
            f"{'simultaneous 95%':>22}{'margin':>8}{'holm p':>9}{'dir':>5}  verdict")
     print(hdr)
@@ -829,21 +895,30 @@ async def main() -> int:
     # `actual_duration_seconds` is NOT a stopwatch margin, and every verdict
     # computed from it was measuring something nobody had identified.
     if family.outcome == "seconds":
-        flat_all = {rid: pl for rd in blocks.values() for rid, pl in rd.items()}
-        agree, total = margin_agreement(flat_all)
+        # ⛔ DISCOVERY ONLY. Validating the outcome definition against every
+        # block would consume the frozen holdout before it is analysed — and a
+        # holdout that has been looked at is spent whether the run went on to
+        # use it or not. A construct check is still a look.
+        flat_disc = {rid: pl for b in disc_b if b in blocks
+                     for rid, pl in blocks[b].items()}
+        agree, total = margin_agreement(flat_disc)
         pct = 100.0 * agree / total if total else 0.0
-        print(f"OUTCOME CHECK — margin sign vs actual winner: "
-              f"{agree}/{total} = {pct:.1f}%")
+        print(f"OUTCOME CHECK (discovery blocks only) — margin sign vs map "
+              f"winner: {agree}/{total} = {pct:.1f}%")
         if pct < MARGIN_AGREEMENT_FLOOR:
             print(
-                f"\n⛔ REFUSING TO RUN. A stopwatch margin that agrees with the\n"
-                f"   result only {pct:.1f}% of the time is not a stopwatch margin.\n"
-                f"   `rounds.actual_duration_seconds` measures wall clock, and R1\n"
-                f"   fullholds run to the timelimit rather than to an objective,\n"
-                f"   so T1 - T2 is not 'how much faster the second attack was'.\n"
-                f"   Fix the quantity — `time_to_beat_seconds` is the real one and\n"
-                f"   is populated on 33 of 2,007 eligible rounds — before using\n"
-                f"   this outcome for anything.\n")
+                f"\n⛔ REFUSING TO RUN. The margin agrees with the map winner\n"
+                f"   {pct:.1f}% of the time. A stopwatch margin is not a correlate\n"
+                f"   of the result — it IS the result, so this should be near\n"
+                f"   total. It is well above chance, so the quantity carries real\n"
+                f"   information; it is simply NOT the margin it is named after.\n"
+                f"   `rounds.actual_duration_seconds` is wall clock: an R1\n"
+                f"   fullhold runs to the timelimit rather than to an objective,\n"
+                f"   and a surrender ends a half early, so T1 - T2 is not 'how\n"
+                f"   much faster the second attack was'.\n"
+                f"   The real quantity is `time_to_beat_seconds`, populated on 33\n"
+                f"   of 2,007 eligible rounds. Making it available is capture-side\n"
+                f"   work, not analysis work.\n")
             return 3
 
     disc = analyse(blocks, disc_b, family)
@@ -881,7 +956,16 @@ async def main() -> int:
     # blocks its interval may legitimately exclude zero. Enforcing the old
     # verdict would then discard a valid family for being better powered.
     kpr = by_id.get("kpr")
-    if kpr and family.outcome == "win" and kpr.get("confirmation") is not None:
+    if family.outcome == "win" and (kpr is None
+                                    or kpr.get("confirmation") is None):
+        # An EXCLUDED kpr has no confirmation figure, and falling through to the
+        # informational branch would let the run succeed WITHOUT ever
+        # reproducing the known calibration point. Unmeasured calibration is a
+        # failed instrument, not a silent pass.
+        broken = True
+        print("  kpr   MISSING   calibration could not be measured — the "
+              "instrument never reproduced the #556 reference")
+    elif kpr and family.outcome == "win":
         k = kpr["confirmation"]
         in_range = KPR_EXPECTED_RANGE[0] <= k <= KPR_EXPECTED_RANGE[1]
         broken = broken or not in_range
