@@ -106,7 +106,9 @@ function Header({ p }: { p: Profile }) {
         <div style={{ textAlign: 'right' }}>
           <Lbl style={{ fontSize: 9 }}>et rating</Lbl>
           <div className="m" style={{ fontSize: 13, color: 'var(--color-text-500)', marginTop: 6 }}>
-            {skill.available ? 'not rated yet' : (skill.reason === 'not rated' ? 'not rated yet' : 'unavailable')}
+            {/* Same split: only `reason` separates "this player has no
+              * rating" from "the rating query failed". */}
+            {skill.reason === 'error' ? 'unavailable' : 'not rated yet'}
           </div>
         </div>
       )}
@@ -158,11 +160,18 @@ function Streaks({ p }: { p: Profile }) {
   const s = p.streaks;
   const onLoss = s.current_type === 'L';
   if (!s.available) {
+    // A failed subquery and an undecided record both arrive as
+    // available:false — only `reason` tells them apart, and calling an
+    // error "no decided rounds yet" would state a player fact we do not
+    // have (Codex, #822 wave 6).
+    const failed = s.reason === 'error';
     return (
       <div data-parity="profile.streaks" style={{ marginTop: 26 }}>
         <Lbl style={{ fontSize: 9 }}>current run</Lbl>
-        <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginLeft: 10 }}>
-          no decided rounds yet
+        <span style={{ marginLeft: 10 }}>
+          {failed
+            ? <Unavailable what="streaks" />
+            : <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no decided rounds yet</span>}
         </span>
       </div>
     );

@@ -261,4 +261,24 @@ describe('PlayerProfilePage', () => {
     await waitFor(() => expect(screen.getByText(/also plays as carniee/)).toBeInTheDocument());
     expect(screen.queryByText(/oldalt/)).toBeNull();
   });
+
+  it('a failed streak query is not reported as an undecided record', async () => {
+    const shapes = [
+      { reason: 'error', expect: 'streaks: unavailable' },
+      { reason: 'no decided rounds', expect: 'no decided rounds yet' },
+    ];
+    for (const s of shapes) {
+      const body = { ...(profile as object), streaks: { available: false, reason: s.reason } };
+      const view = renderProfile('D8423F90', (input) => {
+        const path = String(input).split('?')[0];
+        if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+          return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+        }
+        return fixtureFetch(input);
+      });
+      await waitFor(() => expect(screen.getByText(s.expect)).toBeInTheDocument());
+      view.unmount();
+      vi.restoreAllMocks();
+    }
+  });
 });

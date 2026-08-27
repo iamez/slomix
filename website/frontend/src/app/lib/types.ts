@@ -700,8 +700,10 @@ export interface ProfileIdentity extends ProfileSection {
   last_seen?: string | null;
   rounds?: number;
   discord_linked?: boolean;
-  country?: string | null;
-  twitch?: string | null;
+  /** OBJECTS, not strings (players_profile_router:118-122): the locale-derived
+   * flag is not a verified country, and the twitch handle carries its url. */
+  country?: { flag?: string; country?: string; locale?: string } | null;
+  twitch?: { login?: string; url?: string } | null;
   /** Sick-leave / alt attribution (migration 073). Two shapes, both measured
    * live: an ALT carries {role:'alt', primary_guid, primary_name, active,
    * since}, a PRIMARY carries {role:'primary', alts:[…]}. Statistics stay
