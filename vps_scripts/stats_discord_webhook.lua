@@ -877,6 +877,12 @@ local function roster_scan()
                 local key = guid:sub(1, 32)
                 if key == "" then
                     key = "noguid:" .. clientNum
+                else
+                    -- The GUID may have been unavailable on an earlier scan;
+                    -- now that the client has an identity, retire the slot
+                    -- fallback so the same participant is not emitted twice
+                    -- (and a later slot reuse cannot overwrite them).
+                    roster_seen["noguid:" .. clientNum] = nil
                 end
                 roster_seen[key] = {
                     guid = guid:sub(1, 32),  -- First 32 chars of GUID
