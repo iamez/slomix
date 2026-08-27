@@ -1724,11 +1724,7 @@ function et_RunFrame(levelTime)
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
     handle_gamestate_change(gamestate)
 
-    -- v1.7.3: accumulate the round roster (throttled to once per second
-    -- inside roster_scan) so mid-round quitters stay in the team lists.
-    if round_started and gamestate == GS_PLAYING then
-        roster_scan()
-    end
+
 
     -- Fallback: detect round start reliably (even if gamestate transition is missed)
     if gamestate == GS_PLAYING and not round_started then
@@ -1794,6 +1790,13 @@ function et_RunFrame(levelTime)
     if gamestate == GS_PLAYING then
         detect_pause()
         track_spawns(levelTime)
+        -- v1.7.3: accumulate the round roster (throttled to once per
+        -- second inside roster_scan) so mid-round quitters stay in the
+        -- team lists. AFTER detect_pause on purpose: the pause gate must
+        -- see THIS frame's pause bit, not the previous frame's.
+        if round_started then
+            roster_scan()
+        end
     end
 
     -- Send scheduled webhook
