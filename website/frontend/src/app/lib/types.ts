@@ -100,26 +100,41 @@ export interface SessionSummary {
   formatted_date: string;
 }
 
-/** One row of the quick-leaders boards. The participation field differs per
- * board — xp rows carry `rounds`, dpm_sessions rows carry `sessions`
- * (players_router; Codex on #806) — so both are optional here rather than
- * one board lying about the other's shape. */
-export interface QuickLeaderRow {
+/** One row of the XP board — participation field is `rounds`, mirroring
+ * the backend's XpLeaderRow (players_router, #812). A single row type with
+ * both fields optional let either board claim the other's shape, which is
+ * exactly what response_model now forbids server-side. */
+export interface XpLeaderRow {
   rank: number;
   guid: string;
   name: string;
   value: number;
-  rounds?: number;
-  sessions?: number;
+  rounds: number;
   label: string;
 }
 
-/** GET /api/stats/quick-leaders — corpus: api_stats_quick_leaders.json */
+/** One row of the DPM board — participation field is `sessions`
+ * (backend DpmLeaderRow, #812). */
+export interface DpmLeaderRow {
+  rank: number;
+  guid: string;
+  name: string;
+  value: number;
+  sessions: number;
+  label: string;
+}
+
+/** Either board's row, for shared rendering (rank/name/value only). */
+export type QuickLeaderRow = XpLeaderRow | DpmLeaderRow;
+
+/** GET /api/stats/quick-leaders — corpus: api_stats_quick_leaders.json.
+ * `errors` is list[str], measured: the producer appends exactly
+ * "xp_query_failed" or "dpm_query_failed" (backend QuickLeaders, #812). */
 export interface QuickLeaders {
   window_days: number;
-  xp: QuickLeaderRow[];
-  dpm_sessions: QuickLeaderRow[];
-  errors: unknown[];
+  xp: XpLeaderRow[];
+  dpm_sessions: DpmLeaderRow[];
+  errors: string[];
 }
 
 /** One stage of the capture chain. detail keys vary per stage. */
