@@ -55,6 +55,13 @@ export function useOverview() {
   });
 }
 
+/** The sections this page renders, named explicitly so adding a panel is a
+ * deliberate cost decision rather than a silent one. */
+const PROFILE_SECTIONS = [
+  'identity', 'skill', 'streaks', 'weapons', 'hit_regions', 'movement',
+  'relationships', 'maps', 'recent_matches',
+].join(',');
+
 /** The profile is ONE endpoint with sections (players_profile_router): the
  * legacy page fanned out to a dozen calls; `sections=all` is a single
  * request whose parts each declare their own availability. */
@@ -65,7 +72,11 @@ export function usePlayerProfile(playerId: string) {
     queryFn: () =>
       apiGet('/api/players/{identifier}/profile', {
         pathParams: { identifier: playerId },
-        query: { sections: 'all' },
+        // NOT 'all': `aim` and `advanced` cost a measured 16.9 s and 11.1 s
+        // cold (players_profile_router:1156-1170) and this page renders
+        // neither — asking for them would make every cold profile wait ~28 s
+        // for panels nobody sees.
+        query: { sections: PROFILE_SECTIONS },
       }) as Promise<PlayerProfile>,
   });
 }

@@ -125,4 +125,52 @@ describe('PlayerProfilePage', () => {
     expect(screen.getAllByText('872').length).toBeGreaterThan(0);
     expect(screen.getAllByText('1096').length).toBeGreaterThan(0);
   });
+
+  it('a section that is unavailable carries NO list — the page must not crash', async () => {
+    // The real shape of an unavailable/failed section: {available:false,
+    // reason} and nothing else (players_profile_router `_ok`). The first
+    // version spread `.weapons` before SectionBody ever rendered.
+    const stripped = {
+      ...(profile as object),
+      weapons: { available: false, reason: 'error' },
+      relationships: { available: false, reason: 'error' },
+      maps: { available: false, reason: 'error' },
+      recent_matches: { available: false, reason: 'error' },
+      hit_regions: { available: false, reason: 'error' },
+      movement: { available: false, reason: 'error' },
+    };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(stripped) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+    expect(screen.getByText('weapon stats: unavailable')).toBeInTheDocument();
+    expect(screen.getByText('map history: unavailable')).toBeInTheDocument();
+    expect(screen.getByText('recent rounds: unavailable')).toBeInTheDocument();
+  });
+
+  it('requests only the sections it renders, never the heavy pair', async () => {
+    const spy = vi.fn(fixtureFetch);
+    renderProfile('D8423F90', spy);
+    await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+    const url = String(spy.mock.calls[0][0]);
+    // aim (16.9 s cold) and advanced (11.1 s cold) are not on this page.
+    expect(url).toContain('sections=');
+    expect(url).not.toContain('all');
+    expect(url).not.toContain('aim');
+    expect(url).not.toContain('advanced');
+    expect(url).toContain('weapons');
+  });
+
+  it('teammate rows lead with synergy, the metric the list is ordered by', async () => {
+    renderProfile('D8423F90');
+    await waitFor(() => expect(screen.getByText(/best alongside/)).toBeInTheDocument());
+    expect(screen.getByText(/synergy = dpm delta together/)).toBeInTheDocument();
+    // Recorded top teammate: synergy 82 over 6 rounds at 66.7% together.
+    expect(screen.getAllByText('+82').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/6 rd · 66\.7%/).length).toBeGreaterThan(0);
+  });
 });

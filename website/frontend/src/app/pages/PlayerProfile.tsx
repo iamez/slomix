@@ -120,8 +120,10 @@ function Streaks({ p }: { p: Profile }) {
   );
 }
 
-function Weapons({ rows, available }: { rows: ProfileWeaponRow[]; available: boolean }) {
-  const top = [...rows].sort((a, b) => b.kills - a.kills).slice(0, 8);
+function Weapons({ rows, available }: { rows: ProfileWeaponRow[] | undefined; available: boolean }) {
+  // An unavailable section carries no list at all — read defensively, then
+  // let SectionBody name the state (Codex, #822).
+  const top = [...(rows ?? [])].sort((a, b) => b.kills - a.kills).slice(0, 8);
   return (
     <div data-parity="profile.weapons" style={{ marginTop: 34 }}>
       <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 9 }}>head hits, not headshot kills</Lbl>} />
@@ -177,7 +179,7 @@ function Body({ p }: { p: Profile }) {
       </div>
       <div data-parity="profile.movement">
         <SectionHead label="how they move" />
-        <SectionBody available={m.available} empty={m.tracks === 0} what="movement">
+        <SectionBody available={m.available} empty={!m.tracks} what="movement">
           <div className="home-cols3" style={{ gap: 10, marginTop: 10 }}>
             {([['avg speed', num(m.avg_speed)], ['peak', num(m.peak_speed)], ['sprint', pct(m.sprint_pct)],
               ['dist / life', num(m.avg_distance_per_life)],
@@ -223,6 +225,10 @@ function OpponentList({ title, rows, note, lead }: {
   );
 }
 
+/** Leads with SYNERGY — the DPM delta the backend sorts these lists by
+ * (players_profile_router:516). Showing only the win rate made the visible
+ * number disagree with the order whenever the two diverge (Codex, #822);
+ * win rate stays, as the second figure. */
 function MateList({ title, rows }: { title: string; rows: ProfileTeammate[] }) {
   return (
     <div>
@@ -231,8 +237,12 @@ function MateList({ title, rows }: { title: string; rows: ProfileTeammate[] }) {
         {rows.slice(0, 5).map((t) => (
           <div key={t.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 10, alignItems: 'baseline', padding: '6px 0' }}>
             <span className="m" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
-            <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)' }}>{t.rounds_together} rd</span>
-            <span className="m" style={{ fontSize: 11, color: 'var(--color-text-300)' }}>{pct(t.win_rate_with)}</span>
+            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-200)' }}>
+              {t.synergy == null ? '—' : `${t.synergy > 0 ? '+' : ''}${t.synergy.toFixed(0)}`}
+            </span>
+            <span className="m" style={{ fontSize: 10, color: 'var(--color-text-500)' }}>
+              {t.rounds_together} rd · {pct(t.win_rate_with)}
+            </span>
           </div>
         ))}
       </div>
@@ -242,24 +252,28 @@ function MateList({ title, rows }: { title: string; rows: ProfileTeammate[] }) {
 
 function Relationships({ p }: { p: Profile }) {
   const r = p.relationships;
-  const empty = r.top_killers.length === 0 && r.best_teammates.length === 0;
+  const killers = r.top_killers ?? [];
+  const victims = r.top_victims ?? [];
+  const best = r.best_teammates ?? [];
+  const worst = r.worst_teammates ?? [];
+  const empty = killers.length === 0 && best.length === 0;
   return (
     <div data-parity="profile.relationships" style={{ marginTop: 34 }}>
-      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 9 }}>the leading figure is what each list ranks by</Lbl>} />
+      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 9 }}>the leading figure is what each list ranks by · synergy = dpm delta together</Lbl>} />
       <SectionBody available={r.available} empty={empty} what="head-to-head history">
         <div className="about-grid-4" style={{ gap: 24, marginTop: 10 }}>
-          <OpponentList title="nemeses" rows={r.top_killers} note="kills ON them, of all duels" lead="on" />
-          <OpponentList title="victims" rows={r.top_victims} note="kills BY them, of all duels" lead="by" />
-          <MateList title="best alongside" rows={r.best_teammates} />
-          <MateList title="worst alongside" rows={r.worst_teammates} />
+          <OpponentList title="nemeses" rows={killers} note="kills ON them, of all duels" lead="on" />
+          <OpponentList title="victims" rows={victims} note="kills BY them, of all duels" lead="by" />
+          <MateList title="best alongside" rows={best} />
+          <MateList title="worst alongside" rows={worst} />
         </div>
       </SectionBody>
     </div>
   );
 }
 
-function Maps({ rows, available }: { rows: ProfileMapRow[]; available: boolean }) {
-  const top = [...rows].sort((a, b) => b.rounds - a.rounds).slice(0, 8);
+function Maps({ rows, available }: { rows: ProfileMapRow[] | undefined; available: boolean }) {
+  const top = [...(rows ?? [])].sort((a, b) => b.rounds - a.rounds).slice(0, 8);
   return (
     <div data-parity="profile.maps" style={{ marginTop: 34 }}>
       <SectionHead label="grounds · most played" />
@@ -279,7 +293,8 @@ function Maps({ rows, available }: { rows: ProfileMapRow[]; available: boolean }
   );
 }
 
-function Recent({ rows, available }: { rows: ProfileMatchRow[]; available: boolean }) {
+function Recent({ rows: raw, available }: { rows: ProfileMatchRow[] | undefined; available: boolean }) {
+  const rows = raw ?? [];
   return (
     <div data-parity="profile.recent" style={{ marginTop: 34 }}>
       <SectionHead label="last rounds" aside={<Lbl style={{ fontSize: 9 }}>newest first</Lbl>} />

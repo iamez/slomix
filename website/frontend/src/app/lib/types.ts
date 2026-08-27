@@ -684,6 +684,10 @@ export interface SessionLineups {
  * read the flag rather than the emptiness of the list below it. */
 export interface ProfileSection {
   available: boolean;
+  /** Present when a section failed or was skipped — an UNAVAILABLE section
+   * carries ONLY {available, reason}: every list/object below is absent,
+   * not empty (players_profile_router `_ok`). */
+  reason?: string;
 }
 
 export interface ProfileIdentity extends ProfileSection {
@@ -745,25 +749,25 @@ export interface ProfileWeaponRow {
 }
 
 export interface ProfileWeapons extends ProfileSection {
-  weapons: ProfileWeaponRow[];
+  weapons?: ProfileWeaponRow[];
   overall_accuracy: number | null;
   overall_hs_accuracy: number | null;
 }
 
 export interface ProfileHitRegions extends ProfileSection {
-  totals: {
+  totals?: {
     head: number; arms: number; body: number; legs: number;
     head_pct: number; arms_pct: number; body_pct: number; legs_pct: number;
   } | null;
 }
 
 export interface ProfileMovement extends ProfileSection {
-  tracks: number;
+  tracks?: number;
   avg_speed: number | null;
   peak_speed: number | null;
   sprint_pct: number | null;
   avg_distance_per_life: number | null;
-  stance: {
+  stance?: {
     standing_pct: number; crouching_pct: number; prone_pct: number;
   } | null;
 }
@@ -784,16 +788,19 @@ export interface ProfileTeammate {
   name: string;
   rounds_together: number;
   dpm_with: number | null;
+  /** The DPM DELTA while playing together — this is what the backend SORTS
+   * the teammate lists by (players_profile_router:516), so it is the figure
+   * the column has to lead with. */
   synergy: number | null;
   /** percent here, unlike ProfileOpponent.win_rate — measured, not assumed. */
   win_rate_with: number | null;
 }
 
 export interface ProfileRelationships extends ProfileSection {
-  top_killers: ProfileOpponent[];
-  top_victims: ProfileOpponent[];
-  best_teammates: ProfileTeammate[];
-  worst_teammates: ProfileTeammate[];
+  top_killers?: ProfileOpponent[];
+  top_victims?: ProfileOpponent[];
+  best_teammates?: ProfileTeammate[];
+  worst_teammates?: ProfileTeammate[];
   baseline_dpm: number | null;
 }
 
@@ -807,7 +814,7 @@ export interface ProfileMapRow {
 }
 
 export interface ProfileMaps extends ProfileSection {
-  maps: ProfileMapRow[];
+  maps?: ProfileMapRow[];
 }
 
 export interface ProfileMatchRow {
@@ -824,7 +831,7 @@ export interface ProfileMatchRow {
 }
 
 export interface ProfileRecentMatches extends ProfileSection {
-  matches: ProfileMatchRow[];
+  matches?: ProfileMatchRow[];
 }
 
 export interface PlayerProfile {
