@@ -866,7 +866,15 @@ local function roster_scan()
             if team == TEAM_AXIS or team == TEAM_ALLIES then
                 local guid = get_client_guid(clientNum)
                 local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
-                roster_seen[guid:sub(1, 32)] = {
+                -- A GUID-less client (empty-string fallback) must not share
+                -- the "" key with every other GUID-less client — key them by
+                -- slot instead, so two such players stay distinct. The stored
+                -- guid field keeps the raw value, same as the old snapshot.
+                local key = guid:sub(1, 32)
+                if key == "" then
+                    key = "noguid:" .. clientNum
+                end
+                roster_seen[key] = {
                     guid = guid:sub(1, 32),  -- First 32 chars of GUID
                     name = strip_color_codes(name),
                     team = team,
@@ -907,7 +915,15 @@ local function format_player_names(players)
     if #names == 0 then
         return "(none)"
     end
-    return table.concat(names, ", ")
+    local joined = table.concat(names, ", ")
+    -- Discord embed field values cap at 1024 chars. The cumulative roster
+    -- (v1.7.3) is no longer bounded by simultaneous client count, so a
+    -- reconnect-heavy round could overflow the field and fail the webhook;
+    -- truncate the DISPLAY string only — the JSON payload stays complete.
+    if #joined > 1000 then
+        joined = joined:sub(1, 997) .. "..."
+    end
+    return joined
 end
 
 local function format_player_json(players)

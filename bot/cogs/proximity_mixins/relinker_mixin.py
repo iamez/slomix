@@ -152,6 +152,21 @@ _RELINK_FALLBACK_TEMPLATE = (
     "WHERE map_name = $2 AND round_start_unix = $3 "
     "  AND (round_id IS NULL OR round_id != $1)"
 )
+
+# Roster healing appends one player object to exactly one of two columns.
+# Spelled out as two constant statements (not a formatted column name) so
+# the SQL is verifiably static.
+_ROSTER_HEAL_SQL = {
+    "axis_players": (
+        "UPDATE lua_round_teams SET axis_players = axis_players || ?::jsonb "
+        "WHERE round_id = ?"
+    ),
+    "allies_players": (
+        "UPDATE lua_round_teams "
+        "SET allies_players = allies_players || ?::jsonb "
+        "WHERE round_id = ?"
+    ),
+}
 # lua_round_teams has no session_date column (unlike every other table in
 # the fanout), so it can't use _RELINK_PRIMARY_TEMPLATE as-is. This uses
 # round_number + round_start_unix instead — still more precise than the
@@ -577,8 +592,7 @@ class _ProximityRelinkerMixin:
             guid = (full[0] if full else None) or guid8
             column = "axis_players" if team == 1 else "allies_players"
             await db.execute(
-                f"UPDATE lua_round_teams SET {column} = {column} || ?::jsonb "
-                "WHERE round_id = ?",
+                _ROSTER_HEAL_SQL[column],
                 (json.dumps([{"guid": guid, "name": name}]), round_id),
             )
             healed_rounds.add(round_id)
@@ -592,13 +606,28 @@ class _ProximityRelinkerMixin:
     async def relink_null_rounds(self):
         """Periodically attempt to link NULL round_id rows in proximity tables."""
         await self._relink_null_round_ids()
-        try:
-            await self._heal_truncated_lua_rosters()
-        except Exception:
-            logger.exception("Lua roster healing failed (non-fatal)")
 
     @relink_null_rounds.before_loop
     async def before_relink(self):
         """Wait for bot to be ready + 60s before starting re-linker."""
         await self.bot.wait_until_ready()
         await asyncio.sleep(60)
+
+    @tasks.loop(minutes=5)
+    async def heal_lua_rosters(self):
+        """Top up truncated lua rosters from pcs.
+
+        A SEPARATE loop from relink_null_rounds on purpose: that one starts
+        only when PROXIMITY_ENABLED is true, while the Lua webhook stores
+        rosters regardless — a deployment with proximity off would never
+        heal (Codex, #819). The cog starts this loop unconditionally.
+        """
+        try:
+            await self._heal_truncated_lua_rosters()
+        except Exception:
+            logger.exception("Lua roster healing failed (non-fatal)")
+
+    @heal_lua_rosters.before_loop
+    async def before_heal_lua_rosters(self):
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(90)

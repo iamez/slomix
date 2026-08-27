@@ -88,6 +88,10 @@ class ProximityCog(
             self.relink_null_rounds.start()
         else:
             logger.info("🎯 Proximity Tracker cog initialized (DISABLED)")
+        # Unconditional: the Lua webhook stores rosters whether or not
+        # proximity ingestion is enabled, so their healing must not be
+        # gated on it (Codex, #819).
+        self.heal_lua_rosters.start()
 
         # Ensure local directory exists
         try:
