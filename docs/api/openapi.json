@@ -186,6 +186,93 @@
     "title": "HTTPValidationError",
     "type": "object"
    },
+   "LineupChange": {
+    "description": "Membership delta of ONE team between two consecutive rounds.",
+    "properties": {
+     "joined": {
+      "items": {
+       "$ref": "#/components/schemas/LineupPlayer"
+      },
+      "title": "Joined",
+      "type": "array"
+     },
+     "left": {
+      "items": {
+       "$ref": "#/components/schemas/LineupPlayer"
+      },
+      "title": "Left",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     },
+     "swaps": {
+      "items": {
+       "$ref": "#/components/schemas/LineupSwap"
+      },
+      "title": "Swaps",
+      "type": "array"
+     },
+     "team": {
+      "title": "Team",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map_name",
+     "round_number",
+     "round_id",
+     "team",
+     "joined",
+     "left",
+     "swaps"
+    ],
+    "title": "LineupChange",
+    "type": "object"
+   },
+   "LineupPlayer": {
+    "properties": {
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "guid",
+     "name"
+    ],
+    "title": "LineupPlayer",
+    "type": "object"
+   },
+   "LineupSwap": {
+    "properties": {
+     "incoming": {
+      "$ref": "#/components/schemas/LineupPlayer"
+     },
+     "out": {
+      "$ref": "#/components/schemas/LineupPlayer"
+     }
+    },
+    "required": [
+     "out",
+     "incoming"
+    ],
+    "title": "LineupSwap",
+    "type": "object"
+   },
    "LinkPlayerRequest": {
     "properties": {
      "player_name": {
@@ -370,6 +457,40 @@
     "title": "ResumableInit",
     "type": "object"
    },
+   "SessionLineups": {
+    "properties": {
+     "changes": {
+      "items": {
+       "$ref": "#/components/schemas/LineupChange"
+      },
+      "title": "Changes",
+      "type": "array"
+     },
+     "gaming_session_id": {
+      "title": "Gaming Session Id",
+      "type": "integer"
+     },
+     "rounds_without_roster": {
+      "title": "Rounds Without Roster",
+      "type": "integer"
+     },
+     "teams": {
+      "items": {
+       "$ref": "#/components/schemas/TeamLineup"
+      },
+      "title": "Teams",
+      "type": "array"
+     }
+    },
+    "required": [
+     "gaming_session_id",
+     "teams",
+     "changes",
+     "rounds_without_roster"
+    ],
+    "title": "SessionLineups",
+    "type": "object"
+   },
    "StatsOverview": {
     "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per\nmetric when its aggregate raises, and the endpoint still answers 200 — so\na zero here means \"none, or the query failed\", and no schema can tell them\napart. Naming that is the honest thing a type can do about it; fixing it\nmeans giving `_safe_val` a per-metric error flag, which is a separate\nchange.",
     "properties": {
@@ -476,6 +597,32 @@
      "window_days"
     ],
     "title": "StatsOverview",
+    "type": "object"
+   },
+   "TeamLineup": {
+    "properties": {
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/LineupPlayer"
+      },
+      "title": "Players",
+      "type": "array"
+     }
+    },
+    "required": [
+     "key",
+     "name",
+     "players"
+    ],
+    "title": "TeamLineup",
     "type": "object"
    },
    "ValidationError": {
@@ -12914,6 +13061,48 @@
      }
     },
     "summary": "Get Session Good Night",
+    "tags": [
+     "Sessions"
+    ]
+   }
+  },
+  "/api/stats/session/{gaming_session_id}/lineups": {
+   "get": {
+    "operationId": "get_session_lineups_api_stats_session__gaming_session_id__lineups_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "gaming_session_id",
+      "required": true,
+      "schema": {
+       "title": "Gaming Session Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionLineups"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Session Lineups",
     "tags": [
      "Sessions"
     ]

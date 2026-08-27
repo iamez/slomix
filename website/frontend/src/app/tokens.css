@@ -25,6 +25,11 @@
   --color-text-500: #807c75;
   --color-text-600: #4d4a44;
   --color-accent: #8bb0d6;
+  /* Team identities (design refresh discussion2: team a blue, team b
+   * gold). Same hexes as the accents, but the MEANING differs — accents
+   * mark sides (allies/axis), these mark the evening's persistent teams. */
+  --color-team-a: #8bb0d6;
+  --color-team-b: #c9a86b;
   --color-accent-warm: #c9a86b;
   --color-pos: #8fae8a;
   --color-neg: #b0847c;

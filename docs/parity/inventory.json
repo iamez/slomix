@@ -1,0 +1,628 @@
+{
+  "baseUrl": "http://127.0.0.1:8000",
+  "generated": "2026-08-27T09:02:54.015Z",
+  "routes": {
+    "home": {
+      "apiPaths": [
+        "/api/availability",
+        "/api/availability/promotion-preferences",
+        "/api/challenges/current",
+        "/api/live-status",
+        "/api/predictions/recent",
+        "/api/seasons/current",
+        "/api/seasons/current/leaders",
+        "/api/seasons/current/summary",
+        "/api/sessions",
+        "/api/skill/movers",
+        "/api/stats/activity-calendar",
+        "/api/stats/last-session",
+        "/api/stats/live-session",
+        "/api/stats/matches",
+        "/api/stats/overview",
+        "/api/stats/quick-leaders",
+        "/api/stats/tonight",
+        "/api/stats/trends",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "Active Players per Day",
+        "Map Distribution",
+        "Rounds per Day"
+      ],
+      "tableColumns": {},
+      "canvasCount": 3,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "sessions": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/sessions",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "sessions2": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/sessions",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "session-detail (date, multi-session)": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/proximity/objective-pressure",
+        "/api/proximity/quality",
+        "/api/sessions/2026-08-04",
+        "/api/status",
+        "/api/storytelling/best-lives",
+        "/api/storytelling/moments"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [
+        "Charts",
+        "Player Stats",
+        "Summary",
+        "Teamplay"
+      ],
+      "dataParityKeys": []
+    },
+    "leaderboards": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/leaderboard",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {
+        "leaderboard-table": [
+          "Rank",
+          "Player",
+          "Rounds",
+          "Rounds Played",
+          "Kills",
+          "K/D"
+        ]
+      },
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "form": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/skill/movers",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "maps": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/records/maps/segments",
+        "/api/stats/maps",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "weapons": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/weapons",
+        "/api/stats/weapons/by_player",
+        "/api/stats/weapons/hall-of-fame",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "Airstrike",
+        "Artillery",
+        "Bazooka",
+        "Browning",
+        "Carbine",
+        "Colt",
+        "Dynamite",
+        "Fg42",
+        "Garand",
+        "Grenade",
+        "Grenadelauncher",
+        "K43",
+        "Kar98",
+        "Knife",
+        "Knife Kbar",
+        "Landmine",
+        "Luger",
+        "Mg42",
+        "Mp34",
+        "Mp40",
+        "Panzerfaust",
+        "Satchel",
+        "Sten",
+        "Thompson"
+      ],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "records (alias)": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/maps",
+        "/api/stats/records",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "record-book": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/maps",
+        "/api/stats/records",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "hall-of-fame": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/hall-of-fame",
+        "/api/seasons/current/awards",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "Longest Streak",
+        "Most Active",
+        "Most Assists",
+        "Most DPM",
+        "Most Damage",
+        "Most Deaths",
+        "Most Full Selfkills",
+        "Most Kills",
+        "Most Revives",
+        "Most Selfkills",
+        "Most Wins",
+        "Most XP"
+      ],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "awards": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/awards",
+        "/api/awards/leaderboard",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "profile (owner)": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/player/E587CA5F/matches",
+        "/api/players/E587CA5F/awards",
+        "/api/players/E587CA5F/card",
+        "/api/players/E587CA5F/memory-card",
+        "/api/players/E587CA5F/profile",
+        "/api/proximity/competitive/player-card",
+        "/api/skill/player/E587CA5F/form",
+        "/api/skill/player/E587CA5F/history",
+        "/api/skill/ssr",
+        "/api/stats/player/E587CA5F",
+        "/api/stats/player/E587CA5F/form",
+        "/api/stats/player/E587CA5F/rounds",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {
+        "table-0": [
+          "Map",
+          "Rounds",
+          "Win%",
+          "K/D",
+          "DPM"
+        ]
+      },
+      "canvasCount": 2,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "profile (other)": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/player/D8423F90/matches",
+        "/api/players/D8423F90/awards",
+        "/api/players/D8423F90/card",
+        "/api/players/D8423F90/memory-card",
+        "/api/players/D8423F90/profile",
+        "/api/proximity/competitive/player-card",
+        "/api/proximity/player-aim",
+        "/api/skill/player/D8423F90/form",
+        "/api/skill/player/D8423F90/history",
+        "/api/skill/ssr",
+        "/api/stats/player/D8423F90",
+        "/api/stats/player/D8423F90/form",
+        "/api/stats/player/D8423F90/rounds",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {
+        "table-0": [
+          "Map",
+          "Rounds",
+          "Win%",
+          "K/D",
+          "DPM"
+        ]
+      },
+      "canvasCount": 2,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "skill-rating": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/skill/adjusted-lifetime",
+        "/api/skill/formula",
+        "/api/skill/leaderboard",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "rivalries": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/rivalries/leaderboard",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {
+        "table-0": [
+          "#",
+          "Player 1",
+          "Player 2",
+          "Score",
+          "Total",
+          "Type"
+        ]
+      },
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "story": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/diagnostics/storytelling-completeness",
+        "/api/skill/composite",
+        "/api/skill/ssr",
+        "/api/status",
+        "/api/storytelling/box-score",
+        "/api/storytelling/enabler",
+        "/api/storytelling/gravity",
+        "/api/storytelling/kill-impact",
+        "/api/storytelling/lurker-profile",
+        "/api/storytelling/moments",
+        "/api/storytelling/momentum",
+        "/api/storytelling/narrative",
+        "/api/storytelling/scopes",
+        "/api/storytelling/space-created",
+        "/api/storytelling/synergy",
+        "/api/storytelling/useless-defense-deaths",
+        "/api/storytelling/win-contribution"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 1,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "replay": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/proximity/round/11347/timeline",
+        "/api/proximity/round/11347/tracks",
+        "/api/rounds/recent",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 1,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "retro-viz": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/rounds/11347/viz",
+        "/api/rounds/recent",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "Combat Overview",
+        "Damage Breakdown",
+        "Match Summary",
+        "Support Performance",
+        "Time Distribution",
+        "Top Fraggers"
+      ],
+      "tableColumns": {
+        "table-0": [
+          "Player",
+          "Dmg Given",
+          "Dmg Recv",
+          "TK Dmg",
+          "TK Recv"
+        ]
+      },
+      "canvasCount": 4,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "tonight": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/bets/leaderboard",
+        "/api/bets/market/current",
+        "/api/live-status",
+        "/api/live/feed",
+        "/api/live/state",
+        "/api/stats/tonight",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "proximity": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/proximity/aim-lock",
+        "/api/proximity/carrier-events",
+        "/api/proximity/carrier-kills",
+        "/api/proximity/carrier-returns",
+        "/api/proximity/classes",
+        "/api/proximity/cohesion",
+        "/api/proximity/combat-position-stats",
+        "/api/proximity/combat-positions/danger-zones",
+        "/api/proximity/combat-positions/heatmap",
+        "/api/proximity/combat-positions/kill-lines",
+        "/api/proximity/competitive/clutch",
+        "/api/proximity/competitive/first-blood",
+        "/api/proximity/competitive/man-advantage",
+        "/api/proximity/competitive/personal-bests",
+        "/api/proximity/competitive/side-splits",
+        "/api/proximity/competitive/stagger",
+        "/api/proximity/competitive/wave-cycles",
+        "/api/proximity/construction-events",
+        "/api/proximity/crossfire-angles",
+        "/api/proximity/engagements",
+        "/api/proximity/escort-credits",
+        "/api/proximity/events",
+        "/api/proximity/focus-fire",
+        "/api/proximity/hit-regions",
+        "/api/proximity/hit-regions/headshot-rates",
+        "/api/proximity/hotzones",
+        "/api/proximity/kill-outcomes",
+        "/api/proximity/kill-outcomes/player-stats",
+        "/api/proximity/leaderboards",
+        "/api/proximity/lua-trades",
+        "/api/proximity/movement-stats",
+        "/api/proximity/movers",
+        "/api/proximity/objective-focus",
+        "/api/proximity/objective-runs",
+        "/api/proximity/players",
+        "/api/proximity/prox-scores",
+        "/api/proximity/prox-scores/formula",
+        "/api/proximity/pushes",
+        "/api/proximity/quality",
+        "/api/proximity/reactions",
+        "/api/proximity/revives",
+        "/api/proximity/scopes",
+        "/api/proximity/spawn-timing",
+        "/api/proximity/summary",
+        "/api/proximity/support-summary",
+        "/api/proximity/teamplay",
+        "/api/proximity/trades/events",
+        "/api/proximity/trades/summary",
+        "/api/proximity/v7-status",
+        "/api/proximity/vehicle-progress",
+        "/api/proximity/weapon-accuracy",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "Aim Lock v7",
+        "Crossfire Opportunities",
+        "Spawn Timing Efficiency",
+        "Team Cohesion",
+        "Team Pushes",
+        "Trade Kills (Lua-detected)"
+      ],
+      "tableColumns": {
+        "table-0": [
+          "Player",
+          "Runs",
+          "Solo",
+          "Team",
+          "Denied",
+          "Eff%"
+        ]
+      },
+      "canvasCount": 7,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "proximity-player": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/proximity/hit-regions",
+        "/api/proximity/hit-regions/by-weapon",
+        "/api/proximity/kill-outcomes/player-stats",
+        "/api/proximity/movement-stats",
+        "/api/proximity/player/D8423F90/profile",
+        "/api/proximity/player/D8423F90/radar",
+        "/api/proximity/prox-scores",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "proximity-replay": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/proximity/round/11175/timeline",
+        "/api/proximity/round/11175/tracks",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "proximity-teams": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/proximity/round/11175/team-comparison",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "smart-stats-diag": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/diagnostics/storytelling-completeness",
+        "/api/proximity/scopes",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "greatshot": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/greatshot",
+        "/api/status"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [
+        "Clips",
+        "Demos",
+        "Highlights",
+        "Renders"
+      ],
+      "dataParityKeys": []
+    },
+    "uploads": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/status",
+        "/api/uploads",
+        "/api/uploads/8f0c67153f72460c97a5b40273afe60e/poster",
+        "/api/uploads/tags/popular"
+      ],
+      "panelTitles": [],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [
+        "All",
+        "Archives",
+        "Clips",
+        "Configs",
+        "HUDs"
+      ],
+      "dataParityKeys": []
+    },
+    "availability": {
+      "apiPaths": [
+        "/api/availability",
+        "/api/availability/access",
+        "/api/availability/promotion-preferences",
+        "/api/availability/promotions/campaign",
+        "/api/availability/settings",
+        "/api/bets/market/current",
+        "/api/bets/wallet",
+        "/api/planning/today",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "#ETL",
+        "How should we ping you?",
+        "Thursday, August 27",
+        "Today & Tomorrow",
+        "Tonight’s Queue",
+        "Upcoming days"
+      ],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    },
+    "admin": {
+      "apiPaths": [
+        "/api/availability/promotion-preferences",
+        "/api/stats/overview",
+        "/api/status"
+      ],
+      "panelTitles": [
+        "Slomix",
+        "What Slomix does"
+      ],
+      "tableColumns": {},
+      "canvasCount": 0,
+      "tabs": [],
+      "dataParityKeys": []
+    }
+  }
+}

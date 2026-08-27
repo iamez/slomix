@@ -6,7 +6,7 @@ import type {
   MapSegments, MapStatsRow, RecentRound, RoundViz, SeasonAwards,
   StatsRecords, WeaponRow, WeaponsByPlayer, WeaponsHallOfFame,
   LastSession, LiveState, LiveStatus, MatchRow, QuickLeaders, SeasonCurrent,
-  SeasonLeaders, SeasonSummary, SessionSummary, SkillMovers, StatsOverview,
+  SeasonLeaders, SeasonSummary, SessionLineups, SessionSummary, SkillMovers, StatsOverview,
   StatsTrends, StorytellingCompleteness, SystemOverview, TonightStatus,
   VoiceCurrent,
 } from './types';
@@ -52,6 +52,17 @@ export function useOverview() {
   return useQuery({
     queryKey: ['stats-overview'],
     queryFn: () => apiGet('/api/stats/overview') as Promise<StatsOverview>,
+  });
+}
+
+export function useSessionLineups(sessionId: number, enabled: boolean) {
+  return useQuery({
+    queryKey: ['session-lineups', sessionId],
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/lineups', {
+        pathParams: { gaming_session_id: sessionId },
+      }) as Promise<SessionLineups>,
+    enabled,
   });
 }
 
