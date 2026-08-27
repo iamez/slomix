@@ -45,17 +45,32 @@ function SectionBody({ available, empty, children, what }: {
 function Header({ p }: { p: Profile }) {
   const id = p.identity;
   const skill = p.skill;
+  // identity goes through the same `_ok` wrapper as every other section: a
+  // failed subquery there returns {available:false} with no name, guid or
+  // aliases at all, and the response is still a 200 (Codex, #822 wave 2).
+  // The top-level guid always exists, so the page still identifies WHO.
+  const named = id.available;
+  // The display name is not an alias of itself — the recording lists `vid`
+  // as both, and printing "also vid" claims a second identity that isn't
+  // one, while also eating a slot in the three shown.
+  const aliases = (id.aliases ?? []).filter(
+    (a) => a.trim().toLowerCase() !== (id.name ?? '').trim().toLowerCase(),
+  );
   return (
     <div data-parity="profile.header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
       <div>
-        <Lbl>player · {id.guid}</Lbl>
+        <Lbl>player · {id.guid ?? p.guid}</Lbl>
         <h1 style={{ fontSize: 40, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '10px 0 0', fontWeight: 500 }}>
-          {id.name}
+          {named ? id.name : (p.guid || 'unknown player')}
         </h1>
-        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>
-          {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds)} rounds
-          {id.aliases.length > 0 && ` · also ${id.aliases.slice(0, 3).join(', ')}`}
-        </div>
+        {named ? (
+          <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>
+            {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
+            {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
+          </div>
+        ) : (
+          <div style={{ marginTop: 6 }}><Unavailable what="identity" /></div>
+        )}
       </div>
       {skill.available && skill.et_rating != null && (
         <div style={{ textAlign: 'right' }}>

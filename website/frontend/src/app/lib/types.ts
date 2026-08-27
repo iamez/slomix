@@ -691,12 +691,14 @@ export interface ProfileSection {
 }
 
 export interface ProfileIdentity extends ProfileSection {
-  guid: string;
-  name: string;
-  aliases: string[];
-  first_seen: string | null;
-  last_seen: string | null;
-  rounds: number;
+  /** All optional: identity passes through the same `_ok` wrapper, so a
+   * failed subquery leaves {available:false} and nothing else. */
+  guid?: string;
+  name?: string;
+  aliases?: string[];
+  first_seen?: string | null;
+  last_seen?: string | null;
+  rounds?: number;
   discord_linked: boolean;
   country: string | null;
   twitch: string | null;

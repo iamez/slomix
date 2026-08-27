@@ -173,4 +173,27 @@ describe('PlayerProfilePage', () => {
     expect(screen.getAllByText('+82').length).toBeGreaterThan(0);
     expect(screen.getAllByText(/6 rd · 66\.7%/).length).toBeGreaterThan(0);
   });
+
+  it('an unavailable identity still identifies the player by guid', async () => {
+    const noIdentity = { ...(profile as object), identity: { available: false, reason: 'error' } };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(noIdentity) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText('identity: unavailable')).toBeInTheDocument());
+    // The top-level guid always exists, so the page never renders a nameless
+    // header — and the rest of the profile still draws.
+    expect(screen.getAllByText(/D8423F90/).length).toBeGreaterThan(0);
+    expect(screen.getByText('Mp40')).toBeInTheDocument();
+  });
+
+  it('the display name is not listed as an alias of itself', async () => {
+    renderProfile('D8423F90');
+    await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+    // The recording carries `vid` as both the name and the only alias.
+    expect(screen.queryByText(/also vid/)).toBeNull();
+  });
 });
