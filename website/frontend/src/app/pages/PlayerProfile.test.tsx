@@ -219,4 +219,46 @@ describe('PlayerProfilePage', () => {
     expect(screen.getByText('no decided rounds yet')).toBeInTheDocument();
     expect(screen.getAllByText('et rating').length).toBe(1);
   });
+
+  it('an alt names its primary, and a spent leave does not', async () => {
+    const withLink = (link: unknown) => ({
+      ...(profile as object),
+      identity: { ...(profile as { identity: object }).identity, identity_link: link },
+    });
+    const active = { role: 'alt', link_type: 'sick_leave', primary_guid: 'FB0EC840', primary_name: 'ownator', active: true, since: '2026-08-11' };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withLink(active)) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/alt of ownator/)).toBeInTheDocument());
+    expect(screen.getByText(/on sick leave/)).toBeInTheDocument();
+  });
+
+  it('a primary names its active alts only', async () => {
+    const primary = {
+      role: 'primary',
+      alts: [
+        { alt_guid: 'EF561EAA', alt_name: 'carniee', link_type: 'sick_leave', active: true, since: '2026-08-11' },
+        { alt_guid: 'AAAA1111', alt_name: 'oldalt', link_type: 'sick_leave', active: false, since: '2026-01-01' },
+      ],
+    };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({
+            ...(profile as object),
+            identity: { ...(profile as { identity: object }).identity, identity_link: primary },
+          }),
+        } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/also plays as carniee/)).toBeInTheDocument());
+    expect(screen.queryByText(/oldalt/)).toBeNull();
+  });
 });

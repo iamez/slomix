@@ -1,8 +1,8 @@
 import { useParams } from 'react-router';
 import { usePlayerProfile } from '../lib/queries';
 import type {
-  PlayerProfile as Profile, ProfileMapRow, ProfileMatchRow, ProfileOpponent,
-  ProfileTeammate, ProfileWeaponRow,
+  PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
+  ProfileOpponent, ProfileTeammate, ProfileWeaponRow,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
 import { Lbl, Pending, SectionHead, Unavailable, figure, lblStyle, rowStyle } from '../components/ui';
@@ -42,6 +42,32 @@ function SectionBody({ available, empty, children, what }: {
   return <>{children}</>;
 }
 
+/** Sick-leave / alt attribution (migration 073). Two shapes: an ALT names
+ * its primary, a PRIMARY names its alts. Gated on `active !== false`, the
+ * same rule as the form page (#819): a historical link still arrives, and
+ * a spent leave must not read as a current one. Statistics stay separate —
+ * this line says WHO, never merges numbers. */
+function IdentityLink({ link }: { link: ProfileIdentity['identity_link'] }) {
+  if (!link || link.active === false) return null;
+  if (link.role === 'alt' && link.primary_name) {
+    return (
+      <span style={{ color: 'var(--color-accent-warm)' }}>
+        {' · '}alt of {link.primary_name}
+        {link.link_type === 'sick_leave' && ' (on sick leave)'}
+      </span>
+    );
+  }
+  const alts = (link.alts ?? []).filter((a) => a.active !== false);
+  if (link.role === 'primary' && alts.length > 0) {
+    return (
+      <span style={{ color: 'var(--color-accent-warm)' }}>
+        {' · '}also plays as {alts.map((a) => a.alt_name).join(', ')}
+      </span>
+    );
+  }
+  return null;
+}
+
 function Header({ p }: { p: Profile }) {
   const id = p.identity;
   const skill = p.skill;
@@ -67,6 +93,7 @@ function Header({ p }: { p: Profile }) {
           <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>
             {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
             {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
+            <IdentityLink link={id.identity_link} />
           </div>
         ) : (
           <div style={{ marginTop: 6 }}><Unavailable what="identity" /></div>

@@ -699,9 +699,23 @@ export interface ProfileIdentity extends ProfileSection {
   first_seen?: string | null;
   last_seen?: string | null;
   rounds?: number;
-  discord_linked: boolean;
-  country: string | null;
-  twitch: string | null;
+  discord_linked?: boolean;
+  country?: string | null;
+  twitch?: string | null;
+  /** Sick-leave / alt attribution (migration 073). Two shapes, both measured
+   * live: an ALT carries {role:'alt', primary_guid, primary_name, active,
+   * since}, a PRIMARY carries {role:'primary', alts:[…]}. Statistics stay
+   * separate per GUID — this is attribution only. */
+  identity_link?: {
+    role: 'alt' | 'primary' | string;
+    link_type?: string;
+    reason?: string | null;
+    primary_guid?: string;
+    primary_name?: string;
+    active?: boolean;
+    since?: string | null;
+    alts?: { alt_guid: string; alt_name: string; link_type?: string; active?: boolean; since?: string | null }[];
+  } | null;
 }
 
 export interface ProfileLifetime extends ProfileSection {
