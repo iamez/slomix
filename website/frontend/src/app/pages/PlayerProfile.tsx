@@ -277,8 +277,13 @@ function Relationships({ p }: { p: Profile }) {
       <SectionHead label="the people" aside={<Lbl style={{ fontSize: 9 }}>the leading figure is what each list ranks by · synergy = dpm delta together</Lbl>} />
       <SectionBody available={r.available} empty={empty} what="head-to-head history">
         <div className="about-grid-4" style={{ gap: 24, marginTop: 10 }}>
-          <OpponentList title="nemeses" rows={killers} note="kills ON them, of all duels" lead="on" />
-          <OpponentList title="victims" rows={victims} note="kills BY them, of all duels" lead="by" />
+          {/* Measured at the source (rivalries_service): kills_by_player comes
+            * from the player-as-killer query, kills_on_player from the
+            * player-as-victim one. So the nemesis figure is what THEY did to
+            * this player, and the victim figure is what this player did to
+            * them — my first wording had both actors backwards (Codex). */}
+          <OpponentList title="nemeses" rows={killers} note="their kills on this player" lead="on" />
+          <OpponentList title="victims" rows={victims} note="this player's kills on them" lead="by" />
           <MateList title="best alongside" rows={best} />
           <MateList title="worst alongside" rows={worst} />
         </div>

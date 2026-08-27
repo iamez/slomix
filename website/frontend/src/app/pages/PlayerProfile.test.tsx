@@ -120,8 +120,11 @@ describe('PlayerProfilePage', () => {
     // most) — legitimate, since the backend sorts the same pairs two ways.
     // Nemeses must lead with kills ON the player (872), victims with kills
     // BY the player (1096); printing one fixed order made them look alike.
-    expect(screen.getByText(/kills ON them/)).toBeInTheDocument();
-    expect(screen.getByText(/kills BY them/)).toBeInTheDocument();
+    // The caption must name the right actor: the nemesis figure is what THEY
+    // did to this player (rivalries_service's player-as-victim query), the
+    // victim figure what this player did to them.
+    expect(screen.getByText('their kills on this player')).toBeInTheDocument();
+    expect(screen.getByText("this player's kills on them")).toBeInTheDocument();
     expect(screen.getAllByText('872').length).toBeGreaterThan(0);
     expect(screen.getAllByText('1096').length).toBeGreaterThan(0);
   });
