@@ -107,6 +107,7 @@ SELECT pcs.round_id                      AS rid,
        pcs.kills                         AS kills,
        pcs.deaths                        AS deaths,
        pcs.damage_given                  AS dg,
+       pcs.damage_received               AS dr,
        pcs.time_played_seconds           AS secs,
        pm.margin                         AS margin,
        pm.r2_attacker                    AS r2_attacker
@@ -137,9 +138,32 @@ class Candidate:
     direction: str                 # "higher_is_better" | "lower_is_better"
     fn: Callable[[dict], float | None] = field(compare=False, repr=False)
 
+    def formula_fingerprint(self) -> str:
+        """Hash of the EXECUTABLE formula, not its prose.
+
+        §8.3 freezes the exact formula, and hashing only id/description/direction
+        would let a lambda, a normalisation constant or a missing-value rule
+        change while the manifest still claims the same frozen family. The
+        source text of the callable is the closest honest stand-in; when it
+        cannot be read (a C-level or dynamically built callable), the code
+        object's constants and names are used instead, and the entry says which
+        so nobody reads a weaker fingerprint as a strong one.
+        """
+        try:
+            import inspect
+            src = inspect.getsource(self.fn).strip()
+            kind = "source"
+        except (OSError, TypeError):
+            code = getattr(self.fn, "__code__", None)
+            src = (repr((code.co_names, code.co_consts, code.co_argcount))
+                   if code else repr(self.fn))
+            kind = "bytecode-shape"
+        return f"{kind}:{hashlib.sha256(src.encode()).hexdigest()[:16]}"
+
     def manifest_entry(self) -> dict:
         return {"id": self.cid, "description": self.description,
-                "direction": self.direction}
+                "direction": self.direction,
+                "formula": self.formula_fingerprint()}
 
 
 @dataclass
@@ -149,6 +173,7 @@ class Family:
     candidates: list[Candidate]
     filters: str
     outcome: str = "win"          # §8.3: the outcome definition is frozen too
+    frozen_cutoff: str | None = None   # absolute; set once, never recomputed
     split_fraction: float = DISCOVERY_FRACTION
     resamples: int = RESAMPLES
     seed: int = SEED
@@ -160,6 +185,7 @@ class Family:
             "candidates": [c.manifest_entry() for c in self.candidates],
             "filters": self.filters,
             "outcome": self.outcome,
+            "frozen_cutoff": self.frozen_cutoff,
             "split_fraction": self.split_fraction,
             "resamples": self.resamples,
             "seed": self.seed,
@@ -219,6 +245,21 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
         vals.sort(key=lambda vp: vp[0])
         half = len(vals) // 2
         lo, hi = vals[:half], vals[-half:]
+        # ⛔ TIES MUST NOT BE SPLIT. Kills and deaths are small integers, so the
+        # value at the median is routinely shared. Slicing a sorted list puts
+        # equal-valued players on opposite sides according to the order the
+        # database happened to return them — and rows arrive grouped by round
+        # and guid, which correlates with team. A CONSTANT metric could then
+        # score +1 or -1 instead of carrying no signal at all. Players holding
+        # the boundary value are dropped from both halves; if that empties
+        # either half, the round has no median to split on and is skipped.
+        boundary_lo, boundary_hi = lo[-1][0], hi[0][0]
+        if boundary_lo == boundary_hi:
+            tied = boundary_lo
+            lo = [vp for vp in lo if vp[0] != tied]
+            hi = [vp for vp in hi if vp[0] != tied]
+        if not lo or not hi:
+            continue
         lo_mean = sum(outcome(p) for _, p in lo) / len(lo)
         hi_mean = sum(outcome(p) for _, p in hi) / len(hi)
         diffs.append(hi_mean - lo_mean)
@@ -313,76 +354,126 @@ class _Rng:
         return self._r.randrange(n)
 
 
-def block_bootstrap(blocks: dict, metric: Callable, resamples: int, seed: int,
+def block_draws(blocks: dict, resamples: int, seed: int) -> list[list]:
+    """The shared sequence of block draws for the WHOLE family (§8.4).
+
+    Every candidate must be evaluated on the SAME resamples. max_t_intervals()
+    treats element j of every candidate as one joint replicate, so if each
+    candidate drew its own blocks, the covariance between correlated metrics
+    would be destroyed and the maximum would not come from the joint family
+    distribution — the interval would still be printed, and it would no longer
+    be the family-wise interval it claims to be. Drawing once, here, is what
+    makes the claim true.
+    """
+    keys = sorted(blocks)
+    rng = _Rng(seed)
+    return [[keys[rng.next_below(len(keys))] for _ in range(len(keys))]
+            for _ in range(resamples)]
+
+
+def block_bootstrap(blocks: dict, metric: Callable, draws: list[list],
                     estimator: Callable = None,
                     outcome: Callable = outcome_win) -> list[float]:
-    """Resample WHOLE blocks with replacement (§8.2).
+    """Evaluate one candidate on the shared draws (§8.2).
 
     Teammates share an outcome, and R1/R2 plus several maps in one session share
     teams and stopwatch state. Resampling players or rounds independently would
     treat those as independent evidence and shrink every interval by a factor
     nobody earned.
+
+    Returns one value per draw, with None where a draw could not be measured —
+    positions must line up across candidates for the joint maximum to mean
+    anything.
     """
-    keys = sorted(blocks)
-    rng = _Rng(seed)
     out = []
-    for _ in range(resamples):
+    for draw in draws:
         merged: dict = {}
-        for _ in range(len(keys)):
-            k = keys[rng.next_below(len(keys))]
+        for k in draw:
             for rid, players in blocks[k].items():
                 # a round drawn twice counts twice: give it a fresh key
                 merged[(k, rid, len(merged))] = players
-        s = (estimator or within_round_spread)(merged, metric, outcome)
-        if s is not None:
-            out.append(s)
+        out.append((estimator or within_round_spread)(merged, metric, outcome))
     return out
 
 
 # --- §8.3: chronological split, whole blocks ----------------------------------
-def chronological_split(block_times: dict, fraction: float):
-    """Earliest `fraction` of blocks discover; the latest stay untouched.
+def chronological_split(block_times: dict, fraction: float,
+                        frozen_cutoff: str | None = None):
+    """Earliest blocks discover; the latest stay untouched.
 
     Splitting on whole blocks is what keeps a gaming session from straddling the
     cutoff — a session on both sides would leak the confirmation half into
     discovery through shared teams and stopwatch state.
+
+    ⛔ THE CUTOFF IS AN ABSOLUTE TIMESTAMP, NOT A PERCENTILE OF TODAY'S DATA.
+    Deriving it from `fraction` on every run means it MOVES as new blocks
+    arrive: blocks already inspected during confirmation slide into discovery,
+    a fresh confirmation set is analysed, and the manifest hash stays the same
+    while the untouched-holdout guarantee is gone. Retuning after seeing
+    confirmation is a new hypothesis (§8.3) and must be visible as one.
+
+    So `fraction` is only used to PROPOSE a cutoff on a first run; once the
+    family carries `frozen_cutoff`, that timestamp decides the split and the
+    fraction is ignored.
     """
     ordered = sorted(block_times, key=lambda b: (block_times[b], str(b)))
+    if frozen_cutoff:
+        disc = [b for b in ordered if str(block_times[b]) < frozen_cutoff]
+        conf = [b for b in ordered if str(block_times[b]) >= frozen_cutoff]
+        return set(disc), set(conf), ordered, len(disc)
     cut = int(len(ordered) * fraction)
     return set(ordered[:cut]), set(ordered[cut:]), ordered, cut
 
 
 # --- §8.4: family-wise error ---------------------------------------------------
+MIN_USABLE_REPLICATES = 100
+
+
 def max_t_intervals(boot: dict, point: dict, alpha: float):
     """Block-level max-T: one critical value for the WHOLE family (§8.4).
 
-    Each candidate is standardised by its own bootstrap SD, the maximum |t| per
-    resample is collected, and its (1-alpha) quantile becomes the critical value
-    every member must clear. This is what stops "the best-looking member of a
-    parameter sweep" from being read as a result.
+    `boot[cid]` is one value per SHARED draw, with None where that draw could
+    not be measured. Each candidate is standardised by its own bootstrap SD, the
+    maximum |t| per replicate is collected across the family, and its (1-alpha)
+    quantile becomes the critical value every member must clear. This is what
+    stops "the best-looking member of a parameter sweep" from being read as a
+    result.
+
+    A candidate whose bootstrap cannot produce a usable spread gets NO interval
+    at all rather than a (nan, nan) one. That distinction is load-bearing: `nan`
+    compares false against everything, so a nan interval read as "excludes zero"
+    would ship a candidate that was never measured — an absence of evidence
+    wearing the shape of evidence.
     """
     ids = sorted(boot)
-    sds = {}
+    sds, usable = {}, {}
     for cid in ids:
-        vals = boot[cid]
-        sds[cid] = statistics.stdev(vals) if len(vals) > 1 else float("nan")
+        vals = [v for v in boot[cid] if v is not None]
+        usable[cid] = len(vals)
+        sds[cid] = (statistics.stdev(vals)
+                    if len(vals) >= MIN_USABLE_REPLICATES else float("nan"))
+
+    measurable = [c for c in ids
+                  if sds[c] and not math.isnan(sds[c]) and sds[c] > 0]
 
     n = min((len(boot[c]) for c in ids), default=0)
     maxts = []
     for i in range(n):
-        t = 0.0
-        for cid in ids:
-            sd = sds[cid]
-            if sd and not math.isnan(sd) and sd > 0:
-                t = max(t, abs(boot[cid][i] - point[cid]) / sd)
-        if t > 0:
+        t, ok = 0.0, False
+        for cid in measurable:
+            v = boot[cid][i]
+            if v is None:
+                continue
+            t = max(t, abs(v - point[cid]) / sds[cid])
+            ok = True
+        if ok:
             maxts.append(t)
-    if not maxts:
+    if len(maxts) < MIN_USABLE_REPLICATES:
         return {}, float("nan"), sds
     maxts.sort()
     crit = maxts[min(int((1 - alpha) * len(maxts)), len(maxts) - 1)]
     return ({cid: (point[cid] - crit * sds[cid], point[cid] + crit * sds[cid])
-             for cid in ids if sds[cid] and not math.isnan(sds[cid])}, crit, sds)
+             for cid in measurable}, crit, sds)
 
 
 def boot_p_value(vals: list[float], point: float) -> float:
@@ -443,8 +534,13 @@ DEFAULT_FAMILY = [
               lambda p: float(p["kills"] or 0) / max(float(p["deaths"] or 0), 1.0)),
     Candidate("dpm", "damage given per minute played", "higher_is_better",
               lambda p: float(p["dg"] or 0) / _minutes(p)),
-    Candidate("dmg_ratio", "damage given / max(received,1)", "higher_is_better",
-              lambda p: float(p["dg"] or 0) / max(float(p["deaths"] or 0) * 100.0, 1.0)),
+    # ⛔ This used to divide by `deaths * 100` while calling itself a damage
+    # RATIO, and `damage_received` was not even loaded. The manifest hashed the
+    # prose, so a different statistic shipped under this name. Fixed at the
+    # source rather than by renaming: the ratio people mean is the real one.
+    Candidate("dmg_ratio", "damage given / max(damage received, 1)",
+              "higher_is_better",
+              lambda p: float(p["dg"] or 0) / max(float(p["dr"] or 0), 1.0)),
 ]
 
 
@@ -489,16 +585,19 @@ def analyse(blocks: dict, keep: set, family: Family) -> dict:
     """Point estimates + block bootstrap for every family member."""
     flat = _flatten(blocks, keep)
     sub = {b: blocks[b] for b in keep if b in blocks}
+    oc = OUTCOMES[family.outcome]
+    # ⛔ ONE sequence of draws for the whole family (§8.4). Per-candidate seeds
+    # would give each member its own resamples, and the joint maximum would then
+    # be taken across replicates that never shared a sample — destroying exactly
+    # the covariance that makes the interval family-wise.
+    draws = block_draws(sub, family.resamples, family.seed)
     point, boot = {}, {}
-    for i, c in enumerate(family.candidates):
-        oc = OUTCOMES[family.outcome]
-        p = within_round_spread(flat, c.fn, oc)
-        if p is None:
+    for c in family.candidates:
+        pt = within_round_spread(flat, c.fn, oc)
+        if pt is None:
             continue
-        point[c.cid] = p
-        # a per-candidate seed offset keeps members from sharing one draw
-        boot[c.cid] = block_bootstrap(sub, c.fn, family.resamples,
-                                      family.seed + i * 7919, outcome=oc)
+        point[c.cid] = pt
+        boot[c.cid] = block_bootstrap(sub, c.fn, draws, outcome=oc)
     return {"point": point, "boot": boot, "rounds": len(flat)}
 
 
@@ -537,15 +636,22 @@ def report(family: Family, disc: dict, conf: dict,
             continue
         d = disc["point"].get(cid, float("nan"))
         k = conf["point"][cid]
-        lo, hi = intervals.get(cid, (float("nan"), float("nan")))
         want_pos = c.direction == "higher_is_better"
         dir_ok = (d > 0 and k > 0) if want_pos else (d < 0 and k < 0)
-        excl_zero = not (lo <= 0 <= hi)
-        passed = dir_ok and excl_zero
+        if cid not in intervals:
+            # no usable bootstrap spread: unmeasured, which is not the same as
+            # measured-and-clear. Fail closed and say which one it was.
+            lo = hi = float("nan")
+            excl_zero = False
+            passed = False
+            why = "no usable bootstrap interval — unmeasured, not clear"
+        else:
+            lo, hi = intervals[cid]
+            excl_zero = not (lo <= 0 <= hi)
+            passed = dir_ok and excl_zero
+            why = ("" if passed else
+                   "direction flipped" if not dir_ok else "interval contains zero")
         verdict = "SHIPS" if passed else "FAILS"
-        why = ""
-        if not passed:
-            why = ("direction flipped" if not dir_ok else "interval contains zero")
         # How far the interval bound nearest zero sits from zero, in SD units.
         # A bound of +0.001 and a bound of +0.040 are both "excludes zero"; only
         # this column tells them apart, and only one of them survives a reread.
@@ -584,6 +690,9 @@ async def main() -> int:
     ap.add_argument("--spatial", action="store_true",
                     help="restrict to rounds carrying position tracks (Layer 4 universe)")
     ap.add_argument("--resamples", type=int, default=RESAMPLES)
+    ap.add_argument("--cutoff", default=None,
+                    help="frozen absolute cutoff (e.g. '2026-07-13 21:35:13'); "
+                         "without it the split is only PROPOSED, never frozen")
     ap.add_argument("--outcome", choices=sorted(OUTCOMES), default="win",
                     help="win = §8.6 reference; seconds = stopwatch margin")
     ap.add_argument("--seed", type=int, default=SEED,
@@ -603,10 +712,20 @@ async def main() -> int:
         resamples=args.resamples,
         seed=args.seed,
         outcome=args.outcome,
+        frozen_cutoff=args.cutoff,
     )
 
-    disc_b, conf_b, ordered, cut = chronological_split(times, family.split_fraction)
-    cutoff = str(times[ordered[cut]]) if cut < len(ordered) else "n/a"
+    disc_b, conf_b, ordered, cut = chronological_split(
+        times, family.split_fraction, family.frozen_cutoff)
+    cutoff = family.frozen_cutoff or (
+        str(times[ordered[cut]]) if cut < len(ordered) else "n/a")
+    if not family.frozen_cutoff:
+        # A proposed cutoff is not a frozen one. Print the line that turns this
+        # run into a reproducible experiment instead of letting the boundary
+        # drift with tomorrow's data.
+        print(f"⚠️  cutoff not frozen — this run PROPOSES {cutoff}.\n"
+              f"    Freeze it before confirmation means anything:\n"
+              f"      --cutoff '{cutoff}'\n")
 
     disc = analyse(blocks, disc_b, family)
     conf = analyse(blocks, conf_b, family)

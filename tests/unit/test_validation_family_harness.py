@@ -30,6 +30,7 @@ from validation_family import (  # noqa: E402 - path set above
     Family,
     _Rng,
     block_bootstrap,
+    block_draws,
     boot_p_value,
     chronological_split,
     detectable_effect,
@@ -80,7 +81,8 @@ class TestTheResamplerIsNotDegenerate:
             # blocks differ: in half of them the high-metric side wins
             winner = 1 if b % 2 == 0 else 2
             blocks[b] = {b: _round([(9, 1), (8, 1), (2, 2), (1, 2)], winner)}
-        vals = block_bootstrap(blocks, _metric, resamples=200, seed=20260826)
+        draws = block_draws(blocks, resamples=200, seed=20260826)
+        vals = [v for v in block_bootstrap(blocks, _metric, draws) if v is not None]
         assert len(vals) > 100
         assert len(set(vals)) > 1, "every resample produced the same number"
 
@@ -284,3 +286,75 @@ class TestOnePlayerRowPerRound:
         doubled = clean + [dict(clean[0])]
         assert (within_round_spread({1: clean, 2: clean}, _metric)
                 == within_round_spread({1: doubled, 2: doubled}, _metric))
+
+
+class TestTheCodexRound:
+    """Five P1s and a P2 from review, each pinned by the test that would have
+    caught it. Written after the fixes, which is late — but a defect without a
+    test is a defect that comes back."""
+
+    def test_an_unmeasurable_candidate_gets_no_interval_and_fails(self):
+        """`nan` compares false against everything, so `not (lo <= 0 <= hi)`
+        read a nan interval as 'excludes zero' and SHIPPED an unmeasured
+        candidate. Absence of evidence wearing the shape of evidence."""
+        boot = {"flat": [0.05] * 500}          # zero spread -> no usable SD
+        intervals, crit, sds = max_t_intervals(boot, {"flat": 0.05}, 0.05)
+        assert "flat" not in intervals, "an unmeasurable candidate got an interval"
+        assert math.isnan(sds["flat"]) or sds["flat"] == 0
+
+    def test_too_few_usable_replicates_yields_no_interval(self):
+        boot = {"thin": [0.05, 0.06, None] + [None] * 500}
+        intervals, _, _ = max_t_intervals(boot, {"thin": 0.05}, 0.05)
+        assert "thin" not in intervals
+
+    def test_every_candidate_sees_the_same_draws(self):
+        """max-T reads element j of every candidate as ONE joint replicate. Per
+        candidate seeds would destroy the covariance the interval depends on."""
+        a = block_draws({i: {} for i in range(8)}, resamples=50, seed=5)
+        b = block_draws({i: {} for i in range(8)}, resamples=50, seed=5)
+        assert a == b
+        assert any(d1 != d2 for d1, d2 in zip(a, a[1:])), "draws never vary"
+
+    def test_a_tied_median_does_not_get_split_by_row_order(self):
+        """Kills are small integers, so the median value is routinely shared. A
+        CONSTANT metric must carry no signal regardless of the order rows
+        arrive in — it used to score +1 or -1 depending on it."""
+        const = lambda p: 7.0  # noqa: E731
+        one = _round([(0, 1), (0, 1), (0, 2), (0, 2)], winner=1)
+        other = _round([(0, 2), (0, 2), (0, 1), (0, 1)], winner=1)
+        assert within_round_spread({1: one, 2: one}, const) is None
+        assert within_round_spread({1: other, 2: other}, const) is None
+
+    def test_players_at_the_boundary_value_are_dropped_from_both_halves(self):
+        rounds = {i: _round([(1, 2), (5, 1), (5, 2), (9, 1)], winner=1)
+                  for i in range(3)}
+        # 5 is shared across the median -> both 5s drop, leaving 1 vs 9
+        assert within_round_spread(rounds, _metric) == pytest.approx(1.0)
+
+    def test_the_formula_is_in_the_manifest_not_just_its_prose(self):
+        """Changing a lambda without editing its description must move the hash,
+        or two materially different experiments claim one frozen family."""
+        same = Candidate("x", "d", "higher_is_better", lambda p: p["v"])
+        assert same.formula_fingerprint().startswith(("source:", "bytecode-shape:"))
+        a = Candidate("x", "d", "higher_is_better", lambda p: float(p["v"]))
+        b = Candidate("x", "d", "higher_is_better", lambda p: float(p["v"]) * 2.0)
+        assert a.formula_fingerprint() != b.formula_fingerprint()
+
+    def test_a_frozen_cutoff_beats_the_percentile(self):
+        """The boundary must not drift as new blocks arrive: blocks already seen
+        in confirmation would slide into discovery under an unchanged hash."""
+        times = {f"b{i}": f"2026-0{1 + i // 5}-0{1 + i % 5} 12:00:00"
+                 for i in range(10)}
+        _, conf_a, _, _ = chronological_split(times, 0.70, "2026-02-03 00:00:00")
+        times["b99"] = "2026-03-01 12:00:00"      # a new block arrives
+        _, conf_b, _, _ = chronological_split(times, 0.70, "2026-02-03 00:00:00")
+        assert conf_a <= conf_b, "a frozen cutoff moved a block out of confirmation"
+
+    def test_without_a_frozen_cutoff_the_boundary_does_drift(self):
+        """The other half of the fact — why the flag exists at all."""
+        times = {f"b{i}": f"2026-01-{10 + i} 12:00:00" for i in range(10)}
+        _, conf_a, _, _ = chronological_split(times, 0.70)
+        for j in range(10):
+            times[f"n{j}"] = f"2026-02-{10 + j} 12:00:00"
+        _, conf_b, _, _ = chronological_split(times, 0.70)
+        assert conf_a - conf_b, "expected the percentile split to drift"
