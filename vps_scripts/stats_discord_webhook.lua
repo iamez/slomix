@@ -848,21 +848,17 @@ end
 -- round runs, reset on round start.
 local roster_seen = {}
 local roster_seen_last_scan = 0
--- On the map_restart FALLBACK start path the engine already reports
--- GS_PLAYING during the 15-40 s pre-clock warmup, so players seen ONLY in
--- that window may never take part in the real round. The fallback path
--- sets this to round_start + 45; entries whose last sighting predates it
--- are dropped at collection. The normal WARMUP->PLAYING path leaves it 0,
--- so nothing is ever dropped there.
-local roster_grace_until = 0
 
-local function roster_reset(grace_until)
+local function roster_reset()
     roster_seen = {}
     roster_seen_last_scan = 0
-    roster_grace_until = grace_until or 0
 end
 
 local function roster_scan()
+    -- Not during a pause: gamestate stays GS_PLAYING while paused, and a
+    -- spectator who joins a side mid-pause and leaves before the resume
+    -- was never a participant. Players already seen keep their entries.
+    if paused then return end
     local now = os.time()
     if now == roster_seen_last_scan then return end
     roster_seen_last_scan = now
@@ -882,12 +878,10 @@ local function roster_scan()
                 if key == "" then
                     key = "noguid:" .. clientNum
                 end
-                local prev = roster_seen[key]
                 roster_seen[key] = {
                     guid = guid:sub(1, 32),  -- First 32 chars of GUID
                     name = strip_color_codes(name),
                     team = team,
-                    first_seen = prev and prev.first_seen or now,
                     last_seen = now,
                 }
             end
@@ -904,18 +898,13 @@ local function collect_team_data()
     -- this round but already left.
     roster_scan()
 
+    -- NO pre-clock heuristic, deliberately (three review rounds proved
+    -- every span/grace variant re-loses some real participant in a corner
+    -- of the map_restart path). A team member seen only during the
+    -- pre-clock warmup thus stays listed: cosmetic, pcs never confirms
+    -- them, and losing a real player is the exact failure this feature
+    -- exists to fix.
     for _, p in pairs(roster_seen) do
-        -- Fallback-start rounds: skip only FLEETING pre-clock sightings —
-        -- gone before the grace boundary AND present under 10 s total. A
-        -- player who genuinely played 15 s..40 s has a longer span and is
-        -- kept; losing a real participant is the failure mode this whole
-        -- feature exists to fix, so the filter errs toward keeping.
-        local span = (p.last_seen or 0) - (p.first_seen or p.last_seen or 0)
-        if roster_grace_until > 0 and (p.last_seen or 0) < roster_grace_until
-                and span < 10 then
-            log(string.format("Roster: dropping pre-clock-only %s", p.name))
-            goto continue
-        end
         local player_data = { guid = p.guid, name = p.name, last_seen = p.last_seen or 0 }
         if p.team == TEAM_AXIS then
             table.insert(axis_players, player_data)
@@ -924,7 +913,6 @@ local function collect_team_data()
             table.insert(allies_players, player_data)
             log(string.format("Allies player: %s (%s)", p.name, p.guid:sub(1,8)))
         end
-        ::continue::
     end
 
     return axis_players, allies_players
@@ -1750,9 +1738,7 @@ function et_RunFrame(levelTime)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()
-        -- v1.7.3: fresh cumulative roster; the fallback path may fire
-        -- during the pre-clock warmup, so give it the 45 s grace window.
-        roster_reset(round_start_unix + 45)
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         intermission_handled = false
         round_started = true
         log(string.format("Round started at %d (fallback)", round_start_unix))
