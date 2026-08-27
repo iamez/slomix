@@ -1,4 +1,4 @@
-import { useParams } from 'react-router';
+import { Link, useParams } from 'react-router';
 import { usePlayerProfile } from '../lib/queries';
 import type {
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
@@ -47,12 +47,25 @@ function SectionBody({ available, empty, children, what }: {
  * same rule as the form page (#819): a historical link still arrives, and
  * a spent leave must not read as a current one. Statistics stay separate —
  * this line says WHO, never merges numbers. */
+/** An attributed name is a destination, not a label: the response carries the
+ * other identity's guid, so the reader can follow the relationship instead of
+ * searching for the name by hand (Codex, #822 wave 7). A guid-less entry stays
+ * plain text — a link to `/profile/undefined` is worse than no link. */
+function IdentityName({ guid, name }: { guid?: string | null; name: string }) {
+  if (!guid) return <>{name}</>;
+  return (
+    <Link to={`/profile/${guid}`} style={{ color: 'inherit', textDecoration: 'underline dotted' }}>
+      {name}
+    </Link>
+  );
+}
+
 function IdentityLink({ link }: { link: ProfileIdentity['identity_link'] }) {
   if (!link || link.active === false) return null;
   if (link.role === 'alt' && link.primary_name) {
     return (
       <span style={{ color: 'var(--color-accent-warm)' }}>
-        {' · '}alt of {link.primary_name}
+        {' · '}alt of <IdentityName guid={link.primary_guid} name={link.primary_name} />
         {link.link_type === 'sick_leave' && ' (on sick leave)'}
       </span>
     );
@@ -61,7 +74,13 @@ function IdentityLink({ link }: { link: ProfileIdentity['identity_link'] }) {
   if (link.role === 'primary' && alts.length > 0) {
     return (
       <span style={{ color: 'var(--color-accent-warm)' }}>
-        {' · '}also plays as {alts.map((a) => a.alt_name).join(', ')}
+        {' · '}also plays as{' '}
+        {alts.map((a, i) => (
+          <span key={`${a.alt_guid || 'noguid'}:${a.alt_name}`}>
+            {i > 0 ? ', ' : ''}
+            <IdentityName guid={a.alt_guid} name={a.alt_name} />
+          </span>
+        ))}
       </span>
     );
   }

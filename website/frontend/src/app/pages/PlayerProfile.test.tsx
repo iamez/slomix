@@ -233,8 +233,33 @@ describe('PlayerProfilePage', () => {
       }
       return fixtureFetch(input);
     });
-    await waitFor(() => expect(screen.getByText(/alt of ownator/)).toBeInTheDocument());
+    // The attribution is followable: the response carries the primary's guid,
+    // so the name IS that profile's link, not a name to go search for by hand
+    // (which is also why the wording is asserted apart from the name — the
+    // name now lives in a child element).
+    await waitFor(() => expect(screen.getByRole('link', { name: 'ownator' })).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'ownator' })).toHaveAttribute('href', '/profile/FB0EC840');
+    expect(screen.getByText(/alt of/)).toBeInTheDocument();
     expect(screen.getByText(/on sick leave/)).toBeInTheDocument();
+  });
+
+  it('an attributed name without a guid stays plain text, not a dead link', async () => {
+    const noGuid = { role: 'alt', link_type: 'sick_leave', primary_name: 'ownator', active: true };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({
+            ...(profile as object),
+            identity: { ...(profile as { identity: object }).identity, identity_link: noGuid },
+          }),
+        } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/alt of ownator/)).toBeInTheDocument());
+    expect(screen.queryByRole('link', { name: 'ownator' })).toBeNull();
   });
 
   it('a primary names its active alts only', async () => {
@@ -258,7 +283,9 @@ describe('PlayerProfilePage', () => {
       }
       return fixtureFetch(input);
     });
-    await waitFor(() => expect(screen.getByText(/also plays as carniee/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('link', { name: 'carniee' })).toBeInTheDocument());
+    expect(screen.getByRole('link', { name: 'carniee' })).toHaveAttribute('href', '/profile/EF561EAA');
+    expect(screen.getByText(/also plays as/)).toBeInTheDocument();
     expect(screen.queryByText(/oldalt/)).toBeNull();
   });
 
