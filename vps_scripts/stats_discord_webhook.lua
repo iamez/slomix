@@ -876,23 +876,28 @@ local function roster_scan(force)
             if team == TEAM_AXIS or team == TEAM_ALLIES then
                 local guid = get_client_guid(clientNum)
                 local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+                local clean_name = strip_color_codes(name)
                 -- A GUID-less client (empty-string fallback) must not share
-                -- the "" key with every other GUID-less client — key them by
-                -- slot instead, so two such players stay distinct. The stored
-                -- guid field keeps the raw value, same as the old snapshot.
+                -- the "" key with every other GUID-less client. The SLOT is
+                -- not an identity either — it gets reused after a leave, and
+                -- retiring by slot deleted whoever held it before (review
+                -- rounds 5-6). The NAME is the identity such a client
+                -- actually carries, so the fallback keys by name: a reused
+                -- slot with a different name collides with nothing, and when
+                -- the GUID finally appears the same player's name-keyed
+                -- fallback is the one retired. (Two simultaneous GUID-less
+                -- clients with the identical name would merge — a rename
+                -- while GUID-less leaves a stale extra entry: both benign,
+                -- and this feature errs toward keeping.)
                 local key = guid:sub(1, 32)
                 if key == "" then
-                    key = "noguid:" .. clientNum
+                    key = "noguid:" .. clean_name
                 else
-                    -- The GUID may have been unavailable on an earlier scan;
-                    -- now that the client has an identity, retire the slot
-                    -- fallback so the same participant is not emitted twice
-                    -- (and a later slot reuse cannot overwrite them).
-                    roster_seen["noguid:" .. clientNum] = nil
+                    roster_seen["noguid:" .. clean_name] = nil
                 end
                 roster_seen[key] = {
                     guid = guid:sub(1, 32),  -- First 32 chars of GUID
-                    name = strip_color_codes(name),
+                    name = clean_name,
                     team = team,
                     last_seen = now,
                 }
