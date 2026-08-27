@@ -16,6 +16,7 @@ Nothing in a green test suite would have shown that; the control did.
 
 from __future__ import annotations
 
+import inspect
 import math
 import random
 import sys
@@ -29,12 +30,14 @@ from validation_family import (  # noqa: E402 - path set above
     Candidate,
     Family,
     _Rng,
+    analyse,
     block_bootstrap,
     block_draws,
     boot_p_value,
     chronological_split,
     detectable_effect,
     holm,
+    margin_agreement,
     max_t_intervals,
     outcome_seconds,
     outcome_win,
@@ -216,32 +219,33 @@ class TestTheOutcomeDefinition:
     round; the stopwatch margin is a continuous measurement of the same match.
     Which one is used changes the answer, so it changes the manifest hash."""
 
-    def _p(self, team, winner=1, margin=None, r2_attacker=None):
+    def _p(self, team, winner=1, margin=None, defender=None, half=2):
         return {"guid": "g", "rid": 1, "team": team, "winner": winner,
-                "margin": margin, "r2_attacker": r2_attacker, "v": 1}
+                "margin": margin, "defender": defender, "half": half, "v": 1}
 
     def test_win_outcome_is_one_for_the_winning_side(self):
         assert outcome_win(self._p(1, winner=1)) == 1.0
         assert outcome_win(self._p(2, winner=1)) == 0.0
 
-    def test_the_margin_is_signed_by_which_side_attacked_in_r2(self):
-        """Positive margin means the R2 attack was faster. That side gains it;
-        the other side loses exactly as much."""
-        fast = self._p(1, margin=40.0, r2_attacker=1)
-        slow = self._p(2, margin=40.0, r2_attacker=1)
+    def test_the_margin_is_signed_by_who_attacks_in_this_round(self):
+        """Positive margin means the R2 attack was faster. In R2 the attacking
+        side gains it; the defending side loses exactly as much. The attacker is
+        read per round, because the sides swap between the halves."""
+        fast = self._p(2, margin=40.0, defender=1, half=2)   # attacks in R2
+        slow = self._p(1, margin=40.0, defender=1, half=2)   # defends in R2
         assert outcome_seconds(fast) == +40.0
         assert outcome_seconds(slow) == -40.0
 
     def test_an_unresolved_pair_is_unmeasurable_not_a_dead_heat(self):
         """A missing measurement and a zero margin have the same shape. Reading
         the first as the second would invent evidence."""
-        assert outcome_seconds(self._p(1, margin=None, r2_attacker=1)) is None
-        assert outcome_seconds(self._p(1, margin=10.0, r2_attacker=None)) is None
+        assert outcome_seconds(self._p(1, margin=None, defender=1)) is None
+        assert outcome_seconds(self._p(1, margin=10.0, defender=None)) is None
 
     def test_a_round_with_any_unmeasurable_player_is_dropped_whole(self):
         """Half a round would compare two different populations."""
-        players = [self._p(1, margin=40.0, r2_attacker=1) for _ in range(3)]
-        players.append(self._p(2, margin=None, r2_attacker=1))
+        players = [self._p(1, margin=40.0, defender=2) for _ in range(3)]
+        players.append(self._p(2, margin=None, defender=2))
         for i, p in enumerate(players):
             p["v"] = i
         assert within_round_spread({1: players}, _metric, outcome_seconds) is None
@@ -358,3 +362,105 @@ class TestTheCodexRound:
             times[f"n{j}"] = f"2026-02-{10 + j} 12:00:00"
         _, conf_b, _, _ = chronological_split(times, 0.70)
         assert conf_a - conf_b, "expected the percentile split to drift"
+
+
+class TestTheSecondCodexRound:
+    """Seven more findings on the fixes themselves. The margin one is the reason
+    this class matters: it did not tighten a guard, it retired a conclusion."""
+
+    def _p(self, team, defender, half, margin, winner=1):
+        return {"guid": "g", "rid": 1, "team": team, "winner": winner,
+                "defender": defender, "half": half, "margin": margin, "v": 1}
+
+    def test_the_sign_flips_between_the_halves(self):
+        """The side swaps between R1 and R2 (1,130 of 1,383 paired rows). Taking
+        R1's defender for both halves gave the two halves of one match
+        contradictory labels."""
+        # team 1 defends: in R2 it is the R2 attacker's opponent
+        r2_attacker = self._p(team=2, defender=1, half=2, margin=40.0)
+        r2_defender = self._p(team=1, defender=1, half=2, margin=40.0)
+        assert outcome_seconds(r2_attacker) == +40.0
+        assert outcome_seconds(r2_defender) == -40.0
+        # the same persistent side, one half earlier, attacks in R1
+        r1_attacker = self._p(team=2, defender=1, half=1, margin=40.0)
+        assert outcome_seconds(r1_attacker) == -40.0
+
+    def test_an_unknown_defender_is_unmeasurable(self):
+        assert outcome_seconds(self._p(1, defender=0, half=2, margin=10.0)) is None
+
+    def test_margin_agreement_detects_a_sign_that_carries_no_result(self):
+        """The gate that retired the seconds outcome. A real stopwatch margin IS
+        the result, so agreement is near total; ours agreed 48.5% of the time,
+        which is chance."""
+        # a coherent margin: the winner always has the positive sign
+        good = {i: [self._p(2, 1, 2, +30.0, winner=2),
+                    self._p(1, 1, 2, +30.0, winner=2)] for i in range(5)}
+        agree, total = margin_agreement(good)
+        assert total and agree == total
+        # an incoherent one: the sign says nothing about who won
+        bad = {i: [self._p(2, 1, 2, +30.0, winner=1),
+                   self._p(1, 1, 2, +30.0, winner=1)] for i in range(5)}
+        agree, total = margin_agreement(bad)
+        assert total and agree == 0
+
+    def test_a_helper_change_moves_the_fingerprint(self, tmp_path):
+        """`dpm` calls `_minutes`; changing that helper changes the executable
+        experiment while the lambda's own text is untouched.
+
+        Mutation-checked for real: a copy of the module with `/ 60.0` changed to
+        `/ 60.5` must move `dpm`'s fingerprint and NOTHING else. Asserting on
+        the module as-shipped could not tell a covering fingerprint from a
+        lucky one.
+        """
+        src = Path(inspect.getfile(
+            sys.modules["validation_family"])).read_text()
+        assert "/ 60.0" in src
+        mutant = tmp_path / "vf_mutant.py"
+        mutant.write_text(src.replace('return max(p["secs"], 1) / 60.0',
+                                      'return max(p["secs"], 1) / 60.5'))
+        sys.path.insert(0, str(tmp_path))
+        try:
+            import vf_mutant
+            before = {c.cid: c.formula_fingerprint()
+                      for c in sys.modules["validation_family"].DEFAULT_FAMILY}
+            after = {c.cid: c.formula_fingerprint()
+                     for c in vf_mutant.DEFAULT_FAMILY}
+        finally:
+            sys.path.remove(str(tmp_path))
+            sys.modules.pop("vf_mutant", None)
+        moved = [cid for cid in before if before[cid] != after[cid]]
+        assert moved == ["dpm"], (
+            f"changing _minutes moved {moved}; it must move exactly dpm")
+
+    def test_p_value_ignores_unmeasurable_replicates(self):
+        """max_t_intervals supports gaps, so the p-value must not crash on them
+        nor count them in its denominator."""
+        vals = [0.05] * 200 + [None] * 50
+        usable = [v for v in vals if v is not None]
+        assert boot_p_value(usable, 0.05) < 0.05
+
+
+class TestTheCallSiteNotJustTheHelper:
+    """`test_every_candidate_sees_the_same_draws` checks `block_draws`. That is
+    not enough: reintroducing a per-candidate seed inside `analyse` left the
+    whole suite green, because the helper was still correct and only its CALLER
+    had changed. A guard that cannot see the call site does not guard it."""
+
+    def test_analyse_evaluates_every_candidate_on_identical_draws(self):
+        """Two candidates that are the SAME function must produce identical
+        bootstrap sequences. They can only differ if they were handed different
+        resamples — which is exactly the defect."""
+        blocks = {}
+        for b in range(12):
+            winner = 1 if b % 3 else 2
+            blocks[b] = {b: _round([(9, 1), (8, 1), (2, 2), (1, 2)], winner)}
+        twin = [Candidate("a", "d", "higher_is_better", _metric),
+                Candidate("b", "d", "higher_is_better", _metric)]
+        family = Family(name="t", candidates=twin, filters="f", resamples=120,
+                        seed=99)
+        out = analyse(blocks, set(blocks), family)
+        assert out["boot"]["a"], "no bootstrap produced"
+        assert out["boot"]["a"] == out["boot"]["b"], (
+            "identical candidates got different bootstrap sequences — the draws "
+            "are not shared across the family, so the max-T interval is not "
+            "family-wise")

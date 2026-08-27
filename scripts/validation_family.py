@@ -28,6 +28,23 @@ before it judges an unknown one. Two candidates in the default family must FAIL:
   `null`  a deterministic pseudo-random number. It has no signal by
           construction. If it ever ships, the harness is broken, not lucky.
 
+⛔ WHAT THIS HARNESS RETIRED, INCLUDING ONE OF ITS OWN CLAIMS.
+
+`--outcome seconds` was added on the theory that win/loss is one bit per round
+while a stopwatch match is decided by a margin in seconds, and it appeared to
+clear the family floor by 2.4-8.7 SD where win/loss cleared by 0.18. That
+conclusion is WITHDRAWN. The quantity it used, `r1.actual_duration_seconds -
+r2.actual_duration_seconds`, agrees with who actually won the round 48.5% of the
+time — chance. A real stopwatch margin is not a correlate of the result, it IS
+the result, so agreement should be near total. `actual_duration_seconds` is wall
+clock, and an R1 fullhold runs to the timelimit rather than to an objective, so
+the difference is not "how much faster the second attack was".
+
+The outcome is kept, gated, and refuses to run below MARGIN_AGREEMENT_FLOOR, so
+the next person meets the measurement instead of the idea. `time_to_beat_seconds`
+is the real quantity and is populated on 33 of 2,007 eligible rounds; making it
+available is capture-side work, not analysis work.
+
 Usage:
     PGPASSWORD=... venv/bin/python3 scripts/validation_family.py
     PGPASSWORD=... venv/bin/python3 scripts/validation_family.py --spatial
@@ -43,6 +60,7 @@ import math
 import os
 import random
 import statistics
+import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import Callable
@@ -67,12 +85,10 @@ _Z_POWER = 0.841621234      # one-sided 80%
 # cannot answer "did this side win", so they are excluded rather than assumed.
 ROWS_SQL = """
 WITH candidate_pairs AS (
-  -- The R1/R2 window admits MORE than one partner: the same map is often
-  -- replayed inside a session, so a 45-minute window can see two or three R2s
-  -- after one R1. Measured on this database: 189 rounds match several pairs.
-  -- Left-joining that directly duplicates every player row in those rounds,
-  -- which silently double-counts them in the within-round comparison.
-  SELECT r1.id AS r1id, r2.id AS r2id, r1.defender_team AS r2_attacker,
+  -- The R1/R2 window is many-to-many: the same map replayed inside a session
+  -- gives one R1 several candidate R2s, and an abandoned R1 followed by a real
+  -- one leaves two R1s pointing at the same R2.
+  SELECT r1.id AS r1id, r2.id AS r2id,
          (r1.actual_duration_seconds - r2.actual_duration_seconds)::float AS margin,
          r2.created_at - r1.created_at AS gap
   FROM rounds r1
@@ -83,20 +99,24 @@ WITH candidate_pairs AS (
    AND r2.created_at > r1.created_at
    AND r2.created_at < r1.created_at + interval '45 minutes'
   WHERE r1.is_valid AND r2.is_valid
-    AND r1.defender_team IN (1, 2)
     AND r1.actual_duration_seconds IS NOT NULL
     AND r2.actual_duration_seconds IS NOT NULL
+), r1_choice AS (
+  SELECT DISTINCT ON (r1id) r1id, r2id, margin FROM candidate_pairs
+  ORDER BY r1id, gap, r2id
+), r2_choice AS (
+  SELECT DISTINCT ON (r2id) r2id, r1id FROM candidate_pairs
+  ORDER BY r2id, gap, r1id
+), matched AS (
+  -- MUTUAL choice only. Picking the nearest partner per round independently is
+  -- not a matching: an abandoned R1 keeps a margin to an R2 that chose the
+  -- other R1, fabricating an outcome for a round that never had one.
+  SELECT a.r1id, a.r2id, a.margin
+  FROM r1_choice a JOIN r2_choice b ON b.r2id = a.r2id AND b.r1id = a.r1id
 ), pair_margin AS (
-  -- One partner per round, the nearest in time, from EITHER side of the pair.
-  -- DISTINCT ON over the round id keeps the join one-to-one; the ordering is
-  -- deterministic (gap, then id) so the published table is reproducible.
-  SELECT DISTINCT ON (rid) rid, r1id, r2id, r2_attacker, margin
-  FROM (
-    SELECT r1id AS rid, r1id, r2id, r2_attacker, margin, gap FROM candidate_pairs
-    UNION ALL
-    SELECT r2id AS rid, r1id, r2id, r2_attacker, margin, gap FROM candidate_pairs
-  ) both_sides
-  ORDER BY rid, gap, r2id
+  SELECT r1id AS rid, margin, 1 AS half FROM matched
+  UNION ALL
+  SELECT r2id AS rid, margin, 2 AS half FROM matched
 )
 SELECT pcs.round_id                      AS rid,
        r.gaming_session_id               AS block,
@@ -104,13 +124,14 @@ SELECT pcs.round_id                      AS rid,
        pcs.player_guid                   AS guid,
        pcs.team                          AS team,
        r.winner_team                     AS winner,
+       r.defender_team                   AS defender,
        pcs.kills                         AS kills,
        pcs.deaths                        AS deaths,
        pcs.damage_given                  AS dg,
        pcs.damage_received               AS dr,
        pcs.time_played_seconds           AS secs,
        pm.margin                         AS margin,
-       pm.r2_attacker                    AS r2_attacker
+       pm.half                           AS half
 FROM player_comprehensive_stats pcs
 JOIN rounds r ON r.id = pcs.round_id
 LEFT JOIN pair_margin pm ON pm.rid = r.id
@@ -153,6 +174,22 @@ class Candidate:
             import inspect
             src = inspect.getsource(self.fn).strip()
             kind = "source"
+            # A lambda's text names its helpers but does not contain them:
+            # `dpm` reads `_minutes(p)`, so changing that helper's `/ 60.0` or
+            # its missing-time rule would change the experiment while leaving
+            # the manifest hash alone. Pull in the source of every module-level
+            # helper the formula actually calls, sorted for stability.
+            module = sys.modules.get(self.fn.__module__)
+            code = getattr(self.fn, "__code__", None)
+            for name in sorted(set(code.co_names if code else ())):
+                helper = getattr(module, name, None)
+                if callable(helper) and getattr(helper, "__module__", None) == \
+                        self.fn.__module__:
+                    try:
+                        src += "\n" + inspect.getsource(helper).strip()
+                    except (OSError, TypeError):
+                        src += f"\n<unreadable helper {name}>"
+                        kind = "source+partial-helpers"
         except (OSError, TypeError):
             code = getattr(self.fn, "__code__", None)
             src = (repr((code.co_names, code.co_consts, code.co_argcount))
@@ -207,13 +244,52 @@ def outcome_win(p: dict) -> float | None:
 def outcome_seconds(p: dict) -> float | None:
     """Signed stopwatch margin in seconds for this player's side.
 
-    None when the match pair could not be resolved — the round is then dropped,
-    not scored as a zero margin. A missing measurement and a dead heat have the
-    same shape here and must not be confused.
+    ⛔ THE SIDE SWAPS BETWEEN THE HALVES. `player_comprehensive_stats.team` is
+    the side a player occupied in THAT round, and stopwatch teams change ends
+    between R1 and R2 — measured here: 1,130 of 1,383 paired player rows sit on
+    a different `team` in R2 than in R1. Deriving the sign from R1's defender
+    for both halves therefore labels the real R2 attackers negative and their
+    opponents positive, so the two halves of one match carry contradictory
+    labels. The sign is taken per round instead: within any round the attacker
+    is the side that is not `rounds.defender_team`, and the margin favours the
+    R2 attacker.
+
+    None when the pair could not be resolved — the round is dropped, not scored
+    as a zero margin. A missing measurement and a dead heat have the same shape
+    here and must not be confused.
     """
-    if p.get("margin") is None or p.get("r2_attacker") is None:
+    if p.get("margin") is None or p.get("half") is None:
         return None
-    return float(p["margin"]) * (1.0 if p["team"] == p["r2_attacker"] else -1.0)
+    if p.get("defender") not in (1, 2):
+        return None
+    attacks_this_round = p["team"] != p["defender"]
+    # margin > 0 means the R2 attack was faster, which is a win for whoever
+    # attacks in R2. In R1 the same persistent team is the one DEFENDING.
+    favours_r2_attacker = float(p["margin"])
+    if p["half"] == 2:
+        return favours_r2_attacker if attacks_this_round else -favours_r2_attacker
+    return -favours_r2_attacker if attacks_this_round else favours_r2_attacker
+
+
+def margin_agreement(rows_by_round: dict) -> tuple[int, int]:
+    """How often the margin's sign agrees with who actually won the round.
+
+    A real stopwatch margin is not a correlate of the result — it IS the result,
+    so agreement should be near total. Anything else means the quantity is not
+    what its name says, and every verdict computed from it is measuring
+    something nobody has identified.
+    """
+    agree = total = 0
+    for players in rows_by_round.values():
+        for p in players:
+            v = outcome_seconds(p)
+            if v is None or v == 0:
+                continue
+            total += 1
+            won = p["team"] == p["winner"]
+            if (v > 0) == won:
+                agree += 1
+    return agree, total
 
 
 OUTCOMES = {"win": outcome_win, "seconds": outcome_seconds}
@@ -427,6 +503,11 @@ def chronological_split(block_times: dict, fraction: float,
 
 # --- §8.4: family-wise error ---------------------------------------------------
 MIN_USABLE_REPLICATES = 100
+MARGIN_AGREEMENT_FLOOR = 90.0  # percent; below this an outcome is not itself
+# #556 measured kpr's within-round spread near +0.028. Calibration asks whether
+# this implementation reproduces that MAGNITUDE, not whether it repeats that
+# sample's verdict.
+KPR_EXPECTED_RANGE = (0.0, 0.10)
 
 
 def max_t_intervals(boot: dict, point: dict, alpha: float):
@@ -605,7 +686,11 @@ def report(family: Family, disc: dict, conf: dict,
            d_counts: tuple, c_counts: tuple, cutoff: str) -> list[dict]:
     """§8.5: EVERY candidate, with both halves. The table is the deliverable."""
     intervals, crit, sds = max_t_intervals(conf["boot"], conf["point"], family.alpha)
-    pvals = {cid: boot_p_value(conf["boot"][cid], conf["point"][cid])
+    # only the usable replicates: max_t_intervals() explicitly supports a
+    # candidate whose bootstrap has gaps, so the p-value must not crash on the
+    # first None and must not count the gaps in its denominator either
+    pvals = {cid: boot_p_value([v for v in conf["boot"][cid] if v is not None],
+                               conf["point"][cid])
              for cid in conf["point"]}
     hp = holm(pvals, family.alpha)
 
@@ -699,6 +784,14 @@ async def main() -> int:
                     help="published seed; changing it changes the manifest hash")
     args = ap.parse_args()
 
+    if args.resamples < MIN_USABLE_REPLICATES:
+        print(f"⛔ --resamples {args.resamples} is below the {MIN_USABLE_REPLICATES} "
+              f"needed for any usable interval.\n"
+              f"   Such a run produces no inference at all, yet every candidate "
+              f"would read FAILS and\n   both controls would look correct — a "
+              f"family retired by an instrument that never measured it.")
+        return 5
+
     blocks, times = await load(args.spatial)
     if not blocks:
         print("no eligible rounds — nothing to validate")
@@ -720,12 +813,38 @@ async def main() -> int:
     cutoff = family.frozen_cutoff or (
         str(times[ordered[cut]]) if cut < len(ordered) else "n/a")
     if not family.frozen_cutoff:
-        # A proposed cutoff is not a frozen one. Print the line that turns this
-        # run into a reproducible experiment instead of letting the boundary
-        # drift with tomorrow's data.
-        print(f"⚠️  cutoff not frozen — this run PROPOSES {cutoff}.\n"
-              f"    Freeze it before confirmation means anything:\n"
-              f"      --cutoff '{cutoff}'\n")
+        # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
+        # verdicts on it; re-running later with the printed flag cannot make
+        # that holdout untouched again. The proposal is the whole output.
+        print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
+              f"   Confirmation data stays unopened until the boundary is fixed,\n"
+              f"   because a holdout that has been looked at is not a holdout:\n\n"
+              f"     --cutoff '{cutoff}'\n")
+        return 4
+
+    # ⛔ AN OUTCOME MUST BE VALIDATED BEFORE IT IS BELIEVED.
+    # A stopwatch margin is not a correlate of the match result — it IS the
+    # result, so its sign must agree with who won. Measured here it agrees 48.5%
+    # of the time, which is chance: the quantity derived from
+    # `actual_duration_seconds` is NOT a stopwatch margin, and every verdict
+    # computed from it was measuring something nobody had identified.
+    if family.outcome == "seconds":
+        flat_all = {rid: pl for rd in blocks.values() for rid, pl in rd.items()}
+        agree, total = margin_agreement(flat_all)
+        pct = 100.0 * agree / total if total else 0.0
+        print(f"OUTCOME CHECK — margin sign vs actual winner: "
+              f"{agree}/{total} = {pct:.1f}%")
+        if pct < MARGIN_AGREEMENT_FLOOR:
+            print(
+                f"\n⛔ REFUSING TO RUN. A stopwatch margin that agrees with the\n"
+                f"   result only {pct:.1f}% of the time is not a stopwatch margin.\n"
+                f"   `rounds.actual_duration_seconds` measures wall clock, and R1\n"
+                f"   fullholds run to the timelimit rather than to an objective,\n"
+                f"   so T1 - T2 is not 'how much faster the second attack was'.\n"
+                f"   Fix the quantity — `time_to_beat_seconds` is the real one and\n"
+                f"   is populated on 33 of 2,007 eligible rounds — before using\n"
+                f"   this outcome for anything.\n")
+            return 3
 
     disc = analyse(blocks, disc_b, family)
     conf = analyse(blocks, conf_b, family)
@@ -744,24 +863,42 @@ async def main() -> int:
     # it under --outcome seconds would be asserting a result nobody measured, so
     # it is checked only for the outcome it was retired under and reported as
     # information otherwise.
-    by_id = {r["id"]: r["verdict"] for r in results}
-    controls = ["null"] + (["kpr"] if family.outcome == "win" else [])
-    print("\nINSTRUMENT CHECK — these controls must FAIL:")
+    by_id = {r["id"]: r for r in results}
+    print("\nINSTRUMENT CHECK")
     broken = False
-    for cid in ("kpr", "null"):
-        got = by_id.get(cid, "MISSING")
-        enforced = cid in controls
-        ok = got == "FAILS"
-        if enforced:
-            broken = broken or not ok
-            note = "ok" if ok else "INSTRUMENT IS BROKEN"
-        else:
-            note = (f"not a control under outcome '{family.outcome}' "
-                    f"— #556 retired it against 'win' only")
-        print(f"  {cid:<6} {got:<9} {note}")
+
+    # `null` is the only STRUCTURAL control: pure noise by construction, so it
+    # must fail under every outcome. If noise ships, the harness is broken.
+    nullr = by_id.get("null", {}).get("verdict", "MISSING")
+    if nullr != "FAILS":
+        broken = True
+    print(f"  null  {nullr:<9} {'ok' if nullr == 'FAILS' else 'NOISE SHIPPED — BROKEN'}")
+
+    # `kpr` is CALIBRATION, not a control. #556 measured a spread near +0.028;
+    # reproducing that number is what says the instrument measures the same
+    # thing. Demanding that it stay NON-SIGNIFICANT would be wrong: that was a
+    # property of #556's sample, not of the metric, and with more confirmation
+    # blocks its interval may legitimately exclude zero. Enforcing the old
+    # verdict would then discard a valid family for being better powered.
+    kpr = by_id.get("kpr")
+    if kpr and family.outcome == "win" and kpr.get("confirmation") is not None:
+        k = kpr["confirmation"]
+        in_range = KPR_EXPECTED_RANGE[0] <= k <= KPR_EXPECTED_RANGE[1]
+        broken = broken or not in_range
+        print(f"  kpr   {k:+.3f}    "
+              + (f"ok — within the #556 range {KPR_EXPECTED_RANGE}"
+                 if in_range else
+                 f"OUTSIDE the #556 range {KPR_EXPECTED_RANGE} — the instrument "
+                 f"is not measuring what #556 measured"))
+        print(f"        verdict {kpr['verdict']} is reported, not enforced: "
+              f"significance is a property of this sample, not of the metric")
+    elif kpr:
+        print(f"  kpr   {kpr['verdict']:<9} not calibrated under outcome "
+              f"'{family.outcome}' — #556 measured 'win' only")
+
     if broken:
-        print("\nRefusing to report this run as valid: a control passed. Do not "
-              "use these verdicts.")
+        print("\nRefusing to report this run as valid: the instrument failed its "
+              "own checks. Do not use these verdicts.")
         return 2
     return 0
 
