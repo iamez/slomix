@@ -66,45 +66,15 @@ _Z_POWER = 0.841621234      # one-sided 80%
 # data source (contract in docs/CLAUDE.md). Bot rounds and unresolved winners
 # cannot answer "did this side win", so they are excluded rather than assumed.
 ROWS_SQL = """
-SELECT pcs.round_id                      AS rid,
-       r.gaming_session_id               AS block,
-       r.created_at                      AS at,
-       pcs.player_guid                   AS guid,
-       pcs.team                          AS team,
-       r.winner_team                      AS winner,
-       pcs.kills                         AS kills,
-       pcs.deaths                        AS deaths,
-       pcs.damage_given                  AS dg,
-       pcs.time_played_seconds           AS secs
-FROM player_comprehensive_stats pcs
-JOIN rounds r ON r.id = pcs.round_id
-WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
-  AND r.winner_team IN (1, 2)
-  AND r.gaming_session_id IS NOT NULL
-  AND pcs.round_number IN (1, 2)
-  AND pcs.team IN (1, 2)
-  AND pcs.time_played_seconds > 0
-  AND pcs.player_guid NOT LIKE 'OMNIBOT%'
-"""
-
-SPATIAL_FILTER = " AND EXISTS (SELECT 1 FROM player_track t WHERE t.round_id = r.id)"
-
-# §8.3 requires the OUTCOME DEFINITION to be frozen with the family, and win/loss
-# is not the only defensible one. A stopwatch match is decided by a margin in
-# SECONDS: R1 sets a time, R2 attacks it. `rounds.time_to_beat_seconds` would say
-# so directly but is populated on 33 of 2,007 eligible rounds, so the margin is
-# derived from the pair instead — R1 duration minus R2 duration, both from
-# `actual_duration_seconds`, the MEASURED clock (`actual_time` is the stopwatch
-# TARGET and overstates ~15% of rounds; see shared/round_time.py).
-#
-# Sign convention: positive margin means the side that attacked in R2 was the
-# faster one. A player's signed margin is + if their team attacked in R2, - if
-# it defended. Rounds whose pair cannot be resolved get NULL and are EXCLUDED
-# under --outcome seconds rather than scored as zero.
-MARGIN_CTE = """
-WITH pair_margin AS (
+WITH candidate_pairs AS (
+  -- The R1/R2 window admits MORE than one partner: the same map is often
+  -- replayed inside a session, so a 45-minute window can see two or three R2s
+  -- after one R1. Measured on this database: 189 rounds match several pairs.
+  -- Left-joining that directly duplicates every player row in those rounds,
+  -- which silently double-counts them in the within-round comparison.
   SELECT r1.id AS r1id, r2.id AS r2id, r1.defender_team AS r2_attacker,
-         (r1.actual_duration_seconds - r2.actual_duration_seconds)::float AS margin
+         (r1.actual_duration_seconds - r2.actual_duration_seconds)::float AS margin,
+         r2.created_at - r1.created_at AS gap
   FROM rounds r1
   JOIN rounds r2
     ON r2.gaming_session_id = r1.gaming_session_id
@@ -116,15 +86,47 @@ WITH pair_margin AS (
     AND r1.defender_team IN (1, 2)
     AND r1.actual_duration_seconds IS NOT NULL
     AND r2.actual_duration_seconds IS NOT NULL
+), pair_margin AS (
+  -- One partner per round, the nearest in time, from EITHER side of the pair.
+  -- DISTINCT ON over the round id keeps the join one-to-one; the ordering is
+  -- deterministic (gap, then id) so the published table is reproducible.
+  SELECT DISTINCT ON (rid) rid, r1id, r2id, r2_attacker, margin
+  FROM (
+    SELECT r1id AS rid, r1id, r2id, r2_attacker, margin, gap FROM candidate_pairs
+    UNION ALL
+    SELECT r2id AS rid, r1id, r2id, r2_attacker, margin, gap FROM candidate_pairs
+  ) both_sides
+  ORDER BY rid, gap, r2id
 )
+SELECT pcs.round_id                      AS rid,
+       r.gaming_session_id               AS block,
+       r.created_at                      AS at,
+       pcs.player_guid                   AS guid,
+       pcs.team                          AS team,
+       r.winner_team                     AS winner,
+       pcs.kills                         AS kills,
+       pcs.deaths                        AS deaths,
+       pcs.damage_given                  AS dg,
+       pcs.time_played_seconds           AS secs,
+       pm.margin                         AS margin,
+       pm.r2_attacker                    AS r2_attacker
+FROM player_comprehensive_stats pcs
+JOIN rounds r ON r.id = pcs.round_id
+LEFT JOIN pair_margin pm ON pm.rid = r.id
+WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
+  AND r.winner_team IN (1, 2)
+  AND r.gaming_session_id IS NOT NULL
+  AND pcs.round_number IN (1, 2)
+  AND pcs.team IN (1, 2)
+  AND pcs.time_played_seconds > 0
+  AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+  -- $1 restricts to rounds carrying position tracks (the Layer 4 universe).
+  -- A bound parameter rather than string concatenation: the query text is one
+  -- constant, which is both what the SQL-injection scanners want to see and
+  -- what stops a future filter from being pasted in by hand.
+  AND (NOT $1::boolean
+       OR EXISTS (SELECT 1 FROM player_track t WHERE t.round_id = r.id))
 """
-
-MARGIN_SELECT = """,
-       pm.margin        AS margin,
-       pm.r2_attacker   AS r2_attacker"""
-
-MARGIN_JOIN = """
-LEFT JOIN pair_margin pm ON r.id IN (pm.r1id, pm.r2id)"""
 
 
 @dataclass(frozen=True)
@@ -448,12 +450,6 @@ DEFAULT_FAMILY = [
 
 async def load(spatial: bool) -> tuple[dict, dict]:
     """Returns (blocks -> rid -> [player rows], block -> earliest timestamp)."""
-    sql = (MARGIN_CTE + ROWS_SQL.replace("       pcs.time_played_seconds           AS secs",
-                                         "       pcs.time_played_seconds           AS secs"
-                                         + MARGIN_SELECT)
-           .replace("JOIN rounds r ON r.id = pcs.round_id",
-                    "JOIN rounds r ON r.id = pcs.round_id" + MARGIN_JOIN)
-           + (SPATIAL_FILTER if spatial else ""))
     conn = await asyncpg.connect(
         host=os.environ.get("POSTGRES_HOST", "127.0.0.1"),
         port=int(os.environ.get("POSTGRES_PORT", "5432")),
@@ -461,7 +457,7 @@ async def load(spatial: bool) -> tuple[dict, dict]:
         user=os.environ.get("POSTGRES_USER", "etlegacy_user"),
         password=os.environ.get("POSTGRES_PASSWORD") or os.environ.get("PGPASSWORD", ""))
     try:
-        rows = await conn.fetch(sql)
+        rows = await conn.fetch(ROWS_SQL, spatial)
     finally:
         await conn.close()
 
@@ -603,7 +599,7 @@ async def main() -> int:
         name=("foundations-2026-08" + ("-spatial" if args.spatial else "")
               + ("" if args.outcome == "win" else f"-{args.outcome}")),
         candidates=DEFAULT_FAMILY,
-        filters=ROWS_SQL.strip() + (SPATIAL_FILTER if args.spatial else ""),
+        filters=ROWS_SQL.strip() + f"\n-- bound $1 (spatial) = {args.spatial}",
         resamples=args.resamples,
         seed=args.seed,
         outcome=args.outcome,

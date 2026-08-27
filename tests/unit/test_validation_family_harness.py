@@ -249,3 +249,38 @@ class TestTheOutcomeDefinition:
         a = Family(name="t", candidates=cands, filters="f", outcome="win")
         b = Family(name="t", candidates=cands, filters="f", outcome="seconds")
         assert a.manifest_hash() != b.manifest_hash()
+
+
+class TestOnePlayerRowPerRound:
+    """The R1/R2 window admits more than one partner — the same map replayed in
+    a session gives one R1 two or three candidate R2s (189 rounds on the live
+    database). Joining that naively duplicates every player row in those rounds,
+    and a duplicated player is counted twice inside the very comparison that is
+    supposed to be within-round. The SQL de-duplicates with DISTINCT ON; this
+    test states the invariant that de-duplication exists to protect."""
+
+    def test_a_duplicated_player_can_change_the_answer(self):
+        """Why the invariant matters.
+
+        Note the "can": the first version of this test asserted that duplication
+        ALWAYS moves the number, and it failed. A median split is robust — when
+        the two sides are cleanly separated, a repeated row lands in the half it
+        already dominated and the result is unchanged. It bites on the mixed
+        rounds, which is where the measurement is actually doing work, so a
+        duplicate corrupts precisely the rounds that carry the signal.
+        """
+        mixed = _round([(9, 1), (2, 1), (8, 2), (1, 2)], winner=1)
+        doubled = mixed + [dict(mixed[0])]
+        # two rounds: the estimator needs more than one to return a mean
+        assert within_round_spread({1: mixed, 2: mixed}, _metric) == pytest.approx(0.0)
+        assert (within_round_spread({1: doubled, 2: doubled}, _metric)
+                == pytest.approx(0.5))
+
+    def test_a_cleanly_separated_round_absorbs_the_duplicate(self):
+        """The other half of the same fact, so nobody reads the test above as
+        'duplication is always visible'. It is not, which is why the SQL
+        de-duplicates instead of relying on the measurement to notice."""
+        clean = _round([(9, 1), (8, 1), (2, 2), (1, 2)], winner=1)
+        doubled = clean + [dict(clean[0])]
+        assert (within_round_spread({1: clean, 2: clean}, _metric)
+                == within_round_spread({1: doubled, 2: doubled}, _metric))
