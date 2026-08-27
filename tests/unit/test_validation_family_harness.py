@@ -520,3 +520,31 @@ class TestTiesAtTheMedianValue:
         skewed = [-0.04] * 100 + [0.01] * 400
         assert boot_p_value(skewed, 0.0) == 1.0
         assert boot_p_value(skewed, 0.01) < 1.0
+
+
+class TestNothingMeasuredIsNotACleanRun:
+    """Found by self-review, not by the reviewer — the reviewer had run out of
+    quota, and the same error class it flagged for `--resamples` was sitting one
+    branch away.
+
+    When no candidate has a usable bootstrap spread, every one reports FAILS,
+    and `null` failing looks exactly like a control doing its job. The controls
+    cannot tell "noise was correctly rejected" from "nothing was measured", so
+    the run has to make that distinction itself.
+    """
+
+    def test_a_family_with_no_spread_yields_no_intervals(self):
+        boot = {c: [0.05] * 500 for c in ("kpr", "null", "dpm")}
+        point = dict.fromkeys(boot, 0.05)
+        intervals, crit, _ = max_t_intervals(boot, point, 0.05)
+        assert not intervals
+        assert math.isnan(crit)
+
+    def test_the_controls_look_correct_in_exactly_that_case(self):
+        """States why the check above is not enough on its own: `null` reports
+        FAILS here, which is what a healthy run also shows."""
+        boot = {"null": [0.02] * 500}
+        intervals, _, _ = max_t_intervals(boot, {"null": 0.02}, 0.05)
+        assert "null" not in intervals, (
+            "an unmeasurable null would still be reported FAILS — "
+            "indistinguishable from a correctly rejected one")

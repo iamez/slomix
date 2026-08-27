@@ -948,6 +948,23 @@ async def main() -> int:
     print("\nINSTRUMENT CHECK")
     broken = False
 
+    # ⛔ A FAMILY WHERE NOTHING WAS MEASURABLE MUST NOT READ AS A CLEAN RUN.
+    # When no candidate has a usable bootstrap spread, every one of them reports
+    # FAILS — including `null`, which then looks exactly like a control doing
+    # its job. The controls cannot distinguish "noise was correctly rejected"
+    # from "nothing was measured at all", so the run has to say so itself.
+    # Same shape as the --resamples case: an instrument that measured nothing
+    # will happily retire a whole family.
+    measured = [r for r in results
+                if r.get("verdict") in ("SHIPS", "SHIPS?", "FAILS")
+                and r.get("interval") and not math.isnan(r["interval"][0])]
+    if not measured:
+        print("  ⛔ NOT ONE candidate produced a usable interval. Every verdict "
+              "above is\n     'unmeasured', not 'rejected' — including the "
+              "controls, which is why they\n     look correct. Nothing here "
+              "retires anything.")
+        broken = True
+
     # `null` is the only STRUCTURAL control: pure noise by construction, so it
     # must fail under every outcome. If noise ships, the harness is broken.
     nullr = by_id.get("null", {}).get("verdict", "MISSING")
