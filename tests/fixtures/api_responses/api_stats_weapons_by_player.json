@@ -1,0 +1,192 @@
+{
+ "period": "all",
+ "player_count": 25,
+ "players": [
+  {
+   "player_guid": "00000003000000000000000000000000",
+   "player_name": "player4",
+   "total_kills": 35197,
+   "weapons": [
+    {
+     "accuracy": 42.6,
+     "deaths": 13893,
+     "headshots": 19461,
+     "hits": 150387,
+     "hs_rate": 12.9,
+     "kills": 16308,
+     "name": "Mp40",
+     "shots": 352654,
+     "weapon_key": "mp40"
+    },
+    {
+     "accuracy": 41.3,
+     "deaths": 10921,
+     "headshots": 20416,
+     "hits": 154089,
+     "hs_rate": 13.2,
+     "kills": 13539,
+     "name": "Thompson",
+     "shots": 372875,
+     "weapon_key": "thompson"
+    },
+    {
+     "accuracy": 31.9,
+     "deaths": 2215,
+     "headshots": 0,
+     "hits": 5980,
+     "hs_rate": 0.0,
+     "kills": 2290,
+     "name": "Grenade",
+     "shots": 18733,
+     "weapon_key": "grenade"
+    },
+    {
+     "accuracy": 40.2,
+     "deaths": 910,
+     "headshots": 605,
+     "hits": 5423,
+     "hs_rate": 11.2,
+     "kills": 693,
+     "name": "Luger",
+     "shots": 13477,
+     "weapon_key": "luger"
+    },
+    {
+     "accuracy": 61.5,
+     "deaths": 122,
+     "headshots": 0,
+     "hits": 1272,
+     "hs_rate": 0.0,
+     "kills": 558,
+     "name": "Grenadelauncher",
+     "shots": 2068,
+     "weapon_key": "grenadelauncher"
+    }
+   ]
+  },
+  {
+   "player_guid": "00000000000000000000000000000000",
+   "player_name": "player1",
+   "total_kills": 31039,
+   "weapons": [
+    {
+     "accuracy": 41.5,
+     "deaths": 12268,
+     "headshots": 14487,
+     "hits": 131197,
+     "hs_rate": 11.0,
+     "kills": 13742,
+     "name": "Mp40",
+     "shots": 316354,
+     "weapon_key": "mp40"
+    },
+    {
+     "accuracy": 40.0,
+     "deaths": 9475,
+     "headshots": 14077,
+     "hits": 130712,
+     "hs_rate": 10.8,
+     "kills": 11598,
+     "name": "Thompson",
+     "shots": 326841,
+     "weapon_key": "thompson"
+    },
+    {
+     "accuracy": 40.6,
+     "deaths": 2138,
+     "headshots": 0,
+     "hits": 6919,
+     "hs_rate": 0.0,
+     "kills": 2848,
+     "name": "Grenade",
+     "shots": 17035,
+     "weapon_key": "grenade"
+    },
+    {
+     "accuracy": 45.7,
+     "deaths": 714,
+     "headshots": 655,
+     "hits": 7240,
+     "hs_rate": 9.0,
+     "kills": 898,
+     "name": "Luger",
+     "shots": 15850,
+     "weapon_key": "luger"
+    },
+    {
+     "accuracy": 46.8,
+     "deaths": 141,
+     "headshots": 306,
+     "hits": 2947,
+     "hs_rate": 10.4,
+     "kills": 671,
+     "name": "Garand",
+     "shots": 6296,
+     "weapon_key": "garand"
+    }
+   ]
+  },
+  {
+   "player_guid": "00000005000000000000000000000000",
+   "player_name": "player22",
+   "total_kills": 29160,
+   "weapons": [
+    {
+     "accuracy": 38.9,
+     "deaths": 13903,
+     "headshots": 14518,
+     "hits": 147116,
+     "hs_rate": 9.9,
+     "kills": 14053,
+     "name": "Mp40",
+     "shots": 377713,
+     "weapon_key": "mp40"
+    },
+    {
+     "accuracy": 37.2,
+     "deaths": 12704,
+     "headshots": 12809,
+     "hits": 130414,
+     "hs_rate": 9.8,
+     "kills": 10215,
+     "name": "Thompson",
+     "shots": 350127,
+     "weapon_key": "thompson"
+    },
+    {
+     "accuracy": 41.3,
+     "deaths": 2006,
+     "headshots": 0,
+     "hits": 9181,
+     "hs_rate": 0.0,
+     "kills": 3402,
+     "name": "Grenade",
+     "shots": 22250,
+     "weapon_key": "grenade"
+    },
+    {
+     "accuracy": 39.8,
+     "deaths": 1000,
+     "headshots": 392,
+     "hits": 4246,
+     "hs_rate": 9.2,
+     "kills": 529,
+     "name": "Luger",
+     "shots": 10678,
+     "weapon_key": "luger"
+    },
+    {
+     "accuracy": 41.3,
+     "deaths": 683,
+     "headshots": 299,
+     "hits": 4121,
+     "hs_rate": 7.3,
+     "kills": 437,
+     "name": "Colt",
+     "shots": 9987,
+     "weapon_key": "colt"
+    }
+   ]
+  }
+ ]
+}

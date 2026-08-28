@@ -4118,6 +4118,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/session/{gaming_session_id}/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Rounds
+         * @description Every round of one session, each with its full roster.
+         */
+        get: operations["get_session_rounds_api_stats_session__gaming_session_id__rounds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/session/{gaming_session_id}/verdicts": {
         parameters: {
             query?: never;
@@ -5311,6 +5331,94 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AwardLeaderRow
+         * @description One row of the awards leaderboard, as this endpoint returns it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live
+         *     response, not the first row: `guid` is null on some of them, and a model
+         *     that read only row 0 would have typed it `str` and dropped the nulls.
+         *
+         *     ⛔ `response_model` FILTERS. A field the handler returns and a model omits
+         *     disappears from the payload, silently, with a 200 — which is why
+         *     `tests/unit/test_response_models_drop_nothing.py` compares handler output
+         *     against the serialised model instead of trusting these classes.
+         */
+        AwardLeaderRow: {
+            /** Award Count */
+            award_count: number;
+            /** Guid */
+            guid: string | null;
+            /** Player */
+            player: string;
+            /** Rank */
+            rank: number;
+            /** Top Award */
+            top_award: string;
+            /** Top Award Count */
+            top_award_count: number;
+        };
+        /** AwardLeaderboard */
+        AwardLeaderboard: {
+            filters: components["schemas"]["AwardLeaderboardFilters"];
+            /** Leaderboard */
+            leaderboard: components["schemas"]["AwardLeaderRow"][];
+        };
+        /**
+         * AwardLeaderboardFilters
+         * @description Echo of the query that produced the rows above.
+         */
+        AwardLeaderboardFilters: {
+            /** Award Type */
+            award_type: string | null;
+            /** Days */
+            days: number;
+        };
+        /**
+         * AwardRow
+         * @description One awarded performance. `value` is a PRE-FORMATTED string, not a
+         *     number — the handler renders it per award type, so a numeric type here
+         *     would reject perfectly good rows.
+         */
+        AwardRow: {
+            /** Award */
+            award: string;
+            /** Date */
+            date: string;
+            /** Guid */
+            guid: string;
+            /** Map */
+            map: string;
+            /** Player */
+            player: string;
+            /** Round Id */
+            round_id: number;
+            /** Round Number */
+            round_number: number;
+            /** Value */
+            value: string;
+        };
+        /** AwardsFilters */
+        AwardsFilters: {
+            /** Award Type */
+            award_type: string | null;
+            /** Days */
+            days: number | null;
+            /** Player */
+            player: string | null;
+        };
+        /** AwardsPage */
+        AwardsPage: {
+            /** Awards */
+            awards: components["schemas"]["AwardRow"][];
+            filters: components["schemas"]["AwardsFilters"];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** Body_upload_file_api_uploads_post */
         Body_upload_file_api_uploads_post: {
             /**
@@ -5359,6 +5467,34 @@ export interface components {
             user_agent?: string | null;
         };
         /**
+         * CurrentSeason
+         * @description The current season and the one after it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED — read off a live response and cross-checked
+         *     against the handler, which has a single return with eight literal keys.
+         *
+         *     ⛔ `response_model` FILTERS: a field the handler returns and this model
+         *     omits is dropped silently with a 200.
+         */
+        CurrentSeason: {
+            /** Days Left */
+            days_left: number;
+            /** End Date */
+            end_date: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Next Season Id */
+            next_season_id: string;
+            /** Next Season Name */
+            next_season_name: string;
+            /** Next Season Start */
+            next_season_start: string;
+            /** Start Date */
+            start_date: string;
+        };
+        /**
          * DpmLeaderRow
          * @description One row of the DPM board. ⚠️ Its participation field is `sessions`.
          *
@@ -5385,6 +5521,48 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HallOfFame
+         * @description ⚠️ `categories` is left as a plain mapping on purpose.
+         *
+         *     Twelve category names are present today (`most_kills`, `most_dpm`, …) and
+         *     the handler builds them from a list it can extend. Naming them here would
+         *     make this model the gate on which categories may exist: adding one to the
+         *     handler without editing this class would drop it from the response with a
+         *     200. The mapping keeps the row shape typed while leaving the key set open.
+         */
+        HallOfFame: {
+            /** Categories */
+            categories: {
+                [key: string]: components["schemas"]["HallOfFameRow"][];
+            };
+            /** Delta Window Days */
+            delta_window_days: number | null;
+            /** Generated At */
+            generated_at: string;
+            /** Period */
+            period: string;
+        };
+        /**
+         * HallOfFameRow
+         * @description One entry in a hall-of-fame category.
+         *
+         *     `value` is `float` because one category (`most_dpm`) is fractional while the
+         *     rest are counts. Typing it `int` would silently truncate DPM — a schema is
+         *     as capable of corrupting a number as of dropping a field.
+         */
+        HallOfFameRow: {
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Rank */
+            rank: number;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
         };
         /**
          * LineupChange
@@ -5454,6 +5632,17 @@ export interface components {
             /** Rounds */
             rounds: number;
         };
+        /** PlayerWeapons */
+        PlayerWeapons: {
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Total Kills */
+            total_kills: number;
+            /** Weapons */
+            weapons: components["schemas"]["WeaponRow"][];
+        };
         /**
          * QuickLeaders
          * @description Two small boards for the homepage, and their own failures.
@@ -5508,6 +5697,45 @@ export interface components {
              */
             title: string;
         };
+        /**
+         * RoundPlayerRow
+         * @description One player's line in one round, as the round recorded it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED. `player_comprehensive_stats` carries 39
+         *     populated numeric fields per round; this is the subset a person reads,
+         *     including the three the rest of the site never surfaces per round —
+         *     `time_played_seconds`, `gibs`, `damage_received`.
+         */
+        RoundPlayerRow: {
+            /** Damage Given */
+            damage_given: number;
+            /** Damage Received */
+            damage_received: number;
+            /** Deaths */
+            deaths: number;
+            /** Gibs */
+            gibs: number;
+            /** Headshot Kills */
+            headshot_kills: number;
+            /** Headshots */
+            headshots: number;
+            /** Kills */
+            kills: number;
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Revives Given */
+            revives_given: number;
+            /** Team */
+            team: number;
+            /** Time Played Seconds */
+            time_played_seconds: number;
+            /** Times Revived */
+            times_revived: number;
+            /** Xp */
+            xp: number;
+        };
         /** SessionLineups */
         SessionLineups: {
             /** Changes */
@@ -5518,6 +5746,49 @@ export interface components {
             rounds_without_roster: number;
             /** Teams */
             teams: components["schemas"]["TeamLineup"][];
+        };
+        /**
+         * SessionRound
+         * @description One round, with its full roster.
+         *
+         *     `duration_seconds` comes from `shared/round_time.py` — the MEASURED clock.
+         *     `rounds.actual_time` is the stopwatch TARGET and overstates ~15% of rounds
+         *     (RCA 2026-08-18), so it is not what a player is shown.
+         */
+        SessionRound: {
+            /** Counts Toward Totals */
+            counts_toward_totals: boolean;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /** End Reason */
+            end_reason: string | null;
+            /** Map Name */
+            map_name: string;
+            /** Match Id */
+            match_id: string | null;
+            /** Played At */
+            played_at: string;
+            /** Players */
+            players: components["schemas"]["RoundPlayerRow"][];
+            /** Round Id */
+            round_id: number;
+            /** Round Number */
+            round_number: number;
+            /** Round Status */
+            round_status: string | null;
+        };
+        /** SessionRounds */
+        SessionRounds: {
+            /** Counted Rounds */
+            counted_rounds: number;
+            /** Gaming Session Id */
+            gaming_session_id: number;
+            /** Rounds */
+            rounds: components["schemas"]["SessionRound"][];
+            /** Session Date */
+            session_date: string | null;
+            /** Total Rounds */
+            total_rounds: number;
         };
         /**
          * StatsOverview
@@ -5593,6 +5864,44 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WeaponRow
+         * @description One weapon's line for one player.
+         *
+         *     Types are the union over 125 weapon rows of a live response: `hs_rate` and
+         *     `accuracy` are fractional percentages, the rest are counts. Typing the two
+         *     percentages `int` would truncate them — a schema can corrupt a number as
+         *     easily as it can drop a field.
+         */
+        WeaponRow: {
+            /** Accuracy */
+            accuracy: number;
+            /** Deaths */
+            deaths: number;
+            /** Headshots */
+            headshots: number;
+            /** Hits */
+            hits: number;
+            /** Hs Rate */
+            hs_rate: number;
+            /** Kills */
+            kills: number;
+            /** Name */
+            name: string;
+            /** Shots */
+            shots: number;
+            /** Weapon Key */
+            weapon_key: string;
+        };
+        /** WeaponsByPlayer */
+        WeaponsByPlayer: {
+            /** Period */
+            period: string;
+            /** Player Count */
+            player_count: number;
+            /** Players */
+            players: components["schemas"]["PlayerWeapons"][];
         };
         /**
          * XpLeaderRow
@@ -6061,7 +6370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AwardsPage"];
                 };
             };
             /** @description Validation Error */
@@ -6094,7 +6403,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AwardLeaderboard"];
                 };
             };
             /** @description Validation Error */
@@ -7111,7 +7420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HallOfFame"];
                 };
             };
             /** @description Validation Error */
@@ -10638,7 +10947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CurrentSeason"];
                 };
             };
         };
@@ -11798,6 +12107,37 @@ export interface operations {
             };
         };
     };
+    get_session_rounds_api_stats_session__gaming_session_id__rounds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gaming_session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRounds"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_session_verdicts_api_stats_session__gaming_session_id__verdicts_get: {
         parameters: {
             query?: never;
@@ -12004,7 +12344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WeaponsByPlayer"];
                 };
             };
             /** @description Validation Error */

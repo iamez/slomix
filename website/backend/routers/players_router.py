@@ -1497,26 +1497,43 @@ async def get_player_matches(
     use_guid = player_guid is not None
     identifier = player_guid if use_guid else player_name
 
+    # ⛔ ROUND-LEVEL FIELDS THE ROUND ALREADY HAS.
+    # This returned 13 fields while the row carries 39 populated ones, and the
+    # three it omitted — gibs, damage_received, time_played_seconds — are the
+    # ones a player asks about first. The website had no other per-round path
+    # to them: the session matrix drops damage_received too, so "how much did I
+    # take" was answerable nowhere outside a Discord command.
+    #
+    # `round_status` comes along because a cancelled round is still a round the
+    # player played. Filtering it out here would repeat the defect the session
+    # endpoint has: the row vanishes and nothing says why.
     query = """
         SELECT
-            round_id,
-            round_date,
-            map_name,
-            round_number,
-            kills,
-            deaths,
-            damage_given,
-            time_played_seconds,
-            team,
-            xp,
-            accuracy
-        FROM player_comprehensive_stats
-        WHERE player_guid = $1
-        ORDER BY round_date DESC, round_number DESC
+            pcs.round_id,
+            pcs.round_date,
+            pcs.map_name,
+            pcs.round_number,
+            pcs.kills,
+            pcs.deaths,
+            pcs.damage_given,
+            pcs.time_played_seconds,
+            pcs.team,
+            pcs.xp,
+            pcs.accuracy,
+            pcs.gibs,
+            pcs.damage_received,
+            pcs.headshot_kills,
+            pcs.revives_given,
+            r.round_status,
+            r.gaming_session_id
+        FROM player_comprehensive_stats pcs
+        LEFT JOIN rounds r ON r.id = pcs.round_id
+        WHERE pcs.player_guid = $1
+        ORDER BY pcs.round_date DESC, pcs.round_number DESC
         LIMIT $2
     """
     if not use_guid:
-        query = query.replace("player_guid = $1", "player_name ILIKE $1")
+        query = query.replace("pcs.player_guid = $1", "pcs.player_name ILIKE $1")
 
     try:
         rows = await db.fetch_all(query, (identifier, limit))
@@ -1548,6 +1565,14 @@ async def get_player_matches(
                 "accuracy": row[10],
                 "dpm": round(dpm, 1),
                 "kd": round(kd, 2),
+                "gibs": row[11] or 0,
+                "damage_received": row[12] or 0,
+                "headshot_kills": row[13] or 0,
+                "revives_given": row[14] or 0,
+                #: 'cancelled' rounds were played and have rows; the caller
+                #: decides whether to count them, but must be able to SEE them.
+                "round_status": row[15],
+                "gaming_session_id": row[16],
             }
         )
 

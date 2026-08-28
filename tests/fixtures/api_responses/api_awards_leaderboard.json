@@ -1,0 +1,168 @@
+{
+ "filters": {
+  "award_type": null,
+  "days": 0
+ },
+ "leaderboard": [
+  {
+   "award_count": 4569,
+   "guid": "00000003000000000000000000000000",
+   "player": "player4",
+   "rank": 1,
+   "top_award": "Longest killing spree",
+   "top_award_count": 393
+  },
+  {
+   "award_count": 3371,
+   "guid": "00000000000000000000000000000000",
+   "player": "player1",
+   "rank": 2,
+   "top_award": "Longest killing spree",
+   "top_award_count": 331
+  },
+  {
+   "award_count": 2856,
+   "guid": "00000004000000000000000000000000",
+   "player": "player5",
+   "rank": 3,
+   "top_award": "Most selfkills",
+   "top_award_count": 206
+  },
+  {
+   "award_count": 2664,
+   "guid": "00000005000000000000000000000000",
+   "player": "player6",
+   "rank": 4,
+   "top_award": "Most damage received",
+   "top_award_count": 323
+  },
+  {
+   "award_count": 2045,
+   "guid": "00000002000000000000000000000000",
+   "player": "player3",
+   "rank": 5,
+   "top_award": "Longest death spree",
+   "top_award_count": 224
+  },
+  {
+   "award_count": 1907,
+   "guid": "00000006000000000000000000000000",
+   "player": "player7",
+   "rank": 6,
+   "top_award": "Most deaths",
+   "top_award_count": 133
+  },
+  {
+   "award_count": 1479,
+   "guid": "00000007000000000000000000000000",
+   "player": "player8",
+   "rank": 7,
+   "top_award": "Most revives",
+   "top_award_count": 113
+  },
+  {
+   "award_count": 1411,
+   "guid": "00000008000000000000000000000000",
+   "player": "player9",
+   "rank": 8,
+   "top_award": "Longest killing spree",
+   "top_award_count": 132
+  },
+  {
+   "award_count": 1405,
+   "guid": "00000001000000000000000000000000",
+   "player": "player2",
+   "rank": 9,
+   "top_award": "Most revives",
+   "top_award_count": 109
+  },
+  {
+   "award_count": 968,
+   "guid": "00000009000000000000000000000000",
+   "player": "player10",
+   "rank": 10,
+   "top_award": "Most revived",
+   "top_award_count": 64
+  },
+  {
+   "award_count": 792,
+   "guid": "0000000A000000000000000000000000",
+   "player": "player11",
+   "rank": 11,
+   "top_award": "Most headshots",
+   "top_award_count": 77
+  },
+  {
+   "award_count": 728,
+   "guid": "0000000B000000000000000000000000",
+   "player": "player12",
+   "rank": 12,
+   "top_award": "Most bullets fired",
+   "top_award_count": 70
+  },
+  {
+   "award_count": 303,
+   "guid": "0000000C000000000000000000000000",
+   "player": "player12",
+   "rank": 13,
+   "top_award": "Highest headshot accuracy",
+   "top_award_count": 29
+  },
+  {
+   "award_count": 242,
+   "guid": "0000000D000000000000000000000000",
+   "player": "player13",
+   "rank": 14,
+   "top_award": "Most revived",
+   "top_award_count": 17
+  },
+  {
+   "award_count": 176,
+   "guid": "0000000E000000000000000000000000",
+   "player": "player14",
+   "rank": 15,
+   "top_award": "Longest killing spree",
+   "top_award_count": 18
+  },
+  {
+   "award_count": 142,
+   "guid": "0000000F000000000000000000000000",
+   "player": "player15",
+   "rank": 16,
+   "top_award": "Longest killing spree",
+   "top_award_count": 16
+  },
+  {
+   "award_count": 101,
+   "guid": "00000010000000000000000000000000",
+   "player": "player16",
+   "rank": 17,
+   "top_award": "Most bullets fired",
+   "top_award_count": 8
+  },
+  {
+   "award_count": 46,
+   "guid": null,
+   "player": "player17",
+   "rank": 18,
+   "top_award": "Longest killing spree",
+   "top_award_count": 46
+  },
+  {
+   "award_count": 33,
+   "guid": "00000011000000000000000000000000",
+   "player": "player18",
+   "rank": 19,
+   "top_award": "Longest killing spree",
+   "top_award_count": 8
+  },
+  {
+   "award_count": 15,
+   "guid": "00000012000000000000000000000000",
+   "player": "player19",
+   "rank": 20,
+   "top_award": "Most damage given",
+   "top_award_count": 3
+  }
+ ]
+}

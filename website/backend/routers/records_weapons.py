@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
 from website.backend.dependencies import get_db
@@ -25,6 +26,41 @@ from website.backend.services.weapon_stats_mv_refresh import (
 
 router = APIRouter()
 logger = get_app_logger("api.records.weapons")
+
+
+class WeaponRow(BaseModel):
+    """One weapon's line for one player.
+
+    Types are the union over 125 weapon rows of a live response: `hs_rate` and
+    `accuracy` are fractional percentages, the rest are counts. Typing the two
+    percentages `int` would truncate them — a schema can corrupt a number as
+    easily as it can drop a field.
+    """
+
+    name: str
+    weapon_key: str
+    kills: int
+    deaths: int
+    headshots: int
+    #: Percent, one decimal, already computed by the handler.
+    hs_rate: float
+    shots: int
+    hits: int
+    accuracy: float
+
+
+class PlayerWeapons(BaseModel):
+    player_guid: str
+    player_name: str
+    total_kills: int
+    weapons: list[WeaponRow]
+
+
+class WeaponsByPlayer(BaseModel):
+    period: str
+    player_count: int
+    players: list[PlayerWeapons]
+
 
 
 def _looks_like_missing_mv(exc: Exception) -> bool:
@@ -268,7 +304,7 @@ async def get_weapon_hall_of_fame(
 
 
 @router.get("/stats/weapons/by-player")
-@router.get("/stats/weapons/by_player")
+@router.get("/stats/weapons/by_player", response_model=WeaponsByPlayer)
 @handle_router_errors("Database error")
 async def get_weapon_stats_by_player(
     period: str = "all",

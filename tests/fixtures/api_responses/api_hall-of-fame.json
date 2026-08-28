@@ -1,0 +1,53 @@
+{
+ "categories": {
+  "most_dpm": [
+   {
+    "player_guid": "0000000A000000000000000000000000",
+    "player_name": "player11",
+    "rank": 1,
+    "unit": "dpm",
+    "value": 374.01
+   },
+   {
+    "player_guid": "00000013000000000000000000000000",
+    "player_name": "player20",
+    "rank": 2,
+    "unit": "dpm",
+    "value": 349.53
+   },
+   {
+    "player_guid": "00000014000000000000000000000000",
+    "player_name": "player21",
+    "rank": 3,
+    "unit": "dpm",
+    "value": 324.49
+   }
+  ],
+  "most_kills": [
+   {
+    "player_guid": "00000003000000000000000000000000",
+    "player_name": "player4",
+    "rank": 1,
+    "unit": "kills",
+    "value": 17878
+   },
+   {
+    "player_guid": "00000000000000000000000000000000",
+    "player_name": "player1",
+    "rank": 2,
+    "unit": "kills",
+    "value": 15782
+   },
+   {
+    "player_guid": "00000005000000000000000000000000",
+    "player_name": "player6",
+    "rank": 3,
+    "unit": "kills",
+    "value": 14858
+   }
+  ]
+ },
+ "delta_window_days": null,
+ "generated_at": "2026-08-27T08:46:19.622935+00:00",
+ "period": "all_time"
+}

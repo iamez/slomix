@@ -675,6 +675,53 @@ export interface SessionLineups {
   rounds_without_roster: number;
 }
 
+/** One player's line in one round, as `/stats/session/{id}/rounds` returns it.
+ *
+ * ⚠️ Written from the MEASURED response, not from the field list — the three
+ * fields the rest of the site omits per round (`time_played_seconds`, `gibs`,
+ * `damage_received`) are the reason that endpoint exists.
+ */
+export interface RoundPlayerRow {
+  player_guid: string;
+  player_name: string;
+  team: number;
+  time_played_seconds: number;
+  gibs: number;
+  damage_received: number;
+  damage_given: number;
+  kills: number;
+  deaths: number;
+  headshots: number;
+  headshot_kills: number;
+  revives_given: number;
+  times_revived: number;
+  xp: number;
+}
+
+export interface SessionRound {
+  round_id: number;
+  map_name: string;
+  round_number: number;
+  played_at: string;
+  /** Null when neither the Lua mirror nor a parseable clock survived. */
+  duration_seconds: number | null;
+  end_reason: string | null;
+  /** 'completed' | 'substitution' | 'cancelled' | null — shown, never hidden. */
+  round_status: string | null;
+  /** False for a cancelled round: show it, leave it out of totals. */
+  counts_toward_totals: boolean;
+  match_id: string | null;
+  players: RoundPlayerRow[];
+}
+
+export interface SessionRounds {
+  gaming_session_id: number;
+  session_date: string | null;
+  counted_rounds: number;
+  total_rounds: number;
+  rounds: SessionRound[];
+}
+
 /* ---------- phase 3: the player ---------- */
 
 /** GET /api/players/{id}/profile — corpus:
