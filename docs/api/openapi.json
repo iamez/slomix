@@ -1599,6 +1599,129 @@
     "title": "VizTopKills",
     "type": "object"
    },
+   "VoiceActivity": {
+    "description": "⛔ THREE STATES, AND THE WHOLE POINT IS THAT THEY DIFFER.\n\n`ok` means we read the report and it is current — INCLUDING when nobody is\nin voice. `stale` means we read it and it is too old to be called current.\n`unavailable` means we could not read it at all. Before #808 all three\nrendered as `total_count: 0`, so \"voice is quiet\" and \"we cannot see voice\"\nlooked identical to a client (Codex on #806, via Fable).\n\nA response model has to preserve that distinction rather than flatten it:\n`reason` is present in every branch and null in the healthy one, so its\nABSENCE never has to be interpreted.",
+    "properties": {
+     "age_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Age Seconds"
+     },
+     "channels": {
+      "items": {
+       "$ref": "#/components/schemas/VoiceChannel"
+      },
+      "title": "Channels",
+      "type": "array"
+     },
+     "members": {
+      "items": {
+       "$ref": "#/components/schemas/VoiceMember"
+      },
+      "title": "Members",
+      "type": "array"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total_count": {
+      "title": "Total Count",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     }
+    },
+    "required": [
+     "status",
+     "reason",
+     "updated_at",
+     "age_seconds",
+     "total_count",
+     "members",
+     "channels"
+    ],
+    "title": "VoiceActivity",
+    "type": "object"
+   },
+   "VoiceChannel": {
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "members": {
+      "items": {
+       "$ref": "#/components/schemas/VoiceMember"
+      },
+      "title": "Members",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "members"
+    ],
+    "title": "VoiceChannel",
+    "type": "object"
+   },
+   "VoiceMember": {
+    "description": "One person in voice, as this endpoint is willing to say it.\n\nDeliberately narrow: the stored row carries more per member, and this\nendpoint publishes a NAME and the channel it was heard in. Widening it is\na decision about what the site discloses, not a schema detail.",
+    "properties": {
+     "channel_name": {
+      "title": "Channel Name",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "channel_name"
+    ],
+    "title": "VoiceMember",
+    "type": "object"
+   },
    "WeaponRow": {
     "description": "One weapon's line for one player.\n\nTypes are the union over 125 weapon rows of a live response: `hs_rate` and\n`accuracy` are fractional percentages, the rest are counts. Typing the two\npercentages `int` would truncate them — a schema can corrupt a number as\neasily as it can drop a field.",
     "properties": {
@@ -4296,7 +4419,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "type": "string"
+         },
+         "title": "Response Search Player Api Player Search Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -16824,7 +16953,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/VoiceActivity"
+        }
        }
       },
       "description": "Successful Response"

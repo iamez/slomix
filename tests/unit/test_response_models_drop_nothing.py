@@ -290,3 +290,68 @@ def test_the_awards_fixture_still_carries_an_unsortable_figure():
     # …and the rendered string beside it survives: the two are one figure seen
     # two ways, and dropping either leaves the client worse off.
     assert all(a["value"] for a in still)
+
+
+# --- Round 3b: the branchier endpoints ---------------------------------------
+#
+# ⚠️ These two have MORE THAN ONE `return`, which is why they were skipped in
+# #820. A single-return handler can be typed from one live response; a branchy
+# one cannot, because the branch you did not exercise is the one whose shape
+# you guessed. Both are covered here by exercising EVERY branch, not by
+# recording a fixture and hoping it was representative.
+
+from website.backend.routers.diagnostics_router import VoiceActivity
+
+
+class TestVoiceActivityKeepsItsThreeStates:
+    """⛔ 'quiet' and 'we cannot see voice' must not render alike.
+
+    Before #808 all three situations returned `total_count: 0`, so a client had
+    nothing to branch on. A response model can undo that by flattening the very
+    fields that carry the distinction, so each state is asserted separately.
+    """
+
+    def _full(self, **over):
+        base = {
+            "status": "ok", "reason": None, "updated_at": "2026-08-28 14:00:00",
+            "age_seconds": 12, "total_count": 2,
+            "members": [{"name": "one", "channel_name": "Gaming"},
+                        {"name": "two", "channel_name": "Gaming"}],
+            "channels": [{"id": None, "name": "Gaming",
+                          "members": [{"name": "one", "channel_name": "Gaming"}]}],
+        }
+        base.update(over)
+        return base
+
+    @pytest.mark.parametrize("state", ["ok", "stale", "unavailable"])
+    def test_every_state_survives_the_model(self, state):
+        payload = self._full(status=state) if state == "ok" else self._full(
+            status=state,
+            reason=None if state == "ok" else "the report could not be read",
+            **({"updated_at": None, "age_seconds": None, "total_count": 0,
+                "members": [], "channels": []} if state == "unavailable" else {}),
+        )
+        modelled = _json.loads(VoiceActivity.model_validate(payload).model_dump_json())
+        assert missing_keys(payload, modelled) == []
+        assert modelled == payload
+
+    def test_a_populated_member_list_is_not_thinned(self):
+        """⚠️ THE LIVE RESPONSE IS EMPTY MOST OF THE TIME.
+
+        Typing this from a live call would have exercised `members: []` and
+        proved nothing about the element shape — the same hole that made
+        `duration_seconds` and `numeric` come out non-null in #830. The shape
+        here is read from the handler (diagnostics_router.py:1799-1861), and
+        this test drives it with a full list on purpose.
+        """
+        payload = self._full()
+        modelled = VoiceActivity.model_validate(payload).model_dump()
+        assert len(modelled["members"]) == 2
+        assert modelled["members"][0]["channel_name"] == "Gaming"
+        assert modelled["channels"][0]["members"][0]["name"] == "one"
+
+    def test_reason_is_present_and_null_when_healthy(self):
+        """Absence would have to be interpreted; null says it outright."""
+        modelled = VoiceActivity.model_validate(self._full()).model_dump()
+        assert "reason" in modelled
+        assert modelled["reason"] is None

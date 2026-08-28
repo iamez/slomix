@@ -35,7 +35,12 @@ class LinkPlayerRequest(BaseModel):
     player_name: str
 
 
-@router.get("/player/search")
+#: ⛔ `list[str]`, not a wrapper object. The handler returns a bare list and
+#: the SPA reads it as one; declaring an envelope here would silently reshape
+#: the payload. The names may include `[BOT]` entries — a deliberate decision
+#: recorded in the ordering comment below, not an oversight: `[BOT]` is a
+#: naming convention, and filtering on it would be treating it as identity.
+@router.get("/player/search", response_model=list[str])
 @limiter.limit("30/minute")
 async def search_player(request: Request, query: str, db: DatabaseAdapter = Depends(get_db)):
     """Search for player aliases. Rate-limited to deter enumeration."""

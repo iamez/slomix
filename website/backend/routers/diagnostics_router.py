@@ -10,6 +10,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from shared.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
 from website.backend.dependencies import get_db, require_admin_user
@@ -23,6 +24,53 @@ from website.backend.services.game_server_query import query_game_server
 from website.backend.services.session_scope import resolve_gaming_session_scope
 
 router = APIRouter()
+
+
+class VoiceMember(BaseModel):
+    """One person in voice, as this endpoint is willing to say it.
+
+    Deliberately narrow: the stored row carries more per member, and this
+    endpoint publishes a NAME and the channel it was heard in. Widening it is
+    a decision about what the site discloses, not a schema detail.
+    """
+
+    name: str
+    channel_name: str
+
+
+class VoiceChannel(BaseModel):
+    #: Null in the current writer — the channel is identified by name, and the
+    #: field is kept so a future writer can fill it without a schema change.
+    id: int | None
+    name: str
+    members: list[VoiceMember]
+
+
+class VoiceActivity(BaseModel):
+    """⛔ THREE STATES, AND THE WHOLE POINT IS THAT THEY DIFFER.
+
+    `ok` means we read the report and it is current — INCLUDING when nobody is
+    in voice. `stale` means we read it and it is too old to be called current.
+    `unavailable` means we could not read it at all. Before #808 all three
+    rendered as `total_count: 0`, so "voice is quiet" and "we cannot see voice"
+    looked identical to a client (Codex on #806, via Fable).
+
+    A response model has to preserve that distinction rather than flatten it:
+    `reason` is present in every branch and null in the healthy one, so its
+    ABSENCE never has to be interpreted.
+    """
+
+    #: 'ok' | 'stale' | 'unavailable'
+    status: str
+    #: Null when status is 'ok'; a sentence naming what went wrong otherwise.
+    reason: str | None
+    #: Null when there is nothing to be current about.
+    updated_at: str | None
+    age_seconds: int | None
+    total_count: int
+    members: list[VoiceMember]
+    channels: list[VoiceChannel]
+
 logger = get_app_logger("api.diagnostics")
 
 # Game server configuration (for direct UDP query)
@@ -1766,7 +1814,7 @@ def _voice_report_age_seconds(updated_at: object) -> int | None:
     return max(0, int(age))
 
 
-@router.get("/voice-activity/current")
+@router.get("/voice-activity/current", response_model=VoiceActivity)
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
     # PUBLIC (owner-approved): Home current-voice widget. #80 regression

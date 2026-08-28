@@ -6029,6 +6029,59 @@ export interface components {
             name: string;
         };
         /**
+         * VoiceActivity
+         * @description ⛔ THREE STATES, AND THE WHOLE POINT IS THAT THEY DIFFER.
+         *
+         *     `ok` means we read the report and it is current — INCLUDING when nobody is
+         *     in voice. `stale` means we read it and it is too old to be called current.
+         *     `unavailable` means we could not read it at all. Before #808 all three
+         *     rendered as `total_count: 0`, so "voice is quiet" and "we cannot see voice"
+         *     looked identical to a client (Codex on #806, via Fable).
+         *
+         *     A response model has to preserve that distinction rather than flatten it:
+         *     `reason` is present in every branch and null in the healthy one, so its
+         *     ABSENCE never has to be interpreted.
+         */
+        VoiceActivity: {
+            /** Age Seconds */
+            age_seconds: number | null;
+            /** Channels */
+            channels: components["schemas"]["VoiceChannel"][];
+            /** Members */
+            members: components["schemas"]["VoiceMember"][];
+            /** Reason */
+            reason: string | null;
+            /** Status */
+            status: string;
+            /** Total Count */
+            total_count: number;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /** VoiceChannel */
+        VoiceChannel: {
+            /** Id */
+            id: number | null;
+            /** Members */
+            members: components["schemas"]["VoiceMember"][];
+            /** Name */
+            name: string;
+        };
+        /**
+         * VoiceMember
+         * @description One person in voice, as this endpoint is willing to say it.
+         *
+         *     Deliberately narrow: the stored row carries more per member, and this
+         *     endpoint publishes a NAME and the channel it was heard in. Widening it is
+         *     a decision about what the site discloses, not a schema detail.
+         */
+        VoiceMember: {
+            /** Channel Name */
+            channel_name: string;
+            /** Name */
+            name: string;
+        };
+        /**
          * WeaponRow
          * @description One weapon's line for one player.
          *
@@ -7973,7 +8026,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": string[];
                 };
             };
             /** @description Validation Error */
@@ -13707,7 +13760,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["VoiceActivity"];
                 };
             };
         };
