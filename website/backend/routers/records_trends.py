@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -17,10 +18,39 @@ from website.backend.routers.api_helpers import (
 )
 
 router = APIRouter()
+
+
+class StatsTrends(BaseModel):
+    """Daily series for the trends chart.
+
+    ⛔ THE OPTIONAL FIELDS ARE ABSENT, NOT EMPTY, AND THAT IS THE CONTRACT.
+    The handler builds `result` one key at a time from the `metrics` query
+    parameter, so `?metrics=rounds` returns `{dates, rounds}` and nothing else.
+    Typing them required would have made this model reject every narrowed call
+    with a 500 — and typing them as empty lists would have been worse still,
+    because a client cannot tell "you did not ask for kills" from "there were
+    no kills".
+
+    `exclude_none` is NOT set on the route: a field the caller did not request
+    must stay out of the payload, which is what omitting it from the handler's
+    dict already does.
+    """
+
+    #: Always present: one ISO date per day in the window, and the index every
+    #: other series is aligned to.
+    dates: list[str]
+    #: Per-day counts, aligned index-for-index with `dates`.
+    rounds: list[int] | None = None
+    active_players: list[int] | None = None
+    kills: list[int] | None = None
+    #: map name -> rounds played in the window. Present only with `maps`.
+    map_distribution: dict[str, int] | None = None
+
 logger = get_app_logger("api.records.trends")
 
 
-@router.get("/stats/trends")
+@router.get("/stats/trends", response_model=StatsTrends,
+            response_model_exclude_none=True)
 @handle_router_errors("Failed to generate trends data")
 async def get_stats_trends(
     days: int = 14,

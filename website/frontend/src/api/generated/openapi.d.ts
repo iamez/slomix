@@ -5668,6 +5668,31 @@ export interface components {
             /** Xp */
             xp: components["schemas"]["XpLeaderRow"][];
         };
+        /**
+         * RecentRound
+         * @description One entry in the round picker.
+         *
+         *     ⛔ TYPED FROM THE SCHEMA AND THE HANDLER, NOT FROM A SAMPLE. Every live
+         *     response has these fields populated, and three of them are nullable
+         *     anyway: `rounds.map_name`, `round_date` and `round_number` all allow NULL,
+         *     and the handler writes `str(row[2]) if row[2] else None` for the date
+         *     outright. Sampling shows the branches that fired; the schema shows the
+         *     ones that can.
+         */
+        RecentRound: {
+            /** Id */
+            id: number;
+            /** Map Name */
+            map_name: string | null;
+            /** Player Count */
+            player_count: number;
+            /** Round Date */
+            round_date: string | null;
+            /** Round Label */
+            round_label: string;
+            /** Round Number */
+            round_number: number | null;
+        };
         /** RenderRequest */
         RenderRequest: {
             /** Highlight Id */
@@ -5925,6 +5950,36 @@ export interface components {
              * @example 14
              */
             window_days: number;
+        };
+        /**
+         * StatsTrends
+         * @description Daily series for the trends chart.
+         *
+         *     ⛔ THE OPTIONAL FIELDS ARE ABSENT, NOT EMPTY, AND THAT IS THE CONTRACT.
+         *     The handler builds `result` one key at a time from the `metrics` query
+         *     parameter, so `?metrics=rounds` returns `{dates, rounds}` and nothing else.
+         *     Typing them required would have made this model reject every narrowed call
+         *     with a 500 — and typing them as empty lists would have been worse still,
+         *     because a client cannot tell "you did not ask for kills" from "there were
+         *     no kills".
+         *
+         *     `exclude_none` is NOT set on the route: a field the caller did not request
+         *     must stay out of the payload, which is what omitting it from the handler's
+         *     dict already does.
+         */
+        StatsTrends: {
+            /** Active Players */
+            active_players?: number[] | null;
+            /** Dates */
+            dates: string[];
+            /** Kills */
+            kills?: number[] | null;
+            /** Map Distribution */
+            map_distribution?: {
+                [key: string]: number;
+            } | null;
+            /** Rounds */
+            rounds?: number[] | null;
         };
         /** TeamLineup */
         TeamLineup: {
@@ -10945,7 +11000,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RecentRound"][];
                 };
             };
             /** @description Validation Error */
@@ -12462,7 +12517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StatsTrends"];
                 };
             };
             /** @description Validation Error */

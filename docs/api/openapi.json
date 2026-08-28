@@ -769,6 +769,66 @@
     "title": "QuickLeaders",
     "type": "object"
    },
+   "RecentRound": {
+    "description": "One entry in the round picker.\n\n⛔ TYPED FROM THE SCHEMA AND THE HANDLER, NOT FROM A SAMPLE. Every live\nresponse has these fields populated, and three of them are nullable\nanyway: `rounds.map_name`, `round_date` and `round_number` all allow NULL,\nand the handler writes `str(row[2]) if row[2] else None` for the date\noutright. Sampling shows the branches that fired; the schema shows the\nones that can.",
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "round_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Date"
+     },
+     "round_label": {
+      "title": "Round Label",
+      "type": "string"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     }
+    },
+    "required": [
+     "id",
+     "map_name",
+     "round_date",
+     "round_number",
+     "round_label",
+     "player_count"
+    ],
+    "title": "RecentRound",
+    "type": "object"
+   },
    "RenderRequest": {
     "properties": {
      "highlight_id": {
@@ -1392,6 +1452,79 @@
      "window_days"
     ],
     "title": "StatsOverview",
+    "type": "object"
+   },
+   "StatsTrends": {
+    "description": "Daily series for the trends chart.\n\n⛔ THE OPTIONAL FIELDS ARE ABSENT, NOT EMPTY, AND THAT IS THE CONTRACT.\nThe handler builds `result` one key at a time from the `metrics` query\nparameter, so `?metrics=rounds` returns `{dates, rounds}` and nothing else.\nTyping them required would have made this model reject every narrowed call\nwith a 500 — and typing them as empty lists would have been worse still,\nbecause a client cannot tell \"you did not ask for kills\" from \"there were\nno kills\".\n\n`exclude_none` is NOT set on the route: a field the caller did not request\nmust stay out of the payload, which is what omitting it from the handler's\ndict already does.",
+    "properties": {
+     "active_players": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Active Players"
+     },
+     "dates": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Dates",
+      "type": "array"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "map_distribution": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Distribution"
+     },
+     "rounds": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rounds"
+     }
+    },
+    "required": [
+     "dates"
+    ],
+    "title": "StatsTrends",
     "type": "object"
    },
    "TeamLineup": {
@@ -12463,7 +12596,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/RecentRound"
+         },
+         "title": "Response Get Recent Rounds Api Rounds Recent Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -14605,7 +14744,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StatsTrends"
+        }
        }
       },
       "description": "Successful Response"

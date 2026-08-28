@@ -192,7 +192,12 @@ from website.backend.routers.records_awards import (
     AwardsPage,
     HallOfFame,
 )
-from website.backend.routers.records_matches import RoundAwards, RoundViz
+from website.backend.routers.records_matches import (
+    RecentRound,
+    RoundAwards,
+    RoundViz,
+)
+from website.backend.routers.records_trends import StatsTrends
 from website.backend.routers.records_seasons import CurrentSeason
 from website.backend.routers.records_weapons import WeaponsByPlayer
 
@@ -446,3 +451,66 @@ def test_voice_normalises_an_explicit_null_name():
     stored = {"name": None, "channel_name": None}
     assert stored.get("name", "Unknown") is None       # the trap
     assert (stored.get("name") or "Unknown") == "Unknown"  # the fix
+
+
+class TestOptionalMeansAbsentNotEmpty:
+    """⛔ `/stats/trends` BUILDS ITS PAYLOAD FROM A QUERY PARAMETER.
+
+    `?metrics=rounds` returns `{dates, rounds}` and nothing else. Three ways to
+    model that, two of them wrong:
+
+      required            → every narrowed call becomes a 500
+      empty-list default  → the client cannot tell "you did not ask for kills"
+                            from "there were no kills"
+      absent              → correct, and what the handler already does
+
+    So the fields are `| None = None` and the route sets
+    `response_model_exclude_none`, which keeps an unrequested field OUT of the
+    payload rather than emitting it as null.
+    """
+
+    def _payload(self, **fields):
+        return {"dates": ["2026-08-26", "2026-08-27"], **fields}
+
+    def test_the_full_payload_survives(self):
+        payload = self._payload(rounds=[3, 4], active_players=[6, 6],
+                                kills=[100, 120], map_distribution={"supply": 7})
+        modelled = _json.loads(
+            StatsTrends.model_validate(payload).model_dump_json(exclude_none=True))
+        assert missing_keys(payload, modelled) == []
+        assert modelled == payload
+
+    @pytest.mark.parametrize("subset", [
+        {"rounds": [3, 4]},
+        {"map_distribution": {"supply": 7}},
+        {"rounds": [3, 4], "kills": [100, 120]},
+        {},
+    ])
+    def test_a_narrowed_call_is_neither_rejected_nor_padded(self, subset):
+        payload = self._payload(**subset)
+        modelled = _json.loads(
+            StatsTrends.model_validate(payload).model_dump_json(exclude_none=True))
+        assert modelled == payload, "a field the caller did not request appeared"
+        assert set(modelled) == set(payload)
+
+    def test_dates_is_the_index_every_series_aligns_to(self):
+        """A series shorter than `dates` would silently shift the chart."""
+        payload = self._payload(rounds=[3, 4], kills=[100, 120])
+        modelled = StatsTrends.model_validate(payload)
+        assert len(modelled.rounds or []) == len(modelled.dates)
+        assert len(modelled.kills or []) == len(modelled.dates)
+
+
+class TestRecentRoundsTypedFromTheSchema:
+    def test_the_nullable_columns_are_accepted(self):
+        """`map_name`, `round_date` and `round_number` all allow NULL, and the
+        handler writes the date as None outright. No live row shows it."""
+        edge = {"id": 1, "map_name": None, "round_date": None,
+                "round_number": None, "round_label": "?", "player_count": 0}
+        modelled = _json.loads(RecentRound.model_validate(edge).model_dump_json())
+        assert modelled == edge
+
+    def test_the_ordinary_row_is_unchanged(self):
+        row = {"id": 11365, "map_name": "supply", "round_date": "2026-08-27",
+               "round_number": 2, "round_label": "R2", "player_count": 6}
+        assert _json.loads(RecentRound.model_validate(row).model_dump_json()) == row

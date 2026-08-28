@@ -115,6 +115,26 @@ class RoundViz(BaseModel):
     highlights: VizHighlights
 
 
+class RecentRound(BaseModel):
+    """One entry in the round picker.
+
+    ⛔ TYPED FROM THE SCHEMA AND THE HANDLER, NOT FROM A SAMPLE. Every live
+    response has these fields populated, and three of them are nullable
+    anyway: `rounds.map_name`, `round_date` and `round_number` all allow NULL,
+    and the handler writes `str(row[2]) if row[2] else None` for the date
+    outright. Sampling shows the branches that fired; the schema shows the
+    ones that can.
+    """
+
+    id: int
+    map_name: str | None
+    round_date: str | None
+    round_number: int | None
+    #: Rendered by `serialize_round_label` — "R1"/"R2" or its fallback.
+    round_label: str
+    player_count: int
+
+
 class RoundAwardEntry(BaseModel):
     """One award within a category.
 
@@ -489,7 +509,7 @@ async def get_round_vs_stats(round_id: int, db: DatabaseAdapter = Depends(get_db
     }
 
 
-@router.get("/rounds/recent")
+@router.get("/rounds/recent", response_model=list[RecentRound])
 async def get_recent_rounds(
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
