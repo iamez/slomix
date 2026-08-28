@@ -94,24 +94,24 @@ function RecordCard({ label, rows }: { label: string; rows: RecordEntry[] }) {
         style={{ all: 'unset', cursor: 'pointer', display: 'block', width: '100%' }}
         aria-expanded={open}
       >
-        <Lbl style={{ fontSize: 9 }}>{label}</Lbl>
-        <div className="m" style={{ fontSize: 26, lineHeight: 1, marginTop: 8 }}>{recordValue(top.value)}</div>
-        <div className="m" style={{ fontSize: 12, marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top.player}</div>
-        <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 4 }}>{top.map} · {top.date}</div>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{label}</Lbl>
+        <div className="m" style={{ fontSize: 'var(--fs-kpi)', lineHeight: 1, marginTop: 'var(--space-2)' }}>{recordValue(top.value)}</div>
+        <div className="m" style={{ fontSize: 'var(--fs-small)', marginTop: 'var(--space-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{top.player}</div>
+        <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>{top.map} · {top.date}</div>
       </button>
       {open && rows.length > 1 && (
-        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-900)' }}>
+        <div style={{ marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-rule-900)' }}>
           {rows.slice(1).map((r, i) => (
             /* Each rank can come from a DIFFERENT map and date — the legacy
              * top-5 modal showed both, and dropping them made ranks 2-5
              * unverifiable (Codex on #813, wave 4). */
-            <div key={`${r.player}-${i}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '20px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '5px 0' }}>
-              <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{String(i + 2).padStart(2, '0')}</span>
+            <div key={`${r.player}-${i}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '20px minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '5px 0' }}>
+              <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{String(i + 2).padStart(2, '0')}</span>
               <span style={{ minWidth: 0 }}>
-                <span className="m" style={{ fontSize: 11, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player}</span>
-                <span className="m" style={{ ...lblStyle, fontSize: 8 }}>{r.map} · {r.date}</span>
+                <span className="m" style={{ fontSize: 'var(--fs-micro)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player}</span>
+                <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{r.map} · {r.date}</span>
               </span>
-              <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)' }}>{recordValue(r.value)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)' }}>{recordValue(r.value)}</span>
             </div>
           ))}
         </div>
@@ -126,9 +126,9 @@ function RecordsTab() {
   const maps = useMaps();
   const data = records.isError ? undefined : records.data;
   const section = (title: string, order: { key: string; label: string }[]) => (
-    <div style={{ marginTop: 18 }}>
+    <div style={{ marginTop: 'var(--space-4)' }}>
       <SectionHead label={title} />
-      <div className="about-grid-5" style={{ gap: 10, marginTop: 10 }}>
+      <div className="about-grid-5" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
         {order.map((cat) => (
           data?.[cat.key]?.length
             ? <RecordCard key={cat.key} label={cat.label} rows={data[cat.key]} />
@@ -139,26 +139,26 @@ function RecordsTab() {
   );
   return (
     <div data-parity="record-book.records">
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-        <Lbl style={{ fontSize: 9 }}>map</Lbl>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>map</Lbl>
         <select
           value={mapName ?? ''}
           onChange={(e) => setMapName(e.target.value || null)}
           aria-label="Map filter"
           className="m"
-          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 13, padding: '6px 10px' }}
+          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: '6px 10px' }}
         >
           <option value="">all maps</option>
           {(maps.data ?? []).map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
         </select>
         {maps.isError && <Unavailable what="map list" />}
       </div>
-      {records.isPending && <div style={{ marginTop: 16 }}><Pending label="records" /></div>}
-      {records.isError && <div style={{ marginTop: 16 }}><Unavailable what="records" /></div>}
+      {records.isPending && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="records" /></div>}
+      {records.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="records" /></div>}
       {/* An empty OBJECT is truthy — two headings over empty grids would
         * claim records that do not exist (Codex on #813). */}
       {data && Object.values(data).every((rows) => !rows?.length) && (
-        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 16 }}>
+        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-4)' }}>
           no records for this selection yet
         </div>
       )}
@@ -176,11 +176,11 @@ function RecordsTab() {
  * the legacy HoF showed these and the recording's all_time null hides them
  * (Codex on #813). */
 function MoveBadge({ e }: { e: HallOfFameEntry }) {
-  if (e.is_new) return <span className="m" style={{ fontSize: 9, color: 'var(--color-accent-warm)' }}>NEW</span>;
+  if (e.is_new) return <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-accent-warm)' }}>NEW</span>;
   if (e.rank_delta != null && e.rank_delta !== 0) {
     const up = e.rank_delta > 0;
     return (
-      <span className="m" style={{ fontSize: 9, color: up ? 'var(--color-pos)' : 'var(--color-neg)' }}>
+      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: up ? 'var(--color-pos)' : 'var(--color-neg)' }}>
         {up ? '↗' : '↘'}{Math.abs(e.rank_delta)}
       </span>
     );
@@ -198,16 +198,16 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
   const fmt = (v: number) => (catKey === 'most_dpm' ? v.toFixed(2) : figure(v));
   return (
     <div style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
-      <Lbl style={{ fontSize: 9 }} >{label}</Lbl>
-      <div style={{ fontSize: 12, color: 'var(--color-text-500)', marginTop: 3 }}>{desc}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 12 }}>
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }} >{label}</Lbl>
+      <div style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>{desc}</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
         {podium.map((e) => {
           const inner = (<>
-            <div className="m" style={{ ...lblStyle, fontSize: 9 }}>#{e.rank} <MoveBadge e={e} /></div>
-            <div className="m" style={{ fontSize: 12, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name}</div>
-            <div className="m" style={{ fontSize: 13, marginTop: 2 }}>
+            <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>#{e.rank} <MoveBadge e={e} /></div>
+            <div className="m" style={{ fontSize: 'var(--fs-small)', marginTop: 'var(--space-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name}</div>
+            <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-1)' }}>
               {fmt(e.value)}{' '}
-              <span style={{ ...lblStyle, fontSize: 8 }}>{e.unit}</span>
+              <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{e.unit}</span>
             </div>
           </>);
           // A null guid is a resolvable-by-nobody historical aggregate —
@@ -218,14 +218,14 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
         })}
       </div>
       {rest.length > 0 && (
-        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-900)' }}>
+        <div style={{ marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-rule-900)' }}>
           {visible.map((e) => {
             const inner = (<>
-              <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{String(e.rank).padStart(2, '0')}</span>
-              <span className="m" style={{ fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name} <MoveBadge e={e} /></span>
-              <span className="m" style={{ fontSize: 11 }}>{fmt(e.value)}</span>
+              <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{String(e.rank).padStart(2, '0')}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-micro)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name} <MoveBadge e={e} /></span>
+              <span className="m" style={{ fontSize: 'var(--fs-micro)' }}>{fmt(e.value)}</span>
             </>);
-            const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 8, alignItems: 'baseline', padding: '4px 0', textDecoration: 'none', color: 'var(--color-text-300)' } as const;
+            const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '4px 0', textDecoration: 'none', color: 'var(--color-text-300)' } as const;
             return e.player_guid
               ? <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={style}>{inner}</Link>
               : <div key={`${e.rank}-${e.player_name}`} style={style}>{inner}</div>;
@@ -234,7 +234,7 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              style={{ all: 'unset', cursor: 'pointer', ...lblStyle, fontSize: 9, marginTop: 6, display: 'block' }}
+              style={{ all: 'unset', cursor: 'pointer', ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)', display: 'block' }}
             >
               show {rest.length - 7} more →
             </button>
@@ -251,22 +251,22 @@ function ChampionsBand() {
   // A FAILED request is not an empty season — silence would hide an
   // outage as normalcy (Codex on #813, wave 2).
   if (awards.isError) {
-    return <div style={{ marginBottom: 18 }}><Unavailable what="season champions" /></div>;
+    return <div style={{ marginBottom: 'var(--space-4)' }}><Unavailable what="season champions" /></div>;
   }
   // [] is the NORMAL state until a season is engraved — the band hides,
   // exactly like legacy (corpus recording proves the emptiness).
   if (!awards.isSuccess || list.length === 0) return null;
   return (
-    <div data-parity="record-book.champions" style={{ marginBottom: 18 }}>
+    <div data-parity="record-book.champions" style={{ marginBottom: 'var(--space-4)' }}>
       <SectionHead label={`${awards.data?.season_name ?? 'season'} · champions`} />
-      <div className="landing-quad" style={{ gap: 10, marginTop: 10 }}>
+      <div className="landing-quad" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
         {list.map((a, i) => {
           const inner = (<>
             {/* The backend supplies a display label ('Season MVP') —
               * deriving from award_key rendered 'mvp' (Codex on #813). */}
-            <Lbl style={{ fontSize: 9 }}>{a.label ?? (a.award_key ?? a.key ?? '').replace(/_/g, ' ')}</Lbl>
-            <div className="m" style={{ fontSize: 13, marginTop: 3 }}>{a.player_name ?? '—'}</div>
-            {a.value_text && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>{a.value_text}</div>}
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{a.label ?? (a.award_key ?? a.key ?? '').replace(/_/g, ' ')}</Lbl>
+            <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-1)' }}>{a.player_name ?? '—'}</div>
+            {a.value_text && <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>{a.value_text}</div>}
           </>);
           // Multiple recipients of one award_key are a valid state — the
           // conflict key is (season, award, PLAYER) (wave 2). A champion
@@ -290,23 +290,23 @@ function HofTab() {
   return (
     <div data-parity="record-book.hof">
       <ChampionsBand />
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         {HOF_PERIODS.map((p) => (
           <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => { setPeriod(p.key); }} />
         ))}
       </div>
-      {hof.isPending && <div style={{ marginTop: 16 }}><Pending label="hall of fame" /></div>}
-      {hof.isError && <div style={{ marginTop: 16 }}><Unavailable what="hall of fame" /></div>}
+      {hof.isPending && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="hall of fame" /></div>}
+      {hof.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="hall of fame" /></div>}
       {data && (
-        <div className="landing-split" style={{ gap: 18, marginTop: 16 }}>
+        <div className="landing-split" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-4)' }}>
           {HOF_CATEGORIES.map((cat) => {
             const entries = data.categories[cat.key] ?? [];
             return entries.length > 0
               ? <HofList key={cat.key} catKey={cat.key} label={cat.label} desc={cat.desc} entries={entries} />
               : (
                 <div key={cat.key} style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
-                  <Lbl style={{ fontSize: 9 }}>{cat.label}</Lbl>
-                  <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 8 }}>
+                  <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{cat.label}</Lbl>
+                  <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
                     no data {period === 'all_time' ? 'yet' : 'in this period'}
                   </div>
                 </div>
@@ -341,35 +341,35 @@ function SeasonTab() {
         <SectionHead
           label={season.data.name}
           aside={Number.isFinite(season.data.days_left)
-            ? <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{season.data.days_left} days left</span>
+            ? <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{season.data.days_left} days left</span>
             : undefined}
         />
       )}
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 'var(--space-4)' }}>
         <ChampionsBand />
         {useSeasonAwardsEmptyNote()}
       </div>
       <SectionHead label="category leaders" />
-      {leaders.isPending && <div style={{ marginTop: 10 }}><Pending label="leaders" /></div>}
-      {leaders.isError && <div style={{ marginTop: 10 }}><Unavailable what="leaders" /></div>}
+      {leaders.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="leaders" /></div>}
+      {leaders.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="leaders" /></div>}
       {lead && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 'var(--space-2)' }}>
           {LEADER_LABELS.filter(([key]) => lead[key] != null).map(([key, label]) => {
             const row = lead[key];
             return (
-              <div key={key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '140px minmax(0,1fr) auto', gap: 12, alignItems: 'baseline', padding: '8px 0' }}>
-                <Lbl style={{ fontSize: 9 }}>{label}</Lbl>
-                <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
-                <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
+              <div key={key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '140px minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '8px 0' }}>
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{label}</Lbl>
+                <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
+                <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
               </div>
             );
           })}
           {LEADER_LABELS.every(([key]) => lead[key] == null) && (
-            <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 8 }}>no leaders yet</div>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no leaders yet</div>
           )}
         </div>
       )}
-      <Link to="/leaderboards" style={{ ...lblStyle, fontSize: 9, display: 'inline-block', marginTop: 16, textDecoration: 'none' }}>
+      <Link to="/leaderboards" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', display: 'inline-block', marginTop: 'var(--space-4)', textDecoration: 'none' }}>
         full season leaderboard →
       </Link>
     </div>
@@ -383,7 +383,7 @@ function useSeasonAwardsEmptyNote() {
   const awards = useSeasonAwards();
   if (!awards.isSuccess || (awards.data?.awards.length ?? 0) > 0) return null;
   return (
-    <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginBottom: 14 }}>
+    <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginBottom: 'var(--space-4)' }}>
       no engraved season awards yet
     </div>
   );
@@ -393,17 +393,17 @@ export function RecordBook() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') === 'hof' || params.get('tab') === 'season') ? params.get('tab')! : 'records';
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 980 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>record book</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
         The book everyone is trying to rewrite.
       </h1>
-      <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
         {TABS.map((t) => (
           <Chip key={t.key} active={tab === t.key} label={t.label} onClick={() => { setParams({ tab: t.key }); }} />
         ))}
       </div>
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 'var(--space-5)' }}>
         {tab === 'records' && <RecordsTab />}
         {tab === 'hof' && <HofTab />}
         {tab === 'season' && <SeasonTab />}
