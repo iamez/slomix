@@ -131,12 +131,12 @@ async def test_short_guid_finds_the_same_rivals_as_the_long_one():
 
         assert short.status_code == 200, short.text
         assert long.status_code == 200, long.text
-        s, l = short.json(), long.json()
+        by_short, by_long = short.json(), long.json()
 
         # The heart of it: the two ids describe one player.
-        assert s["resolved"] is True
-        assert s["total_opponents"] == l["total_opponents"] == 1
-        assert s["player_name"] == l["player_name"] == "vid"
+        assert by_short["resolved"] is True
+        assert by_short["total_opponents"] == by_long["total_opponents"] == 1
+        assert by_short["player_name"] == by_long["player_name"] == "vid"
 
     finally:
         await conn.execute(f'DROP SCHEMA IF EXISTS "{schema}" CASCADE')

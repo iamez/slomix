@@ -32,15 +32,34 @@ async def _resolve_guid32(db: DatabaseAdapter, guid: str) -> str | None:
     player" apart from "wrong shape of id", which the empty answer could not.
     """
     if len(guid) >= 32:
-        return guid
+        # A full-length id still has to EXIST. Returning it unchecked made a
+        # nonexistent 32-character GUID answer `resolved: true` with an empty
+        # list — the same lie this function was written to end, wearing the
+        # other id length (Codex on #834).
+        row = await db.fetch_one(
+            "SELECT killer_guid FROM proximity_kill_outcome WHERE killer_guid = $1 LIMIT 1",
+            (guid,),
+        )
+        if row and row[0]:
+            return row[0]
+        row = await db.fetch_one(
+            "SELECT victim_guid FROM proximity_kill_outcome WHERE victim_guid = $1 LIMIT 1",
+            (guid,),
+        )
+        return row[0] if row and row[0] else None
+
     row = await db.fetch_one(
         "SELECT MAX(killer_guid) FROM proximity_kill_outcome WHERE killer_guid_canonical = $1",
         (guid,),
     )
     if row and row[0]:
         return row[0]
+    # substr(), not LEFT(): the local quick-start runs DATABASE_TYPE=sqlite,
+    # which has no LEFT() at all, so a victim-only short GUID raised there
+    # while working on PostgreSQL (Codex on #834). substr(x, 1, 8) is the one
+    # spelling both accept.
     row = await db.fetch_one(
-        "SELECT MAX(victim_guid) FROM proximity_kill_outcome WHERE LEFT(victim_guid, 8) = $1",
+        "SELECT MAX(victim_guid) FROM proximity_kill_outcome WHERE substr(victim_guid, 1, 8) = $1",
         (guid,),
     )
     return row[0] if row and row[0] else None

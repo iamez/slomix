@@ -1,9 +1,14 @@
-import { useSearchParams } from 'react-router';
-import { Link } from 'react-router';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
+import { useQuery } from '@tanstack/react-query';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Pending, SectionHead, Unavailable, figure, rowStyle } from '../components/ui';
+import { Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { apiGet } from '../lib/api';
 import { usePlayerRivalries, useRivalryLeaderboard } from '../lib/queries';
 import type { RivalryOpponent, RivalryPair } from '../lib/types';
+
+/** Shape of one /auth/players/search hit — the 8-character guid and a name. */
+interface SearchHit { guid: string; name: string }
 
 /**
  * Rivalries (docs/design/12 row 25) — the first page written out of the
@@ -204,6 +209,68 @@ function PlayerPanel({ guid }: { guid: string }) {
   );
 }
 
+/** The way in. Without it the `?guid=` view is reachable only by typing a
+ * URL, which is a feature nobody finds (Codex on #834). Same search endpoint
+ * and same 300 ms debounce as Home — /auth/players/search is rate-limited to
+ * 30/min, and a request per keystroke spends that on one typed name. */
+function PickPlayer({ onPick }: { onPick: (guid: string) => void }) {
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const search = useQuery({
+    queryKey: ['player-search', debounced],
+    enabled: debounced.length >= 2,
+    queryFn: () => apiGet('/auth/players/search', { query: { q: debounced } }) as Promise<SearchHit[]>,
+  });
+  return (
+    <Stack gap={2} parity="rivalries.pick" style={{ maxWidth: 380 }}>
+      <Lbl>whose opponents</Lbl>
+      <input
+        type="text"
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); }}
+        placeholder="player name or alias"
+        aria-label="Whose opponents"
+        className="m"
+        style={{
+          width: '100%', background: 'var(--color-ink-800)',
+          border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)',
+          fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-3)', boxSizing: 'border-box',
+        }}
+      />
+      {debounced.length >= 2 && (
+        <Stack gap={1} className="rows">
+          {search.isPending && <Pending label="search" />}
+          {search.isError && <Unavailable what="search" />}
+          {search.data?.length === 0 && (
+            <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+              no player matches "{debounced}"
+            </span>
+          )}
+          {search.data?.slice(0, 6).map((hit) => (
+            <button
+              key={hit.guid}
+              type="button"
+              className="row"
+              onClick={() => { onPick(hit.guid); }}
+              style={{
+                background: 'transparent', border: 0, textAlign: 'left', cursor: 'pointer',
+                color: 'var(--color-text-100)', padding: 'var(--space-2) 0',
+                fontSize: 'var(--fs-value)', fontFamily: 'var(--font-mono)',
+              }}
+            >
+              {hit.name}
+            </button>
+          ))}
+        </Stack>
+      )}
+    </Stack>
+  );
+}
+
 export function Rivalries() {
   const [params, setParams] = useSearchParams();
   const guid = params.get('guid');
@@ -224,6 +291,12 @@ export function Rivalries() {
           </Cluster>
         ))}
       </Cluster>
+
+      {!guid && (
+        <div style={{ paddingTop: 'var(--space-5)' }}>
+          <PickPlayer onPick={(picked) => { setParams({ guid: picked }); }} />
+        </div>
+      )}
 
       {guid && (
         <>
