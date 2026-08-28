@@ -40,8 +40,13 @@ const SPACE = new Map<Space, string>([
 /** A Map rather than an object: a lookup by variable key on a plain object is
  * an injection sink to every scanner that reads this code, and the shape it
  * asks for here is also the more honest one — these are eight fixed entries,
- * not a record someone may extend at a call site. */
-const space = (step: Space) => SPACE.get(step) ?? SPACE.get(3)!;
+ * not a record someone may extend at a call site.
+ *
+ * The fallback is written out rather than asserted non-null: `Space` already
+ * makes an unknown step unreachable, and a `!` would be a promise the type
+ * system keeps rather than a value a reader can see. */
+const DEFAULT_SPACE = 'var(--space-3)';
+const space = (step: Space) => SPACE.get(step) ?? DEFAULT_SPACE;
 
 export interface StackProps {
   /** Distance between children, as a scale step. */
