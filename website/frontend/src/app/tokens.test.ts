@@ -215,7 +215,7 @@ describe('design tokens', () => {
      * commit that lowers the count. An allowance nobody is forced to update
      * stops describing anything after the first retrofit (Codex on #823).
      *
-     * 1,012 raw sizes live in inline styles today across 14 of 34 pages. Left
+     * 1,010 raw sizes live in inline styles today across 14 of 34 pages. Left
      * alone the count passes 2,000 by the last phase, and every one of them
      * is a value the next layout rework has to read and re-decide by hand —
      * worse, 236 style blocks mix layout with look, so a find/replace cannot
@@ -230,12 +230,47 @@ describe('design tokens', () => {
     // that can legitimately raise this number, since that work predates the
     // guard rather than defying it. 1,012 here: the five copied Pill
     // functions this PR deletes take ten of them with it.
-    const BUDGET = 1012;
+    const BUDGET = 1010;
+    // Zero is not a hand-typed size, it is a RESET: `margin: 0` on an <h1>
+    // inside a Stack cancels the browser default so it cannot add itself to
+    // the gap. Counting it pushed people towards writing `margin: '0'` as a
+    // string to slip past the guard — an evasion the guard invited (reported
+    // by the per-round session, 2026-08-28). A guard that punishes the right
+    // fix teaches the wrong one.
+    //
+    // The exclusion READS the value rather than pattern-matching a leading
+    // digit: `[1-9]\d*` quietly stopped counting `margin: 0.5`, which is a
+    // hand-typed size like any other (Codex on #828). Parsing is the honest
+    // way to ask "is this zero" — a regex that answers it by the first digit
+    // answers a different question.
+    // One bounded regex finds the property and its value; the value is then
+    // read with string operations rather than a second pattern. Two rounds
+    // of "unsafe regular expression" on patterns that were already bounded
+    // (Codacy on #828) are two rounds of arguing with a heuristic — and the
+    // non-regex version is the plainer thing to read anyway: split the value,
+    // drop the unit, ask what the number is.
     const SIZE_PROP =
-      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:\d+\b|'[^']*\d+(?:px|em|rem|%)[^']*')/g;
+      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):[ ]{0,4}([^,;\n}]{0,40})/g;
+    const UNITS = ['px', 'em', 'rem', '%'];
+    /** The number a CSS length carries, or null when the piece is not one. */
+    const lengthOf = (piece: string): number | null => {
+      const unit = UNITS.find((u) => piece.endsWith(u));
+      const digits = unit ? piece.slice(0, -unit.length) : piece;
+      if (digits.length === 0 || digits.length > 8) return null;
+      const value = Number(digits);
+      return Number.isFinite(value) ? value : null;
+    };
     let count = 0;
     for (const [, text] of appSources()) {
-      count += [...text.matchAll(SIZE_PROP)].length;
+      for (const match of text.matchAll(SIZE_PROP)) {
+        const value = match[1].trim();
+        if (value.startsWith("'")) {
+          const pieces = value.slice(1, value.length - 1).split(' ').filter(Boolean);
+          if (pieces.some((piece) => (lengthOf(piece) ?? 0) !== 0)) count += 1;
+        } else if ((lengthOf(value) ?? 0) !== 0) {
+          count += 1;
+        }
+      }
     }
     expect(
       count,

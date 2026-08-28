@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { Cluster, Stack, space } from '../components/layout';
 import type { Space } from '../components/layout';
 import {
@@ -32,20 +32,60 @@ const SAMPLE_ROWS = [
   { map: 'supply', matches: 122 },
 ];
 
-const TYPE_SCALE: { token: string; label: string }[] = [
-  { token: '--fs-caption', label: 'caption · 9' },
-  { token: '--fs-label', label: 'label · 10' },
-  { token: '--fs-micro', label: 'micro · 11' },
-  { token: '--fs-small', label: 'small · 12' },
-  { token: '--fs-value', label: 'value · 13' },
-  { token: '--fs-body', label: 'body · 14' },
-  { token: '--fs-row', label: 'row · 15' },
-  { token: '--fs-lead', label: 'lead · 18' },
-  { token: '--fs-kpi', label: 'kpi · 26' },
-  { token: '--fs-title', label: 'title · 34' },
-  { token: '--fs-display', label: 'display · 40' },
-  { token: '--fs-hero', label: 'hero · 66' },
+const TYPE_SCALE: { token: string; role: string }[] = [
+  { token: '--fs-caption', role: 'caption' },
+  { token: '--fs-label', role: 'label' },
+  { token: '--fs-micro', role: 'micro' },
+  { token: '--fs-small', role: 'small' },
+  { token: '--fs-value', role: 'value' },
+  { token: '--fs-body', role: 'body' },
+  { token: '--fs-row', role: 'row' },
+  { token: '--fs-lead', role: 'lead' },
+  { token: '--fs-kpi', role: 'kpi' },
+  { token: '--fs-title', role: 'title' },
+  { token: '--fs-display', role: 'display' },
+  { token: '--fs-hero', role: 'hero' },
 ];
+
+/**
+ * The size beside each sample is MEASURED, not typed in. A catalogue that
+ * repeats the pixel value as static text goes stale the first time someone
+ * changes a token during the layout rework this page exists to support: the
+ * sample would move and the caption would keep insisting on the old number
+ * (Codex on #827). Reading it back off the element means the page cannot lie
+ * about its own scale.
+ */
+function TypeRow({ token, role }: { token: string; role: string }) {
+  const sample = useRef<HTMLSpanElement>(null);
+  const [size, setSize] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const node = sample.current;
+    if (!node) return undefined;
+    const read = () => {
+      const measured = getComputedStyle(node).fontSize;
+      setSize(measured && measured !== '0px' ? measured.replace('px', '') : null);
+    };
+    read();
+    // Measuring once at mount is measuring at the one moment nobody is
+    // editing. This page is open WHILE tokens change — Vite replaces the
+    // stylesheet without remounting anything — so the sample would resize
+    // and the caption would keep the old number, which is the very failure
+    // this row was rewritten to avoid (Codex on #828). A ResizeObserver
+    // fires on exactly that: the box changed because the font did.
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => { observer.disconnect(); };
+  }, [token]);
+  return (
+    <Cluster gap={4} align="baseline" justify="between" style={{ padding: 'var(--space-1) 0' }}>
+      <span ref={sample} style={{ fontSize: `var(${token})`, letterSpacing: 'var(--track-tight)' }}>
+        Slomix
+      </span>
+      <span className="lbl">{role} · {size ?? 'unmeasured'}</span>
+    </Cluster>
+  );
+}
 
 const COLOURS: { token: string; meaning: string }[] = [
   { token: '--color-ink-950', meaning: 'page' },
@@ -59,12 +99,19 @@ const COLOURS: { token: string; meaning: string }[] = [
   { token: '--color-rule-500', meaning: 'action underline' },
   { token: '--color-rule-400', meaning: 'active chip border' },
   { token: '--color-text-100', meaning: 'primary text' },
-  { token: '--color-text-300', meaning: 'secondary text' },
+  { token: '--color-text-200', meaning: 'secondary text' },
+  { token: '--color-text-300', meaning: 'tertiary text' },
+  { token: '--color-text-400', meaning: 'quiet text' },
   { token: '--color-text-500', meaning: 'labels' },
-  { token: '--color-accent', meaning: 'side · focus · team a' },
-  { token: '--color-accent-warm', meaning: 'team b · callout' },
+  { token: '--color-text-600', meaning: 'footer' },
+  { token: '--color-accent', meaning: 'focus · active' },
+  { token: '--color-accent-warm', meaning: 'callout · provenance' },
+  { token: '--color-team-a', meaning: 'team a' },
+  { token: '--color-team-b', meaning: 'team b' },
   { token: '--color-pos', meaning: 'better' },
   { token: '--color-neg', meaning: 'worse' },
+  { token: '--color-neg-strong', meaning: 'worse, emphatic' },
+  { token: '--color-ice', meaning: 'looking · running' },
   { token: '--color-idle', meaning: 'neither' },
   { token: '--color-allies', meaning: 'allies' },
   { token: '--color-axis', meaning: 'axis' },
@@ -121,12 +168,7 @@ export function DesignCatalog() {
       <Bench name="type" note="one scale; a size is a name, not a number">
         <Stack gap={1} divided>
           {TYPE_SCALE.map((t) => (
-            <Cluster key={t.token} gap={4} align="baseline" justify="between" style={{ padding: 'var(--space-1) 0' }}>
-              <span style={{ fontSize: `var(${t.token})`, letterSpacing: 'var(--track-tight)' }}>
-                Slomix
-              </span>
-              <span className="lbl">{t.label}</span>
-            </Cluster>
+            <TypeRow key={t.token} token={t.token} role={t.role} />
           ))}
         </Stack>
       </Bench>
@@ -187,7 +229,12 @@ export function DesignCatalog() {
       </Bench>
 
       <Bench name="rows" note="a hairline and a hover — never a card">
-        <Stack gap={1} divided>
+        {/* No `divided` here: .row already carries the bottom hairline, and
+          * stacking both drew two lines between neighbours plus a stray one
+          * after the last row — a workshop misrepresenting the very thing it
+          * demonstrates (Codex on #827). `divided` is for children that are
+          * NOT rows, as in the type and states benches above. */}
+        <Stack gap={1} className="rows">
           {SAMPLE_ROWS.map((row) => (
             <Cluster key={row.map} gap={4} justify="between" className="row" style={{ padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-row)' }}>{row.map}</span>
