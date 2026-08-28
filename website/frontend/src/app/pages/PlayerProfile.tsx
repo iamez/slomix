@@ -31,10 +31,10 @@ function hours(seconds: number | null | undefined): string {
 function SectionBody({ available, empty, children, what }: {
   available: boolean; empty: boolean; what: string; children: React.ReactNode;
 }) {
-  if (!available) return <div style={{ marginTop: 8 }}><Unavailable what={what} /></div>;
+  if (!available) return <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what={what} /></div>;
   if (empty) {
     return (
-      <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 8 }}>
+      <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
         no {what} recorded yet
       </div>
     );
@@ -102,20 +102,20 @@ function Header({ p }: { p: Profile }) {
     (a) => a.trim().toLowerCase() !== (id.name ?? '').trim().toLowerCase(),
   );
   return (
-    <div data-parity="profile.header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 24, flexWrap: 'wrap' }}>
+    <div data-parity="profile.header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
       <div>
         <Lbl>player · {id.guid ?? p.guid}</Lbl>
-        <h1 style={{ fontSize: 40, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '10px 0 0', fontWeight: 500 }}>
+        <h1 style={{ fontSize: 'var(--fs-display)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '10px 0 0', fontWeight: 500 }}>
           {named ? id.name : (p.guid || 'unknown player')}
         </h1>
         {named ? (
-          <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>
+          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
             {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
             {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
             <IdentityLink link={id.identity_link} />
           </div>
         ) : (
-          <div style={{ marginTop: 6 }}><Unavailable what="identity" /></div>
+          <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="identity" /></div>
         )}
       </div>
       {/* An unrated player gets {available:false, reason:"not rated"} — the
@@ -123,8 +123,8 @@ function Header({ p }: { p: Profile }) {
         * missing panel and a missing rating are different facts. */}
       {!(skill.available && skill.et_rating != null) && (
         <div style={{ textAlign: 'right' }}>
-          <Lbl style={{ fontSize: 9 }}>et rating</Lbl>
-          <div className="m" style={{ fontSize: 13, color: 'var(--color-text-500)', marginTop: 6 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>et rating</Lbl>
+          <div className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
             {/* Same split: only `reason` separates "this player has no
               * rating" from "the rating query failed". */}
             {skill.reason === 'error' ? 'unavailable' : 'not rated yet'}
@@ -133,11 +133,11 @@ function Header({ p }: { p: Profile }) {
       )}
       {skill.available && skill.et_rating != null && (
         <div style={{ textAlign: 'right' }}>
-          <Lbl style={{ fontSize: 9 }}>et rating</Lbl>
-          <div className="m" style={{ fontSize: 44, lineHeight: 0.9, color: 'var(--color-accent)' }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>et rating</Lbl>
+          <div className="m" style={{ fontSize: 'var(--fs-display-lg)', lineHeight: 0.9, color: 'var(--color-accent)' }}>
             {skill.et_rating.toFixed(3)}
           </div>
-          <div className="m" style={{ fontSize: 10, color: 'var(--color-text-400)', marginTop: 4 }}>
+          <div className="m" style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>
             {skill.tier ?? '—'}
             {skill.rank != null && skill.total_rated != null && ` · #${skill.rank} of ${skill.total_rated}`}
             {skill.percentile != null && ` · top ${(100 - skill.percentile).toFixed(1)}%`}
@@ -164,11 +164,11 @@ function Lifetime({ p }: { p: Profile }) {
     ['played', hours(l.time_played_seconds)],
   ];
   return (
-    <div data-parity="profile.lifetime" className="about-grid-5" style={{ gap: 12, marginTop: 30 }}>
+    <div data-parity="profile.lifetime" className="about-grid-5" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-6)' }}>
       {cells.map(([k, v]) => (
         <div key={k}>
-          <Lbl style={{ fontSize: 9 }}>{k}</Lbl>
-          <div className="m" style={{ fontSize: 17, marginTop: 4 }}>{v}</div>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+          <div className="m" style={{ fontSize: 'var(--fs-row-lg)', marginTop: 'var(--space-1)' }}>{v}</div>
         </div>
       ))}
     </div>
@@ -185,25 +185,25 @@ function Streaks({ p }: { p: Profile }) {
     // have (Codex, #822 wave 6).
     const failed = s.reason === 'error';
     return (
-      <div data-parity="profile.streaks" style={{ marginTop: 26 }}>
-        <Lbl style={{ fontSize: 9 }}>current run</Lbl>
-        <span style={{ marginLeft: 10 }}>
+      <div data-parity="profile.streaks" style={{ marginTop: 'var(--space-6)' }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>current run</Lbl>
+        <span style={{ marginLeft: 'var(--space-2)' }}>
           {failed
             ? <Unavailable what="streaks" />
-            : <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no decided rounds yet</span>}
+            : <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no decided rounds yet</span>}
         </span>
       </div>
     );
   }
   return (
-    <div data-parity="profile.streaks" style={{ marginTop: 26, display: 'flex', gap: 26, alignItems: 'baseline', flexWrap: 'wrap' }}>
+    <div data-parity="profile.streaks" style={{ marginTop: 'var(--space-6)', display: 'flex', gap: 'var(--space-6)', alignItems: 'baseline', flexWrap: 'wrap' }}>
       <span>
-        <Lbl style={{ fontSize: 9 }}>current run</Lbl>
-        <span className="m" style={{ fontSize: 15, marginLeft: 10, color: onLoss ? 'var(--color-neg)' : 'var(--color-pos)' }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>current run</Lbl>
+        <span className="m" style={{ fontSize: 'var(--fs-row)', marginLeft: 'var(--space-2)', color: onLoss ? 'var(--color-neg)' : 'var(--color-pos)' }}>
           {s.current_streak} {s.current_type ?? ''}
         </span>
       </span>
-      <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)' }}>
+      <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)' }}>
         longest win {s.longest_win} · longest loss {s.longest_loss}
       </span>
     </div>
@@ -215,24 +215,24 @@ function Weapons({ rows, available }: { rows: ProfileWeaponRow[] | undefined; av
   // let SectionBody name the state (Codex, #822).
   const top = [...(rows ?? [])].sort((a, b) => b.kills - a.kills).slice(0, 8);
   return (
-    <div data-parity="profile.weapons" style={{ marginTop: 34 }}>
-      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 9 }}>head hits, not headshot kills</Lbl>} />
+    <div data-parity="profile.weapons" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills</Lbl>} />
       <SectionBody available={available} empty={top.length === 0} what="weapon stats">
-        <div style={{ marginTop: 8 }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 12, padding: '6px 0' }}>
-            <Lbl style={{ fontSize: 9 }}>weapon</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>kills</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>acc</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>head hits</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>hs rate</Lbl>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', padding: '6px 0' }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>weapon</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>kills</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>acc</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>head hits</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>hs rate</Lbl>
           </div>
           {top.map((w) => (
-            <div key={w.weapon} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 12, alignItems: 'baseline', padding: '7px 0' }}>
-              <span style={{ fontSize: 13, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{w.weapon}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right' }}>{figure(w.kills)}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.accuracy)}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{figure(w.headshots)}</span>
-              <span className="m" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.hs_accuracy)}</span>
+            <div key={w.weapon} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '7px 0' }}>
+              <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{w.weapon}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right' }}>{figure(w.kills)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.accuracy)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{figure(w.headshots)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.hs_accuracy)}</span>
             </div>
           ))}
         </div>
@@ -246,18 +246,18 @@ function Body({ p }: { p: Profile }) {
   const m = p.movement;
   const stance = m.stance;
   return (
-    <div className="landing-split" style={{ gap: 34, marginTop: 34 }}>
+    <div className="landing-split" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-6)' }}>
       <div data-parity="profile.hit-regions">
         <SectionHead label="where the hits land" />
         <SectionBody available={p.hit_regions.available} empty={t == null} what="hit regions">
           {t && (
             <>
-              <div style={{ display: 'flex', height: 6, marginTop: 10 }}>
+              <div style={{ display: 'flex', height: 6, marginTop: 'var(--space-2)' }}>
                 {([['head', t.head_pct, 'var(--color-accent)'], ['arms', t.arms_pct, '#6b7f92'],
                   ['body', t.body_pct, 'var(--color-accent-warm)'], ['legs', t.legs_pct, '#7a6a52']] as const)
                   .map(([k, v, c]) => <span key={k} style={{ width: `${v}%`, background: c, display: 'block' }} />)}
               </div>
-              <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)', display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
                 <span>head {pct(t.head_pct)}</span>
                 <span>arms {pct(t.arms_pct)}</span>
                 <span>body {pct(t.body_pct)}</span>
@@ -270,14 +270,14 @@ function Body({ p }: { p: Profile }) {
       <div data-parity="profile.movement">
         <SectionHead label="how they move" />
         <SectionBody available={m.available} empty={!m.tracks} what="movement">
-          <div className="home-cols3" style={{ gap: 10, marginTop: 10 }}>
+          <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {([['avg speed', num(m.avg_speed)], ['peak', num(m.peak_speed)], ['sprint', pct(m.sprint_pct)],
               ['dist / life', num(m.avg_distance_per_life)],
               ['standing', pct(stance?.standing_pct)], ['crouching', pct(stance?.crouching_pct)]] as const)
               .map(([k, v]) => (
                 <div key={k}>
-                  <Lbl style={{ fontSize: 9 }}>{k}</Lbl>
-                  <div className="m" style={{ fontSize: 13, marginTop: 3 }}>{v}</div>
+                  <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+                  <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-1)' }}>{v}</div>
                 </div>
               ))}
           </div>
@@ -296,21 +296,21 @@ function OpponentList({ title, rows, note, lead }: {
 }) {
   return (
     <div>
-      <Lbl style={{ fontSize: 9 }}>{title}</Lbl>
-      <div style={{ marginTop: 6 }}>
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
+      <div style={{ marginTop: 'var(--space-2)' }}>
         {rows.slice(0, 5).map((o) => (
-          <div key={o.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 10, alignItems: 'baseline', padding: '6px 0' }}>
-            <span className="m" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.name}</span>
-            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-200)' }}>
+          <div key={o.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '6px 0' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.name}</span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-200)' }}>
               {lead === 'on' ? o.kills_on_player : o.kills_by_player}
             </span>
-            <span className="m" style={{ fontSize: 10, color: 'var(--color-text-500)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-500)' }}>
               of {o.total_encounters}
             </span>
           </div>
         ))}
       </div>
-      <Lbl style={{ fontSize: 9, marginTop: 4 }}>{note}</Lbl>
+      <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>{note}</Lbl>
     </div>
   );
 }
@@ -322,15 +322,15 @@ function OpponentList({ title, rows, note, lead }: {
 function MateList({ title, rows }: { title: string; rows: ProfileTeammate[] }) {
   return (
     <div>
-      <Lbl style={{ fontSize: 9 }}>{title}</Lbl>
-      <div style={{ marginTop: 6 }}>
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
+      <div style={{ marginTop: 'var(--space-2)' }}>
         {rows.slice(0, 5).map((t) => (
-          <div key={t.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 10, alignItems: 'baseline', padding: '6px 0' }}>
-            <span className="m" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
-            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-200)' }}>
+          <div key={t.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '6px 0' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-200)' }}>
               {t.synergy == null ? '—' : `${t.synergy > 0 ? '+' : ''}${t.synergy.toFixed(0)}`}
             </span>
-            <span className="m" style={{ fontSize: 10, color: 'var(--color-text-500)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-500)' }}>
               {t.rounds_together} rd · {pct(t.win_rate_with)}
             </span>
           </div>
@@ -348,10 +348,10 @@ function Relationships({ p }: { p: Profile }) {
   const worst = r.worst_teammates ?? [];
   const empty = killers.length === 0 && best.length === 0;
   return (
-    <div data-parity="profile.relationships" style={{ marginTop: 34 }}>
-      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 9 }}>the leading figure is what each list ranks by · synergy = dpm delta together</Lbl>} />
+    <div data-parity="profile.relationships" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>the leading figure is what each list ranks by · synergy = dpm delta together</Lbl>} />
       <SectionBody available={r.available} empty={empty} what="head-to-head history">
-        <div className="about-grid-4" style={{ gap: 24, marginTop: 10 }}>
+        <div className="about-grid-4" style={{ gap: 'var(--space-5)', marginTop: 'var(--space-2)' }}>
           {/* Measured at the source (rivalries_service): kills_by_player comes
             * from the player-as-killer query, kills_on_player from the
             * player-as-victim one. So the nemesis figure is what THEY did to
@@ -370,16 +370,16 @@ function Relationships({ p }: { p: Profile }) {
 function Maps({ rows, available }: { rows: ProfileMapRow[] | undefined; available: boolean }) {
   const top = [...(rows ?? [])].sort((a, b) => b.rounds - a.rounds).slice(0, 8);
   return (
-    <div data-parity="profile.maps" style={{ marginTop: 34 }}>
+    <div data-parity="profile.maps" style={{ marginTop: 'var(--space-6)' }}>
       <SectionHead label="grounds · most played" />
       <SectionBody available={available} empty={top.length === 0} what="map history">
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 'var(--space-2)' }}>
           {top.map((m) => (
-            <div key={m.map} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 12, alignItems: 'baseline', padding: '7px 0' }}>
-              <span style={{ fontSize: 13, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{mapLabel(m.map)}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{m.rounds} rd</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{pct(m.win_rate)}</span>
-              <span className="m" style={{ fontSize: 12 }}>{m.dpm == null ? '—' : m.dpm.toFixed(0)} dpm</span>
+            <div key={m.map} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '7px 0' }}>
+              <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{mapLabel(m.map)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.rounds} rd</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{pct(m.win_rate)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)' }}>{m.dpm == null ? '—' : m.dpm.toFixed(0)} dpm</span>
             </div>
           ))}
         </div>
@@ -391,20 +391,20 @@ function Maps({ rows, available }: { rows: ProfileMapRow[] | undefined; availabl
 function Recent({ rows: raw, available }: { rows: ProfileMatchRow[] | undefined; available: boolean }) {
   const rows = raw ?? [];
   return (
-    <div data-parity="profile.recent" style={{ marginTop: 34 }}>
-      <SectionHead label="last rounds" aside={<Lbl style={{ fontSize: 9 }}>newest first</Lbl>} />
+    <div data-parity="profile.recent" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="last rounds" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>newest first</Lbl>} />
       <SectionBody available={available} empty={rows.length === 0} what="recent rounds">
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 'var(--space-2)' }}>
           {rows.map((r) => (
-            <div key={r.round_id} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto auto', gap: 12, alignItems: 'baseline', padding: '7px 0' }}>
-              <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{r.date}</span>
-              <span style={{ fontSize: 13, letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div key={r.round_id} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '7px 0' }}>
+              <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{r.date}</span>
+              <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {mapLabel(r.map)} R{r.round_number}
               </span>
-              <span className="m" style={{ fontSize: 12 }}>{r.kills}/{r.deaths}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{r.dpm == null ? '—' : r.dpm.toFixed(0)} dpm</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)' }}>{r.kills}/{r.deaths}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{r.dpm == null ? '—' : r.dpm.toFixed(0)} dpm</span>
               {/* A round with no attributed winner shows a dash — never a loss. */}
-              <span className="m" style={{ fontSize: 12, color: r.result === 'W' ? 'var(--color-pos)' : r.result === 'L' ? 'var(--color-neg)' : 'var(--color-text-500)' }}>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: r.result === 'W' ? 'var(--color-pos)' : r.result === 'L' ? 'var(--color-neg)' : 'var(--color-text-500)' }}>
                 {r.result ?? '—'}
               </span>
             </div>
@@ -421,14 +421,14 @@ export function PlayerProfilePage() {
   const profile = usePlayerProfile(playerId);
   const p = profile.isError ? undefined : profile.data;
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 980 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       {playerId.length === 0 && (
         <>
           <Lbl>player</Lbl>
-          <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
             Pick a player.
           </h1>
-          <div className="m" style={{ fontSize: 12, color: 'var(--color-text-400)', marginTop: 12 }}>
+          <div className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', marginTop: 'var(--space-3)' }}>
             Open a profile from a leaderboard, a lineup or a session.
           </div>
         </>
@@ -445,7 +445,7 @@ export function PlayerProfilePage() {
           <Relationships p={p} />
           <Maps rows={p.maps.maps} available={p.maps.available} />
           <Recent rows={p.recent_matches.matches} available={p.recent_matches.available} />
-          <Lbl style={{ fontSize: 9, marginTop: 26 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
             {p.sections.length} sections · generated {p.generated_at.slice(0, 19).replace('T', ' ')} utc
           </Lbl>
         </>

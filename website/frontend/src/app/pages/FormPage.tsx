@@ -49,19 +49,19 @@ function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; t
       : `${row.latest ?? '—'}`;
   return (
     <div style={rowStyle}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 90px auto', gap: 12, alignItems: 'center', padding: '8px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 90px auto', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 0' }}>
         <span>
-          <Link to={`/profile/${row.guid}`} className="m" style={{ fontSize: 13, textDecoration: 'none', color: 'var(--color-text-100)' }}>
+          <Link to={`/profile/${row.guid}`} className="m" style={{ fontSize: 'var(--fs-value)', textDecoration: 'none', color: 'var(--color-text-100)' }}>
             {row.sick_leave ? `${row.name} · alt of ${row.sick_leave.primary_name}` : row.name}
           </Link>
         </span>
-        <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{baseline}</span>
+        <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{baseline}</span>
         {row.series.length > 1 ? (
           <svg viewBox="0 0 84 22" style={{ width: 84, height: 22 }}>
             <path d={sparkPath(row.series, 84, 22, 2)} fill="none" stroke={flat || row.is_new ? '#a78bfa' : color} strokeWidth="1.2" />
           </svg>
         ) : <span />}
-        <span className="m" style={{ fontSize: 11, color: flat ? 'var(--color-text-400)' : color, textAlign: 'right' }}>
+        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: flat ? 'var(--color-text-400)' : color, textAlign: 'right' }}>
           {row.is_new
             /* A linked sick-leave alternate must never read as a genuine
              * newcomer — the backend attaches the link for exactly this
@@ -78,7 +78,7 @@ function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; t
         </span>
       </div>
       {metric === 'overall' && row.breakdown.length > 0 && (
-        <div className="m" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', fontSize: 9, color: 'var(--color-text-500)', padding: '0 0 8px' }}>
+        <div className="m" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)', padding: '0 0 8px' }}>
           {row.breakdown.map((b) => (
             <span key={b.metric}>
               {b.label.toLowerCase()}{' '}
@@ -103,19 +103,19 @@ export function FormPage() {
       ].filter((s) => s.rows.length > 0)
     : [];
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 760 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 760 }}>
       <Lbl>form · each player against their own trailing average</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
         Who is heating up, and who is cooling off.
       </h1>
-      <div data-parity="form.tabs" style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
+      <div data-parity="form.tabs" style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
         {METRICS.map((m) => (
           <button
             key={m.key}
             type="button"
             onClick={() => { setMetric(m.key); }}
             style={{
-              fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+              fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
               border: `1px solid ${metric === m.key ? '#4a5a66' : 'var(--color-rule-700)'}`,
               background: metric === m.key ? '#151a1e' : 'transparent',
               color: metric === m.key ? 'var(--color-text-100)' : 'var(--color-text-400)',
@@ -126,24 +126,24 @@ export function FormPage() {
           </button>
         ))}
       </div>
-      <div data-parity="form.sections" style={{ marginTop: 18 }}>
+      <div data-parity="form.sections" style={{ marginTop: 'var(--space-4)' }}>
         {movers.isPending && <Pending label="form" />}
         {movers.isError && <Unavailable what="form" />}
         {data && sections.length === 0 && (
-          <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>
+          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
             form data appears after the next session
           </div>
         )}
         {sections.map((s) => (
-          <div key={s.label} style={{ marginTop: 16 }}>
+          <div key={s.label} style={{ marginTop: 'var(--space-4)' }}>
             <SectionHead label={s.label} />
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 'var(--space-2)' }}>
               {s.rows.map((row) => <MoverRow key={row.guid} row={row} metric={metric} tone={s.tone} />)}
             </div>
           </div>
         ))}
         {data && metric === 'overall' && (
-          <Lbl style={{ fontSize: 9, marginTop: 14, lineHeight: 1.7 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)', lineHeight: 1.7 }}>
             composite: damage 25% · impact 25% · k/d 20% · objectives 15% · accuracy 10% · kills 5% —
             measured against each player's own ~10-session average. rank-vs-self, not a ranking.
           </Lbl>

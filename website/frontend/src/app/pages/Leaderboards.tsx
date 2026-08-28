@@ -52,40 +52,40 @@ export function Leaderboards() {
   // (Codex on #813, wave 2). The fixed column hides instead.
   const cols = `34px minmax(0,1fr) auto${stat === 'games' ? '' : ' auto'}${stat === 'kills' ? '' : ' auto'}${stat === 'kd' ? '' : ' auto'}`;
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 860 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 860 }}>
       <Lbl>leaderboards · top players by performance</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
         Who leads, and by how much.
       </h1>
 
-      <div data-parity="leaderboards.filters" style={{ marginTop: 22 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div data-parity="leaderboards.filters" style={{ marginTop: 'var(--space-5)' }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
           {STATS.map((s) => (
             <Chip key={s.key} active={stat === s.key} label={s.label} onClick={() => { setStat(s.key); }} />
           ))}
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
           {PERIODS.map((p) => (
             <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => { setPeriod(p.key); }} />
           ))}
         </div>
       </div>
 
-      <div data-parity="leaderboards.table" style={{ marginTop: 22 }}>
+      <div data-parity="leaderboards.table" style={{ marginTop: 'var(--space-5)' }}>
         <SectionHead label={`${statLabel.toLowerCase()} · ${PERIODS.find((p) => p.key === period)?.label.toLowerCase()}`} />
-        <div className="lb-table" style={{ marginTop: 8 }}>
-          <div className="lb-row" style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 14, padding: '6px 0' }}>
-            <Lbl style={{ fontSize: 9 }}>#</Lbl>
-            <Lbl style={{ fontSize: 9 }}>player</Lbl>
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>{statLabel}</Lbl>
-            {stat !== 'games' && <span className="lb-aux"><Lbl style={{ fontSize: 9, textAlign: 'right' }}>rounds</Lbl></span>}
-            {stat !== 'kills' && <span className="lb-aux"><Lbl style={{ fontSize: 9, textAlign: 'right' }}>kills</Lbl></span>}
-            {stat !== 'kd' && <span className="lb-aux"><Lbl style={{ fontSize: 9, textAlign: 'right' }}>k/d</Lbl></span>}
+        <div className="lb-table" style={{ marginTop: 'var(--space-2)' }}>
+          <div className="lb-row" style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 'var(--space-4)', padding: '6px 0' }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>#</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>{statLabel}</Lbl>
+            {stat !== 'games' && <span className="lb-aux"><Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>rounds</Lbl></span>}
+            {stat !== 'kills' && <span className="lb-aux"><Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>kills</Lbl></span>}
+            {stat !== 'kd' && <span className="lb-aux"><Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>k/d</Lbl></span>}
           </div>
           {board.isPending && <div style={{ padding: '10px 0' }}><Pending label="leaderboard" /></div>}
           {board.isError && <div style={{ padding: '10px 0' }}><Unavailable what="leaderboard" /></div>}
           {data?.length === 0 && (
-            <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', padding: '10px 0' }}>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: '10px 0' }}>
               no data found for this period
             </div>
           )}
@@ -94,21 +94,21 @@ export function Leaderboards() {
               key={row.guid}
               to={`/profile/${row.guid}`}
               className="lb-row"
-              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 14, alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 'var(--space-4)', alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
             >
-              <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{String(row.rank).padStart(2, '0')}</span>
-              <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-              <span className="m" style={{ fontSize: 13, textAlign: 'right', color: 'var(--color-text-100)' }}>{formatValue(stat, row.value)}</span>
-              {stat !== 'games' && <span className="m lb-aux" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{row.rounds}</span>}
-              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills}</span>}
-              {stat !== 'kd' && <span className="m lb-aux" style={{ fontSize: 12, textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>}
+              <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right', color: 'var(--color-text-100)' }}>{formatValue(stat, row.value)}</span>
+              {stat !== 'games' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.rounds}</span>}
+              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills}</span>}
+              {stat !== 'kd' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>}
             </Link>
           ))}
         </div>
         {/* Measured against players_router:1132 — the 50-bullet/rate-cap
           * claim belonged to the RECORDS endpoint, not this one (Codex on
           * #813; my own confident-half). */}
-        <Lbl style={{ fontSize: 9, marginTop: 10 }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
           bots excluded · halves only (r1+r2) · accuracy needs 100+ bullets
         </Lbl>
       </div>
