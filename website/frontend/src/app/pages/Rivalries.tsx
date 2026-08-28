@@ -21,21 +21,25 @@ interface SearchHit { guid: string; name: string }
  * and their 61% one is not. So the rule is on the page, next to the labels.
  */
 
-const CLASS_RULE: Record<string, string> = {
-  PREY: 'you win 70%+',
-  NEMESIS: 'they win 70%+',
-  RIVAL: 'within 40-60%',
-  CONTENDER: 'between those',
-  INSUFFICIENT_DATA: 'fewer than 5 meetings',
-};
+/** Maps, not objects: a lookup by a value that arrives from the API is an
+ * injection sink to every scanner, and the classification names do arrive
+ * from the API (Codacy on #834 — the same shape the layout primitives
+ * settled on for the same reason). */
+const CLASS_RULE = new Map<string, string>([
+  ['PREY', 'you win 70%+'],
+  ['NEMESIS', 'they win 70%+'],
+  ['RIVAL', 'within 40-60%'],
+  ['CONTENDER', 'between those'],
+  ['INSUFFICIENT_DATA', 'fewer than 5 meetings'],
+]);
 
-const CLASS_COLOUR: Record<string, string> = {
-  PREY: 'var(--color-pos)',
-  NEMESIS: 'var(--color-neg)',
-  RIVAL: 'var(--color-accent)',
-  CONTENDER: 'var(--color-text-400)',
-  INSUFFICIENT_DATA: 'var(--color-text-500)',
-};
+const CLASS_COLOUR = new Map<string, string>([
+  ['PREY', 'var(--color-pos)'],
+  ['NEMESIS', 'var(--color-neg)'],
+  ['RIVAL', 'var(--color-accent)'],
+  ['CONTENDER', 'var(--color-text-400)'],
+  ['INSUFFICIENT_DATA', 'var(--color-text-500)'],
+]);
 
 function Badge({ classification }: { classification: string }) {
   return (
@@ -44,7 +48,7 @@ function Badge({ classification }: { classification: string }) {
       style={{
         fontSize: 'var(--fs-caption)',
         letterSpacing: 'var(--track-chip)',
-        color: CLASS_COLOUR[classification] ?? 'var(--color-text-400)',
+        color: CLASS_COLOUR.get(classification) ?? 'var(--color-text-400)',
       }}
     >
       {classification.replace('_', ' ').toLowerCase()}
@@ -159,7 +163,7 @@ function PlayerPanel({ guid }: { guid: string }) {
 
   const d = q.data;
   const nameCounts = new Map<string, number>();
-  for (const row of d?.all_pairs ?? []) {
+  for (const row of d.all_pairs) {
     const name = row.opponent_name || row.name;
     nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
   }
@@ -217,8 +221,8 @@ function PickPlayer({ onPick }: { onPick: (guid: string) => void }) {
   const [query, setQuery] = useState('');
   const [debounced, setDebounced] = useState('');
   useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 300);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => { setDebounced(query.trim()); }, 300);
+    return () => { clearTimeout(timer); };
   }, [query]);
   const search = useQuery({
     queryKey: ['player-search', debounced],
@@ -284,7 +288,7 @@ export function Rivalries() {
       </h1>
 
       <Cluster gap={4} style={{ marginTop: 'var(--space-3)' }}>
-        {Object.entries(CLASS_RULE).map(([name, rule]) => (
+        {[...CLASS_RULE].map(([name, rule]) => (
           <Cluster key={name} gap={1} align="baseline">
             <Badge classification={name} />
             <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>{rule}</span>
