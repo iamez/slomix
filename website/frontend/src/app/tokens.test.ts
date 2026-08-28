@@ -36,7 +36,21 @@ const SOURCES = import.meta.glob('./**/*.{ts,tsx}', {
   eager: true,
 }) as Record<string, string>;
 
-const css = readFileSync('src/app/tokens.css', 'utf8');
+const cssRaw = readFileSync('src/app/tokens.css', 'utf8');
+
+/**
+ * Every check below reads the stylesheet as CODE, never as prose. This file
+ * is heavily commented — including comments that name tokens and quote the
+ * `@theme static` line — and a guard that matches a comment is a guard that
+ * a future paragraph can satisfy without a single declaration behind it
+ * (the class that bit us in #798's source-matching guards). Stripping
+ * comments once, here, is what keeps "declared" meaning declared.
+ */
+export function stripComments(text: string): string {
+  return text.replace(/\/\*[\s\S]*?\*\//g, '');
+}
+
+const css = stripComments(cssRaw);
 
 function appSources(): [string, string][] {
   return Object.entries(SOURCES).filter(
@@ -73,10 +87,17 @@ function luminance(hex: string): number {
 }
 
 describe('design tokens', () => {
-  it('reads the stylesheet it claims to check', () => {
+  it('reads the stylesheet it claims to check, as code and not as prose', () => {
     // An empty read would make every assertion below vacuously true.
-    expect(css.length).toBeGreaterThan(500);
+    expect(cssRaw.length).toBeGreaterThan(500);
     expect(declared.size).toBeGreaterThan(20);
+    // And a token that only a comment mentions is not declared. Without this
+    // the whole file could be satisfied by paragraphs about tokens rather
+    // than by tokens.
+    expect(stripComments('/* --color-ghost: #fff; */\n  --color-real: #000;')).not.toContain(
+      '--color-ghost',
+    );
+    expect(stripComments('/* @theme static { */\n@theme {')).not.toMatch(/@theme\s+static\s*\{/);
   });
 
   it('declares every custom property the app reads', () => {
