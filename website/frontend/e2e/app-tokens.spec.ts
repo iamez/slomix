@@ -52,7 +52,10 @@ test('no element asks for a background it does not get', async ({ page }) => {
     await page.waitForTimeout(500);
     const transparent = await page.evaluate(() => {
       const out: string[] = [];
-      for (const el of document.querySelectorAll<HTMLElement>('[style*="background"]')) {
+      // Array.from, not a spread: tsconfig.e2e.json omits DOM.Iterable, so a
+      // NodeList is not iterable under that project even though it is at run
+      // time (CI's second tsc pass caught this; the app pass did not).
+      for (const el of Array.from(document.querySelectorAll<HTMLElement>('[style*="background"]'))) {
         const wanted = el.getAttribute('style') || '';
         if (!/background[^;]*var\(--/.test(wanted)) continue;
         const got = getComputedStyle(el).backgroundColor;
