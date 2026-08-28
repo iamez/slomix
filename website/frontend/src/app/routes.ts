@@ -44,6 +44,10 @@ export const APP_ROUTES: readonly AppRoute[] = Object.freeze([
   // ?tab= via hashToPath (grammar: route-registry.js parseHash for both keys).
   { key: 'record-book', path: '/record-book', label: 'Record Book', nav: 'stats', phase: 2 },
   { key: 'retro-viz', path: '/retro-viz', label: 'Retro Viz', nav: 'stats', phase: 2 },
+  // Per-round stats the profile (phase 3) and session-detail (phase 4) will
+  // eventually host; a route of its own so the data is reachable now
+  // without colliding with those pages.
+  { key: 'rounds', path: '/rounds', label: 'Rounds', nav: 'stats', phase: 2 },
   { key: 'profile', path: '/profile/:id?', label: 'Profile', nav: 'stats', phase: 3 },
   { key: 'skill-rating', path: '/skill-rating', label: 'ET Rating', nav: 'stats', phase: 3 },
   { key: 'rivalries', path: '/rivalries', label: 'Rivalries', nav: 'stats', phase: 3 },

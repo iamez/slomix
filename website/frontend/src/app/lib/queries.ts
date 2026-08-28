@@ -1,14 +1,42 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import { apiGet } from './api';
 import type {
-  ActivityCalendar, AvailabilityOverview, AwardsLeaderboard, AwardsPage,
-  BuildInfo, ChallengeCurrent, HallOfFame, LeaderboardRow, MapRow,
-  MapSegments, MapStatsRow, RecentRound, RoundViz, SeasonAwards,
-  StatsRecords, WeaponRow, WeaponsByPlayer, WeaponsHallOfFame,
-  LastSession, LiveState, LiveStatus, MatchRow, QuickLeaders, SeasonCurrent,
-  SeasonLeaders, SeasonSummary, SessionLineups, SessionSummary, SkillMovers, StatsOverview,
-  StatsTrends, StorytellingCompleteness, SystemOverview, TonightStatus,
+  ActivityCalendar,
+  AvailabilityOverview,
+  AwardsLeaderboard,
+  AwardsPage,
+  BuildInfo,
+  ChallengeCurrent,
+  HallOfFame,
+  LastSession,
+  LeaderboardRow,
+  LiveState,
+  LiveStatus,
+  MapRow,
+  MapSegments,
+  MapStatsRow,
+  MatchRow,
+  QuickLeaders,
+  RecentRound,
+  RoundViz,
+  SeasonAwards,
+  SeasonCurrent,
+  SeasonLeaders,
+  SeasonSummary,
+  SessionLineups,
+  SessionRounds,
+  SessionSummary,
+  SkillMovers,
+  StatsOverview,
+  StatsRecords,
+  StatsTrends,
+  StorytellingCompleteness,
+  SystemOverview,
+  TonightStatus,
   VoiceCurrent,
+  WeaponRow,
+  WeaponsByPlayer,
+  WeaponsHallOfFame,
 } from './types';
 
 /**
@@ -383,5 +411,22 @@ export function useRoundViz(roundId: number | null) {
       apiGet('/api/rounds/{round_id}/viz', {
         pathParams: { round_id: roundId! },
       }) as Promise<RoundViz>,
+  });
+}
+
+/** Every round of one session, each with its full roster.
+ *
+ * One call instead of 18 to `/rounds/{id}/viz`. Includes rounds that do not
+ * count toward totals (`counts_toward_totals: false`) rather than filtering
+ * them — a player who played a cancelled round has to be able to see it.
+ */
+export function useSessionRounds(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-rounds', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/rounds', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionRounds>,
   });
 }
