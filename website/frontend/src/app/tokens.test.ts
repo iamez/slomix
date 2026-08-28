@@ -215,7 +215,7 @@ describe('design tokens', () => {
      * commit that lowers the count. An allowance nobody is forced to update
      * stops describing anything after the first retrofit (Codex on #823).
      *
-     * 917 raw sizes live in inline styles today across 13 of 34 pages. Left
+     * 1,022 raw sizes live in inline styles today across 14 of 34 pages. Left
      * alone the count passes 2,000 by the last phase, and every one of them
      * is a value the next layout rework has to read and re-decide by hand —
      * worse, 236 style blocks mix layout with look, so a find/replace cannot
@@ -225,7 +225,13 @@ describe('design tokens', () => {
      * same decision typed two ways, and counting only the first would let the
      * pile grow in the form React code most often uses (Codex again).
      */
-    const BUDGET = 917;
+    // 917 when this branch was written; 1,022 after main gained the player
+    // page (#822, 105 of them). A merge from main is the one motion that can
+    // legitimately raise this number — the work predates the guard rather
+    // than defying it — and it is recorded here rather than waved through
+    // with a `<=`. Every other direction is downward, starting with the A4
+    // retrofit.
+    const BUDGET = 1022;
     const SIZE_PROP =
       /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:\d+\b|'[^']*\d+(?:px|em|rem|%)[^']*')/g;
     let count = 0;
