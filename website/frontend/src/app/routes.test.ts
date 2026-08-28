@@ -1,3 +1,7 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 // The legacy registry itself is the oracle — a route added there without a
 // counterpart here must turn this suite red, not become a discovery at
@@ -94,5 +98,39 @@ describe('routes.ts covers the legacy registry', () => {
   it('folded tabs carry the exact legacy tab values', () => {
     expect(hashToPath('#/records')).toBe('/record-book?tab=records');
     expect(hashToPath('#/hall-of-fame')).toBe('/record-book?tab=hof');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// `nav` and the shell's own prefix list are two halves of one fact.
+// ---------------------------------------------------------------------------
+
+describe('routes and the shell agree on what is a stats page', () => {
+  /** Read from source: the list lives in AppShell and nothing joins it to
+   *  `nav: 'stats'`, so a route can be tagged and unrecognised — which renders
+   *  the sub-nav on the way in, then makes the whole strip vanish on arrival
+   *  and leaves the primary tab inactive. `/rounds` shipped that way. */
+  function statsPrefixesFromShell(): string[] {
+    const source = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'components', 'AppShell.tsx'),
+      'utf8',
+    );
+    const block = source.match(/const statsPrefixes = \[([\s\S]*?)\];/);
+    expect(block, 'statsPrefixes moved or was renamed').not.toBeNull();
+    return [...(block as RegExpMatchArray)[1].matchAll(/'([^']+)'/g)].map((m) => m[1]);
+  }
+
+  it('every stats-tagged route is recognised as a stats path', () => {
+    const prefixes = statsPrefixesFromShell();
+    const unrecognised = APP_ROUTES.filter((r) => r.nav === 'stats')
+      .map((r) => r.path)
+      .filter((path) => !prefixes.some((p) => path === p || path.startsWith(`${p}/`)));
+    expect(unrecognised, 'tagged for the stats sub-nav but the shell does not '
+      + 'know them — the strip disappears on arrival').toEqual([]);
+  });
+
+  it('the check can fail', () => {
+    // Without this, a regex that matched nothing would read as "all agree".
+    expect(statsPrefixesFromShell().length).toBeGreaterThan(5);
   });
 });

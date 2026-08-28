@@ -2214,12 +2214,21 @@ class UltimateETLegacyBot(
                 f"❌ Missing argument: {error.param}. Use `!help` for usage."
             )
         elif isinstance(error, commands.CheckFailure):
-            # For channel check failures, just send the custom message without extra error text
             from bot.core.checks import ChannelCheckFailure
             if isinstance(error, ChannelCheckFailure):
-                await ctx.send(str(error))
+                # ⛔ SAY NOTHING. This Discord runs more than one bot, and a
+                # command aimed at another one lands here too. Answering "check
+                # functions failed" makes ours interrupt a conversation it is
+                # not part of — which is what `!teams` did on 2026-08-27, four
+                # times, while the user was talking to the team-building bot.
+                logger.debug(
+                    "Channel check declined !%s in #%s — staying quiet",
+                    ctx.command.name if ctx.command else "unknown",
+                    getattr(ctx.channel, "id", "?"),
+                )
             else:
-                # Other check failures
+                # A permission or role check, not a channel one: the user asked
+                # THIS bot for something and deserves to hear why not.
                 await ctx.send(f"❌ {sanitize_error_message(error)}")
         else:
             error_logger = get_logger('bot.errors')
