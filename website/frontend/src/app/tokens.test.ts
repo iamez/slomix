@@ -50,12 +50,30 @@ export function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
+/**
+ * The same rule for TS/TSX. It matters for exactly the reason the CSS one
+ * does: a component that documents `var(--space-${step})` in a comment would
+ * otherwise be recorded as READING a token named `--space-`, which nothing
+ * declares — the guard would fail on prose while the code was correct, and
+ * the tempting fix would be to reword the comment rather than to read code.
+ *
+ * Line comments are stripped only when the line begins with `//` or with a
+ * `*` continuation, never mid-line: `'https://…'` inside a string must not
+ * take the rest of its line with it.
+ */
+export function stripJsComments(text: string): string {
+  return stripComments(text)
+    .split('\n')
+    .filter((line) => !/^\s*(\/\/|\*)/.test(line))
+    .join('\n');
+}
+
 const css = stripComments(cssRaw);
 
 function appSources(): [string, string][] {
-  return Object.entries(SOURCES).filter(
-    ([file]) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'),
-  );
+  return Object.entries(SOURCES)
+    .filter(([file]) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'))
+    .map(([file, text]) => [file, stripJsComments(text)]);
 }
 
 /** Names the stylesheet declares, from `@theme` and from `:root` alike. */
