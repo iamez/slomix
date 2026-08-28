@@ -83,11 +83,17 @@
   --fs-value: 13px;    /* mono figures in rows, .act */
   --fs-body: 14px;     /* nav, row text */
   --fs-row: 15px;      /* row title */
+  --fs-body-lg: 16px;  /* prose */
+  --fs-row-lg: 17px;   /* card title */
   --fs-lead: 18px;     /* emphasised row */
+  --fs-figure: 22px;   /* small figure, section title */
   --fs-kpi: 26px;      /* KpiTile, .h-section */
+  --fs-kpi-lg: 30px;   /* the evening's figures */
   --fs-title: 34px;    /* page title */
   --fs-display: 40px;  /* profile / session headline */
+  --fs-display-lg: 44px; /* landing headline */
   --fs-hero: 66px;     /* BigScore */
+  --fs-hero-lg: 74px;  /* the evening's score, the largest figure we print */
 
   /* Tracking is part of the same decision: eight values in use, six of which
    * are these. Uppercase text without tracking is not this design. */
