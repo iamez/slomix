@@ -59,9 +59,23 @@ function TypeRow({ token, role }: { token: string; role: string }) {
   const sample = useRef<HTMLSpanElement>(null);
   const [size, setSize] = useState<string | null>(null);
   useLayoutEffect(() => {
-    if (!sample.current) return;
-    const measured = getComputedStyle(sample.current).fontSize;
-    setSize(measured && measured !== '0px' ? measured.replace('px', '') : null);
+    const node = sample.current;
+    if (!node) return undefined;
+    const read = () => {
+      const measured = getComputedStyle(node).fontSize;
+      setSize(measured && measured !== '0px' ? measured.replace('px', '') : null);
+    };
+    read();
+    // Measuring once at mount is measuring at the one moment nobody is
+    // editing. This page is open WHILE tokens change — Vite replaces the
+    // stylesheet without remounting anything — so the sample would resize
+    // and the caption would keep the old number, which is the very failure
+    // this row was rewritten to avoid (Codex on #828). A ResizeObserver
+    // fires on exactly that: the box changed because the font did.
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => { observer.disconnect(); };
   }, [token]);
   return (
     <Cluster gap={4} align="baseline" justify="between" style={{ padding: 'var(--space-1) 0' }}>
@@ -220,7 +234,7 @@ export function DesignCatalog() {
           * after the last row — a workshop misrepresenting the very thing it
           * demonstrates (Codex on #827). `divided` is for children that are
           * NOT rows, as in the type and states benches above. */}
-        <Stack gap={1}>
+        <Stack gap={1} className="rows">
           {SAMPLE_ROWS.map((row) => (
             <Cluster key={row.map} gap={4} justify="between" className="row" style={{ padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-row)' }}>{row.map}</span>

@@ -215,7 +215,7 @@ describe('design tokens', () => {
      * commit that lowers the count. An allowance nobody is forced to update
      * stops describing anything after the first retrofit (Codex on #823).
      *
-     * 1,012 raw sizes live in inline styles today across 14 of 34 pages. Left
+     * 1,010 raw sizes live in inline styles today across 14 of 34 pages. Left
      * alone the count passes 2,000 by the last phase, and every one of them
      * is a value the next layout rework has to read and re-decide by hand —
      * worse, 236 style blocks mix layout with look, so a find/replace cannot
@@ -230,9 +230,15 @@ describe('design tokens', () => {
     // that can legitimately raise this number, since that work predates the
     // guard rather than defying it. 1,012 here: the five copied Pill
     // functions this PR deletes take ten of them with it.
-    const BUDGET = 1012;
+    const BUDGET = 1010;
+    // Zero is not a hand-typed size, it is a RESET: `margin: 0` on an <h1>
+    // inside a Stack cancels the browser default so it cannot add itself to
+    // the gap. Counting it pushed people towards writing `margin: '0'` as a
+    // string to slip past the guard — an evasion the guard invited (reported
+    // by the per-round session, 2026-08-28). A guard that punishes the right
+    // fix teaches the wrong one.
     const SIZE_PROP =
-      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:\d+\b|'[^']*\d+(?:px|em|rem|%)[^']*')/g;
+      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:[1-9]\d*\b|'[^']*[1-9]\d*(?:px|em|rem|%)[^']*')/g;
     let count = 0;
     for (const [, text] of appSources()) {
       count += [...text.matchAll(SIZE_PROP)].length;

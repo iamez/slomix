@@ -206,6 +206,15 @@ body {
   background: var(--color-ink-800);
 }
 
+/* A list of rows ends where its last row ends. `.row` gives every row its
+ * bottom hairline, which is right between neighbours and wrong after the
+ * last one — a rule hanging under nothing (Codex on #828). Wrap a list in
+ * `.rows` and the trailing line goes away, without any row having to know
+ * whether it happens to be last. */
+.rows > .row:last-child {
+  border-bottom: 0;
+}
+
 /* <Stack divided>: the hairline goes BETWEEN children, so the last child has
  * no trailing line to trim. An inline style cannot express `> * + *`, which
  * is the whole reason this rule lives here and not in the component. */

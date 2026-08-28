@@ -90,6 +90,10 @@ describe('DesignCatalog', () => {
     expect(bench).not.toBeNull();
     expect(bench?.querySelectorAll('.row').length).toBe(3);
     expect(bench?.querySelectorAll('.stack-divided').length).toBe(0);
+    // …and the list does not end on a rule hanging under nothing: `.rows`
+    // clears the last row's border in CSS, so no row has to know whether it
+    // happens to be last (Codex on #828).
+    expect(bench?.querySelector('.rows')).not.toBeNull();
   });
 
   it('reads the type sizes off the page instead of repeating them', () => {
