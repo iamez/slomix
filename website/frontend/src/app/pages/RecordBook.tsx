@@ -117,7 +117,7 @@ function RecordCard({ label, rows }: { label: string; rows: RecordEntry[] }) {
         <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 4 }}>{top.map} · {top.date}</div>
       </button>
       {open && rows.length > 1 && (
-        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
+        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-900)' }}>
           {rows.slice(1).map((r, i) => (
             /* Each rank can come from a DIFFERENT map and date — the legacy
              * top-5 modal showed both, and dropping them made ranks 2-5
@@ -235,7 +235,7 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
         })}
       </div>
       {rest.length > 0 && (
-        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
+        <div style={{ marginTop: 10, borderTop: '1px solid var(--color-rule-900)' }}>
           {visible.map((e) => {
             const inner = (<>
               <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{String(e.rank).padStart(2, '0')}</span>

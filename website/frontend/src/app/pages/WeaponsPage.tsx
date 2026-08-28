@@ -115,7 +115,7 @@ function WeaponsGrid({ period, category }: { period: string; category: string })
           return (
             <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,140px) 1fr auto auto auto', gap: 12, alignItems: 'center', padding: '7px 0' }}>
               <span style={{ fontSize: 14, letterSpacing: '0.03em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
-              <span style={{ height: 5, background: 'var(--color-rule-800)', display: 'block', position: 'relative' }}>
+              <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                 <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(share * 2, 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
               </span>
               <span className="m" style={{ fontSize: 12 }}>{w.kills.toLocaleString('en-US')}</span>

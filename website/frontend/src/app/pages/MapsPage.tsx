@@ -175,7 +175,7 @@ export function MapsPage() {
                     * COUNTS can. */}
                   {m.allies_wins + m.axis_wins > 0 && m.allies_win_rate != null && m.axis_win_rate != null ? (
                     <div style={{ marginTop: 10 }}>
-                      <div style={{ display: 'flex', height: 5, background: 'var(--color-rule-800)' }}>
+                      <div style={{ display: 'flex', height: 5, background: 'var(--color-rule-900)' }}>
                         <span style={{ width: `${m.allies_win_rate}%`, background: 'var(--color-accent)', display: 'block' }} />
                         <span style={{ width: `${m.axis_win_rate}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
                       </div>

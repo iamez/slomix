@@ -10,14 +10,34 @@
  * docs/design/03_TOKENI_IN_STIL with its one amendment: labels lightened from
  * #6b6862 to #807c75 to clear WCAG AA at 10px, 3.55 -> 4.74 against the
  * ground). Colour carries exactly four meanings here — side, team, better/
- * worse, provenance — a metric never gets a colour of its own. */
-@theme {
+ * worse, provenance — a metric never gets a colour of its own.
+ *
+ * `static` is load-bearing, not decoration. Tailwind v4 emits only the theme
+ * variables some CSS rule or generated utility references, and a `var(--x)`
+ * written inside a React `style={{}}` is not such a reference. Measured on
+ * the live dev page before this change: 9 of 29 tokens were absent from
+ * getComputedStyle(:root) — ink-850, rule-600, allies, axis and all four
+ * speed bands — i.e. exactly the colours proximity and the spider web are
+ * meant to draw with. `static` emits every declaration whether or not the
+ * build can see it used. */
+@theme static {
+  /* Ground. The names follow the handoff's TOKENS.md so the two never drift:
+   * 950 page, 900 sub-nav/opened row, 850 boxes and tiles, 800 row hover. */
   --color-ink-950: #0b0b0a;
   --color-ink-900: #0e0e0d;
-  --color-ink-850: #101010;
-  --color-rule-800: #171715;
+  --color-ink-850: #0f0f0e;
+  --color-ink-800: #101010;
+
+  /* Rules — the only separator this design has. 900 is the row hairline
+   * (the one used everywhere), 800 a box border, 700 a chip border, 600 a
+   * table head, 500 an action underline, 400 an active chip border. */
+  --color-rule-900: #171715;
+  --color-rule-800: #22221d;
   --color-rule-700: #26251f;
   --color-rule-600: #2b2b27;
+  --color-rule-500: #45433d;
+  --color-rule-400: #4a5a66;
+
   --color-text-100: #eae7e1;
   --color-text-200: #cfcbc3;
   --color-text-300: #a8a29a;
@@ -33,6 +53,8 @@
   --color-accent-warm: #c9a86b;
   --color-pos: #8fae8a;
   --color-neg: #b0847c;
+  --color-neg-strong: #c99090;
+  --color-ice: #9fb8c9;
   --color-allies: #8bb0d6;
   --color-axis: #d1857c;
   --color-speed-1: #575651;
@@ -42,12 +64,59 @@
   --font-cond: 'Barlow Condensed', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --radius: 0px;
+
+  /* ── Type scale (handoff TOKENS.md "Type scale") ────────────────────────
+   * The owner is going to rework layout and controls repeatedly — the theme
+   * stays, the arrangement changes. That only stays cheap if a size is a
+   * NAME, not a number typed into a style attribute: 352 raw `fontSize:`
+   * numbers across 13 pages spread over 23 distinct values, of which the top
+   * six already cover 82 %. The long tail is noise, not intent, so the scale
+   * below is the six that do the work plus the headline steps. */
+  --fs-caption: 9px;   /* note under a figure */
+  --fs-label: 10px;    /* .lbl */
+  --fs-micro: 11px;    /* state lines, empty states */
+  --fs-small: 12px;    /* chips, secondary cells */
+  --fs-value: 13px;    /* mono figures in rows, .act */
+  --fs-body: 14px;     /* nav, row text */
+  --fs-row: 15px;      /* row title */
+  --fs-lead: 18px;     /* emphasised row */
+  --fs-kpi: 26px;      /* KpiTile, .h-section */
+  --fs-title: 34px;    /* page title */
+  --fs-display: 40px;  /* profile / session headline */
+  --fs-hero: 66px;     /* BigScore */
+
+  /* Tracking is part of the same decision: eight values in use, six of which
+   * are these. Uppercase text without tracking is not this design. */
+  --track-tight: 0.02em;
+  --track-title: 0.03em;
+  --track-wide: 0.04em;
+  --track-row: 0.05em;
+  --track-chip: 0.08em;
+  --track-act: 0.14em;
+  --track-label: 0.24em;
+
+  /* ── Spacing scale ──────────────────────────────────────────────────────
+   * 380 raw margin/gap/padding numbers over 25 distinct values; marginTop's
+   * top six cover only 64 %, the widest scatter in the app. Eight steps,
+   * deliberately fewer than the values in use today: call sites snap to them
+   * in the retrofit, not here, so this commit stays visually neutral. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 28px;
+  --space-7: 40px;
+  --space-8: 56px;
 }
 
 /* One animation constant for the whole app (the prototypes shipped four
- * different durations; 950 ms is the README's number and the survivor). */
+ * different durations; 950 ms is the README's number and the survivor).
+ * `--layout-max` is the second thing the prototypes never agreed on: their
+ * containers run 940–1740px. One number, declared once, read by the shell. */
 :root {
   --anim-ms: 950ms;
+  --layout-max: 1180px;
 }
 @media (prefers-reduced-motion: reduce) {
   :root {
@@ -75,6 +144,77 @@ body {
   letter-spacing: 0.24em;
   text-transform: uppercase;
   color: var(--color-text-500);
+}
+
+/* The rest of the handoff's utility set (TOKENS.md "Utility classes to add").
+ * These are the shapes the component library builds on; a page should reach
+ * for a component, and a component for one of these — never for a hand-typed
+ * copy of the same five declarations. */
+
+/* Smaller than a label, for a note under a figure. */
+.caption {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-text-500);
+}
+
+/* Every clickable piece of text. Never reuse .lbl for an action — a label
+ * that turns out to be a link is the design's one unforgivable lie. */
+.act {
+  font-size: 13px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-text-200);
+  border-bottom: 1px solid var(--color-rule-500);
+  padding-bottom: 3px;
+  text-decoration: none;
+}
+.act:hover {
+  color: #fff;
+  border-bottom-color: var(--color-accent);
+}
+
+/* Framed toggle (metric pickers, period pickers, POV switch). The pressed
+ * state is carried by aria-pressed, so the accessible name and the visible
+ * state cannot disagree. */
+.chip {
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid var(--color-rule-700);
+  background: transparent;
+  color: var(--color-text-400);
+  padding: 5px 9px;
+  cursor: pointer;
+}
+.chip[aria-pressed='true'] {
+  color: var(--color-text-100);
+  border-color: var(--color-rule-400);
+  background: #151a1e;
+}
+
+/* A row is a hairline and a hover — never a card. */
+.row {
+  border-bottom: 1px solid var(--color-rule-900);
+}
+.row:hover {
+  background: var(--color-ink-800);
+}
+
+.h-section {
+  font-size: 26px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+
+/* Reading text (About, explanations) — the one place with a measure. */
+.prose-body {
+  font-size: 16px;
+  line-height: 1.62;
+  color: #c4c0b8;
+  max-width: 62ch;
 }
 
 :focus-visible {

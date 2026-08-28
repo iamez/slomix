@@ -46,7 +46,7 @@ function TopBand() {
   const live = useLiveStatus();
   const data = live.isError ? undefined : live.data;
   return (
-    <div data-parity="home.status-band" style={{ borderBottom: '1px solid var(--color-rule-800)', background: 'var(--color-ink-800)', margin: '0 -8px', padding: '12px 8px' }}>
+    <div data-parity="home.status-band" style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-800)', margin: '0 -8px', padding: '12px 8px' }}>
       <div className="landing-split" style={{ gap: 34 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -179,7 +179,7 @@ function EveningFigures() {
     { k: 'revives', v: sum((p) => p.revives_given).toLocaleString('en-US') },
   ];
   return (
-    <div data-parity="home.evening-figures" className="home-grid-5" style={{ marginTop: 42, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
+    <div data-parity="home.evening-figures" className="home-grid-5" style={{ marginTop: 42, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
       {cells.map((c) => (
         <div key={c.k} style={{ padding: '18px 0 16px' }}>
           <div className="m" style={{ fontSize: 30, lineHeight: 1 }}>{c.v}</div>
@@ -206,7 +206,7 @@ function Insights() {
       {values && values.length > 1 ? (
         <>
           <svg viewBox="0 0 320 110" style={{ width: '100%', display: 'block', marginTop: 10 }}>
-            <line x1="0" y1="96" x2="320" y2="96" stroke="var(--color-rule-800)" strokeWidth="1" />
+            <line x1="0" y1="96" x2="320" y2="96" stroke="var(--color-rule-900)" strokeWidth="1" />
             <path d={sparkPath(values, 320, 110, 14)} fill="none" stroke={color} strokeWidth="1.4" />
           </svg>
           <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 6 }}>
@@ -219,7 +219,7 @@ function Insights() {
     </div>
   );
   return (
-    <div data-parity="home.insights" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
+    <div data-parity="home.insights" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
       <SectionHead
         label="how busy we have been"
         aside={
@@ -253,7 +253,7 @@ function Insights() {
             {mapRows.map(([name, n]) => (
               <div key={name} style={{ display: 'grid', gridTemplateColumns: '104px 1fr 26px', gap: 10, alignItems: 'center', padding: '3px 0' }}>
                 <span className="m" style={{ fontSize: 11, color: 'var(--color-text-300)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
-                <span style={{ height: 5, background: 'var(--color-rule-800)', display: 'block', position: 'relative' }}>
+                <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((n / mapMax) * 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
                 </span>
                 <span className="m" style={{ fontSize: 11, textAlign: 'right', color: 'var(--color-text-500)' }}>{n}</span>
@@ -310,7 +310,7 @@ function SeasonBlock() {
   return (
     <div data-parity="home.season">
       <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 9 }}>{s.days_left} days left</span>} />
-      <div style={{ height: 3, background: 'var(--color-rule-800)', marginTop: 10, position: 'relative' }}>
+      <div style={{ height: 3, background: 'var(--color-rule-900)', marginTop: 10, position: 'relative' }}>
         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct.toFixed(0)}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
       </div>
       <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 7 }}>{s.start_date} → {s.end_date}</div>
@@ -327,7 +327,7 @@ function SeasonBlock() {
       )}
       {leaders.isError && <div style={{ marginTop: 12 }}><Unavailable what="season leaders" /></div>}
       {leaderRows.length > 0 && (
-        <div style={{ marginTop: 16, borderTop: '1px solid var(--color-rule-800)' }}>
+        <div style={{ marginTop: 16, borderTop: '1px solid var(--color-rule-900)' }}>
           {leaderRows.map(({ k, row }) => (
             <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 10, alignItems: 'baseline', padding: '8px 0' }}>
               <Lbl style={{ fontSize: 9 }}>{k}</Lbl>
@@ -451,7 +451,7 @@ function PulseRow() {
   const challenge = useChallengeCurrent();
   const md = movers.isError ? undefined : movers.data;
   return (
-    <div data-parity="home.pulse" className="landing-split" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
+    <div data-parity="home.pulse" className="landing-split" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
       <div>
         <SectionHead label={`form movers · ${md?.metric_label?.toLowerCase() ?? 'vs own recent form'}`} />
         {movers.isPending && <div style={{ marginTop: 12 }}><Pending label="movers" /></div>}
@@ -699,13 +699,13 @@ export function Home() {
         kills-per-minute trace: no per-minute series is recorded for an evening yet
       </Lbl>
       <Insights />
-      <div className="home-cols3" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div className="home-cols3" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
         <SeasonBlock />
         <LatestGames />
         <QuickLeadersPanel />
       </div>
       <PulseRow />
-      <div className="landing-split" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div className="landing-split" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
         <Tonight />
         <FindYourStats />
       </div>
@@ -713,7 +713,7 @@ export function Home() {
         <EarlierEvenings />
         <GoDeeper />
       </div>
-      <div data-parity="home.standing" className="landing-quad" style={{ marginTop: 56, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div data-parity="home.standing" className="landing-quad" style={{ marginTop: 56, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
         <StandingFigures />
       </div>
       {/* The canon's page footer is omitted: AppShell already renders the
