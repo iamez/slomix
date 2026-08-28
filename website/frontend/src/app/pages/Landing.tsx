@@ -101,7 +101,7 @@ function LivePanel() {
       </div>
       {/* The voice row renders from its own query — a dead game server must
         * not silence a perfectly healthy voice report (Codex on #806). */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-900)' }}>
         {/* ⛔ A STALE REPORT IS NOT A GREEN DOT. The count alone drove this,
           * so an undateable report — `status: "stale"` with `age_seconds:
           * null` — rendered a green dot beside a bare "3 in voice" (Codex on
@@ -297,7 +297,7 @@ export function Landing() {
         </div>
       </div>
 
-      <div className="landing-quad" data-parity="landing.figures" style={{ marginTop: 48, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div className="landing-quad" data-parity="landing.figures" style={{ marginTop: 48, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
         {overview.isPending && <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>}
         {(overview.isError || overviewSuspect) && <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>}
         {overviewData && !overviewSuspect && (
@@ -393,7 +393,7 @@ export function Landing() {
         </div>
       </div>
 
-      <div data-parity="landing.cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, marginTop: 56, paddingTop: 22, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div data-parity="landing.cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, marginTop: 56, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
         <div>
           <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             Played with us? Your stats are already in here.

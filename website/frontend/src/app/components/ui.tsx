@@ -28,7 +28,7 @@ export const actStyle: CSSProperties = {
   paddingBottom: 3,
 };
 
-export const rowStyle: CSSProperties = { borderBottom: '1px solid var(--color-rule-800)' };
+export const rowStyle: CSSProperties = { borderBottom: '1px solid var(--color-rule-900)' };
 
 export function Lbl({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <div style={{ ...lblStyle, ...style }}>{children}</div>;
@@ -69,11 +69,65 @@ export function StatusDot({ state }: { state: 'ok' | 'warn' | 'error' | 'idle' |
     state === 'ok' ? 'var(--color-pos)'
     : state === 'warn' ? 'var(--color-accent-warm)'
     : state === 'error' ? 'var(--color-neg)'
-    : '#454340';
+    : 'var(--color-idle)';
   return (
     <span
       style={{ width: 6, height: 6, borderRadius: '50%', flex: 'none', alignSelf: 'center', background: color, display: 'inline-block' }}
     />
+  );
+}
+
+/**
+ * A framed toggle. This shape existed five times — byte-for-byte identical
+ * `Pill` functions in Awards, Leaderboards, MapsPage, RecordBook and
+ * WeaponsPage — which is five places to edit when the owner reworks the
+ * controls, and five chances for one of them to drift.
+ *
+ * The pressed state rides on `aria-pressed`, so what a screen reader is told
+ * and what the eye sees cannot disagree; the styling is the `.chip` class,
+ * so a rework happens in the stylesheet rather than in five files.
+ */
+export function Chip({
+  active, label, onClick, title,
+}: { active: boolean; label: ReactNode; onClick: () => void; title?: string }) {
+  return (
+    <button type="button" className="chip" aria-pressed={active} onClick={onClick} title={title}>
+      {label}
+    </button>
+  );
+}
+
+/**
+ * Tabs — one selected at a time, the underline carrying the state. Same
+ * decision as a Chip, worn differently, so it takes the same shape of props
+ * rather than inventing a second one.
+ *
+ * `aria-selected` on a `tablist` is what makes the group announce itself as
+ * a set with one chosen member; a row of independent buttons does not.
+ */
+export function Tabs<T extends string>({
+  tabs, current, onSelect, parity,
+}: {
+  tabs: readonly { key: T; label: ReactNode }[];
+  current: T;
+  onSelect: (key: T) => void;
+  parity?: string;
+}) {
+  return (
+    <div role="tablist" data-parity={parity} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+      {tabs.map((t) => (
+        <button
+          key={t.key}
+          type="button"
+          role="tab"
+          className="tab"
+          aria-selected={t.key === current}
+          onClick={() => { onSelect(t.key); }}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

@@ -100,26 +100,41 @@ export interface SessionSummary {
   formatted_date: string;
 }
 
-/** One row of the quick-leaders boards. The participation field differs per
- * board — xp rows carry `rounds`, dpm_sessions rows carry `sessions`
- * (players_router; Codex on #806) — so both are optional here rather than
- * one board lying about the other's shape. */
-export interface QuickLeaderRow {
+/** One row of the XP board — participation field is `rounds`, mirroring
+ * the backend's XpLeaderRow (players_router, #812). A single row type with
+ * both fields optional let either board claim the other's shape, which is
+ * exactly what response_model now forbids server-side. */
+export interface XpLeaderRow {
   rank: number;
   guid: string;
   name: string;
   value: number;
-  rounds?: number;
-  sessions?: number;
+  rounds: number;
   label: string;
 }
 
-/** GET /api/stats/quick-leaders — corpus: api_stats_quick_leaders.json */
+/** One row of the DPM board — participation field is `sessions`
+ * (backend DpmLeaderRow, #812). */
+export interface DpmLeaderRow {
+  rank: number;
+  guid: string;
+  name: string;
+  value: number;
+  sessions: number;
+  label: string;
+}
+
+/** Either board's row, for shared rendering (rank/name/value only). */
+export type QuickLeaderRow = XpLeaderRow | DpmLeaderRow;
+
+/** GET /api/stats/quick-leaders — corpus: api_stats_quick_leaders.json.
+ * `errors` is list[str], measured: the producer appends exactly
+ * "xp_query_failed" or "dpm_query_failed" (backend QuickLeaders, #812). */
 export interface QuickLeaders {
   window_days: number;
-  xp: QuickLeaderRow[];
-  dpm_sessions: QuickLeaderRow[];
-  errors: unknown[];
+  xp: XpLeaderRow[];
+  dpm_sessions: DpmLeaderRow[];
+  errors: string[];
 }
 
 /** One stage of the capture chain. detail keys vary per stage. */
@@ -617,4 +632,239 @@ export interface RoundViz {
     most_kills?: { name: string; kills: number };
     most_damage?: { name: string; damage_given: number };
   };
+}
+
+/** GET /api/stats/session/{id}/lineups — corpus: api_stats_session_gaming_session_id_lineups.json
+ * (session 153: two trios, and a real mid-evening team switch). Derived from
+ * lua_round_teams per-round rosters (cumulative since webhook v1.7.3). */
+export interface LineupPlayer {
+  guid: string;
+  name: string;
+}
+
+export interface LineupSwap {
+  out: LineupPlayer;
+  incoming: LineupPlayer;
+}
+
+/** Membership delta of ONE team between two consecutive rounds. A player
+ * moving BETWEEN teams appears as joined on one team and left on the other
+ * in the same round — the UI folds that mirror pair into a single switch. */
+export interface LineupChange {
+  map_name: string;
+  round_number: number;
+  round_id: number;
+  team: 'a' | 'b' | string;
+  joined: LineupPlayer[];
+  left: LineupPlayer[];
+  swaps: LineupSwap[];
+}
+
+export interface TeamLineup {
+  key: 'a' | 'b' | string;
+  name: string;
+  players: LineupPlayer[];
+}
+
+export interface SessionLineups {
+  gaming_session_id: number;
+  teams: TeamLineup[];
+  changes: LineupChange[];
+  /** Rounds with no lua roster (pre-webhook history) — an unmeasured
+   * stretch, never "no changes". */
+  rounds_without_roster: number;
+}
+
+/* ---------- phase 3: the player ---------- */
+
+/** GET /api/players/{id}/profile — corpus:
+ * api_players_identifier_profile.json (recorded with sections=all for vid).
+ * EVERY section carries `available`: a section can be off (no capture, no
+ * rows, a failed sub-query) while the response is a 200, so the page must
+ * read the flag rather than the emptiness of the list below it. */
+export interface ProfileSection {
+  available: boolean;
+  /** Present when a section failed or was skipped — an UNAVAILABLE section
+   * carries ONLY {available, reason}: every list/object below is absent,
+   * not empty (players_profile_router `_ok`). */
+  reason?: string;
+}
+
+export interface ProfileIdentity extends ProfileSection {
+  /** All optional: identity passes through the same `_ok` wrapper, so a
+   * failed subquery leaves {available:false} and nothing else. */
+  guid?: string;
+  name?: string;
+  aliases?: string[];
+  first_seen?: string | null;
+  last_seen?: string | null;
+  rounds?: number;
+  discord_linked?: boolean;
+  /** OBJECTS, not strings (players_profile_router:118-122): the locale-derived
+   * flag is not a verified country, and the twitch handle carries its url. */
+  country?: { flag?: string; country?: string; locale?: string } | null;
+  twitch?: { login?: string; url?: string } | null;
+  /** Sick-leave / alt attribution (migration 073). Two shapes, both measured
+   * live: an ALT carries {role:'alt', primary_guid, primary_name, active,
+   * since}, a PRIMARY carries {role:'primary', alts:[…]}. Statistics stay
+   * separate per GUID — this is attribution only. */
+  identity_link?: {
+    role: 'alt' | 'primary' | string;
+    link_type?: string;
+    reason?: string | null;
+    primary_guid?: string;
+    primary_name?: string;
+    active?: boolean;
+    since?: string | null;
+    alts?: { alt_guid: string; alt_name: string; link_type?: string; active?: boolean; since?: string | null }[];
+  } | null;
+}
+
+export interface ProfileLifetime extends ProfileSection {
+  rounds: number;
+  wins: number;
+  losses: number;
+  win_rate: number;
+  kills: number;
+  deaths: number;
+  kd: number;
+  gibs: number;
+  headshots: number;
+  headshot_kills: number;
+  damage_given: number;
+  damage_received: number;
+  time_played_seconds: number;
+  xp: number;
+}
+
+export interface ProfileSkill extends ProfileSection {
+  et_rating: number | null;
+  tier: string | null;
+  games_rated: number;
+  rank: number | null;
+  total_rated: number | null;
+  percentile: number | null;
+}
+
+export interface ProfileStreaks extends ProfileSection {
+  current_streak: number;
+  /** 'W' | 'L' — the side of the current run. */
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+
+export interface ProfileWeaponRow {
+  weapon: string;
+  kills: number;
+  deaths: number;
+  /** HIT LOCATIONS, not headshot kills — they legitimately exceed kills. */
+  headshots: number;
+  shots: number;
+  hits: number;
+  accuracy: number;
+  hs_accuracy: number;
+}
+
+export interface ProfileWeapons extends ProfileSection {
+  weapons?: ProfileWeaponRow[];
+  overall_accuracy: number | null;
+  overall_hs_accuracy: number | null;
+}
+
+export interface ProfileHitRegions extends ProfileSection {
+  totals?: {
+    head: number; arms: number; body: number; legs: number;
+    head_pct: number; arms_pct: number; body_pct: number; legs_pct: number;
+  } | null;
+}
+
+export interface ProfileMovement extends ProfileSection {
+  tracks?: number;
+  avg_speed: number | null;
+  peak_speed: number | null;
+  sprint_pct: number | null;
+  avg_distance_per_life: number | null;
+  stance?: {
+    standing_pct: number; crouching_pct: number; prone_pct: number;
+  } | null;
+}
+
+export interface ProfileOpponent {
+  guid: string;
+  name: string;
+  kills_by_player: number;
+  kills_on_player: number;
+  total_encounters: number;
+  /** 0..1 from this endpoint (NOT a percentage) — the page formats it. */
+  win_rate: number | null;
+  classification?: string;
+}
+
+export interface ProfileTeammate {
+  guid: string;
+  name: string;
+  rounds_together: number;
+  dpm_with: number | null;
+  /** The DPM DELTA while playing together — this is what the backend SORTS
+   * the teammate lists by (players_profile_router:516), so it is the figure
+   * the column has to lead with. */
+  synergy: number | null;
+  /** percent here, unlike ProfileOpponent.win_rate — measured, not assumed. */
+  win_rate_with: number | null;
+}
+
+export interface ProfileRelationships extends ProfileSection {
+  top_killers?: ProfileOpponent[];
+  top_victims?: ProfileOpponent[];
+  best_teammates?: ProfileTeammate[];
+  worst_teammates?: ProfileTeammate[];
+  baseline_dpm: number | null;
+}
+
+export interface ProfileMapRow {
+  map: string;
+  rounds: number;
+  wins: number;
+  win_rate: number | null;
+  kd: number | null;
+  dpm: number | null;
+}
+
+export interface ProfileMaps extends ProfileSection {
+  maps?: ProfileMapRow[];
+}
+
+export interface ProfileMatchRow {
+  round_id: number;
+  date: string;
+  map: string;
+  round_number: number;
+  kills: number;
+  deaths: number;
+  kd: number | null;
+  dpm: number | null;
+  /** 'W' | 'L' | null — null when the round has no attributed winner. */
+  result: string | null;
+}
+
+export interface ProfileRecentMatches extends ProfileSection {
+  matches?: ProfileMatchRow[];
+}
+
+export interface PlayerProfile {
+  guid: string;
+  generated_at: string;
+  /** Which sections this response actually carries (sorted, server-side). */
+  sections: string[];
+  identity: ProfileIdentity;
+  lifetime: ProfileLifetime;
+  skill: ProfileSkill;
+  streaks: ProfileStreaks;
+  weapons: ProfileWeapons;
+  hit_regions: ProfileHitRegions;
+  movement: ProfileMovement;
+  relationships: ProfileRelationships;
+  maps: ProfileMaps;
+  recent_matches: ProfileRecentMatches;
 }

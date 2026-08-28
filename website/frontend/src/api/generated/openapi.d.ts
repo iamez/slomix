@@ -4077,6 +4077,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/session/{gaming_session_id}/lineups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Session Lineups */
+        get: operations["get_session_lineups_api_stats_session__gaming_session_id__lineups_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/session/{gaming_session_id}/mvp": {
         parameters: {
             query?: never;
@@ -5394,7 +5411,10 @@ export interface components {
              * @default
              */
             description: string;
-            /** File */
+            /**
+             * File
+             * Format: binary
+             */
             file: string;
             /** Poster */
             poster?: string | null;
@@ -5413,7 +5433,10 @@ export interface components {
         };
         /** Body_upload_greatshot_api_greatshot_upload_post */
         Body_upload_greatshot_api_greatshot_upload_post: {
-            /** File */
+            /**
+             * File
+             * Format: binary
+             */
             file: string;
         };
         /** ClientErrorReport */
@@ -5527,6 +5550,38 @@ export interface components {
             /** Value */
             value: number;
         };
+        /**
+         * LineupChange
+         * @description Membership delta of ONE team between two consecutive rounds.
+         */
+        LineupChange: {
+            /** Joined */
+            joined: components["schemas"]["LineupPlayer"][];
+            /** Left */
+            left: components["schemas"]["LineupPlayer"][];
+            /** Map Name */
+            map_name: string;
+            /** Round Id */
+            round_id: number;
+            /** Round Number */
+            round_number: number;
+            /** Swaps */
+            swaps: components["schemas"]["LineupSwap"][];
+            /** Team */
+            team: string;
+        };
+        /** LineupPlayer */
+        LineupPlayer: {
+            /** Guid */
+            guid: string;
+            /** Name */
+            name: string;
+        };
+        /** LineupSwap */
+        LineupSwap: {
+            incoming: components["schemas"]["LineupPlayer"];
+            out: components["schemas"]["LineupPlayer"];
+        };
         /** LinkPlayerRequest */
         LinkPlayerRequest: {
             /** Player Name */
@@ -5628,6 +5683,17 @@ export interface components {
              */
             title: string;
         };
+        /** SessionLineups */
+        SessionLineups: {
+            /** Changes */
+            changes: components["schemas"]["LineupChange"][];
+            /** Gaming Session Id */
+            gaming_session_id: number;
+            /** Rounds Without Roster */
+            rounds_without_roster: number;
+            /** Teams */
+            teams: components["schemas"]["TeamLineup"][];
+        };
         /**
          * StatsOverview
          * @description The homepage figures, as this endpoint actually returns them.
@@ -5681,12 +5747,17 @@ export interface components {
              */
             window_days: number;
         };
+        /** TeamLineup */
+        TeamLineup: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Players */
+            players: components["schemas"]["LineupPlayer"][];
+        };
         /** ValidationError */
         ValidationError: {
-            /** Context */
-            ctx?: Record<string, never>;
-            /** Input */
-            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */
@@ -11824,6 +11895,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_lineups_api_stats_session__gaming_session_id__lineups_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gaming_session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionLineups"];
                 };
             };
             /** @description Validation Error */

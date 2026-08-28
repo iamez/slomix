@@ -139,7 +139,7 @@ function Counted() {
   return (
     <>
       {cells.map((c) => (
-        <div key={c.k} style={{ padding: '18px 16px 16px 0', borderRight: '1px solid var(--color-rule-800)' }}>
+        <div key={c.k} style={{ padding: '18px 16px 16px 0', borderRight: '1px solid var(--color-rule-900)' }}>
           <div className="m" style={{ fontSize: 22, lineHeight: 1 }}>{c.v}</div>
           <Lbl style={{ fontSize: 9, marginTop: 6 }}>{c.k}</Lbl>
         </div>
@@ -259,7 +259,7 @@ export function About() {
         </p>
       </div>
 
-      <div data-parity="admin.figures" className="about-grid-4" style={{ marginTop: 44, borderTop: '1px solid var(--color-rule-700)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div data-parity="admin.figures" className="about-grid-4" style={{ marginTop: 44, borderTop: '1px solid var(--color-rule-700)', borderBottom: '1px solid var(--color-rule-900)' }}>
         <HeadlineFigures />
       </div>
 
@@ -327,7 +327,7 @@ export function About() {
         </div>
       </div>
 
-      <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-900)' }}>
         <h2 style={H2} data-parity="admin.surfaces">The five surfaces</h2>
         <div className="about-grid-5" style={{ marginTop: 18 }}>
           {SURFACES.map((s) => (
@@ -341,7 +341,7 @@ export function About() {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-900)' }}>
         <div>
           <h2 style={H2} data-parity="admin.principles">What we built on purpose</h2>
           <p style={{ ...P, marginTop: 14 }}>
@@ -377,7 +377,7 @@ export function About() {
         </div>
       </div>
 
-      <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-900)' }}>
         <h2 style={H2} data-parity="admin.counted">Counted, live</h2>
         <Lbl style={{ marginTop: 6 }}>
           not a public dataset — one group's games, straight from the database as you read this
@@ -387,7 +387,7 @@ export function About() {
         </div>
       </div>
 
-      <div className="about-cols" style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div className="about-cols" style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-900)' }}>
         <div>
           <h2 style={H2} data-parity="admin.development">Development</h2>
           <p style={{ ...P, marginTop: 14 }}>
@@ -424,7 +424,7 @@ export function About() {
         </div>
       </div>
 
-      <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+      <div style={{ marginTop: 56, paddingTop: 26, borderTop: '1px solid var(--color-rule-900)' }}>
         <h2 style={H2} data-parity="admin.start">Where to start</h2>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20, marginTop: 18 }}>
           {START.map((s) => (
@@ -437,7 +437,7 @@ export function About() {
         </div>
       </div>
 
-      <div className="m" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 52, paddingTop: 14, borderTop: '1px solid var(--color-rule-800)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-text-600, #4d4a44)' }}>
+      <div className="m" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 52, paddingTop: 14, borderTop: '1px solid var(--color-rule-900)', fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--color-text-600, #4d4a44)' }}>
         <span>slomix · built for the et:legacy community</span>
         <span>github.com/iamez/slomix</span>
       </div>

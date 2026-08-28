@@ -64,7 +64,7 @@ function SummaryPanel({ viz }: { viz: RoundViz }) {
         </div>
       </div>
       {highlights.length > 0 && (
-        <div data-parity="retro-viz.highlights" className="home-cols3" style={{ gap: 10, marginTop: 12, borderTop: '1px solid var(--color-rule-800)', paddingTop: 10 }}>
+        <div data-parity="retro-viz.highlights" className="home-cols3" style={{ gap: 10, marginTop: 12, borderTop: '1px solid var(--color-rule-900)', paddingTop: 10 }}>
           {highlights.map((h) => (
             <div key={h.k}>
               <Lbl style={{ fontSize: 9 }}>{h.k}</Lbl>
