@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
 from shared.utils import escape_like_pattern
@@ -21,6 +22,104 @@ from website.backend.routers.api_helpers import (
 
 router = APIRouter()
 logger = get_app_logger("api.records.awards")
+
+
+class AwardLeaderRow(BaseModel):
+    """One row of the awards leaderboard, as this endpoint returns it.
+
+    ⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live
+    response, not the first row: `guid` is null on some of them, and a model
+    that read only row 0 would have typed it `str` and dropped the nulls.
+
+    ⛔ `response_model` FILTERS. A field the handler returns and a model omits
+    disappears from the payload, silently, with a 200 — which is why
+    `tests/unit/test_response_models_drop_nothing.py` compares handler output
+    against the serialised model instead of trusting these classes.
+    """
+
+    rank: int
+    player: str
+    #: Null when the display name could not be resolved back to a guid.
+    guid: str | None
+    award_count: int
+    top_award: str
+    top_award_count: int
+
+
+class AwardLeaderboardFilters(BaseModel):
+    """Echo of the query that produced the rows above."""
+
+    days: int
+    #: Null means "no award_type filter was applied", not "unknown".
+    award_type: str | None
+
+
+class AwardLeaderboard(BaseModel):
+    leaderboard: list[AwardLeaderRow]
+    filters: AwardLeaderboardFilters
+
+
+class AwardRow(BaseModel):
+    """One awarded performance. `value` is a PRE-FORMATTED string, not a
+    number — the handler renders it per award type, so a numeric type here
+    would reject perfectly good rows."""
+
+    award: str
+    player: str
+    guid: str
+    value: str
+    date: str
+    map: str
+    round_number: int
+    round_id: int
+
+
+class AwardsFilters(BaseModel):
+    #: All three are null when the corresponding filter was not requested.
+    player: str | None
+    award_type: str | None
+    days: int | None
+
+
+class AwardsPage(BaseModel):
+    awards: list[AwardRow]
+    total: int
+    limit: int
+    offset: int
+    filters: AwardsFilters
+
+
+class HallOfFameRow(BaseModel):
+    """One entry in a hall-of-fame category.
+
+    `value` is `float` because one category (`most_dpm`) is fractional while the
+    rest are counts. Typing it `int` would silently truncate DPM — a schema is
+    as capable of corrupting a number as of dropping a field.
+    """
+
+    rank: int
+    player_guid: str
+    player_name: str
+    value: float
+    unit: str
+
+
+class HallOfFame(BaseModel):
+    """⚠️ `categories` is left as a plain mapping on purpose.
+
+    Twelve category names are present today (`most_kills`, `most_dpm`, …) and
+    the handler builds them from a list it can extend. Naming them here would
+    make this model the gate on which categories may exist: adding one to the
+    handler without editing this class would drop it from the response with a
+    200. The mapping keeps the row shape typed while leaving the key set open.
+    """
+
+    categories: dict[str, list[HallOfFameRow]]
+    period: str
+    #: Null when no delta window was requested.
+    delta_window_days: int | None
+    generated_at: str
+
 
 
 @router.get("/stats/records")
@@ -191,7 +290,7 @@ async def get_records(
     return results
 
 
-@router.get("/awards/leaderboard")
+@router.get("/awards/leaderboard", response_model=AwardLeaderboard)
 async def get_awards_leaderboard(
     limit: int = 20,
     days: int = 0,
@@ -491,7 +590,7 @@ async def get_player_awards(
     }
 
 
-@router.get("/awards")
+@router.get("/awards", response_model=AwardsPage)
 async def list_awards(
     limit: int = 50,
     offset: int = 0,
@@ -646,7 +745,7 @@ async def list_awards(
     }
 
 
-@router.get("/hall-of-fame")
+@router.get("/hall-of-fame", response_model=HallOfFame)
 async def get_hall_of_fame(
     period: str = "all_time",
     start_date: str | None = None,

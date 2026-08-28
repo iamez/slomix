@@ -23,8 +23,12 @@ function sectionFor(pathname: string): 'stats' | 'telemetry' | null {
   const statsPrefixes = [
     '/sessions', '/sessions2', '/session-detail', '/leaderboards', '/maps',
     '/weapons', '/form', '/awards', '/record-book', '/retro-viz', '/profile',
-    '/skill-rating', '/rivalries', '/story', '/replay',
+    '/skill-rating', '/rivalries', '/story', '/replay', '/rounds',
   ];
+  // ⛔ This list and `nav: 'stats'` in routes.ts are two halves of one fact,
+  // and nothing joins them: a route tagged for the stats sub-nav but missing
+  // here renders the sub-nav, then makes it vanish the moment you click into
+  // the page. `routes.test.ts` now asserts the two agree.
   if (pathname.startsWith('/proximity') || pathname.startsWith('/spider-web')) return 'telemetry';
   if (statsPrefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`))) return 'stats';
   return null;

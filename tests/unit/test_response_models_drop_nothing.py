@@ -168,3 +168,87 @@ async def test_both_boards_are_populated_so_the_comparison_can_see_them():
     # The asymmetry is the reason there are two row models.
     assert "rounds" in raw["xp"][0]
     assert "sessions" in raw["dpm_sessions"][0]
+
+
+# --- Round 2: five endpoints the new SPA reads -------------------------------
+#
+# ⚠️ THESE USE RECORDED RESPONSES, NOT STUBS, and the difference matters.
+# A stub answers what the test author imagined; a recording answers what the
+# service actually produced. Every fixture in `tests/fixtures/api_responses/`
+# was captured from the running dev API, then anonymised — player names and
+# guids replaced, everything else byte-for-byte — because the shape is what a
+# schema must match and the identities are not ours to publish.
+#
+# ⚠️ The fixtures are TRIMMED but not thinned: `api_awards_leaderboard.json`
+# keeps all 20 rows because the `guid: null` values live in the tail. A
+# fixture cut to three rows would have typed that field `str` and this test
+# would have passed while the model dropped nulls in production.
+
+import json as _json
+from pathlib import Path as _Path
+
+from website.backend.routers.records_awards import (
+    AwardLeaderboard,
+    AwardsPage,
+    HallOfFame,
+)
+from website.backend.routers.records_seasons import CurrentSeason
+from website.backend.routers.records_weapons import WeaponsByPlayer
+
+_FIXTURES = _Path(__file__).resolve().parents[1] / "fixtures" / "api_responses"
+
+_RECORDED = [
+    ("api_awards.json", AwardsPage),
+    ("api_awards_leaderboard.json", AwardLeaderboard),
+    ("api_hall-of-fame.json", HallOfFame),
+    ("api_seasons_current.json", CurrentSeason),
+    ("api_stats_weapons_by_player.json", WeaponsByPlayer),
+]
+
+
+@pytest.mark.parametrize(("fixture", "model"), _RECORDED,
+                         ids=[f for f, _ in _RECORDED])
+def test_the_model_drops_nothing_from_a_recorded_response(fixture, model):
+    raw = _json.loads((_FIXTURES / fixture).read_text())
+    modelled = _json.loads(model.model_validate(raw).model_dump_json())
+    lost = missing_keys(raw, modelled)
+    assert not lost, f"{fixture}: {model.__name__} dropped {lost}"
+
+
+@pytest.mark.parametrize(("fixture", "model"), _RECORDED,
+                         ids=[f for f, _ in _RECORDED])
+def test_the_model_changes_no_value_either(fixture, model):
+    """Dropping a field is the loud failure; changing one is the quiet one.
+
+    A `float` typed `int` truncates, an `int` typed `str` stringifies, and
+    `missing_keys` sees a key in both places and calls it a pass. `most_dpm`
+    is fractional while every other hall-of-fame category is a count, so this
+    assertion is the one standing between that model and a silent truncation.
+    """
+    raw = _json.loads((_FIXTURES / fixture).read_text())
+    modelled = _json.loads(model.model_validate(raw).model_dump_json())
+    assert raw == modelled, f"{fixture}: {model.__name__} altered a value"
+
+
+def test_a_null_survives_the_leaderboard_model():
+    """States the premise the fixture exists to carry.
+
+    If a future trim drops the rows where `guid` is null, the two tests above
+    keep passing while the fixture stops proving anything about nullability.
+    This one fails instead.
+    """
+    raw = _json.loads((_FIXTURES / "api_awards_leaderboard.json").read_text())
+    guids = [row["guid"] for row in raw["leaderboard"]]
+    assert None in guids, "fixture no longer carries a null guid to test"
+    modelled = AwardLeaderboard.model_validate(raw).model_dump()
+    assert [r["guid"] for r in modelled["leaderboard"]] == guids
+
+
+def test_the_hall_of_fame_keeps_a_fractional_value():
+    """`most_dpm` is the category that would show an int truncation."""
+    raw = _json.loads((_FIXTURES / "api_hall-of-fame.json").read_text())
+    dpm = raw["categories"]["most_dpm"]
+    assert any(row["value"] % 1 for row in dpm), "fixture has no fractional dpm"
+    modelled = HallOfFame.model_validate(raw).model_dump()
+    assert ([r["value"] for r in modelled["categories"]["most_dpm"]]
+            == [r["value"] for r in dpm])
