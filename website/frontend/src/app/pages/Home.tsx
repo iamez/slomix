@@ -47,38 +47,38 @@ function TopBand() {
   const data = live.isError ? undefined : live.data;
   return (
     <div data-parity="home.status-band" style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-800)', margin: '0 -8px', padding: '12px 8px' }}>
-      <div className="landing-split" style={{ gap: 34 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div className="landing-split" style={{ gap: 'var(--space-6)' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <StatusDot state={data?.game_server.online ? 'ok' : 'idle'} />
-            <span style={{ ...lblStyle, fontSize: 9 }}>game server</span>
+            <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>game server</span>
           </span>
           {live.isPending && <Pending label="server" />}
           {live.isError && <Unavailable what="server" />}
           {data && (
             <>
-              <span className="m" style={{ fontSize: 13 }}>{data.game_server.hostname}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{data.game_server.map ?? '—'}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>
+              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{data.game_server.hostname}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{data.game_server.map ?? '—'}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>
                 {data.game_server.player_count} / {data.game_server.max_players} players
               </span>
               {data.game_server.ping_ms != null && (
-                <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginLeft: 'auto' }}>{data.game_server.ping_ms} ms</span>
+                <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginLeft: 'auto' }}>{data.game_server.ping_ms} ms</span>
               )}
             </>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
             <StatusDot state={(data?.voice_channel.count ?? 0) > 0 ? 'ok' : 'idle'} />
-            <span style={{ ...lblStyle, fontSize: 9 }}>voice</span>
+            <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>voice</span>
           </span>
           {/* voice_channel.error is a failure INSIDE the 200 — its zero is
             * an initialization, not an empty room (Codex wave 3). */}
           {data && (data.voice_channel.error
             ? <Unavailable what="voice" />
             : (
-              <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)' }}>
                 {data.voice_channel.count > 0 ? `${data.voice_channel.count} in voice` : 'No one in voice'}
               </span>
             ))}
@@ -99,51 +99,51 @@ function evening(last: LastSession): { day: string; date: string } {
 
 function Hero() {
   const last = useLastSession();
-  if (last.isPending) return <div style={{ paddingTop: 52 }}><Pending label="last session" /></div>;
-  if (last.isError || !last.isSuccess) return <div style={{ paddingTop: 52 }}><Unavailable what="last session" /></div>;
+  if (last.isPending) return <div style={{ paddingTop: 'var(--space-8)' }}><Pending label="last session" /></div>;
+  if (last.isError || !last.isSuccess) return <div style={{ paddingTop: 'var(--space-8)' }}><Unavailable what="last session" /></div>;
   const d = last.data;
   const when = evening(d);
   // Played pairings, not unique names — the fixture has 4 names over 5
   // R1 rows (same rule as the figures strip).
   const mapsPlayed = d.matches.filter((m) => m.round_number === 1).length;
   return (
-    <div data-parity="home.hero" className="landing-split" style={{ paddingTop: 52, alignItems: 'end' }}>
+    <div data-parity="home.hero" className="landing-split" style={{ paddingTop: 'var(--space-8)', alignItems: 'end' }}>
       <div>
         <Lbl>Last night{d.gaming_session_id != null ? ` · session ${d.gaming_session_id}` : ''}</Lbl>
-        <div style={{ fontSize: 40, letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.05, marginTop: 12 }}>
+        <div style={{ fontSize: 'var(--fs-display)', letterSpacing: '0.04em', textTransform: 'uppercase', lineHeight: 1.05, marginTop: 'var(--space-3)' }}>
           {when.day}<br />{when.date}
         </div>
-        <div className="m" style={{ fontSize: 13, color: 'var(--color-text-400)', marginTop: 12 }}>
+        <div className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)', marginTop: 'var(--space-3)' }}>
           {d.rounds} rounds · {mapsPlayed} maps · {d.player_count} players
         </div>
         {/* No session id on the latest rounds is a supported backend state —
           * the date route is the fallback that still identifies the evening. */}
         <ActLink
           to={d.gaming_session_id != null ? `/session-detail/${d.gaming_session_id}` : `/session-detail/date/${d.date}`}
-          style={{ display: 'inline-block', marginTop: 18 }}
+          style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}
         >
           Open the evening →
         </ActLink>
       </div>
-      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', gap: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'flex-end', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
         {d.scoring.available ? (
           <>
-            <div style={{ textAlign: 'right', paddingBottom: 14 }}>
-              <Lbl style={{ fontSize: 9 }}>box score</Lbl>
-              <Lbl style={{ fontSize: 9, marginTop: 3 }}>sides swap every map</Lbl>
+            <div style={{ textAlign: 'right', paddingBottom: 'var(--space-4)' }}>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>box score</Lbl>
+              <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>sides swap every map</Lbl>
             </div>
             <div style={{ textAlign: 'right' }}>
               <Lbl>{d.scoring.team_a_name.toLowerCase()}</Lbl>
-              <div className="m" style={{ fontSize: 74, lineHeight: 0.84, color: 'var(--color-accent)' }}>{d.scoring.team_a_score}</div>
+              <div className="m" style={{ fontSize: 'var(--fs-hero-lg)', lineHeight: 0.84, color: 'var(--color-accent)' }}>{d.scoring.team_a_score}</div>
             </div>
-            <div className="m" style={{ fontSize: 26, color: '#3f3d38', paddingBottom: 12 }}>/</div>
+            <div className="m" style={{ fontSize: 'var(--fs-kpi)', color: '#3f3d38', paddingBottom: 'var(--space-3)' }}>/</div>
             <div>
               <Lbl>{d.scoring.team_b_name.toLowerCase()}</Lbl>
-              <div className="m" style={{ fontSize: 74, lineHeight: 0.84, color: 'var(--color-accent-warm)' }}>{d.scoring.team_b_score}</div>
+              <div className="m" style={{ fontSize: 'var(--fs-hero-lg)', lineHeight: 0.84, color: 'var(--color-accent-warm)' }}>{d.scoring.team_b_score}</div>
             </div>
           </>
         ) : (
-          <Lbl style={{ fontSize: 9 }}>score not attributed for this session</Lbl>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>score not attributed for this session</Lbl>
         )}
       </div>
     </div>
@@ -179,11 +179,11 @@ function EveningFigures() {
     { k: 'revives', v: sum((p) => p.revives_given).toLocaleString('en-US') },
   ];
   return (
-    <div data-parity="home.evening-figures" className="home-grid-5" style={{ marginTop: 42, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
+    <div data-parity="home.evening-figures" className="home-grid-5" style={{ marginTop: 'var(--space-7)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
       {cells.map((c) => (
         <div key={c.k} style={{ padding: '18px 0 16px' }}>
-          <div className="m" style={{ fontSize: 30, lineHeight: 1 }}>{c.v}</div>
-          <Lbl style={{ marginTop: 6 }}>{c.k}</Lbl>
+          <div className="m" style={{ fontSize: 'var(--fs-kpi-lg)', lineHeight: 1 }}>{c.v}</div>
+          <Lbl style={{ marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
         </div>
       ))}
     </div>
@@ -202,35 +202,35 @@ function Insights() {
   const mapMax = mapRows.length > 0 ? mapRows[0][1] : 1;
   const chart = (label: string, values: number[] | undefined, color: string, note: string) => (
     <div>
-      <Lbl style={{ fontSize: 9 }}>{label}</Lbl>
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{label}</Lbl>
       {values && values.length > 1 ? (
         <>
-          <svg viewBox="0 0 320 110" style={{ width: '100%', display: 'block', marginTop: 10 }}>
+          <svg viewBox="0 0 320 110" style={{ width: '100%', display: 'block', marginTop: 'var(--space-2)' }}>
             <line x1="0" y1="96" x2="320" y2="96" stroke="var(--color-rule-900)" strokeWidth="1" />
             <path d={sparkPath(values, 320, 110, 14)} fill="none" stroke={color} strokeWidth="1.4" />
           </svg>
-          <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 6 }}>
+          <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
             peak {Math.max(...values)} · {note}
           </div>
         </>
       ) : (
-        <div style={{ marginTop: 10 }}>{trends.isPending ? <Pending label="trend" /> : <Unavailable what="trend" />}</div>
+        <div style={{ marginTop: 'var(--space-2)' }}>{trends.isPending ? <Pending label="trend" /> : <Unavailable what="trend" />}</div>
       )}
     </div>
   );
   return (
-    <div data-parity="home.insights" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
+    <div data-parity="home.insights" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
       <SectionHead
         label="how busy we have been"
         aside={
-          <span style={{ display: 'flex', gap: 8 }}>
+          <span style={{ display: 'flex', gap: 'var(--space-2)' }}>
             {RANGES.map((r) => (
               <button
                 key={r}
                 type="button"
                 onClick={() => setDays(r)}
                 style={{
-                  fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
+                  fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
                   border: `1px solid ${days === r ? '#4a5a66' : 'var(--color-rule-700)'}`,
                   background: days === r ? '#151a1e' : 'transparent',
                   color: days === r ? 'var(--color-text-100)' : 'var(--color-text-400)',
@@ -243,24 +243,24 @@ function Insights() {
           </span>
         }
       />
-      {trends.isError && <div style={{ marginTop: 14 }}><Unavailable what="activity" /></div>}
-      <div className="home-cols3" style={{ gap: 34, marginTop: 18 }}>
+      {trends.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="activity" /></div>}
+      <div className="home-cols3" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
         {chart('rounds per day', data?.rounds, 'var(--color-accent)', `last ${days} days`)}
         {chart('players per day', data?.active_players, 'var(--color-pos)', 'unique guids')}
         <div>
-          <Lbl style={{ fontSize: 9 }}>most played maps</Lbl>
-          <div style={{ marginTop: 12 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>most played maps</Lbl>
+          <div style={{ marginTop: 'var(--space-3)' }}>
             {mapRows.map(([name, n]) => (
-              <div key={name} style={{ display: 'grid', gridTemplateColumns: '104px 1fr 26px', gap: 10, alignItems: 'center', padding: '3px 0' }}>
-                <span className="m" style={{ fontSize: 11, color: 'var(--color-text-300)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
+              <div key={name} style={{ display: 'grid', gridTemplateColumns: '104px 1fr 26px', gap: 'var(--space-2)', alignItems: 'center', padding: '3px 0' }}>
+                <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-300)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                 <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((n / mapMax) * 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
                 </span>
-                <span className="m" style={{ fontSize: 11, textAlign: 'right', color: 'var(--color-text-500)' }}>{n}</span>
+                <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', color: 'var(--color-text-500)' }}>{n}</span>
               </div>
             ))}
             {data && mapRows.length === 0 && (
-              <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no maps in this window</div>
+              <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no maps in this window</div>
             )}
           </div>
         </div>
@@ -309,40 +309,40 @@ function SeasonBlock() {
   const activeDays = activeDaysCount > 0 ? activeDaysCount : null;
   return (
     <div data-parity="home.season">
-      <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 9 }}>{s.days_left} days left</span>} />
-      <div style={{ height: 3, background: 'var(--color-rule-900)', marginTop: 10, position: 'relative' }}>
+      <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{s.days_left} days left</span>} />
+      <div style={{ height: 3, background: 'var(--color-rule-900)', marginTop: 'var(--space-2)', position: 'relative' }}>
         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct.toFixed(0)}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
       </div>
-      <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 7 }}>{s.start_date} → {s.end_date}</div>
-      {summary.isError && <div style={{ marginTop: 12 }}><Unavailable what="season figures" /></div>}
+      <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>{s.start_date} → {s.end_date}</div>
+      {summary.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="season figures" /></div>}
       {seasonFigures.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginTop: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
           {seasonFigures.map((f) => (
             <div key={f.k}>
-              <div className="m" style={{ fontSize: 19, lineHeight: 1 }}>{f.v}</div>
-              <Lbl style={{ fontSize: 9, marginTop: 4 }}>{f.k}</Lbl>
+              <div className="m" style={{ fontSize: 'var(--fs-lead)', lineHeight: 1 }}>{f.v}</div>
+              <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>{f.k}</Lbl>
             </div>
           ))}
         </div>
       )}
-      {leaders.isError && <div style={{ marginTop: 12 }}><Unavailable what="season leaders" /></div>}
+      {leaders.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="season leaders" /></div>}
       {leaderRows.length > 0 && (
-        <div style={{ marginTop: 16, borderTop: '1px solid var(--color-rule-900)' }}>
+        <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-rule-900)' }}>
           {leaderRows.map(({ k, row }) => (
-            <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 10, alignItems: 'baseline', padding: '8px 0' }}>
-              <Lbl style={{ fontSize: 9 }}>{k}</Lbl>
-              <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
+            <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '8px 0' }}>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
             </div>
           ))}
         </div>
       )}
       {activeDays != null && (
-        <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 10 }}>
+        <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
           active on {activeDays} of the last {calendar.data?.days} days
         </div>
       )}
-      <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 6 }}>next: {s.next_season_name} starts {s.next_season_start}</div>
+      <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>next: {s.next_season_name} starts {s.next_season_start}</div>
     </div>
   );
 }
@@ -354,27 +354,27 @@ function LatestGames() {
     <div data-parity="home.latest-games">
       <SectionHead
         label="latest games"
-        aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>view all →</Link>}
+        aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>view all →</Link>}
       />
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 'var(--space-3)' }}>
         {matches.isPending && <Pending label="matches" />}
         {matches.isError && <Unavailable what="matches" />}
-        {data?.length === 0 && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no matches recorded yet</div>}
+        {data?.length === 0 && <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no matches recorded yet</div>}
         {data?.map((m) => (
           <Link
             key={m.id}
             to={m.gaming_session_id != null ? `/session-detail/${m.gaming_session_id}` : `/session-detail/date/${m.date}`}
             style={{ ...rowStyle, display: 'block', padding: '11px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
           >
-            <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12 }}>
-              <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {m.team1_players.join(' · ')} vs {m.team2_players.join(' · ')}
               </span>
-              <span className="m" style={{ fontSize: 12, flex: 'none', color: m.outcome === 'Fullhold' ? 'var(--color-pos)' : m.winner === m.team1_name ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', flex: 'none', color: m.outcome === 'Fullhold' ? 'var(--color-pos)' : m.winner === m.team1_name ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>
                 {m.winner.toLowerCase()} · {m.duration}
               </span>
             </span>
-            <span className="m" style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--color-text-500)', marginTop: 5 }}>
+            <span className="m" style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>
               <span>{m.map_name}</span>
               <span>R{m.round_number}</span>
               <span>{m.format}</span>
@@ -394,26 +394,26 @@ function QuickLeadersPanel() {
     <div data-parity="home.quick-leaders">
       <SectionHead
         label="quick leaders"
-        aside={<Link to="/leaderboards" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>view all →</Link>}
+        aside={<Link to="/leaderboards" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>view all →</Link>}
       />
-      {leaders.isPending && <div style={{ marginTop: 12 }}><Pending label="leaders" /></div>}
-      {leaders.isError && <div style={{ marginTop: 12 }}><Unavailable what="leaders" /></div>}
+      {leaders.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="leaders" /></div>}
+      {leaders.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="leaders" /></div>}
       {data && (
         [
           { k: `top xp · ${data.window_days} days`, rows: data.xp.slice(0, 5), failed: data.errors.includes('xp_query_failed') },
           { k: `top dpm per session · ${data.window_days} days`, rows: data.dpm_sessions.slice(0, 5), failed: data.errors.includes('dpm_query_failed') },
         ].map((board) => (
-          <div key={board.k} style={{ marginTop: 14 }}>
-            <Lbl style={{ fontSize: 9 }}>{board.k}</Lbl>
-            <div style={{ marginTop: 8 }}>
+          <div key={board.k} style={{ marginTop: 'var(--space-4)' }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{board.k}</Lbl>
+            <div style={{ marginTop: 'var(--space-2)' }}>
               {board.rows.length === 0 && (board.failed
                 ? <Unavailable what="board" />
-                : <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no data in this window</div>)}
+                : <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no data in this window</div>)}
               {board.rows.map((r) => (
-                <div key={r.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) auto', gap: 10, alignItems: 'baseline', padding: '7px 0' }}>
-                  <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{String(r.rank).padStart(2, '0')}</span>
-                  <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
-                  <span className="m" style={{ fontSize: 12, color: 'var(--color-text-300)' }}>{figure(r.value)}</span>
+                <div key={r.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '7px 0' }}>
+                  <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(r.rank).padStart(2, '0')}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>{figure(r.value)}</span>
                 </div>
               ))}
             </div>
@@ -427,14 +427,14 @@ function QuickLeadersPanel() {
 function MoverLine({ row, dir }: { row: SkillMoverRow; dir: 'up' | 'down' | 'new' }) {
   const color = dir === 'up' ? 'var(--color-pos)' : dir === 'down' ? 'var(--color-neg)' : 'var(--color-text-400)';
   return (
-    <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 64px auto', gap: 10, alignItems: 'center', padding: '6px 0' }}>
-      <span className="m" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+    <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 64px auto', gap: 'var(--space-2)', alignItems: 'center', padding: '6px 0' }}>
+      <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
       {row.series.length > 1 ? (
         <svg viewBox="0 0 64 18" style={{ width: 64, height: 18 }}>
           <path d={sparkPath(row.series, 64, 18, 2)} fill="none" stroke={color} strokeWidth="1" />
         </svg>
       ) : <span />}
-      <span className="m" style={{ fontSize: 11, color }}>
+      <span className="m" style={{ fontSize: 'var(--fs-micro)', color }}>
         {/* A linked sick-leave alternate is a KNOWN player on a spare
           * account — calling them new is false (skill_router sends the
           * link precisely so the UI does not). */}
@@ -451,35 +451,35 @@ function PulseRow() {
   const challenge = useChallengeCurrent();
   const md = movers.isError ? undefined : movers.data;
   return (
-    <div data-parity="home.pulse" className="landing-split" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
+    <div data-parity="home.pulse" className="landing-split" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
       <div>
         <SectionHead label={`form movers · ${md?.metric_label?.toLowerCase() ?? 'vs own recent form'}`} />
-        {movers.isPending && <div style={{ marginTop: 12 }}><Pending label="movers" /></div>}
-        {movers.isError && <div style={{ marginTop: 12 }}><Unavailable what="movers" /></div>}
+        {movers.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="movers" /></div>}
+        {movers.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="movers" /></div>}
         {md && (
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 'var(--space-2)' }}>
             {md.movers_up.slice(0, 3).map((r) => <MoverLine key={r.guid} row={r} dir="up" />)}
             {md.movers_down.slice(0, 2).map((r) => <MoverLine key={r.guid} row={r} dir="down" />)}
             {md.new_players.slice(0, 2).map((r) => <MoverLine key={r.guid} row={r} dir="new" />)}
             {md.movers_up.length + md.movers_down.length + md.new_players.length === 0 && (
-              <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no session to compare yet</div>
+              <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no session to compare yet</div>
             )}
-            <Lbl style={{ fontSize: 9, marginTop: 8 }}>vs each player's own trailing form — not a ranking</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>vs each player's own trailing form — not a ranking</Lbl>
           </div>
         )}
       </div>
       <div>
         <SectionHead label="challenge of the week" />
-        <div style={{ marginTop: 12 }}>
+        <div style={{ marginTop: 'var(--space-3)' }}>
           {challenge.isPending && <Pending label="challenge" />}
           {challenge.isError && <Unavailable what="challenge" />}
           {challenge.data && (challenge.data.challenge ? (
             <>
-              <div style={{ fontSize: 18, letterSpacing: '0.03em', textTransform: 'uppercase' }}>{challenge.data.challenge.title}</div>
-              <div style={{ fontSize: 14, color: 'var(--color-text-400)', marginTop: 4 }}>{challenge.data.challenge.description}</div>
+              <div style={{ fontSize: 'var(--fs-lead)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{challenge.data.challenge.title}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{challenge.data.challenge.description}</div>
             </>
           ) : (
-            <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no challenge this week</div>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no challenge this week</div>
           ))}
         </div>
       </div>
@@ -498,15 +498,15 @@ function Tonight() {
       <Lbl>tonight</Lbl>
       {/* While the tonight check is pending or failed, an idle claim would
         * be a guess — 'Nobody in voice' only after the endpoint answered. */}
-      {tonight.isPending && <div style={{ marginTop: 10 }}><Pending label="tonight" /></div>}
-      {tonight.isError && <div style={{ marginTop: 10 }}><Unavailable what="tonight" /></div>}
+      {tonight.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="tonight" /></div>}
+      {tonight.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="tonight" /></div>}
       {tonight.isSuccess && (
         activeNow ? (
-          <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
+          <div style={{ fontSize: 'var(--fs-figure)', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 'var(--space-2)' }}>
             Playing right now
           </div>
         ) : live.isSuccess ? (
-          <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 10 }}>
+          <div style={{ fontSize: 'var(--fs-figure)', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 'var(--space-2)' }}>
             {/* tonight is deliberately false until the first Lua row lands —
               * players already on the server outrank a voice-based idle
               * claim, and an in-band voice error forbids the claim entirely
@@ -522,28 +522,28 @@ function Tonight() {
         ) : (
           // 'Nobody in voice' is a claim about the room — it needs the
           // voice query to have ANSWERED, not defaulted (Codex wave 2).
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 'var(--space-2)' }}>
             {live.isPending ? <Pending label="voice" /> : <Unavailable what="voice" />}
           </div>
         )
       )}
-      {availability.isPending && <div style={{ marginTop: 12 }}><Pending label="availability" /></div>}
-      {availability.isError && <div style={{ marginTop: 12 }}><Unavailable what="availability" /></div>}
+      {availability.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="availability" /></div>}
+      {availability.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="availability" /></div>}
       {availability.isSuccess && (nextMarked ? (
         <>
-          <Lbl style={{ fontSize: 9, marginTop: 18 }}>marked for {nextMarked.date} — {nextMarked.total}</Lbl>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)' }}>marked for {nextMarked.date} — {nextMarked.total}</Lbl>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {Object.entries(nextMarked.counts).filter(([, n]) => n > 0).map(([status, n]) => (
-              <span key={status} className="m" style={{ fontSize: 13, border: '1px solid var(--color-rule-700)', padding: '5px 9px', color: 'var(--color-text-300)' }}>
+              <span key={status} className="m" style={{ fontSize: 'var(--fs-value)', border: '1px solid var(--color-rule-700)', padding: '5px 9px', color: 'var(--color-text-300)' }}>
                 {status.toLowerCase().replace('_', ' ')} · {n}
               </span>
             ))}
           </div>
         </>
       ) : (
-        <Lbl style={{ fontSize: 9, marginTop: 18 }}>nobody marked for the next {availability.data.days.length} days</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)' }}>nobody marked for the next {availability.data.days.length} days</Lbl>
       ))}
-      <ActLink to="/availability" style={{ display: 'inline-block', marginTop: 16 }}>Mark yourself →</ActLink>
+      <ActLink to="/availability" style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>Mark yourself →</ActLink>
     </div>
   );
 }
@@ -579,26 +579,26 @@ function FindYourStats() {
         aria-label="Find your stats"
         className="m"
         style={{
-          width: '100%', marginTop: 12, background: 'var(--color-ink-800)',
+          width: '100%', marginTop: 'var(--space-3)', background: 'var(--color-ink-800)',
           border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)',
-          fontSize: 13, padding: '10px 11px', boxSizing: 'border-box',
+          fontSize: 'var(--fs-value)', padding: '10px 11px', boxSizing: 'border-box',
         }}
       />
       {trimmed.length >= 2 && (
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 'var(--space-2)' }}>
           {search.isPending && <Pending label="search" />}
           {search.isError && <Unavailable what="search" />}
           {search.data?.length === 0 && (
-            <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no player matches "{trimmed}"</div>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no player matches "{trimmed}"</div>
           )}
           {search.data?.slice(0, 6).map((hit) => (
             <Link key={hit.guid} to={`/profile/${hit.guid}`} style={{ ...rowStyle, display: 'block', padding: '7px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
-              <span className="m" style={{ fontSize: 13 }}>{hit.name}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{hit.name}</span>
             </Link>
           ))}
         </div>
       )}
-      <Lbl style={{ fontSize: 9, marginTop: 10 }}>
+      <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
         {known != null ? `${known} players known · ` : ''}names resolve through every alias we have seen
       </Lbl>
     </div>
@@ -616,23 +616,23 @@ function EarlierEvenings() {
   return (
     <div data-parity="home.earlier">
       <Lbl>earlier evenings</Lbl>
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 'var(--space-3)' }}>
         {sessions.isPending && <Pending label="sessions" />}
         {sessions.isError && <Unavailable what="sessions" />}
-        {data?.length === 0 && <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no sessions recorded yet</div>}
+        {data?.length === 0 && <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no sessions recorded yet</div>}
         {data?.slice(skipFirst, skipFirst + 5).map((row) => (
-          <Link key={row.session_id} to={`/session-detail/${row.session_id}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'baseline', gap: 14, padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
-            <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{row.formatted_date.replace(/,.*$/, '')} {row.date.slice(5)}</span>
-            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
-            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.players} pl</span>
-            <span className="m" style={{ fontSize: 14, minWidth: 58, textAlign: 'right' }}>
+          <Link key={row.session_id} to={`/session-detail/${row.session_id}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'baseline', gap: 'var(--space-4)', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
+            <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{row.formatted_date.replace(/,.*$/, '')} {row.date.slice(5)}</span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.players} pl</span>
+            <span className="m" style={{ fontSize: 'var(--fs-body)', minWidth: 58, textAlign: 'right' }}>
               {row.team_1_score != null && row.team_2_score != null && row.team_1_score + row.team_2_score > 0
                 ? `${row.team_1_score} / ${row.team_2_score}`
                 : '—'}
             </span>
           </Link>
         ))}
-        <ActLink to="/sessions2" style={{ display: 'inline-block', marginTop: 14 }}>All evenings →</ActLink>
+        <ActLink to="/sessions2" style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>All evenings →</ActLink>
       </div>
     </div>
   );
@@ -648,12 +648,12 @@ function GoDeeper() {
   return (
     <div data-parity="home.deeper">
       <Lbl>go deeper</Lbl>
-      <div style={{ marginTop: 12 }}>
+      <div style={{ marginTop: 'var(--space-3)' }}>
         {cards.map((c) => (
-          <Link key={c.title} to={c.to} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline', gap: 16, padding: '13px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
+          <Link key={c.title} to={c.to} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline', gap: 'var(--space-4)', padding: '13px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
             <span>
-              <span style={{ fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', display: 'block' }}>{c.title}</span>
-              <span style={{ fontSize: 14, color: 'var(--color-text-400)' }}>{c.body}</span>
+              <span style={{ fontSize: 'var(--fs-row-lg)', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'block' }}>{c.title}</span>
+              <span style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)' }}>{c.body}</span>
             </span>
           </Link>
         ))}
@@ -678,8 +678,8 @@ function StandingFigures() {
     <>
       {cells.map((c) => (
         <div key={c.k} style={{ padding: '16px 0 14px' }}>
-          <div className="m" style={{ fontSize: 22, lineHeight: 1, color: 'var(--color-text-200)' }}>{c.v}</div>
-          <Lbl style={{ marginTop: 6 }}>{c.k}</Lbl>
+          <div className="m" style={{ fontSize: 'var(--fs-figure)', lineHeight: 1, color: 'var(--color-text-200)' }}>{c.v}</div>
+          <Lbl style={{ marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
         </div>
       ))}
     </>
@@ -688,32 +688,32 @@ function StandingFigures() {
 
 export function Home() {
   return (
-    <div style={{ paddingBottom: 40 }}>
+    <div style={{ paddingBottom: 'var(--space-7)' }}>
       <TopBand />
       <Hero />
       <EveningFigures />
       {/* The canon's kills-per-minute evening trace is ABSENT on purpose: no
         * endpoint serves a per-minute series for an evening. Saying so beats
         * drawing an invented line (landing sparkline rule). */}
-      <Lbl style={{ fontSize: 9, marginTop: 8 }}>
+      <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
         kills-per-minute trace: no per-minute series is recorded for an evening yet
       </Lbl>
       <Insights />
-      <div className="home-cols3" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
+      <div className="home-cols3" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
         <SeasonBlock />
         <LatestGames />
         <QuickLeadersPanel />
       </div>
       <PulseRow />
-      <div className="landing-split" style={{ marginTop: 52, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
+      <div className="landing-split" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
         <Tonight />
         <FindYourStats />
       </div>
-      <div className="landing-split" style={{ marginTop: 56 }}>
+      <div className="landing-split" style={{ marginTop: 'var(--space-8)' }}>
         <EarlierEvenings />
         <GoDeeper />
       </div>
-      <div data-parity="home.standing" className="landing-quad" style={{ marginTop: 56, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
+      <div data-parity="home.standing" className="landing-quad" style={{ marginTop: 'var(--space-8)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
         <StandingFigures />
       </div>
       {/* The canon's page footer is omitted: AppShell already renders the
