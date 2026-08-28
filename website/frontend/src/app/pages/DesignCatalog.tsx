@@ -23,6 +23,15 @@ import {
 
 const SPACES: Space[] = [1, 2, 3, 4, 5, 6, 7, 8];
 
+/** Sample rows: a pair per line rather than two arrays read by index — the
+ * index lookup was a second place a reader had to hold in their head, and a
+ * sink to every scanner that reads a[i] with a variable i. */
+const SAMPLE_ROWS = [
+  { map: 'te_escape2', matches: 293 },
+  { map: 'etl_adlernest', matches: 156 },
+  { map: 'supply', matches: 122 },
+];
+
 const TYPE_SCALE: { token: string; label: string }[] = [
   { token: '--fs-caption', label: 'caption · 9' },
   { token: '--fs-label', label: 'label · 10' },
@@ -179,10 +188,10 @@ export function DesignCatalog() {
 
       <Bench name="rows" note="a hairline and a hover — never a card">
         <Stack gap={1} divided>
-          {['te_escape2', 'etl_adlernest', 'supply'].map((m, i) => (
-            <Cluster key={m} gap={4} justify="between" className="row" style={{ padding: 'var(--space-2) 0' }}>
-              <span style={{ fontSize: 'var(--fs-row)' }}>{m}</span>
-              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{figure([293, 156, 122][i])}</span>
+          {SAMPLE_ROWS.map((row) => (
+            <Cluster key={row.map} gap={4} justify="between" className="row" style={{ padding: 'var(--space-2) 0' }}>
+              <span style={{ fontSize: 'var(--fs-row)' }}>{row.map}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{figure(row.matches)}</span>
             </Cluster>
           ))}
         </Stack>
