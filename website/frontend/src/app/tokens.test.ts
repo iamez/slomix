@@ -215,7 +215,7 @@ describe('design tokens', () => {
      * commit that lowers the count. An allowance nobody is forced to update
      * stops describing anything after the first retrofit (Codex on #823).
      *
-     * 907 raw sizes live in inline styles today across 13 of 34 pages. Left
+     * 1,012 raw sizes live in inline styles today across 14 of 34 pages. Left
      * alone the count passes 2,000 by the last phase, and every one of them
      * is a value the next layout rework has to read and re-decide by hand —
      * worse, 236 style blocks mix layout with look, so a find/replace cannot
@@ -225,7 +225,12 @@ describe('design tokens', () => {
      * same decision typed two ways, and counting only the first would let the
      * pile grow in the form React code most often uses (Codex again).
      */
-    const BUDGET = 907;
+    // 917 when the theme branch was written; 1,022 once main gained the
+    // player page (#822, 105 of them) — a merge from main is the one motion
+    // that can legitimately raise this number, since that work predates the
+    // guard rather than defying it. 1,012 here: the five copied Pill
+    // functions this PR deletes take ten of them with it.
+    const BUDGET = 1012;
     const SIZE_PROP =
       /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:\d+\b|'[^']*\d+(?:px|em|rem|%)[^']*')/g;
     let count = 0;
