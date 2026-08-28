@@ -915,3 +915,53 @@ export interface PlayerProfile {
   maps: ProfileMaps;
   recent_matches: ProfileRecentMatches;
 }
+
+/* ── Rivalries (docs/design/12 row 25) ────────────────────────────────────
+ * Both endpoints answer with `resolved`, which exists because the empty
+ * answer and the unresolvable id used to have the same shape: a player with
+ * fourteen opponents looked exactly like a player with none when the short
+ * GUID was passed (measured 2026-08-28). */
+
+export interface RivalryPair {
+  guid1: string;
+  guid2: string;
+  name1: string;
+  name2: string;
+  kills_1to2: number;
+  kills_2to1: number;
+  total: number;
+  /** Share of encounters won by name1. */
+  win_rate: number;
+  classification: string;
+}
+
+export interface RivalryLeaderboard {
+  status: string;
+  pairs: RivalryPair[];
+  total: number;
+}
+
+export interface RivalryOpponent {
+  opponent_guid: string;
+  opponent_name: string;
+  guid: string;
+  name: string;
+  kills_by_player: number;
+  kills_on_player: number;
+  total_encounters: number;
+  win_rate: number;
+  classification: string;
+}
+
+export interface PlayerRivalries {
+  status: string;
+  /** false = no proximity rows were ever recorded under this id. */
+  resolved?: boolean;
+  player_guid: string;
+  player_name: string | null;
+  nemesis: RivalryOpponent | null;
+  prey: RivalryOpponent | null;
+  rival: RivalryOpponent | null;
+  all_pairs: RivalryOpponent[];
+  total_opponents: number;
+}
