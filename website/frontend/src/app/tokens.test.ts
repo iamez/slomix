@@ -1,5 +1,5 @@
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+/// <reference types="vite/client" />
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -18,24 +18,31 @@ import { describe, expect, it } from 'vitest';
  * This file guards (1) statically, in CI, with no browser. Guarding (2) needs
  * a real page, so it lives in the dev sweep (e2e/app-tokens.spec.ts); the
  * `@theme static` declaration in tokens.css is what makes it pass.
+ *
+ * Enumeration is Vite's `import.meta.glob`, the same shape
+ * lib/fixturesCoverage.test.ts settled on: the bundler resolves the tree at
+ * build time, so there is no filesystem walk and no path built at runtime.
+ * The stylesheet itself is read with one literal path — importing it with
+ * `?raw` yields an empty string here, because the Tailwind Vite plugin owns
+ * .css imports and hands the test environment processed (i.e. nothing)
+ * output. The literal keeps the scanner's question answered and the
+ * emptiness check below turns a wrong working directory into a failure
+ * rather than a silently passing suite.
  */
 
-const APP_DIR = join(__dirname);
-const TOKENS_CSS = join(APP_DIR, 'tokens.css');
+const SOURCES = import.meta.glob('./**/*.{ts,tsx}', {
+  query: '?raw',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>;
 
-function sourceFiles(dir: string, out: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      sourceFiles(full, out);
-    } else if (/\.tsx?$/.test(entry) && !/\.test\.tsx?$/.test(entry)) {
-      out.push(full);
-    }
-  }
-  return out;
+const css = readFileSync('src/app/tokens.css', 'utf8');
+
+function appSources(): [string, string][] {
+  return Object.entries(SOURCES).filter(
+    ([file]) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'),
+  );
 }
-
-const css = readFileSync(TOKENS_CSS, 'utf8');
 
 /** Names the stylesheet declares, from `@theme` and from `:root` alike. */
 const declared = new Set(
@@ -43,21 +50,39 @@ const declared = new Set(
 );
 
 /** Names the application reads, wherever it reads them. */
-const usedIn = new Map<string, string[]>();
-for (const file of sourceFiles(APP_DIR)) {
-  const text = readFileSync(file, 'utf8');
+const usedIn = new Map<string, Set<string>>();
+for (const [file, text] of appSources()) {
   for (const m of text.matchAll(/var\((--[a-z0-9-]+)/g)) {
-    const list = usedIn.get(m[1]) ?? [];
-    list.push(file.slice(APP_DIR.length + 1));
-    usedIn.set(m[1], list);
+    const seen = usedIn.get(m[1]) ?? new Set<string>();
+    seen.add(file);
+    usedIn.set(m[1], seen);
   }
 }
 
+/** Relative luminance — the ramps are ordered by lightness, not by name. */
+function luminance(hex: string): number {
+  const channel = (pair: string) => {
+    const c = parseInt(pair, 16) / 255;
+    return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  return (
+    0.2126 * channel(hex.slice(1, 3)) +
+    0.7152 * channel(hex.slice(3, 5)) +
+    0.0722 * channel(hex.slice(5, 7))
+  );
+}
+
 describe('design tokens', () => {
+  it('reads the stylesheet it claims to check', () => {
+    // An empty read would make every assertion below vacuously true.
+    expect(css.length).toBeGreaterThan(500);
+    expect(declared.size).toBeGreaterThan(20);
+  });
+
   it('declares every custom property the app reads', () => {
     const missing = [...usedIn.entries()]
       .filter(([name]) => !declared.has(name))
-      .map(([name, files]) => `${name} (used in ${[...new Set(files)].join(', ')})`);
+      .map(([name, files]) => `${name} (used in ${[...files].join(', ')})`);
     expect(missing).toEqual([]);
   });
 
@@ -70,28 +95,30 @@ describe('design tokens', () => {
     // footer. Checking only that the values differ would let rule-900 and
     // rule-800 swap — turning every hairline in the app into a box border
     // while the test stayed green (Codex on #823).
-    const luminance = (hex: string) => {
-      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
-      const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
-      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    };
-    const ramp = (prefix: string) =>
-      [...css.matchAll(new RegExp(`^\\s*--color-${prefix}-(\\d+):\\s*(#[0-9a-f]{6});`, 'gm'))]
-        .map((m) => ({ step: Number(m[1]), hex: m[2], lum: luminance(m[2]) }));
+    const ramps = new Map<string, { step: number; hex: string }[]>();
+    for (const m of css.matchAll(/^\s*--color-(ink|rule|text)-(\d+):\s*(#[0-9a-f]{6});/gm)) {
+      const list = ramps.get(m[1]) ?? [];
+      list.push({ step: Number(m[2]), hex: m[3] });
+      ramps.set(m[1], list);
+    }
 
-    for (const prefix of ['ink', 'rule', 'text']) {
-      const steps = ramp(prefix);
-      expect(steps.length, `${prefix} ramp is missing`).toBeGreaterThan(2);
+    expect([...ramps.keys()].sort()).toEqual(['ink', 'rule', 'text']);
+    for (const [name, steps] of ramps) {
+      expect(steps.length, `${name} ramp is missing`).toBeGreaterThan(2);
       const hexes = steps.map((s) => s.hex);
-      expect(new Set(hexes).size, `${prefix} ramp repeats a value`).toBe(hexes.length);
+      expect(new Set(hexes).size, `${name} ramp repeats a value`).toBe(hexes.length);
 
-      const byStep = [...steps].sort((a, b) => a.step - b.step);
-      const wrong = byStep
-        .slice(1)
-        .map((s, i) => ({ prev: byStep[i], cur: s }))
-        .filter(({ prev, cur }) => cur.lum >= prev.lum)
-        .map(({ prev, cur }) => `${prefix}-${cur.step} (${cur.hex}) is not darker than ${prefix}-${prev.step} (${prev.hex})`);
-      expect(wrong, `${prefix} ramp is out of order`).toEqual([]);
+      const wrong: string[] = [];
+      let previous: { step: number; hex: string } | null = null;
+      for (const current of [...steps].sort((a, b) => a.step - b.step)) {
+        if (previous && luminance(current.hex) >= luminance(previous.hex)) {
+          wrong.push(
+            `${name}-${current.step} (${current.hex}) is not darker than ${name}-${previous.step} (${previous.hex})`,
+          );
+        }
+        previous = current;
+      }
+      expect(wrong, `${name} ramp is out of order`).toEqual([]);
     }
   });
 
@@ -108,15 +135,18 @@ describe('design tokens', () => {
   it('carries a type and spacing scale, each monotonic', () => {
     // Layout and controls are going to be reworked repeatedly — that is the
     // owner's plan, not a risk. It stays cheap only while a size is a name.
-    const scale = (prefix: string) =>
-      [...css.matchAll(new RegExp(`^\\s*--${prefix}-([a-z0-9]+):\\s*(\\d+)px;`, 'gm'))].map(
-        (m) => Number(m[2]),
-      );
-    for (const prefix of ['fs', 'space']) {
-      const steps = scale(prefix);
-      expect(steps.length, `${prefix} scale is missing`).toBeGreaterThan(5);
-      expect(steps, `${prefix} scale is not ascending`).toEqual([...steps].sort((a, b) => a - b));
-      expect(new Set(steps).size, `${prefix} scale repeats a step`).toBe(steps.length);
+    const scales = new Map<string, number[]>();
+    for (const m of css.matchAll(/^\s*--(fs|space)-[a-z0-9]+:\s*(\d+)px;/gm)) {
+      const list = scales.get(m[1]) ?? [];
+      list.push(Number(m[2]));
+      scales.set(m[1], list);
+    }
+
+    expect([...scales.keys()].sort()).toEqual(['fs', 'space']);
+    for (const [name, steps] of scales) {
+      expect(steps.length, `${name} scale is missing`).toBeGreaterThan(5);
+      expect(steps, `${name} scale is not ascending`).toEqual([...steps].sort((a, b) => a - b));
+      expect(new Set(steps).size, `${name} scale repeats a step`).toBe(steps.length);
     }
     expect(declared.has('--track-label')).toBe(true);
   });
@@ -137,11 +167,13 @@ describe('design tokens', () => {
      * it, lower the budget with it.
      */
     const BUDGET = 805;
-    const pattern =
-      /\b(fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*\d+\b/g;
     let count = 0;
-    for (const file of sourceFiles(APP_DIR)) {
-      count += [...readFileSync(file, 'utf8').matchAll(pattern)].length;
+    for (const [, text] of appSources()) {
+      count += [
+        ...text.matchAll(
+          /\b(fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*\d+\b/g,
+        ),
+      ].length;
     }
     expect(
       count,
