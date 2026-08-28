@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
+import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DesignCatalog } from './DesignCatalog';
 
@@ -35,6 +36,20 @@ function renderCatalog() {
 }
 
 describe('DesignCatalog', () => {
+  it('leaves no declared colour out of the swatches', () => {
+    // A catalogue that omits a token is worse than no catalogue: it claims
+    // completeness while the piece someone came to check is absent. Seven
+    // were missing on the first pass — team-a/b among them, which is exactly
+    // where a visual regression would hide (Codex on #827).
+    const css = readFileSync('src/app/tokens.css', 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    const declared = [...css.matchAll(/^\s*(--color-[a-z0-9-]+):/gm)].map((m) => m[1]);
+    const page = readFileSync('src/app/pages/DesignCatalog.tsx', 'utf8');
+    const catalogued = new Set(
+      [...page.matchAll(/\{ token: '(--color-[a-z0-9-]+)'/g)].map((m) => m[1]),
+    );
+    expect(declared.filter((name) => !catalogued.has(name))).toEqual([]);
+  });
+
   it('shows every bench, so a missing component is visible', () => {
     renderCatalog();
     for (const bench of ['colour', 'type', 'spacing', 'controls', 'figures', 'states', 'rows']) {
@@ -63,6 +78,26 @@ describe('DesignCatalog', () => {
   it('calls no endpoint, so it opens when the data does not', () => {
     const fetchSpy = renderCatalog();
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('draws each row with one hairline, not two', () => {
+    // .row already carries a bottom border; a `divided` Stack adds a top one
+    // to every child after the first, so the two together drew doubled lines
+    // between neighbours — in the bench whose whole job is to show what a row
+    // looks like (Codex on #827).
+    renderCatalog();
+    const bench = document.querySelector('[data-parity="design.rows"]');
+    expect(bench).not.toBeNull();
+    expect(bench?.querySelectorAll('.row').length).toBe(3);
+    expect(bench?.querySelectorAll('.stack-divided').length).toBe(0);
+  });
+
+  it('reads the type sizes off the page instead of repeating them', () => {
+    // jsdom resolves no stylesheet, so the measurement comes back unusable
+    // and the row says so rather than inventing a number — the same rule the
+    // rest of the app follows about absent values.
+    renderCatalog();
+    expect(screen.getAllByText(/caption ·/).length).toBe(1);
   });
 
   it('names each colour by what it means, not by where it is used', () => {
