@@ -28,7 +28,7 @@ export const actStyle: CSSProperties = {
   paddingBottom: 3,
 };
 
-export const rowStyle: CSSProperties = { borderBottom: '1px solid var(--color-rule-800)' };
+export const rowStyle: CSSProperties = { borderBottom: '1px solid var(--color-rule-900)' };
 
 export function Lbl({ children, style }: { children: ReactNode; style?: CSSProperties }) {
   return <div style={{ ...lblStyle, ...style }}>{children}</div>;

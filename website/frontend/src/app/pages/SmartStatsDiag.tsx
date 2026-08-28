@@ -137,7 +137,7 @@ export function SmartStatsDiag() {
       )}
       {d && d.status !== 'no_data' && (
         <>
-          <div data-parity="smart-stats-diag.boards" className="diag-boards" style={{ marginTop: 26, borderTop: '1px solid var(--color-rule-800)' }}>
+          <div data-parity="smart-stats-diag.boards" className="diag-boards" style={{ marginTop: 26, borderTop: '1px solid var(--color-rule-900)' }}>
             {boards(d).map((b) => (
               <div key={b.label} style={{ paddingTop: 16 }}>
                 <SectionHead label={b.label} aside={<StatusDot state={b.state} />} />
