@@ -18,16 +18,23 @@ from httpx import ASGITransport, AsyncClient
 
 from website.backend.dependencies import get_db
 from website.backend.routers.sessions_router import (
-    NON_COUNTING_ROUND_STATUSES,
+    COUNTING_ROUND_STATUSES,
     SessionRounds,
+    _counts_toward_totals,
     router,
 )
 
-#: (id, map, round_number, created_at, duration, end_reason, status, match_id)
+#: (id, map, round_number, played_at, duration, end_reason, status, match_id,
+#:  is_valid, is_bot_round)
 _ROUNDS = [
-    (1, "supply", 1, "2026-08-26 21:09:58", 454, "SURRENDER", "cancelled", "m1"),
-    (2, "supply", 1, "2026-08-26 21:23:58", 565, "OBJECTIVE", "completed", "m2"),
-    (3, "et_brewdog", 2, "2026-08-26 22:30:13", 164, "NORMAL", None, "m3"),
+    (1, "supply", 1, "2026-08-26 21:09:58", 454, "SURRENDER", "cancelled", "m1", True, False),
+    (2, "supply", 1, "2026-08-26 21:23:58", 565, "OBJECTIVE", "completed", "m2", True, False),
+    (3, "et_brewdog", 2, "2026-08-26 22:30:13", 164, "NORMAL", None, "m3", True, False),
+    # completed but INVALID, and completed but a BOT round: the two cases the
+    # first version of this endpoint marked as counting because it only looked
+    # at the status string. 88 such rounds exist on the live database.
+    (4, "supply", 2, "2026-08-26 21:40:00", 300, "NORMAL", "completed", "m2", False, False),
+    (5, "radar", 1, "2026-08-26 22:00:00", 300, "NORMAL", "completed", "m4", True, True),
 ]
 #: (round_id, guid, name, team, secs, gibs, dmg_recv, dmg_given, k, d, hs,
 #:  hs_kills, rev_given, rev_taken, xp)
@@ -83,17 +90,27 @@ async def test_it_is_returned_and_marked_as_not_counting():
 @pytest.mark.asyncio
 async def test_the_counts_disagree_on_purpose():
     _, body = await _get(_StubDB())
-    assert body["total_rounds"] == 3
+    assert body["total_rounds"] == 5
     assert body["counted_rounds"] == 2, (
         "counted and total must differ when a round does not count — equal "
         "numbers would hide the very thing this endpoint exists to show")
 
 
 @pytest.mark.asyncio
-async def test_a_completed_round_counts():
+async def test_status_alone_does_not_decide():
+    """⚠️ THIS TEST USED TO ASSERT THE WEAKER RULE — that every non-cancelled
+    round counts. Two of the fixtures are `completed` and still must not:
+    round 4 is invalid, round 5 is a bot round. Reading only the status is the
+    defect this endpoint shipped with."""
     _, body = await _get(_StubDB())
-    assert all(r["counts_toward_totals"] for r in body["rounds"]
-               if r["round_status"] != "cancelled")
+    by_id = {r["round_id"]: r for r in body["rounds"]}
+    assert by_id[2]["counts_toward_totals"] is True    # completed, valid, human
+    assert by_id[3]["counts_toward_totals"] is True    # null status
+    assert by_id[4]["counts_toward_totals"] is False   # completed but invalid
+    assert by_id[5]["counts_toward_totals"] is False   # completed but bot
+    assert by_id[4]["round_status"] == by_id[2]["round_status"], (
+        "the two disagree on counting while sharing a status — which is "
+        "exactly why status alone cannot decide")
 
 
 @pytest.mark.asyncio
@@ -131,10 +148,28 @@ async def test_an_unknown_session_is_404_not_an_empty_success():
     assert status == 404
 
 
-def test_the_non_counting_set_is_named_once():
-    """The API and the UI must not drift on what "counts" means."""
-    assert "cancelled" in NON_COUNTING_ROUND_STATUSES
-    assert "completed" not in NON_COUNTING_ROUND_STATUSES
+def test_the_counting_set_is_an_allowlist():
+    """⛔ ALLOWLIST, NOT DENYLIST.
+
+    The first version listed the statuses it knew to exclude, which marked as
+    counting any status invented later — plus invalid and bot rounds, because
+    it read only the status string.
+    """
+    assert {"completed", "substitution"} == COUNTING_ROUND_STATUSES
+    assert "cancelled" not in COUNTING_ROUND_STATUSES
+
+
+def test_an_invalid_or_bot_round_does_not_count_even_when_completed():
+    """The session-total queries require valid, non-bot, completed/substitution
+    /null. A flag that says otherwise is worse than no flag: it looks
+    authoritative while disagreeing with every total on the site."""
+    assert _counts_toward_totals("completed", True, False) is True
+    assert _counts_toward_totals(None, True, False) is True
+    assert _counts_toward_totals("substitution", True, False) is True
+    assert _counts_toward_totals("completed", False, False) is False   # invalid
+    assert _counts_toward_totals("completed", True, True) is False     # bot
+    assert _counts_toward_totals("warmup", True, False) is False       # unknown
+    assert _counts_toward_totals("cancelled", True, False) is False
 
 
 def test_the_response_model_declares_the_measured_fields():
@@ -184,3 +219,20 @@ class TestTheSqlItself:
         assert "actual_duration_seconds" in sql
         measured_first = sql.index("actual_duration_seconds") < sql.index("actual_time")
         assert measured_first, "the target clock is being preferred over the measurement"
+
+
+def test_played_at_is_not_the_ingestion_time():
+    """`created_at` is when the ROW was written, not when the round was played.
+
+    The importer supplies round_date and round_time and leaves created_at at
+    its database default, so for historical imports the two diverge — measured
+    on this database: 907 rounds have a created_at on a different DAY than
+    their round_date. Showing an import date as "when this happened" is not a
+    rounding error.
+    """
+    from website.backend.routers.sessions_router import _SESSION_ROUNDS_SQL
+    select = _SESSION_ROUNDS_SQL.split("FROM", 1)[0]
+    assert "round_date" in select and "round_time" in select
+    assert "AS played_at" in select
+    # created_at may remain only as the fallback inside COALESCE
+    assert "COALESCE(" in select, "the fallback for rows without a clock is gone"

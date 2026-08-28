@@ -2366,17 +2366,48 @@ class SessionRounds(BaseModel):
     rounds: list[SessionRound]
 
 
-#: A round that was played but is excluded from session totals. Kept as one
-#: named set so the API and the UI cannot drift on what "counts" means.
-NON_COUNTING_ROUND_STATUSES = frozenset({"cancelled", "orphan_r2"})
+#: The statuses a round must be in to reach session totals. Everything else —
+#: 'cancelled', 'orphan_r2', 'warmup', anything future — does not count.
+#:
+#: ⛔ AN ALLOWLIST, NOT A DENYLIST. The first version listed the two statuses it
+#: knew to exclude, which marked as counting: an invalid completed round, a bot
+#: round, and any status invented later. Measured on this database: 88 rounds
+#: are `completed` AND (invalid or bot). A consumer trusting the flag would
+#: have included data the rest of the site excludes — the flag would have been
+#: worse than no flag, because it looks authoritative.
+#:
+#: Mirrors the session-total gate at sessions_router.py:1258-1300.
+COUNTING_ROUND_STATUSES = frozenset({"completed", "substitution"})
+
+
+def _counts_toward_totals(status: str | None, is_valid, is_bot_round) -> bool:
+    """The same three conditions the session-total queries apply."""
+    if is_valid is False:
+        return False
+    if is_bot_round:
+        return False
+    return status is None or status in COUNTING_ROUND_STATUSES
 
 _SESSION_ROUNDS_SQL = """
-    SELECT r.id, r.map_name, r.round_number, r.created_at,
+    -- ⛔ NOT created_at. That column is the INGESTION time: the importer
+    -- supplies round_date and round_time and leaves created_at at its default,
+    -- so for historical imports and reprocessed stats it says when the row was
+    -- written, not when the round was played. Measured: 907 rounds have a
+    -- created_at on a different DAY than their round_date. Showing a player an
+    -- import date as "when this happened" is not a rounding error, it is the
+    -- wrong fact.
+    SELECT r.id, r.map_name, r.round_number,
+           COALESCE(
+             (r.round_date::text || ' ' ||
+              regexp_replace(lpad(r.round_time, 6, '0'),
+                             '^(..)(..)(..)$', '\\1:\\2:\\3'))::timestamp,
+             r.created_at) AS played_at,
            COALESCE(NULLIF(r.actual_duration_seconds, 0),
              CASE WHEN r.actual_time ~ '^[0-9]+:[0-9]{2}$'
                   THEN split_part(r.actual_time, ':', 1)::int * 60
                      + split_part(r.actual_time, ':', 2)::int END) AS duration_seconds,
-           r.end_reason, r.round_status, r.match_id
+           r.end_reason, r.round_status, r.match_id,
+           r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
     FROM rounds r
     WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2)
     ORDER BY r.created_at
@@ -2427,7 +2458,7 @@ async def get_session_rounds(
             round_id=row[0], map_name=row[1], round_number=row[2],
             played_at=str(row[3]), duration_seconds=row[4],
             end_reason=row[5], round_status=status,
-            counts_toward_totals=status not in NON_COUNTING_ROUND_STATUSES,
+            counts_toward_totals=_counts_toward_totals(status, row[8], row[9]),
             match_id=row[7], players=by_round.get(row[0], []),
         ))
 

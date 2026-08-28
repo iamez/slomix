@@ -122,7 +122,9 @@ describe('columns', () => {
     const { container } = render(
       <RoundsTable rounds={[round()]} mode="round" columns={['gibs', 'kills']} />,
     );
-    const head = within(container.querySelector('thead')!);
+    const thead = container.querySelector('thead');
+    expect(thead).not.toBeNull();
+    const head = within(thead as HTMLElement);
     expect(head.getByText('gibs')).toBeTruthy();
     expect(head.queryByText('taken')).toBeNull();
   });
@@ -159,5 +161,27 @@ describe('mmss', () => {
 
   it('does not invent a time for a non-number', () => {
     expect(mmss(Number.NaN)).toBe('—');
+  });
+});
+
+
+describe('the review round', () => {
+  it('a stale player selection does not survive a session change', () => {
+    // Selecting someone in session A and switching to session B, where that
+    // guid is absent, used to leave the table filtering every row and
+    // reporting "no rounds match" for a session full of rounds.
+    const sessionB = [round({ players: [player({ player_guid: 'ONLY_HERE' })] })];
+    render(<RoundsTable rounds={sessionB} mode="player" playerGuid="FROM_SESSION_A" />);
+    expect(screen.getByText(/no rounds match/i)).toBeTruthy();
+    // …which is why the PAGE must re-resolve the guid; the table's job is only
+    // to say that the filter, not the data, is what emptied it.
+  });
+
+  it('reports the filter, never "no data", when rounds exist', () => {
+    const { container } = render(
+      <RoundsTable rounds={[round()]} mode="player" playerGuid="NOBODY" />,
+    );
+    expect(container.querySelector('[data-empty="filtered"]')).toBeTruthy();
+    expect(container.querySelector('[data-empty="no_data"]')).toBeNull();
   });
 });

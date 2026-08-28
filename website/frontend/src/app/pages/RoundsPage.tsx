@@ -25,9 +25,23 @@ const SPACE = {
   7: 'var(--space-7, 40px)',
 } as const;
 
-function reasonFor(query: { isPending: boolean; isError: boolean }): EmptyReason {
-  if (query.isPending) return 'loading';
-  if (query.isError) return 'unavailable';
+/** ⛔ A DISABLED QUERY IS PENDING FOREVER IN REACT QUERY v5.
+ *
+ * `useSessionRounds(null)` never runs, so `isPending` stays true — and reading
+ * only the rounds query would render "Loading rounds…" indefinitely when the
+ * real story is that the session LIST failed, or that there are no sessions at
+ * all. The upstream state has to be part of the answer.
+ */
+function reasonFor(
+  rounds: { isPending: boolean; isError: boolean },
+  sessions: { isPending: boolean; isError: boolean },
+  haveSession: boolean,
+): EmptyReason {
+  if (sessions.isError) return 'unavailable';
+  if (sessions.isPending) return 'loading';
+  if (!haveSession) return 'no_data';
+  if (rounds.isError) return 'unavailable';
+  if (rounds.isPending) return 'loading';
   return 'no_data';
 }
 
@@ -51,7 +65,12 @@ export function RoundsPage() {
     return [...seen.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [data]);
 
-  const effectiveGuid = guid || players.at(0)?.[0] || '';
+  // ⛔ A saved selection must be re-checked against the NEW session. Keeping
+  // a guid that this session's roster does not contain leaves the selector
+  // showing a value no option holds, while the table filters every row and
+  // reports "no rounds match" for a session that is full of rounds.
+  const knownGuid = players.some(([g]) => g === guid);
+  const effectiveGuid = (knownGuid ? guid : players.at(0)?.[0]) ?? '';
 
   return (
     <div style={{ paddingTop: SPACE[7], paddingBottom: SPACE[7], maxWidth: 1100 }}>
@@ -72,7 +91,7 @@ export function RoundsPage() {
         <Lbl style={{ fontSize: 'var(--fs-1, 9px)' }}>session</Lbl>
         <select
           value={sessionId ?? ''}
-          onChange={(e) => setPicked(Number(e.target.value))}
+          onChange={(e) => { setPicked(Number(e.target.value)); setGuid(''); }}
           aria-label="session"
           style={{ background: 'transparent', color: 'var(--color-text-100)',
                    border: '1px solid var(--color-rule-900, #1b1b1b)',
@@ -91,7 +110,7 @@ export function RoundsPage() {
             <button
               key={m}
               type="button"
-              onClick={() => setMode(m)}
+              onClick={() => { setMode(m); }}
               aria-pressed={mode === m}
               style={{ all: 'unset', cursor: 'pointer',
                        fontSize: 'var(--fs-3, 12px)',
@@ -107,7 +126,7 @@ export function RoundsPage() {
         {mode === 'player' && players.length > 0 ? (
           <select
             value={effectiveGuid}
-            onChange={(e) => setGuid(e.target.value)}
+            onChange={(e) => { setGuid(e.target.value); }}
             aria-label="player"
             style={{ background: 'transparent', color: 'var(--color-text-100)',
                      border: '1px solid var(--color-rule-900, #1b1b1b)',
@@ -137,7 +156,7 @@ export function RoundsPage() {
             rounds={data?.rounds ?? []}
             mode={mode}
             playerGuid={mode === 'player' ? effectiveGuid : undefined}
-            emptyReason={reasonFor(rounds)}
+            emptyReason={reasonFor(rounds, sessions, sessionId != null)}
           />
         </div>
       </div>

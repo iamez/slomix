@@ -64,12 +64,16 @@ export function mmss(seconds: number): string {
  *  same shape; the reader must be able to tell them apart. */
 export type EmptyReason = 'no_data' | 'unavailable' | 'loading' | 'filtered';
 
-const EMPTY_TEXT: Record<EmptyReason, string> = {
-  no_data: 'No rounds recorded.',
-  unavailable: 'Could not load rounds.',
-  loading: 'Loading rounds…',
-  filtered: 'No rounds match this filter.',
-};
+/** ⛔ A Map, not an object index. `Record<K, V>` types the lookup as always
+ *  present, so `EMPTY_TEXT[reason]` reads as `string` even for a key that is
+ *  not there — the same shape that lets a bad key reach the DOM as
+ *  `undefined`. A Map makes the miss visible to the type system. */
+const EMPTY_TEXT = new Map<EmptyReason, string>([
+  ['no_data', 'No rounds recorded.'],
+  ['unavailable', 'Could not load rounds.'],
+  ['loading', 'Loading rounds…'],
+  ['filtered', 'No rounds match this filter.'],
+]);
 
 function Cell({ children, muted }: { children: ReactNode; muted?: boolean }) {
   return (
@@ -140,7 +144,7 @@ function PlayerRows({
               const value = typeof raw === 'number' ? raw : 0;
               return (
                 <Cell key={c.key}>
-                  {'format' in c && c.format ? c.format(value) : value.toLocaleString()}
+                  {'format' in c ? c.format(value) : value.toLocaleString()}
                 </Cell>
               );
             })}
@@ -221,7 +225,7 @@ export function RoundsTable({
     return (
       <p data-empty={emptyReason}
          style={{ fontSize: FS.small, color: 'var(--color-text-400)' }}>
-        {EMPTY_TEXT[emptyReason]}
+        {EMPTY_TEXT.get(emptyReason)}
       </p>
     );
   }
@@ -235,7 +239,7 @@ export function RoundsTable({
       return (
         <p data-empty="filtered"
            style={{ fontSize: FS.small, color: 'var(--color-text-400)' }}>
-          {EMPTY_TEXT.filtered}
+          {EMPTY_TEXT.get('filtered')}
         </p>
       );
     }
@@ -270,7 +274,7 @@ export function RoundsTable({
                 <td style={{ padding: `${SPACE[1]} ${SPACE[2]}`, fontSize: FS.body }}>
                   <button
                     type="button"
-                    onClick={onSelectRound ? () => onSelectRound(round.round_id) : undefined}
+                    onClick={onSelectRound ? () => { onSelectRound(round.round_id); } : undefined}
                     disabled={!onSelectRound}
                     style={{ all: 'unset', cursor: onSelectRound ? 'pointer' : 'default',
                              color: 'var(--color-text-100)' }}
@@ -290,7 +294,7 @@ export function RoundsTable({
                   const value = typeof raw === 'number' ? raw : 0;
                   return (
                     <Cell key={c.key} muted={!round.counts_toward_totals}>
-                      {'format' in c && c.format ? c.format(value) : value.toLocaleString()}
+                      {'format' in c ? c.format(value) : value.toLocaleString()}
                     </Cell>
                   );
                 })}
