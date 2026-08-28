@@ -29,7 +29,10 @@ import type {
   SessionLineups,
   SessionRounds,
   SessionSummary,
+  SkillFormula,
+  SkillLeaderboard,
   SkillMovers,
+  SsrBoard,
   StatsOverview,
   StatsRecords,
   StatsTrends,
@@ -478,5 +481,30 @@ export function usePlayerRivalries(guid: string | null) {
       apiGet('/api/rivalries/player/{guid}', {
         pathParams: { guid: guid! },
       }) as Promise<PlayerRivalries>,
+  });
+}
+
+/** ET Rating v2.1 — the number the profile shows, with its components. */
+export function useSkillLeaderboard(limit: number) {
+  return useQuery({
+    queryKey: ['skill-leaderboard', limit],
+    queryFn: () =>
+      apiGet('/api/skill/leaderboard', { query: { limit } }) as Promise<SkillLeaderboard>,
+  });
+}
+
+/** The formula itself, so the page can quote it rather than paraphrase it. */
+export function useSkillFormula() {
+  return useQuery({
+    queryKey: ['skill-formula'],
+    queryFn: () => apiGet('/api/skill/formula') as Promise<SkillFormula>,
+  });
+}
+
+/** SSR v0.3 — a second, session-scoped formula, still partially covered. */
+export function useSsr() {
+  return useQuery({
+    queryKey: ['skill-ssr'],
+    queryFn: () => apiGet('/api/skill/ssr') as Promise<SsrBoard>,
   });
 }
