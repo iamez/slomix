@@ -11784,7 +11784,7 @@
   },
   "/api/rivalries/h2h/{guid1}/{guid2}": {
    "get": {
-    "description": "Full H2H breakdown between two players.",
+    "description": "Full H2H breakdown between two players. Either GUID length works.",
     "operationId": "get_head_to_head_api_rivalries_h2h__guid1___guid2__get",
     "parameters": [
      {
@@ -11878,7 +11878,7 @@
   },
   "/api/rivalries/player/{guid}": {
    "get": {
-    "description": "Get nemesis, prey, rival and all H2H pairs for a player.",
+    "description": "Get nemesis, prey, rival and all H2H pairs for a player.\n\nAccepts either GUID length. `resolved: false` means no proximity rows\nwere ever recorded under this id — which is a different fact from a\nplayer who was tracked and simply has no rival, and the page says so.",
     "operationId": "get_player_rivalries_api_rivalries_player__guid__get",
     "parameters": [
      {

@@ -3052,7 +3052,7 @@ export interface paths {
         };
         /**
          * Get Head To Head
-         * @description Full H2H breakdown between two players.
+         * @description Full H2H breakdown between two players. Either GUID length works.
          */
         get: operations["get_head_to_head_api_rivalries_h2h__guid1___guid2__get"];
         put?: never;
@@ -3093,6 +3093,10 @@ export interface paths {
         /**
          * Get Player Rivalries
          * @description Get nemesis, prey, rival and all H2H pairs for a player.
+         *
+         *     Accepts either GUID length. `resolved: false` means no proximity rows
+         *     were ever recorded under this id — which is a different fact from a
+         *     player who was tracked and simply has no rival, and the page says so.
          */
         get: operations["get_player_rivalries_api_rivalries_player__guid__get"];
         put?: never;
