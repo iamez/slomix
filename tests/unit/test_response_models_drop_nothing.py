@@ -355,3 +355,94 @@ class TestVoiceActivityKeepsItsThreeStates:
         modelled = VoiceActivity.model_validate(self._full()).model_dump()
         assert "reason" in modelled
         assert modelled["reason"] is None
+
+
+class TestNullsTheDataDoesNotShowYet:
+    """⛔ TYPE FROM THE SCHEMA AND THE CODE, NOT FROM THE SAMPLE.
+
+    #830 typed these models from 80 live rounds and got two nullable fields
+    right that way. Review then found six more the sample could not have shown:
+    every one of them is a column the schema declares nullable, or a branch the
+    handler writes explicitly — and every one would have turned a rendering
+    page into a response-validation 500, not a dropped field.
+
+        rounds.winner_team   nullable   0 rows today
+        rounds.round_date    nullable   0 rows today
+        rounds.round_number  nullable   0 rows today
+        round_awards.player_guid  nullable   496 rows today
+
+    "Zero rows today" is not a type. The 496 currently resolve through the
+    alias map, which is exactly why sampling responses could not see them.
+    """
+
+    def test_an_award_with_no_resolvable_player_is_accepted(self):
+        payload = {
+            "round_id": 1, "map_name": "supply", "round_number": 1,
+            "round_date": "2026-08-26",
+            "categories": {"combat": {"name": "Combat", "emoji": "*", "awards": [
+                {"award": "Most damage", "player": "Unknown", "guid": None,
+                 "value": "4999", "numeric": 4999.0},
+            ]}},
+        }
+        modelled = _json.loads(RoundAwards.model_validate(payload).model_dump_json())
+        assert missing_keys(payload, modelled) == []
+        assert modelled["categories"]["combat"]["awards"][0]["guid"] is None
+
+    def test_an_active_round_without_a_number_is_accepted(self):
+        """`!session_start` inserts a placeholder with no round_number."""
+        payload = {"round_id": 1, "map_name": "supply", "round_number": None,
+                   "round_date": None, "categories": {}}
+        assert RoundAwards.model_validate(payload).round_number is None
+
+    def test_a_round_with_no_winner_yet_is_accepted(self):
+        payload = _viz_payload(winner_team=None)
+        assert RoundViz.model_validate(payload).winner_team is None
+
+    def test_a_round_with_no_date_is_accepted(self):
+        assert RoundViz.model_validate(_viz_payload(round_date=None)).round_date is None
+
+    def test_a_round_with_no_players_has_empty_highlights(self):
+        """The handler leaves `highlights` as {} when there are no player rows;
+        requiring the three entries turned that into a 500."""
+        payload = _viz_payload(players=[], player_count=0, highlights={})
+        modelled = RoundViz.model_validate(payload)
+        assert modelled.players == []
+        assert modelled.highlights.mvp is None
+
+    def test_the_three_highlight_names_are_still_declared(self):
+        """Optional must not mean forgettable: a renamed field still fails."""
+        assert set(RoundViz.model_fields["highlights"].annotation.model_fields) == {
+            "most_damage", "most_kills", "mvp"}
+
+
+def _viz_payload(**over):
+    payload = {
+        "round_id": 1, "map_name": "supply", "round_date": "2026-08-26",
+        "round_number": 1, "round_label": "R1", "winner_team": 1,
+        "duration_seconds": 454, "player_count": 1,
+        "players": [{
+            "guid": "A" * 8, "name": "one", "kills": 8, "deaths": 3,
+            "damage_given": 1510, "damage_received": 1204,
+            "team_damage_given": 0, "team_damage_received": 0,
+            "time_played_seconds": 222, "time_dead_seconds": 30,
+            "revives_given": 1, "gibs": 3, "self_kills": 0,
+            "denied_playtime": 0, "kill_assists": 2, "xp": 55.0,
+            "efficiency": 60.0, "dpm": 408.1,
+        }],
+        "highlights": {
+            "most_damage": {"name": "one", "damage_given": 1510},
+            "most_kills": {"name": "one", "kills": 8},
+            "mvp": {"name": "one", "dpm": 408.1},
+        },
+    }
+    payload.update(over)
+    return payload
+
+
+def test_voice_normalises_an_explicit_null_name():
+    """`.get(k, default)` does NOT apply the default when the key is present
+    with a null — and this validation runs after the handler's try block, so
+    its malformed-row fallback could not catch the resulting error."""
+    stored = {"name": None, "channel_name": None}
+    assert stored.get("name", "Unknown") is None       # the trap
+    assert (stored.get("name") or "Unknown") == "Unknown"  # the fix

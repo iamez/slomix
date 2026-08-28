@@ -1844,9 +1844,20 @@ async def get_current_voice_activity(
                 status_data = json.loads(status_data)
 
             members = status_data.get("members") or []
-            channel_name = status_data.get("channel_name", "Gaming")
+            # ⛔ `or`, not `.get(key, default)`. The default only applies when
+            # the KEY IS ABSENT — a key present with an explicit null returns
+            # the null, and it would then be validated AFTER this try block
+            # returns, so the malformed-row fallback below could not catch it
+            # and the endpoint would answer 500 instead of its unavailable
+            # payload (Codex on #830).
+            #
+            # Normalised rather than typed nullable, because here the fallback
+            # IS the meaning: a member whose name we do not know is "Unknown",
+            # not "no name". Contrast the award guid in records_matches, where
+            # null genuinely means unresolved and the model says so.
+            channel_name = status_data.get("channel_name") or "Gaming"
             safe_members = [
-                {"name": m.get("name", "Unknown"), "channel_name": channel_name}
+                {"name": (m.get("name") or "Unknown"), "channel_name": channel_name}
                 for m in members
             ]
             age = _voice_report_age_seconds(row[1])

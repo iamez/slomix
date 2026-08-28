@@ -867,8 +867,15 @@
       "type": "string"
      },
      "guid": {
-      "title": "Guid",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Guid"
      },
      "numeric": {
       "anyOf": [
@@ -915,16 +922,30 @@
       "type": "string"
      },
      "round_date": {
-      "title": "Round Date",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Date"
      },
      "round_id": {
       "title": "Round Id",
       "type": "integer"
      },
      "round_number": {
-      "title": "Round Number",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
      }
     },
     "required": [
@@ -1049,8 +1070,15 @@
       "type": "array"
      },
      "round_date": {
-      "title": "Round Date",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Date"
      },
      "round_id": {
       "title": "Round Id",
@@ -1065,8 +1093,15 @@
       "type": "integer"
      },
      "winner_team": {
-      "title": "Winner Team",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Team"
      }
     },
     "required": [
@@ -1426,23 +1461,39 @@
     "type": "object"
    },
    "VizHighlights": {
-    "description": "⚠️ Present on every round measured, including ones with three players\nand the oldest rows in the database — so these are NOT optional. Marking\nthem optional would be the safer-looking choice and the less honest one:\nit would let a future handler drop one without a test noticing.",
+    "description": "⚠️ EMPTY WHEN THE ROUND HAS NO PLAYER ROWS.\n\nPresent on all 80 rounds I sampled, which is why the first version required\nall three — but the handler leaves `highlights` as `{}` when `players` is\nempty (ingestion incomplete, or a round that never recorded stats).\nRequiring them turned that valid empty payload into a 500.\n\nOptional here means \"the round produced none\", not \"the field may be\nforgotten\": the three names stay declared, so a handler that renames one\nstill fails the drop-nothing test.",
     "properties": {
      "most_damage": {
-      "$ref": "#/components/schemas/VizTopDamage"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VizTopDamage"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "most_kills": {
-      "$ref": "#/components/schemas/VizTopKills"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VizTopKills"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "mvp": {
-      "$ref": "#/components/schemas/VizMvp"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VizMvp"
+       },
+       {
+        "type": "null"
+       }
+      ]
      }
     },
-    "required": [
-     "most_damage",
-     "most_kills",
-     "mvp"
-    ],
     "title": "VizHighlights",
     "type": "object"
    },

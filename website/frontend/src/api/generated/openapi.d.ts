@@ -5719,7 +5719,7 @@ export interface components {
             /** Award */
             award: string;
             /** Guid */
-            guid: string;
+            guid: string | null;
             /** Numeric */
             numeric: number | null;
             /** Player */
@@ -5745,11 +5745,11 @@ export interface components {
             /** Map Name */
             map_name: string;
             /** Round Date */
-            round_date: string;
+            round_date: string | null;
             /** Round Id */
             round_id: number;
             /** Round Number */
-            round_number: number;
+            round_number: number | null;
         };
         /**
          * RoundPlayerRow
@@ -5809,7 +5809,7 @@ export interface components {
             /** Players */
             players: components["schemas"]["VizPlayerRow"][];
             /** Round Date */
-            round_date: string;
+            round_date: string | null;
             /** Round Id */
             round_id: number;
             /** Round Label */
@@ -5817,7 +5817,7 @@ export interface components {
             /** Round Number */
             round_number: number;
             /** Winner Team */
-            winner_team: number;
+            winner_team: number | null;
         };
         /** SessionLineups */
         SessionLineups: {
@@ -5950,15 +5950,21 @@ export interface components {
         };
         /**
          * VizHighlights
-         * @description ⚠️ Present on every round measured, including ones with three players
-         *     and the oldest rows in the database — so these are NOT optional. Marking
-         *     them optional would be the safer-looking choice and the less honest one:
-         *     it would let a future handler drop one without a test noticing.
+         * @description ⚠️ EMPTY WHEN THE ROUND HAS NO PLAYER ROWS.
+         *
+         *     Present on all 80 rounds I sampled, which is why the first version required
+         *     all three — but the handler leaves `highlights` as `{}` when `players` is
+         *     empty (ingestion incomplete, or a round that never recorded stats).
+         *     Requiring them turned that valid empty payload into a 500.
+         *
+         *     Optional here means "the round produced none", not "the field may be
+         *     forgotten": the three names stay declared, so a handler that renames one
+         *     still fails the drop-nothing test.
          */
         VizHighlights: {
-            most_damage: components["schemas"]["VizTopDamage"];
-            most_kills: components["schemas"]["VizTopKills"];
-            mvp: components["schemas"]["VizMvp"];
+            most_damage?: components["schemas"]["VizTopDamage"] | null;
+            most_kills?: components["schemas"]["VizTopKills"] | null;
+            mvp?: components["schemas"]["VizMvp"] | null;
         };
         /** VizMvp */
         VizMvp: {

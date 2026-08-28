@@ -66,14 +66,21 @@ class VizMvp(BaseModel):
 
 
 class VizHighlights(BaseModel):
-    """⚠️ Present on every round measured, including ones with three players
-    and the oldest rows in the database — so these are NOT optional. Marking
-    them optional would be the safer-looking choice and the less honest one:
-    it would let a future handler drop one without a test noticing."""
+    """⚠️ EMPTY WHEN THE ROUND HAS NO PLAYER ROWS.
 
-    most_damage: VizTopDamage
-    most_kills: VizTopKills
-    mvp: VizMvp
+    Present on all 80 rounds I sampled, which is why the first version required
+    all three — but the handler leaves `highlights` as `{}` when `players` is
+    empty (ingestion incomplete, or a round that never recorded stats).
+    Requiring them turned that valid empty payload into a 500.
+
+    Optional here means "the round produced none", not "the field may be
+    forgotten": the three names stay declared, so a handler that renames one
+    still fails the drop-nothing test.
+    """
+
+    most_damage: VizTopDamage | None = None
+    most_kills: VizTopKills | None = None
+    mvp: VizMvp | None = None
 
 
 class RoundViz(BaseModel):
@@ -85,11 +92,17 @@ class RoundViz(BaseModel):
 
     round_id: int
     map_name: str
-    round_date: str
+    #: `str(round_row[2]) if round_row[2] else None` — the column is nullable.
+    round_date: str | None
     round_number: int
     #: Human label such as "R1" — rendered by the handler, not a number.
     round_label: str
-    winner_team: int
+    #: Nullable in the schema and passed through unchanged: an active or
+    #: unresolved round has no winner yet. The legacy frontend contract
+    #: (`RoundVizData`) already declares this `number | null`; typing it
+    #: non-null here would have made this model stricter than the page it
+    #: feeds.
+    winner_team: int | None
     #: ⚠️ NULL on rounds whose clock could not be resolved. My first sample of
     #: 14 rounds had none, so the model typed this `int` and REJECTED five of
     #: the oldest rounds outright — a 500 where the page used to render. Found
@@ -113,7 +126,12 @@ class RoundAwardEntry(BaseModel):
 
     award: str
     player: str
-    guid: str
+    #: ⚠️ NULL when the award could not be resolved to a player: the handler
+    #: writes `effective_guid` and branches on `if effective_guid else ...`,
+    #: and `round_awards.player_guid` is nullable with 496 such rows today.
+    #: They currently resolve through the alias map, which is why 80 sampled
+    #: rounds showed none — the schema and the code both say otherwise.
+    guid: str | None
     value: str
     #: ⚠️ NULL for awards whose figure is not sortable — a rendered string with
     #: no number behind it. My first sample of 14 rounds contained none, so
@@ -141,8 +159,11 @@ class RoundAwards(BaseModel):
 
     round_id: int
     map_name: str
-    round_number: int
-    round_date: str
+    #: ⚠️ NULL for the placeholder row `!session_start` inserts — that insert
+    #: omits `round_number` and this handler does not filter on status, so an
+    #: active session would otherwise answer 500 instead of an empty award set.
+    round_number: int | None
+    round_date: str | None
     categories: dict[str, RoundAwardCategory]
 
 logger = get_app_logger("api.records.matches")
