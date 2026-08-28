@@ -6,7 +6,7 @@
  * so the player who played one has nowhere to learn why it is missing. This
  * component must not repeat that: it shows the round AND marks it.
  */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
 import { RoundsTable, mmss } from './RoundsTable';
@@ -119,14 +119,13 @@ describe('player mode', () => {
 
 describe('columns', () => {
   it('narrows to the requested set', () => {
-    const { container } = render(
-      <RoundsTable rounds={[round()]} mode="round" columns={['gibs', 'kills']} />,
-    );
-    const thead = container.querySelector('thead');
-    expect(thead).not.toBeNull();
-    const head = within(thead as HTMLElement);
-    expect(head.getByText('gibs')).toBeTruthy();
-    expect(head.queryByText('taken')).toBeNull();
+    render(<RoundsTable rounds={[round()]} mode="round" columns={['gibs', 'kills']} />);
+    // Query the header row through the accessibility tree rather than casting
+    // a `querySelector` result: `columnheader` is what a screen reader sees,
+    // and it needs no non-null assertion to reach.
+    const headers = screen.getAllByRole('columnheader').map((h) => h.textContent);
+    expect(headers).toContain('gibs');
+    expect(headers).not.toContain('taken');
   });
 });
 
