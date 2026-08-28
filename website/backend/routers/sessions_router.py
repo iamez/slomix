@@ -26,6 +26,7 @@ from website.backend.services.session_matrix_service import SessionMatrixService
 from website.backend.services.website_session_data_service import (
     WebsiteSessionDataService as SessionDataService,
 )
+from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
 logger = get_app_logger("api.sessions")
@@ -2291,3 +2292,149 @@ async def get_session_lineups(
         "changes": changes,
         "rounds_without_roster": rounds_without_roster,
     }
+
+
+# --- One session, round by round ---------------------------------------------
+#
+# ⛔ WHY THIS EXISTS RATHER THAN 18 CALLS TO /rounds/{id}/viz.
+# A session is 10-20 rounds. Asking per round is 18 round-trips for data one
+# query answers in 1.2 ms, and it gives the client no way to show a round it
+# was never told about — which is how `round_status = 'cancelled'` rounds
+# became invisible: `/stats/session/{id}/detail` filters them out and says
+# nothing, so a player who played one has nowhere to learn why it is missing.
+#
+# This endpoint returns EVERY round of the session, cancelled ones included and
+# labelled, and leaves counting to the caller.
+
+
+class RoundPlayerRow(BaseModel):
+    """One player's line in one round, as the round recorded it.
+
+    ⚠️ MEASURED, NOT DESIGNED. `player_comprehensive_stats` carries 39
+    populated numeric fields per round; this is the subset a person reads,
+    including the three the rest of the site never surfaces per round —
+    `time_played_seconds`, `gibs`, `damage_received`.
+    """
+
+    player_guid: str
+    player_name: str
+    team: int
+    time_played_seconds: int
+    gibs: int
+    damage_received: int
+    damage_given: int
+    kills: int
+    deaths: int
+    headshots: int
+    headshot_kills: int
+    revives_given: int
+    times_revived: int
+    xp: float
+
+
+class SessionRound(BaseModel):
+    """One round, with its full roster.
+
+    `duration_seconds` comes from `shared/round_time.py` — the MEASURED clock.
+    `rounds.actual_time` is the stopwatch TARGET and overstates ~15% of rounds
+    (RCA 2026-08-18), so it is not what a player is shown.
+    """
+
+    round_id: int
+    map_name: str
+    round_number: int
+    played_at: str
+    #: Null when neither the Lua mirror nor a parseable clock survived.
+    duration_seconds: int | None
+    end_reason: str | None
+    #: 'completed' | 'substitution' | 'cancelled' | ... — shown, never hidden.
+    round_status: str | None
+    #: False for a cancelled round: the client must be able to show it AND
+    #: leave it out of totals, which one flag cannot do if it is missing.
+    counts_toward_totals: bool
+    match_id: str | None
+    players: list[RoundPlayerRow]
+
+
+class SessionRounds(BaseModel):
+    gaming_session_id: int
+    session_date: str | None
+    #: Rounds whose `counts_toward_totals` is true.
+    counted_rounds: int
+    #: Every round returned, including the ones that do not count.
+    total_rounds: int
+    rounds: list[SessionRound]
+
+
+#: A round that was played but is excluded from session totals. Kept as one
+#: named set so the API and the UI cannot drift on what "counts" means.
+NON_COUNTING_ROUND_STATUSES = frozenset({"cancelled", "orphan_r2"})
+
+_SESSION_ROUNDS_SQL = """
+    SELECT r.id, r.map_name, r.round_number, r.created_at,
+           COALESCE(NULLIF(r.actual_duration_seconds, 0),
+             CASE WHEN r.actual_time ~ '^[0-9]+:[0-9]{2}$'
+                  THEN split_part(r.actual_time, ':', 1)::int * 60
+                     + split_part(r.actual_time, ':', 2)::int END) AS duration_seconds,
+           r.end_reason, r.round_status, r.match_id
+    FROM rounds r
+    WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2)
+    ORDER BY r.created_at
+"""
+
+_SESSION_PLAYERS_SQL = """
+    SELECT p.round_id, p.player_guid, p.player_name, p.team,
+           p.time_played_seconds, p.gibs, p.damage_received, p.damage_given,
+           p.kills, p.deaths, p.headshots, p.headshot_kills,
+           p.revives_given, p.times_revived, p.xp
+    FROM player_comprehensive_stats p
+    JOIN rounds r ON r.id = p.round_id
+    WHERE r.gaming_session_id = $1 AND p.round_number IN (1, 2)
+      AND p.team IN (1, 2)
+      AND p.player_guid NOT LIKE 'OMNIBOT%'
+      AND COALESCE(p.player_name, '') NOT LIKE '[BOT]%'
+    ORDER BY p.round_id, p.damage_given DESC
+"""
+
+
+@router.get("/stats/session/{gaming_session_id}/rounds",
+            response_model=SessionRounds)
+async def get_session_rounds(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Every round of one session, each with its full roster."""
+    round_rows = await db.fetch_all(_SESSION_ROUNDS_SQL, (gaming_session_id,))
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    player_rows = await db.fetch_all(_SESSION_PLAYERS_SQL, (gaming_session_id,))
+    by_round: dict[int, list[RoundPlayerRow]] = {}
+    for row in player_rows:
+        by_round.setdefault(row[0], []).append(RoundPlayerRow(
+            player_guid=row[1], player_name=strip_et_colors(row[2] or ""),
+            team=row[3], time_played_seconds=row[4] or 0, gibs=row[5] or 0,
+            damage_received=row[6] or 0, damage_given=row[7] or 0,
+            kills=row[8] or 0, deaths=row[9] or 0, headshots=row[10] or 0,
+            headshot_kills=row[11] or 0, revives_given=row[12] or 0,
+            times_revived=row[13] or 0, xp=float(row[14] or 0),
+        ))
+
+    rounds: list[SessionRound] = []
+    for row in round_rows:
+        status = row[6]
+        rounds.append(SessionRound(
+            round_id=row[0], map_name=row[1], round_number=row[2],
+            played_at=str(row[3]), duration_seconds=row[4],
+            end_reason=row[5], round_status=status,
+            counts_toward_totals=status not in NON_COUNTING_ROUND_STATUSES,
+            match_id=row[7], players=by_round.get(row[0], []),
+        ))
+
+    return SessionRounds(
+        gaming_session_id=gaming_session_id,
+        session_date=str(round_rows[0][3])[:10] if round_rows else None,
+        counted_rounds=sum(1 for r in rounds if r.counts_toward_totals),
+        total_rounds=len(rounds),
+        rounds=rounds,
+    )

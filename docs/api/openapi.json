@@ -457,6 +457,85 @@
     "title": "ResumableInit",
     "type": "object"
    },
+   "RoundPlayerRow": {
+    "description": "One player's line in one round, as the round recorded it.\n\n⚠️ MEASURED, NOT DESIGNED. `player_comprehensive_stats` carries 39\npopulated numeric fields per round; this is the subset a person reads,\nincluding the three the rest of the site never surfaces per round —\n`time_played_seconds`, `gibs`, `damage_received`.",
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "damage_received": {
+      "title": "Damage Received",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "gibs": {
+      "title": "Gibs",
+      "type": "integer"
+     },
+     "headshot_kills": {
+      "title": "Headshot Kills",
+      "type": "integer"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "revives_given": {
+      "title": "Revives Given",
+      "type": "integer"
+     },
+     "team": {
+      "title": "Team",
+      "type": "integer"
+     },
+     "time_played_seconds": {
+      "title": "Time Played Seconds",
+      "type": "integer"
+     },
+     "times_revived": {
+      "title": "Times Revived",
+      "type": "integer"
+     },
+     "xp": {
+      "title": "Xp",
+      "type": "number"
+     }
+    },
+    "required": [
+     "player_guid",
+     "player_name",
+     "team",
+     "time_played_seconds",
+     "gibs",
+     "damage_received",
+     "damage_given",
+     "kills",
+     "deaths",
+     "headshots",
+     "headshot_kills",
+     "revives_given",
+     "times_revived",
+     "xp"
+    ],
+    "title": "RoundPlayerRow",
+    "type": "object"
+   },
    "SessionLineups": {
     "properties": {
      "changes": {
@@ -489,6 +568,139 @@
      "rounds_without_roster"
     ],
     "title": "SessionLineups",
+    "type": "object"
+   },
+   "SessionRound": {
+    "description": "One round, with its full roster.\n\n`duration_seconds` comes from `shared/round_time.py` — the MEASURED clock.\n`rounds.actual_time` is the stopwatch TARGET and overstates ~15% of rounds\n(RCA 2026-08-18), so it is not what a player is shown.",
+    "properties": {
+     "counts_toward_totals": {
+      "title": "Counts Toward Totals",
+      "type": "boolean"
+     },
+     "duration_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration Seconds"
+     },
+     "end_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "End Reason"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "match_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Id"
+     },
+     "played_at": {
+      "title": "Played At",
+      "type": "string"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/RoundPlayerRow"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     },
+     "round_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Status"
+     }
+    },
+    "required": [
+     "round_id",
+     "map_name",
+     "round_number",
+     "played_at",
+     "duration_seconds",
+     "end_reason",
+     "round_status",
+     "counts_toward_totals",
+     "match_id",
+     "players"
+    ],
+    "title": "SessionRound",
+    "type": "object"
+   },
+   "SessionRounds": {
+    "properties": {
+     "counted_rounds": {
+      "title": "Counted Rounds",
+      "type": "integer"
+     },
+     "gaming_session_id": {
+      "title": "Gaming Session Id",
+      "type": "integer"
+     },
+     "rounds": {
+      "items": {
+       "$ref": "#/components/schemas/SessionRound"
+      },
+      "title": "Rounds",
+      "type": "array"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     },
+     "total_rounds": {
+      "title": "Total Rounds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "gaming_session_id",
+     "session_date",
+     "counted_rounds",
+     "total_rounds",
+     "rounds"
+    ],
+    "title": "SessionRounds",
     "type": "object"
    },
    "StatsOverview": {
@@ -13195,6 +13407,49 @@
      }
     },
     "summary": "Post Session Mvp",
+    "tags": [
+     "Sessions"
+    ]
+   }
+  },
+  "/api/stats/session/{gaming_session_id}/rounds": {
+   "get": {
+    "description": "Every round of one session, each with its full roster.",
+    "operationId": "get_session_rounds_api_stats_session__gaming_session_id__rounds_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "gaming_session_id",
+      "required": true,
+      "schema": {
+       "title": "Gaming Session Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionRounds"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Session Rounds",
     "tags": [
      "Sessions"
     ]
