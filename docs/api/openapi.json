@@ -833,6 +833,110 @@
     "title": "ResumableInit",
     "type": "object"
    },
+   "RoundAwardCategory": {
+    "properties": {
+     "awards": {
+      "items": {
+       "$ref": "#/components/schemas/RoundAwardEntry"
+      },
+      "title": "Awards",
+      "type": "array"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "emoji",
+     "awards"
+    ],
+    "title": "RoundAwardCategory",
+    "type": "object"
+   },
+   "RoundAwardEntry": {
+    "description": "One award within a category.\n\n`value` is a PRE-FORMATTED string and `numeric` its sortable counterpart;\nthey are two views of one figure and both must survive — dropping\n`numeric` would leave the client unable to rank, dropping `value` would\nleave it re-implementing the handler's formatting.",
+    "properties": {
+     "award": {
+      "title": "Award",
+      "type": "string"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "numeric": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Numeric"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "award",
+     "player",
+     "guid",
+     "value",
+     "numeric"
+    ],
+    "title": "RoundAwardEntry",
+    "type": "object"
+   },
+   "RoundAwards": {
+    "description": "⚠️ `categories` stays a mapping on purpose.\n\nSeven categories exist today (combat, deaths, objectives, skills,\nteamwork, timing, weapons) and the handler builds them from a table it can\nextend. Naming them here would make this model the gate on which\ncategories may exist: adding one without editing this class would drop it\nfrom the response with a 200.",
+    "properties": {
+     "categories": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/RoundAwardCategory"
+      },
+      "title": "Categories",
+      "type": "object"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "round_date": {
+      "title": "Round Date",
+      "type": "string"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "round_id",
+     "map_name",
+     "round_number",
+     "round_date",
+     "categories"
+    ],
+    "title": "RoundAwards",
+    "type": "object"
+   },
    "RoundPlayerRow": {
     "description": "One player's line in one round, as the round recorded it.\n\n⚠️ MEASURED, NOT DESIGNED. `player_comprehensive_stats` carries 39\npopulated numeric fields per round; this is the subset a person reads,\nincluding the three the rest of the site never surfaces per round —\n`time_played_seconds`, `gibs`, `damage_received`.",
     "properties": {
@@ -910,6 +1014,74 @@
      "xp"
     ],
     "title": "RoundPlayerRow",
+    "type": "object"
+   },
+   "RoundViz": {
+    "description": "⛔ `response_model` FILTERS: a field the handler returns and this model\nomits vanishes from the payload, silently, with a 200. The guard is\n`tests/unit/test_response_models_drop_nothing.py` plus the ASGI check in\n`tests/integration/test_response_models_survive_fastapi.py` — pydantic\nround-tripping alone does not prove what the client receives.",
+    "properties": {
+     "duration_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration Seconds"
+     },
+     "highlights": {
+      "$ref": "#/components/schemas/VizHighlights"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/VizPlayerRow"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "round_date": {
+      "title": "Round Date",
+      "type": "string"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_label": {
+      "title": "Round Label",
+      "type": "string"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     },
+     "winner_team": {
+      "title": "Winner Team",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "round_id",
+     "map_name",
+     "round_date",
+     "round_number",
+     "round_label",
+     "winner_team",
+     "duration_seconds",
+     "player_count",
+     "players",
+     "highlights"
+    ],
+    "title": "RoundViz",
     "type": "object"
    },
    "SessionLineups": {
@@ -1251,6 +1423,180 @@
      "type"
     ],
     "title": "ValidationError",
+    "type": "object"
+   },
+   "VizHighlights": {
+    "description": "⚠️ Present on every round measured, including ones with three players\nand the oldest rows in the database — so these are NOT optional. Marking\nthem optional would be the safer-looking choice and the less honest one:\nit would let a future handler drop one without a test noticing.",
+    "properties": {
+     "most_damage": {
+      "$ref": "#/components/schemas/VizTopDamage"
+     },
+     "most_kills": {
+      "$ref": "#/components/schemas/VizTopKills"
+     },
+     "mvp": {
+      "$ref": "#/components/schemas/VizMvp"
+     }
+    },
+    "required": [
+     "most_damage",
+     "most_kills",
+     "mvp"
+    ],
+    "title": "VizHighlights",
+    "type": "object"
+   },
+   "VizMvp": {
+    "properties": {
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "dpm"
+    ],
+    "title": "VizMvp",
+    "type": "object"
+   },
+   "VizPlayerRow": {
+    "description": "One player's row in a round's visualisation payload.\n\n⚠️ MEASURED, NOT DESIGNED — types are the union over 14 rounds including\nedge cases (the four oldest in the database, and four with fewer than four\nplayers). `dpm`, `efficiency` and `xp` are fractional; typing any of them\n`int` would truncate silently, still with a 200.",
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "damage_received": {
+      "title": "Damage Received",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "denied_playtime": {
+      "title": "Denied Playtime",
+      "type": "integer"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "efficiency": {
+      "title": "Efficiency",
+      "type": "number"
+     },
+     "gibs": {
+      "title": "Gibs",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "kill_assists": {
+      "title": "Kill Assists",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "revives_given": {
+      "title": "Revives Given",
+      "type": "integer"
+     },
+     "self_kills": {
+      "title": "Self Kills",
+      "type": "integer"
+     },
+     "team_damage_given": {
+      "title": "Team Damage Given",
+      "type": "integer"
+     },
+     "team_damage_received": {
+      "title": "Team Damage Received",
+      "type": "integer"
+     },
+     "time_dead_seconds": {
+      "title": "Time Dead Seconds",
+      "type": "integer"
+     },
+     "time_played_seconds": {
+      "title": "Time Played Seconds",
+      "type": "integer"
+     },
+     "xp": {
+      "title": "Xp",
+      "type": "number"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "kills",
+     "deaths",
+     "damage_given",
+     "damage_received",
+     "team_damage_given",
+     "team_damage_received",
+     "time_played_seconds",
+     "time_dead_seconds",
+     "revives_given",
+     "gibs",
+     "self_kills",
+     "denied_playtime",
+     "kill_assists",
+     "xp",
+     "efficiency",
+     "dpm"
+    ],
+    "title": "VizPlayerRow",
+    "type": "object"
+   },
+   "VizTopDamage": {
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "damage_given"
+    ],
+    "title": "VizTopDamage",
+    "type": "object"
+   },
+   "VizTopKills": {
+    "properties": {
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "kills"
+    ],
+    "title": "VizTopKills",
     "type": "object"
    },
    "WeaponRow": {
@@ -11978,7 +12324,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/RoundAwards"
+        }
        }
       },
       "description": "Successful Response"
@@ -12069,7 +12417,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/RoundViz"
+        }
        }
       },
       "description": "Successful Response"

@@ -192,6 +192,7 @@ from website.backend.routers.records_awards import (
     AwardsPage,
     HallOfFame,
 )
+from website.backend.routers.records_matches import RoundAwards, RoundViz
 from website.backend.routers.records_seasons import CurrentSeason
 from website.backend.routers.records_weapons import WeaponsByPlayer
 
@@ -203,6 +204,16 @@ _RECORDED = [
     ("api_hall-of-fame.json", HallOfFame),
     ("api_seasons_current.json", CurrentSeason),
     ("api_stats_weapons_by_player.json", WeaponsByPlayer),
+    # ⚠️ BOTH OF THESE FIXTURES ARE EDGE CASES ON PURPOSE.
+    # The first models of these two endpoints typed `duration_seconds` and
+    # `numeric` as non-null, because a 14-round sample contained no nulls.
+    # They then REJECTED five of the oldest rounds and three of forty award
+    # payloads outright — a 500 where the page had been rendering. Widening to
+    # 60 randomly drawn rounds found both. So the recorded fixtures are a round
+    # whose clock could not be resolved and an award list carrying an
+    # unsortable figure; a future trim that loses those nulls loses the test.
+    ("api_rounds_round_id_viz.json", RoundViz),
+    ("api_rounds_round_id_awards.json", RoundAwards),
 ]
 
 
@@ -252,3 +263,30 @@ def test_the_hall_of_fame_keeps_a_fractional_value():
     modelled = HallOfFame.model_validate(raw).model_dump()
     assert ([r["value"] for r in modelled["categories"]["most_dpm"]]
             == [r["value"] for r in dpm])
+
+
+def test_the_viz_fixture_still_carries_its_null_clock():
+    """States the premise the fixture exists for.
+
+    `duration_seconds` is null on rounds whose clock could not be resolved.
+    A fixture re-recorded from a modern round would lose that, and the two
+    tests above would keep passing while proving nothing about nullability.
+    """
+    raw = _json.loads((_FIXTURES / "api_rounds_round_id_viz.json").read_text())
+    assert raw["duration_seconds"] is None, "fixture no longer carries a null clock"
+    modelled = RoundViz.model_validate(raw).model_dump()
+    assert modelled["duration_seconds"] is None
+
+
+def test_the_awards_fixture_still_carries_an_unsortable_figure():
+    raw = _json.loads((_FIXTURES / "api_rounds_round_id_awards.json").read_text())
+    nulls = [a for cat in raw["categories"].values()
+             for a in cat["awards"] if a["numeric"] is None]
+    assert nulls, "fixture no longer carries a null numeric"
+    modelled = RoundAwards.model_validate(raw).model_dump()
+    still = [a for cat in modelled["categories"].values()
+             for a in cat["awards"] if a["numeric"] is None]
+    assert len(still) == len(nulls)
+    # …and the rendered string beside it survives: the two are one figure seen
+    # two ways, and dropping either leaves the client worse off.
+    assert all(a["value"] for a in still)

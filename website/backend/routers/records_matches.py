@@ -3,6 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -18,6 +19,132 @@ from website.backend.routers.records_helpers import (
 )
 
 router = APIRouter()
+
+
+class VizPlayerRow(BaseModel):
+    """One player's row in a round's visualisation payload.
+
+    ⚠️ MEASURED, NOT DESIGNED — types are the union over 14 rounds including
+    edge cases (the four oldest in the database, and four with fewer than four
+    players). `dpm`, `efficiency` and `xp` are fractional; typing any of them
+    `int` would truncate silently, still with a 200.
+    """
+
+    guid: str
+    name: str
+    kills: int
+    deaths: int
+    damage_given: int
+    damage_received: int
+    team_damage_given: int
+    team_damage_received: int
+    time_played_seconds: int
+    time_dead_seconds: int
+    revives_given: int
+    gibs: int
+    self_kills: int
+    denied_playtime: int
+    kill_assists: int
+    xp: float
+    efficiency: float
+    dpm: float
+
+
+class VizTopDamage(BaseModel):
+    name: str
+    damage_given: int
+
+
+class VizTopKills(BaseModel):
+    name: str
+    kills: int
+
+
+class VizMvp(BaseModel):
+    name: str
+    dpm: float
+
+
+class VizHighlights(BaseModel):
+    """⚠️ Present on every round measured, including ones with three players
+    and the oldest rows in the database — so these are NOT optional. Marking
+    them optional would be the safer-looking choice and the less honest one:
+    it would let a future handler drop one without a test noticing."""
+
+    most_damage: VizTopDamage
+    most_kills: VizTopKills
+    mvp: VizMvp
+
+
+class RoundViz(BaseModel):
+    """⛔ `response_model` FILTERS: a field the handler returns and this model
+    omits vanishes from the payload, silently, with a 200. The guard is
+    `tests/unit/test_response_models_drop_nothing.py` plus the ASGI check in
+    `tests/integration/test_response_models_survive_fastapi.py` — pydantic
+    round-tripping alone does not prove what the client receives."""
+
+    round_id: int
+    map_name: str
+    round_date: str
+    round_number: int
+    #: Human label such as "R1" — rendered by the handler, not a number.
+    round_label: str
+    winner_team: int
+    #: ⚠️ NULL on rounds whose clock could not be resolved. My first sample of
+    #: 14 rounds had none, so the model typed this `int` and REJECTED five of
+    #: the oldest rounds outright — a 500 where the page used to render. Found
+    #: by widening to 60 randomly drawn rounds; `duration_seconds` was the only
+    #: field that turned out nullable. A sample that happens to miss the null
+    #: branch types the field wrongly and looks thorough doing it.
+    duration_seconds: int | None
+    player_count: int
+    players: list[VizPlayerRow]
+    highlights: VizHighlights
+
+
+class RoundAwardEntry(BaseModel):
+    """One award within a category.
+
+    `value` is a PRE-FORMATTED string and `numeric` its sortable counterpart;
+    they are two views of one figure and both must survive — dropping
+    `numeric` would leave the client unable to rank, dropping `value` would
+    leave it re-implementing the handler's formatting.
+    """
+
+    award: str
+    player: str
+    guid: str
+    value: str
+    #: ⚠️ NULL for awards whose figure is not sortable — a rendered string with
+    #: no number behind it. My first sample of 14 rounds contained none, so
+    #: this was typed `float` and REJECTED three rounds out of forty, turning
+    #: a rendering page into a 500. A field is nullable when the data says so,
+    #: not when the first few rows agree.
+    numeric: float | None
+
+
+class RoundAwardCategory(BaseModel):
+    name: str
+    emoji: str
+    awards: list[RoundAwardEntry]
+
+
+class RoundAwards(BaseModel):
+    """⚠️ `categories` stays a mapping on purpose.
+
+    Seven categories exist today (combat, deaths, objectives, skills,
+    teamwork, timing, weapons) and the handler builds them from a table it can
+    extend. Naming them here would make this model the gate on which
+    categories may exist: adding one without editing this class would drop it
+    from the response with a 200.
+    """
+
+    round_id: int
+    map_name: str
+    round_number: int
+    round_date: str
+    categories: dict[str, RoundAwardCategory]
+
 logger = get_app_logger("api.records.matches")
 
 
@@ -233,7 +360,7 @@ async def get_match_details(match_id: str, db: DatabaseAdapter = Depends(get_db)
     }
 
 
-@router.get("/rounds/{round_id}/awards")
+@router.get("/rounds/{round_id}/awards", response_model=RoundAwards)
 async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db)):
     """
     Get awards for a specific round, grouped by category.
@@ -377,7 +504,7 @@ async def get_recent_rounds(
     ]
 
 
-@router.get("/rounds/{round_id}/viz")
+@router.get("/rounds/{round_id}/viz", response_model=RoundViz)
 async def get_round_viz(
     round_id: int,
     db: DatabaseAdapter = Depends(get_db),

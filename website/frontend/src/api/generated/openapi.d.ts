@@ -5697,6 +5697,60 @@ export interface components {
              */
             title: string;
         };
+        /** RoundAwardCategory */
+        RoundAwardCategory: {
+            /** Awards */
+            awards: components["schemas"]["RoundAwardEntry"][];
+            /** Emoji */
+            emoji: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * RoundAwardEntry
+         * @description One award within a category.
+         *
+         *     `value` is a PRE-FORMATTED string and `numeric` its sortable counterpart;
+         *     they are two views of one figure and both must survive — dropping
+         *     `numeric` would leave the client unable to rank, dropping `value` would
+         *     leave it re-implementing the handler's formatting.
+         */
+        RoundAwardEntry: {
+            /** Award */
+            award: string;
+            /** Guid */
+            guid: string;
+            /** Numeric */
+            numeric: number | null;
+            /** Player */
+            player: string;
+            /** Value */
+            value: string;
+        };
+        /**
+         * RoundAwards
+         * @description ⚠️ `categories` stays a mapping on purpose.
+         *
+         *     Seven categories exist today (combat, deaths, objectives, skills,
+         *     teamwork, timing, weapons) and the handler builds them from a table it can
+         *     extend. Naming them here would make this model the gate on which
+         *     categories may exist: adding one without editing this class would drop it
+         *     from the response with a 200.
+         */
+        RoundAwards: {
+            /** Categories */
+            categories: {
+                [key: string]: components["schemas"]["RoundAwardCategory"];
+            };
+            /** Map Name */
+            map_name: string;
+            /** Round Date */
+            round_date: string;
+            /** Round Id */
+            round_id: number;
+            /** Round Number */
+            round_number: number;
+        };
         /**
          * RoundPlayerRow
          * @description One player's line in one round, as the round recorded it.
@@ -5735,6 +5789,35 @@ export interface components {
             times_revived: number;
             /** Xp */
             xp: number;
+        };
+        /**
+         * RoundViz
+         * @description ⛔ `response_model` FILTERS: a field the handler returns and this model
+         *     omits vanishes from the payload, silently, with a 200. The guard is
+         *     `tests/unit/test_response_models_drop_nothing.py` plus the ASGI check in
+         *     `tests/integration/test_response_models_survive_fastapi.py` — pydantic
+         *     round-tripping alone does not prove what the client receives.
+         */
+        RoundViz: {
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            highlights: components["schemas"]["VizHighlights"];
+            /** Map Name */
+            map_name: string;
+            /** Player Count */
+            player_count: number;
+            /** Players */
+            players: components["schemas"]["VizPlayerRow"][];
+            /** Round Date */
+            round_date: string;
+            /** Round Id */
+            round_id: number;
+            /** Round Label */
+            round_label: string;
+            /** Round Number */
+            round_number: number;
+            /** Winner Team */
+            winner_team: number;
         };
         /** SessionLineups */
         SessionLineups: {
@@ -5864,6 +5947,86 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * VizHighlights
+         * @description ⚠️ Present on every round measured, including ones with three players
+         *     and the oldest rows in the database — so these are NOT optional. Marking
+         *     them optional would be the safer-looking choice and the less honest one:
+         *     it would let a future handler drop one without a test noticing.
+         */
+        VizHighlights: {
+            most_damage: components["schemas"]["VizTopDamage"];
+            most_kills: components["schemas"]["VizTopKills"];
+            mvp: components["schemas"]["VizMvp"];
+        };
+        /** VizMvp */
+        VizMvp: {
+            /** Dpm */
+            dpm: number;
+            /** Name */
+            name: string;
+        };
+        /**
+         * VizPlayerRow
+         * @description One player's row in a round's visualisation payload.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED — types are the union over 14 rounds including
+         *     edge cases (the four oldest in the database, and four with fewer than four
+         *     players). `dpm`, `efficiency` and `xp` are fractional; typing any of them
+         *     `int` would truncate silently, still with a 200.
+         */
+        VizPlayerRow: {
+            /** Damage Given */
+            damage_given: number;
+            /** Damage Received */
+            damage_received: number;
+            /** Deaths */
+            deaths: number;
+            /** Denied Playtime */
+            denied_playtime: number;
+            /** Dpm */
+            dpm: number;
+            /** Efficiency */
+            efficiency: number;
+            /** Gibs */
+            gibs: number;
+            /** Guid */
+            guid: string;
+            /** Kill Assists */
+            kill_assists: number;
+            /** Kills */
+            kills: number;
+            /** Name */
+            name: string;
+            /** Revives Given */
+            revives_given: number;
+            /** Self Kills */
+            self_kills: number;
+            /** Team Damage Given */
+            team_damage_given: number;
+            /** Team Damage Received */
+            team_damage_received: number;
+            /** Time Dead Seconds */
+            time_dead_seconds: number;
+            /** Time Played Seconds */
+            time_played_seconds: number;
+            /** Xp */
+            xp: number;
+        };
+        /** VizTopDamage */
+        VizTopDamage: {
+            /** Damage Given */
+            damage_given: number;
+            /** Name */
+            name: string;
+        };
+        /** VizTopKills */
+        VizTopKills: {
+            /** Kills */
+            kills: number;
+            /** Name */
+            name: string;
         };
         /**
          * WeaponRow
@@ -10754,7 +10917,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RoundAwards"];
                 };
             };
             /** @description Validation Error */
@@ -10817,7 +10980,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["RoundViz"];
                 };
             };
             /** @description Validation Error */
