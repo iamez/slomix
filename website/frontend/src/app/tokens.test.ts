@@ -237,11 +237,26 @@ describe('design tokens', () => {
     // string to slip past the guard — an evasion the guard invited (reported
     // by the per-round session, 2026-08-28). A guard that punishes the right
     // fix teaches the wrong one.
+    //
+    // The exclusion READS the value rather than pattern-matching a leading
+    // digit: `[1-9]\d*` quietly stopped counting `margin: 0.5`, which is a
+    // hand-typed size like any other (Codex on #828). Parsing is the honest
+    // way to ask "is this zero" — a regex that answers it by the first digit
+    // answers a different question.
     const SIZE_PROP =
-      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:[1-9]\d*\b|'[^']*[1-9]\d*(?:px|em|rem|%)[^']*')/g;
+      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(\d+(?:\.\d+)?|'[^']*')/g;
+    const LENGTH_IN_STRING = /(\d+(?:\.\d+)?)(?:px|em|rem|%)/g;
     let count = 0;
     for (const [, text] of appSources()) {
-      count += [...text.matchAll(SIZE_PROP)].length;
+      for (const match of text.matchAll(SIZE_PROP)) {
+        const value = match[1];
+        if (value.startsWith("'")) {
+          const lengths = [...value.matchAll(LENGTH_IN_STRING)].map((m) => Number(m[1]));
+          if (lengths.some((n) => n !== 0)) count += 1;
+        } else if (Number(value) !== 0) {
+          count += 1;
+        }
+      }
     }
     expect(
       count,
