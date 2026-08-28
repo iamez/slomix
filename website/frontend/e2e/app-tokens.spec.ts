@@ -19,8 +19,11 @@ import { dirname, join } from 'node:path';
  * stylesheet says it does not. So this reads the names out of tokens.css and
  * asks the page itself for each one.
  *
- * Runs against a built /app (npm run build:app) served by the dev backend —
- * same prerequisites as smoke.spec.ts, not wired into CI.
+ * Runs against a built /app served by the dev backend — the prerequisites of
+ * smoke.spec.ts plus step 3b in playwright.config.ts (`npm run build:app`,
+ * a bundle separate from `build`), and in that order: the backend decides
+ * whether /app exists when it starts, so a build after startup still 404s.
+ * Not wired into CI, for the same reason smoke.spec.ts is not.
  */
 
 const here = dirname(fileURLToPath(import.meta.url));

@@ -63,9 +63,15 @@ const declared = new Set(
   [...css.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]),
 );
 
-/** Names the application reads, wherever it reads them. */
+/**
+ * Names the application reads, wherever it reads them — and the stylesheet
+ * reads them too. Its own utility classes (.act, .chip, .row …) resolve
+ * var(--color-rule-500) and friends, so a typo there would be exactly as
+ * invisible as the one in TSX was, and scanning only TSX would miss it
+ * (Codex on #823).
+ */
 const usedIn = new Map<string, Set<string>>();
-for (const [file, text] of appSources()) {
+for (const [file, text] of [...appSources(), ['tokens.css', css] as [string, string]]) {
   for (const m of text.matchAll(/var\((--[a-z0-9-]+)/g)) {
     const seen = usedIn.get(m[1]) ?? new Set<string>();
     seen.add(file);
@@ -149,8 +155,19 @@ describe('design tokens', () => {
     expect(css).toMatch(/@theme\s+static\s*\{/);
   });
 
-  it('names one container width instead of the prototypes six', () => {
+  it('names one container width AND makes the shell use it', () => {
+    // Declaring the token proves nothing on its own: the four shell widths
+    // could drift back to numbers one at a time and the token would sit
+    // there, declared and unread (Codex on #823). So assert the consumption,
+    // not the declaration.
     expect(declared.has('--layout-max')).toBe(true);
+    const shell = SOURCES['./components/AppShell.tsx'];
+    expect(shell, 'AppShell.tsx not found by the glob').toBeTruthy();
+    expect([...shell.matchAll(/maxWidth:\s*'var\(--layout-max\)'/g)].length).toBe(4);
+    expect(
+      [...shell.matchAll(/maxWidth:\s*(?:\d+|'[^']*\d+(?:px|em|rem|%)[^']*')/g)].map((m) => m[0]),
+      'the shell hard-codes a width again',
+    ).toEqual([]);
   });
 
   it('carries a type and spacing scale, each monotonic', () => {
@@ -172,35 +189,36 @@ describe('design tokens', () => {
     expect(declared.has('--track-label')).toBe(true);
   });
 
-  it('does not grow the pile of hand-typed sizes', () => {
+  it('holds the pile of hand-typed sizes at exactly the budget', () => {
     /**
-     * A ratchet, in the shape this repo already trusts (tests/data/
-     * endpoint_gap.txt): a number that may fall and must never rise.
+     * A ratchet in the shape this repo already trusts (tests/data/
+     * endpoint_gap.txt): the number may fall, must never rise, and — this is
+     * the part a `<=` would lose — the budget must be lowered in the same
+     * commit that lowers the count. An allowance nobody is forced to update
+     * stops describing anything after the first retrofit (Codex on #823).
      *
-     * 805 raw sizes live in inline styles today across 13 of 34 pages. Left
-     * alone the count reaches ~2,000 by the last phase, and every one of them
-     * is a value the next layout rework has to be read and re-decided by
-     * hand — worse, 236 style blocks mix layout with look, so a find/replace
-     * cannot separate what stays from what goes.
+     * 917 raw sizes live in inline styles today across 13 of 34 pages. Left
+     * alone the count passes 2,000 by the last phase, and every one of them
+     * is a value the next layout rework has to read and re-decide by hand —
+     * worse, 236 style blocks mix layout with look, so a find/replace cannot
+     * separate what stays from what goes.
      *
-     * This does not forbid them: the retrofit lowers the number page by page.
-     * It forbids the pile getting deeper while that happens. When you lower
-     * it, lower the budget with it.
+     * Both spellings count. `padding: 12` and `padding: '12px 8px'` are the
+     * same decision typed two ways, and counting only the first would let the
+     * pile grow in the form React code most often uses (Codex again).
      */
-    const BUDGET = 805;
+    const BUDGET = 917;
+    const SIZE_PROP =
+      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(?:\d+\b|'[^']*\d+(?:px|em|rem|%)[^']*')/g;
     let count = 0;
     for (const [, text] of appSources()) {
-      count += [
-        ...text.matchAll(
-          /\b(fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*\d+\b/g,
-        ),
-      ].length;
+      count += [...text.matchAll(SIZE_PROP)].length;
     }
     expect(
       count,
       count > BUDGET
         ? `raw inline sizes rose to ${count}; use the --fs-*/--space-* scale instead`
-        : `raw inline sizes are down to ${count} — lower BUDGET to match`,
-    ).toBeLessThanOrEqual(BUDGET);
+        : `raw inline sizes are down to ${count} — lower BUDGET to ${count} in this commit`,
+    ).toBe(BUDGET);
   });
 });
