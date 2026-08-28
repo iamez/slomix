@@ -4118,6 +4118,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stats/session/{gaming_session_id}/rounds": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Rounds
+         * @description Every round of one session, each with its full roster.
+         */
+        get: operations["get_session_rounds_api_stats_session__gaming_session_id__rounds_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/stats/session/{gaming_session_id}/verdicts": {
         parameters: {
             query?: never;
@@ -5508,6 +5528,45 @@ export interface components {
              */
             title: string;
         };
+        /**
+         * RoundPlayerRow
+         * @description One player's line in one round, as the round recorded it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED. `player_comprehensive_stats` carries 39
+         *     populated numeric fields per round; this is the subset a person reads,
+         *     including the three the rest of the site never surfaces per round —
+         *     `time_played_seconds`, `gibs`, `damage_received`.
+         */
+        RoundPlayerRow: {
+            /** Damage Given */
+            damage_given: number;
+            /** Damage Received */
+            damage_received: number;
+            /** Deaths */
+            deaths: number;
+            /** Gibs */
+            gibs: number;
+            /** Headshot Kills */
+            headshot_kills: number;
+            /** Headshots */
+            headshots: number;
+            /** Kills */
+            kills: number;
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Revives Given */
+            revives_given: number;
+            /** Team */
+            team: number;
+            /** Time Played Seconds */
+            time_played_seconds: number;
+            /** Times Revived */
+            times_revived: number;
+            /** Xp */
+            xp: number;
+        };
         /** SessionLineups */
         SessionLineups: {
             /** Changes */
@@ -5518,6 +5577,49 @@ export interface components {
             rounds_without_roster: number;
             /** Teams */
             teams: components["schemas"]["TeamLineup"][];
+        };
+        /**
+         * SessionRound
+         * @description One round, with its full roster.
+         *
+         *     `duration_seconds` comes from `shared/round_time.py` — the MEASURED clock.
+         *     `rounds.actual_time` is the stopwatch TARGET and overstates ~15% of rounds
+         *     (RCA 2026-08-18), so it is not what a player is shown.
+         */
+        SessionRound: {
+            /** Counts Toward Totals */
+            counts_toward_totals: boolean;
+            /** Duration Seconds */
+            duration_seconds: number | null;
+            /** End Reason */
+            end_reason: string | null;
+            /** Map Name */
+            map_name: string;
+            /** Match Id */
+            match_id: string | null;
+            /** Played At */
+            played_at: string;
+            /** Players */
+            players: components["schemas"]["RoundPlayerRow"][];
+            /** Round Id */
+            round_id: number;
+            /** Round Number */
+            round_number: number;
+            /** Round Status */
+            round_status: string | null;
+        };
+        /** SessionRounds */
+        SessionRounds: {
+            /** Counted Rounds */
+            counted_rounds: number;
+            /** Gaming Session Id */
+            gaming_session_id: number;
+            /** Rounds */
+            rounds: components["schemas"]["SessionRound"][];
+            /** Session Date */
+            session_date: string | null;
+            /** Total Rounds */
+            total_rounds: number;
         };
         /**
          * StatsOverview
@@ -11785,6 +11887,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_rounds_api_stats_session__gaming_session_id__rounds_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                gaming_session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionRounds"];
                 };
             };
             /** @description Validation Error */
