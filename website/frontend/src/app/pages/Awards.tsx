@@ -179,11 +179,11 @@ export function Awards() {
         Who took what home.
       </h1>
       <div style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
-        <Chip active={tab === 'round'} label="By round" onClick={() => setTab('round')} />
-        <Chip active={tab === 'player'} label="By player" onClick={() => setTab('player')} />
+        <Chip active={tab === 'round'} label="By round" onClick={() => { setTab('round'); }} />
+        <Chip active={tab === 'player'} label="By player" onClick={() => { setTab('player'); }} />
         <span style={{ width: 12 }} />
         {DAY_CHOICES.map((d) => (
-          <Chip key={String(d.key)} active={days === d.key} label={d.label} onClick={() => setDays(d.key)} />
+          <Chip key={String(d.key)} active={days === d.key} label={d.label} onClick={() => { setDays(d.key); }} />
         ))}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 10 }}>

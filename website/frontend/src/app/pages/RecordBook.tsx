@@ -292,7 +292,7 @@ function HofTab() {
       <ChampionsBand />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {HOF_PERIODS.map((p) => (
-          <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => setPeriod(p.key)} />
+          <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => { setPeriod(p.key); }} />
         ))}
       </div>
       {hof.isPending && <div style={{ marginTop: 16 }}><Pending label="hall of fame" /></div>}
@@ -400,7 +400,7 @@ export function RecordBook() {
       </h1>
       <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
         {TABS.map((t) => (
-          <Chip key={t.key} active={tab === t.key} label={t.label} onClick={() => setParams({ tab: t.key })} />
+          <Chip key={t.key} active={tab === t.key} label={t.label} onClick={() => { setParams({ tab: t.key }); }} />
         ))}
       </div>
       <div style={{ marginTop: 20 }}>

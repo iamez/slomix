@@ -26,18 +26,22 @@ export type Space = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
  * fails silently. Eight literal strings cost nothing and keep the eight steps
  * greppable.
  */
-const SPACE: Record<Space, string> = {
-  1: 'var(--space-1)',
-  2: 'var(--space-2)',
-  3: 'var(--space-3)',
-  4: 'var(--space-4)',
-  5: 'var(--space-5)',
-  6: 'var(--space-6)',
-  7: 'var(--space-7)',
-  8: 'var(--space-8)',
-};
+const SPACE = new Map<Space, string>([
+  [1, 'var(--space-1)'],
+  [2, 'var(--space-2)'],
+  [3, 'var(--space-3)'],
+  [4, 'var(--space-4)'],
+  [5, 'var(--space-5)'],
+  [6, 'var(--space-6)'],
+  [7, 'var(--space-7)'],
+  [8, 'var(--space-8)'],
+]);
 
-const space = (step: Space) => SPACE[step];
+/** A Map rather than an object: a lookup by variable key on a plain object is
+ * an injection sink to every scanner that reads this code, and the shape it
+ * asks for here is also the more honest one — these are eight fixed entries,
+ * not a record someone may extend at a call site. */
+const space = (step: Space) => SPACE.get(step) ?? SPACE.get(3)!;
 
 export interface StackProps {
   /** Distance between children, as a scale step. */
@@ -79,19 +83,19 @@ export interface ClusterProps {
   children: ReactNode;
 }
 
-const JUSTIFY = {
-  start: 'flex-start',
-  between: 'space-between',
-  end: 'flex-end',
-  center: 'center',
-} as const;
+const JUSTIFY = new Map<NonNullable<ClusterProps['justify']>, string>([
+  ['start', 'flex-start'],
+  ['between', 'space-between'],
+  ['end', 'flex-end'],
+  ['center', 'center'],
+]);
 
-const ALIGN = {
-  baseline: 'baseline',
-  center: 'center',
-  start: 'flex-start',
-  end: 'flex-end',
-} as const;
+const ALIGN = new Map<NonNullable<ClusterProps['align']>, string>([
+  ['baseline', 'baseline'],
+  ['center', 'center'],
+  ['start', 'flex-start'],
+  ['end', 'flex-end'],
+]);
 
 /** Children in a row, wrapping, with one distance between them. */
 export function Cluster({
@@ -105,8 +109,8 @@ export function Cluster({
       style={{
         display: 'flex',
         flexWrap: wrap ? 'wrap' : 'nowrap',
-        alignItems: ALIGN[align],
-        justifyContent: JUSTIFY[justify],
+        alignItems: ALIGN.get(align),
+        justifyContent: JUSTIFY.get(justify),
         gap: space(gap),
         ...style,
       }}

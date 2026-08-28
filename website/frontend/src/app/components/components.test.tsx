@@ -25,43 +25,45 @@ describe('layout primitives', () => {
     // The whole point of the primitives: the owner reworks arrangement
     // repeatedly, so distance has to be a named step that a stylesheet can
     // redefine — not a number frozen into a hundred call sites.
-    const { container } = renderIn(
-      <Stack gap={5}>
+    renderIn(
+      <Stack gap={5} parity="probe.stack">
         <span>a</span>
         <span>b</span>
       </Stack>,
     );
-    const el = container.firstElementChild as HTMLElement;
-    expect(el.style.gap).toBe('var(--space-5)');
-    expect(el.style.display).toBe('grid');
+    expect(document.querySelector('[data-parity="probe.stack"]')).toHaveStyle({
+      gap: 'var(--space-5)',
+      display: 'grid',
+    });
   });
 
   it('put the hairline between children, not after the last one', () => {
-    const { container } = renderIn(
-      <Stack divided>
+    renderIn(
+      <Stack divided parity="probe.divided">
         <span>a</span>
       </Stack>,
     );
     // The rule lives in CSS (`.stack-divided > * + *`) because an inline
     // style cannot express "every child after the first".
-    expect((container.firstElementChild as HTMLElement).className).toContain('stack-divided');
+    expect(document.querySelector('[data-parity="probe.divided"]')).toHaveClass('stack-divided');
   });
 
   it('wrap a cluster by default so a row of chips cannot overflow', () => {
-    const { container } = renderIn(
-      <Cluster gap={2}>
+    renderIn(
+      <Cluster gap={2} parity="probe.cluster">
         <span>a</span>
       </Cluster>,
     );
-    const el = container.firstElementChild as HTMLElement;
-    expect(el.style.flexWrap).toBe('wrap');
-    expect(el.style.gap).toBe('var(--space-2)');
-    expect(el.style.alignItems).toBe('baseline');
+    expect(document.querySelector('[data-parity="probe.cluster"]')).toHaveStyle({
+      flexWrap: 'wrap',
+      gap: 'var(--space-2)',
+      alignItems: 'baseline',
+    });
   });
 
   it('carry a parity key when given one, since the sweep reads those', () => {
-    const { container } = renderIn(<Stack parity="sessions2.lineups"><span>a</span></Stack>);
-    expect(container.querySelector('[data-parity="sessions2.lineups"]')).not.toBeNull();
+    renderIn(<Stack parity="sessions2.lineups"><span>a</span></Stack>);
+    expect(document.querySelector('[data-parity="sessions2.lineups"]')).not.toBeNull();
   });
 });
 
@@ -125,16 +127,21 @@ describe('StatusDot', () => {
       ['something-new', 'var(--color-idle)'],
     ];
     for (const [state, expected] of cases) {
-      const { container, unmount } = renderIn(<StatusDot state={state} />);
-      expect((container.firstElementChild as HTMLElement).style.background).toBe(expected);
-      unmount();
+      const view = renderIn(
+        <Stack parity="probe.dot">
+          <StatusDot state={state} />
+        </Stack>,
+      );
+      const dot = document.querySelector('[data-parity="probe.dot"] > span');
+      expect(dot).toHaveStyle({ background: expected });
+      view.unmount();
     }
   });
 });
 
 describe('the small text components', () => {
   it('render a label, a section head with its parity key, and a KPI', () => {
-    const { container } = renderIn(
+    renderIn(
       <>
         <Lbl>played</Lbl>
         <SectionHead label="the maps" parity="maps.list" />
@@ -143,7 +150,7 @@ describe('the small text components', () => {
     );
     expect(screen.getByText('played')).toBeInTheDocument();
     expect(screen.getByText('rounds')).toBeInTheDocument();
-    expect(container.querySelector('[data-parity="maps.list"]')).not.toBeNull();
+    expect(document.querySelector('[data-parity="maps.list"]')).not.toBeNull();
     expect(screen.getByText('1,760')).toBeInTheDocument();
   });
 

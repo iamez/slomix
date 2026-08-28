@@ -122,7 +122,7 @@ export function Tabs<T extends string>({
           role="tab"
           className="tab"
           aria-selected={t.key === current}
-          onClick={() => onSelect(t.key)}
+          onClick={() => { onSelect(t.key); }}
         >
           {t.label}
         </button>

@@ -61,12 +61,12 @@ export function Leaderboards() {
       <div data-parity="leaderboards.filters" style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {STATS.map((s) => (
-            <Chip key={s.key} active={stat === s.key} label={s.label} onClick={() => setStat(s.key)} />
+            <Chip key={s.key} active={stat === s.key} label={s.label} onClick={() => { setStat(s.key); }} />
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           {PERIODS.map((p) => (
-            <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => setPeriod(p.key)} />
+            <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => { setPeriod(p.key); }} />
           ))}
         </div>
       </div>
