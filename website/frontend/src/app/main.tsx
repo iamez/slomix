@@ -19,6 +19,7 @@ import { WeaponsPage } from './pages/WeaponsPage';
 import { FormPage } from './pages/FormPage';
 import { RetroViz } from './pages/RetroViz';
 import { PlayerProfilePage } from './pages/PlayerProfile';
+import { DesignCatalog } from './pages/DesignCatalog';
 import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
@@ -70,6 +71,7 @@ const PAGES: Record<string, React.ReactElement> = {
   form: <FormPage />,
   'retro-viz': <RetroViz />,
   profile: <PlayerProfilePage />,
+  design: <DesignCatalog />,
   rounds: <RoundsPage />,
 };
 
