@@ -71,6 +71,10 @@ export const APP_ROUTES: readonly AppRoute[] = Object.freeze([
   { key: 'availability', path: '/availability', label: '#ETL', nav: 'primary', phase: 6 },
   { key: 'admin', path: '/admin', label: 'About', nav: 'primary', phase: 1 },
   { key: 'system', path: '/system', label: 'System', nav: 'footer', phase: 1 },
+  // The component workshop (docs/design/11, plan A3). Deliberately `hidden`:
+  // it is a surface for whoever is reworking layout, not a page for readers,
+  // and it calls no endpoint so it cannot break with the data.
+  { key: 'design', path: '/design', label: 'Design', nav: 'hidden', phase: 1 },
 ]);
 
 const GREATSHOT_SECTIONS = new Set(['demos', 'highlights', 'clips', 'renders']);
