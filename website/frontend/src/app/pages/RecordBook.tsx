@@ -5,7 +5,7 @@ import {
   useSeasonLeaders,
 } from '../lib/queries';
 import type { HallOfFameEntry, RecordEntry } from '../lib/types';
-import { Lbl, Pending, SectionHead, Unavailable, figure, lblStyle, rowStyle } from '../components/ui';
+import { Chip, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Record Book (docs/design/12 — absorbs the legacy records + hall-of-fame
@@ -81,23 +81,6 @@ function recordValue(v: number): string {
   return Number.isInteger(v) ? Math.round(v).toLocaleString('en-US') : v.toFixed(2);
 }
 
-function Pill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-        border: `1px solid ${active ? '#4a5a66' : 'var(--color-rule-700)'}`,
-        background: active ? '#151a1e' : 'transparent',
-        color: active ? 'var(--color-text-100)' : 'var(--color-text-400)',
-        padding: '4px 9px',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function RecordCard({ label, rows }: { label: string; rows: RecordEntry[] }) {
   const [open, setOpen] = useState(false);
@@ -309,7 +292,7 @@ function HofTab() {
       <ChampionsBand />
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         {HOF_PERIODS.map((p) => (
-          <Pill key={p.key} active={period === p.key} label={p.label} onClick={() => setPeriod(p.key)} />
+          <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => { setPeriod(p.key); }} />
         ))}
       </div>
       {hof.isPending && <div style={{ marginTop: 16 }}><Pending label="hall of fame" /></div>}
@@ -417,7 +400,7 @@ export function RecordBook() {
       </h1>
       <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
         {TABS.map((t) => (
-          <Pill key={t.key} active={tab === t.key} label={t.label} onClick={() => setParams({ tab: t.key })} />
+          <Chip key={t.key} active={tab === t.key} label={t.label} onClick={() => { setParams({ tab: t.key }); }} />
         ))}
       </div>
       <div style={{ marginTop: 20 }}>

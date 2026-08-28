@@ -52,6 +52,10 @@
   --color-team-b: #c9a86b;
   --color-accent-warm: #c9a86b;
   --color-pos: #8fae8a;
+  /* Idle: a state that is neither good nor bad nor warned about — the server
+   * with nobody on it, a dot waiting. It had been a bare #454340 inside
+   * StatusDot, the one colour in the app that no token could restyle. */
+  --color-idle: #454340;
   --color-neg: #b0847c;
   --color-neg-strong: #c99090;
   --color-ice: #9fb8c9;
@@ -200,6 +204,40 @@ body {
 }
 .row:hover {
   background: var(--color-ink-800);
+}
+
+/* <Stack divided>: the hairline goes BETWEEN children, so the last child has
+ * no trailing line to trim. An inline style cannot express `> * + *`, which
+ * is the whole reason this rule lives here and not in the component. */
+.stack-divided > * + * {
+  border-top: 1px solid var(--color-rule-900);
+}
+
+/* Chips and tabs are buttons; the browser's own button chrome is not part of
+ * this design. Everything else about them is .chip / .tab. */
+.chip,
+.tab {
+  appearance: none;
+  font-family: inherit;
+  margin: 0;
+}
+
+/* A tab is the same decision as a chip, worn differently: no frame, an
+ * underline that carries the state. */
+.tab {
+  font-size: 14px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--color-text-400);
+  padding: 0 0 6px;
+  cursor: pointer;
+}
+.tab[aria-selected='true'] {
+  color: var(--color-text-100);
+  border-bottom-color: var(--color-accent);
 }
 
 .h-section {
