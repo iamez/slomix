@@ -18,6 +18,7 @@ import { MapsPage } from './pages/MapsPage';
 import { WeaponsPage } from './pages/WeaponsPage';
 import { FormPage } from './pages/FormPage';
 import { RetroViz } from './pages/RetroViz';
+import { PlayerProfilePage } from './pages/PlayerProfile';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
 
@@ -67,6 +68,7 @@ const PAGES: Record<string, React.ReactElement> = {
   weapons: <WeaponsPage />,
   form: <FormPage />,
   'retro-viz': <RetroViz />,
+  profile: <PlayerProfilePage />,
 };
 
 const router = createBrowserRouter(
