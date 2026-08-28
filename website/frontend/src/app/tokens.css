@@ -64,6 +64,50 @@
   --font-cond: 'Barlow Condensed', system-ui, sans-serif;
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
   --radius: 0px;
+
+  /* ── Type scale (handoff TOKENS.md "Type scale") ────────────────────────
+   * The owner is going to rework layout and controls repeatedly — the theme
+   * stays, the arrangement changes. That only stays cheap if a size is a
+   * NAME, not a number typed into a style attribute: 352 raw `fontSize:`
+   * numbers across 13 pages spread over 23 distinct values, of which the top
+   * six already cover 82 %. The long tail is noise, not intent, so the scale
+   * below is the six that do the work plus the headline steps. */
+  --fs-caption: 9px;   /* note under a figure */
+  --fs-label: 10px;    /* .lbl */
+  --fs-micro: 11px;    /* state lines, empty states */
+  --fs-small: 12px;    /* chips, secondary cells */
+  --fs-value: 13px;    /* mono figures in rows, .act */
+  --fs-body: 14px;     /* nav, row text */
+  --fs-row: 15px;      /* row title */
+  --fs-lead: 18px;     /* emphasised row */
+  --fs-kpi: 26px;      /* KpiTile, .h-section */
+  --fs-title: 34px;    /* page title */
+  --fs-display: 40px;  /* profile / session headline */
+  --fs-hero: 66px;     /* BigScore */
+
+  /* Tracking is part of the same decision: eight values in use, six of which
+   * are these. Uppercase text without tracking is not this design. */
+  --track-tight: 0.02em;
+  --track-title: 0.03em;
+  --track-wide: 0.04em;
+  --track-row: 0.05em;
+  --track-chip: 0.08em;
+  --track-act: 0.14em;
+  --track-label: 0.24em;
+
+  /* ── Spacing scale ──────────────────────────────────────────────────────
+   * 380 raw margin/gap/padding numbers over 25 distinct values; marginTop's
+   * top six cover only 64 %, the widest scatter in the app. Eight steps,
+   * deliberately fewer than the values in use today: call sites snap to them
+   * in the retrofit, not here, so this commit stays visually neutral. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 22px;
+  --space-6: 28px;
+  --space-7: 40px;
+  --space-8: 56px;
 }
 
 /* One animation constant for the whole app (the prototypes shipped four
