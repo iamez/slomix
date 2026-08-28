@@ -158,8 +158,11 @@ function Role({ label, who, absent }: { label: string; who: RivalryOpponent | nu
 function PlayerPanel({ guid }: { guid: string }) {
   const q = usePlayerRivalries(guid);
 
+  // Past these two guards react-query's own union says `data` is defined, so
+  // a third `!q.data` check reads as caution while being dead code — and the
+  // scanner is right to say so (Codacy on #834).
   if (q.isPending) return <div style={{ paddingTop: 'var(--space-3)' }}><Pending label="opponents" /></div>;
-  if (q.isError || !q.data) return <div style={{ paddingTop: 'var(--space-3)' }}><Unavailable what="opponents" /></div>;
+  if (q.isError) return <div style={{ paddingTop: 'var(--space-3)' }}><Unavailable what="opponents" /></div>;
 
   const d = q.data;
   const nameCounts = new Map<string, number>();
