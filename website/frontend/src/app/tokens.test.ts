@@ -243,17 +243,24 @@ describe('design tokens', () => {
     // hand-typed size like any other (Codex on #828). Parsing is the honest
     // way to ask "is this zero" — a regex that answers it by the first digit
     // answers a different question.
+    // Every quantifier below is bounded. Unbounded ones are what make a
+    // pattern's cost depend on its input rather than on its length, and a
+    // scanner cannot tell a safe `\d+` from a dangerous one — so the shape
+    // says the bound out loud instead of arguing about it (Codacy on #828).
+    // Four digits and three decimals cover every CSS length anyone writes
+    // here; a longer run is not a size, it is a mistake worth not counting.
     const SIZE_PROP =
-      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):\s*(\d+(?:\.\d+)?|'[^']*')/g;
-    const LENGTH_IN_STRING = /(\d+(?:\.\d+)?)(?:px|em|rem|%)/g;
+      /\b(?:fontSize|gap|columnGap|rowGap|margin|marginTop|marginBottom|marginLeft|marginRight|padding|paddingTop|paddingBottom):[ ]{0,4}([^,;\n}]{0,40})/g;
+    const LENGTH_IN_STRING = /(\d{1,4}(?:\.\d{1,3})?)(?:px|em|rem|%)/g;
+    const BARE_NUMBER = /^\d{1,4}(?:\.\d{1,3})?$/;
     let count = 0;
     for (const [, text] of appSources()) {
       for (const match of text.matchAll(SIZE_PROP)) {
-        const value = match[1];
+        const value = match[1].trim();
         if (value.startsWith("'")) {
           const lengths = [...value.matchAll(LENGTH_IN_STRING)].map((m) => Number(m[1]));
           if (lengths.some((n) => n !== 0)) count += 1;
-        } else if (Number(value) !== 0) {
+        } else if (BARE_NUMBER.test(value) && Number(value) !== 0) {
           count += 1;
         }
       }
