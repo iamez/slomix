@@ -375,10 +375,29 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         ORDER BY time_dead_minutes DESC
         LIMIT 1
     """
+    # ⛔ THIS QUERY COUNTS ROUNDS, NOT PLAYERS, so it may not carry the
+    # per-player guard the others do. It used to: `player_name NOT LIKE
+    # '[BOT]%'`, `player_guid NOT LIKE 'OMNIBOT%'` and a subquery correlating
+    # on `player_comprehensive_stats.round_id` were all copied onto a
+    # `FROM rounds` query. `rounds` has none of those columns, so asyncpg
+    # raised UndefinedColumnError on EVERY call — and `_fetch_one_with_field`
+    # catches Exception and returns None, so `longest_session` was silently
+    # null for as long as the copy has been there. A failure that logs at
+    # DEBUG and answers 200 is indistinguishable from "no data" to the reader.
+    #
+    # The validity guard belongs here and is expressed against `rounds`
+    # directly; bot ROUNDS are excluded by `is_bot_round`, which is the
+    # round-level equivalent of the player-level bot filters.
     session_query = """
         SELECT gaming_session_id, COUNT(*) as round_count, MIN(round_date) as session_date
         FROM rounds
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2)
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
+          AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
+          AND gaming_session_id IS NOT NULL
+          AND is_valid IS NOT FALSE
+          AND COALESCE(round_status, '') <> 'orphan_r2'
+          AND NOT COALESCE(is_bot_round, FALSE)
         GROUP BY gaming_session_id
         ORDER BY round_count DESC
         LIMIT 1
