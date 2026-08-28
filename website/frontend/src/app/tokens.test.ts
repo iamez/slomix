@@ -215,8 +215,8 @@ describe('design tokens', () => {
      * commit that lowers the count. An allowance nobody is forced to update
      * stops describing anything after the first retrofit (Codex on #823).
      *
-     * 856 raw sizes live in inline styles today; Home was the first page
-     * retrofitted onto the scale and took 154 of them with it. Left alone the
+     * 523 raw sizes live in inline styles today. Home went first (-154), then
+     * About, RecordBook, Landing, RetroViz, ui and AppShell (-333 together). Left alone the
      * count passes 2,000 by the last phase, and every one of them
      * is a value the next layout rework has to read and re-decide by hand —
      * worse, 236 style blocks mix layout with look, so a find/replace cannot
@@ -231,7 +231,7 @@ describe('design tokens', () => {
     // that can legitimately raise this number, since that work predates the
     // guard rather than defying it. 1,012 here: the five copied Pill
     // functions this PR deletes take ten of them with it.
-    const BUDGET = 856;
+    const BUDGET = 523;
     // Zero is not a hand-typed size, it is a RESET: `margin: 0` on an <h1>
     // inside a Stack cancels the browser default so it cannot add itself to
     // the gap. Counting it pushed people towards writing `margin: '0'` as a
