@@ -46,7 +46,7 @@ const SPACE = new Map<Space, string>([
  * makes an unknown step unreachable, and a `!` would be a promise the type
  * system keeps rather than a value a reader can see. */
 const DEFAULT_SPACE = 'var(--space-3)';
-const space = (step: Space) => SPACE.get(step) ?? DEFAULT_SPACE;
+export const space = (step: Space) => SPACE.get(step) ?? DEFAULT_SPACE;
 
 export interface StackProps {
   /** Distance between children, as a scale step. */
