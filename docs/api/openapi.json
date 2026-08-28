@@ -1,6 +1,226 @@
 {
  "components": {
   "schemas": {
+   "AwardLeaderRow": {
+    "description": "One row of the awards leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live\nresponse, not the first row: `guid` is null on some of them, and a model\nthat read only row 0 would have typed it `str` and dropped the nulls.\n\n⛔ `response_model` FILTERS. A field the handler returns and a model omits\ndisappears from the payload, silently, with a 200 — which is why\n`tests/unit/test_response_models_drop_nothing.py` compares handler output\nagainst the serialised model instead of trusting these classes.",
+    "properties": {
+     "award_count": {
+      "title": "Award Count",
+      "type": "integer"
+     },
+     "guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Guid"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "top_award": {
+      "title": "Top Award",
+      "type": "string"
+     },
+     "top_award_count": {
+      "title": "Top Award Count",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rank",
+     "player",
+     "guid",
+     "award_count",
+     "top_award",
+     "top_award_count"
+    ],
+    "title": "AwardLeaderRow",
+    "type": "object"
+   },
+   "AwardLeaderboard": {
+    "properties": {
+     "filters": {
+      "$ref": "#/components/schemas/AwardLeaderboardFilters"
+     },
+     "leaderboard": {
+      "items": {
+       "$ref": "#/components/schemas/AwardLeaderRow"
+      },
+      "title": "Leaderboard",
+      "type": "array"
+     }
+    },
+    "required": [
+     "leaderboard",
+     "filters"
+    ],
+    "title": "AwardLeaderboard",
+    "type": "object"
+   },
+   "AwardLeaderboardFilters": {
+    "description": "Echo of the query that produced the rows above.",
+    "properties": {
+     "award_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Award Type"
+     },
+     "days": {
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "days",
+     "award_type"
+    ],
+    "title": "AwardLeaderboardFilters",
+    "type": "object"
+   },
+   "AwardRow": {
+    "description": "One awarded performance. `value` is a PRE-FORMATTED string, not a\nnumber — the handler renders it per award type, so a numeric type here\nwould reject perfectly good rows.",
+    "properties": {
+     "award": {
+      "title": "Award",
+      "type": "string"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "award",
+     "player",
+     "guid",
+     "value",
+     "date",
+     "map",
+     "round_number",
+     "round_id"
+    ],
+    "title": "AwardRow",
+    "type": "object"
+   },
+   "AwardsFilters": {
+    "properties": {
+     "award_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Award Type"
+     },
+     "days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Days"
+     },
+     "player": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player"
+     }
+    },
+    "required": [
+     "player",
+     "award_type",
+     "days"
+    ],
+    "title": "AwardsFilters",
+    "type": "object"
+   },
+   "AwardsPage": {
+    "properties": {
+     "awards": {
+      "items": {
+       "$ref": "#/components/schemas/AwardRow"
+      },
+      "title": "Awards",
+      "type": "array"
+     },
+     "filters": {
+      "$ref": "#/components/schemas/AwardsFilters"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "awards",
+     "total",
+     "limit",
+     "offset",
+     "filters"
+    ],
+    "title": "AwardsPage",
+    "type": "object"
+   },
    "Body_upload_file_api_uploads_post": {
     "properties": {
      "category": {
@@ -134,6 +354,55 @@
     "title": "ClientErrorReport",
     "type": "object"
    },
+   "CurrentSeason": {
+    "description": "The current season and the one after it.\n\n⚠️ MEASURED, NOT DESIGNED — read off a live response and cross-checked\nagainst the handler, which has a single return with eight literal keys.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
+    "properties": {
+     "days_left": {
+      "title": "Days Left",
+      "type": "integer"
+     },
+     "end_date": {
+      "title": "End Date",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "next_season_id": {
+      "title": "Next Season Id",
+      "type": "string"
+     },
+     "next_season_name": {
+      "title": "Next Season Name",
+      "type": "string"
+     },
+     "next_season_start": {
+      "title": "Next Season Start",
+      "type": "string"
+     },
+     "start_date": {
+      "title": "Start Date",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "days_left",
+     "start_date",
+     "end_date",
+     "next_season_id",
+     "next_season_name",
+     "next_season_start"
+    ],
+    "title": "CurrentSeason",
+    "type": "object"
+   },
    "DpmLeaderRow": {
     "description": "One row of the DPM board. ⚠️ Its participation field is `sessions`.\n\n⛔ A SEPARATE MODEL, not one row type with both fields optional. The two\nboards genuinely differ, and a shared model with `rounds?`/`sessions?`\nwould let either board claim the other's shape — a client could then read\n`rounds` off a DPM row and get `undefined` with the type system's blessing.",
     "properties": {
@@ -184,6 +453,82 @@
      }
     },
     "title": "HTTPValidationError",
+    "type": "object"
+   },
+   "HallOfFame": {
+    "description": "⚠️ `categories` is left as a plain mapping on purpose.\n\nTwelve category names are present today (`most_kills`, `most_dpm`, …) and\nthe handler builds them from a list it can extend. Naming them here would\nmake this model the gate on which categories may exist: adding one to the\nhandler without editing this class would drop it from the response with a\n200. The mapping keeps the row shape typed while leaving the key set open.",
+    "properties": {
+     "categories": {
+      "additionalProperties": {
+       "items": {
+        "$ref": "#/components/schemas/HallOfFameRow"
+       },
+       "type": "array"
+      },
+      "title": "Categories",
+      "type": "object"
+     },
+     "delta_window_days": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Delta Window Days"
+     },
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "period": {
+      "title": "Period",
+      "type": "string"
+     }
+    },
+    "required": [
+     "categories",
+     "period",
+     "delta_window_days",
+     "generated_at"
+    ],
+    "title": "HallOfFame",
+    "type": "object"
+   },
+   "HallOfFameRow": {
+    "description": "One entry in a hall-of-fame category.\n\n`value` is `float` because one category (`most_dpm`) is fractional while the\nrest are counts. Typing it `int` would silently truncate DPM — a schema is\nas capable of corrupting a number as of dropping a field.",
+    "properties": {
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "unit": {
+      "title": "Unit",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "rank",
+     "player_guid",
+     "player_name",
+     "value",
+     "unit"
+    ],
+    "title": "HallOfFameRow",
     "type": "object"
    },
    "LineupChange": {
@@ -353,6 +698,37 @@
      "rounds"
     ],
     "title": "MostActivePlayer",
+    "type": "object"
+   },
+   "PlayerWeapons": {
+    "properties": {
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "weapons": {
+      "items": {
+       "$ref": "#/components/schemas/WeaponRow"
+      },
+      "title": "Weapons",
+      "type": "array"
+     }
+    },
+    "required": [
+     "player_guid",
+     "player_name",
+     "total_kills",
+     "weapons"
+    ],
+    "title": "PlayerWeapons",
     "type": "object"
    },
    "QuickLeaders": {
@@ -875,6 +1251,86 @@
      "type"
     ],
     "title": "ValidationError",
+    "type": "object"
+   },
+   "WeaponRow": {
+    "description": "One weapon's line for one player.\n\nTypes are the union over 125 weapon rows of a live response: `hs_rate` and\n`accuracy` are fractional percentages, the rest are counts. Typing the two\npercentages `int` would truncate them — a schema can corrupt a number as\neasily as it can drop a field.",
+    "properties": {
+     "accuracy": {
+      "title": "Accuracy",
+      "type": "number"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "hits": {
+      "title": "Hits",
+      "type": "integer"
+     },
+     "hs_rate": {
+      "title": "Hs Rate",
+      "type": "number"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "shots": {
+      "title": "Shots",
+      "type": "integer"
+     },
+     "weapon_key": {
+      "title": "Weapon Key",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "weapon_key",
+     "kills",
+     "deaths",
+     "headshots",
+     "hs_rate",
+     "shots",
+     "hits",
+     "accuracy"
+    ],
+    "title": "WeaponRow",
+    "type": "object"
+   },
+   "WeaponsByPlayer": {
+    "properties": {
+     "period": {
+      "title": "Period",
+      "type": "string"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/PlayerWeapons"
+      },
+      "title": "Players",
+      "type": "array"
+     }
+    },
+    "required": [
+     "period",
+     "player_count",
+     "players"
+    ],
+    "title": "WeaponsByPlayer",
     "type": "object"
    },
    "XpLeaderRow": {
@@ -1512,7 +1968,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/AwardsPage"
+        }
        }
       },
       "description": "Successful Response"
@@ -1573,7 +2031,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/AwardLeaderboard"
+        }
        }
       },
       "description": "Successful Response"
@@ -3015,7 +3475,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/HallOfFame"
+        }
        }
       },
       "description": "Successful Response"
@@ -11767,7 +12229,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/CurrentSeason"
+        }
        }
       },
       "description": "Successful Response"
@@ -13883,7 +14347,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/WeaponsByPlayer"
+        }
        }
       },
       "description": "Successful Response"

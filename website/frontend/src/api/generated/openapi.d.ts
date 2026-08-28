@@ -5331,6 +5331,94 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AwardLeaderRow
+         * @description One row of the awards leaderboard, as this endpoint returns it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live
+         *     response, not the first row: `guid` is null on some of them, and a model
+         *     that read only row 0 would have typed it `str` and dropped the nulls.
+         *
+         *     ⛔ `response_model` FILTERS. A field the handler returns and a model omits
+         *     disappears from the payload, silently, with a 200 — which is why
+         *     `tests/unit/test_response_models_drop_nothing.py` compares handler output
+         *     against the serialised model instead of trusting these classes.
+         */
+        AwardLeaderRow: {
+            /** Award Count */
+            award_count: number;
+            /** Guid */
+            guid: string | null;
+            /** Player */
+            player: string;
+            /** Rank */
+            rank: number;
+            /** Top Award */
+            top_award: string;
+            /** Top Award Count */
+            top_award_count: number;
+        };
+        /** AwardLeaderboard */
+        AwardLeaderboard: {
+            filters: components["schemas"]["AwardLeaderboardFilters"];
+            /** Leaderboard */
+            leaderboard: components["schemas"]["AwardLeaderRow"][];
+        };
+        /**
+         * AwardLeaderboardFilters
+         * @description Echo of the query that produced the rows above.
+         */
+        AwardLeaderboardFilters: {
+            /** Award Type */
+            award_type: string | null;
+            /** Days */
+            days: number;
+        };
+        /**
+         * AwardRow
+         * @description One awarded performance. `value` is a PRE-FORMATTED string, not a
+         *     number — the handler renders it per award type, so a numeric type here
+         *     would reject perfectly good rows.
+         */
+        AwardRow: {
+            /** Award */
+            award: string;
+            /** Date */
+            date: string;
+            /** Guid */
+            guid: string;
+            /** Map */
+            map: string;
+            /** Player */
+            player: string;
+            /** Round Id */
+            round_id: number;
+            /** Round Number */
+            round_number: number;
+            /** Value */
+            value: string;
+        };
+        /** AwardsFilters */
+        AwardsFilters: {
+            /** Award Type */
+            award_type: string | null;
+            /** Days */
+            days: number | null;
+            /** Player */
+            player: string | null;
+        };
+        /** AwardsPage */
+        AwardsPage: {
+            /** Awards */
+            awards: components["schemas"]["AwardRow"][];
+            filters: components["schemas"]["AwardsFilters"];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Total */
+            total: number;
+        };
         /** Body_upload_file_api_uploads_post */
         Body_upload_file_api_uploads_post: {
             /**
@@ -5379,6 +5467,34 @@ export interface components {
             user_agent?: string | null;
         };
         /**
+         * CurrentSeason
+         * @description The current season and the one after it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED — read off a live response and cross-checked
+         *     against the handler, which has a single return with eight literal keys.
+         *
+         *     ⛔ `response_model` FILTERS: a field the handler returns and this model
+         *     omits is dropped silently with a 200.
+         */
+        CurrentSeason: {
+            /** Days Left */
+            days_left: number;
+            /** End Date */
+            end_date: string;
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Next Season Id */
+            next_season_id: string;
+            /** Next Season Name */
+            next_season_name: string;
+            /** Next Season Start */
+            next_season_start: string;
+            /** Start Date */
+            start_date: string;
+        };
+        /**
          * DpmLeaderRow
          * @description One row of the DPM board. ⚠️ Its participation field is `sessions`.
          *
@@ -5405,6 +5521,48 @@ export interface components {
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * HallOfFame
+         * @description ⚠️ `categories` is left as a plain mapping on purpose.
+         *
+         *     Twelve category names are present today (`most_kills`, `most_dpm`, …) and
+         *     the handler builds them from a list it can extend. Naming them here would
+         *     make this model the gate on which categories may exist: adding one to the
+         *     handler without editing this class would drop it from the response with a
+         *     200. The mapping keeps the row shape typed while leaving the key set open.
+         */
+        HallOfFame: {
+            /** Categories */
+            categories: {
+                [key: string]: components["schemas"]["HallOfFameRow"][];
+            };
+            /** Delta Window Days */
+            delta_window_days: number | null;
+            /** Generated At */
+            generated_at: string;
+            /** Period */
+            period: string;
+        };
+        /**
+         * HallOfFameRow
+         * @description One entry in a hall-of-fame category.
+         *
+         *     `value` is `float` because one category (`most_dpm`) is fractional while the
+         *     rest are counts. Typing it `int` would silently truncate DPM — a schema is
+         *     as capable of corrupting a number as of dropping a field.
+         */
+        HallOfFameRow: {
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Rank */
+            rank: number;
+            /** Unit */
+            unit: string;
+            /** Value */
+            value: number;
         };
         /**
          * LineupChange
@@ -5473,6 +5631,17 @@ export interface components {
             name: string;
             /** Rounds */
             rounds: number;
+        };
+        /** PlayerWeapons */
+        PlayerWeapons: {
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Total Kills */
+            total_kills: number;
+            /** Weapons */
+            weapons: components["schemas"]["WeaponRow"][];
         };
         /**
          * QuickLeaders
@@ -5695,6 +5864,44 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * WeaponRow
+         * @description One weapon's line for one player.
+         *
+         *     Types are the union over 125 weapon rows of a live response: `hs_rate` and
+         *     `accuracy` are fractional percentages, the rest are counts. Typing the two
+         *     percentages `int` would truncate them — a schema can corrupt a number as
+         *     easily as it can drop a field.
+         */
+        WeaponRow: {
+            /** Accuracy */
+            accuracy: number;
+            /** Deaths */
+            deaths: number;
+            /** Headshots */
+            headshots: number;
+            /** Hits */
+            hits: number;
+            /** Hs Rate */
+            hs_rate: number;
+            /** Kills */
+            kills: number;
+            /** Name */
+            name: string;
+            /** Shots */
+            shots: number;
+            /** Weapon Key */
+            weapon_key: string;
+        };
+        /** WeaponsByPlayer */
+        WeaponsByPlayer: {
+            /** Period */
+            period: string;
+            /** Player Count */
+            player_count: number;
+            /** Players */
+            players: components["schemas"]["PlayerWeapons"][];
         };
         /**
          * XpLeaderRow
@@ -6163,7 +6370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AwardsPage"];
                 };
             };
             /** @description Validation Error */
@@ -6196,7 +6403,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AwardLeaderboard"];
                 };
             };
             /** @description Validation Error */
@@ -7213,7 +7420,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HallOfFame"];
                 };
             };
             /** @description Validation Error */
@@ -10740,7 +10947,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CurrentSeason"];
                 };
             };
         };
@@ -12137,7 +12344,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WeaponsByPlayer"];
                 };
             };
             /** @description Validation Error */
