@@ -33,10 +33,10 @@ function sectionFor(pathname: string): 'stats' | 'telemetry' | null {
 function SubNav({ section }: { section: 'stats' | 'telemetry' }) {
   const items = APP_ROUTES.filter((r) => r.nav === section);
   return (
-    <div style={{ borderBottom: '1px solid var(--color-rule-800)', background: 'var(--color-ink-900)' }}>
+    <div style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-900)' }}>
       <div
         style={{
-          maxWidth: 1180, margin: '0 auto', padding: '0 34px', display: 'flex',
+          maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 34px', display: 'flex',
           alignItems: 'center', gap: 18, height: 40, overflowX: 'auto',
         }}
       >
@@ -64,10 +64,10 @@ export function AppShell() {
   const section = sectionFor(pathname);
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div style={{ borderBottom: '1px solid var(--color-rule-900)' }}>
         <div
           style={{
-            maxWidth: 1180, margin: '0 auto', padding: '8px 34px', display: 'flex',
+            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '8px 34px', display: 'flex',
             alignItems: 'center', minHeight: 60, gap: 26, flexWrap: 'wrap', rowGap: 8,
           }}
         >
@@ -131,15 +131,15 @@ export function AppShell() {
 
       {section && <SubNav section={section} />}
 
-      <main style={{ flex: 1, width: '100%', maxWidth: 1180, margin: '0 auto', padding: '0 34px', boxSizing: 'border-box' }}>
+      <main style={{ flex: 1, width: '100%', maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 34px', boxSizing: 'border-box' }}>
         <Outlet />
       </main>
 
-      <footer style={{ borderTop: '1px solid var(--color-rule-800)', marginTop: 48 }}>
+      <footer style={{ borderTop: '1px solid var(--color-rule-900)', marginTop: 48 }}>
         <div
           className="m"
           style={{
-            maxWidth: 1180, margin: '0 auto', padding: '14px 34px', display: 'flex',
+            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '14px 34px', display: 'flex',
             justifyContent: 'space-between', fontSize: 10, letterSpacing: '0.14em',
             textTransform: 'uppercase', color: 'var(--color-text-600)',
           }}

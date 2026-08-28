@@ -72,7 +72,7 @@
 ]]--
 
 local modname = "stats_discord_webhook"
-local version = "1.7.2"
+local version = "1.7.3"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -838,34 +838,97 @@ end
 -- TEAM DATA COLLECTION
 -- ============================================================================
 
+-- v1.7.3: the roster is CUMULATIVE over the round, not a snapshot at
+-- intermission. The old collect-at-intermission call said "before players
+-- disconnect" — but a player who quits mid-round beats it (goldrush R2
+-- 2026-08-26: two quits ~30 s before the end left allies_players with ONE
+-- name of three; the stats file kept their stats fine, the roster lied).
+-- roster_seen maps guid -> {guid, name, team}: last-known PLAYING team
+-- wins (going spectator never erases it), scanned once a second while a
+-- round runs, reset on round start.
+local roster_seen = {}
+local roster_seen_last_scan = 0
+
+local function roster_reset()
+    roster_seen = {}
+    roster_seen_last_scan = 0
+end
+
+local function roster_scan(force)
+    -- Not during a pause: gamestate stays GS_PLAYING while paused, and a
+    -- spectator who joins a side mid-pause and leaves before the resume
+    -- was never a participant. Players already seen keep their entries.
+    -- `force` (the intermission collection) bypasses both gates: the
+    -- 1-second throttle would otherwise swallow the FINAL scan whenever a
+    -- frame scan already ran in the same os.time() second, losing a
+    -- last-moment join or team switch.
+    local now = os.time()
+    if not force then
+        if paused then return end
+        if now == roster_seen_last_scan then return end
+    end
+    roster_seen_last_scan = now
+    local max_clients = get_max_clients()
+    for clientNum = 0, max_clients - 1 do
+        local connected = safe_gentity_get(clientNum, "pers.connected")
+        if connected == CON_CONNECTED then
+            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+            if team == TEAM_AXIS or team == TEAM_ALLIES then
+                local guid = get_client_guid(clientNum)
+                local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+                local clean_name = strip_color_codes(name)
+                -- A GUID-less client (empty-string fallback) must not share
+                -- the "" key with every other GUID-less client. The SLOT is
+                -- not an identity either — it gets reused after a leave, and
+                -- retiring by slot deleted whoever held it before (review
+                -- rounds 5-6). The NAME is the identity such a client
+                -- actually carries, so the fallback keys by name: a reused
+                -- slot with a different name collides with nothing, and when
+                -- the GUID finally appears the same player's name-keyed
+                -- fallback is the one retired. (Two simultaneous GUID-less
+                -- clients with the identical name would merge — a rename
+                -- while GUID-less leaves a stale extra entry: both benign,
+                -- and this feature errs toward keeping.)
+                local key = guid:sub(1, 32)
+                if key == "" then
+                    key = "noguid:" .. clean_name
+                else
+                    roster_seen["noguid:" .. clean_name] = nil
+                end
+                roster_seen[key] = {
+                    guid = guid:sub(1, 32),  -- First 32 chars of GUID
+                    name = clean_name,
+                    team = team,
+                    last_seen = now,
+                }
+            end
+        end
+    end
+end
+
 local function collect_team_data()
     local axis_players = {}
     local allies_players = {}
 
-    local max_clients = get_max_clients()
-    for clientNum = 0, max_clients - 1 do
-        -- Check if player is connected
-        local connected = safe_gentity_get(clientNum, "pers.connected")
-        if connected == CON_CONNECTED then
-            local guid = get_client_guid(clientNum)
-            local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
-            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+    -- One final scan so the intermission state itself is captured; the
+    -- accumulated roster_seen then also contributes everyone who played
+    -- this round but already left. Forced: the throttle must not swallow it.
+    roster_scan(true)
 
-            -- Clean the name (remove color codes for cleaner display)
-            local clean_name = strip_color_codes(name)
-
-            local player_data = {
-                guid = guid:sub(1, 32),  -- First 32 chars of GUID
-                name = clean_name
-            }
-
-            if team == TEAM_AXIS then
-                table.insert(axis_players, player_data)
-                log(string.format("Axis player: %s (%s)", clean_name, guid:sub(1,8)))
-            elseif team == TEAM_ALLIES then
-                table.insert(allies_players, player_data)
-                log(string.format("Allies player: %s (%s)", clean_name, guid:sub(1,8)))
-            end
+    -- NO pre-clock heuristic, deliberately (three review rounds proved
+    -- every span/grace variant re-loses some real participant in a corner
+    -- of the map_restart path). A team member seen only during the
+    -- pre-clock warmup thus stays listed: cosmetic, pcs never confirms
+    -- them, and losing a real player is the exact failure this feature
+    -- exists to fix.
+    for _, p in pairs(roster_seen) do
+        local player_data = { guid = p.guid, name = p.name, last_seen = p.last_seen or 0 }
+        if p.team == TEAM_AXIS then
+            table.insert(axis_players, player_data)
+            log(string.format("Axis player: %s (%s)", p.name, p.guid:sub(1,8)))
+        elseif p.team == TEAM_ALLIES then
+            table.insert(allies_players, player_data)
+            log(string.format("Allies player: %s (%s)", p.name, p.guid:sub(1,8)))
         end
     end
 
@@ -880,7 +943,25 @@ local function format_player_names(players)
     if #names == 0 then
         return "(none)"
     end
-    return table.concat(names, ", ")
+    local joined = table.concat(names, ", ")
+    -- Discord embed field values cap at 1024 chars. The cumulative roster
+    -- (v1.7.3) is no longer bounded by simultaneous client count, so a
+    -- reconnect-heavy round could overflow the field and fail the webhook;
+    -- truncate the DISPLAY string only — the JSON payload stays complete.
+    if #joined > 1000 then
+        -- Do not split a UTF-8 code point: sub() is byte-oriented and
+        -- json_escape passes non-ASCII through, so a cut inside a
+        -- multibyte name would make the whole webhook body invalid UTF-8.
+        -- Back up over continuation bytes (0x80-0xBF) to a boundary.
+        local cut = 997
+        while cut > 1 do
+            local b = joined:byte(cut + 1)
+            if b == nil or b < 0x80 or b > 0xBF then break end
+            cut = cut - 1
+        end
+        joined = joined:sub(1, cut) .. "..."
+    end
+    return joined
 end
 
 local function format_player_json(players)
@@ -889,16 +970,36 @@ local function format_player_json(players)
         return "[]"
     end
 
+    -- ⚠️ This string is a DATA channel: the bot parses Axis_JSON /
+    -- Allies_JSON out of the Discord embed fields, and a field over 1024
+    -- chars fails the whole webhook. The cumulative roster (v1.7.3) is no
+    -- longer bounded by simultaneous client count, so cap by WHOLE entries
+    -- with the most recently seen players first — anyone dropped here is
+    -- the oldest sighting, and the bot's pcs-based roster healing restores
+    -- them on the database side.
+    local ordered = {}
+    for _, p in ipairs(players) do table.insert(ordered, p) end
+    table.sort(ordered, function(a, b)
+        return (a.last_seen or 0) > (b.last_seen or 0)
+    end)
+
     local parts = {}
-    for _, p in ipairs(players) do
+    local total_len = 2  -- brackets
+    for _, p in ipairs(ordered) do
         -- Use the RFC 8259-compliant escape (v1.6.4): names can contain raw
         -- control bytes from clipboard paste / binary corruption, and the
         -- prior inline `\` and `"` only escape let those through.
-        table.insert(parts, string.format(
+        local entry = string.format(
             '{"guid":"%s","name":"%s"}',
             json_escape(p.guid),
             json_escape(p.name)
-        ))
+        )
+        if total_len + #entry + 1 > 1000 then
+            log(string.format("Roster JSON cap: dropping oldest entry %s", p.name))
+        else
+            table.insert(parts, entry)
+            total_len = total_len + #entry + 1
+        end
     end
     return "[" .. table.concat(parts, ",") .. "]"
 end
@@ -1494,6 +1595,7 @@ local function handle_gamestate_change(new_gamestate)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()   -- Reset surrender vote for new round (v1.4.0)
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         round_started = true
         log(string.format("Round started at %d", round_start_unix))
         intermission_handled = false
@@ -1632,6 +1734,8 @@ function et_RunFrame(levelTime)
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
     handle_gamestate_change(gamestate)
 
+
+
     -- Fallback: detect round start reliably (even if gamestate transition is missed)
     if gamestate == GS_PLAYING and not round_started then
         round_start_unix = os.time()
@@ -1657,6 +1761,7 @@ function et_RunFrame(levelTime)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         intermission_handled = false
         round_started = true
         log(string.format("Round started at %d (fallback)", round_start_unix))
@@ -1695,6 +1800,13 @@ function et_RunFrame(levelTime)
     if gamestate == GS_PLAYING then
         detect_pause()
         track_spawns(levelTime)
+        -- v1.7.3: accumulate the round roster (throttled to once per
+        -- second inside roster_scan) so mid-round quitters stay in the
+        -- team lists. AFTER detect_pause on purpose: the pause gate must
+        -- see THIS frame's pause bit, not the previous frame's.
+        if round_started then
+            roster_scan()
+        end
     end
 
     -- Send scheduled webhook

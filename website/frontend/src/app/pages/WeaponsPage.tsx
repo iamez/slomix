@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useWeapons, useWeaponsByPlayer, useWeaponsHof } from '../lib/queries';
 import type { WeaponRow } from '../lib/types';
-import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Weapons (docs/design/12 row 6) — legacy matches.js weapons view carried
@@ -48,23 +48,6 @@ function categoryOf(weaponKey: string): string {
   return 'other';
 }
 
-function Pill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-        border: `1px solid ${active ? '#4a5a66' : 'var(--color-rule-700)'}`,
-        background: active ? '#151a1e' : 'transparent',
-        color: active ? 'var(--color-text-100)' : 'var(--color-text-400)',
-        padding: '4px 9px',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function HallOfFameStrip({ period }: { period: string }) {
   const hof = useWeaponsHof(period);
@@ -115,7 +98,7 @@ function WeaponsGrid({ period, category }: { period: string; category: string })
           return (
             <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,140px) 1fr auto auto auto', gap: 12, alignItems: 'center', padding: '7px 0' }}>
               <span style={{ fontSize: 14, letterSpacing: '0.03em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
-              <span style={{ height: 5, background: 'var(--color-rule-800)', display: 'block', position: 'relative' }}>
+              <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                 <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(share * 2, 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
               </span>
               <span className="m" style={{ fontSize: 12 }}>{w.kills.toLocaleString('en-US')}</span>
@@ -177,9 +160,9 @@ export function WeaponsPage() {
         The tools of the trade.
       </h1>
       <div data-parity="weapons.filters" style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
-        {PERIODS.map((p) => <Pill key={p} active={period === p} label={p} onClick={() => { setPeriod(p); }} />)}
+        {PERIODS.map((p) => <Chip key={p} active={period === p} label={p} onClick={() => { setPeriod(p); }} />)}
         <span style={{ width: 12 }} />
-        {CATEGORIES.map((c) => <Pill key={c} active={category === c} label={c} onClick={() => { setCategory(c); }} />)}
+        {CATEGORIES.map((c) => <Chip key={c} active={category === c} label={c} onClick={() => { setCategory(c); }} />)}
       </div>
       <HallOfFameStrip period={period} />
       <WeaponsGrid period={period} category={category} />
