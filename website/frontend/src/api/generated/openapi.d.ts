@@ -5435,10 +5435,7 @@ export interface components {
              * @default
              */
             description: string;
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
             /** Poster */
             poster?: string | null;
@@ -5457,10 +5454,7 @@ export interface components {
         };
         /** Body_upload_greatshot_api_greatshot_upload_post */
         Body_upload_greatshot_api_greatshot_upload_post: {
-            /**
-             * File
-             * Format: binary
-             */
+            /** File */
             file: string;
         };
         /** ClientErrorReport */
@@ -5864,6 +5858,10 @@ export interface components {
         };
         /** ValidationError */
         ValidationError: {
+            /** Context */
+            ctx?: Record<string, never>;
+            /** Input */
+            input?: unknown;
             /** Location */
             loc: (string | number)[];
             /** Message */

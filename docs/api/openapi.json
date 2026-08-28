@@ -234,14 +234,14 @@
       "type": "string"
      },
      "file": {
-      "format": "binary",
+      "contentMediaType": "application/octet-stream",
       "title": "File",
       "type": "string"
      },
      "poster": {
       "anyOf": [
        {
-        "format": "binary",
+        "contentMediaType": "application/octet-stream",
         "type": "string"
        },
        {
@@ -281,7 +281,7 @@
    "Body_upload_greatshot_api_greatshot_upload_post": {
     "properties": {
      "file": {
-      "format": "binary",
+      "contentMediaType": "application/octet-stream",
       "title": "File",
       "type": "string"
      }
@@ -1215,6 +1215,13 @@
    },
    "ValidationError": {
     "properties": {
+     "ctx": {
+      "title": "Context",
+      "type": "object"
+     },
+     "input": {
+      "title": "Input"
+     },
      "loc": {
       "items": {
        "anyOf": [
