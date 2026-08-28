@@ -259,7 +259,11 @@ def _is_channel_decline(error) -> bool:
     """
     try:
         from bot.core.checks import ChannelCheckFailure
-    except Exception:  # pragma: no cover - tooling without discord.py
+    except ImportError:  # pragma: no cover - tooling without discord.py
+        # ⛔ ImportError only. A bare `except Exception` here would also
+        # swallow a real fault inside `bot.core.checks` and quietly report
+        # every decline as a genuine failure — the exact confusion this
+        # function exists to remove.
         return False
     return isinstance(error, ChannelCheckFailure)
 
