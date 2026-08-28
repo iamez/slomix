@@ -250,6 +250,20 @@ def _exc_info_for(error):
     return error if isinstance(error, BaseException) else False
 
 
+def _is_channel_decline(error) -> bool:
+    """True when a command was declined for being in the wrong channel.
+
+    Imported lazily and guarded: `bot.core.checks` imports discord.py, and this
+    module is also loaded by tooling that has no reason to. A missing import
+    must not turn every command log into a crash.
+    """
+    try:
+        from bot.core.checks import ChannelCheckFailure
+    except Exception:  # pragma: no cover - tooling without discord.py
+        return False
+    return isinstance(error, ChannelCheckFailure)
+
+
 def log_command_execution(ctx, command_name, start_time=None, end_time=None, error=None):
     """
     Log command execution with full context
@@ -275,8 +289,21 @@ def log_command_execution(ctx, command_name, start_time=None, end_time=None, err
         elapsed = end_time - start_time
         duration = f" [{elapsed:.2f}s]"
 
-    # Log based on success/failure
-    if error:
+    # Log based on success/failure.
+    #
+    # ⛔ A CHANNEL DECLINE IS NOT A FAILURE. This Discord runs more than one
+    # bot, so commands meant for another one reach ours and are declined by
+    # channel scope. Recording those at ERROR with a traceback fills errors.log
+    # with entries nothing went wrong in — and a log full of non-failures is
+    # how a real failure gets missed. (During the 2026-08-28 review, four
+    # `!teams` entries aimed at the team-building bot sat among the genuine
+    # ones and had to be ruled out by hand.)
+    if error and _is_channel_decline(error):
+        logger.debug(
+            f"↷ DECLINED (channel scope): {command_name} | User: {user} | "
+            f"Guild: {guild} | Channel: {channel}"
+        )
+    elif error:
         logger.error(
             f"❌ FAILED: {command_name}{duration} | User: {user} | Guild: {guild} | Channel: {channel} | Error: {error}",
             exc_info=_exc_info_for(error)
