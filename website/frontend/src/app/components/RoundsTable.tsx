@@ -20,20 +20,24 @@
  */
 import type { ReactNode } from 'react';
 
+import { Cluster, Stack } from './layout';
 import type { RoundPlayerRow, SessionRound } from '../lib/types';
 
+// The scale is declared in tokens.css and guarded by tokens.test.ts, so these
+// need no fallbacks: an undeclared token would fail that guard, not this file.
 const SPACE = {
-  1: 'var(--space-1, 4px)',
-  2: 'var(--space-2, 8px)',
-  3: 'var(--space-3, 12px)',
-  4: 'var(--space-4, 16px)',
-  5: 'var(--space-5, 22px)',
+  1: 'var(--space-1)',
+  2: 'var(--space-2)',
 } as const;
 
+// ⚠️ The type scale is NAMED, not numbered — `--fs-caption`, `--fs-small`,
+// `--fs-value`… I wrote `--fs-1/3/4/9` from memory and the token guard caught
+// all four: an undeclared custom property resolves to nothing, so the text
+// would have rendered at the browser default with no error anywhere.
 const FS = {
-  micro: 'var(--fs-1, 9px)',
-  small: 'var(--fs-3, 12px)',
-  body: 'var(--fs-4, 13px)',
+  micro: 'var(--fs-caption)',
+  small: 'var(--fs-small)',
+  body: 'var(--fs-value)',
 } as const;
 
 /** Columns, in the order they read. `key` doubles as the field name. */
@@ -132,10 +136,10 @@ function PlayerRows({
           <tr
             key={p.player_guid}
             data-highlighted={mine || undefined}
-            style={{ borderTop: '1px solid var(--color-rule-900, #1b1b1b)' }}
+            style={{ borderTop: '1px solid var(--color-rule-900)' }}
           >
             <td style={{ padding: `${SPACE[1]} ${SPACE[2]}`, fontSize: FS.body,
-                         color: mine ? 'var(--color-accent, #d8a657)'
+                         color: mine ? 'var(--color-accent)'
                                      : 'var(--color-text-100)' }}>
               {p.player_name}
             </td>
@@ -158,8 +162,7 @@ function PlayerRows({
 function RoundHeading({ round }: { round: SessionRound }) {
   const excluded = !round.counts_toward_totals;
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[2],
-                  flexWrap: 'wrap' }}>
+    <Cluster gap={2} align="baseline">
       <span style={{ fontSize: FS.body, color: 'var(--color-text-100)' }}>
         {round.map_name}
       </span>
@@ -185,12 +188,12 @@ function RoundHeading({ round }: { round: SessionRound }) {
           data-excluded="true"
           style={{ fontSize: FS.micro, letterSpacing: '0.08em',
                    textTransform: 'uppercase',
-                   color: 'var(--color-accent-warm, #c98a4b)' }}
+                   color: 'var(--color-accent-warm)' }}
         >
           {round.round_status ?? 'excluded'} · not counted
         </span>
       ) : null}
-    </div>
+    </Cluster>
   );
 }
 
@@ -270,7 +273,7 @@ export function RoundsTable({
             {rows.map(({ round, row }) => (
               <tr key={round.round_id}
                   data-excluded={!round.counts_toward_totals || undefined}
-                  style={{ borderTop: '1px solid var(--color-rule-900, #1b1b1b)' }}>
+                  style={{ borderTop: '1px solid var(--color-rule-900)' }}>
                 <td style={{ padding: `${SPACE[1]} ${SPACE[2]}`, fontSize: FS.body }}>
                   <button
                     type="button"
@@ -284,7 +287,7 @@ export function RoundsTable({
                   {!round.counts_toward_totals ? (
                     <span style={{ fontSize: FS.micro, marginInlineStart: SPACE[2],
                                    textTransform: 'uppercase', letterSpacing: '0.08em',
-                                   color: 'var(--color-accent-warm, #c98a4b)' }}>
+                                   color: 'var(--color-accent-warm)' }}>
                       not counted
                     </span>
                   ) : null}
@@ -307,11 +310,11 @@ export function RoundsTable({
   }
 
   return (
-    <div style={{ display: 'grid', gap: SPACE[5] }}>
+    <Stack gap={5}>
       {rounds.map((round) => (
         <section key={round.round_id} data-round-id={round.round_id}
                  data-excluded={!round.counts_toward_totals || undefined}>
-          <div style={{ display: 'grid', gap: SPACE[2] }}>
+          <Stack gap={2}>
             <RoundHeading round={round} />
             <div style={{ overflowX: 'auto' }}>
               <table style={{ borderCollapse: 'collapse', width: '100%' }}>
@@ -324,9 +327,9 @@ export function RoundsTable({
                 </tbody>
               </table>
             </div>
-          </div>
+          </Stack>
         </section>
       ))}
-    </div>
+    </Stack>
   );
 }

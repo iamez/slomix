@@ -16,6 +16,7 @@ import type {
   MapSegments,
   MapStatsRow,
   MatchRow,
+  PlayerProfile,
   QuickLeaders,
   RecentRound,
   RoundViz,
@@ -80,6 +81,32 @@ export function useOverview() {
   return useQuery({
     queryKey: ['stats-overview'],
     queryFn: () => apiGet('/api/stats/overview') as Promise<StatsOverview>,
+  });
+}
+
+/** The sections this page renders, named explicitly so adding a panel is a
+ * deliberate cost decision rather than a silent one. */
+const PROFILE_SECTIONS = [
+  'identity', 'skill', 'streaks', 'weapons', 'hit_regions', 'movement',
+  'relationships', 'maps', 'recent_matches',
+].join(',');
+
+/** The profile is ONE endpoint with sections (players_profile_router): the
+ * legacy page fanned out to a dozen calls; `sections=all` is a single
+ * request whose parts each declare their own availability. */
+export function usePlayerProfile(playerId: string) {
+  return useQuery({
+    queryKey: ['player-profile', playerId],
+    enabled: playerId.length > 0,
+    queryFn: () =>
+      apiGet('/api/players/{identifier}/profile', {
+        pathParams: { identifier: playerId },
+        // NOT 'all': `aim` and `advanced` cost a measured 16.9 s and 11.1 s
+        // cold (players_profile_router:1156-1170) and this page renders
+        // neither — asking for them would make every cold profile wait ~28 s
+        // for panels nobody sees.
+        query: { sections: PROFILE_SECTIONS },
+      }) as Promise<PlayerProfile>,
   });
 }
 

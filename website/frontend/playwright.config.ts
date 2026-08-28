@@ -20,6 +20,12 @@ import { defineConfig, devices } from '@playwright/test';
 //   3. npm --prefix website/frontend run build   (website/static/modern/ is
 //      gitignored + generated; the skill-rating route imports
 //      /static/modern/route-host.js and 404s without this)
+//   3b. npm --prefix website/frontend run build:app   (a SECOND and separate
+//      bundle — website/static/app/, also gitignored. main.py mounts /app
+//      only `if os.path.isdir(APP_DIST)` and evaluates that at STARTUP, so
+//      app-tokens.spec.ts gets a 404 without this step, and building it
+//      after the server is already running still 404s until a restart.
+//      Order that works: build, then start the backend.)
 //   4. cd website && ../venv/bin/uvicorn backend.main:app --port 8000
 //      (must run from website/, not the repo root — there is no root-level
 //      `backend` package, it's website/backend; the venv lives at the repo

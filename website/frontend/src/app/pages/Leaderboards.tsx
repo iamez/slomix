@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useLeaderboard } from '../lib/queries';
-import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Leaderboards (docs/design/12 row 3) — legacy leaderboard.js carried over:
@@ -39,23 +39,6 @@ function formatValue(stat: string, value: number): string {
   return value.toLocaleString('en-US');
 }
 
-function Pill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-        border: `1px solid ${active ? '#4a5a66' : 'var(--color-rule-700)'}`,
-        background: active ? '#151a1e' : 'transparent',
-        color: active ? 'var(--color-text-100)' : 'var(--color-text-400)',
-        padding: '4px 9px',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 export function Leaderboards() {
   // Legacy defaults: stat=games ("Rounds"), period=season.
@@ -78,12 +61,12 @@ export function Leaderboards() {
       <div data-parity="leaderboards.filters" style={{ marginTop: 22 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           {STATS.map((s) => (
-            <Pill key={s.key} active={stat === s.key} label={s.label} onClick={() => setStat(s.key)} />
+            <Chip key={s.key} active={stat === s.key} label={s.label} onClick={() => { setStat(s.key); }} />
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
           {PERIODS.map((p) => (
-            <Pill key={p.key} active={period === p.key} label={p.label} onClick={() => setPeriod(p.key)} />
+            <Chip key={p.key} active={period === p.key} label={p.label} onClick={() => { setPeriod(p.key); }} />
           ))}
         </div>
       </div>

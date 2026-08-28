@@ -120,7 +120,7 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
   return (
     <div style={{ marginTop: 40 }}>
       <SectionHead label="data integrity" parity="system.linkage" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 10, borderTop: '1px solid var(--color-rule-800)', borderBottom: '1px solid var(--color-rule-800)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 10, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
         {cells.map((c) => (
           <div key={c.k} style={{ padding: '14px 0 12px' }}>
             <div className="m" style={{ fontSize: 22, lineHeight: 1 }}>{c.v}</div>

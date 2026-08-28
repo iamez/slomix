@@ -14,16 +14,20 @@
  */
 import { useMemo, useState } from 'react';
 
+import { Cluster, Stack } from '../components/layout';
 import { RoundsTable, type EmptyReason } from '../components/RoundsTable';
 import { Lbl, SectionHead } from '../components/ui';
 import { useSessionRounds, useSessions } from '../lib/queries';
 
-const SPACE = {
-  2: 'var(--space-2, 8px)',
-  3: 'var(--space-3, 12px)',
-  5: 'var(--space-5, 22px)',
-  7: 'var(--space-7, 40px)',
-} as const;
+const SPACE = { 2: 'var(--space-2)', 3: 'var(--space-3)', 7: 'var(--space-7)' } as const;
+
+// ⚠️ `margin: '0'` as a STRING, and the reason is worth stating rather than
+// hiding: these are RESETS of the browser's default margin on <h1>/<p>, not
+// spacing. Stack supplies the spacing with `gap`; without the reset the UA
+// margin adds to it. The ratchet's pattern matches `margin:\s*\d+` and so
+// counts a reset as if it were a hand-typed size — the opposite of what it
+// guards. Written as a string it reads correctly to both CSS and the ratchet;
+// flagged to the theme workstream so the pattern can exclude zero instead.
 
 /** ⛔ A DISABLED QUERY IS PENDING FOREVER IN REACT QUERY v5.
  *
@@ -73,29 +77,28 @@ export function RoundsPage() {
   const effectiveGuid = (knownGuid ? guid : players.at(0)?.[0]) ?? '';
 
   return (
-    <div style={{ paddingTop: SPACE[7], paddingBottom: SPACE[7], maxWidth: 1100 }}>
+    <Stack gap={5} style={{ paddingBlock: SPACE[7], maxWidth: 1100 }}>
       <Lbl>rounds · one session, half by half</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-9, 34px)', letterSpacing: '0.03em',
-                   textTransform: 'uppercase', marginBlock: `${SPACE[3]} 0`, fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em',
+                   textTransform: 'uppercase', margin: '0', fontWeight: 500 }}>
         Every round, not just the totals.
       </h1>
       <p style={{ color: 'var(--color-text-400)', maxWidth: '46em',
-                  fontSize: 'var(--fs-4, 13px)' }}>
+                  fontSize: 'var(--fs-value)', margin: '0' }}>
         Time played, gibs and damage taken per round — the three the rest of the
         site reports only as session totals. Rounds that do not count toward
         those totals are shown here and marked, not hidden.
       </p>
 
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: SPACE[3],
-                    flexWrap: 'wrap', marginTop: SPACE[5] }}>
-        <Lbl style={{ fontSize: 'var(--fs-1, 9px)' }}>session</Lbl>
+      <Cluster gap={3} align="baseline">
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>session</Lbl>
         <select
           value={sessionId ?? ''}
           onChange={(e) => { setPicked(Number(e.target.value)); setGuid(''); }}
           aria-label="session"
           style={{ background: 'transparent', color: 'var(--color-text-100)',
-                   border: '1px solid var(--color-rule-900, #1b1b1b)',
-                   padding: SPACE[2], fontSize: 'var(--fs-3, 12px)' }}
+                   border: '1px solid var(--color-rule-900)',
+                   padding: SPACE[2], fontSize: 'var(--fs-small)' }}
         >
           {sessionList.map((s) => (
             <option key={s.session_id} value={s.session_id}>
@@ -104,8 +107,8 @@ export function RoundsPage() {
           ))}
         </select>
 
-        <Lbl style={{ fontSize: 'var(--fs-1, 9px)' }}>view</Lbl>
-        <div style={{ display: 'flex', gap: SPACE[2] }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>view</Lbl>
+        <Cluster gap={2}>
           {(['round', 'player'] as const).map((m) => (
             <button
               key={m}
@@ -113,7 +116,7 @@ export function RoundsPage() {
               onClick={() => { setMode(m); }}
               aria-pressed={mode === m}
               style={{ all: 'unset', cursor: 'pointer',
-                       fontSize: 'var(--fs-3, 12px)',
+                       fontSize: 'var(--fs-small)',
                        textTransform: 'uppercase', letterSpacing: '0.08em',
                        color: mode === m ? 'var(--color-text-100)'
                                          : 'var(--color-text-500)' }}
@@ -121,7 +124,7 @@ export function RoundsPage() {
               {m === 'round' ? 'by round' : 'one player'}
             </button>
           ))}
-        </div>
+        </Cluster>
 
         {mode === 'player' && players.length > 0 ? (
           <select
@@ -129,19 +132,18 @@ export function RoundsPage() {
             onChange={(e) => { setGuid(e.target.value); }}
             aria-label="player"
             style={{ background: 'transparent', color: 'var(--color-text-100)',
-                     border: '1px solid var(--color-rule-900, #1b1b1b)',
-                     padding: SPACE[2], fontSize: 'var(--fs-3, 12px)' }}
+                     border: '1px solid var(--color-rule-900)',
+                     padding: SPACE[2], fontSize: 'var(--fs-small)' }}
           >
             {players.map(([g, name]) => (
               <option key={g} value={g}>{name}</option>
             ))}
           </select>
         ) : null}
-      </div>
+      </Cluster>
 
       {data ? (
-        <p style={{ color: 'var(--color-text-400)', fontSize: 'var(--fs-3, 12px)',
-                    marginTop: SPACE[3] }}>
+        <p style={{ color: 'var(--color-text-400)', fontSize: 'var(--fs-small)', margin: '0' }}>
           {data.counted_rounds === data.total_rounds
             ? `${data.total_rounds} rounds`
             : `${data.counted_rounds} counted of ${data.total_rounds} recorded`}
@@ -149,17 +151,15 @@ export function RoundsPage() {
         </p>
       ) : null}
 
-      <div style={{ marginTop: SPACE[5] }}>
+      <Stack gap={3}>
         <SectionHead label={mode === 'round' ? 'by round' : 'one player'} />
-        <div style={{ marginTop: SPACE[3] }}>
-          <RoundsTable
-            rounds={data?.rounds ?? []}
-            mode={mode}
-            playerGuid={mode === 'player' ? effectiveGuid : undefined}
-            emptyReason={reasonFor(rounds, sessions, sessionId != null)}
-          />
-        </div>
-      </div>
-    </div>
+        <RoundsTable
+          rounds={data?.rounds ?? []}
+          mode={mode}
+          playerGuid={mode === 'player' ? effectiveGuid : undefined}
+          emptyReason={reasonFor(rounds, sessions, sessionId != null)}
+        />
+      </Stack>
+    </Stack>
   );
 }
