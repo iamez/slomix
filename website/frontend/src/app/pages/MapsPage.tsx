@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useMapSegments, useMapStats } from '../lib/queries';
 import type { MapStatsRow } from '../lib/types';
 import { mapImageFor, mapLabel } from '../lib/maps';
-import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Maps (docs/design/12 row 4) — legacy matches.js loadMapsView carried
@@ -33,23 +33,6 @@ function fmtSeconds(s: number): string {
   return `${m}:${String(Math.round(s % 60)).padStart(2, '0')}`;
 }
 
-function Pill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-        border: `1px solid ${active ? '#4a5a66' : 'var(--color-rule-700)'}`,
-        background: active ? '#151a1e' : 'transparent',
-        color: active ? 'var(--color-text-100)' : 'var(--color-text-400)',
-        padding: '4px 9px',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function Summary({ maps }: { maps: MapStatsRow[] }) {
   if (maps.length === 0) return null;
@@ -134,7 +117,7 @@ export function MapsPage() {
             aside={
               <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 {SORTS.map((s) => (
-                  <Pill key={s.key} active={sort === s.key} label={s.label} onClick={() => { setSort(s.key); }} />
+                  <Chip key={s.key} active={sort === s.key} label={s.label} onClick={() => { setSort(s.key); }} />
                 ))}
               </span>
             }

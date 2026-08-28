@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useAwards, useAwardsLeaderboard } from '../lib/queries';
 import type { AwardRow } from '../lib/types';
-import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Awards (docs/design/12 row 11) — legacy awards.js carried over: two tabs
@@ -33,23 +33,6 @@ const DAY_CHOICES: { key: number | null; label: string }[] = [
   { key: null, label: 'All time' },
 ];
 
-function Pill({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', cursor: 'pointer',
-        border: `1px solid ${active ? '#4a5a66' : 'var(--color-rule-700)'}`,
-        background: active ? '#151a1e' : 'transparent',
-        color: active ? 'var(--color-text-100)' : 'var(--color-text-400)',
-        padding: '4px 9px',
-      }}
-    >
-      {label}
-    </button>
-  );
-}
 
 function roundKey(a: AwardRow): string {
   return `${a.date}-${a.map}-${a.round_number}`;
@@ -196,11 +179,11 @@ export function Awards() {
         Who took what home.
       </h1>
       <div style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
-        <Pill active={tab === 'round'} label="By round" onClick={() => setTab('round')} />
-        <Pill active={tab === 'player'} label="By player" onClick={() => setTab('player')} />
+        <Chip active={tab === 'round'} label="By round" onClick={() => setTab('round')} />
+        <Chip active={tab === 'player'} label="By player" onClick={() => setTab('player')} />
         <span style={{ width: 12 }} />
         {DAY_CHOICES.map((d) => (
-          <Pill key={String(d.key)} active={days === d.key} label={d.label} onClick={() => setDays(d.key)} />
+          <Chip key={String(d.key)} active={days === d.key} label={d.label} onClick={() => setDays(d.key)} />
         ))}
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 10 }}>
