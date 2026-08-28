@@ -46,7 +46,7 @@ function TopBand() {
   const live = useLiveStatus();
   const data = live.isError ? undefined : live.data;
   return (
-    <div data-parity="home.status-band" style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-800)', margin: '0 -8px', padding: '12px 8px' }}>
+    <div data-parity="home.status-band" style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-800)', margin: '0 -8px', padding: 'var(--space-3) var(--space-2)' }}>
       <div className="landing-split" style={{ gap: 'var(--space-6)' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
@@ -154,8 +154,8 @@ function Hero() {
  * per-player rows — the halves are the truth, the sum is arithmetic. */
 function EveningFigures() {
   const last = useLastSession();
-  if (last.isPending) return <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>;
-  if (!last.isSuccess) return <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>;
+  if (last.isPending) return <div style={{ padding: 'var(--space-4) 0' }}><Pending label="figures" /></div>;
+  if (!last.isSuccess) return <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="figures" /></div>;
   const d = last.data;
   // Substitutes live in unassigned_players — leaving them out silently
   // shrinks the evening (Codex on #811).
@@ -164,7 +164,7 @@ function EveningFigures() {
   // shape inside a 200 — sums over nobody would publish zero kills for a
   // played evening (Codex wave 3).
   if (players.length === 0 && d.player_count > 0) {
-    return <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>;
+    return <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="figures" /></div>;
   }
   const sum = (pick: (p: LastSession['teams'][number]['players'][number]) => number) =>
     players.reduce((acc, p) => acc + pick(p), 0);
@@ -181,7 +181,7 @@ function EveningFigures() {
   return (
     <div data-parity="home.evening-figures" className="home-grid-5" style={{ marginTop: 'var(--space-7)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
       {cells.map((c) => (
-        <div key={c.k} style={{ padding: '18px 0 16px' }}>
+        <div key={c.k} style={{ padding: 'var(--space-4) 0 var(--space-4)' }}>
           <div className="m" style={{ fontSize: 'var(--fs-kpi-lg)', lineHeight: 1 }}>{c.v}</div>
           <Lbl style={{ marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
         </div>
@@ -234,7 +234,7 @@ function Insights() {
                   border: `1px solid ${days === r ? '#4a5a66' : 'var(--color-rule-700)'}`,
                   background: days === r ? '#151a1e' : 'transparent',
                   color: days === r ? 'var(--color-text-100)' : 'var(--color-text-400)',
-                  padding: '4px 9px',
+                  padding: 'var(--space-1) var(--space-2)',
                 }}
               >
                 {r}d
@@ -329,7 +329,7 @@ function SeasonBlock() {
       {leaderRows.length > 0 && (
         <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-rule-900)' }}>
           {leaderRows.map(({ k, row }) => (
-            <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '8px 0' }}>
+            <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
               <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
@@ -364,7 +364,7 @@ function LatestGames() {
           <Link
             key={m.id}
             to={m.gaming_session_id != null ? `/session-detail/${m.gaming_session_id}` : `/session-detail/date/${m.date}`}
-            style={{ ...rowStyle, display: 'block', padding: '11px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+            style={{ ...rowStyle, display: 'block', padding: 'var(--space-3) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
           >
             <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
               <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -410,7 +410,7 @@ function QuickLeadersPanel() {
                 ? <Unavailable what="board" />
                 : <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no data in this window</div>)}
               {board.rows.map((r) => (
-                <div key={r.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '7px 0' }}>
+                <div key={r.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
                   <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(r.rank).padStart(2, '0')}</span>
                   <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
                   <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>{figure(r.value)}</span>
@@ -427,7 +427,7 @@ function QuickLeadersPanel() {
 function MoverLine({ row, dir }: { row: SkillMoverRow; dir: 'up' | 'down' | 'new' }) {
   const color = dir === 'up' ? 'var(--color-pos)' : dir === 'down' ? 'var(--color-neg)' : 'var(--color-text-400)';
   return (
-    <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 64px auto', gap: 'var(--space-2)', alignItems: 'center', padding: '6px 0' }}>
+    <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 64px auto', gap: 'var(--space-2)', alignItems: 'center', padding: 'var(--space-2) 0' }}>
       <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
       {row.series.length > 1 ? (
         <svg viewBox="0 0 64 18" style={{ width: 64, height: 18 }}>
@@ -534,7 +534,7 @@ function Tonight() {
           <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)' }}>marked for {nextMarked.date} — {nextMarked.total}</Lbl>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {Object.entries(nextMarked.counts).filter(([, n]) => n > 0).map(([status, n]) => (
-              <span key={status} className="m" style={{ fontSize: 'var(--fs-value)', border: '1px solid var(--color-rule-700)', padding: '5px 9px', color: 'var(--color-text-300)' }}>
+              <span key={status} className="m" style={{ fontSize: 'var(--fs-value)', border: '1px solid var(--color-rule-700)', padding: 'var(--space-1) var(--space-2)', color: 'var(--color-text-300)' }}>
                 {status.toLowerCase().replace('_', ' ')} · {n}
               </span>
             ))}
@@ -581,7 +581,7 @@ function FindYourStats() {
         style={{
           width: '100%', marginTop: 'var(--space-3)', background: 'var(--color-ink-800)',
           border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)',
-          fontSize: 'var(--fs-value)', padding: '10px 11px', boxSizing: 'border-box',
+          fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-3)', boxSizing: 'border-box',
         }}
       />
       {trimmed.length >= 2 && (
@@ -592,7 +592,7 @@ function FindYourStats() {
             <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no player matches "{trimmed}"</div>
           )}
           {search.data?.slice(0, 6).map((hit) => (
-            <Link key={hit.guid} to={`/profile/${hit.guid}`} style={{ ...rowStyle, display: 'block', padding: '7px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
+            <Link key={hit.guid} to={`/profile/${hit.guid}`} style={{ ...rowStyle, display: 'block', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
               <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{hit.name}</span>
             </Link>
           ))}
@@ -621,7 +621,7 @@ function EarlierEvenings() {
         {sessions.isError && <Unavailable what="sessions" />}
         {data?.length === 0 && <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no sessions recorded yet</div>}
         {data?.slice(skipFirst, skipFirst + 5).map((row) => (
-          <Link key={row.session_id} to={`/session-detail/${row.session_id}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'baseline', gap: 'var(--space-4)', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
+          <Link key={row.session_id} to={`/session-detail/${row.session_id}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto auto', alignItems: 'baseline', gap: 'var(--space-4)', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
             <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{row.formatted_date.replace(/,.*$/, '')} {row.date.slice(5)}</span>
             <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
             <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.players} pl</span>
@@ -650,7 +650,7 @@ function GoDeeper() {
       <Lbl>go deeper</Lbl>
       <div style={{ marginTop: 'var(--space-3)' }}>
         {cards.map((c) => (
-          <Link key={c.title} to={c.to} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline', gap: 'var(--space-4)', padding: '13px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
+          <Link key={c.title} to={c.to} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'baseline', gap: 'var(--space-4)', padding: 'var(--space-3) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
             <span>
               <span style={{ fontSize: 'var(--fs-row-lg)', letterSpacing: '0.04em', textTransform: 'uppercase', display: 'block' }}>{c.title}</span>
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)' }}>{c.body}</span>
@@ -664,8 +664,8 @@ function GoDeeper() {
 
 function StandingFigures() {
   const overview = useOverview();
-  if (overview.isPending) return <div style={{ padding: '16px 0' }}><Pending label="figures" /></div>;
-  if (!overview.isSuccess) return <div style={{ padding: '16px 0' }}><Unavailable what="figures" /></div>;
+  if (overview.isPending) return <div style={{ padding: 'var(--space-4) 0' }}><Pending label="figures" /></div>;
+  if (!overview.isSuccess) return <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="figures" /></div>;
   const d = overview.data;
   const live = (n: number) => (n === 0 ? '—' : n.toLocaleString('en-US'));
   const cells = [
@@ -677,7 +677,7 @@ function StandingFigures() {
   return (
     <>
       {cells.map((c) => (
-        <div key={c.k} style={{ padding: '16px 0 14px' }}>
+        <div key={c.k} style={{ padding: 'var(--space-4) 0 var(--space-4)' }}>
           <div className="m" style={{ fontSize: 'var(--fs-figure)', lineHeight: 1, color: 'var(--color-text-200)' }}>{c.v}</div>
           <Lbl style={{ marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
         </div>

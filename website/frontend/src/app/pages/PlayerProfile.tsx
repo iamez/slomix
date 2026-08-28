@@ -105,7 +105,7 @@ function Header({ p }: { p: Profile }) {
     <div data-parity="profile.header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 'var(--space-5)', flexWrap: 'wrap' }}>
       <div>
         <Lbl>player · {id.guid ?? p.guid}</Lbl>
-        <h1 style={{ fontSize: 'var(--fs-display)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '10px 0 0', fontWeight: 500 }}>
+        <h1 style={{ fontSize: 'var(--fs-display)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-2) 0 0', fontWeight: 500 }}>
           {named ? id.name : (p.guid || 'unknown player')}
         </h1>
         {named ? (
@@ -219,7 +219,7 @@ function Weapons({ rows, available }: { rows: ProfileWeaponRow[] | undefined; av
       <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills</Lbl>} />
       <SectionBody available={available} empty={top.length === 0} what="weapon stats">
         <div style={{ marginTop: 'var(--space-2)' }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', padding: '6px 0' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>weapon</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>kills</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>acc</Lbl>
@@ -227,7 +227,7 @@ function Weapons({ rows, available }: { rows: ProfileWeaponRow[] | undefined; av
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>hs rate</Lbl>
           </div>
           {top.map((w) => (
-            <div key={w.weapon} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '7px 0' }}>
+            <div key={w.weapon} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{w.weapon}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right' }}>{figure(w.kills)}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.accuracy)}</span>
@@ -299,7 +299,7 @@ function OpponentList({ title, rows, note, lead }: {
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
       <div style={{ marginTop: 'var(--space-2)' }}>
         {rows.slice(0, 5).map((o) => (
-          <div key={o.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '6px 0' }}>
+          <div key={o.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
             <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{o.name}</span>
             <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-200)' }}>
               {lead === 'on' ? o.kills_on_player : o.kills_by_player}
@@ -325,7 +325,7 @@ function MateList({ title, rows }: { title: string; rows: ProfileTeammate[] }) {
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
       <div style={{ marginTop: 'var(--space-2)' }}>
         {rows.slice(0, 5).map((t) => (
-          <div key={t.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '6px 0' }}>
+          <div key={t.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
             <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
             <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-200)' }}>
               {t.synergy == null ? '—' : `${t.synergy > 0 ? '+' : ''}${t.synergy.toFixed(0)}`}
@@ -375,7 +375,7 @@ function Maps({ rows, available }: { rows: ProfileMapRow[] | undefined; availabl
       <SectionBody available={available} empty={top.length === 0} what="map history">
         <div style={{ marginTop: 'var(--space-2)' }}>
           {top.map((m) => (
-            <div key={m.map} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '7px 0' }}>
+            <div key={m.map} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{mapLabel(m.map)}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.rounds} rd</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{pct(m.win_rate)}</span>
@@ -396,7 +396,7 @@ function Recent({ rows: raw, available }: { rows: ProfileMatchRow[] | undefined;
       <SectionBody available={available} empty={rows.length === 0} what="recent rounds">
         <div style={{ marginTop: 'var(--space-2)' }}>
           {rows.map((r) => (
-            <div key={r.round_id} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '7px 0' }}>
+            <div key={r.round_id} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'auto minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{r.date}</span>
               <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {mapLabel(r.map)} R{r.round_number}
@@ -425,7 +425,7 @@ export function PlayerProfilePage() {
       {playerId.length === 0 && (
         <>
           <Lbl>player</Lbl>
-          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
             Pick a player.
           </h1>
           <div className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', marginTop: 'var(--space-3)' }}>

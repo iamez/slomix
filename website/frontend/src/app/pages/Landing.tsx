@@ -53,7 +53,7 @@ function LivePanel() {
   // field says which.
   const voiceData = voice.isError || voice.data?.status === 'unavailable' ? undefined : voice.data;
   return (
-    <div data-parity="landing.live" style={{ border: '1px solid var(--color-rule-700)', padding: '14px 16px' }}>
+    <div data-parity="landing.live" style={{ border: '1px solid var(--color-rule-700)', padding: 'var(--space-4) var(--space-4)' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         {live.isPending && <Pending label="live" />}
         {live.isError && <Unavailable what="game server" />}
@@ -231,7 +231,7 @@ function LeaderBoard({ title, rows, hadErrors }: { title: string; rows: QuickLea
         /* minmax(0,1fr): a 1fr track keeps min-content width, so one long
          * stored name forced the row past a phone viewport (Codex wave 9);
          * the name itself ellipsizes rather than pushing the value out. */
-        <div key={row.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '7px 0' }}>
+        <div key={row.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
           <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
           <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
           <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>
@@ -267,14 +267,14 @@ export function Landing() {
       <div className="landing-hero">
         <div data-parity="landing.hero">
           <Lbl>enemy territory: legacy · stopwatch · since january 2025</Lbl>
-          <h1 style={{ fontSize: 'var(--fs-display-lg)', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.04, margin: '14px 0 0', maxWidth: '13em' }}>
+          <h1 style={{ fontSize: 'var(--fs-display-lg)', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.04, margin: 'var(--space-4) 0 0', maxWidth: '13em' }}>
             Every round we play, written down.
           </h1>
           <p style={{ color: 'var(--color-text-300)', maxWidth: '36em', marginTop: 'var(--space-4)' }}>
             Scoreboard and telemetry from our own server, kept since january 2025.
           </p>
           <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-6)', alignItems: 'center' }}>
-            <ActLink to="/auth/login" style={{ border: '1px solid #33322e', padding: '10px 14px', borderBottom: '1px solid #33322e' }}>
+            <ActLink to="/auth/login" style={{ border: '1px solid #33322e', padding: 'var(--space-2) var(--space-4)', borderBottom: '1px solid #33322e' }}>
               Connect your ID
             </ActLink>
             {lastNight && (
@@ -298,8 +298,8 @@ export function Landing() {
       </div>
 
       <div className="landing-quad" data-parity="landing.figures" style={{ marginTop: 'var(--space-7)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
-        {overview.isPending && <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>}
-        {(overview.isError || overviewSuspect) && <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>}
+        {overview.isPending && <div style={{ padding: 'var(--space-4) 0' }}><Pending label="figures" /></div>}
+        {(overview.isError || overviewSuspect) && <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="figures" /></div>}
         {overviewData && !overviewSuspect && (
           [
             { v: overviewData.rounds, k: 'rounds kept' },
@@ -354,7 +354,7 @@ export function Landing() {
               <Link
                 key={row.session_id}
                 to={`/session-detail/${row.session_id}`}
-                style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 'var(--space-4)', alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+                style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 'var(--space-4)', alignItems: 'baseline', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
               >
                 <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{monthDay(row.date)}</span>
                 <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
@@ -402,7 +402,7 @@ export function Landing() {
             connect your discord to claim your name, set availability, and upload clips
           </div>
         </div>
-        <a href="/auth/login" style={{ ...actStyle, border: '1px solid #33322e', padding: '10px 14px', flex: 'none', borderBottom: '1px solid #33322e' }}>
+        <a href="/auth/login" style={{ ...actStyle, border: '1px solid #33322e', padding: 'var(--space-2) var(--space-4)', flex: 'none', borderBottom: '1px solid #33322e' }}>
           Connect your ID
         </a>
       </div>

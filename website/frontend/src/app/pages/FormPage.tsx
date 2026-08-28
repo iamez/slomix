@@ -49,7 +49,7 @@ function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; t
       : `${row.latest ?? '—'}`;
   return (
     <div style={rowStyle}>
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 90px auto', gap: 'var(--space-3)', alignItems: 'center', padding: '8px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto 90px auto', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-2) 0' }}>
         <span>
           <Link to={`/profile/${row.guid}`} className="m" style={{ fontSize: 'var(--fs-value)', textDecoration: 'none', color: 'var(--color-text-100)' }}>
             {row.sick_leave ? `${row.name} · alt of ${row.sick_leave.primary_name}` : row.name}
@@ -78,7 +78,7 @@ function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; t
         </span>
       </div>
       {metric === 'overall' && row.breakdown.length > 0 && (
-        <div className="m" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)', padding: '0 0 8px' }}>
+        <div className="m" style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)', padding: '0 0 var(--space-2)' }}>
           {row.breakdown.map((b) => (
             <span key={b.metric}>
               {b.label.toLowerCase()}{' '}
@@ -105,7 +105,7 @@ export function FormPage() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 760 }}>
       <Lbl>form · each player against their own trailing average</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         Who is heating up, and who is cooling off.
       </h1>
       <div data-parity="form.tabs" style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
@@ -119,7 +119,7 @@ export function FormPage() {
               border: `1px solid ${metric === m.key ? '#4a5a66' : 'var(--color-rule-700)'}`,
               background: metric === m.key ? '#151a1e' : 'transparent',
               color: metric === m.key ? 'var(--color-text-100)' : 'var(--color-text-400)',
-              padding: '4px 9px',
+              padding: 'var(--space-1) var(--space-2)',
             }}
           >
             {m.label}

@@ -76,7 +76,7 @@ function stageFacts(stage: SystemStage): string[] {
 function StageRow({ stage }: { stage: SystemStage }) {
   const facts = stageFacts(stage);
   return (
-    <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)', padding: '13px 0' }}>
+    <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)', padding: 'var(--space-3) 0' }}>
       <StatusDot state={dotState(stage.state)} />
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -122,7 +122,7 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
       <SectionHead label="data integrity" parity="system.linkage" />
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
         {cells.map((c) => (
-          <div key={c.k} style={{ padding: '14px 0 12px' }}>
+          <div key={c.k} style={{ padding: 'var(--space-4) 0 var(--space-3)' }}>
             <div className="m" style={{ fontSize: 'var(--fs-figure)', lineHeight: 1 }}>{c.v}</div>
             <Lbl style={{ marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
           </div>
@@ -167,7 +167,7 @@ export function SystemPage() {
       )}
       {data && (
         <>
-          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
             {OVERALL_HEADLINE[data.overall] ?? OVERALL_HEADLINE.unknown}
           </h1>
           <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>

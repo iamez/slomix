@@ -40,7 +40,7 @@ function Stub({ label, phase }: { label: string; phase: number }) {
       <h1
         style={{
           fontSize: 'var(--fs-display)', letterSpacing: '0.04em', textTransform: 'uppercase',
-          lineHeight: 1.05, margin: '12px 0 0', fontWeight: 500,
+          lineHeight: 1.05, margin: 'var(--space-3) 0 0', fontWeight: 500,
         }}
       >
         {label}

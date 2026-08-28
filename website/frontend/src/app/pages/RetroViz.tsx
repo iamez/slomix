@@ -121,7 +121,7 @@ function DamageTable({ players }: { players: VizPlayer[] }) {
   });
   return (
     <div data-parity="retro-viz.damage" style={{ overflowX: 'auto' }}>
-      <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', padding: '6px 0' }}>
+      <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
         <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>dmg given</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>dmg recv</Lbl>
@@ -129,7 +129,7 @@ function DamageTable({ players }: { players: VizPlayer[] }) {
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>tk recv</Lbl>
       </div>
       {rows.map((p) => (
-        <div key={p.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '5px 0' }}>
+        <div key={p.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0' }}>
           <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
           <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.damage_given, colMax.given, '96,165,250') }}>{p.damage_given.toLocaleString('en-US')}</span>
           <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.damage_received, colMax.received, '251,113,133') }}>{p.damage_received.toLocaleString('en-US')}</span>
@@ -166,7 +166,7 @@ export function RetroViz() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>retro viz · one round, six instruments</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         The round, replotted.
       </h1>
       <div data-parity="retro-viz.picker" style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
@@ -176,7 +176,7 @@ export function RetroViz() {
           onChange={(e) => { setPicked(Number(e.target.value)); }}
           aria-label="Round"
           className="m"
-          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: '6px 10px', maxWidth: 420 }}
+          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-2)', maxWidth: 420 }}
         >
           {selectable.map((r) => (
             <option key={r.id} value={r.id}>

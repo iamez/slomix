@@ -83,7 +83,7 @@ export function SmartStatsDiag() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 760 }}>
       <Lbl>smart stats · per-session health of the derived layer</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         Is the storytelling data complete?
       </h1>
 
@@ -97,7 +97,7 @@ export function SmartStatsDiag() {
           className="m"
           style={{
             background: 'var(--color-ink-800)', color: 'var(--color-text-100)',
-            border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: '6px 10px',
+            border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-2)',
           }}
         />
         {d && d.gaming_session_id != null && (
@@ -128,7 +128,7 @@ export function SmartStatsDiag() {
         * ratioState would paint three red boards for a date nobody played
         * (Codex on #809). */}
       {d && d.status === 'no_data' && (
-        <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: '16px 0', marginTop: 'var(--space-5)' }}>
+        <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-4) 0', marginTop: 'var(--space-5)' }}>
           <StatusDot state="idle" />
           <span style={{ fontSize: 'var(--fs-row)', color: 'var(--color-text-300)' }}>
             No kill records for this scope — nothing to diagnose.
@@ -155,7 +155,7 @@ export function SmartStatsDiag() {
 
           <div data-parity="smart-stats-diag.warnings" style={{ marginTop: 'var(--space-6)' }}>
             {d.warnings.length === 0 ? (
-              <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: '10px 0' }}>
+              <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
                 <StatusDot state="ok" />
                 <span style={{ fontSize: 'var(--fs-row)', color: 'var(--color-text-300)' }}>
                   No warnings — Smart Stats for this session are complete and linked.
@@ -163,7 +163,7 @@ export function SmartStatsDiag() {
               </div>
             ) : (
               d.warnings.map((w) => (
-                <div key={w.message} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: '10px 0' }}>
+                <div key={w.message} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
                   <StatusDot state={w.level === 'warning' ? 'warn' : 'idle'} />
                   <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{w.level}</span>
                   <span style={{ fontSize: 'var(--fs-row)', color: 'var(--color-text-300)' }}>{w.message}</span>
@@ -177,7 +177,7 @@ export function SmartStatsDiag() {
               <SectionHead label="systemic caveats · affect every date" parity="smart-stats-diag.known-issues" />
               <div style={{ marginTop: 'var(--space-2)' }}>
                 {d.known_issues.map((issue) => (
-                  <div key={issue.key} style={{ ...rowStyle, padding: '12px 0' }}>
+                  <div key={issue.key} style={{ ...rowStyle, padding: 'var(--space-3) 0' }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: 'var(--fs-body-lg)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{issue.title}</span>
                       <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{issue.key}</span>

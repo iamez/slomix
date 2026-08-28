@@ -96,10 +96,10 @@ const BOX: React.CSSProperties = { border: '1px solid var(--color-rule-700)', ba
 
 function HeadlineFigures() {
   const overview = useOverview();
-  if (overview.isPending) return <div style={{ padding: '20px 0' }}><Pending label="figures" /></div>;
+  if (overview.isPending) return <div style={{ padding: 'var(--space-5) 0' }}><Pending label="figures" /></div>;
   // isSuccess (not a null check the types already forbid): anything short
   // of a successful answer renders as unavailable.
-  if (!overview.isSuccess) return <div style={{ padding: '20px 0' }}><Unavailable what="figures" /></div>;
+  if (!overview.isSuccess) return <div style={{ padding: 'var(--space-5) 0' }}><Unavailable what="figures" /></div>;
   const d = overview.data;
   // _safe_val substitutes 0 per failed aggregate inside a 200 — same rule
   // as the landing figures: a zero renders as a dash, never as a count.
@@ -113,7 +113,7 @@ function HeadlineFigures() {
   return (
     <>
       {tiles.map((h) => (
-        <div key={h.k} style={{ padding: '20px 0 18px' }}>
+        <div key={h.k} style={{ padding: 'var(--space-5) 0 var(--space-4)' }}>
           <div className="m" style={{ fontSize: 'var(--fs-title)', lineHeight: 1 }}>{h.v}</div>
           <Lbl style={{ marginTop: 'var(--space-2)' }}>{h.k}</Lbl>
         </div>
@@ -124,8 +124,8 @@ function HeadlineFigures() {
 
 function Counted() {
   const overview = useOverview();
-  if (overview.isPending) return <div style={{ padding: '18px 0' }}><Pending label="counted" /></div>;
-  if (!overview.isSuccess) return <div style={{ padding: '18px 0' }}><Unavailable what="counted" /></div>;
+  if (overview.isPending) return <div style={{ padding: 'var(--space-4) 0' }}><Pending label="counted" /></div>;
+  if (!overview.isSuccess) return <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="counted" /></div>;
   const d = overview.data;
   const live = (n: number) => (n === 0 ? '—' : n.toLocaleString('en-US'));
   const cells = [
@@ -139,7 +139,7 @@ function Counted() {
   return (
     <>
       {cells.map((c) => (
-        <div key={c.k} style={{ padding: '18px 16px 16px 0', borderRight: '1px solid var(--color-rule-900)' }}>
+        <div key={c.k} style={{ padding: 'var(--space-4) var(--space-4) var(--space-4) 0', borderRight: '1px solid var(--color-rule-900)' }}>
           <div className="m" style={{ fontSize: 'var(--fs-figure)', lineHeight: 1 }}>{c.v}</div>
           <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
         </div>
@@ -165,7 +165,7 @@ function ThisBuild() {
             { k: 'api contract', v: build.data.api_contract },
             { k: 'schema ledger', v: build.data.schema_ledger_max_file ?? '—' },
           ].map((b) => (
-            <div key={b.k} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)', padding: '7px 0' }}>
+            <div key={b.k} style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{b.k}</Lbl>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>{b.v}</span>
             </div>
@@ -193,7 +193,7 @@ function Health() {
         {overview.isPending && <Pending label="health" />}
         {overview.isError && <Unavailable what="health" />}
         {data?.stages.map((s) => (
-          <div key={s.key} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: '8px 0' }}>
+          <div key={s.key} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
             <StatusDot state={s.state === 'ok' ? 'ok' : s.state === 'warn' ? 'warn' : s.state === 'down' ? 'error' : 'idle'} />
             <span style={{ fontSize: 'var(--fs-row)', color: 'var(--color-text-300)' }}>{s.label}</span>
             <span className="m" style={{ marginLeft: 'auto', fontSize: 'var(--fs-small)', color: 'var(--color-text-500)', textAlign: 'right' }}>{s.summary}</span>
@@ -224,7 +224,7 @@ function ProbeTable() {
         {API_PROBES.map((probe) => {
           const r = results.get(probe.endpoint);
           return (
-            <div key={probe.endpoint} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: '7px 0' }}>
+            <div key={probe.endpoint} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
               <StatusDot state={r ? (r.state === 'ok' ? 'ok' : probe.required ? 'error' : 'warn') : 'idle'} />
               <span style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-300)' }}>{probe.name}</span>
               <span className="m" style={{ marginLeft: 'auto', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
@@ -247,7 +247,7 @@ export function About() {
     <div style={{ paddingBottom: 'var(--space-7)' }}>
       <div data-parity="admin.hero" style={{ paddingTop: 'var(--space-8)', maxWidth: '74ch' }}>
         <Lbl>about</Lbl>
-        <h1 style={{ fontSize: 'var(--fs-display-lg)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.08, margin: '14px 0 0', fontWeight: 500 }}>
+        <h1 style={{ fontSize: 'var(--fs-display-lg)', letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.08, margin: 'var(--space-4) 0 0', fontWeight: 500 }}>
           Slomix keeps the record of our games.
         </h1>
         <p style={{ ...P, marginTop: 'var(--space-5)', maxWidth: '70ch' }}>
@@ -285,7 +285,7 @@ export function About() {
             <Lbl>the four things stopwatch makes hard</Lbl>
             <div style={{ marginTop: 'var(--space-4)' }}>
               {PROBLEMS.map((p) => (
-                <div key={p.n} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px 1fr', gap: 'var(--space-4)', padding: '14px 0' }}>
+                <div key={p.n} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px 1fr', gap: 'var(--space-4)', padding: 'var(--space-4) 0' }}>
                   <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-500)' }}>{p.n}</span>
                   <span>
                     <span style={{ display: 'block', fontSize: 'var(--fs-lead)', letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--color-text-100)' }}>{p.k}</span>
@@ -350,7 +350,7 @@ export function About() {
           </p>
           <div style={{ marginTop: 'var(--space-4)' }}>
             {PRINCIPLES.map((p) => (
-              <div key={p.k} style={{ ...rowStyle, padding: '12px 0' }}>
+              <div key={p.k} style={{ ...rowStyle, padding: 'var(--space-3) 0' }}>
                 <div style={{ fontSize: 'var(--fs-row-lg)', letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--color-text-100)' }}>{p.k}</div>
                 <div style={{ ...P, fontSize: 'var(--fs-row)', marginTop: 'var(--space-1)' }}>{p.body}</div>
               </div>
@@ -365,7 +365,7 @@ export function About() {
           </p>
           <div style={{ marginTop: 'var(--space-4)' }}>
             {NOT_BUILT.map((n) => (
-              <div key={n.k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '18px 1fr', gap: 'var(--space-3)', padding: '11px 0', alignItems: 'baseline' }}>
+              <div key={n.k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '18px 1fr', gap: 'var(--space-3)', padding: 'var(--space-3) 0', alignItems: 'baseline' }}>
                 <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-neg)' }}>—</span>
                 <span>
                   <span style={{ display: 'block', fontSize: 'var(--fs-body-lg)', letterSpacing: '0.03em', textTransform: 'uppercase', color: 'var(--color-text-300)' }}>{n.k}</span>
@@ -395,7 +395,7 @@ export function About() {
           </p>
           <div style={{ marginTop: 'var(--space-4)' }}>
             {DEVS.map((d) => (
-              <div key={d.who} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '150px 1fr', gap: 'var(--space-5)', padding: '12px 0', alignItems: 'baseline' }}>
+              <div key={d.who} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '150px 1fr', gap: 'var(--space-5)', padding: 'var(--space-3) 0', alignItems: 'baseline' }}>
                 <span>
                   <span className="m" style={{ display: 'block', fontSize: 'var(--fs-body)', color: 'var(--color-text-100)' }}>{d.who}</span>
                   <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>{d.role}</Lbl>
@@ -409,7 +409,7 @@ export function About() {
           <p style={{ ...P, marginTop: 'var(--space-4)' }}>For the pieces this was built on top of.</p>
           <div style={{ marginTop: 'var(--space-4)' }}>
             {THANKS.map((t) => (
-              <div key={t.who} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '150px 1fr', gap: 'var(--space-5)', padding: '12px 0', alignItems: 'baseline' }}>
+              <div key={t.who} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '150px 1fr', gap: 'var(--space-5)', padding: 'var(--space-3) 0', alignItems: 'baseline' }}>
                 <span className="m" style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-100)' }}>{t.who}</span>
                 <span style={{ ...P, fontSize: 'var(--fs-row)' }}>{t.what}</span>
               </div>
