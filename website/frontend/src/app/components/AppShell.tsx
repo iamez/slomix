@@ -40,7 +40,7 @@ function SubNav({ section }: { section: 'stats' | 'telemetry' }) {
     <div style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-900)' }}>
       <div
         style={{
-          maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 34px', display: 'flex',
+          maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 var(--space-6)', display: 'flex',
           alignItems: 'center', gap: 'var(--space-4)', height: 40, overflowX: 'auto',
         }}
       >
@@ -71,7 +71,7 @@ export function AppShell() {
       <div style={{ borderBottom: '1px solid var(--color-rule-900)' }}>
         <div
           style={{
-            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '8px 34px', display: 'flex',
+            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: 'var(--space-2) var(--space-6)', display: 'flex',
             alignItems: 'center', minHeight: 60, gap: 'var(--space-6)', flexWrap: 'wrap', rowGap: 'var(--space-2)',
           }}
         >
@@ -124,7 +124,7 @@ export function AppShell() {
               style={{
                 fontSize: 'var(--fs-value)', letterSpacing: '0.14em', textTransform: 'uppercase',
                 color: 'var(--color-text-200)', textDecoration: 'none',
-                border: '1px solid #33322e', padding: '7px 12px',
+                border: '1px solid #33322e', padding: 'var(--space-2) var(--space-3)',
               }}
             >
               Connect ID
@@ -135,7 +135,7 @@ export function AppShell() {
 
       {section && <SubNav section={section} />}
 
-      <main style={{ flex: 1, width: '100%', maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 34px', boxSizing: 'border-box' }}>
+      <main style={{ flex: 1, width: '100%', maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 var(--space-6)', boxSizing: 'border-box' }}>
         <Outlet />
       </main>
 
@@ -143,7 +143,7 @@ export function AppShell() {
         <div
           className="m"
           style={{
-            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '14px 34px', display: 'flex',
+            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: 'var(--space-4) var(--space-6)', display: 'flex',
             justifyContent: 'space-between', fontSize: 'var(--fs-label)', letterSpacing: '0.14em',
             textTransform: 'uppercase', color: 'var(--color-text-600)',
           }}

@@ -121,7 +121,7 @@ export function SessionsList({ box }: { box: boolean }) {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: box ? 900 : 760 }}>
       <Lbl>{box ? 'the evenings · box score' : 'the evenings'}</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         Every evening we played.
       </h1>
       <div data-parity={box ? 'sessions2.table' : 'sessions.table'} style={{ marginTop: 'var(--space-5)' }}>
@@ -132,7 +132,7 @@ export function SessionsList({ box }: { box: boolean }) {
             : <Link to="/sessions2" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>box view →</Link>}
         />
         <div style={{ marginTop: 'var(--space-2)' }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-4)', padding: '6px 0' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-4)', padding: 'var(--space-2) 0' }}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>evening</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>rd</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>pl</Lbl>
@@ -142,10 +142,10 @@ export function SessionsList({ box }: { box: boolean }) {
             {box && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>draw</Lbl>}
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>box</Lbl>
           </div>
-          {sessions.isPending && <div style={{ padding: '10px 0' }}><Pending label="sessions" /></div>}
-          {sessions.isError && <div style={{ padding: '10px 0' }}><Unavailable what="sessions" /></div>}
+          {sessions.isPending && <div style={{ padding: 'var(--space-2) 0' }}><Pending label="sessions" /></div>}
+          {sessions.isError && <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="sessions" /></div>}
           {data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: '10px 0' }}>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: 'var(--space-2) 0' }}>
               no sessions recorded yet
             </div>
           )}
@@ -153,7 +153,7 @@ export function SessionsList({ box }: { box: boolean }) {
             <div key={row.session_id}>
             <Link
               to={`/session-detail/${row.session_id}`}
-              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-4)', alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-4)', alignItems: 'baseline', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
             >
               <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.formatted_date}
@@ -192,7 +192,7 @@ export function SessionsList({ box }: { box: boolean }) {
             style={{
               marginTop: 'var(--space-4)', fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase',
               border: '1px solid var(--color-rule-700)', background: 'transparent',
-              color: 'var(--color-text-300)', padding: '6px 12px', cursor: 'pointer',
+              color: 'var(--color-text-300)', padding: 'var(--space-2) var(--space-3)', cursor: 'pointer',
             }}
           >
             show older evenings →

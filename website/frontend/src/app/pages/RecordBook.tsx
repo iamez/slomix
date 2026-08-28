@@ -105,7 +105,7 @@ function RecordCard({ label, rows }: { label: string; rows: RecordEntry[] }) {
             /* Each rank can come from a DIFFERENT map and date — the legacy
              * top-5 modal showed both, and dropping them made ranks 2-5
              * unverifiable (Codex on #813, wave 4). */
-            <div key={`${r.player}-${i}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '20px minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '5px 0' }}>
+            <div key={`${r.player}-${i}`} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '20px minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0' }}>
               <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{String(i + 2).padStart(2, '0')}</span>
               <span style={{ minWidth: 0 }}>
                 <span className="m" style={{ fontSize: 'var(--fs-micro)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.player}</span>
@@ -146,7 +146,7 @@ function RecordsTab() {
           onChange={(e) => setMapName(e.target.value || null)}
           aria-label="Map filter"
           className="m"
-          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: '6px 10px' }}
+          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-2)' }}
         >
           <option value="">all maps</option>
           {(maps.data ?? []).map((m) => <option key={m.name} value={m.name}>{m.name}</option>)}
@@ -225,7 +225,7 @@ function HofList({ catKey, label, desc, entries }: { catKey: string; label: stri
               <span className="m" style={{ fontSize: 'var(--fs-micro)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.player_name} <MoveBadge e={e} /></span>
               <span className="m" style={{ fontSize: 'var(--fs-micro)' }}>{fmt(e.value)}</span>
             </>);
-            const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '4px 0', textDecoration: 'none', color: 'var(--color-text-300)' } as const;
+            const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '24px minmax(0,1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0', textDecoration: 'none', color: 'var(--color-text-300)' } as const;
             return e.player_guid
               ? <Link key={e.player_guid} to={`/profile/${e.player_guid}`} style={style}>{inner}</Link>
               : <div key={`${e.rank}-${e.player_name}`} style={style}>{inner}</div>;
@@ -357,7 +357,7 @@ function SeasonTab() {
           {LEADER_LABELS.filter(([key]) => lead[key] != null).map(([key, label]) => {
             const row = lead[key];
             return (
-              <div key={key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '140px minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '8px 0' }}>
+              <div key={key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '140px minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
                 <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{label}</Lbl>
                 <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
                 <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
@@ -395,7 +395,7 @@ export function RecordBook() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>record book</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         The book everyone is trying to rewrite.
       </h1>
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>

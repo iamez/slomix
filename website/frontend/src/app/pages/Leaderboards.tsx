@@ -54,7 +54,7 @@ export function Leaderboards() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 860 }}>
       <Lbl>leaderboards · top players by performance</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         Who leads, and by how much.
       </h1>
 
@@ -74,7 +74,7 @@ export function Leaderboards() {
       <div data-parity="leaderboards.table" style={{ marginTop: 'var(--space-5)' }}>
         <SectionHead label={`${statLabel.toLowerCase()} · ${PERIODS.find((p) => p.key === period)?.label.toLowerCase()}`} />
         <div className="lb-table" style={{ marginTop: 'var(--space-2)' }}>
-          <div className="lb-row" style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 'var(--space-4)', padding: '6px 0' }}>
+          <div className="lb-row" style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 'var(--space-4)', padding: 'var(--space-2) 0' }}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>#</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>{statLabel}</Lbl>
@@ -82,10 +82,10 @@ export function Leaderboards() {
             {stat !== 'kills' && <span className="lb-aux"><Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>kills</Lbl></span>}
             {stat !== 'kd' && <span className="lb-aux"><Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>k/d</Lbl></span>}
           </div>
-          {board.isPending && <div style={{ padding: '10px 0' }}><Pending label="leaderboard" /></div>}
-          {board.isError && <div style={{ padding: '10px 0' }}><Unavailable what="leaderboard" /></div>}
+          {board.isPending && <div style={{ padding: 'var(--space-2) 0' }}><Pending label="leaderboard" /></div>}
+          {board.isError && <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="leaderboard" /></div>}
           {data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: '10px 0' }}>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: 'var(--space-2) 0' }}>
               no data found for this period
             </div>
           )}
@@ -94,7 +94,7 @@ export function Leaderboards() {
               key={row.guid}
               to={`/profile/${row.guid}`}
               className="lb-row"
-              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 'var(--space-4)', alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: cols, gap: 'var(--space-4)', alignItems: 'baseline', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
             >
               <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
               <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>

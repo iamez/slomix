@@ -56,7 +56,7 @@ export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?
 
 export function KpiTile({ value, label }: { value: ReactNode; label: ReactNode }) {
   return (
-    <div style={{ padding: '18px 0 16px' }}>
+    <div style={{ padding: 'var(--space-4) 0 var(--space-4)' }}>
       <div className="m" style={{ fontSize: 'var(--fs-kpi)', lineHeight: 1 }}>{value}</div>
       <div style={{ ...lblStyle, marginTop: 'var(--space-2)' }}>{label}</div>
     </div>

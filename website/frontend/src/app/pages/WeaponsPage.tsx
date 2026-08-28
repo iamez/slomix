@@ -96,7 +96,7 @@ function WeaponsGrid({ period, category }: { period: string; category: string })
         {rows.map((w: WeaponRow) => {
           const share = (w.kills / totalKills) * 100;
           return (
-            <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,140px) 1fr auto auto auto', gap: 'var(--space-3)', alignItems: 'center', padding: '7px 0' }}>
+            <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,140px) 1fr auto auto auto', gap: 'var(--space-3)', alignItems: 'center', padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-body)', letterSpacing: '0.03em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
               <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                 <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${Math.min(share * 2, 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
@@ -132,7 +132,7 @@ function MasteryGrid({ period }: { period: string }) {
             </div>
             <div style={{ marginTop: 'var(--space-2)' }}>
               {p.weapons.map((w) => (
-                <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: '4px 0' }}>
+                <div key={w.weapon_key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0' }}>
                   <span className="m" style={{ fontSize: 'var(--fs-micro)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{w.name}</span>
                   {/* w.kills is an ABSOLUTE count — a 'k' suffix would read
                     * 16,148 as sixteen million. */}
@@ -156,7 +156,7 @@ export function WeaponsPage() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>weapons · what the kills were made with</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         The tools of the trade.
       </h1>
       <div data-parity="weapons.filters" style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>

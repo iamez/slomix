@@ -78,7 +78,7 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
           </div>
           <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {rows.map((a, i) => (
-              <div key={`${a.award}-${i}`} style={{ ...rowStyle, padding: '6px 0' }}>
+              <div key={`${a.award}-${i}`} style={{ ...rowStyle, padding: 'var(--space-2) 0' }}>
                 <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{a.award.toLowerCase()}</Lbl>
                 <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
                   <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.player}</span>
@@ -96,7 +96,7 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
             type="button"
             disabled={page === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
-            style={{ fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page === 0 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page === 0 ? 'default' : 'pointer' }}
+            style={{ fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page === 0 ? '#454340' : 'var(--color-text-400)', padding: 'var(--space-1) var(--space-2)', cursor: page === 0 ? 'default' : 'pointer' }}
           >
             ← newer
           </button>
@@ -104,7 +104,7 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
             type="button"
             disabled={page >= pages - 1}
             onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
-            style={{ fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page >= pages - 1 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page >= pages - 1 ? 'default' : 'pointer' }}
+            style={{ fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page >= pages - 1 ? '#454340' : 'var(--color-text-400)', padding: 'var(--space-1) var(--space-2)', cursor: page >= pages - 1 ? 'default' : 'pointer' }}
           >
             older →
           </button>
@@ -121,16 +121,16 @@ function ByPlayer({ days, awardType }: { days: number | null; awardType: string 
     <div data-parity="awards.by-player">
       <SectionHead label={`${data?.leaderboard.length ?? '…'} players`} />
       <div style={{ marginTop: 'var(--space-2)' }}>
-        <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 'var(--space-4)', padding: '6px 0' }}>
+        <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 'var(--space-4)', padding: 'var(--space-2) 0' }}>
           <Lbl style={{ fontSize: 'var(--fs-caption)' }}>#</Lbl>
           <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
           <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>awards</Lbl>
           <Lbl style={{ fontSize: 'var(--fs-caption)' }}>most won</Lbl>
         </div>
-        {board.isPending && <div style={{ padding: '10px 0' }}><Pending label="leaderboard" /></div>}
-        {board.isError && <div style={{ padding: '10px 0' }}><Unavailable what="leaderboard" /></div>}
+        {board.isPending && <div style={{ padding: 'var(--space-2) 0' }}><Pending label="leaderboard" /></div>}
+        {board.isError && <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="leaderboard" /></div>}
         {data?.leaderboard.length === 0 && (
-          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: '10px 0' }}>
+          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: 'var(--space-2) 0' }}>
             no player awards found for this selection
           </div>
         )}
@@ -143,7 +143,7 @@ function ByPlayer({ days, awardType }: { days: number | null; awardType: string 
               {row.top_award.toLowerCase()} ({row.top_award_count}×)
             </span>
           </>);
-          const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 'var(--space-4)', alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' } as const;
+          const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 'var(--space-4)', alignItems: 'baseline', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' } as const;
           // A null guid is a historical winner neither alias map resolves —
           // a row, not a /profile/null link (Codex on #813).
           return row.guid
@@ -175,7 +175,7 @@ export function Awards() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>awards · round awards from endgame stats</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         Who took what home.
       </h1>
       <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
@@ -193,7 +193,7 @@ export function Awards() {
           onChange={(e) => setAwardType(e.target.value || null)}
           aria-label="Award type"
           className="m"
-          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: '6px 10px', maxWidth: 320 }}
+          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-2)', maxWidth: 320 }}
         >
           <option value="">all awards</option>
           {types.map((name) => <option key={name} value={name}>{name}</option>)}

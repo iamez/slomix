@@ -76,7 +76,7 @@ function ObjectiveRecords() {
           {[rows.slice(0, Math.ceil(rows.length / 2)), rows.slice(Math.ceil(rows.length / 2))].map((half, i) => (
             <div key={i}>
               {half.map((r) => (
-                <div key={r.map_name} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: '8px 0' }}>
+                <div key={r.map_name} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
                   <span style={{ fontSize: 'var(--fs-body)', letterSpacing: '0.03em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapLabel(r.map_name)}</span>
                   {/* winner_side is the SERVER's word — the numeric
                     * winner_team means different things per endpoint family,
@@ -103,7 +103,7 @@ export function MapsPage() {
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>maps · every map we keep score on</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         The grounds we fight over.
       </h1>
       {stats.isPending && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="maps" /></div>}
