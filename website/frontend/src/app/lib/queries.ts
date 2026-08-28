@@ -501,10 +501,15 @@ export function useSkillFormula() {
   });
 }
 
-/** SSR v0.3 — a second, session-scoped formula, still partially covered. */
-export function useSsr() {
+/** SSR v0.3 — a second, session-scoped formula, still partially covered.
+ *
+ * `enabled` is not optional politeness: the endpoint takes a measured 2.4 s,
+ * and the panel that shows it starts closed, so an unconditional query spent
+ * that on every visit for data nobody had asked to see (Codex on #835). */
+export function useSsr(enabled: boolean) {
   return useQuery({
     queryKey: ['skill-ssr'],
+    enabled,
     queryFn: () => apiGet('/api/skill/ssr') as Promise<SsrBoard>,
   });
 }

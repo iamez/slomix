@@ -16,10 +16,18 @@ import type { RatedPlayer, SsrPlayer } from '../lib/types';
  * kept apart, labelled by version, and the SSR panel prints coverage beside
  * every score rather than under a footnote.
  *
- * The other rule this page follows: THE VISIBLE FIGURE EXPLAINS ITS OWN
- * ORDER. Expanding a row shows weight x percentile per component, which is
- * literally how the rating is assembled, so a rank can be argued with rather
- * than believed.
+ * WHAT THE COMPONENT PANEL IS, AND IS NOT. The first version of this page
+ * said the components "are the sum the rating is". They are not, and the
+ * review was right to stop it. `constant + Σ contribution` produces the RAW
+ * score; the published rating then passes through
+ * `(n·raw + k·pool_mean)/(n+k)`, and `pool_mean` is not in the payload.
+ * Measured on dev 2026-08-28: for vid the two differ by 0.004, for SQUUAZE
+ * by 0.051, and only 12 of 31 rows reconstruct at all — one of them,
+ * MrAvAc at 6 rounds, has a published rating exactly equal to its raw score,
+ * i.e. no shrinkage applied where shrinkage matters most. That is a backend
+ * question, not a page one; the page's duty is to stop claiming an identity
+ * that does not hold. So the panel is labelled as the RAW side, and the
+ * shrinkage step is named rather than recomputed.
  */
 
 const TIER_COLOUR = new Map<string, string>([
@@ -45,15 +53,24 @@ function ContributionBar({ value, scale }: { value: number; scale: number }) {
   );
 }
 
-function Components({ player }: { player: RatedPlayer }) {
+function Components({ player, constant }: { player: RatedPlayer; constant: number }) {
   const entries = Object.entries(player.components);
+  const raw = constant + entries.reduce((sum, [, c]) => sum + c.contribution, 0);
   const scale = Math.max(...entries.map(([, c]) => Math.abs(c.contribution)), 0.01);
   const sorted = [...entries].sort((a, b) => Math.abs(b[1].contribution) - Math.abs(a[1].contribution));
   return (
     <Stack gap={1} className="rows" style={{ paddingTop: 'var(--space-2)', paddingBottom: 'var(--space-3)' }}>
       <Cluster gap={3} justify="between">
-        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>component</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>what the raw score is made of</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)' }}>measured · percentile · weight → contribution</Lbl>
+      </Cluster>
+      <Cluster gap={3} justify="between" className="row" style={{ padding: 'var(--space-1) 0' }}>
+        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>
+          raw = constant + Σ = {raw.toFixed(4)}
+        </span>
+        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+          published {player.et_rating.toFixed(4)} — the raw score shrunk toward the pool mean by n/(n+k), n={player.games_rated}
+        </span>
       </Cluster>
       {sorted.map(([name, c]) => (
         <Cluster key={name} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-1) 0' }}>
@@ -79,8 +96,8 @@ function Components({ player }: { player: RatedPlayer }) {
   );
 }
 
-function RatedRow({ player, open, onToggle, ambiguous }: {
-  player: RatedPlayer; open: boolean; onToggle: () => void; ambiguous: boolean;
+function RatedRow({ player, open, onToggle, ambiguous, constant }: {
+  player: RatedPlayer; open: boolean; onToggle: () => void; ambiguous: boolean; constant: number;
 }) {
   return (
     <Stack gap={1}>
@@ -102,11 +119,14 @@ function RatedRow({ player, open, onToggle, ambiguous }: {
           <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 84, textAlign: 'right' }}>
             {figure(player.games_rated)} rounds
           </span>
-          {/* Confidence is the shrinkage weight: below 1 the published number
-            * has been pulled toward the pool mean, and a rank read without
-            * that is a rank read wrong. */}
-          <span className="m" style={{ fontSize: 'var(--fs-small)', color: player.confidence >= 1 ? 'var(--color-text-500)' : 'var(--color-accent-warm)', width: 96, textAlign: 'right' }}>
-            {player.confidence >= 1 ? 'full weight' : `${(player.confidence * 100).toFixed(0)}% weight`}
+          {/* `confidence` is NOT the shrinkage weight, though it reads like
+            * one: the backend defines it as min(1, n/30) (skill_router:107)
+            * while shrinkage uses n/(n+k) with k=40. For a 22-round player
+            * those are 0.73 and 0.355 — printing the first as "weight" was
+            * wrong by a factor of two (Codex on #835). It is labelled as
+            * what it is now: a sample-size confidence. */}
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: player.confidence >= 1 ? 'var(--color-text-500)' : 'var(--color-accent-warm)', width: 128, textAlign: 'right' }}>
+            {player.confidence >= 1 ? 'full sample' : `sample conf. ${(player.confidence * 100).toFixed(0)}%`}
           </span>
           <span className="m" style={{ fontSize: 'var(--fs-lead)', width: 68, textAlign: 'right' }}>
             {player.et_rating.toFixed(3)}
@@ -122,7 +142,7 @@ function RatedRow({ player, open, onToggle, ambiguous }: {
           </button>
         </Cluster>
       </Cluster>
-      {open && <Components player={player} />}
+      {open && <Components player={player} constant={constant} />}
     </Stack>
   );
 }
@@ -161,7 +181,7 @@ export function SkillRating() {
   const [showSsr, setShowSsr] = useState(false);
   const board = useSkillLeaderboard(30);
   const formula = useSkillFormula();
-  const ssr = useSsr();
+  const ssr = useSsr(showSsr);
 
   const nameCounts = new Map<string, number>();
   for (const p of board.data?.players ?? []) {
@@ -212,6 +232,7 @@ export function SkillRating() {
                 open={open === p.player_guid}
                 onToggle={() => { setOpen(open === p.player_guid ? null : p.player_guid); }}
                 ambiguous={(nameCounts.get(p.display_name) ?? 0) > 1}
+                constant={board.data?.meta.constant ?? 0}
               />
             ))}
           </Stack>

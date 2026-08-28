@@ -53,18 +53,33 @@ describe('SkillRating', () => {
     expect(screen.getAllByText('veteran').length).toBeGreaterThan(0);
   });
 
-  it('explains an order when asked: weight times percentile, per component', async () => {
-    // The whole point of the page. A rank nobody can argue with is a rank
-    // nobody can check.
+  it('explains the RAW score, and says so rather than claiming the published one', async () => {
+    // The first version claimed these components were "the sum the rating
+    // is". They are not: constant + Σ gives the raw score, and the published
+    // rating is that shrunk toward the pool mean — for vid 0.7523 against a
+    // published 0.7481. A panel that shows one and labels it the other is
+    // the failure this page exists to avoid (Codex on #835).
     renderPage();
     await waitFor(() => expect(screen.getAllByRole('button', { name: 'why' }).length).toBeGreaterThan(0));
     screen.getAllByRole('button', { name: 'why' })[0].click();
     await waitFor(() => expect(screen.getByText('dpm')).toBeInTheDocument());
-    // dpm for vid in the recording: raw 314.093, percentile 0.839, weight
-    // 0.12, contribution 0.1007.
     expect(screen.getByText('+0.1007')).toBeInTheDocument();
     expect(screen.getByText('84%')).toBeInTheDocument();
     expect(screen.getByText('+0.12')).toBeInTheDocument();
+    // The raw sum is printed as the raw sum…
+    expect(screen.getByText(/raw = constant \+ Σ = 0\.7523/)).toBeInTheDocument();
+    // …and the step between it and the published number is named.
+    expect(screen.getByText(/published 0\.7481 — the raw score shrunk toward the pool mean/)).toBeInTheDocument();
+  });
+
+  it('does not call the SSR endpoint until its panel is opened', async () => {
+    // 2.4 s on every visit for a panel that starts closed.
+    const spy = vi.fn(fixtureFetch);
+    renderPage(spy);
+    await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+    expect(spy.mock.calls.some(([u]) => String(u).includes('/skill/ssr'))).toBe(false);
+    screen.getByRole('button', { name: /show ssr/i }).click();
+    await waitFor(() => expect(spy.mock.calls.some(([u]) => String(u).includes('/skill/ssr'))).toBe(true));
   });
 
   it('keeps SSR behind its own switch and never mixes it with the rating', async () => {
@@ -100,9 +115,9 @@ describe('SkillRating', () => {
     expect(screen.queryByText('D8423F90')).toBeNull();
   });
 
-  it('says when a published number was pulled toward the mean', async () => {
-    // Confidence below 1 means shrinkage did the talking; a rank read
-    // without that is a rank read wrong.
+  it('names the sample-size confidence without calling it a weight', async () => {
+    // The backend defines confidence as min(1, n/30); the shrinkage weight is
+    // n/(n+40). For a 22-round player: 0.73 against 0.355.
     const shrunk = {
       ...(leaderboard as object),
       players: [
@@ -116,6 +131,8 @@ describe('SkillRating', () => {
       }
       return fixtureFetch(input);
     });
-    await waitFor(() => expect(screen.getByText('42% weight')).toBeInTheDocument());
+    // Labelled as what the field is — a sample-size confidence — not as the
+    // shrinkage weight, which is n/(n+k) and a different number entirely.
+    await waitFor(() => expect(screen.getByText('sample conf. 42%')).toBeInTheDocument());
   });
 });
