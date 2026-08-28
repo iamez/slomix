@@ -63,15 +63,35 @@ describe('design tokens', () => {
 
   it('keeps the ground and rule ramps in the order the design gives them', () => {
     // A ramp whose steps are out of order is how --color-ink-800 came to mean
-    // two different things in two files. Darkest first, no duplicates.
+    // two different things in two files. The invariant every ramp here obeys
+    // is one sentence: A HIGHER STEP NUMBER IS DARKER. ink-950 is the page
+    // and ink-800 the row hover; rule-900 is the hairline and rule-400 an
+    // active chip border; text-100 is the brightest text and text-600 the
+    // footer. Checking only that the values differ would let rule-900 and
+    // rule-800 swap — turning every hairline in the app into a box border
+    // while the test stayed green (Codex on #823).
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+      const lin = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+      return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+    };
     const ramp = (prefix: string) =>
       [...css.matchAll(new RegExp(`^\\s*--color-${prefix}-(\\d+):\\s*(#[0-9a-f]{6});`, 'gm'))]
-        .map((m) => ({ step: Number(m[1]), hex: m[2] }));
+        .map((m) => ({ step: Number(m[1]), hex: m[2], lum: luminance(m[2]) }));
+
     for (const prefix of ['ink', 'rule', 'text']) {
       const steps = ramp(prefix);
       expect(steps.length, `${prefix} ramp is missing`).toBeGreaterThan(2);
       const hexes = steps.map((s) => s.hex);
       expect(new Set(hexes).size, `${prefix} ramp repeats a value`).toBe(hexes.length);
+
+      const byStep = [...steps].sort((a, b) => a.step - b.step);
+      const wrong = byStep
+        .slice(1)
+        .map((s, i) => ({ prev: byStep[i], cur: s }))
+        .filter(({ prev, cur }) => cur.lum >= prev.lum)
+        .map(({ prev, cur }) => `${prefix}-${cur.step} (${cur.hex}) is not darker than ${prefix}-${prev.step} (${prev.hex})`);
+      expect(wrong, `${prefix} ramp is out of order`).toEqual([]);
     }
   });
 
