@@ -55,34 +55,34 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
       <SectionHead
         label={`${data?.total?.toLocaleString('en-US') ?? '…'} awards`}
         aside={pages > 1
-          ? <span className="m" style={{ ...lblStyle, fontSize: 9 }}>page {page + 1} / {pages}</span>
+          ? <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>page {page + 1} / {pages}</span>
           : undefined}
       />
-      {awards.isPending && <div style={{ marginTop: 12 }}><Pending label="awards" /></div>}
-      {awards.isError && <div style={{ marginTop: 12 }}><Unavailable what="awards" /></div>}
+      {awards.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="awards" /></div>}
+      {awards.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="awards" /></div>}
       {data?.awards.length === 0 && (
-        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 12 }}>
+        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-3)' }}>
           no awards found for this selection
         </div>
       )}
       {[...groups.entries()].map(([key, rows]) => (
-        <div key={key} style={{ marginTop: 16, border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{rows[0].map}</span>
+        <div key={key} style={{ marginTop: 'var(--space-4)', border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{rows[0].map}</span>
             {/* The endpoint paginates ROWS, so a big round can straddle
               * pages — the caption counts what is SHOWN, never claims the
               * round's total (Codex on #813). */}
-            <span className="m" style={{ ...lblStyle, fontSize: 9 }}>
+            <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>
               round {rows[0].round_number} · {rows[0].date} · {rows.length} shown
             </span>
           </div>
-          <div className="home-cols3" style={{ gap: 10, marginTop: 10 }}>
+          <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {rows.map((a, i) => (
               <div key={`${a.award}-${i}`} style={{ ...rowStyle, padding: '6px 0' }}>
-                <Lbl style={{ fontSize: 9 }}>{a.award.toLowerCase()}</Lbl>
-                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                  <span className="m" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.player}</span>
-                  <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)', flex: 'none' }}>{a.value}</span>
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{a.award.toLowerCase()}</Lbl>
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                  <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.player}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)', flex: 'none' }}>{a.value}</span>
                 </div>
               </div>
             ))}
@@ -90,13 +90,13 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
         </div>
       ))}
       {pages > 1 && (
-        <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+        <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
           {/* Boundary controls disable instead of silently clamping. */}
           <button
             type="button"
             disabled={page === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
-            style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page === 0 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page === 0 ? 'default' : 'pointer' }}
+            style={{ fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page === 0 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page === 0 ? 'default' : 'pointer' }}
           >
             ← newer
           </button>
@@ -104,7 +104,7 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
             type="button"
             disabled={page >= pages - 1}
             onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
-            style={{ fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page >= pages - 1 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page >= pages - 1 ? 'default' : 'pointer' }}
+            style={{ fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase', border: '1px solid var(--color-rule-700)', background: 'transparent', color: page >= pages - 1 ? '#454340' : 'var(--color-text-400)', padding: '4px 9px', cursor: page >= pages - 1 ? 'default' : 'pointer' }}
           >
             older →
           </button>
@@ -120,30 +120,30 @@ function ByPlayer({ days, awardType }: { days: number | null; awardType: string 
   return (
     <div data-parity="awards.by-player">
       <SectionHead label={`${data?.leaderboard.length ?? '…'} players`} />
-      <div style={{ marginTop: 8 }}>
-        <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 14, padding: '6px 0' }}>
-          <Lbl style={{ fontSize: 9 }}>#</Lbl>
-          <Lbl style={{ fontSize: 9 }}>player</Lbl>
-          <Lbl style={{ fontSize: 9, textAlign: 'right' }}>awards</Lbl>
-          <Lbl style={{ fontSize: 9 }}>most won</Lbl>
+      <div style={{ marginTop: 'var(--space-2)' }}>
+        <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 'var(--space-4)', padding: '6px 0' }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>#</Lbl>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>awards</Lbl>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>most won</Lbl>
         </div>
         {board.isPending && <div style={{ padding: '10px 0' }}><Pending label="leaderboard" /></div>}
         {board.isError && <div style={{ padding: '10px 0' }}><Unavailable what="leaderboard" /></div>}
         {data?.leaderboard.length === 0 && (
-          <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', padding: '10px 0' }}>
+          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: '10px 0' }}>
             no player awards found for this selection
           </div>
         )}
         {data?.leaderboard.map((row) => {
           const inner = (<>
-            <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{String(row.rank).padStart(2, '0')}</span>
-            <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
-            <span className="m" style={{ fontSize: 13, textAlign: 'right' }}>{row.award_count.toLocaleString('en-US')}</span>
-            <span className="m" style={{ fontSize: 11, color: 'var(--color-text-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
+            <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
+            <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right' }}>{row.award_count.toLocaleString('en-US')}</span>
+            <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {row.top_award.toLowerCase()} ({row.top_award_count}×)
             </span>
           </>);
-          const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 14, alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' } as const;
+          const style = { ...rowStyle, display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) auto minmax(0,1fr)', gap: 'var(--space-4)', alignItems: 'baseline', padding: '9px 0', textDecoration: 'none', color: 'var(--color-text-100)' } as const;
           // A null guid is a historical winner neither alias map resolves —
           // a row, not a /profile/null link (Codex on #813).
           return row.guid
@@ -173,12 +173,12 @@ export function Awards() {
     ...(firstPage.data?.awards.map((a) => a.award) ?? []),
   ])].sort();
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 980 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>awards · round awards from endgame stats</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
         Who took what home.
       </h1>
-      <div style={{ display: 'flex', gap: 8, marginTop: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 'var(--space-2)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
         <Chip active={tab === 'round'} label="By round" onClick={() => { setTab('round'); }} />
         <Chip active={tab === 'player'} label="By player" onClick={() => { setTab('player'); }} />
         <span style={{ width: 12 }} />
@@ -186,20 +186,20 @@ export function Awards() {
           <Chip key={String(d.key)} active={days === d.key} label={d.label} onClick={() => { setDays(d.key); }} />
         ))}
       </div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 10 }}>
-        <Lbl style={{ fontSize: 9 }}>award</Lbl>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', marginTop: 'var(--space-2)' }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>award</Lbl>
         <select
           value={awardType ?? ''}
           onChange={(e) => setAwardType(e.target.value || null)}
           aria-label="Award type"
           className="m"
-          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 13, padding: '6px 10px', maxWidth: 320 }}
+          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: '6px 10px', maxWidth: 320 }}
         >
           <option value="">all awards</option>
           {types.map((name) => <option key={name} value={name}>{name}</option>)}
         </select>
       </div>
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 'var(--space-5)' }}>
         {/* key remounts ByRound when filters change, so its page state
           * resets — a narrower result must never inherit an out-of-range
           * offset (Codex on #813). */}

@@ -67,34 +67,34 @@ function LineupStrip({ sessionId, open }: { sessionId: number; open: boolean }) 
       {lineups.isPending && <Pending label="lineups" />}
       {lineups.isError && <Unavailable what="lineups" />}
       {data && data.teams.length === 0 && (
-        <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>
+        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
           no roster capture for this evening
         </span>
       )}
       {data && data.teams.length > 0 && (
         <>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-2)', alignItems: 'baseline', flexWrap: 'wrap' }}>
             {data.teams.map((t, i) => (
-              <span key={t.key} style={{ display: 'inline-flex', gap: 10, alignItems: 'baseline' }}>
-                {i > 0 && <span className="m" style={{ fontSize: 14, color: 'var(--color-text-500)' }}>/</span>}
-                <span style={{ fontSize: 13, letterSpacing: '0.05em', textTransform: 'uppercase', color: TEAM_COLOR[t.key] ?? 'var(--color-text-200)' }}>
+              <span key={t.key} style={{ display: 'inline-flex', gap: 'var(--space-2)', alignItems: 'baseline' }}>
+                {i > 0 && <span className="m" style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-500)' }}>/</span>}
+                <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.05em', textTransform: 'uppercase', color: TEAM_COLOR[t.key] ?? 'var(--color-text-200)' }}>
                   {names(t.players)}
                 </span>
               </span>
             ))}
           </div>
           {events.length > 0 && (
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 'var(--space-2)' }}>
               {events.map((e) => (
-                <div key={e.key} className="m" style={{ ...rowStyle, fontSize: 10, color: 'var(--color-text-400)', padding: '3px 0', display: 'flex', gap: 12 }}>
-                  <span style={{ ...lblStyle, fontSize: 9 }}>{e.label}</span>
+                <div key={e.key} className="m" style={{ ...rowStyle, fontSize: 'var(--fs-label)', color: 'var(--color-text-400)', padding: '3px 0', display: 'flex', gap: 'var(--space-3)' }}>
+                  <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{e.label}</span>
                   <span>{e.text}</span>
                 </div>
               ))}
             </div>
           )}
           {data.rounds_without_roster > 0 && (
-            <Lbl style={{ fontSize: 9, marginTop: 6 }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
               {data.rounds_without_roster} round(s) without roster capture \u2014 changes there are unmeasured
             </Lbl>
           )}
@@ -119,33 +119,33 @@ export function SessionsList({ box }: { box: boolean }) {
   const data = sessions.isError ? undefined : sessions.data;
   const maybeMore = data != null && data.length >= limit;
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: box ? 900 : 760 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: box ? 900 : 760 }}>
       <Lbl>{box ? 'the evenings · box score' : 'the evenings'}</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
         Every evening we played.
       </h1>
-      <div data-parity={box ? 'sessions2.table' : 'sessions.table'} style={{ marginTop: 24 }}>
+      <div data-parity={box ? 'sessions2.table' : 'sessions.table'} style={{ marginTop: 'var(--space-5)' }}>
         <SectionHead
           label={`newest first · ${data?.length ?? '…'} evenings`}
           aside={box
-            ? <Link to="/sessions" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>plain view →</Link>
-            : <Link to="/sessions2" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>box view →</Link>}
+            ? <Link to="/sessions" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>plain view →</Link>
+            : <Link to="/sessions2" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>box view →</Link>}
         />
-        <div style={{ marginTop: 10 }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 14, padding: '6px 0' }}>
-            <Lbl style={{ fontSize: 9 }}>evening</Lbl>
-            <Lbl style={{ fontSize: 9 }}>rd</Lbl>
-            <Lbl style={{ fontSize: 9 }}>pl</Lbl>
-            <Lbl style={{ fontSize: 9 }}>kills</Lbl>
-            {box && <Lbl style={{ fontSize: 9 }}>allies</Lbl>}
-            {box && <Lbl style={{ fontSize: 9 }}>axis</Lbl>}
-            {box && <Lbl style={{ fontSize: 9 }}>draw</Lbl>}
-            <Lbl style={{ fontSize: 9, textAlign: 'right' }}>box</Lbl>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-4)', padding: '6px 0' }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>evening</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>rd</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>pl</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>kills</Lbl>
+            {box && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>allies</Lbl>}
+            {box && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>axis</Lbl>}
+            {box && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>draw</Lbl>}
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>box</Lbl>
           </div>
           {sessions.isPending && <div style={{ padding: '10px 0' }}><Pending label="sessions" /></div>}
           {sessions.isError && <div style={{ padding: '10px 0' }}><Unavailable what="sessions" /></div>}
           {data?.length === 0 && (
-            <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', padding: '10px 0' }}>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: '10px 0' }}>
               no sessions recorded yet
             </div>
           )}
@@ -153,18 +153,18 @@ export function SessionsList({ box }: { box: boolean }) {
             <div key={row.session_id}>
             <Link
               to={`/session-detail/${row.session_id}`}
-              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 14, alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+              style={{ ...rowStyle, display: 'grid', gridTemplateColumns: box ? 'minmax(0,1fr) auto auto auto auto auto auto auto' : 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-4)', alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
             >
-              <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                 {row.formatted_date}
               </span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.rounds}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.players}</span>
-              <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.total_kills.toLocaleString('en-US')}</span>
-              {box && <span className="m" style={{ fontSize: 12, color: 'var(--color-accent)' }}>{row.allies_wins}</span>}
-              {box && <span className="m" style={{ fontSize: 12, color: 'var(--color-accent-warm)' }}>{row.axis_wins}</span>}
-              {box && <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.draws}</span>}
-              <span className="m" style={{ fontSize: 14, minWidth: 58, textAlign: 'right' }}>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.rounds}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.players}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.total_kills.toLocaleString('en-US')}</span>
+              {box && <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-accent)' }}>{row.allies_wins}</span>}
+              {box && <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-accent-warm)' }}>{row.axis_wins}</span>}
+              {box && <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.draws}</span>}
+              <span className="m" style={{ fontSize: 'var(--fs-body)', minWidth: 58, textAlign: 'right' }}>
                 {/* 0/0 with an aggregate row present means NO map was
                   * attributed — a dash, not a claimed tie (Codex wave 2). */}
                 {row.team_1_score != null && row.team_2_score != null && row.team_1_score + row.team_2_score > 0
@@ -176,7 +176,7 @@ export function SessionsList({ box }: { box: boolean }) {
               <button
                 type="button"
                 onClick={() => { setOpenLineup((cur) => (cur === row.session_id ? null : row.session_id)); }}
-                style={{ ...lblStyle, fontSize: 9, background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 6px', color: openLineup === row.session_id ? 'var(--color-text-200)' : 'var(--color-text-500)' }}
+                style={{ ...lblStyle, fontSize: 'var(--fs-caption)', background: 'none', border: 'none', cursor: 'pointer', padding: '2px 0 6px', color: openLineup === row.session_id ? 'var(--color-text-200)' : 'var(--color-text-500)' }}
               >
                 lineup {openLineup === row.session_id ? '\u25b4' : '\u25be'}
               </button>
@@ -190,7 +190,7 @@ export function SessionsList({ box }: { box: boolean }) {
             type="button"
             onClick={() => setLimit((l) => l + PAGE)}
             style={{
-              marginTop: 14, fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase',
+              marginTop: 'var(--space-4)', fontSize: 'var(--fs-small)', letterSpacing: '0.08em', textTransform: 'uppercase',
               border: '1px solid var(--color-rule-700)', background: 'transparent',
               color: 'var(--color-text-300)', padding: '6px 12px', cursor: 'pointer',
             }}
@@ -199,7 +199,7 @@ export function SessionsList({ box }: { box: boolean }) {
           </button>
         )}
         {box && (
-          <Lbl style={{ fontSize: 9, marginTop: 10 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
             box = 2 points per map won, 1–1 on a draw · allies/axis = map wins by the side, sides swap every map
           </Lbl>
         )}
