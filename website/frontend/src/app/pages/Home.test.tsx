@@ -158,4 +158,21 @@ describe('Home', () => {
     const call = fetchSpy.mock.calls.map((c) => String(c[0])).find((u) => u.includes('players/search'));
     expect(call).toContain('q=vi');
   });
+  it('says a missing trend series is missing, not unavailable', async () => {
+    // /api/stats/trends omits a series the request did not ask for: the KEY
+    // is absent, not null (measured on #830, where the route gains
+    // response_model_exclude_none). "unavailable" would blame the endpoint
+    // for doing what it was asked.
+    const partial = { ...(trends as object), rounds: undefined, active_players: undefined };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/stats/trends') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(partial) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    await waitFor(() => expect(screen.getAllByText('not in this response').length).toBeGreaterThan(0));
+    expect(screen.queryByText(/trend: unavailable/)).toBeNull();
+  });
 });

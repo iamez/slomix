@@ -251,10 +251,17 @@ export interface LastSession {
 /** GET /api/stats/trends?days= — corpus: api_stats_trends.json */
 export interface StatsTrends {
   dates: string[];
-  rounds: number[];
-  active_players: number[];
-  kills: number[];
-  map_distribution: Record<string, number>;
+  /** OPTIONAL, not nullable: `?metrics=rounds` returns `{dates, rounds}`
+   *  with `kills` ABSENT — measured by the brother on #830, where the route
+   *  gains `response_model_exclude_none`. The key is missing, so the check
+   *  is on PRESENCE; reading these as nullable is the shape of the
+   *  `total_votes` crash. This page never filters, so it receives all four
+   *  today — which is precisely the reasoning that failed on session 154,
+   *  so the type states the contract rather than this caller's habit. */
+  rounds?: number[];
+  active_players?: number[];
+  kills?: number[];
+  map_distribution?: Record<string, number>;
 }
 
 /** One row of GET /api/stats/matches — corpus: api_stats_matches.json.

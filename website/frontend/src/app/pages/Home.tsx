@@ -197,7 +197,7 @@ function Insights() {
   const trends = useTrends(days);
   const data = trends.isError ? undefined : trends.data;
   const mapRows = data
-    ? Object.entries(data.map_distribution).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    ? Object.entries(data.map_distribution ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 8)
     : [];
   const mapMax = mapRows.length > 0 ? mapRows[0][1] : 1;
   const chart = (label: string, values: number[] | undefined, color: string, note: string) => (
@@ -214,7 +214,19 @@ function Insights() {
           </div>
         </>
       ) : (
-        <div style={{ marginTop: 'var(--space-2)' }}>{trends.isPending ? <Pending label="trend" /> : <Unavailable what="trend" />}</div>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          {trends.isPending && <Pending label="trend" />}
+          {trends.isError && <Unavailable what="trend" />}
+          {/* Answered, but this series is not in it. `/api/stats/trends`
+            * omits a series the request did not ask for — the KEY is
+            * absent, not null — so "unavailable" would blame the endpoint
+            * for doing what it was asked. */}
+          {trends.isSuccess && (
+            <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+              not in this response
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
