@@ -141,6 +141,17 @@ describe('Story', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('does not crash when the board is empty', async () => {
+    // players[0] types as if it always hits; it does not when nobody met the
+    // round floor, and the guard that saves it looked like dead code to the
+    // scanner until the read became .at(0) (Codacy on #839).
+    const noPlayers = { ...pwc, players: [], mvp: null };
+    renderPage(withOverride('/storytelling/win-contribution', () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(noPlayers) } as Response)));
+    await waitFor(() => expect(screen.getByText('win contribution')).toBeInTheDocument());
+    expect(screen.queryByText('mvp')).toBeNull();
+  });
+
   it('draws both momentum series on one scale, one drawing per round', async () => {
     renderPage();
     await waitFor(() => expect(screen.getAllByRole('img', { name: /momentum/ }).length).toBeGreaterThan(0));

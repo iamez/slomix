@@ -224,7 +224,12 @@ function WinContribution({ gsid }: { gsid: number }) {
   if (q.isError) return <Unavailable what="win contribution" />;
 
   const { mvp, players } = q.data;
-  const leader = players[0];
+  // .at(0), not [0]: an index read is typed as if it always hit, so the
+  // null-check below reads to the compiler (and to Codacy) as dead code
+  // while being the only thing standing between an empty board and a crash.
+  // The array can be empty — a session where nobody met the round floor —
+  // so the type has to say what the runtime does.
+  const leader = players.at(0);
   const mvpIsLeader = mvp != null && leader != null && mvp.guid === leader.guid;
 
   return (
@@ -530,7 +535,7 @@ export function Story() {
       (s) => s.start_date === dateParam || s.end_date === dateParam,
     )
     : [];
-  const latest = scopes.data?.sessions[0]?.gaming_session_id ?? null;
+  const latest = scopes.data?.sessions.at(0)?.gaming_session_id ?? null;
   const gsid = explicit
     ?? (dateParam ? (dated.length === 1 ? dated[0].gaming_session_id : null) : latest);
 
