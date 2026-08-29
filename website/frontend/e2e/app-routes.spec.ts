@@ -3,6 +3,14 @@ import { test, expect, type ConsoleMessage, type Page } from '@playwright/test';
 // with "needs an import attribute of type json" and no tests are collected.
 import routes from '../src/app/routes.data.json' with { type: 'json' };
 
+/** Phases whose pages are built. A route at or below this renders a real
+ *  page; above it, the shell's stub is the correct answer.
+ *
+ *  This number is the reason the constant exists rather than being inlined:
+ *  raise it when a phase lands, and every route of that phase is required to
+ *  stop showing the stub. */
+const BUILT_THROUGH_PHASE = 3;
+
 /**
  * Every route of the standalone app, loaded once (docs/design/09 §H3).
  *
@@ -112,6 +120,20 @@ for (const route of routes) {
     // Values the page failed to format leak as these three, and every one of
     // them has reached a screenshot in this project at least once.
     expect(text).not.toMatch(/\bundefined\b|\bNaN\b|\[object Object\]/);
+
+    // A stub answers 200 and renders cleanly, so every check above passes
+    // for a route whose page was never wired into the registry. That is not
+    // hypothetical: /story/date/:date rendered the stub while its unit tests
+    // passed, because those mount the component directly and only the
+    // registry decides what the browser gets.
+    if (route.phase <= BUILT_THROUGH_PHASE) {
+      // Case-insensitive on purpose: the stub's label is a `.lbl`, and that
+      // class uppercases through CSS, so innerText returns "NOT BUILT YET".
+      // The first version of this assertion matched lowercase and passed on
+      // a route that was showing the stub — the control run is what caught
+      // it, not the green one.
+      expect(text, `${url} still shows the phase stub`).not.toMatch(/not built yet/i);
+    }
 
     expect(seen.consoleErrors, `${url} logged console errors`).toEqual([]);
     expect(seen.badResponses, `${url} made failing requests`).toEqual([]);
