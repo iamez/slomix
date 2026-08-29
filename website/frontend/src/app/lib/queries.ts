@@ -29,7 +29,10 @@ import type {
   SessionLineups,
   SessionRounds,
   SessionSummary,
+  SkillFormula,
+  SkillLeaderboard,
   SkillMovers,
+  SsrBoard,
   StatsOverview,
   StatsRecords,
   StatsTrends,
@@ -478,5 +481,35 @@ export function usePlayerRivalries(guid: string | null) {
       apiGet('/api/rivalries/player/{guid}', {
         pathParams: { guid: guid! },
       }) as Promise<PlayerRivalries>,
+  });
+}
+
+/** ET Rating v2.1 — the number the profile shows, with its components. */
+export function useSkillLeaderboard(limit: number) {
+  return useQuery({
+    queryKey: ['skill-leaderboard', limit],
+    queryFn: () =>
+      apiGet('/api/skill/leaderboard', { query: { limit } }) as Promise<SkillLeaderboard>,
+  });
+}
+
+/** The formula itself, so the page can quote it rather than paraphrase it. */
+export function useSkillFormula() {
+  return useQuery({
+    queryKey: ['skill-formula'],
+    queryFn: () => apiGet('/api/skill/formula') as Promise<SkillFormula>,
+  });
+}
+
+/** SSR v0.3 — a second, session-scoped formula, still partially covered.
+ *
+ * `enabled` is not optional politeness: the endpoint takes a measured 2.4 s,
+ * and the panel that shows it starts closed, so an unconditional query spent
+ * that on every visit for data nobody had asked to see (Codex on #835). */
+export function useSsr(enabled: boolean) {
+  return useQuery({
+    queryKey: ['skill-ssr'],
+    enabled,
+    queryFn: () => apiGet('/api/skill/ssr') as Promise<SsrBoard>,
   });
 }
