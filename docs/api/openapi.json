@@ -751,6 +751,13 @@
     "title": "DpmLeaderRow",
     "type": "object"
    },
+   "EmptyHighlights": {
+    "additionalProperties": false,
+    "description": "`highlights: {}` — the round produced no player rows at all.\n\n⛔ ITS OWN MODEL, BECAUSE OPTIONAL FIELDS SERIALISE AS NULLS. Making the\nthree entries optional on `VizHighlights` stopped the 500, but FastAPI\nthen sent `{\"most_damage\": null, \"most_kills\": null, \"mvp\": null}` where\nthe handler had written `{}` — a payload change on the very state the\noptionality was added for (Codex on #830).\n\n⚠️ AND HERE THE UNION ORDER IS LOAD-BEARING, unlike the day's other\nunions. `VizHighlights` has three optional fields, so it accepts `{}` too;\nwritten first it wins and re-introduces the three nulls. `EmptyHighlights`\nmust come first, and `extra=\"forbid\"` keeps it from swallowing a populated\npayload. Measured both orders before choosing.",
+    "properties": {},
+    "title": "EmptyHighlights",
+    "type": "object"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -1381,8 +1388,15 @@
       "title": "Map Name"
      },
      "played": {
-      "title": "Played",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Played"
      },
      "winner_side": {
       "title": "Winner Side",
@@ -2620,8 +2634,15 @@
       "type": "object"
      },
      "map_name": {
-      "title": "Map Name",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
      },
      "round_date": {
       "anyOf": [
@@ -2754,11 +2775,26 @@
       "title": "Duration Seconds"
      },
      "highlights": {
-      "$ref": "#/components/schemas/VizHighlights"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/EmptyHighlights"
+       },
+       {
+        "$ref": "#/components/schemas/VizHighlights"
+       }
+      ],
+      "title": "Highlights"
      },
      "map_name": {
-      "title": "Map Name",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
      },
      "player_count": {
       "title": "Player Count",
@@ -2791,8 +2827,15 @@
       "type": "string"
      },
      "round_number": {
-      "title": "Round Number",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
      },
      "winner_team": {
       "anyOf": [
@@ -2907,12 +2950,26 @@
       "type": "string"
      },
      "team_a_r1_side": {
-      "title": "Team A R1 Side",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
      },
      "team_a_r2_side": {
-      "title": "Team A R2 Side",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
      },
      "winner_side": {
       "anyOf": [
@@ -2970,8 +3027,15 @@
       "title": "Map Play Seq"
      },
      "match_id": {
-      "title": "Match Id",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Id"
      },
      "r1_defender_side": {
       "title": "R1 Defender Side",
@@ -2990,12 +3054,26 @@
       "type": "integer"
      },
      "team_a_r1_side": {
-      "title": "Team A R1 Side",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
      },
      "team_a_r2_side": {
-      "title": "Team A R2 Side",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
      },
      "team_a_time": {
       "title": "Team A Time",
@@ -3557,8 +3635,15 @@
       "type": "string"
      },
      "duration": {
-      "title": "Duration",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration"
      },
      "id": {
       "title": "Id",
@@ -3569,8 +3654,15 @@
       "type": "string"
      },
      "outcome": {
-      "title": "Outcome",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Outcome"
      },
      "round_number": {
       "title": "Round Number",
@@ -4750,8 +4842,15 @@
       "title": "Beat Seconds"
      },
      "map": {
-      "title": "Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
      },
      "r2_pending": {
       "title": "R2 Pending",
@@ -4888,8 +4987,15 @@
       "$ref": "#/components/schemas/TonightCurrent"
      },
      "current_map": {
-      "title": "Current Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Current Map"
      },
      "director": {
       "anyOf": [
@@ -4969,8 +5075,15 @@
       "type": "integer"
      },
      "map": {
-      "title": "Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
      },
      "map_number": {
       "title": "Map Number",
@@ -5032,8 +5145,15 @@
       "type": "integer"
      },
      "duration": {
-      "title": "Duration",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration"
      },
      "is_fullhold": {
       "title": "Is Fullhold",
@@ -5044,8 +5164,15 @@
       "type": "integer"
      },
      "winner": {
-      "title": "Winner",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner"
      }
     },
     "required": [

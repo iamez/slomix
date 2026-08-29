@@ -64,7 +64,9 @@ class MapObjectiveRecord(BaseModel):
     #: `M:SS`, rendered from the MEASURED duration — not the `actual_time`
     #: header, which is the stopwatch target and overstates ~15% of rounds.
     fastest_time: str
-    played: str
+    #: `rounds.round_date` is nullable and the segments query does not
+    #: exclude undated rows — Codex on #830.
+    played: str | None
     #: Nullable column: an unresolved round has no winner.
     winner_team: int | None
     #: 'Axis' | 'Allies' | 'Draw' — derived, so never null.

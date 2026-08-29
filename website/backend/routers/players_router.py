@@ -420,16 +420,22 @@ def _tonight_director_line(score: dict, momentum: list, current: dict,
 
 class TonightRound(BaseModel):
     round: int
-    winner: str
+    #: None when the Lua winner value is outside 1/2 — a live or
+    #: unlinked round, not an error (Codex on #830).
+    winner: str | None
     axis_score: int
     allies_score: int
-    duration: int
+    #: None when neither `actual_duration_seconds` nor a usable timestamp
+    #: pair exists (Codex on #830).
+    duration: int | None
     a_on_axis: bool
     is_fullhold: bool
 
 
 class TonightMap(BaseModel):
-    map: str
+    #: `lua_round_teams.map_name` is nullable and preserved as null by
+    #: `_store_lua_round_teams` — Codex on #830.
+    map: str | None
     map_number: int
     rounds: list[TonightRound]
     winner: str
@@ -470,7 +476,7 @@ class TonightCurrent(BaseModel):
     typed from `cur_by_round.get(1, {}).get("duration")`, not from a reading.
     """
 
-    map: str
+    map: str | None
     round: int
     status: str
     r2_pending: bool
@@ -492,7 +498,8 @@ class TonightLive(BaseModel):
 
     status: str
     active: bool
-    current_map: str
+    #: Nullable for the same reason as `TonightMap.map`.
+    current_map: str | None
     last_update_unix: int
     age_seconds: int
     teams: TonightTeams

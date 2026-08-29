@@ -3,7 +3,7 @@
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -65,6 +65,25 @@ class VizMvp(BaseModel):
     dpm: float
 
 
+class EmptyHighlights(BaseModel):
+    """`highlights: {}` — the round produced no player rows at all.
+
+    ⛔ ITS OWN MODEL, BECAUSE OPTIONAL FIELDS SERIALISE AS NULLS. Making the
+    three entries optional on `VizHighlights` stopped the 500, but FastAPI
+    then sent `{"most_damage": null, "most_kills": null, "mvp": null}` where
+    the handler had written `{}` — a payload change on the very state the
+    optionality was added for (Codex on #830).
+
+    ⚠️ AND HERE THE UNION ORDER IS LOAD-BEARING, unlike the day's other
+    unions. `VizHighlights` has three optional fields, so it accepts `{}` too;
+    written first it wins and re-introduces the three nulls. `EmptyHighlights`
+    must come first, and `extra="forbid"` keeps it from swallowing a populated
+    payload. Measured both orders before choosing.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class VizHighlights(BaseModel):
     """⚠️ EMPTY WHEN THE ROUND HAS NO PLAYER ROWS.
 
@@ -91,10 +110,14 @@ class RoundViz(BaseModel):
     round-tripping alone does not prove what the client receives."""
 
     round_id: int
-    map_name: str
+    #: `rounds.map_name` is nullable and passed through raw — Codex on #830.
+    map_name: str | None
     #: `str(round_row[2]) if round_row[2] else None` — the column is nullable.
     round_date: str | None
-    round_number: int
+    #: ⚠️ `!session_start` inserts an active placeholder WITHOUT a round
+    #: number, and this endpoint does not filter on status — the same state
+    #: `RoundAwards` already models as nullable (Codex on #830).
+    round_number: int | None
     #: Human label such as "R1" — rendered by the handler, not a number.
     round_label: str
     #: Nullable in the schema and passed through unchanged: an active or
@@ -112,7 +135,7 @@ class RoundViz(BaseModel):
     duration_seconds: int | None
     player_count: int
     players: list[VizPlayerRow]
-    highlights: VizHighlights
+    highlights: EmptyHighlights | VizHighlights
 
 
 class RecentRound(BaseModel):
@@ -178,7 +201,8 @@ class RoundAwards(BaseModel):
     """
 
     round_id: int
-    map_name: str
+    #: Nullable for the same reason as `RoundViz.map_name` (Codex on #830).
+    map_name: str | None
     #: ⚠️ NULL for the placeholder row `!session_start` inserts — that insert
     #: omits `round_number` and this handler does not filter on status, so an
     #: active session would otherwise answer 500 instead of an empty award set.

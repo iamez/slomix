@@ -245,9 +245,14 @@ class SessionMatchRow(BaseModel):
     map_name: str
     round_number: int
     date: str
-    duration: str
+    #: NULL when neither `actual_duration_seconds` nor `actual_time`
+    #: resolves — Codex on #830.
+    duration: str | None
     winner: str
-    outcome: str
+    #: `rounds.round_outcome` is nullable and passed through raw. 26 rows
+    #: carry NULL today; none fell in the eight sampled sessions, which is
+    #: exactly why sampling did not find this.
+    outcome: str | None
 
 
 class ScoringMapRow(BaseModel):
@@ -259,7 +264,9 @@ class ScoringMapRow(BaseModel):
     """
 
     map: str
-    match_id: str
+    #: `StopwatchScoringService._pair_round` stores None on its legacy
+    #: sequential fallback — Codex on #830.
+    match_id: str | None
     emoji: str
     description: str
     winner: str
@@ -267,8 +274,10 @@ class ScoringMapRow(BaseModel):
     counted: bool
     scoring_source: str
     r1_defender_side: int
-    team_a_r1_side: int
-    team_a_r2_side: int
+    #: None on the `incomplete` and `ambiguous` scoring branches (R1-only
+    #: map, or a roster change) — Codex on #830.
+    team_a_r1_side: int | None
+    team_a_r2_side: int | None
     team_a_points: int
     team_b_points: int
     team_a_time: str
@@ -285,8 +294,8 @@ class ScoringDebugRow(BaseModel):
     scoring_source: str
     winner_side: int | None
     r1_defender_side: int
-    team_a_r1_side: int
-    team_a_r2_side: int
+    team_a_r1_side: int | None
+    team_a_r2_side: int | None
     note: str | None
 
 

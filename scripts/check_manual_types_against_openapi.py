@@ -225,7 +225,20 @@ def main() -> int:
         compared += 1
         declared = _fields(body)
         required = set(schema.get("required", []))
-        for field, field_schema in (schema.get("properties") or {}).items():
+        properties = schema.get("properties") or {}
+
+        # ⛔ THE OTHER DIRECTION, WHICH THIS SCRIPT USED TO IGNORE ENTIRELY.
+        # Iterating only the OpenAPI properties means a field declared SOLELY
+        # in TypeScript is never examined, so a removed or renamed API field
+        # can stay `required` on the client while this exits clean — the drift
+        # that actually breaks a page, since the client reads a key the server
+        # stopped sending (Codex on #830). A clean exit must cover both sets.
+        findings.extend(
+            (name, field, "declared in types.ts, absent from the API",
+             declared[field][0])
+            for field in sorted(set(declared) - set(properties)))
+
+        for field, field_schema in properties.items():
             if field not in declared:
                 findings.append((name, field, "absent from types.ts", ""))
                 continue
@@ -244,7 +257,13 @@ def main() -> int:
                 findings.append((name, field, "API nullable, TS is not", ts_type))
             if ts_nullable and not (api_nullable or api_optional):
                 findings.append((name, field, "TS nullable, API never is", ts_type))
-            if api_optional and not (ts_optional or ts_nullable):
+            # ⛔ `ts_nullable` DOES NOT SATISFY `api_optional`. An optional API
+            # field may be ABSENT, which arrives as `undefined`, and
+            # `field: T | null` forbids undefined just as firmly as `field: T`
+            # does. Accepting nullability here let the checker print agreement
+            # for exactly the optional-versus-nullable drift its own docstring
+            # claims to detect (Codex on #830). Optionality needs `?`.
+            if api_optional and not ts_optional:
                 findings.append((name, field, "API optional, TS is required", ts_type))
             if ts_optional and not api_optional:
                 findings.append((name, field, "TS optional, API always sends it", ts_type))

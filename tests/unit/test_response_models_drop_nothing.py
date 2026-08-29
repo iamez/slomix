@@ -223,9 +223,11 @@ from website.backend.routers.records_awards import (
 )
 from website.backend.routers.records_maps import MapObjectiveRecords, MapStats
 from website.backend.routers.records_matches import (
+    EmptyHighlights,
     RecentRound,
     RoundAwards,
     RoundViz,
+    VizHighlights,
 )
 from website.backend.routers.records_seasons import (
     CurrentSeason,
@@ -456,17 +458,41 @@ class TestNullsTheDataDoesNotShowYet:
     def test_a_round_with_no_date_is_accepted(self):
         assert RoundViz.model_validate(_viz_payload(round_date=None)).round_date is None
 
-    def test_a_round_with_no_players_has_empty_highlights(self):
-        """The handler leaves `highlights` as {} when there are no player rows;
-        requiring the three entries turned that into a 500."""
+    def test_a_round_with_no_players_sends_an_empty_object(self):
+        """The handler leaves `highlights` as `{}` when there are no player
+        rows. Requiring the three entries turned that into a 500; making them
+        OPTIONAL fixed the 500 and broke the payload instead, sending
+        `{"most_damage": null, …}` where `{}` had been (Codex on #830). The
+        union restores the shape, and this asserts the SERIALISED bytes rather
+        than an attribute — the attribute is what hid the regression."""
         payload = _viz_payload(players=[], player_count=0, highlights={})
         modelled = RoundViz.model_validate(payload)
         assert modelled.players == []
-        assert modelled.highlights.mvp is None
+        assert type(modelled.highlights) is EmptyHighlights
+        assert _json.loads(modelled.model_dump_json())["highlights"] == {}
+
+    def test_the_union_order_is_load_bearing_here(self):
+        """⚠️ UNLIKE THE OTHER UNIONS ON THIS BRANCH, ORDER DECIDES THIS ONE.
+
+        `VizHighlights` has three optional fields, so it also accepts `{}`;
+        written first it wins and puts the three nulls back. Measured both
+        ways before choosing. Pinned so a tidy-up that reorders the annotation
+        fails here instead of in a payload nobody re-checks.
+        """
+        from pydantic import TypeAdapter
+
+        annotation = RoundViz.model_fields["highlights"].annotation
+        assert _json.loads(
+            TypeAdapter(annotation).validate_python({}).model_dump_json()) == {}
+        wrong_way = TypeAdapter(VizHighlights | EmptyHighlights)
+        assert _json.loads(
+            wrong_way.validate_python({}).model_dump_json()) != {}, (
+            "VizHighlights no longer accepts {} — the ordering hazard this "
+            "test guards against is gone, and so is the reason for the union")
 
     def test_the_three_highlight_names_are_still_declared(self):
         """Optional must not mean forgettable: a renamed field still fails."""
-        assert set(RoundViz.model_fields["highlights"].annotation.model_fields) == {
+        assert set(VizHighlights.model_fields) == {
             "most_damage", "most_kills", "mvp"}
 
 
