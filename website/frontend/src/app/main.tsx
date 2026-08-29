@@ -80,6 +80,13 @@ const PAGES: Record<string, React.ReactElement> = {
   rounds: <RoundsPage />,
   story: <Story />,
   'story-session': <Story />,
+  // All three story routes mount the same page — the date variant included,
+  // which is the one that would otherwise render a stub while its tests pass
+  // (they mount the component directly; only the registry decides what the
+  // BROWSER gets). Found by the route sweep's own gap: a stub answers 200
+  // and renders cleanly, so "the sweep is green" says nothing about whether
+  // the right component is behind the route.
+  'story-date': <Story />,
 };
 
 const router = createBrowserRouter(
