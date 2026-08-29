@@ -39,6 +39,248 @@
     "title": "ActivityCalendar",
     "type": "object"
    },
+   "AvailabilityDayAnonymous": {
+    "additionalProperties": false,
+    "description": "A day as an anonymous caller sees it: three keys, no viewer detail.",
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "date",
+     "counts",
+     "total"
+    ],
+    "title": "AvailabilityDayAnonymous",
+    "type": "object"
+   },
+   "AvailabilityDayViewer": {
+    "additionalProperties": false,
+    "description": "A day as a LOGGED-IN caller sees it — `my_status` appears.\n\n⛔ ABSENT AND NULL MEAN DIFFERENT THINGS HERE AND BOTH ARE LOAD-BEARING:\n  - key ABSENT  -> nobody is logged in, so the question was never asked\n  - value NULL  -> you are logged in and set nothing for that day\nMeasured on one range: 5 days carry a status, 50 are null, and every day\nof the anonymous response omits the key entirely.\n\n⭐ Which is why this is a UNION of day shapes and not one model with\n`my_status: str | None = None`. That single model has no way to express\nthe difference: without `exclude_none` the anonymous response GAINS\n`\"my_status\": null` (and the two states collapse into one), and with it\nthe logged-in null DISAPPEARS (and they collapse the other way). Both\ncollapses are wrong, in opposite directions.",
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "my_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "My Status"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "date",
+     "counts",
+     "total",
+     "my_status"
+    ],
+    "title": "AvailabilityDayViewer",
+    "type": "object"
+   },
+   "AvailabilityDayViewerWithUsers": {
+    "additionalProperties": false,
+    "description": "…and with `?include_users=true`, who was on each status that day.\n\n⚠️ `include_users=true` IS SILENTLY IGNORED FOR AN ANONYMOUS CALLER. The\nhandler gates it on `include_users and user_id is not None`, so the API\naccepts the parameter, answers 200, and simply omits the field. Measured:\nanonymous with and without the flag are byte-identical.",
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "my_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "My Status"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     },
+     "users_by_status": {
+      "additionalProperties": {
+       "items": {
+        "$ref": "#/components/schemas/AvailabilityUser"
+       },
+       "type": "array"
+      },
+      "title": "Users By Status",
+      "type": "object"
+     }
+    },
+    "required": [
+     "date",
+     "counts",
+     "total",
+     "my_status",
+     "users_by_status"
+    ],
+    "title": "AvailabilityDayViewerWithUsers",
+    "type": "object"
+   },
+   "AvailabilityOverview": {
+    "description": "Date-range availability aggregates, plus whatever the viewer may see.\n\n⚠️ WHAT ACTUALLY DISCRIMINATES THE DAY UNION IS PYDANTIC, NOT THIS CODE.\nAn earlier version of this docstring claimed the ordering and\n`extra=\"forbid\"` were load-bearing — that a five-key day would otherwise\nvalidate as the three-key anonymous shape and lose its extra fields. Both\nhalves are false, and mutation says so: reversing the order changes\nnothing, dropping `forbid` from all three members changes nothing, and\ndropping BOTH changes nothing. Pydantic's smart union picks the most\nspecific member that validates, whatever order it is written in.\n\n`extra=\"forbid\"` stays as belt-and-braces — it makes the contract explicit\ninstead of dependent on a union heuristic — but it is not the mechanism,\nand a comment that misnames the mechanism is worse than no comment.\n`tests/unit/test_response_models_drop_nothing.py` pins the real behaviour\nrather than repeating this prose.",
+    "properties": {
+     "days": {
+      "items": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/AvailabilityDayViewerWithUsers"
+        },
+        {
+         "$ref": "#/components/schemas/AvailabilityDayViewer"
+        },
+        {
+         "$ref": "#/components/schemas/AvailabilityDayAnonymous"
+        }
+       ]
+      },
+      "title": "Days",
+      "type": "array"
+     },
+     "from": {
+      "title": "From",
+      "type": "string"
+     },
+     "session_ready": {
+      "$ref": "#/components/schemas/AvailabilitySessionReady"
+     },
+     "statuses": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Statuses",
+      "type": "array"
+     },
+     "to": {
+      "title": "To",
+      "type": "string"
+     },
+     "viewer": {
+      "$ref": "#/components/schemas/AvailabilityViewer"
+     }
+    },
+    "required": [
+     "from",
+     "to",
+     "statuses",
+     "days",
+     "viewer",
+     "session_ready"
+    ],
+    "title": "AvailabilityOverview",
+    "type": "object"
+   },
+   "AvailabilitySessionReady": {
+    "description": "Whether today has enough LOOKING players to call a session.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "event_key": {
+      "title": "Event Key",
+      "type": "string"
+     },
+     "looking_count": {
+      "title": "Looking Count",
+      "type": "integer"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "threshold": {
+      "title": "Threshold",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "date",
+     "ready",
+     "looking_count",
+     "threshold",
+     "event_key"
+    ],
+    "title": "AvailabilitySessionReady",
+    "type": "object"
+   },
+   "AvailabilityUser": {
+    "properties": {
+     "display_name": {
+      "title": "Display Name",
+      "type": "string"
+     },
+     "user_id": {
+      "title": "User Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "user_id",
+     "display_name"
+    ],
+    "title": "AvailabilityUser",
+    "type": "object"
+   },
+   "AvailabilityViewer": {
+    "properties": {
+     "authenticated": {
+      "title": "Authenticated",
+      "type": "boolean"
+     },
+     "linked_discord": {
+      "title": "Linked Discord",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "authenticated",
+     "linked_discord"
+    ],
+    "title": "AvailabilityViewer",
+    "type": "object"
+   },
    "AwardLeaderRow": {
     "description": "One row of the awards leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live\nresponse, not the first row: `guid` is null on some of them, and a model\nthat read only row 0 would have typed it `str` and dropped the nulls.\n\n⛔ `response_model` FILTERS. A field the handler returns and a model omits\ndisappears from the payload, silently, with a 200 — which is why\n`tests/unit/test_response_models_drop_nothing.py` compares handler output\nagainst the serialised model instead of trusting these classes.",
     "properties": {
@@ -4766,7 +5008,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/AvailabilityOverview"
+        }
        }
       },
       "description": "Successful Response"

@@ -13,6 +13,7 @@ from typing import Any
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, ConfigDict, Field
 
 from website.backend.dependencies import get_db
 from website.backend.logging_config import get_app_logger
@@ -438,7 +439,109 @@ async def get_availability_access(request: Request, db=Depends(get_db)):
     }
 
 
-@router.get("")
+class AvailabilityUser(BaseModel):
+    user_id: int
+    #: `COALESCE(pl.player_name, ae.user_name, pl.discord_username)`, with a
+    #: `"User {id}"` fallback in the handler — never null.
+    display_name: str
+
+
+class AvailabilityDayAnonymous(BaseModel):
+    """A day as an anonymous caller sees it: three keys, no viewer detail."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    date: str
+    #: One count per status name; the key set mirrors the `statuses` field.
+    counts: dict[str, int]
+    total: int
+
+
+class AvailabilityDayViewer(AvailabilityDayAnonymous):
+    """A day as a LOGGED-IN caller sees it — `my_status` appears.
+
+    ⛔ ABSENT AND NULL MEAN DIFFERENT THINGS HERE AND BOTH ARE LOAD-BEARING:
+      - key ABSENT  -> nobody is logged in, so the question was never asked
+      - value NULL  -> you are logged in and set nothing for that day
+    Measured on one range: 5 days carry a status, 50 are null, and every day
+    of the anonymous response omits the key entirely.
+
+    ⭐ Which is why this is a UNION of day shapes and not one model with
+    `my_status: str | None = None`. That single model has no way to express
+    the difference: without `exclude_none` the anonymous response GAINS
+    `"my_status": null` (and the two states collapse into one), and with it
+    the logged-in null DISAPPEARS (and they collapse the other way). Both
+    collapses are wrong, in opposite directions.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    my_status: str | None
+
+
+class AvailabilityDayViewerWithUsers(AvailabilityDayViewer):
+    """…and with `?include_users=true`, who was on each status that day.
+
+    ⚠️ `include_users=true` IS SILENTLY IGNORED FOR AN ANONYMOUS CALLER. The
+    handler gates it on `include_users and user_id is not None`, so the API
+    accepts the parameter, answers 200, and simply omits the field. Measured:
+    anonymous with and without the flag are byte-identical.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    users_by_status: dict[str, list[AvailabilityUser]]
+
+
+class AvailabilityViewer(BaseModel):
+    authenticated: bool
+    linked_discord: bool
+
+
+class AvailabilitySessionReady(BaseModel):
+    """Whether today has enough LOOKING players to call a session."""
+
+    date: str
+    ready: bool
+    looking_count: int
+    threshold: int
+    event_key: str
+
+
+class AvailabilityOverview(BaseModel):
+    """Date-range availability aggregates, plus whatever the viewer may see.
+
+    ⚠️ WHAT ACTUALLY DISCRIMINATES THE DAY UNION IS PYDANTIC, NOT THIS CODE.
+    An earlier version of this docstring claimed the ordering and
+    `extra="forbid"` were load-bearing — that a five-key day would otherwise
+    validate as the three-key anonymous shape and lose its extra fields. Both
+    halves are false, and mutation says so: reversing the order changes
+    nothing, dropping `forbid` from all three members changes nothing, and
+    dropping BOTH changes nothing. Pydantic's smart union picks the most
+    specific member that validates, whatever order it is written in.
+
+    `extra="forbid"` stays as belt-and-braces — it makes the contract explicit
+    instead of dependent on a union heuristic — but it is not the mechanism,
+    and a comment that misnames the mechanism is worse than no comment.
+    `tests/unit/test_response_models_drop_nothing.py` pins the real behaviour
+    rather than repeating this prose.
+    """
+
+    #: `YYYY-MM-DD`, from `date.isoformat()`.
+    from_: str = Field(alias="from")
+    to: str
+    statuses: list[str]
+    days: list[
+        AvailabilityDayViewerWithUsers | AvailabilityDayViewer | AvailabilityDayAnonymous
+    ]
+    viewer: AvailabilityViewer
+    session_ready: AvailabilitySessionReady
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+@router.get("", response_model=AvailabilityOverview,
+            response_model_by_alias=True)
 async def get_availability_range(
     request: Request,
     from_date: date | None = Query(default=None, alias="from"),

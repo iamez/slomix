@@ -188,6 +188,13 @@ async def test_both_boards_are_populated_so_the_comparison_can_see_them():
 import json as _json
 from pathlib import Path as _Path
 
+from website.backend.routers.availability import (
+    AvailabilityDayAnonymous,
+    AvailabilityDayViewer,
+    AvailabilityDayViewerWithUsers,
+    AvailabilityOverview,
+    AvailabilityUser,
+)
 from website.backend.routers.challenges_router import CurrentChallenge
 from website.backend.routers.diagnostics_router import (
     StorytellingCompleteness,
@@ -1498,3 +1505,132 @@ class TestTheStatesNoUrlCanReach:
         empty_season = _json.loads(
             (_FIXTURES / "api_seasons_current_summary_empty.json").read_text())
         assert isinstance(empty_season["totals"]["avg_rounds_per_day"], int)
+
+
+class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
+    """`/api/availability` — the one endpoint so far where NEITHER a nullable
+    field nor `exclude_none` can express the contract, because absence and null
+    are two different answers and both are given.
+
+        anonymous          `my_status` ABSENT     — nobody asked the question
+        logged in, unset   `my_status` null       — asked, and you set nothing
+        logged in, set     `my_status` "LOOKING"  — asked, and here it is
+
+    Measured over one range: 5 days carry a status, 50 are null, and all 55
+    days of the anonymous response omit the key.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, raw):
+        modelled = _json.loads(
+            AvailabilityOverview.model_validate(raw).model_dump_json(by_alias=True))
+        assert not missing_keys(raw, modelled), (
+            f"AvailabilityOverview dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, "AvailabilityOverview altered a value"
+        return modelled
+
+    @pytest.mark.parametrize("fixture", [
+        "api_availability_anonymous.json",
+        "api_availability_viewer.json",
+        "api_availability_viewer_with_users.json",
+    ])
+    def test_every_viewer_state_survives(self, fixture):
+        self._roundtrip(self._f(fixture))
+
+    def test_the_three_states_of_my_status(self):
+        anon = self._f("api_availability_anonymous.json")
+        viewer = self._f("api_availability_viewer.json")
+        assert all("my_status" not in d for d in anon["days"]), (
+            "the anonymous fixture grew my_status — it no longer proves "
+            "absence is a state")
+        nulls = [d for d in viewer["days"] if d.get("my_status") is None]
+        values = [d for d in viewer["days"] if d.get("my_status")]
+        assert all("my_status" in d for d in viewer["days"])
+        assert len(nulls) == 50 and len(values) == 5, (
+            f"the viewer fixture no longer covers both: {len(nulls)} null, "
+            f"{len(values)} set")
+
+    def test_the_union_keeps_each_day_shape_exactly(self):
+        """Each day payload comes back as its own shape, with every key.
+
+        ⚠️ NOT because of the ordering, and not because of `extra="forbid"` —
+        both of those were claimed as the mechanism and mutation refuted both:
+        reversing the union, removing `forbid` from every member, and doing
+        both at once all leave this test green. Pydantic's smart union picks
+        the most specific member that validates. The next test pins that,
+        because it is the thing the contract actually rests on.
+        """
+        from pydantic import TypeAdapter
+
+        adapter = TypeAdapter(
+            AvailabilityDayViewerWithUsers | AvailabilityDayViewer
+            | AvailabilityDayAnonymous)
+        cases = [
+            ("api_availability_anonymous.json", AvailabilityDayAnonymous, 3),
+            ("api_availability_viewer.json", AvailabilityDayViewer, 4),
+            ("api_availability_viewer_with_users.json",
+             AvailabilityDayViewerWithUsers, 5),
+        ]
+        for fixture, expected_model, keys in cases:
+            day = self._f(fixture)["days"][0]
+            chosen = adapter.validate_python(day)
+            assert type(chosen) is expected_model, (
+                f"{fixture} day matched {type(chosen).__name__}, not "
+                f"{expected_model.__name__}")
+            out = _json.loads(chosen.model_dump_json())
+            assert len(out) == keys and out == day
+
+    def test_include_users_is_silently_ignored_without_a_session(self):
+        """⚠️ The API accepts `include_users=true` from an anonymous caller,
+        answers 200, and omits the field — the handler gates it on
+        `include_users and user_id is not None`. Recorded because a caller
+        cannot tell "there were no users" from "you were not allowed to ask"."""
+        anon = self._f("api_availability_anonymous.json")
+        assert all("users_by_status" not in d for d in anon["days"])
+        with_users = self._f("api_availability_viewer_with_users.json")
+        populated = [d for d in with_users["days"]
+                     if any(v for v in d["users_by_status"].values())]
+        assert populated, "the fixture no longer carries a populated day"
+        assert set(populated[0]["users_by_status"]) == {
+            "LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"}
+        # …and the users inside keep their shape. Without this the element
+        # type could be widened to `Any` and nothing would notice.
+        someone = next(u for v in populated[0]["users_by_status"].values()
+                       for u in v)
+        assert set(someone) == {"user_id", "display_name"}
+        modelled = AvailabilityOverview.model_validate(with_users)
+        day = next(d for d in modelled.days
+                   if any(v for v in getattr(d, "users_by_status", {}).values()))
+        entry = next(u for v in day.users_by_status.values() for u in v)
+        assert isinstance(entry, AvailabilityUser)
+        assert isinstance(entry.user_id, int)
+        assert isinstance(entry.display_name, str)
+
+    def test_what_the_day_union_actually_rests_on(self):
+        """⭐ MEASURED, BECAUSE THE OBVIOUS EXPLANATIONS WERE BOTH WRONG.
+
+        Smart-union selection is by specificity, not by declaration order, so
+        the contract survives a reorder. Pinned so that a future switch to
+        `Union[...]` in left-to-right mode — which WOULD make order matter —
+        fails here instead of silently thinning a payload.
+        """
+        from pydantic import TypeAdapter
+
+        reversed_order = TypeAdapter(
+            AvailabilityDayAnonymous | AvailabilityDayViewer
+            | AvailabilityDayViewerWithUsers)
+        day = self._f("api_availability_viewer_with_users.json")["days"][0]
+        chosen = reversed_order.validate_python(day)
+        assert type(chosen) is AvailabilityDayViewerWithUsers, (
+            "most-specific selection no longer holds: the union now depends on "
+            "declaration order, and the members must be reordered to match")
+        assert _json.loads(chosen.model_dump_json()) == day
+
+    def test_the_from_alias_survives_the_model(self):
+        """`from` is a Python keyword, so the field is `from_` with an alias.
+        A model that forgot `by_alias` would rename the key in the payload."""
+        raw = self._f("api_availability_anonymous.json")
+        assert "from" in raw and "from_" not in raw
+        assert "from" in self._roundtrip(raw)

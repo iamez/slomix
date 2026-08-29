@@ -5365,6 +5365,135 @@ export interface components {
             status: string;
         };
         /**
+         * AvailabilityDayAnonymous
+         * @description A day as an anonymous caller sees it: three keys, no viewer detail.
+         */
+        AvailabilityDayAnonymous: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Date */
+            date: string;
+            /** Total */
+            total: number;
+        };
+        /**
+         * AvailabilityDayViewer
+         * @description A day as a LOGGED-IN caller sees it — `my_status` appears.
+         *
+         *     ⛔ ABSENT AND NULL MEAN DIFFERENT THINGS HERE AND BOTH ARE LOAD-BEARING:
+         *       - key ABSENT  -> nobody is logged in, so the question was never asked
+         *       - value NULL  -> you are logged in and set nothing for that day
+         *     Measured on one range: 5 days carry a status, 50 are null, and every day
+         *     of the anonymous response omits the key entirely.
+         *
+         *     ⭐ Which is why this is a UNION of day shapes and not one model with
+         *     `my_status: str | None = None`. That single model has no way to express
+         *     the difference: without `exclude_none` the anonymous response GAINS
+         *     `"my_status": null` (and the two states collapse into one), and with it
+         *     the logged-in null DISAPPEARS (and they collapse the other way). Both
+         *     collapses are wrong, in opposite directions.
+         */
+        AvailabilityDayViewer: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Date */
+            date: string;
+            /** My Status */
+            my_status: string | null;
+            /** Total */
+            total: number;
+        };
+        /**
+         * AvailabilityDayViewerWithUsers
+         * @description …and with `?include_users=true`, who was on each status that day.
+         *
+         *     ⚠️ `include_users=true` IS SILENTLY IGNORED FOR AN ANONYMOUS CALLER. The
+         *     handler gates it on `include_users and user_id is not None`, so the API
+         *     accepts the parameter, answers 200, and simply omits the field. Measured:
+         *     anonymous with and without the flag are byte-identical.
+         */
+        AvailabilityDayViewerWithUsers: {
+            /** Counts */
+            counts: {
+                [key: string]: number;
+            };
+            /** Date */
+            date: string;
+            /** My Status */
+            my_status: string | null;
+            /** Total */
+            total: number;
+            /** Users By Status */
+            users_by_status: {
+                [key: string]: components["schemas"]["AvailabilityUser"][];
+            };
+        };
+        /**
+         * AvailabilityOverview
+         * @description Date-range availability aggregates, plus whatever the viewer may see.
+         *
+         *     ⚠️ WHAT ACTUALLY DISCRIMINATES THE DAY UNION IS PYDANTIC, NOT THIS CODE.
+         *     An earlier version of this docstring claimed the ordering and
+         *     `extra="forbid"` were load-bearing — that a five-key day would otherwise
+         *     validate as the three-key anonymous shape and lose its extra fields. Both
+         *     halves are false, and mutation says so: reversing the order changes
+         *     nothing, dropping `forbid` from all three members changes nothing, and
+         *     dropping BOTH changes nothing. Pydantic's smart union picks the most
+         *     specific member that validates, whatever order it is written in.
+         *
+         *     `extra="forbid"` stays as belt-and-braces — it makes the contract explicit
+         *     instead of dependent on a union heuristic — but it is not the mechanism,
+         *     and a comment that misnames the mechanism is worse than no comment.
+         *     `tests/unit/test_response_models_drop_nothing.py` pins the real behaviour
+         *     rather than repeating this prose.
+         */
+        AvailabilityOverview: {
+            /** Days */
+            days: (components["schemas"]["AvailabilityDayViewerWithUsers"] | components["schemas"]["AvailabilityDayViewer"] | components["schemas"]["AvailabilityDayAnonymous"])[];
+            /** From */
+            from: string;
+            session_ready: components["schemas"]["AvailabilitySessionReady"];
+            /** Statuses */
+            statuses: string[];
+            /** To */
+            to: string;
+            viewer: components["schemas"]["AvailabilityViewer"];
+        };
+        /**
+         * AvailabilitySessionReady
+         * @description Whether today has enough LOOKING players to call a session.
+         */
+        AvailabilitySessionReady: {
+            /** Date */
+            date: string;
+            /** Event Key */
+            event_key: string;
+            /** Looking Count */
+            looking_count: number;
+            /** Ready */
+            ready: boolean;
+            /** Threshold */
+            threshold: number;
+        };
+        /** AvailabilityUser */
+        AvailabilityUser: {
+            /** Display Name */
+            display_name: string;
+            /** User Id */
+            user_id: number;
+        };
+        /** AvailabilityViewer */
+        AvailabilityViewer: {
+            /** Authenticated */
+            authenticated: boolean;
+            /** Linked Discord */
+            linked_discord: boolean;
+        };
+        /**
          * AwardLeaderRow
          * @description One row of the awards leaderboard, as this endpoint returns it.
          *
@@ -7488,7 +7617,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["AvailabilityOverview"];
                 };
             };
             /** @description Validation Error */
