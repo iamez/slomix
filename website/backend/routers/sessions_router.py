@@ -193,7 +193,168 @@ async def build_session_scoring(
     return scoring_payload, warnings, hardcoded_teams
 
 
-@router.get("/stats/last-session")
+class SessionPlayerRow(BaseModel):
+    """One player's totals for the session.
+
+    ⭐ THIS ONE CLASS SERVES TWO FIELDS. `teams[].players[]` and
+    `unassigned_players[]` are literally the same `player_payload` dict — the
+    handler appends it to the team roster when the name resolves and to the
+    unassigned list when it does not. Verified on a live response rather than
+    inferred: both carry the same 25 keys with the same types, symmetric
+    difference empty.
+
+    `kd` is the only float; every other figure is `int(x or 0)` in the handler.
+    """
+
+    guid: str
+    name: str
+    kills: int
+    deaths: int
+    kd: float
+    dpm: int
+    damage_given: int
+    damage_received: int
+    gibs: int
+    headshot_kills: int
+    revives_given: int
+    times_revived: int
+    useful_kills: int
+    kill_assists: int
+    self_kills: int
+    full_selfkills: int
+    double_kills: int
+    triple_kills: int
+    quad_kills: int
+    multi_kills: int
+    mega_kills: int
+    time_played_seconds: int
+    time_dead_seconds: int
+    time_dead_seconds_raw: int
+    denied_playtime: int
+
+
+class SessionTeam(BaseModel):
+    name: str
+    players: list[SessionPlayerRow]
+
+
+class SessionMatchRow(BaseModel):
+    """One round of the session, as the match list carries it."""
+
+    id: int
+    map_name: str
+    round_number: int
+    date: str
+    duration: str
+    winner: str
+    outcome: str
+
+
+class ScoringMapRow(BaseModel):
+    """One map in the stopwatch scoring table.
+
+    ⚠️ `winner_side` is `int | None` — measured null on 8 of 48 rows across
+    eight sessions. `map_play_seq` was null on ALL 48: it is typed nullable
+    because that is what the endpoint sends, not because a value was seen.
+    """
+
+    map: str
+    match_id: str
+    emoji: str
+    description: str
+    winner: str
+    winner_side: int | None
+    counted: bool
+    scoring_source: str
+    r1_defender_side: int
+    team_a_r1_side: int
+    team_a_r2_side: int
+    team_a_points: int
+    team_b_points: int
+    team_a_time: str
+    team_b_time: str
+    round_start_unix: int
+    map_play_seq: int | None
+
+
+class ScoringDebugRow(BaseModel):
+    """Per-map scoring trace. `note` was null on all 48 sampled rows."""
+
+    map: str
+    counted: bool
+    scoring_source: str
+    winner_side: int | None
+    r1_defender_side: int
+    team_a_r1_side: int
+    team_a_r2_side: int
+    note: str | None
+
+
+class ScoringUnavailable(BaseModel):
+    """Scoring could not be built: `{"available": false, "reason": "…"}`.
+
+    ⛔ THE SHAPE SAMPLING NEVER SHOWS. All EIGHT sessions in the corpus —
+    every session day there is — returned the other one, so a model built from
+    measurement alone makes `maps` and `team_a_name` required and answers 500
+    the first time a session takes an early return. There are FOUR of them in
+    `build_session_scoring`: no session ids, fewer than two hardcoded teams,
+    fewer than two rosters, no scoring result. Forcing the second confirms the
+    shape: HTTP 200, two keys, and `unassigned_players` fills with the six
+    players that could not be placed on a team.
+
+    ⭐ A corpus that agrees with itself is not a contract. It is one branch
+    that happened to win eight times.
+    """
+
+    available: bool
+    reason: str
+
+
+class ScoringAvailable(BaseModel):
+    """Scoring was built: the eight-key shape with both teams and the maps."""
+
+    available: bool
+    maps: list[ScoringMapRow]
+    debug: list[ScoringDebugRow]
+    team_a_name: str
+    team_b_name: str
+    team_a_score: int
+    team_b_score: int
+    total_maps: int
+
+
+class LastSession(BaseModel):
+    """The most recent gaming session, as `/stats/last-session` returns it.
+
+    ⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all
+    eight sampled sessions, so none of their element shapes came from the
+    sample. `warnings` and `stats_checks` are f-strings built in the handler;
+    `unassigned_players` carries `SessionPlayerRow`, which was then confirmed
+    by forcing the branch that fills it. An empty list tells you a field's
+    name and nothing about its contents.
+
+    `map_counts` is keyed by map name, so it is a dict, not a model.
+
+    ⛔ `response_model` FILTERS: a field the handler returns and this model
+    omits is dropped silently with a 200.
+    """
+
+    date: str
+    player_count: int
+    rounds: int
+    maps: list[str]
+    map_counts: dict[str, int]
+    matches: list[SessionMatchRow]
+    scoring: ScoringAvailable | ScoringUnavailable
+    warnings: list[str]
+    teams: list[SessionTeam]
+    unassigned_players: list[SessionPlayerRow]
+    stats_checks: list[str]
+    #: Null when the rounds carry no gaming session id.
+    gaming_session_id: int | None
+
+
+@router.get("/stats/last-session", response_model=LastSession)
 async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     """Get the latest session data (similar to !last_session)"""
     config = load_config()

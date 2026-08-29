@@ -3,6 +3,20 @@
 
 READ-ONLY. Prints a report and exits non-zero when they disagree.
 
+⛔ TWO THINGS THIS SCRIPT CANNOT SEE, both of which look like agreement:
+
+  1. A hand type written as `export type X = …` (an ALIAS, not an `interface`)
+     is invisible to the parser. That used to print "types agree" after
+     comparing nothing; it now prints NOT COMPARED and exits 2.
+  2. It compares TOP-LEVEL fields only. It does not descend into an inline
+     object literal, so `top_map: { name: string } | null` is checked for the
+     nullability of `top_map` and never for the nullability of `name` —
+     which is the one that is wrong there (the API sends `top_map.name = null`
+     on a season with no rounds, and never sends a null `top_map`).
+
+A clean result means the top-level fields of a matching interface agree. It
+does not mean the file is right.
+
 WHY THIS EXISTS. `website/frontend/src/app/lib/types.ts` holds ~75 interfaces
 written by hand, and `src/api/generated/openapi.d.ts` holds the same shapes
 generated from `docs/api/openapi.json`. Nothing compares them, so a field that

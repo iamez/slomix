@@ -5606,6 +5606,50 @@ export interface components {
             value: number;
         };
         /**
+         * LastSession
+         * @description The most recent gaming session, as `/stats/last-session` returns it.
+         *
+         *     ⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all
+         *     eight sampled sessions, so none of their element shapes came from the
+         *     sample. `warnings` and `stats_checks` are f-strings built in the handler;
+         *     `unassigned_players` carries `SessionPlayerRow`, which was then confirmed
+         *     by forcing the branch that fills it. An empty list tells you a field's
+         *     name and nothing about its contents.
+         *
+         *     `map_counts` is keyed by map name, so it is a dict, not a model.
+         *
+         *     ⛔ `response_model` FILTERS: a field the handler returns and this model
+         *     omits is dropped silently with a 200.
+         */
+        LastSession: {
+            /** Date */
+            date: string;
+            /** Gaming Session Id */
+            gaming_session_id: number | null;
+            /** Map Counts */
+            map_counts: {
+                [key: string]: number;
+            };
+            /** Maps */
+            maps: string[];
+            /** Matches */
+            matches: components["schemas"]["SessionMatchRow"][];
+            /** Player Count */
+            player_count: number;
+            /** Rounds */
+            rounds: number;
+            /** Scoring */
+            scoring: components["schemas"]["ScoringAvailable"] | components["schemas"]["ScoringUnavailable"];
+            /** Stats Checks */
+            stats_checks: string[];
+            /** Teams */
+            teams: components["schemas"]["SessionTeam"][];
+            /** Unassigned Players */
+            unassigned_players: components["schemas"]["SessionPlayerRow"][];
+            /** Warnings */
+            warnings: string[];
+        };
+        /**
          * LeaderboardRow
          * @description One row of the generic stat leaderboard, as this endpoint returns it.
          *
@@ -5704,6 +5748,27 @@ export interface components {
             level_ms?: number | null;
             /** Type */
             type: string;
+        };
+        /**
+         * LongestSession
+         * @description The season's biggest gaming session.
+         *
+         *     ⛔ TYPED FROM THE CODE, NOT FROM THE RUNNING SERVER — and that distinction
+         *     decided the type. The dev server answers `"longest_session": null`, which
+         *     reads like a broken query, and typing from it would have pinned this field
+         *     to null forever. It is not broken: the same request through the code in the
+         *     tree answers `{"rounds": 23, "date": "2026-07-18"}`. The server has been up
+         *     since 2026-08-28 06:57 and the fix landed at 13:08 the same day, so the
+         *     process is running a handler six hours older than the file.
+         *     ⚠️ A live endpoint is evidence about a DEPLOYED BUILD, not about the code
+         *     you are typing. Check the service start time against the file's git log
+         *     before trusting a sample.
+         */
+        LongestSession: {
+            /** Date */
+            date: string;
+            /** Rounds */
+            rounds: number;
         };
         /**
          * MapObjectiveRecord
@@ -6068,6 +6133,116 @@ export interface components {
             winner_team: number | null;
         };
         /**
+         * ScoringAvailable
+         * @description Scoring was built: the eight-key shape with both teams and the maps.
+         */
+        ScoringAvailable: {
+            /** Available */
+            available: boolean;
+            /** Debug */
+            debug: components["schemas"]["ScoringDebugRow"][];
+            /** Maps */
+            maps: components["schemas"]["ScoringMapRow"][];
+            /** Team A Name */
+            team_a_name: string;
+            /** Team A Score */
+            team_a_score: number;
+            /** Team B Name */
+            team_b_name: string;
+            /** Team B Score */
+            team_b_score: number;
+            /** Total Maps */
+            total_maps: number;
+        };
+        /**
+         * ScoringDebugRow
+         * @description Per-map scoring trace. `note` was null on all 48 sampled rows.
+         */
+        ScoringDebugRow: {
+            /** Counted */
+            counted: boolean;
+            /** Map */
+            map: string;
+            /** Note */
+            note: string | null;
+            /** R1 Defender Side */
+            r1_defender_side: number;
+            /** Scoring Source */
+            scoring_source: string;
+            /** Team A R1 Side */
+            team_a_r1_side: number;
+            /** Team A R2 Side */
+            team_a_r2_side: number;
+            /** Winner Side */
+            winner_side: number | null;
+        };
+        /**
+         * ScoringMapRow
+         * @description One map in the stopwatch scoring table.
+         *
+         *     ⚠️ `winner_side` is `int | None` — measured null on 8 of 48 rows across
+         *     eight sessions. `map_play_seq` was null on ALL 48: it is typed nullable
+         *     because that is what the endpoint sends, not because a value was seen.
+         */
+        ScoringMapRow: {
+            /** Counted */
+            counted: boolean;
+            /** Description */
+            description: string;
+            /** Emoji */
+            emoji: string;
+            /** Map */
+            map: string;
+            /** Map Play Seq */
+            map_play_seq: number | null;
+            /** Match Id */
+            match_id: string;
+            /** R1 Defender Side */
+            r1_defender_side: number;
+            /** Round Start Unix */
+            round_start_unix: number;
+            /** Scoring Source */
+            scoring_source: string;
+            /** Team A Points */
+            team_a_points: number;
+            /** Team A R1 Side */
+            team_a_r1_side: number;
+            /** Team A R2 Side */
+            team_a_r2_side: number;
+            /** Team A Time */
+            team_a_time: string;
+            /** Team B Points */
+            team_b_points: number;
+            /** Team B Time */
+            team_b_time: string;
+            /** Winner */
+            winner: string;
+            /** Winner Side */
+            winner_side: number | null;
+        };
+        /**
+         * ScoringUnavailable
+         * @description Scoring could not be built: `{"available": false, "reason": "…"}`.
+         *
+         *     ⛔ THE SHAPE SAMPLING NEVER SHOWS. All EIGHT sessions in the corpus —
+         *     every session day there is — returned the other one, so a model built from
+         *     measurement alone makes `maps` and `team_a_name` required and answers 500
+         *     the first time a session takes an early return. There are FOUR of them in
+         *     `build_session_scoring`: no session ids, fewer than two hardcoded teams,
+         *     fewer than two rosters, no scoring result. Forcing the second confirms the
+         *     shape: HTTP 200, two keys, and `unassigned_players` fills with the six
+         *     players that could not be placed on a team.
+         *
+         *     ⭐ A corpus that agrees with itself is not a contract. It is one branch
+         *     that happened to win eight times.
+         */
+        ScoringUnavailable: {
+            /** Available */
+            available: boolean;
+            /** Reason */
+            reason: string;
+        };
+        /**
          * SeasonAward
          * @description One engraved award for a season.
          *
@@ -6101,6 +6276,131 @@ export interface components {
             season_name: string;
             /** Status */
             status: string;
+        };
+        /**
+         * SeasonLeader
+         * @description One category leader: who, and with what figure.
+         *
+         *     `value` is `int | float` because `leader_payload` is called with a
+         *     per-category cast: `float` for `dpm` and `time_dead`, `int` for the other
+         *     ten. A bare `float` would rewrite every counter as `x.0`.
+         */
+        SeasonLeader: {
+            /** Player */
+            player: string;
+            /** Value */
+            value: number;
+        };
+        /**
+         * SeasonLeaders
+         * @description The thirteen category leaders, plus the biggest session.
+         *
+         *     ⭐ EVERY KEY IS ALWAYS PRESENT AND EVERY VALUE MAY BE NULL — the exact
+         *     opposite of `StatsRecords` in this same release, where the keys disappear
+         *     instead. Both endpoints answer "nothing to report" and they answer it in
+         *     incompatible ways, so a consumer cannot carry one habit across: here you
+         *     check the VALUE, there you check PRESENCE. Measured: pointed at a season
+         *     with no rounds, all fourteen keys are present and all fourteen are null.
+         *
+         *     ⛔ Consequently this route must NOT take `response_model_exclude_none`.
+         *     Dropping the nulls would turn "no leader for this category" into "we did
+         *     not mention it" and destroy the distinction the handler is drawing.
+         */
+        SeasonLeaders: {
+            damage_given: components["schemas"]["SeasonLeader"] | null;
+            damage_received: components["schemas"]["SeasonLeader"] | null;
+            deaths: components["schemas"]["SeasonLeader"] | null;
+            dpm: components["schemas"]["SeasonLeader"] | null;
+            gibs: components["schemas"]["SeasonLeader"] | null;
+            kills: components["schemas"]["SeasonLeader"] | null;
+            longest_session: components["schemas"]["LongestSession"] | null;
+            objectives: components["schemas"]["SeasonLeader"] | null;
+            revives: components["schemas"]["SeasonLeader"] | null;
+            team_damage: components["schemas"]["SeasonLeader"] | null;
+            time_alive: components["schemas"]["SeasonLeader"] | null;
+            time_dead: components["schemas"]["SeasonLeader"] | null;
+            xp: components["schemas"]["SeasonLeader"] | null;
+        };
+        /**
+         * SeasonLeadersResponse
+         * @description ⚠️ `start_date` / `end_date` are `str(datetime)` here —
+         *     "2026-07-01 00:00:00" — while `/seasons/current/summary` sends
+         *     "2026-07-01" for the same two names. Do not assume the pair matches.
+         */
+        SeasonLeadersResponse: {
+            /** End Date */
+            end_date: string;
+            leaders: components["schemas"]["SeasonLeaders"];
+            /** Start Date */
+            start_date: string;
+        };
+        /**
+         * SeasonSummary
+         * @description Totals and activity for the current season.
+         *
+         *     ⚠️ `start_date` / `end_date` are `YYYY-MM-DD` HERE, but the sibling
+         *     `/seasons/current/leaders` sends `str(datetime)` — "2026-07-01 00:00:00".
+         *     Same two field names, same router, two formats. Neither is wrong; assuming
+         *     they match is.
+         *
+         *     ⛔ `response_model` FILTERS: a field the handler returns and this model
+         *     omits is dropped silently with a 200.
+         */
+        SeasonSummary: {
+            /** End Date */
+            end_date: string;
+            /** Season Id */
+            season_id: string;
+            /** Start Date */
+            start_date: string;
+            top_map: components["schemas"]["SeasonTopMap"];
+            totals: components["schemas"]["SeasonTotals"];
+        };
+        /**
+         * SeasonTopMap
+         * @description The most-played map of the season.
+         *
+         *     ⛔ `name` IS NULLABLE and the live response never shows it: the handler
+         *     writes `top_map_row[0] if top_map_row else None`, so an empty season sends
+         *     `{"name": null, "plays": 0}`. This endpoint takes NO parameters, so that
+         *     branch cannot be reached by varying a query string — it was measured by
+         *     pointing SeasonManager at a season with no rounds (2030-Q1). An endpoint
+         *     without filters still has states; they just live in the data.
+         */
+        SeasonTopMap: {
+            /** Name */
+            name: string | null;
+            /** Plays */
+            plays: number;
+        };
+        /**
+         * SeasonTotals
+         * @description Season counters. Every one is coalesced with `or 0` in the handler, so
+         *     none of them is nullable — a season with nothing in it reports zeros, not
+         *     nulls.
+         *
+         *     ⚠️ `avg_rounds_per_day` is `int | float`, and the union is not laziness:
+         *     `round(rounds / days, 1)` is a float, but the guard `if active_days else 0`
+         *     yields an INT — and that branch is not hypothetical, it is the state of
+         *     every season on its first day. Measured both ways against a live database:
+         *     the current season answers `13.1`, a season pointed at 2030 answers `0`.
+         *     Typing it `float` would rewrite that `0` as `0.0`.
+         */
+        SeasonTotals: {
+            /** Active Days */
+            active_days: number;
+            /** Avg Rounds Per Day */
+            avg_rounds_per_day: number;
+            /** Kills */
+            kills: number;
+            /** Maps */
+            maps: number;
+            /** Players */
+            players: number;
+            /** Rounds */
+            rounds: number;
+            /** Sessions */
+            sessions: number;
         };
         /**
          * SessionLeaderRow
@@ -6142,6 +6442,91 @@ export interface components {
             rounds_without_roster: number;
             /** Teams */
             teams: components["schemas"]["TeamLineup"][];
+        };
+        /**
+         * SessionMatchRow
+         * @description One round of the session, as the match list carries it.
+         */
+        SessionMatchRow: {
+            /** Date */
+            date: string;
+            /** Duration */
+            duration: string;
+            /** Id */
+            id: number;
+            /** Map Name */
+            map_name: string;
+            /** Outcome */
+            outcome: string;
+            /** Round Number */
+            round_number: number;
+            /** Winner */
+            winner: string;
+        };
+        /**
+         * SessionPlayerRow
+         * @description One player's totals for the session.
+         *
+         *     ⭐ THIS ONE CLASS SERVES TWO FIELDS. `teams[].players[]` and
+         *     `unassigned_players[]` are literally the same `player_payload` dict — the
+         *     handler appends it to the team roster when the name resolves and to the
+         *     unassigned list when it does not. Verified on a live response rather than
+         *     inferred: both carry the same 25 keys with the same types, symmetric
+         *     difference empty.
+         *
+         *     `kd` is the only float; every other figure is `int(x or 0)` in the handler.
+         */
+        SessionPlayerRow: {
+            /** Damage Given */
+            damage_given: number;
+            /** Damage Received */
+            damage_received: number;
+            /** Deaths */
+            deaths: number;
+            /** Denied Playtime */
+            denied_playtime: number;
+            /** Double Kills */
+            double_kills: number;
+            /** Dpm */
+            dpm: number;
+            /** Full Selfkills */
+            full_selfkills: number;
+            /** Gibs */
+            gibs: number;
+            /** Guid */
+            guid: string;
+            /** Headshot Kills */
+            headshot_kills: number;
+            /** Kd */
+            kd: number;
+            /** Kill Assists */
+            kill_assists: number;
+            /** Kills */
+            kills: number;
+            /** Mega Kills */
+            mega_kills: number;
+            /** Multi Kills */
+            multi_kills: number;
+            /** Name */
+            name: string;
+            /** Quad Kills */
+            quad_kills: number;
+            /** Revives Given */
+            revives_given: number;
+            /** Self Kills */
+            self_kills: number;
+            /** Time Dead Seconds */
+            time_dead_seconds: number;
+            /** Time Dead Seconds Raw */
+            time_dead_seconds_raw: number;
+            /** Time Played Seconds */
+            time_played_seconds: number;
+            /** Times Revived */
+            times_revived: number;
+            /** Triple Kills */
+            triple_kills: number;
+            /** Useful Kills */
+            useful_kills: number;
         };
         /**
          * SessionRound
@@ -6235,6 +6620,13 @@ export interface components {
             total_kills: number;
             /** Winning Team */
             winning_team: number | null;
+        };
+        /** SessionTeam */
+        SessionTeam: {
+            /** Name */
+            name: string;
+            /** Players */
+            players: components["schemas"]["SessionPlayerRow"][];
         };
         /**
          * StatsOverview
@@ -11750,7 +12142,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SeasonLeadersResponse"];
                 };
             };
         };
@@ -11770,7 +12162,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SeasonSummary"];
                 };
             };
         };
@@ -12345,7 +12737,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LastSession"];
                 };
             };
         };

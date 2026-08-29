@@ -202,7 +202,11 @@ from website.backend.routers.records_matches import (
     RoundAwards,
     RoundViz,
 )
-from website.backend.routers.records_seasons import CurrentSeason
+from website.backend.routers.records_seasons import (
+    CurrentSeason,
+    SeasonLeadersResponse,
+    SeasonSummary,
+)
 from website.backend.routers.records_trends import StatsTrends
 from website.backend.routers.records_weapons import (
     WeaponAggregate,
@@ -212,6 +216,7 @@ from website.backend.routers.records_weapons import (
 )
 from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.sessions_router import (
+    LastSession,
     SessionLeaderRow,
     SessionSummary,
 )
@@ -1203,3 +1208,114 @@ class TestTheTwoFilteredBoards:
                      if isinstance(r, APIRoute) and r.path == "/stats/records")
         assert route.response_model is StatsRecords
         assert route.response_model_exclude_none is True
+
+
+class TestTheEndpointsWithoutFilters:
+    """Three endpoints that take NO query parameters — and therefore look like
+    they have only one shape. All three have several.
+
+    ⭐ AN ENDPOINT WITHOUT FILTERS STILL HAS STATES; THEY LIVE IN THE DATA.
+    You cannot reach them by varying a URL, so they were reached by pointing
+    the season at a range with no rounds, and by making the session's team
+    lookup come back empty. Both are recorded here as fixtures.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, model, raw, **dump):
+        modelled = _json.loads(model.model_validate(raw).model_dump_json(**dump))
+        assert not missing_keys(raw, modelled), (
+            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, f"{model.__name__} altered a value"
+        return modelled
+
+    def test_season_summary_survives_a_populated_season(self):
+        self._roundtrip(SeasonSummary, self._f("api_seasons_current_summary.json"))
+
+    def test_an_empty_season_keeps_its_null_map_and_its_integer_zero(self):
+        """⛔ THE BRANCH NO URL CAN REACH. `top_map.name` is null and
+        `avg_rounds_per_day` is the INT 0, not 0.0 — the handler's
+        `if active_days else 0`. Typing that field `float` passes every test
+        written against a populated season and rewrites the number on the one
+        day of the year a season is empty."""
+        raw = self._f("api_seasons_current_summary_empty.json")
+        assert raw["top_map"]["name"] is None
+        assert isinstance(raw["totals"]["avg_rounds_per_day"], int)
+        modelled = SeasonSummary.model_validate(raw)
+        assert modelled.top_map.name is None
+        assert isinstance(modelled.totals.avg_rounds_per_day, int)
+        self._roundtrip(SeasonSummary, raw)
+
+    def test_season_leaders_survive_both_states(self):
+        for name in ("api_seasons_current_leaders.json",
+                     "api_seasons_current_leaders_empty.json"):
+            self._roundtrip(SeasonLeadersResponse, self._f(name))
+
+    def test_every_leader_key_is_present_even_when_every_value_is_null(self):
+        """⭐ THE OPPOSITE OF StatsRecords, IN THE SAME RELEASE.
+
+        `/stats/records` omits a category that has nothing; this endpoint keeps
+        the key and nulls the value. A consumer cannot carry one habit across:
+        here you check the VALUE, there you check PRESENCE. Pinned so that
+        adding exclude_none to this route — which would look like tidying —
+        fails loudly instead of erasing the distinction.
+        """
+        full = self._f("api_seasons_current_leaders.json")["leaders"]
+        empty = self._f("api_seasons_current_leaders_empty.json")["leaders"]
+        assert set(full) == set(empty), "the two states disagree on the key set"
+        assert len(empty) == 13
+        assert all(v is None for v in empty.values())
+        assert all(v is not None for v in full.values()), (
+            "the populated fixture lost a leader — it no longer proves the "
+            "keys carry values in the other state")
+
+    def test_last_session_survives_the_rich_scoring_shape(self):
+        self._roundtrip(LastSession, self._f("api_stats_last-session.json"))
+
+    def test_last_session_survives_the_two_key_scoring_shape(self):
+        """⛔ ALL EIGHT SESSIONS IN THE CORPUS RETURN THE OTHER SHAPE.
+
+        `scoring` is `{available, reason}` — two keys — whenever
+        `build_session_scoring` takes one of its four early returns. No session
+        day in the database does, so a model built from measurement alone makes
+        `maps` and `team_a_name` required and answers 500 the first time one
+        does. Typed as a UNION rather than one model with optional fields,
+        because optional fields would put `"maps": null` on the wire for the
+        common shape and `"reason": null` on the other — a payload change in
+        both directions, verified byte-for-byte to be absent.
+        """
+        raw = self._f("api_stats_last-session_scoring_unavailable.json")
+        assert set(raw["scoring"]) == {"available", "reason"}
+        assert raw["scoring"]["available"] is False
+        modelled = self._roundtrip(LastSession, raw)
+        assert set(modelled["scoring"]) == {"available", "reason"}, (
+            "the union leaked the other shape's fields onto the wire")
+        assert raw["unassigned_players"], (
+            "the fixture no longer carries unplaced players — it was the only "
+            "recorded proof that unassigned_players and teams[].players share "
+            "a shape")
+
+    def test_unassigned_players_and_team_players_are_one_shape(self):
+        """The handler appends the SAME dict to either list. One model serves
+        both, and this is the evidence: same keys, same types."""
+        short = self._f("api_stats_last-session_scoring_unavailable.json")
+        rich = self._f("api_stats_last-session.json")
+        unassigned = short["unassigned_players"][0]
+        team_player = rich["teams"][0]["players"][0]
+        assert set(unassigned) == set(team_player)
+        assert len(unassigned) == 25
+        assert {k: type(v).__name__ for k, v in unassigned.items()} == \
+               {k: type(v).__name__ for k, v in team_player.items()}
+
+    def test_the_three_lists_that_were_empty_in_every_sample(self):
+        """`warnings`, `stats_checks` and `unassigned_players` are empty in all
+        eight sampled sessions. An empty list tells you a field's NAME and
+        nothing about its contents — these types came from the handler."""
+        rich = self._f("api_stats_last-session.json")
+        assert rich["warnings"] == []
+        assert rich["stats_checks"] == []
+        assert rich["unassigned_players"] == []
+        modelled = LastSession.model_validate(rich)
+        assert modelled.warnings == []
+        assert modelled.unassigned_players == []

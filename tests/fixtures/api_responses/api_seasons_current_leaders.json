@@ -1,0 +1,58 @@
+{
+  "start_date": "2026-07-01 00:00:00",
+  "end_date": "2026-09-30 23:59:59",
+  "leaders": {
+    "damage_given": {
+      "player": "vid",
+      "value": 474716
+    },
+    "damage_received": {
+      "player": ".olz",
+      "value": 474046
+    },
+    "team_damage": {
+      "player": ".olz",
+      "value": 8418
+    },
+    "revives": {
+      "player": "[TWK]CUJO",
+      "value": 471
+    },
+    "deaths": {
+      "player": ".lgz",
+      "value": 2496
+    },
+    "gibs": {
+      "player": "vid",
+      "value": 826
+    },
+    "objectives": {
+      "player": ".lgz",
+      "value": 223
+    },
+    "xp": {
+      "player": ".lgz",
+      "value": 16158
+    },
+    "kills": {
+      "player": "vid",
+      "value": 2306
+    },
+    "dpm": {
+      "player": "SHIFT+W squAzE__",
+      "value": 399.4
+    },
+    "time_alive": {
+      "player": ".olz",
+      "value": 77425
+    },
+    "time_dead": {
+      "player": "kanii",
+      "value": 366.7000001296401
+    },
+    "longest_session": {
+      "rounds": 23,
+      "date": "2026-07-18"
+    }
+  }
+}

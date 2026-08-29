@@ -1,0 +1,19 @@
+{
+  "start_date": "2030-01-01 00:00:00",
+  "end_date": "2030-03-31 23:59:59",
+  "leaders": {
+    "damage_given": null,
+    "damage_received": null,
+    "team_damage": null,
+    "revives": null,
+    "deaths": null,
+    "gibs": null,
+    "objectives": null,
+    "xp": null,
+    "kills": null,
+    "dpm": null,
+    "time_alive": null,
+    "time_dead": null,
+    "longest_session": null
+  }
+}
