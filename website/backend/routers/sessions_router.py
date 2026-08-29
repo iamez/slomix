@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from shared.config import load_config
+from shared.round_time import round_duration_sql
 from shared.services.session_stats_aggregator import SessionStatsAggregator
 from shared.services.stopwatch_scoring_service import StopwatchScoringService
 from shared.utils import escape_like_pattern
@@ -2679,10 +2680,7 @@ _SESSION_ROUNDS_SQL = """
               regexp_replace(lpad(r.round_time, 6, '0'),
                              '^(..)(..)(..)$', '\\1:\\2:\\3'))::timestamp,
              r.created_at) AS played_at,
-           COALESCE(NULLIF(r.actual_duration_seconds, 0),
-             CASE WHEN r.actual_time ~ '^[0-9]+:[0-9]{2}$'
-                  THEN split_part(r.actual_time, ':', 1)::int * 60
-                     + split_part(r.actual_time, ':', 2)::int END) AS duration_seconds,
+           """ + round_duration_sql("r") + """ AS duration_seconds,
            r.end_reason, r.round_status, r.match_id,
            r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
     FROM rounds r

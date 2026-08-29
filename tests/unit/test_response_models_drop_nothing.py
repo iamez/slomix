@@ -2071,3 +2071,34 @@ class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
         positions_scope = self._f("api_proximity_player_heatmap.json")["scope"]
         assert "scoped" in scores_scope and "player_guid" not in scores_scope
         assert "player_guid" in positions_scope and "scoped" not in positions_scope
+
+
+def test_no_router_hand_copies_the_round_duration_expression():
+    """⛔ CLAUDE.md: round duration ALWAYS comes from `shared/round_time.py`.
+
+    `_SESSION_ROUNDS_SQL` had its own inlined copy of exactly what
+    `round_duration_sql()` builds — mine, from #824 — and it went unnoticed
+    until a change to the canonical helper made the two disagree: the helper
+    tightened its seconds pattern to `[0-5][0-9]` while the copy kept
+    `[0-9]{2}`, so `"4:60"` would have been 300 s in one place and unknown in
+    the other. Zero rows carry such a clock today across all 3,176 rounds, so
+    this was latent — which is the moment to remove the copy, not the moment
+    to argue it does not matter.
+
+    A source-level guard on purpose: no fixture can see a second copy of an
+    expression, only the text can.
+    """
+    import re
+    from pathlib import Path
+
+    # The tell is `actual_time ~ '...'` written out in a router rather than
+    # obtained from the helper.
+    offenders = []
+    for path in sorted(Path("website/backend/routers").glob("*.py")):
+        text = path.read_text()
+        for match in re.finditer(r"actual_time\s*~\s*'([^']+)'", text):
+            line = text[:match.start()].count("\n") + 1
+            offenders.append(f"{path.name}:{line} — {match.group(1)}")
+    assert not offenders, (
+        "a router spells out the actual_time clock pattern instead of calling "
+        "shared.round_time.round_duration_sql(): " + "; ".join(offenders))
