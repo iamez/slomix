@@ -5466,6 +5466,14 @@ export interface components {
             /** User Agent */
             user_agent?: string | null;
         };
+        /** CurrentChallenge */
+        CurrentChallenge: {
+            challenge: components["schemas"]["WeeklyChallenge"] | null;
+            /** Status */
+            status: string;
+            /** Week Start Date */
+            week_start_date: string;
+        };
         /**
          * CurrentSeason
          * @description The current season and the one after it.
@@ -5844,6 +5852,41 @@ export interface components {
             /** Winner Team */
             winner_team: number | null;
         };
+        /**
+         * SeasonAward
+         * @description One engraved award for a season.
+         *
+         *     ⛔ TYPED FROM `_serialize` AND THE SCHEMA. Every live call returned
+         *     `awards: []` — none are engraved yet — so the element shape is not
+         *     observable at all from a response. `player_name`, `value_text` and
+         *     `value_num` are nullable columns; `label` is derived by the serializer and
+         *     always present.
+         */
+        SeasonAward: {
+            /** Award Key */
+            award_key: string;
+            /** Label */
+            label: string;
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string | null;
+            /** Value Num */
+            value_num: number | null;
+            /** Value Text */
+            value_text: string | null;
+        };
+        /** SeasonAwards */
+        SeasonAwards: {
+            /** Awards */
+            awards: components["schemas"]["SeasonAward"][];
+            /** Season Id */
+            season_id: string;
+            /** Season Name */
+            season_name: string;
+            /** Status */
+            status: string;
+        };
         /** SessionLineups */
         SessionLineups: {
             /** Changes */
@@ -6179,6 +6222,27 @@ export interface components {
             player_count: number;
             /** Players */
             players: components["schemas"]["PlayerWeapons"][];
+        };
+        /**
+         * WeeklyChallenge
+         * @description The challenge posted for one ISO week.
+         *
+         *     ⛔ TYPED FROM `_serialize` AND THE SCHEMA, NOT FROM A RESPONSE. Every live
+         *     call I made returned `challenge: null` — no challenge is set this week — so
+         *     sampling could show only that the field is nullable and nothing about what
+         *     it holds when it is not. `weekly_challenges.description` and `created_at`
+         *     are nullable columns, and the serializer writes
+         *     `str(row[3]) if row[3] else None` for the timestamp outright.
+         */
+        WeeklyChallenge: {
+            /** Created At */
+            created_at: string | null;
+            /** Description */
+            description: string | null;
+            /** Title */
+            title: string;
+            /** Week Start Date */
+            week_start_date: string;
         };
         /**
          * XpLeaderRow
@@ -6955,7 +7019,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CurrentChallenge"];
                 };
             };
         };
@@ -11286,7 +11350,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SeasonAwards"];
                 };
             };
             /** @description Validation Error */

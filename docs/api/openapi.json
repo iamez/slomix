@@ -354,6 +354,35 @@
     "title": "ClientErrorReport",
     "type": "object"
    },
+   "CurrentChallenge": {
+    "properties": {
+     "challenge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/WeeklyChallenge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "week_start_date": {
+      "title": "Week Start Date",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "week_start_date",
+     "challenge"
+    ],
+    "title": "CurrentChallenge",
+    "type": "object"
+   },
    "CurrentSeason": {
     "description": "The current season and the one after it.\n\n⚠️ MEASURED, NOT DESIGNED — read off a live response and cross-checked\nagainst the handler, which has a single return with eight literal keys.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
     "properties": {
@@ -1179,6 +1208,97 @@
     "title": "RoundViz",
     "type": "object"
    },
+   "SeasonAward": {
+    "description": "One engraved award for a season.\n\n⛔ TYPED FROM `_serialize` AND THE SCHEMA. Every live call returned\n`awards: []` — none are engraved yet — so the element shape is not\nobservable at all from a response. `player_name`, `value_text` and\n`value_num` are nullable columns; `label` is derived by the serializer and\nalways present.",
+    "properties": {
+     "award_key": {
+      "title": "Award Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player Name"
+     },
+     "value_num": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Num"
+     },
+     "value_text": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Text"
+     }
+    },
+    "required": [
+     "award_key",
+     "label",
+     "player_guid",
+     "player_name",
+     "value_text",
+     "value_num"
+    ],
+    "title": "SeasonAward",
+    "type": "object"
+   },
+   "SeasonAwards": {
+    "properties": {
+     "awards": {
+      "items": {
+       "$ref": "#/components/schemas/SeasonAward"
+      },
+      "title": "Awards",
+      "type": "array"
+     },
+     "season_id": {
+      "title": "Season Id",
+      "type": "string"
+     },
+     "season_name": {
+      "title": "Season Name",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "season_id",
+     "season_name",
+     "awards"
+    ],
+    "title": "SeasonAwards",
+    "type": "object"
+   },
    "SessionLineups": {
     "properties": {
      "changes": {
@@ -1984,6 +2104,49 @@
      "players"
     ],
     "title": "WeaponsByPlayer",
+    "type": "object"
+   },
+   "WeeklyChallenge": {
+    "description": "The challenge posted for one ISO week.\n\n⛔ TYPED FROM `_serialize` AND THE SCHEMA, NOT FROM A RESPONSE. Every live\ncall I made returned `challenge: null` — no challenge is set this week — so\nsampling could show only that the field is nullable and nothing about what\nit holds when it is not. `weekly_challenges.description` and `created_at`\nare nullable columns, and the serializer writes\n`str(row[3]) if row[3] else None` for the timestamp outright.",
+    "properties": {
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "week_start_date": {
+      "title": "Week Start Date",
+      "type": "string"
+     }
+    },
+    "required": [
+     "week_start_date",
+     "title",
+     "description",
+     "created_at"
+    ],
+    "title": "WeeklyChallenge",
     "type": "object"
    },
    "XpLeaderRow": {
@@ -3038,7 +3201,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/CurrentChallenge"
+        }
        }
       },
       "description": "Successful Response"
@@ -12971,7 +13136,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/SeasonAwards"
+        }
        }
       },
       "description": "Successful Response"

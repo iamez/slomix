@@ -197,7 +197,9 @@ from website.backend.routers.records_matches import (
     RoundAwards,
     RoundViz,
 )
+from website.backend.routers.challenges_router import CurrentChallenge
 from website.backend.routers.records_trends import StatsTrends
+from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.records_seasons import CurrentSeason
 from website.backend.routers.records_weapons import WeaponsByPlayer
 
@@ -514,3 +516,69 @@ class TestRecentRoundsTypedFromTheSchema:
         row = {"id": 11365, "map_name": "supply", "round_date": "2026-08-27",
                "round_number": 2, "round_label": "R2", "player_count": 6}
         assert _json.loads(RecentRound.model_validate(row).model_dump_json()) == row
+
+
+class TestShapesNoResponseCanShow:
+    """⛔ TWO ENDPOINTS WHOSE PAYLOAD IS EMPTY EVERY TIME YOU LOOK.
+
+    `/challenges/current` returns `challenge: null` (none set this week) and
+    `/seasons/{id}/awards` returns `awards: []` (none engraved yet). Sampling
+    responses can establish that those fields are nullable and nothing more —
+    the element shape is simply not observable.
+
+    #820 left both untyped for that reason. That was the right call then and
+    the wrong reason: the shape IS knowable, from the `_serialize` helpers and
+    the nullable columns behind them. So these models are typed from the code
+    and exercised here with the content no live call produces.
+    """
+
+    def test_a_week_with_a_challenge_survives(self):
+        payload = {
+            "status": "ok", "week_start_date": "2026-08-24",
+            "challenge": {"week_start_date": "2026-08-24", "title": "Most revives",
+                          "description": "Revive the most teammates",
+                          "created_at": "2026-08-24 10:00:00"},
+        }
+        modelled = _json.loads(
+            CurrentChallenge.model_validate(payload).model_dump_json())
+        assert missing_keys(payload, modelled) == []
+        assert modelled == payload
+
+    def test_a_challenge_with_the_nullable_columns_empty(self):
+        """`description` and `created_at` are nullable, and `_serialize` writes
+        `str(row[3]) if row[3] else None` for the timestamp."""
+        payload = {"status": "ok", "week_start_date": "2026-08-24",
+                   "challenge": {"week_start_date": "2026-08-24", "title": "T",
+                                 "description": None, "created_at": None}}
+        assert _json.loads(
+            CurrentChallenge.model_validate(payload).model_dump_json()) == payload
+
+    def test_no_challenge_is_an_answer_not_a_failure(self):
+        payload = {"status": "ok", "week_start_date": "2026-08-24", "challenge": None}
+        modelled = CurrentChallenge.model_validate(payload)
+        assert modelled.challenge is None
+        assert modelled.status == "ok", "an empty week must not read as an error"
+
+    def test_engraved_awards_survive_including_the_nullable_ones(self):
+        payload = {"status": "ok", "season_id": "2026-Q3", "season_name": "Q3 2026",
+                   "awards": [
+                       {"award_key": "most_kills", "label": "Most Kills",
+                        "player_guid": "A" * 8, "player_name": "one",
+                        "value_text": "2306", "value_num": 2306.0},
+                       {"award_key": "x", "label": "X", "player_guid": "B" * 8,
+                        "player_name": None, "value_text": None, "value_num": None},
+                   ]}
+        modelled = _json.loads(SeasonAwards.model_validate(payload).model_dump_json())
+        assert missing_keys(payload, modelled) == []
+        assert modelled == payload
+
+    def test_both_halves_of_a_figure_survive(self):
+        """`value_text` displays and `value_num` ranks; they are one number seen
+        two ways and a client needs both."""
+        payload = {"status": "ok", "season_id": "s", "season_name": "S",
+                   "awards": [{"award_key": "k", "label": "K", "player_guid": "G",
+                               "player_name": "p", "value_text": "1.8",
+                               "value_num": 1.7999999523162842}]}
+        award = SeasonAwards.model_validate(payload).awards[0]
+        assert award.value_text == "1.8"
+        assert award.value_num == pytest.approx(1.8)
