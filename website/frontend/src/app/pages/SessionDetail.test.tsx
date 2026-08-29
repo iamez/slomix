@@ -141,6 +141,16 @@ describe('SessionDetail', () => {
     expect(screen.getAllByText(first.player_name).length).toBeGreaterThan(0);
   });
 
+  it('does not fetch the session list when the URL already names a session', async () => {
+    // Thirty sessions loaded to be ignored is the same waste the story
+    // page's SSR panel was called out for; the list exists only to resolve
+    // a DATE.
+    const spy = vi.fn(fixtureFetch);
+    renderPage(spy);
+    await waitFor(() => expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument());
+    expect(spy.mock.calls.some(([u]) => String(u).includes('/api/sessions?'))).toBe(false);
+  });
+
   it('resolves a dated legacy link to that session', async () => {
     // /session-detail/date/:date is a legacy hash. The recording's newest
     // session is 154 on 2026-08-27; the link has to land there because of

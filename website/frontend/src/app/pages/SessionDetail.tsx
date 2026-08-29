@@ -258,15 +258,22 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
   );
 }
 
-const PLAYER_COLUMNS: readonly { key: keyof SessionPlayerTotals; label: string; digits?: number }[] = [
-  { key: 'kills', label: 'k' },
-  { key: 'deaths', label: 'd' },
-  { key: 'kd', label: 'k/d', digits: 2 },
-  { key: 'dpm', label: 'dpm', digits: 0 },
-  { key: 'damage_given', label: 'dmg' },
-  { key: 'headshot_kills', label: 'hs' },
-  { key: 'revives_given', label: 'rev' },
-  { key: 'accuracy', label: 'acc', digits: 1 },
+/** Accessors, not key strings: a column that reads `player[col.key]` is an
+ * object indexed by a value, which every scanner in this CI treats as an
+ * injection sink — and the accessor also lets the compiler check that the
+ * field exists, which a `keyof` string only pretends to do once the value
+ * comes back as a union of everything. */
+const PLAYER_COLUMNS: readonly {
+  label: string; read: (p: SessionPlayerTotals) => number; digits?: number;
+}[] = [
+  { label: 'k', read: (p) => p.kills },
+  { label: 'd', read: (p) => p.deaths },
+  { label: 'k/d', read: (p) => p.kd, digits: 2 },
+  { label: 'dpm', read: (p) => p.dpm, digits: 0 },
+  { label: 'dmg', read: (p) => p.damage_given },
+  { label: 'hs', read: (p) => p.headshot_kills },
+  { label: 'rev', read: (p) => p.revives_given },
+  { label: 'acc', read: (p) => p.accuracy, digits: 1 },
 ];
 
 function PlayerTable({ players }: { players: SessionPlayerTotals[] }) {
@@ -289,12 +296,10 @@ function PlayerTable({ players }: { players: SessionPlayerTotals[] }) {
               </Link>
               <Cluster gap={3} align="baseline">
                 {PLAYER_COLUMNS.map((col) => {
-                  const value = p[col.key];
+                  const value = col.read(p);
                   return (
-                    <span key={col.key} className="m" style={{ fontSize: 'var(--fs-small)', width: 62, textAlign: 'right' }}>
-                      {typeof value === 'number'
-                        ? (col.digits == null ? figure(value) : value.toFixed(col.digits))
-                        : '—'}
+                    <span key={col.label} className="m" style={{ fontSize: 'var(--fs-small)', width: 62, textAlign: 'right' }}>
+                      {col.digits == null ? figure(value) : value.toFixed(col.digits)}
                     </span>
                   );
                 })}
@@ -376,7 +381,10 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
 export function SessionDetail() {
   const { sessionId: idParam, sessionDate, tab } = useParams();
   const navigate = useNavigate();
-  const sessions = useSessions(30);
+  // Only fetched when a DATE has to be resolved to a session. An id in the
+  // URL needs no list, and loading thirty sessions to ignore them is the
+  // same waste the story page's SSR panel was called out for.
+  const sessions = useSessions(30, sessionDate != null);
 
   // Two ways in, one key. /session-detail/date/:date is a legacy hash, and a
   // date is not a key: a session crossing midnight has two, and one date can

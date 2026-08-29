@@ -140,9 +140,10 @@ export function useSessionLineups(sessionId: number, enabled: boolean) {
   });
 }
 
-export function useSessions(limit = 6) {
+export function useSessions(limit = 6, enabled = true) {
   return useQuery({
     queryKey: ['sessions', limit],
+    enabled,
     queryFn: () => apiGet('/api/sessions', { query: { limit } }) as Promise<SessionSummary[]>,
   });
 }
