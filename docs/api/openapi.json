@@ -932,6 +932,81 @@
     "title": "HitRegionRow",
     "type": "object"
    },
+   "HitRegionScope": {
+    "additionalProperties": false,
+    "description": "The scope echo for `/proximity/hit-regions`, which has ONE MORE FIELD.\n\n⛔ THE FAILURE THIS MODULE'S TEST FILE IS NAMED AFTER, IN MY OWN CODE. That\nhandler writes `scope[\"weapon_id\"] = int(weapon_id)` when the filter is\nused, `ProximityScope` does not declare it, and `response_model` therefore\nDROPS it — the client gets results narrowed to one weapon while the echoed\nscope no longer says which (Codex on #830). The scope object exists to let\na caller check what the answer was filtered to; silently removing a filter\nfrom it is the worst field to lose.\n\nA separate member rather than an optional field on `ProximityScope`,\nbecause the key is absent when no weapon filter was sent and an optional\nfield would put `\"weapon_id\": null` on every other response.",
+    "properties": {
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player Guid"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     },
+     "weapon_id": {
+      "title": "Weapon Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "session_date",
+     "map_name",
+     "round_number",
+     "round_start_unix",
+     "player_guid",
+     "weapon_id"
+    ],
+    "title": "HitRegionScope",
+    "type": "object"
+   },
    "LastSession": {
     "description": "The most recent gaming session, as `/stats/last-session` returns it.\n\n⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all\neight sampled sessions, so none of their element shapes came from the\nsample. `warnings` and `stats_checks` are f-strings built in the handler;\n`unassigned_players` carries `SessionPlayerRow`, which was then confirmed\nby forcing the branch that fills it. An empty list tells you a field's\nname and nothing about its contents.\n\n`map_counts` is keyed by map name, so it is a dict, not a model.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
     "properties": {
@@ -959,7 +1034,14 @@
      },
      "maps": {
       "items": {
-       "type": "string"
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ]
       },
       "title": "Maps",
       "type": "array"
@@ -2077,7 +2159,15 @@
       "type": "array"
      },
      "quality": {
-      "$ref": "#/components/schemas/ProxScoresQuality"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ProxScoresQualityDegraded"
+       },
+       {
+        "$ref": "#/components/schemas/ProxScoresQuality"
+       }
+      ],
+      "title": "Quality"
      },
      "range_days": {
       "title": "Range Days",
@@ -2148,6 +2238,44 @@
      "below_coverage_dropped"
     ],
     "title": "ProxScoresQuality",
+    "type": "object"
+   },
+   "ProxScoresQualityDegraded": {
+    "additionalProperties": false,
+    "description": "⛔ P1: THE SHAPE THAT ONLY EXISTS WHEN SOMETHING IS ALREADY BROKEN.\n\n`prox_scoring._degraded()` returns a deliberate 200 with\n`status: \"degraded\"` and a quality object of FIVE keys — `_ok()` adds\n`below_coverage_dropped`, `_degraded()` does not. Requiring that field\nmade FastAPI reject the degraded payload with a 500, hiding exactly the\nfailure metadata and empty ranking the caller is meant to receive (Codex\non #830).\n\n⭐ SECOND TIME THIS SHAPE OF BUG APPEARED IN ONE DAY, and I found the\nfirst one myself: `linkage.metrics` on `/system/overview` is partial when\na subquery fails, and pinning the healthy key set would 500 precisely when\nthe page is needed most. Finding it there did not stop me writing it here.\n\nModelled as a union member rather than fixed in the service, so the wire is\nunchanged and nothing about the degraded payload moves; the absence is\nalso what the frontend's hand-written type already expects\n(`below_coverage_dropped?: number`).",
+    "properties": {
+     "failed_sources": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Sources",
+      "type": "array"
+     },
+     "metric_weight_coverage": {
+      "title": "Metric Weight Coverage",
+      "type": "number"
+     },
+     "ranking_available": {
+      "title": "Ranking Available",
+      "type": "boolean"
+     },
+     "successful_sources": {
+      "title": "Successful Sources",
+      "type": "integer"
+     },
+     "total_sources": {
+      "title": "Total Sources",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "ranking_available",
+     "successful_sources",
+     "total_sources",
+     "failed_sources",
+     "metric_weight_coverage"
+    ],
+    "title": "ProxScoresQualityDegraded",
     "type": "object"
    },
    "ProxScoresScope": {
@@ -2222,7 +2350,15 @@
       "type": "array"
      },
      "scope": {
-      "$ref": "#/components/schemas/ProximityScope"
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/HitRegionScope"
+       },
+       {
+        "$ref": "#/components/schemas/ProximityScope"
+       }
+      ],
+      "title": "Scope"
      },
      "status": {
       "title": "Status",
@@ -2880,7 +3016,17 @@
      },
      "maps": {
       "items": {
-       "$ref": "#/components/schemas/ScoringMapRow"
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/ScoringMapWithNote"
+        },
+        {
+         "$ref": "#/components/schemas/ScoringMapRow"
+        },
+        {
+         "$ref": "#/components/schemas/ScoringMapAmbiguous"
+        }
+       ]
       },
       "title": "Maps",
       "type": "array"
@@ -2996,8 +3142,122 @@
     "title": "ScoringDebugRow",
     "type": "object"
    },
+   "ScoringMapAmbiguous": {
+    "additionalProperties": false,
+    "description": "A map whose roster changed mid-session: FIFTEEN keys, no bookkeeping.\n\n⛔ THE SERVICE PRODUCES THREE SHAPES HERE AND I MODELLED ONE. Reading\n`calculate_session_scores_with_teams` for its `map_results.append` calls:\n18 keys (with `note`), 17 (without), and this 15-key branch, which omits\n`match_id`, `round_start_unix` AND `map_play_seq` because side attribution\nis genuinely unknown. Eight sampled sessions produced only the 17-key\nshape, so the model required three fields this branch never sends.\n\n⚠️ AND `int | None` WITHOUT A DEFAULT IS STILL REQUIRED IN PYDANTIC V2 —\nnullable is not optional. Widening those three to `| None` would not have\nfixed it; only their ABSENCE from this member does (Codex on #830).",
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "r1_defender_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
+     },
+     "scoring_source": {
+      "title": "Scoring Source",
+      "type": "string"
+     },
+     "team_a_points": {
+      "title": "Team A Points",
+      "type": "integer"
+     },
+     "team_a_r1_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
+     },
+     "team_a_r2_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
+     },
+     "team_a_time": {
+      "title": "Team A Time",
+      "type": "string"
+     },
+     "team_b_points": {
+      "title": "Team B Points",
+      "type": "integer"
+     },
+     "team_b_time": {
+      "title": "Team B Time",
+      "type": "string"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     },
+     "winner_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Side"
+     }
+    },
+    "required": [
+     "map",
+     "emoji",
+     "description",
+     "winner",
+     "winner_side",
+     "counted",
+     "scoring_source",
+     "r1_defender_side",
+     "team_a_r1_side",
+     "team_a_r2_side",
+     "team_a_points",
+     "team_b_points",
+     "team_a_time",
+     "team_b_time",
+     "note"
+    ],
+    "title": "ScoringMapAmbiguous",
+    "type": "object"
+   },
    "ScoringMapRow": {
-    "description": "One map in the stopwatch scoring table.\n\n⚠️ `winner_side` is `int | None` — measured null on 8 of 48 rows across\neight sessions. `map_play_seq` was null on ALL 48: it is typed nullable\nbecause that is what the endpoint sends, not because a value was seen.",
+    "additionalProperties": false,
+    "description": "A normally paired map: seventeen keys.",
     "properties": {
      "counted": {
       "title": "Counted",
@@ -3038,8 +3298,15 @@
       "title": "Match Id"
      },
      "r1_defender_side": {
-      "title": "R1 Defender Side",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
      },
      "round_start_unix": {
       "title": "Round Start Unix",
@@ -3105,7 +3372,6 @@
     },
     "required": [
      "map",
-     "match_id",
      "emoji",
      "description",
      "winner",
@@ -3119,10 +3385,153 @@
      "team_b_points",
      "team_a_time",
      "team_b_time",
+     "match_id",
      "round_start_unix",
      "map_play_seq"
     ],
     "title": "ScoringMapRow",
+    "type": "object"
+   },
+   "ScoringMapWithNote": {
+    "additionalProperties": false,
+    "description": "…and eighteen when the branch attaches an explanation.\n\nA separate member rather than `note: str | None = None` on the row above,\nbecause a default would put `\"note\": null` on every one of the 48 sampled\nmaps that does not carry one.",
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "map_play_seq": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Play Seq"
+     },
+     "match_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Id"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "r1_defender_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
+     },
+     "round_start_unix": {
+      "title": "Round Start Unix",
+      "type": "integer"
+     },
+     "scoring_source": {
+      "title": "Scoring Source",
+      "type": "string"
+     },
+     "team_a_points": {
+      "title": "Team A Points",
+      "type": "integer"
+     },
+     "team_a_r1_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
+     },
+     "team_a_r2_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
+     },
+     "team_a_time": {
+      "title": "Team A Time",
+      "type": "string"
+     },
+     "team_b_points": {
+      "title": "Team B Points",
+      "type": "integer"
+     },
+     "team_b_time": {
+      "title": "Team B Time",
+      "type": "string"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     },
+     "winner_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Side"
+     }
+    },
+    "required": [
+     "map",
+     "emoji",
+     "description",
+     "winner",
+     "winner_side",
+     "counted",
+     "scoring_source",
+     "r1_defender_side",
+     "team_a_r1_side",
+     "team_a_r2_side",
+     "team_a_points",
+     "team_b_points",
+     "team_a_time",
+     "team_b_time",
+     "match_id",
+     "round_start_unix",
+     "map_play_seq",
+     "note"
+    ],
+    "title": "ScoringMapWithNote",
     "type": "object"
    },
    "ScoringUnavailable": {

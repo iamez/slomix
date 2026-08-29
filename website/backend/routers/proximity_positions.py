@@ -6,7 +6,7 @@ import math
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -270,6 +270,32 @@ class ProximityScope(BaseModel):
     player_guid: str | None
 
 
+class HitRegionScope(BaseModel):
+    """The scope echo for `/proximity/hit-regions`, which has ONE MORE FIELD.
+
+    ⛔ THE FAILURE THIS MODULE'S TEST FILE IS NAMED AFTER, IN MY OWN CODE. That
+    handler writes `scope["weapon_id"] = int(weapon_id)` when the filter is
+    used, `ProximityScope` does not declare it, and `response_model` therefore
+    DROPS it — the client gets results narrowed to one weapon while the echoed
+    scope no longer says which (Codex on #830). The scope object exists to let
+    a caller check what the answer was filtered to; silently removing a filter
+    from it is the worst field to lose.
+
+    A separate member rather than an optional field on `ProximityScope`,
+    because the key is absent when no weapon filter was sent and an optional
+    field would put `"weapon_id": null` on every other response.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_date: str | None
+    map_name: str | None
+    round_number: int | None
+    round_start_unix: int | None
+    player_guid: str | None
+    weapon_id: int
+
+
 class ProximityPlayerRef(BaseModel):
     """A player in the scope, for the page's picker."""
 
@@ -320,7 +346,7 @@ class HitRegionRow(BaseModel):
 
 class ProximityHitRegions(BaseModel):
     status: str
-    scope: ProximityScope
+    scope: HitRegionScope | ProximityScope
     players: list[HitRegionRow]
 
 

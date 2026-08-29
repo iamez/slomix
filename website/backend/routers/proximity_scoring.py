@@ -5,7 +5,7 @@ from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from shared.guid_utils import short_guid
 from website.backend.dependencies import get_db
@@ -894,6 +894,36 @@ class ProxScoresQuality(BaseModel):
     below_coverage_dropped: int
 
 
+class ProxScoresQualityDegraded(BaseModel):
+    """⛔ P1: THE SHAPE THAT ONLY EXISTS WHEN SOMETHING IS ALREADY BROKEN.
+
+    `prox_scoring._degraded()` returns a deliberate 200 with
+    `status: "degraded"` and a quality object of FIVE keys — `_ok()` adds
+    `below_coverage_dropped`, `_degraded()` does not. Requiring that field
+    made FastAPI reject the degraded payload with a 500, hiding exactly the
+    failure metadata and empty ranking the caller is meant to receive (Codex
+    on #830).
+
+    ⭐ SECOND TIME THIS SHAPE OF BUG APPEARED IN ONE DAY, and I found the
+    first one myself: `linkage.metrics` on `/system/overview` is partial when
+    a subquery fails, and pinning the healthy key set would 500 precisely when
+    the page is needed most. Finding it there did not stop me writing it here.
+
+    Modelled as a union member rather than fixed in the service, so the wire is
+    unchanged and nothing about the degraded payload moves; the absence is
+    also what the frontend's hand-written type already expects
+    (`below_coverage_dropped?: number`).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    ranking_available: bool
+    successful_sources: int
+    total_sources: int
+    failed_sources: list[str]
+    metric_weight_coverage: float
+
+
 class ProxScoresScope(BaseModel):
     """⚠️ NOT the same shape as `ProximityScope` in proximity_positions.py.
 
@@ -923,7 +953,7 @@ class ProxScores(BaseModel):
     status: str
     version: str
     formula_version: str
-    quality: ProxScoresQuality
+    quality: ProxScoresQualityDegraded | ProxScoresQuality
     range_days: int
     scope: ProxScoresScope
     player_count: int

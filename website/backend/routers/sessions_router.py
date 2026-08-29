@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from shared.config import load_config
 from shared.services.session_stats_aggregator import SessionStatsAggregator
@@ -255,35 +255,64 @@ class SessionMatchRow(BaseModel):
     outcome: str | None
 
 
-class ScoringMapRow(BaseModel):
-    """One map in the stopwatch scoring table.
+class _ScoringMapCommon(BaseModel):
+    """The fifteen fields every scoring map carries, whatever branch made it."""
 
-    ⚠️ `winner_side` is `int | None` — measured null on 8 of 48 rows across
-    eight sessions. `map_play_seq` was null on ALL 48: it is typed nullable
-    because that is what the endpoint sends, not because a value was seen.
-    """
+    model_config = ConfigDict(extra="forbid")
 
     map: str
-    #: `StopwatchScoringService._pair_round` stores None on its legacy
-    #: sequential fallback — Codex on #830.
-    match_id: str | None
     emoji: str
     description: str
     winner: str
+    #: `int | None` — measured null on 8 of 48 rows across eight sessions.
     winner_side: int | None
     counted: bool
     scoring_source: str
-    r1_defender_side: int
-    #: None on the `incomplete` and `ambiguous` scoring branches (R1-only
-    #: map, or a roster change) — Codex on #830.
+    r1_defender_side: int | None
+    #: None on the `incomplete` and `ambiguous` branches — Codex on #830.
     team_a_r1_side: int | None
     team_a_r2_side: int | None
     team_a_points: int
     team_b_points: int
     team_a_time: str
     team_b_time: str
+
+
+class ScoringMapAmbiguous(_ScoringMapCommon):
+    """A map whose roster changed mid-session: FIFTEEN keys, no bookkeeping.
+
+    ⛔ THE SERVICE PRODUCES THREE SHAPES HERE AND I MODELLED ONE. Reading
+    `calculate_session_scores_with_teams` for its `map_results.append` calls:
+    18 keys (with `note`), 17 (without), and this 15-key branch, which omits
+    `match_id`, `round_start_unix` AND `map_play_seq` because side attribution
+    is genuinely unknown. Eight sampled sessions produced only the 17-key
+    shape, so the model required three fields this branch never sends.
+
+    ⚠️ AND `int | None` WITHOUT A DEFAULT IS STILL REQUIRED IN PYDANTIC V2 —
+    nullable is not optional. Widening those three to `| None` would not have
+    fixed it; only their ABSENCE from this member does (Codex on #830).
+    """
+
+    note: str
+
+
+class ScoringMapRow(_ScoringMapCommon):
+    """A normally paired map: seventeen keys."""
+
+    match_id: str | None
     round_start_unix: int
     map_play_seq: int | None
+
+
+class ScoringMapWithNote(ScoringMapRow):
+    """…and eighteen when the branch attaches an explanation.
+
+    A separate member rather than `note: str | None = None` on the row above,
+    because a default would put `"note": null` on every one of the 48 sampled
+    maps that does not carry one.
+    """
+
+    note: str
 
 
 class ScoringDebugRow(BaseModel):
@@ -323,7 +352,7 @@ class ScoringAvailable(BaseModel):
     """Scoring was built: the eight-key shape with both teams and the maps."""
 
     available: bool
-    maps: list[ScoringMapRow]
+    maps: list[ScoringMapWithNote | ScoringMapRow | ScoringMapAmbiguous]
     debug: list[ScoringDebugRow]
     team_a_name: str
     team_b_name: str
@@ -351,8 +380,20 @@ class LastSession(BaseModel):
     date: str
     player_count: int
     rounds: int
-    maps: list[str]
-    map_counts: dict[str, int]
+    #: ⚠️ `rounds.map_name` is nullable and `fetch_session_data()` does not
+    #: exclude unresolved rounds, so an unnamed map reaches both this list and
+    #: the KEYS of `map_counts` below. Measured: pydantic rejects `None` in a
+    #: `list[str]` and rejects a `None` key in a `dict[str, int]` outright, so
+    #: either one turns the whole last-session payload into a 500 (Codex on
+    #: #830). Zero such rounds exist today; the column allows them.
+    #:
+    #: ⚠️ ONE MEASURED DIFFERENCE, ACCEPTED KNOWINGLY: a None KEY serialises as
+    #: `"None"` through the model and as `"null"` through the bare
+    #: jsonable_encoder. The state is unreachable today, and a cosmetic key
+    #: spelling is a better outcome than a 500 — but it is a difference, so it
+    #: is written down rather than left for someone to find.
+    maps: list[str | None]
+    map_counts: dict[str | None, int]
     matches: list[SessionMatchRow]
     scoring: ScoringAvailable | ScoringUnavailable
     warnings: list[str]
