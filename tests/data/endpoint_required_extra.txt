@@ -4,3 +4,14 @@
 /api/storytelling/kill-matrix
 /api/storytelling/movement
 /api/storytelling/win-contribution/formula
+
+# /api/skill/adjusted-lifetime — the frozen inventory assigns it to the
+# skill-rating route, but the H1 extractor never saw it: it scans
+# website/js/*.js, and this call comes from the LEGACY REACT page
+# (src/pages/SkillRating.tsx via api/hooks.ts), which the extractor does not
+# read. So the ratchet believed the endpoint was covered while nothing in the
+# new tree calls it (Codex on #835). Listing it here makes the gap visible
+# and keeps it visible until the page shows the adjusted lifetime rating —
+# a third formula (s.effort-v0.2) that needs its own panel and its own
+# sentence about not being comparable with the other two.
+/api/skill/adjusted-lifetime

@@ -82,6 +82,31 @@ async def test_rows_outside_the_run_are_removed():
 
 
 @pytest.mark.asyncio
+async def test_a_concurrent_run_is_not_reconciled_away():
+    """The delete is bounded by this run's own start time.
+
+    Two requests can cross the one-hour staleness boundary together, and each
+    execute() auto-commits, so an unbounded delete could remove rows another
+    run had just written. Rows newer than this run's start are somebody
+    else's fresh work, never this run's leftovers.
+    """
+    db = _RecordingDB([_row("still_here", "Player", 300)])
+
+    await compute_and_store_ratings(db)
+
+    reconcile = [
+        (q, p) for q, p in db.deletes_from("player_skill_ratings")
+        if "<> ALL" in q
+    ]
+    assert reconcile, "no reconciliation delete was issued"
+    query, params = reconcile[0]
+    assert "last_rated_at <" in query, "the delete is not bounded in time"
+    # …and the bound is a real timestamp, not a placeholder that never binds.
+    assert params[1] is not None
+    assert hasattr(params[1], "tzinfo") and params[1].tzinfo is not None
+
+
+@pytest.mark.asyncio
 async def test_history_is_never_reconciled_away():
     """The past belongs in player_skill_history and stays there.
 

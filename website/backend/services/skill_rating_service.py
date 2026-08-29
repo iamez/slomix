@@ -25,7 +25,7 @@ Format-agnostic: metrics work in 3v3 (medic/engi/covy) and 6v6 (full roster).
 import bisect
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -546,6 +546,7 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
 
 async def compute_and_store_ratings(db) -> int:
     """Compute all ratings and upsert into player_skill_ratings table."""
+    run_started_at = datetime.now(timezone.utc)
     results = await compute_all_ratings(db)
 
     # Upserts never remove rows, so bot entries rated before the bot gate
@@ -576,10 +577,17 @@ async def compute_and_store_ratings(db) -> int:
     # ⛔ Guarded on a non-empty result. A failed or empty computation must
     # not be allowed to empty the table — that would turn a bad run into
     # data loss.
+    # ⛔ And it must not delete a CONCURRENT run's work. Two requests can
+    # cross the one-hour staleness boundary together, each execute()
+    # auto-commits, so without this the second run's reconcile could remove
+    # rows the first had just written. Deleting only rows older than this
+    # run's own start makes the operation safe under interleaving: a fresher
+    # row is never somebody else's mistake (Codex on #835).
     if results:
         await db.execute(
-            "DELETE FROM player_skill_ratings WHERE player_guid <> ALL($1)",
-            ([p["player_guid"] for p in results],),
+            "DELETE FROM player_skill_ratings "
+            "WHERE player_guid <> ALL($1) AND last_rated_at < $2",
+            ([p["player_guid"] for p in results], run_started_at),
         )
 
     for player in results:

@@ -195,7 +195,7 @@ function SsrRow({ player }: { player: SsrPlayer }) {
 export function SkillRating() {
   const [open, setOpen] = useState<string | null>(null);
   const [showSsr, setShowSsr] = useState(false);
-  const board = useSkillLeaderboard(30);
+  const board = useSkillLeaderboard(50);
   const formula = useSkillFormula();
   const ssr = useSsr(showSsr);
 
@@ -231,7 +231,7 @@ export function SkillRating() {
       </Stack>
 
       <Stack gap={2} parity="skill.leaderboard" style={{ paddingTop: 'var(--space-6)' }}>
-        <SectionHead label="rated players" aside={<span className="lbl">rounds · weight · rating</span>} />
+        <SectionHead label="rated players" aside={<span className="lbl">rounds · sample · rating</span>} />
         {board.isPending && <Pending label="ratings" />}
         {board.isError && <Unavailable what="ratings" />}
         {board.data && board.data.players.length === 0 && (
