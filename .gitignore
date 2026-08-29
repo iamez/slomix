@@ -896,3 +896,10 @@ docs/reference/c0rnp0rn7_prepatch_from_git_history.lua
 tools/README.md
 tools/verify_pipeline.py
 tools/pipeline_health_report.py
+
+# Generated from docs/api/openapi.json by `npm run generate:api`. NOT tracked:
+# it is derived, it grows with every typed endpoint, and it crossed the 500 kB
+# push/CI size guard on 2026-08-29. CI generates it BEFORE tsc, so the types
+# the frontend compiles against come from the committed schema, which
+# tests/integration/test_openapi_snapshot.py ties to the running app.
+website/frontend/src/api/generated/openapi.d.ts

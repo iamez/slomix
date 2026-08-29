@@ -5,6 +5,7 @@ from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from shared.guid_utils import short_guid
 from website.backend.dependencies import get_db
@@ -756,7 +757,180 @@ async def get_proximity_leaderboards(
         raise HTTPException(status_code=500, detail="leaderboards computation failed")
 
 
-@router.get("/proximity/prox-scores")
+class ProxFormulaMetric(BaseModel):
+    """One metric inside a category of the published formula."""
+
+    label: str
+    weight: float
+    invert: bool
+
+
+class ProxFormulaCategory(BaseModel):
+    """One scoring category, with the metrics that make it up.
+
+    ⭐ `metrics` IS AN OPEN DICT ON PURPOSE, and so is `categories` above it.
+    This endpoint exists so the page can CITE the formula instead of keeping
+    its own copy of the weights. If the schema pinned the metric names, it
+    would become a second copy — and the day a metric is added or retired, the
+    endpoint that publishes the formula would answer 500 or quietly drop it,
+    which is the failure mode the endpoint was built to prevent.
+    """
+
+    label: str
+    description: str
+    weight_in_overall: float
+    metrics: dict[str, ProxFormulaMetric]
+
+
+class ProxFormula(BaseModel):
+    """The scoring formula itself: weights, categories, metrics.
+
+    ⛔ THIS IS THE ONE ENDPOINT IN THE FAMILY WHERE A WRONG TYPE MISSTATES THE
+    METRIC RATHER THAN EMPTYING A PANEL. Everything here is an explanation of
+    what a score MEANS, so a dropped category or a coerced weight does not
+    look broken — it looks like a different formula.
+
+    `{"status": "ok", **get_formula_config()}` — the body is the service's own
+    config, spread into the response, so the shape follows the formula and not
+    this file.
+    """
+
+    status: str
+    #: Formula version, e.g. "3.0" — the page should display it next to any
+    #: score it explains.
+    version: str
+    min_engagements: int
+    category_weights: dict[str, float]
+    categories: dict[str, ProxFormulaCategory]
+
+
+class ProxMetricBreakdown(BaseModel):
+    """How one metric contributed to one player's category score.
+
+    ⚠️ `raw` and `percentile` are nullable — a player with no measurement for
+    that metric still appears in the breakdown, with the contribution zeroed,
+    rather than vanishing from it.
+
+    ⛔ A LIVE METRIC HAS FIVE KEYS; A RETIRED ONE HAS SIX. `retired_in` is
+    present on 364 of 504 sampled entries — a metric kept in the breakdown for
+    continuity but no longer carrying weight names the version that retired
+    it. Absent means "still live"; a null would read as "retirement unknown",
+    which is a different claim.
+
+    ⚠️ THE FIRST VERSION OF THIS MODEL GOT IT WRONG IN EXACTLY THE WAY THIS
+    DOCSTRING WARNS ABOUT. `retired_in: str | None = None` put
+    `"retired_in": null` on every live metric — 140 of them — and the
+    before/after comparison caught it. `exclude_none` is not the fix either:
+    `raw` and `percentile` use null as a VALUE (a player with no measurement
+    still appears, with the contribution zeroed) and would have been stripped
+    along with it. Hence a union, the same shape as `coverage` on
+    `/proximity/player-heatmap`.
+    """
+
+    label: str
+    raw: float | None
+    percentile: float | None
+    weight: float
+    contribution: float
+
+
+class ProxMetricBreakdownRetired(ProxMetricBreakdown):
+    """A metric still shown but no longer weighted — it names its retirement."""
+
+    retired_in: str
+
+
+class ProxRadarPoint(BaseModel):
+    label: str
+    value: float
+
+
+class ProxPlayerScore(BaseModel):
+    """One player's proximity score, with the arithmetic that produced it."""
+
+    guid: str
+    name: str
+    rank: int
+    engagements: int
+    tracks: int
+    prox_combat: float
+    prox_team: float
+    prox_gamesense: float
+    prox_overall: float
+    prox_radar: list[ProxRadarPoint]
+    #: category -> metric -> how it contributed.
+    breakdown: dict[
+        str, dict[str, ProxMetricBreakdownRetired | ProxMetricBreakdown]
+    ]
+    #: category -> how many of its metrics actually carry weight. Present so a
+    #: consumer can see that prox_combat's 0.40 share rests on ONE measurement
+    #: instead of inferring it from the breakdown (#556).
+    metrics_scored: dict[str, int]
+    metric_weight_coverage: float
+    #: Names of metrics this player had no data for. Empty in every sampled
+    #: response, so the element type comes from the service
+    #: (`[mk for mk in _METRIC_EFFECTIVE_WEIGHT if pdata.get(mk) is None]`),
+    #: not from a reading.
+    missing_metrics: list[str]
+
+
+class ProxScoresQuality(BaseModel):
+    """Whether the ranking can be trusted, carried with every response.
+
+    ⭐ `ranking_available` is the field that separates "nobody scored" from
+    "we could not score": an empty `players` list with
+    `ranking_available: false` is the second. Always present so the contract
+    does not depend on the dataset (Codex on #512).
+
+    `failed_sources` is empty in every sampled response; its element type is
+    the service's `s["source"]`, a string.
+    """
+
+    ranking_available: bool
+    successful_sources: int
+    total_sources: int
+    failed_sources: list[str]
+    metric_weight_coverage: float
+    below_coverage_dropped: int
+
+
+class ProxScoresScope(BaseModel):
+    """⚠️ NOT the same shape as `ProximityScope` in proximity_positions.py.
+
+    This one carries `scoped` and has NO `player_guid`; that one carries
+    `player_guid` and no `scoped`. Two endpoints in the same family echo their
+    scope differently, so a shared helper that reads one shape off the other
+    finds a missing key rather than a null.
+    """
+
+    #: True when any scope filter was applied.
+    scoped: bool
+    session_date: str | None
+    map_name: str | None
+    round_number: int | None
+    round_start_unix: int | None
+
+
+class ProxScores(BaseModel):
+    """Proximity scores for the current scope.
+
+    ⚠️ `player_count` is the count BEFORE `limit`, like `total` on
+    `/api/uploads`: `?limit=1` answers one player with `player_count: 14`.
+    A consumer that reads it as "how many rows are below" gets 14 and renders
+    one.
+    """
+
+    status: str
+    version: str
+    formula_version: str
+    quality: ProxScoresQuality
+    range_days: int
+    scope: ProxScoresScope
+    player_count: int
+    players: list[ProxPlayerScore]
+
+
+@router.get("/proximity/prox-scores", response_model=ProxScores)
 @limiter.limit("15/minute")
 async def get_prox_scores(
     request: Request,
@@ -826,7 +1000,7 @@ async def get_prox_scores(
         raise HTTPException(status_code=500, detail="prox-scores computation failed")
 
 
-@router.get("/proximity/prox-scores/formula")
+@router.get("/proximity/prox-scores/formula", response_model=ProxFormula)
 async def get_prox_scores_formula():
     """Return current formula config (weights, metrics, categories) for transparency."""
     from website.backend.services.prox_scoring import get_formula_config

@@ -175,16 +175,23 @@ jobs:
           cache-dependency-path: website/frontend/package-lock.json
       - name: Install React frontend dependencies
         run: npm ci
+      - name: Generate API types from the committed openapi snapshot
+        # ⛔ THIS MUST RUN BEFORE tsc. `src/api/generated/openapi.d.ts` is NOT
+        # tracked (2026-08-29): it is derived from docs/api/openapi.json, it
+        # grows with every typed endpoint, and it crossed the 500 kB size
+        # guard enforced by scripts/git-hooks/pre-push and this workflow.
+        #
+        # The guarantee is unchanged in substance and stronger in order. It
+        # used to be "the committed .d.ts still matches the JSON", checked
+        # AFTER tsc had already compiled against that committed file — so a
+        # stale file could typecheck and only then be caught. Now the file is
+        # built from the JSON first and tsc compiles against nothing else, and
+        # tests/integration/test_openapi_snapshot.py ties the JSON to the
+        # running app. App -> JSON -> types -> tsc, with no copy in between
+        # that can drift (original intent: Codex review on #802).
+        run: npm run generate:api
       - name: Typecheck (tsc --noEmit)
         run: npm run typecheck
-      - name: Generated API types match the openapi snapshot
-        # docs/api/openapi.json is ratcheted by tests/integration/
-        # test_openapi_snapshot.py; this closes the OTHER half — a refreshed
-        # JSON with a forgotten `npm run generate:api` would leave apiGet
-        # compiling against stale paths (Codex review on #802).
-        run: |
-          npm run generate:api
-          git diff --exit-code -- src/api/generated/openapi.d.ts
       - name: Unit tests (vitest)
         run: npm test
       - name: Standalone app build (vite.app.config.ts)

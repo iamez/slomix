@@ -1728,6 +1728,476 @@
     "title": "PlayerWeapons",
     "type": "object"
    },
+   "ProxFormula": {
+    "description": "The scoring formula itself: weights, categories, metrics.\n\n⛔ THIS IS THE ONE ENDPOINT IN THE FAMILY WHERE A WRONG TYPE MISSTATES THE\nMETRIC RATHER THAN EMPTYING A PANEL. Everything here is an explanation of\nwhat a score MEANS, so a dropped category or a coerced weight does not\nlook broken — it looks like a different formula.\n\n`{\"status\": \"ok\", **get_formula_config()}` — the body is the service's own\nconfig, spread into the response, so the shape follows the formula and not\nthis file.",
+    "properties": {
+     "categories": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/ProxFormulaCategory"
+      },
+      "title": "Categories",
+      "type": "object"
+     },
+     "category_weights": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Category Weights",
+      "type": "object"
+     },
+     "min_engagements": {
+      "title": "Min Engagements",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "version",
+     "min_engagements",
+     "category_weights",
+     "categories"
+    ],
+    "title": "ProxFormula",
+    "type": "object"
+   },
+   "ProxFormulaCategory": {
+    "description": "One scoring category, with the metrics that make it up.\n\n⭐ `metrics` IS AN OPEN DICT ON PURPOSE, and so is `categories` above it.\nThis endpoint exists so the page can CITE the formula instead of keeping\nits own copy of the weights. If the schema pinned the metric names, it\nwould become a second copy — and the day a metric is added or retired, the\nendpoint that publishes the formula would answer 500 or quietly drop it,\nwhich is the failure mode the endpoint was built to prevent.",
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "metrics": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/ProxFormulaMetric"
+      },
+      "title": "Metrics",
+      "type": "object"
+     },
+     "weight_in_overall": {
+      "title": "Weight In Overall",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "description",
+     "weight_in_overall",
+     "metrics"
+    ],
+    "title": "ProxFormulaCategory",
+    "type": "object"
+   },
+   "ProxFormulaMetric": {
+    "description": "One metric inside a category of the published formula.",
+    "properties": {
+     "invert": {
+      "title": "Invert",
+      "type": "boolean"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "weight": {
+      "title": "Weight",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "weight",
+     "invert"
+    ],
+    "title": "ProxFormulaMetric",
+    "type": "object"
+   },
+   "ProxMetricBreakdown": {
+    "description": "How one metric contributed to one player's category score.\n\n⚠️ `raw` and `percentile` are nullable — a player with no measurement for\nthat metric still appears in the breakdown, with the contribution zeroed,\nrather than vanishing from it.\n\n⛔ A LIVE METRIC HAS FIVE KEYS; A RETIRED ONE HAS SIX. `retired_in` is\npresent on 364 of 504 sampled entries — a metric kept in the breakdown for\ncontinuity but no longer carrying weight names the version that retired\nit. Absent means \"still live\"; a null would read as \"retirement unknown\",\nwhich is a different claim.\n\n⚠️ THE FIRST VERSION OF THIS MODEL GOT IT WRONG IN EXACTLY THE WAY THIS\nDOCSTRING WARNS ABOUT. `retired_in: str | None = None` put\n`\"retired_in\": null` on every live metric — 140 of them — and the\nbefore/after comparison caught it. `exclude_none` is not the fix either:\n`raw` and `percentile` use null as a VALUE (a player with no measurement\nstill appears, with the contribution zeroed) and would have been stripped\nalong with it. Hence a union, the same shape as `coverage` on\n`/proximity/player-heatmap`.",
+    "properties": {
+     "contribution": {
+      "title": "Contribution",
+      "type": "number"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "percentile": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Percentile"
+     },
+     "raw": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw"
+     },
+     "weight": {
+      "title": "Weight",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "raw",
+     "percentile",
+     "weight",
+     "contribution"
+    ],
+    "title": "ProxMetricBreakdown",
+    "type": "object"
+   },
+   "ProxMetricBreakdownRetired": {
+    "description": "A metric still shown but no longer weighted — it names its retirement.",
+    "properties": {
+     "contribution": {
+      "title": "Contribution",
+      "type": "number"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "percentile": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Percentile"
+     },
+     "raw": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw"
+     },
+     "retired_in": {
+      "title": "Retired In",
+      "type": "string"
+     },
+     "weight": {
+      "title": "Weight",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "raw",
+     "percentile",
+     "weight",
+     "contribution",
+     "retired_in"
+    ],
+    "title": "ProxMetricBreakdownRetired",
+    "type": "object"
+   },
+   "ProxPlayerScore": {
+    "description": "One player's proximity score, with the arithmetic that produced it.",
+    "properties": {
+     "breakdown": {
+      "additionalProperties": {
+       "additionalProperties": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/ProxMetricBreakdownRetired"
+         },
+         {
+          "$ref": "#/components/schemas/ProxMetricBreakdown"
+         }
+        ]
+       },
+       "type": "object"
+      },
+      "title": "Breakdown",
+      "type": "object"
+     },
+     "engagements": {
+      "title": "Engagements",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "metric_weight_coverage": {
+      "title": "Metric Weight Coverage",
+      "type": "number"
+     },
+     "metrics_scored": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Metrics Scored",
+      "type": "object"
+     },
+     "missing_metrics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Missing Metrics",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "prox_combat": {
+      "title": "Prox Combat",
+      "type": "number"
+     },
+     "prox_gamesense": {
+      "title": "Prox Gamesense",
+      "type": "number"
+     },
+     "prox_overall": {
+      "title": "Prox Overall",
+      "type": "number"
+     },
+     "prox_radar": {
+      "items": {
+       "$ref": "#/components/schemas/ProxRadarPoint"
+      },
+      "title": "Prox Radar",
+      "type": "array"
+     },
+     "prox_team": {
+      "title": "Prox Team",
+      "type": "number"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "tracks": {
+      "title": "Tracks",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "rank",
+     "engagements",
+     "tracks",
+     "prox_combat",
+     "prox_team",
+     "prox_gamesense",
+     "prox_overall",
+     "prox_radar",
+     "breakdown",
+     "metrics_scored",
+     "metric_weight_coverage",
+     "missing_metrics"
+    ],
+    "title": "ProxPlayerScore",
+    "type": "object"
+   },
+   "ProxRadarPoint": {
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "value"
+    ],
+    "title": "ProxRadarPoint",
+    "type": "object"
+   },
+   "ProxScores": {
+    "description": "Proximity scores for the current scope.\n\n⚠️ `player_count` is the count BEFORE `limit`, like `total` on\n`/api/uploads`: `?limit=1` answers one player with `player_count: 14`.\nA consumer that reads it as \"how many rows are below\" gets 14 and renders\none.",
+    "properties": {
+     "formula_version": {
+      "title": "Formula Version",
+      "type": "string"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/ProxPlayerScore"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "quality": {
+      "$ref": "#/components/schemas/ProxScoresQuality"
+     },
+     "range_days": {
+      "title": "Range Days",
+      "type": "integer"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProxScoresScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "version",
+     "formula_version",
+     "quality",
+     "range_days",
+     "scope",
+     "player_count",
+     "players"
+    ],
+    "title": "ProxScores",
+    "type": "object"
+   },
+   "ProxScoresQuality": {
+    "description": "Whether the ranking can be trusted, carried with every response.\n\n⭐ `ranking_available` is the field that separates \"nobody scored\" from\n\"we could not score\": an empty `players` list with\n`ranking_available: false` is the second. Always present so the contract\ndoes not depend on the dataset (Codex on #512).\n\n`failed_sources` is empty in every sampled response; its element type is\nthe service's `s[\"source\"]`, a string.",
+    "properties": {
+     "below_coverage_dropped": {
+      "title": "Below Coverage Dropped",
+      "type": "integer"
+     },
+     "failed_sources": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Sources",
+      "type": "array"
+     },
+     "metric_weight_coverage": {
+      "title": "Metric Weight Coverage",
+      "type": "number"
+     },
+     "ranking_available": {
+      "title": "Ranking Available",
+      "type": "boolean"
+     },
+     "successful_sources": {
+      "title": "Successful Sources",
+      "type": "integer"
+     },
+     "total_sources": {
+      "title": "Total Sources",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "ranking_available",
+     "successful_sources",
+     "total_sources",
+     "failed_sources",
+     "metric_weight_coverage",
+     "below_coverage_dropped"
+    ],
+    "title": "ProxScoresQuality",
+    "type": "object"
+   },
+   "ProxScoresScope": {
+    "description": "⚠️ NOT the same shape as `ProximityScope` in proximity_positions.py.\n\nThis one carries `scoped` and has NO `player_guid`; that one carries\n`player_guid` and no `scoped`. Two endpoints in the same family echo their\nscope differently, so a shared helper that reads one shape off the other\nfinds a missing key rather than a null.",
+    "properties": {
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "scoped": {
+      "title": "Scoped",
+      "type": "boolean"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     }
+    },
+    "required": [
+     "scoped",
+     "session_date",
+     "map_name",
+     "round_number",
+     "round_start_unix"
+    ],
+    "title": "ProxScoresScope",
+    "type": "object"
+   },
    "ProximityHitRegions": {
     "properties": {
      "players": {
@@ -13896,7 +14366,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProxScores"
+        }
        }
       },
       "description": "Successful Response"
@@ -13926,7 +14398,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProxFormula"
+        }
        }
       },
       "description": "Successful Response"

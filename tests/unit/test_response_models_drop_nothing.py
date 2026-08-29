@@ -211,6 +211,10 @@ from website.backend.routers.proximity_positions import (
     ProximityHitRegions,
     ProximityPlayers,
 )
+from website.backend.routers.proximity_scoring import (
+    ProxFormula,
+    ProxScores,
+)
 from website.backend.routers.records_awards import (
     AwardLeaderboard,
     AwardsPage,
@@ -1921,3 +1925,123 @@ def test_proximity_players_names_are_guaranteed_by_the_handler():
     assert "if r and r[0] and r[1]" in built, (
         f"the truthiness filter is gone from {built!r} — an empty or missing "
         f"name can now reach the payload")
+
+
+class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
+    """`/proximity/prox-scores` and its `/formula`.
+
+    ⛔ THE FORMULA ENDPOINT IS DIFFERENT IN KIND FROM EVERY OTHER ONE ON THIS
+    BRANCH. Elsewhere a wrong type empties a panel; here it changes what a
+    score MEANS. The endpoint exists so the page can CITE the weights instead
+    of keeping its own copy, so the schema must not become that second copy:
+    `categories`, `metrics` and `category_weights` are OPEN dicts, and the day
+    a metric is added or retired the response still validates.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, model, raw):
+        modelled = _json.loads(model.model_validate(raw).model_dump_json())
+        assert not missing_keys(raw, modelled), (
+            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, f"{model.__name__} altered a value"
+        return modelled
+
+    def test_the_formula_survives_intact(self):
+        self._roundtrip(ProxFormula,
+                        self._f("api_proximity_prox_scores_formula.json"))
+
+    def test_a_new_metric_does_not_break_the_formula_endpoint(self):
+        """The point of the open dicts, checked rather than asserted in prose.
+        A schema that pinned the metric names would answer 500 on the first
+        formula change — on the endpoint whose job is to publish changes."""
+        raw = self._f("api_proximity_prox_scores_formula.json")
+        cat = next(iter(raw["categories"]))
+        raw["categories"][cat]["metrics"]["a_brand_new_metric"] = {
+            "label": "Invented", "weight": 0.25, "invert": True}
+        raw["categories"]["prox_invented"] = {
+            "label": "Invented", "description": "did not exist yesterday",
+            "weight_in_overall": 0.0, "metrics": {}}
+        raw["category_weights"]["prox_invented"] = 0.0
+        modelled = ProxFormula.model_validate(raw)
+        assert "a_brand_new_metric" in modelled.categories[cat].metrics
+        assert "prox_invented" in modelled.categories
+
+    @pytest.mark.parametrize("fixture", [
+        "api_proximity_prox_scores.json",
+        "api_proximity_prox_scores_empty.json",
+        "api_proximity_prox_scores_limited.json",
+    ])
+    def test_scores_survive_every_recorded_state(self, fixture):
+        self._roundtrip(ProxScores, self._f(fixture))
+
+    def test_a_live_metric_has_five_keys_and_a_retired_one_six(self):
+        """⛔ THE MISTAKE THIS TEST EXISTS FOR WAS MINE, AND THE BEFORE/AFTER
+        COMPARISON CAUGHT IT. `retired_in: str | None = None` put
+        `"retired_in": null` on every live metric. `exclude_none` would not
+        have fixed it either: `raw` and `percentile` use null as a VALUE — a
+        player with no measurement still appears, contribution zeroed — and
+        would have been stripped with it. Hence a union.
+        """
+        raw = self._f("api_proximity_prox_scores.json")
+        live, retired = [], []
+        for player in raw["players"]:
+            for metrics in player["breakdown"].values():
+                for entry in metrics.values():
+                    (retired if "retired_in" in entry else live).append(entry)
+        assert live and retired, (
+            f"the fixture no longer covers both kinds: {len(live)} live, "
+            f"{len(retired)} retired")
+        assert all(len(e) == 5 for e in live)
+        assert all(len(e) == 6 for e in retired)
+        out = self._roundtrip(ProxScores, raw)
+        for player in out["players"]:
+            for metrics in player["breakdown"].values():
+                for name, entry in metrics.items():
+                    assert ("retired_in" in entry) == (len(entry) == 6), name
+
+    def test_raw_and_percentile_keep_their_nulls(self):
+        """A metric with no measurement stays in the breakdown with its
+        contribution zeroed — dropping the null would remove the evidence that
+        the player was considered at all."""
+        # ⛔ THIS TEST FAILED FIRST, AND THE FIXTURE WAS THE REASON. The
+        # date-scoped response has no unmeasured metric at all (0 of 108), so
+        # the assertion was true of the model and false of the sample. The
+        # round-scoped one carries two — a real null, recorded rather than
+        # constructed, which is the difference between pinning the contract
+        # and pinning my own guess about it.
+        raw = self._f("api_proximity_prox_scores_unmeasured.json")
+        nulls = [e for p in raw["players"] for m in p["breakdown"].values()
+                 for e in m.values() if e["raw"] is None]
+        assert nulls, "the fixture lost its unmeasured metrics"
+        assert all(e["contribution"] == 0 for e in nulls)
+        out = self._roundtrip(ProxScores, raw)
+        still = [e for p in out["players"] for m in p["breakdown"].values()
+                 for e in m.values() if e["raw"] is None]
+        assert len(still) == len(nulls)
+
+    def test_player_count_is_the_count_before_the_limit(self):
+        """⚠️ Like `total` on /api/uploads: `?limit=1` answers one player with
+        `player_count: 14`. A consumer reading it as "rows below" gets 14."""
+        limited = self._f("api_proximity_prox_scores_limited.json")
+        assert len(limited["players"]) == 1
+        assert limited["player_count"] > 1
+
+    def test_an_empty_scope_says_so_in_quality(self):
+        """⭐ `ranking_available` separates "nobody scored" from "we could not
+        score" — an empty list alone cannot."""
+        empty = self._f("api_proximity_prox_scores_empty.json")
+        assert empty["players"] == []
+        assert empty["quality"]["ranking_available"] is False
+        full = self._f("api_proximity_prox_scores.json")
+        assert full["quality"]["ranking_available"] is True
+
+    def test_the_two_scope_shapes_in_this_family_are_not_the_same(self):
+        """⚠️ `ProxScoresScope` carries `scoped` and no `player_guid`;
+        `ProximityScope` carries `player_guid` and no `scoped`. A shared
+        helper reading one off the other finds a missing key, not a null."""
+        scores_scope = self._f("api_proximity_prox_scores.json")["scope"]
+        positions_scope = self._f("api_proximity_player_heatmap.json")["scope"]
+        assert "scoped" in scores_scope and "player_guid" not in scores_scope
+        assert "player_guid" in positions_scope and "scoped" not in positions_scope
