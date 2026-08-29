@@ -141,18 +141,21 @@ function appRoutes() {
     const table = JSON.parse(
         readFileSync(path.join(REPO_ROOT, 'website/frontend/src/app/routes.data.json'), 'utf8'),
     );
-    const samples = {
-        ':id?': 'D8423F90', ':guid': 'D8423F90', ':roundId': '11365',
-        ':sessionId': '154', ':sessionDate': '2026-08-04', ':gsid': '154',
-        ':date': '2026-08-27', ':section?': 'demos',
-        ':demoId': '7dc01a5727344cd8afece44a1cc572e6',
-        ':uploadId': 'de4f8d8628c148e5a8756a522aeb43b0',
-        ':tab?': '',
-    };
+    // A Map, not an object: the key comes out of a file, and an object
+    // indexed by a value read from data is an injection sink to every
+    // scanner in this repo's CI (same reason layout.tsx's SPACE is a Map).
+    const samples = new Map([
+        [':id?', 'D8423F90'], [':guid', 'D8423F90'], [':roundId', '11365'],
+        [':sessionId', '154'], [':sessionDate', '2026-08-04'], [':gsid', '154'],
+        [':date', '2026-08-27'], [':section?', 'demos'],
+        [':demoId', '7dc01a5727344cd8afece44a1cc572e6'],
+        [':uploadId', 'de4f8d8628c148e5a8756a522aeb43b0'],
+        [':tab?', ''],
+    ]);
     return table.map((row) => {
         const filled = row.path
             .split('/')
-            .map((seg) => (seg.startsWith(':') ? samples[seg] ?? seg.replace(/[:?]/g, '') : seg))
+            .map((seg) => (seg.startsWith(':') ? samples.get(seg) ?? seg.replace(/[:?]/g, '') : seg))
             .filter((seg, i) => seg !== '' || i === 0)
             .join('/');
         return { key: row.key, name: row.key, hash: `app${filled === '/' ? '' : filled}` };

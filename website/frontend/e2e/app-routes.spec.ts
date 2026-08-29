@@ -31,24 +31,24 @@ const routes = JSON.parse(
  *  rather than bouncing off a guard. Shared with the sample table in
  *  scripts/audit_website_browser.mjs — the two sweeps should visit the same
  *  data, so a difference between them is a difference in the pages. */
-const SAMPLES: Record<string, string> = {
-  ':id?': 'D8423F90',
-  ':guid': 'D8423F90',
-  ':roundId': '11365',
-  ':sessionId': '154',
-  ':sessionDate': '2026-08-04',
-  ':gsid': '154',
-  ':date': '2026-08-27',
-  ':section?': 'demos',
-  ':demoId': '7dc01a5727344cd8afece44a1cc572e6',
-  ':uploadId': 'de4f8d8628c148e5a8756a522aeb43b0',
-  ':tab?': '',
-};
+const SAMPLES = new Map<string, string>([
+  [':id?', 'D8423F90'],
+  [':guid', 'D8423F90'],
+  [':roundId', '11365'],
+  [':sessionId', '154'],
+  [':sessionDate', '2026-08-04'],
+  [':gsid', '154'],
+  [':date', '2026-08-27'],
+  [':section?', 'demos'],
+  [':demoId', '7dc01a5727344cd8afece44a1cc572e6'],
+  [':uploadId', 'de4f8d8628c148e5a8756a522aeb43b0'],
+  [':tab?', ''],
+]);
 
 function fill(path: string): string {
   const filled = path
     .split('/')
-    .map((seg) => (seg.startsWith(':') ? SAMPLES[seg] ?? seg.replace(/[:?]/g, '') : seg))
+    .map((seg) => (seg.startsWith(':') ? SAMPLES.get(seg) ?? seg.replace(/[:?]/g, '') : seg))
     .filter((seg, i) => seg !== '' || i === 0)
     .join('/');
   return `/app${filled === '/' ? '' : filled}`;

@@ -450,8 +450,13 @@ function SessionStory({ gsid }: { gsid: number }) {
         {synergy.isError && <Unavailable what="synergy" />}
         {synergy.data && (
           <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>
-            {(['group_a', 'group_b'] as const).map((key) => {
-              const g = synergy.data.groups[key];
+            {/* Named, not indexed: the two groups are a pair, not a list,
+              * and an object read by a computed key is a finding in this
+              * repo's scanners even when the key is a literal. */}
+            {[
+              { key: 'group_a', group: synergy.data.groups.group_a },
+              { key: 'group_b', group: synergy.data.groups.group_b },
+            ].map(({ key, group: g }) => {
               return (
                 <Stack key={key} gap={1} style={{ minWidth: 240 }}>
                   <Cluster gap={2} align="baseline">

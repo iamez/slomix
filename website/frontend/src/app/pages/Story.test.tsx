@@ -130,8 +130,15 @@ describe('Story', () => {
     await waitFor(() => expect(screen.getByText(/picked by waa_bayes/)).toBeInTheDocument());
     // The sentence has to say who leads the board, or the reader is left
     // comparing two numbers with no idea which one ranked the list.
+    // Matched by substring rather than by a regex built from data — the
+    // name carries brackets and dots, and escaping them by hand is a worse
+    // bug than the one it guards against.
     const leader = (pwc as { players: { name: string }[] }).players[0].name;
-    expect(screen.getByText(new RegExp(`${leader.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} leads`))).toBeInTheDocument();
+    // getAllByText: ancestors match a textContent predicate too, and the
+    // question here is whether the sentence is on the page at all.
+    expect(
+      screen.getAllByText((_, el) => (el?.textContent ?? '').includes(`${leader} leads`)).length,
+    ).toBeGreaterThan(0);
   });
 
   it('draws both momentum series on one scale, one drawing per round', async () => {
