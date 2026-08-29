@@ -175,4 +175,25 @@ describe('Home', () => {
     await waitFor(() => expect(screen.getAllByText('not in this response').length).toBeGreaterThan(0));
     expect(screen.queryByText(/trend: unavailable/)).toBeNull();
   });
+  it('shows the hero without scores when the session has no scoring', async () => {
+    // The short form: {available: false, reason} — no names, no scores. All
+    // eight sessions in the database answer the long form, so this shape can
+    // only be reached by forcing it (the brother did, on #830), and a page
+    // typed off the corpus would read names that are not there.
+    const short = {
+      ...(lastSession as object),
+      scoring: { available: false, reason: 'no persistent teams' },
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/stats/last-session') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(short) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    // The evening still renders — date, players, rounds — without a scoreline.
+    await waitFor(() => expect(screen.getAllByText(/players/i).length).toBeGreaterThan(0));
+    expect(screen.queryByText('Team A')).toBeNull();
+  });
 });

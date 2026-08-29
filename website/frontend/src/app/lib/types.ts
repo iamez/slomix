@@ -225,6 +225,16 @@ export interface LastSessionPlayer {
 
 /** GET /api/stats/last-session — corpus: api_stats_last_session.json.
  * scoring is the real BOX (2/1/0 per map) with per-map rows. */
+export type LastSessionScoring =
+  | {
+    available: true;
+    team_a_name: string;
+    team_b_name: string;
+    team_a_score: number;
+    team_b_score: number;
+  }
+  | { available: false; reason?: string };
+
 export interface LastSession {
   date: string;
   /** null when the latest rounds carry no session id (sessions_router) —
@@ -238,13 +248,19 @@ export interface LastSession {
   /** Substitutes and players mapped to neither persistent team — the
    * evening totals must include them (Codex on #811). */
   unassigned_players: LastSessionPlayer[];
-  scoring: {
-    available: boolean;
-    team_a_name: string;
-    team_b_name: string;
-    team_a_score: number;
-    team_b_score: number;
-  };
+  /** A DISCRIMINATED UNION, because the endpoint answers with two different
+   *  shapes and the short one carries neither names nor scores:
+   *
+   *      available: true   → 8 keys (names, scores, maps, debug)
+   *      available: false  → 2 keys: {available, reason}
+   *
+   *  All eight sessions in the database answer the long form, so a type read
+   *  off the corpus would have made the names required — and 500'd (or here,
+   *  crashed) the first time a session took one of the four early returns.
+   *  The brother forced the short form on #830 to measure it. Written as a
+   *  union rather than one shape with optional fields, so the compiler makes
+   *  the `available` check mandatory before a name can be read. */
+  scoring: LastSessionScoring;
   warnings: unknown[];
 }
 
@@ -306,14 +322,27 @@ export interface SeasonLeaders {
 /** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
 export interface SeasonSummary {
   season_id: string;
+  start_date: string;
+  end_date: string;
   totals: {
     rounds: number;
     players: number;
     sessions: number;
     maps: number;
     kills: number;
+    active_days: number;
+    /** int OR float on the wire: a real season answers 13.1, an empty one
+     *  answers 0 as an integer (#830). `number` covers both in TS; the note
+     *  is here so nobody formats it assuming a decimal. */
+    avg_rounds_per_day: number;
   };
-  top_map: { name: string; plays: number } | null;
+  /** ⚠️ The NULL is inside, not outside. This said
+   *  `{ name: string; plays: number } | null`, which defended against a case
+   *  that does not happen and promised one that does: a season with no
+   *  rounds answers `{"name": null, "plays": 0}` — the object is always
+   *  there, the name is what goes missing (#830). Nullability at the wrong
+   *  level is not a smaller mistake than no nullability at all. */
+  top_map: { name: string | null; plays: number };
 }
 
 /** GET /api/availability — corpus: api_availability.json. Day counts only —
