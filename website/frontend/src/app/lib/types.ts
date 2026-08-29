@@ -1388,8 +1388,13 @@ export interface SessionMatchRound {
   round_id: number;
   round_number: number;
   winner_team: number | null;
-  allies_score: number;
-  axis_score: number;
+  /** Nullable, measured: one session in forty answers null for both scores.
+   *  Found by sampling every session rather than the newest — the brother's
+   *  rule from #830, where `/api/sessions?limit=200` produced 420 nulls that
+   *  `?limit=1` could not show, because they come from a LEFT JOIN and not
+   *  from a nullable column. */
+  allies_score: number | null;
+  axis_score: number | null;
   duration_seconds: number | null;
 }
 
