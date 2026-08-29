@@ -840,6 +840,91 @@
     "title": "HallOfFameRow",
     "type": "object"
    },
+   "HeatmapCell": {
+    "description": "One grid cell. Coordinates are grid indices, not world units.",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "x": {
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "count"
+    ],
+    "title": "HeatmapCell",
+    "type": "object"
+   },
+   "HitRegionRow": {
+    "description": "One player's hit distribution across the four body regions.\n\n⭐ `head_pct` is `float`, NOT `int | float`, and the reason is worth\nseparating from the similar-looking cases elsewhere on this branch. The\nhandler writes `round(head * 100.0 / total, 1) if total > 0 else 0` — an\nint on the else branch — but the query carries `HAVING COUNT(*) >= 10`\nand `total_hits` IS that COUNT, so `total` cannot be 0. This is a\nSTRUCTURAL guarantee from the query in the same function, not a claim\nabout today's data. Compare `LeaderboardRow.kills`, where the only\nguarantee was \"no null rows exist right now\" and the type had to widen.\n\n`name` is `MAX(attacker_name)` passed through raw, with no\n`IS NOT NULL` guard (unlike `/proximity/players`, which has one), so it\nis nullable.",
+    "properties": {
+     "arms": {
+      "title": "Arms",
+      "type": "integer"
+     },
+     "body": {
+      "title": "Body",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "head": {
+      "title": "Head",
+      "type": "integer"
+     },
+     "head_pct": {
+      "title": "Head Pct",
+      "type": "number"
+     },
+     "legs": {
+      "title": "Legs",
+      "type": "integer"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "total_damage": {
+      "title": "Total Damage",
+      "type": "integer"
+     },
+     "total_hits": {
+      "title": "Total Hits",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "head",
+     "arms",
+     "body",
+     "legs",
+     "head_pct",
+     "total_hits",
+     "total_damage"
+    ],
+    "title": "HitRegionRow",
+    "type": "object"
+   },
    "LastSession": {
     "description": "The most recent gaming session, as `/stats/last-session` returns it.\n\n⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all\neight sampled sessions, so none of their element shapes came from the\nsample. `warnings` and `stats_checks` are f-strings built in the handler;\n`unassigned_players` carries `SessionPlayerRow`, which was then confirmed\nby forcing the branch that fills it. An empty list tells you a field's\nname and nothing about its contents.\n\n`map_counts` is keyed by map name, so it is a dict, not a model.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
     "properties": {
@@ -1485,6 +1570,133 @@
     "title": "MostActivePlayer",
     "type": "object"
    },
+   "PlayerHeatmap": {
+    "description": "Per-player combat heatmap for one map, in one of five modes.\n\n⚠️ EVERY PARAMETER THAT MATTERS IS REQUIRED AND REJECTED LOUDLY, which is\nthe opposite of the pattern found elsewhere on this branch: `map_name`,\n`mode` and `player_guid` each answer 400 when missing, an unknown `mode`\nanswers 400 with the list of valid ones, and `weapon_id` combined with\n`mode=presence` answers 400 rather than silently dropping the filter. That\nlast one is the behaviour every ignored parameter should have had.\n\nAn unknown `player_guid` or an out-of-range scope answers 200 with\n`hotzones: []` and `total: 0` — an empty result, not an error, and\n`player_name` falls back to `#` plus the first eight characters of the\nguid, so it is never null.",
+    "properties": {
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HeatmapCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "sampled": {
+      "title": "Sampled",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "status",
+     "map_name",
+     "mode",
+     "grid_size",
+     "player_guid",
+     "player_name",
+     "hotzones",
+     "total",
+     "sampled",
+     "scope"
+    ],
+    "title": "PlayerHeatmap",
+    "type": "object"
+   },
+   "PlayerHeatmapKillsOnly": {
+    "description": "`mode=player_dies` only — it carries one EXTRA key.\n\n⛔ Measured across all five modes: `kills_from`, `victims_die`,\n`presence` and `aim` return ten keys; `player_dies` returns ELEVEN. World\nand suicide deaths are not tracked, so that mode reports\n`coverage: \"kills_only\"` to say the map is deaths-by-enemy, not all\ndeaths. A single model with `coverage: str | None = None` would put\n`\"coverage\": null` on the other four modes, which reads as \"coverage\nunknown\" — the opposite of the truth, since for them the question does\nnot arise. Hence a union, and `exclude_none` is NOT an option here\nbecause `scope` uses null as a value throughout.",
+    "properties": {
+     "coverage": {
+      "title": "Coverage",
+      "type": "string"
+     },
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HeatmapCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "sampled": {
+      "title": "Sampled",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "status",
+     "map_name",
+     "mode",
+     "grid_size",
+     "player_guid",
+     "player_name",
+     "hotzones",
+     "total",
+     "sampled",
+     "scope",
+     "coverage"
+    ],
+    "title": "PlayerHeatmapKillsOnly",
+    "type": "object"
+   },
    "PlayerWeapons": {
     "properties": {
      "player_guid": {
@@ -1514,6 +1726,145 @@
      "weapons"
     ],
     "title": "PlayerWeapons",
+    "type": "object"
+   },
+   "ProximityHitRegions": {
+    "properties": {
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/HitRegionRow"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "scope",
+     "players"
+    ],
+    "title": "ProximityHitRegions",
+    "type": "object"
+   },
+   "ProximityPlayerRef": {
+    "description": "A player in the scope, for the page's picker.",
+    "properties": {
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "guid",
+     "name"
+    ],
+    "title": "ProximityPlayerRef",
+    "type": "object"
+   },
+   "ProximityPlayers": {
+    "description": "Who appears in the current scope — the backbone of the proximity page.\n\n`guid` and `name` are `str(...)` in the handler and the row is skipped\nunless both are truthy, so neither can be null here. That is a HANDLER\nguarantee, not a schema one.",
+    "properties": {
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/ProximityPlayerRef"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "scope",
+     "players"
+    ],
+    "title": "ProximityPlayers",
+    "type": "object"
+   },
+   "ProximityScope": {
+    "description": "What the answer was actually scoped to, echoed back.\n\n⭐ THIS OBJECT IS THE REASON THE SCOPE BUG WAS INVISIBLE. Every field is\nnullable, and a null means \"not filtered on\" — so a panel that ignores a\nparameter still echoes the scope it was ASKED for, and the number beside\nit looks like it belongs to that scope. `/proximity/revives` shipped a\n30-day aggregate under a one-round label for exactly this reason (fixed in\n`cc8085ef`, 1,873 revives where the round had 90). Typing it does not fix\nthat class; only comparing counts across scopes does.",
+    "properties": {
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player Guid"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     }
+    },
+    "required": [
+     "session_date",
+     "map_name",
+     "round_number",
+     "round_start_unix",
+     "player_guid"
+    ],
+    "title": "ProximityScope",
     "type": "object"
    },
    "QuickLeaders": {
@@ -11360,7 +11711,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProximityHitRegions"
+        }
        }
       },
       "description": "Successful Response"
@@ -13085,7 +13438,17 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/PlayerHeatmapKillsOnly"
+          },
+          {
+           "$ref": "#/components/schemas/PlayerHeatmap"
+          }
+         ],
+         "title": "Response Get Proximity Player Heatmap Api Proximity Player Heatmap Get"
+        }
        }
       },
       "description": "Successful Response"
@@ -13399,7 +13762,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProximityPlayers"
+        }
        }
       },
       "description": "Successful Response"

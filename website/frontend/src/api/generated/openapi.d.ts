@@ -5745,6 +5745,55 @@ export interface components {
             value: number;
         };
         /**
+         * HeatmapCell
+         * @description One grid cell. Coordinates are grid indices, not world units.
+         */
+        HeatmapCell: {
+            /** Count */
+            count: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
+        /**
+         * HitRegionRow
+         * @description One player's hit distribution across the four body regions.
+         *
+         *     ⭐ `head_pct` is `float`, NOT `int | float`, and the reason is worth
+         *     separating from the similar-looking cases elsewhere on this branch. The
+         *     handler writes `round(head * 100.0 / total, 1) if total > 0 else 0` — an
+         *     int on the else branch — but the query carries `HAVING COUNT(*) >= 10`
+         *     and `total_hits` IS that COUNT, so `total` cannot be 0. This is a
+         *     STRUCTURAL guarantee from the query in the same function, not a claim
+         *     about today's data. Compare `LeaderboardRow.kills`, where the only
+         *     guarantee was "no null rows exist right now" and the type had to widen.
+         *
+         *     `name` is `MAX(attacker_name)` passed through raw, with no
+         *     `IS NOT NULL` guard (unlike `/proximity/players`, which has one), so it
+         *     is nullable.
+         */
+        HitRegionRow: {
+            /** Arms */
+            arms: number;
+            /** Body */
+            body: number;
+            /** Guid */
+            guid: string;
+            /** Head */
+            head: number;
+            /** Head Pct */
+            head_pct: number;
+            /** Legs */
+            legs: number;
+            /** Name */
+            name: string | null;
+            /** Total Damage */
+            total_damage: number;
+            /** Total Hits */
+            total_hits: number;
+        };
+        /**
          * LastSession
          * @description The most recent gaming session, as `/stats/last-session` returns it.
          *
@@ -6086,6 +6135,80 @@ export interface components {
             /** Rounds */
             rounds: number;
         };
+        /**
+         * PlayerHeatmap
+         * @description Per-player combat heatmap for one map, in one of five modes.
+         *
+         *     ⚠️ EVERY PARAMETER THAT MATTERS IS REQUIRED AND REJECTED LOUDLY, which is
+         *     the opposite of the pattern found elsewhere on this branch: `map_name`,
+         *     `mode` and `player_guid` each answer 400 when missing, an unknown `mode`
+         *     answers 400 with the list of valid ones, and `weapon_id` combined with
+         *     `mode=presence` answers 400 rather than silently dropping the filter. That
+         *     last one is the behaviour every ignored parameter should have had.
+         *
+         *     An unknown `player_guid` or an out-of-range scope answers 200 with
+         *     `hotzones: []` and `total: 0` — an empty result, not an error, and
+         *     `player_name` falls back to `#` plus the first eight characters of the
+         *     guid, so it is never null.
+         */
+        PlayerHeatmap: {
+            /** Grid Size */
+            grid_size: number;
+            /** Hotzones */
+            hotzones: components["schemas"]["HeatmapCell"][];
+            /** Map Name */
+            map_name: string;
+            /** Mode */
+            mode: string;
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Sampled */
+            sampled: boolean;
+            scope: components["schemas"]["ProximityScope"];
+            /** Status */
+            status: string;
+            /** Total */
+            total: number;
+        };
+        /**
+         * PlayerHeatmapKillsOnly
+         * @description `mode=player_dies` only — it carries one EXTRA key.
+         *
+         *     ⛔ Measured across all five modes: `kills_from`, `victims_die`,
+         *     `presence` and `aim` return ten keys; `player_dies` returns ELEVEN. World
+         *     and suicide deaths are not tracked, so that mode reports
+         *     `coverage: "kills_only"` to say the map is deaths-by-enemy, not all
+         *     deaths. A single model with `coverage: str | None = None` would put
+         *     `"coverage": null` on the other four modes, which reads as "coverage
+         *     unknown" — the opposite of the truth, since for them the question does
+         *     not arise. Hence a union, and `exclude_none` is NOT an option here
+         *     because `scope` uses null as a value throughout.
+         */
+        PlayerHeatmapKillsOnly: {
+            /** Coverage */
+            coverage: string;
+            /** Grid Size */
+            grid_size: number;
+            /** Hotzones */
+            hotzones: components["schemas"]["HeatmapCell"][];
+            /** Map Name */
+            map_name: string;
+            /** Mode */
+            mode: string;
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Sampled */
+            sampled: boolean;
+            scope: components["schemas"]["ProximityScope"];
+            /** Status */
+            status: string;
+            /** Total */
+            total: number;
+        };
         /** PlayerWeapons */
         PlayerWeapons: {
             /** Player Guid */
@@ -6096,6 +6219,63 @@ export interface components {
             total_kills: number;
             /** Weapons */
             weapons: components["schemas"]["WeaponRow"][];
+        };
+        /** ProximityHitRegions */
+        ProximityHitRegions: {
+            /** Players */
+            players: components["schemas"]["HitRegionRow"][];
+            scope: components["schemas"]["ProximityScope"];
+            /** Status */
+            status: string;
+        };
+        /**
+         * ProximityPlayerRef
+         * @description A player in the scope, for the page's picker.
+         */
+        ProximityPlayerRef: {
+            /** Guid */
+            guid: string;
+            /** Name */
+            name: string;
+        };
+        /**
+         * ProximityPlayers
+         * @description Who appears in the current scope — the backbone of the proximity page.
+         *
+         *     `guid` and `name` are `str(...)` in the handler and the row is skipped
+         *     unless both are truthy, so neither can be null here. That is a HANDLER
+         *     guarantee, not a schema one.
+         */
+        ProximityPlayers: {
+            /** Players */
+            players: components["schemas"]["ProximityPlayerRef"][];
+            scope: components["schemas"]["ProximityScope"];
+            /** Status */
+            status: string;
+        };
+        /**
+         * ProximityScope
+         * @description What the answer was actually scoped to, echoed back.
+         *
+         *     ⭐ THIS OBJECT IS THE REASON THE SCOPE BUG WAS INVISIBLE. Every field is
+         *     nullable, and a null means "not filtered on" — so a panel that ignores a
+         *     parameter still echoes the scope it was ASKED for, and the number beside
+         *     it looks like it belongs to that scope. `/proximity/revives` shipped a
+         *     30-day aggregate under a one-round label for exactly this reason (fixed in
+         *     `cc8085ef`, 1,873 revives where the round had 90). Typing it does not fix
+         *     that class; only comparing counts across scopes does.
+         */
+        ProximityScope: {
+            /** Map Name */
+            map_name: string | null;
+            /** Player Guid */
+            player_guid: string | null;
+            /** Round Number */
+            round_number: number | null;
+            /** Round Start Unix */
+            round_start_unix: number | null;
+            /** Session Date */
+            session_date: string | null;
         };
         /**
          * QuickLeaders
@@ -10870,7 +11050,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProximityHitRegions"];
                 };
             };
             /** @description Validation Error */
@@ -11380,7 +11560,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["PlayerHeatmapKillsOnly"] | components["schemas"]["PlayerHeatmap"];
                 };
             };
             /** @description Validation Error */
@@ -11520,7 +11700,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ProximityPlayers"];
                 };
             };
             /** @description Validation Error */

@@ -205,6 +205,12 @@ from website.backend.routers.players_router import (
     TonightIdle,
     TonightLive,
 )
+from website.backend.routers.proximity_positions import (
+    PlayerHeatmap,
+    PlayerHeatmapKillsOnly,
+    ProximityHitRegions,
+    ProximityPlayers,
+)
 from website.backend.routers.records_awards import (
     AwardLeaderboard,
     AwardsPage,
@@ -1781,3 +1787,137 @@ class TestUploadsWhereTheAnswerIsUnambiguous:
         broken["tags"] = [{"tag": "demo"}]
         with pytest.raises(Exception):
             UploadDetail.model_validate(broken)
+
+
+class TestProximityWhereTheScopeIsTheWholeStory:
+    """The three endpoints the proximity page calls most (5, 3 and 3 times per
+    render). Typed ahead of the frontend page so it is written against a schema
+    rather than against a sample.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, model, raw):
+        modelled = _json.loads(model.model_validate(raw).model_dump_json())
+        assert not missing_keys(raw, modelled), (
+            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, f"{model.__name__} altered a value"
+        return modelled
+
+    def test_players_and_hit_regions_survive(self):
+        self._roundtrip(ProximityPlayers, self._f("api_proximity_players.json"))
+        self._roundtrip(ProximityPlayers,
+                        self._f("api_proximity_players_empty.json"))
+        self._roundtrip(ProximityHitRegions,
+                        self._f("api_proximity_hit_regions.json"))
+
+    def test_an_empty_scope_is_an_answer_not_an_error(self):
+        empty = self._f("api_proximity_players_empty.json")
+        assert empty["status"] == "ok" and empty["players"] == []
+        assert empty["scope"]["session_date"] == "2020-01-01", (
+            "the fixture no longer records WHICH scope came back empty — "
+            "which is the only thing separating it from a broken filter")
+
+    def test_the_scope_echo_carries_nulls_as_meaning(self):
+        """⭐ `scope` is how a caller checks the answer was filtered the way it
+        asked. Every field is nullable and null means "not filtered on", so a
+        model that dropped the nulls would leave a page unable to tell a
+        one-round answer from a thirty-day one — which is precisely the bug
+        `/proximity/revives` shipped."""
+        heat = self._f("api_proximity_player_heatmap.json")
+        assert heat["scope"]["session_date"] is None
+        assert heat["scope"]["map_name"] == "te_escape2"
+        assert "session_date" in heat["scope"], "a null scope key vanished"
+        self._roundtrip(PlayerHeatmap, heat)
+
+    def test_player_dies_is_the_only_mode_with_coverage(self):
+        """⛔ Measured across all five modes: four return TEN keys,
+        `player_dies` returns ELEVEN. `coverage: "kills_only"` says the map is
+        deaths-by-enemy because world and suicide deaths are not tracked.
+
+        A single model with `coverage: str | None = None` would put
+        `"coverage": null` on the other four, which reads as "coverage
+        unknown" — the opposite of the truth, since for them the question does
+        not arise. Hence the union.
+        """
+        from pydantic import TypeAdapter
+
+        plain = self._f("api_proximity_player_heatmap.json")
+        dies = self._f("api_proximity_player_heatmap_player_dies.json")
+        assert set(dies) - set(plain) == {"coverage"}
+        assert dies["coverage"] == "kills_only"
+        assert dies["mode"] == "player_dies" and plain["mode"] != "player_dies"
+
+        # ⛔ THE ADAPTER COMES FROM THE ROUTE, NOT FROM THIS FILE. Building
+        # `TypeAdapter(A | B)` by hand here tests the union I just wrote down,
+        # not the one FastAPI serialises with: narrowing the route to
+        # `response_model=PlayerHeatmap` — which silently drops `coverage`
+        # from every player_dies response — left all 132 tests green. Same
+        # mistake as hand-picking a union member, one level further out.
+        from fastapi.routing import APIRoute
+
+        from website.backend.routers import proximity_positions
+
+        route = next(r for r in proximity_positions.router.routes
+                     if isinstance(r, APIRoute)
+                     and r.path == "/proximity/player-heatmap")
+        adapter = TypeAdapter(route.response_model)
+        for raw, expected, keys in ((plain, PlayerHeatmap, 10),
+                                    (dies, PlayerHeatmapKillsOnly, 11)):
+            chosen = adapter.validate_python(raw)
+            assert type(chosen) is expected, (
+                f"mode={raw['mode']} matched {type(chosen).__name__}")
+            out = _json.loads(chosen.model_dump_json())
+            assert len(out) == keys and out == raw
+
+    def test_an_unresolvable_player_still_gets_a_name(self):
+        """`player_name` falls back to `#` plus eight guid characters, so it is
+        never null — an empty heatmap still labels whose it is."""
+        empty = self._f("api_proximity_player_heatmap_empty.json")
+        assert empty["hotzones"] == [] and empty["total"] == 0
+        assert empty["player_name"].startswith("#")
+        self._roundtrip(PlayerHeatmap, empty)
+
+    def test_head_pct_is_a_float_because_the_query_guarantees_it(self):
+        """⭐ The handler's `else 0` branch is an INT, but `HAVING COUNT(*) >= 10`
+        makes `total` unreachable at 0 — a STRUCTURAL guarantee from the query
+        in the same function, not a claim about today's rows. That is what
+        separates this from `LeaderboardRow.kills`, where the only guarantee
+        was "no null rows exist right now" and the type had to widen."""
+        rows = self._f("api_proximity_hit_regions.json")["players"]
+        assert rows, "the fixture lost its rows"
+        assert all(r["total_hits"] >= 10 for r in rows), (
+            "a row below the HAVING floor appeared — head_pct's int branch is "
+            "reachable after all and the type must widen to int | float")
+        modelled = ProximityHitRegions.model_validate(
+            self._f("api_proximity_hit_regions.json"))
+        assert all(isinstance(r.head_pct, float) for r in modelled.players)
+
+
+def test_proximity_players_names_are_guaranteed_by_the_handler():
+    """⚠️ `ProximityPlayerRef.name` is non-null because of code, not schema.
+
+    `player_track.player_name` is nullable; the handler wraps it in `str(...)`
+    and skips the row unless both guid and name are truthy. Loosening the type
+    to `str | None` breaks nothing a fixture can see — the values are still
+    strings — so the guarantee is pinned where it actually lives. If the
+    coercion or the truthiness filter goes, the type must widen with it.
+    """
+    import ast
+    from pathlib import Path
+
+    src = Path("website/backend/routers/proximity_positions.py").read_text()
+    fn = next(n for n in ast.walk(ast.parse(src))
+              if isinstance(n, ast.AsyncFunctionDef)
+              and n.name == "get_proximity_players")
+    comprehensions = [ast.unparse(n) for n in ast.walk(fn)
+                      if isinstance(n, ast.ListComp)]
+    assert comprehensions, "the players list is no longer built by a comprehension"
+    built = comprehensions[0]
+    assert "str(r[0])" in built and "str(r[1])" in built, (
+        f"the guid/name coercion is gone from {built!r} — `name: str` is no "
+        f"longer guaranteed and the model must widen to `str | None`")
+    assert "if r and r[0] and r[1]" in built, (
+        f"the truthiness filter is gone from {built!r} — an empty or missing "
+        f"name can now reach the payload")

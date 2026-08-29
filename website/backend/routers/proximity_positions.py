@@ -6,6 +6,7 @@ import math
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -250,7 +251,135 @@ async def _resolve_player_guid_canonical(
     return str(row) if row else g
 
 
-@router.get("/proximity/players")
+class ProximityScope(BaseModel):
+    """What the answer was actually scoped to, echoed back.
+
+    ⭐ THIS OBJECT IS THE REASON THE SCOPE BUG WAS INVISIBLE. Every field is
+    nullable, and a null means "not filtered on" — so a panel that ignores a
+    parameter still echoes the scope it was ASKED for, and the number beside
+    it looks like it belongs to that scope. `/proximity/revives` shipped a
+    30-day aggregate under a one-round label for exactly this reason (fixed in
+    `cc8085ef`, 1,873 revives where the round had 90). Typing it does not fix
+    that class; only comparing counts across scopes does.
+    """
+
+    session_date: str | None
+    map_name: str | None
+    round_number: int | None
+    round_start_unix: int | None
+    player_guid: str | None
+
+
+class ProximityPlayerRef(BaseModel):
+    """A player in the scope, for the page's picker."""
+
+    guid: str
+    name: str
+
+
+class ProximityPlayers(BaseModel):
+    """Who appears in the current scope — the backbone of the proximity page.
+
+    `guid` and `name` are `str(...)` in the handler and the row is skipped
+    unless both are truthy, so neither can be null here. That is a HANDLER
+    guarantee, not a schema one.
+    """
+
+    status: str
+    scope: ProximityScope
+    players: list[ProximityPlayerRef]
+
+
+class HitRegionRow(BaseModel):
+    """One player's hit distribution across the four body regions.
+
+    ⭐ `head_pct` is `float`, NOT `int | float`, and the reason is worth
+    separating from the similar-looking cases elsewhere on this branch. The
+    handler writes `round(head * 100.0 / total, 1) if total > 0 else 0` — an
+    int on the else branch — but the query carries `HAVING COUNT(*) >= 10`
+    and `total_hits` IS that COUNT, so `total` cannot be 0. This is a
+    STRUCTURAL guarantee from the query in the same function, not a claim
+    about today's data. Compare `LeaderboardRow.kills`, where the only
+    guarantee was "no null rows exist right now" and the type had to widen.
+
+    `name` is `MAX(attacker_name)` passed through raw, with no
+    `IS NOT NULL` guard (unlike `/proximity/players`, which has one), so it
+    is nullable.
+    """
+
+    guid: str
+    name: str | None
+    head: int
+    arms: int
+    body: int
+    legs: int
+    head_pct: float
+    total_hits: int
+    total_damage: int
+
+
+class ProximityHitRegions(BaseModel):
+    status: str
+    scope: ProximityScope
+    players: list[HitRegionRow]
+
+
+class HeatmapCell(BaseModel):
+    """One grid cell. Coordinates are grid indices, not world units."""
+
+    x: int
+    y: int
+    count: int
+
+
+class PlayerHeatmap(BaseModel):
+    """Per-player combat heatmap for one map, in one of five modes.
+
+    ⚠️ EVERY PARAMETER THAT MATTERS IS REQUIRED AND REJECTED LOUDLY, which is
+    the opposite of the pattern found elsewhere on this branch: `map_name`,
+    `mode` and `player_guid` each answer 400 when missing, an unknown `mode`
+    answers 400 with the list of valid ones, and `weapon_id` combined with
+    `mode=presence` answers 400 rather than silently dropping the filter. That
+    last one is the behaviour every ignored parameter should have had.
+
+    An unknown `player_guid` or an out-of-range scope answers 200 with
+    `hotzones: []` and `total: 0` — an empty result, not an error, and
+    `player_name` falls back to `#` plus the first eight characters of the
+    guid, so it is never null.
+    """
+
+    status: str
+    map_name: str
+    mode: str
+    grid_size: int
+    player_guid: str
+    #: Resolved display name, or `#XXXXXXXX` when it cannot be resolved.
+    player_name: str
+    hotzones: list[HeatmapCell]
+    total: int
+    #: True when the server downsampled the path before returning it.
+    sampled: bool
+    scope: ProximityScope
+
+
+class PlayerHeatmapKillsOnly(PlayerHeatmap):
+    """`mode=player_dies` only — it carries one EXTRA key.
+
+    ⛔ Measured across all five modes: `kills_from`, `victims_die`,
+    `presence` and `aim` return ten keys; `player_dies` returns ELEVEN. World
+    and suicide deaths are not tracked, so that mode reports
+    `coverage: "kills_only"` to say the map is deaths-by-enemy, not all
+    deaths. A single model with `coverage: str | None = None` would put
+    `"coverage": null` on the other four modes, which reads as "coverage
+    unknown" — the opposite of the truth, since for them the question does
+    not arise. Hence a union, and `exclude_none` is NOT an option here
+    because `scope` uses null as a value throughout.
+    """
+
+    coverage: str
+
+
+@router.get("/proximity/players", response_model=ProximityPlayers)
 @handle_router_errors("Proximity players error")
 async def get_proximity_players(
     range_days: int = 365,
@@ -282,7 +411,7 @@ async def get_proximity_players(
     return {"status": "ok", "scope": scope, "players": players}
 
 
-@router.get("/proximity/hit-regions")
+@router.get("/proximity/hit-regions", response_model=ProximityHitRegions)
 @handle_router_errors("Proximity hit-regions error")
 async def get_proximity_hit_regions(
     range_days: int = 30,
@@ -626,7 +755,8 @@ async def get_proximity_push_deaths_heatmap(
     }
 
 
-@router.get("/proximity/player-heatmap")
+@router.get("/proximity/player-heatmap",
+            response_model=PlayerHeatmapKillsOnly | PlayerHeatmap)
 @handle_router_errors("Proximity player-heatmap error")
 async def get_proximity_player_heatmap(
     map_name: str | None = None,
