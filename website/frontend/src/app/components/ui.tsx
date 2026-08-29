@@ -12,20 +12,20 @@ import { Link } from 'react-router';
  */
 
 export const lblStyle: CSSProperties = {
-  fontSize: 10,
+  fontSize: 'var(--fs-label)',
   letterSpacing: '0.24em',
   textTransform: 'uppercase',
   color: 'var(--color-text-500)',
 };
 
 export const actStyle: CSSProperties = {
-  fontSize: 13,
+  fontSize: 'var(--fs-value)',
   letterSpacing: '0.14em',
   textTransform: 'uppercase',
   color: 'var(--color-text-200)',
   textDecoration: 'none',
   borderBottom: '1px solid #45433d',
-  paddingBottom: 3,
+  paddingBottom: 'var(--space-1)',
 };
 
 export const rowStyle: CSSProperties = { borderBottom: '1px solid var(--color-rule-900)' };
@@ -48,7 +48,7 @@ export function ActLink({ to, children, style }: { to: string; children: ReactNo
 export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?: ReactNode; parity?: string }) {
   return (
     <div data-parity={parity} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ ...lblStyle, fontSize: 9 }}>{label}</span>
+      <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{label}</span>
       {aside}
     </div>
   );
@@ -56,9 +56,9 @@ export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?
 
 export function KpiTile({ value, label }: { value: ReactNode; label: ReactNode }) {
   return (
-    <div style={{ padding: '18px 0 16px' }}>
-      <div className="m" style={{ fontSize: 28, lineHeight: 1 }}>{value}</div>
-      <div style={{ ...lblStyle, marginTop: 6 }}>{label}</div>
+    <div style={{ padding: 'var(--space-4) 0 var(--space-4)' }}>
+      <div className="m" style={{ fontSize: 'var(--fs-kpi)', lineHeight: 1 }}>{value}</div>
+      <div style={{ ...lblStyle, marginTop: 'var(--space-2)' }}>{label}</div>
     </div>
   );
 }
@@ -132,12 +132,12 @@ export function Tabs<T extends string>({
 }
 
 export function Pending({ label }: { label: string }) {
-  return <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>{label}…</span>;
+  return <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>{label}…</span>;
 }
 
 export function Unavailable({ what }: { what: string }) {
   return (
-    <span className="m" style={{ fontSize: 11, color: 'var(--color-neg)' }}>
+    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-neg)' }}>
       {what}: unavailable
     </span>
   );

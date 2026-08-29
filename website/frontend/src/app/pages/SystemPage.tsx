@@ -76,20 +76,20 @@ function stageFacts(stage: SystemStage): string[] {
 function StageRow({ stage }: { stage: SystemStage }) {
   const facts = stageFacts(stage);
   return (
-    <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 12, padding: '13px 0' }}>
+    <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)', padding: 'var(--space-3) 0' }}>
       <StatusDot state={dotState(stage.state)} />
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 'var(--fs-row-lg)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             {stage.label || stage.key}
           </span>
-          <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{stage.state}</span>
+          <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{stage.state}</span>
         </div>
-        <div style={{ fontSize: 14, color: 'var(--color-text-400)', marginTop: 2 }}>{stage.summary}</div>
+        <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{stage.summary}</div>
         {facts.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
             {facts.map((f) => (
-              <span key={f} className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>{f}</span>
+              <span key={f} className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>{f}</span>
             ))}
           </div>
         )}
@@ -104,9 +104,9 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
   // unavailable instead of 'no thresholds breached' (Codex on #809).
   if (linkage.available !== true || linkage.status === 'error') {
     return (
-      <div style={{ marginTop: 40 }}>
+      <div style={{ marginTop: 'var(--space-7)' }}>
         <SectionHead label="data integrity" parity="system.linkage" />
-        <div style={{ marginTop: 10 }}><Unavailable what="linkage check" /></div>
+        <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="linkage check" /></div>
       </div>
     );
   }
@@ -118,24 +118,24 @@ function Linkage({ linkage }: { linkage: import('../lib/types').SystemOverview['
   if (typeof m.wrong_start_lua_rows === 'number') cells.push({ k: 'wrong-round links', v: String(m.wrong_start_lua_rows) });
   const breaches = linkage.breaches ?? [];
   return (
-    <div style={{ marginTop: 40 }}>
+    <div style={{ marginTop: 'var(--space-7)' }}>
       <SectionHead label="data integrity" parity="system.linkage" />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 10, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
         {cells.map((c) => (
-          <div key={c.k} style={{ padding: '14px 0 12px' }}>
-            <div className="m" style={{ fontSize: 22, lineHeight: 1 }}>{c.v}</div>
-            <Lbl style={{ marginTop: 6 }}>{c.k}</Lbl>
+          <div key={c.k} style={{ padding: 'var(--space-4) 0 var(--space-3)' }}>
+            <div className="m" style={{ fontSize: 'var(--fs-figure)', lineHeight: 1 }}>{c.v}</div>
+            <Lbl style={{ marginTop: 'var(--space-2)' }}>{c.k}</Lbl>
           </div>
         ))}
       </div>
       {breaches.length === 0 ? (
-        <div className="m" style={{ fontSize: 11, color: 'var(--color-pos)', marginTop: 10 }}>
+        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-pos)', marginTop: 'var(--space-2)' }}>
           no thresholds breached
         </div>
       ) : (
-        <div style={{ marginTop: 10 }}>
+        <div style={{ marginTop: 'var(--space-2)' }}>
           {breaches.map((b) => (
-            <div key={b.metric} className="m" style={{ fontSize: 12, color: 'var(--color-accent-warm)' }}>
+            <div key={b.metric} className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-accent-warm)' }}>
               {b.metric}: {b.value} (threshold {b.threshold})
             </div>
           ))}
@@ -152,12 +152,12 @@ export function SystemPage() {
   const data = overview.isError ? undefined : overview.data;
 
   return (
-    <div data-parity="system.headline" style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 760 }}>
+    <div data-parity="system.headline" style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 760 }}>
       <Lbl>system · refreshed every 30 s · never from a cache</Lbl>
-      {overview.isPending && <div style={{ marginTop: 16 }}><Pending label="checking the chain" /></div>}
+      {overview.isPending && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="checking the chain" /></div>}
       {overview.isError && (
-        <div style={{ marginTop: 16 }}>
-          <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: 0, fontWeight: 500 }}>
+        <div style={{ marginTop: 'var(--space-4)' }}>
+          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 0, fontWeight: 500 }}>
             The website API did not answer.
           </h1>
           <p style={{ color: 'var(--color-text-400)', maxWidth: '44em' }}>
@@ -167,17 +167,17 @@ export function SystemPage() {
       )}
       {data && (
         <>
-          <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+          <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
             {OVERALL_HEADLINE[data.overall] ?? OVERALL_HEADLINE.unknown}
           </h1>
-          <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>
+          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
             checked {String(data.generated_at).replace('T', ' ').slice(0, 19)} utc
           </div>
-          <div style={{ marginTop: 28 }}>
+          <div style={{ marginTop: 'var(--space-6)' }}>
             <SectionHead label="the chain · game server → capture → parser → smart stats → api" parity="system.chain" />
-            <div style={{ marginTop: 6 }}>
+            <div style={{ marginTop: 'var(--space-2)' }}>
               {data.stages.length === 0
-                ? <div style={{ marginTop: 10 }}><Unavailable what="stages" /></div>
+                ? <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="stages" /></div>
                 : data.stages.map((s) => <StageRow key={s.key} stage={s} />)}
             </div>
           </div>

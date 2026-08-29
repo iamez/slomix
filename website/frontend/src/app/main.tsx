@@ -20,6 +20,7 @@ import { FormPage } from './pages/FormPage';
 import { RetroViz } from './pages/RetroViz';
 import { PlayerProfilePage } from './pages/PlayerProfile';
 import { DesignCatalog } from './pages/DesignCatalog';
+import { Rivalries } from './pages/Rivalries';
 import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES } from './routes';
@@ -35,12 +36,12 @@ applyHashShim('/app');
  */
 function Stub({ label, phase }: { label: string; phase: number }) {
   return (
-    <div style={{ paddingTop: 44 }}>
+    <div style={{ paddingTop: 'var(--space-7)' }}>
       <div className="lbl">phase {phase} · not built yet</div>
       <h1
         style={{
-          fontSize: 40, letterSpacing: '0.04em', textTransform: 'uppercase',
-          lineHeight: 1.05, margin: '12px 0 0', fontWeight: 500,
+          fontSize: 'var(--fs-display)', letterSpacing: '0.04em', textTransform: 'uppercase',
+          lineHeight: 1.05, margin: 'var(--space-3) 0 0', fontWeight: 500,
         }}
       >
         {label}
@@ -72,6 +73,7 @@ const PAGES: Record<string, React.ReactElement> = {
   'retro-viz': <RetroViz />,
   profile: <PlayerProfilePage />,
   design: <DesignCatalog />,
+  rivalries: <Rivalries />,
   rounds: <RoundsPage />,
 };
 

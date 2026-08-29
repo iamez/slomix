@@ -40,17 +40,17 @@ function SubNav({ section }: { section: 'stats' | 'telemetry' }) {
     <div style={{ borderBottom: '1px solid var(--color-rule-900)', background: 'var(--color-ink-900)' }}>
       <div
         style={{
-          maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 34px', display: 'flex',
-          alignItems: 'center', gap: 18, height: 40, overflowX: 'auto',
+          maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 var(--space-6)', display: 'flex',
+          alignItems: 'center', gap: 'var(--space-4)', height: 40, overflowX: 'auto',
         }}
       >
-        <span className="lbl" style={{ fontSize: 9, flex: 'none' }}>{section}</span>
+        <span className="lbl" style={{ fontSize: 'var(--fs-caption)', flex: 'none' }}>{section}</span>
         {items.map((r) => (
           <NavLink
             key={r.key}
             to={r.path.split('/:')[0] || r.path}
             style={({ isActive }) => ({
-              fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase',
+              fontSize: 'var(--fs-small)', letterSpacing: '0.1em', textTransform: 'uppercase',
               whiteSpace: 'nowrap', textDecoration: 'none',
               color: isActive ? 'var(--color-text-100)' : 'var(--color-text-400)',
             })}
@@ -71,14 +71,14 @@ export function AppShell() {
       <div style={{ borderBottom: '1px solid var(--color-rule-900)' }}>
         <div
           style={{
-            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '8px 34px', display: 'flex',
-            alignItems: 'center', minHeight: 60, gap: 26, flexWrap: 'wrap', rowGap: 8,
+            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: 'var(--space-2) var(--space-6)', display: 'flex',
+            alignItems: 'center', minHeight: 60, gap: 'var(--space-6)', flexWrap: 'wrap', rowGap: 'var(--space-2)',
           }}
         >
           <Link
             to="/"
             style={{
-              fontSize: 16, fontWeight: 600, letterSpacing: '0.32em',
+              fontSize: 'var(--fs-body-lg)', fontWeight: 600, letterSpacing: '0.32em',
               textTransform: 'uppercase', color: 'var(--color-text-100)', textDecoration: 'none',
             }}
           >
@@ -86,7 +86,7 @@ export function AppShell() {
           </Link>
           {/* Wraps on narrow viewports as an interim measure; the real
               responsive pass is phase-1 design work (docs/design/08). */}
-          <nav style={{ display: 'flex', gap: 20, flexWrap: 'wrap', rowGap: 6 }}>
+          <nav style={{ display: 'flex', gap: 'var(--space-5)', flexWrap: 'wrap', rowGap: 'var(--space-2)' }}>
             {PRIMARY.map((item) => {
               // Sectioned entries light up for their whole sub-navigation;
               // unsectioned ones by their own prefix (a `section === null`
@@ -100,8 +100,8 @@ export function AppShell() {
                   key={item.label}
                   to={item.to}
                   style={{
-                    fontSize: 14, letterSpacing: '0.12em', textTransform: 'uppercase',
-                    textDecoration: 'none', paddingBottom: 3,
+                    fontSize: 'var(--fs-body)', letterSpacing: '0.12em', textTransform: 'uppercase',
+                    textDecoration: 'none', paddingBottom: 'var(--space-1)',
                     color: active ? 'var(--color-text-100)' : '#9b968e',
                     borderBottom: `1px solid ${active ? 'var(--color-accent)' : 'transparent'}`,
                   }}
@@ -111,8 +111,8 @@ export function AppShell() {
               );
             })}
           </nav>
-          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 18 }}>
-            <span className="m" style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 11, color: 'var(--color-text-500)' }}>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 'var(--space-4)' }}>
+            <span className="m" style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#454340' }} />
               DEV
             </span>
@@ -122,9 +122,9 @@ export function AppShell() {
             <a
               href="/auth/login"
               style={{
-                fontSize: 13, letterSpacing: '0.14em', textTransform: 'uppercase',
+                fontSize: 'var(--fs-value)', letterSpacing: '0.14em', textTransform: 'uppercase',
                 color: 'var(--color-text-200)', textDecoration: 'none',
-                border: '1px solid #33322e', padding: '7px 12px',
+                border: '1px solid #33322e', padding: 'var(--space-2) var(--space-3)',
               }}
             >
               Connect ID
@@ -135,21 +135,21 @@ export function AppShell() {
 
       {section && <SubNav section={section} />}
 
-      <main style={{ flex: 1, width: '100%', maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 34px', boxSizing: 'border-box' }}>
+      <main style={{ flex: 1, width: '100%', maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '0 var(--space-6)', boxSizing: 'border-box' }}>
         <Outlet />
       </main>
 
-      <footer style={{ borderTop: '1px solid var(--color-rule-900)', marginTop: 48 }}>
+      <footer style={{ borderTop: '1px solid var(--color-rule-900)', marginTop: 'var(--space-7)' }}>
         <div
           className="m"
           style={{
-            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: '14px 34px', display: 'flex',
-            justifyContent: 'space-between', fontSize: 10, letterSpacing: '0.14em',
+            maxWidth: 'var(--layout-max)', margin: '0 auto', padding: 'var(--space-4) var(--space-6)', display: 'flex',
+            justifyContent: 'space-between', fontSize: 'var(--fs-label)', letterSpacing: '0.14em',
             textTransform: 'uppercase', color: 'var(--color-text-600)',
           }}
         >
           <span>slomix · kept since january 2025</span>
-          <span style={{ display: 'flex', gap: 18 }}>
+          <span style={{ display: 'flex', gap: 'var(--space-4)' }}>
             <Link to="/system" style={{ color: 'inherit', textDecoration: 'none' }}>system</Link>
             <Link to="/smart-stats-diag" style={{ color: 'inherit', textDecoration: 'none' }}>diag</Link>
             <span>et:legacy stopwatch</span>

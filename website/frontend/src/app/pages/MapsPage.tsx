@@ -44,12 +44,12 @@ function Summary({ maps }: { maps: MapStatsRow[] }) {
     { k: 'nade spam', m: by((a, b) => b.grenade_kills - a.grenade_kills), v: (m: MapStatsRow) => `${m.grenade_kills.toLocaleString('en-US')} nades` },
   ];
   return (
-    <div data-parity="maps.summary" className="landing-quad" style={{ gap: 10, marginTop: 18 }}>
+    <div data-parity="maps.summary" className="landing-quad" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
       {cards.map((c) => (
         <div key={c.k} style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 12 }}>
-          <Lbl style={{ fontSize: 9 }}>{c.k}</Lbl>
-          <div style={{ fontSize: 16, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 6 }}>{mapLabel(c.m.name)}</div>
-          <div className="m" style={{ fontSize: 11, color: 'var(--color-text-400)', marginTop: 2 }}>{c.v(c.m)}</div>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{c.k}</Lbl>
+          <div style={{ fontSize: 'var(--fs-body-lg)', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 'var(--space-2)' }}>{mapLabel(c.m.name)}</div>
+          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{c.v(c.m)}</div>
         </div>
       ))}
     </div>
@@ -64,26 +64,26 @@ function ObjectiveRecords() {
   // not an empty record book (same family as the #811 waves).
   const failed = segments.isError || segments.data?.status === 'error';
   return (
-    <div data-parity="maps.objective-records" style={{ marginTop: 34 }}>
+    <div data-parity="maps.objective-records" style={{ marginTop: 'var(--space-6)' }}>
       <SectionHead label="fastest objective completions · full map records" />
-      {segments.isPending && <div style={{ marginTop: 10 }}><Pending label="records" /></div>}
-      {failed && <div style={{ marginTop: 10 }}><Unavailable what="objective records" /></div>}
+      {segments.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="records" /></div>}
+      {failed && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="objective records" /></div>}
       {segments.isSuccess && !failed && rows.length === 0 && (
-        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 10 }}>no objective records yet</div>
+        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no objective records yet</div>
       )}
       {rows.length > 0 && (
-        <div className="landing-split" style={{ gap: 24, marginTop: 8 }}>
+        <div className="landing-split" style={{ gap: 'var(--space-5)', marginTop: 'var(--space-2)' }}>
           {[rows.slice(0, Math.ceil(rows.length / 2)), rows.slice(Math.ceil(rows.length / 2))].map((half, i) => (
             <div key={i}>
               {half.map((r) => (
-                <div key={r.map_name} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 12, alignItems: 'baseline', padding: '8px 0' }}>
-                  <span style={{ fontSize: 14, letterSpacing: '0.03em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapLabel(r.map_name)}</span>
+                <div key={r.map_name} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
+                  <span style={{ fontSize: 'var(--fs-body)', letterSpacing: '0.03em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapLabel(r.map_name)}</span>
                   {/* winner_side is the SERVER's word — the numeric
                     * winner_team means different things per endpoint family,
                     * so it is never interpreted here. */}
-                  <span className="m" style={{ fontSize: 11, color: r.winner_side === 'Allies' ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>{r.winner_side.toLowerCase()}</span>
-                  <span className="m" style={{ fontSize: 13 }}>{r.fastest_time}</span>
-                  <span className="m" style={{ ...lblStyle, fontSize: 9 }}>{r.played}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-micro)', color: r.winner_side === 'Allies' ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>{r.winner_side.toLowerCase()}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{r.fastest_time}</span>
+                  <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{r.played}</span>
                 </div>
               ))}
             </div>
@@ -101,21 +101,21 @@ export function MapsPage() {
   const cmp = SORTS.find((s) => s.key === sort)?.cmp ?? SORTS[0].cmp;
   const sorted = data ? [...data].sort(cmp) : [];
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 980 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>maps · every map we keep score on</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         The grounds we fight over.
       </h1>
-      {stats.isPending && <div style={{ marginTop: 18 }}><Pending label="maps" /></div>}
-      {stats.isError && <div style={{ marginTop: 18 }}><Unavailable what="maps" /></div>}
+      {stats.isPending && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="maps" /></div>}
+      {stats.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="maps" /></div>}
       {data && <Summary maps={data} />}
       <ObjectiveRecords />
       {data && (
-        <div data-parity="maps.grid" style={{ marginTop: 34 }}>
+        <div data-parity="maps.grid" style={{ marginTop: 'var(--space-6)' }}>
           <SectionHead
             label={`${sorted.length} maps`}
             aside={
-              <span style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <span style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 {SORTS.map((s) => (
                   <Chip key={s.key} active={sort === s.key} label={s.label} onClick={() => { setSort(s.key); }} />
                 ))}
@@ -123,9 +123,9 @@ export function MapsPage() {
             }
           />
           {sorted.length === 0 && (
-            <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 10 }}>no map statistics yet</div>
+            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no map statistics yet</div>
           )}
-          <div className="home-cols3" style={{ gap: 14, marginTop: 12 }}>
+          <div className="home-cols3" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
             {sorted.map((m) => (
               <div key={m.name} style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)' }}>
                 <img
@@ -135,11 +135,11 @@ export function MapsPage() {
                   loading="lazy"
                 />
                 <div style={{ padding: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-                    <span style={{ fontSize: 16, letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapLabel(m.name)}</span>
-                    <span className="m" style={{ ...lblStyle, fontSize: 9, flex: 'none' }}>{m.matches_played} matches</span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-2)' }}>
+                    <span style={{ fontSize: 'var(--fs-body-lg)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{mapLabel(m.name)}</span>
+                    <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', flex: 'none' }}>{m.matches_played} matches</span>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6, marginTop: 10 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
                     {[
                       ['avg time', fmtSeconds(m.avg_duration)],
                       ['last played', m.last_played ?? '—'],
@@ -147,8 +147,8 @@ export function MapsPage() {
                       ['avg dpm', m.avg_dpm.toFixed(1)],
                     ].map(([k, v]) => (
                       <div key={k}>
-                        <Lbl style={{ fontSize: 9 }}>{k}</Lbl>
-                        <div className="m" style={{ fontSize: 12, marginTop: 2 }}>{v}</div>
+                        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+                        <div className="m" style={{ fontSize: 'var(--fs-small)', marginTop: 'var(--space-1)' }}>{v}</div>
                       </div>
                     ))}
                   </div>
@@ -157,19 +157,19 @@ export function MapsPage() {
                     * rates to 50), so nullability can't detect it; the win
                     * COUNTS can. */}
                   {m.allies_wins + m.axis_wins > 0 && m.allies_win_rate != null && m.axis_win_rate != null ? (
-                    <div style={{ marginTop: 10 }}>
+                    <div style={{ marginTop: 'var(--space-2)' }}>
                       <div style={{ display: 'flex', height: 5, background: 'var(--color-rule-900)' }}>
                         <span style={{ width: `${m.allies_win_rate}%`, background: 'var(--color-accent)', display: 'block' }} />
                         <span style={{ width: `${m.axis_win_rate}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
                       </div>
-                      <div className="m" style={{ ...lblStyle, fontSize: 9, marginTop: 4 }}>
+                      <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>
                         allies {m.allies_win_rate.toFixed(1)}% · axis {m.axis_win_rate.toFixed(1)}%
                       </div>
                     </div>
                   ) : (
-                    <Lbl style={{ fontSize: 9, marginTop: 10 }}>win rate — no decided maps yet</Lbl>
+                    <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>win rate — no decided maps yet</Lbl>
                   )}
-                  <div className="m" style={{ display: 'flex', gap: 10, fontSize: 10, color: 'var(--color-text-500)', marginTop: 8, flexWrap: 'wrap' }}>
+                  <div className="m" style={{ display: 'flex', gap: 'var(--space-2)', fontSize: 'var(--fs-label)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)', flexWrap: 'wrap' }}>
                     <span>{m.total_kills.toLocaleString('en-US')} kills</span>
                     <span>{m.total_rounds} rd</span>
                     <span>{m.grenade_kills} nades</span>

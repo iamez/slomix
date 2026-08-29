@@ -51,25 +51,25 @@ function SummaryPanel({ viz }: { viz: RoundViz }) {
   ].filter((h) => h != null);
   return (
     <div data-parity="retro-viz.summary" style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
-      <div className="home-cols3" style={{ gap: 10 }}>
+      <div className="home-cols3" style={{ gap: 'var(--space-2)' }}>
         {cells.map(([k, v]) => (
           <div key={k}>
-            <Lbl style={{ fontSize: 9 }}>{k}</Lbl>
-            <div className="m" style={{ fontSize: 14, marginTop: 3 }}>{v}</div>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+            <div className="m" style={{ fontSize: 'var(--fs-body)', marginTop: 'var(--space-1)' }}>{v}</div>
           </div>
         ))}
         <div>
-          <Lbl style={{ fontSize: 9 }}>winner</Lbl>
-          <div className="m" style={{ fontSize: 14, marginTop: 3, color: winner.color }}>{winner.text}</div>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>winner</Lbl>
+          <div className="m" style={{ fontSize: 'var(--fs-body)', marginTop: 'var(--space-1)', color: winner.color }}>{winner.text}</div>
         </div>
       </div>
       {highlights.length > 0 && (
-        <div data-parity="retro-viz.highlights" className="home-cols3" style={{ gap: 10, marginTop: 12, borderTop: '1px solid var(--color-rule-900)', paddingTop: 10 }}>
+        <div data-parity="retro-viz.highlights" className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-3)', borderTop: '1px solid var(--color-rule-900)', paddingTop: 'var(--space-2)' }}>
           {highlights.map((h) => (
             <div key={h.k}>
-              <Lbl style={{ fontSize: 9 }}>{h.k}</Lbl>
-              <div className="m" style={{ fontSize: 13, marginTop: 3 }}>{h.name}</div>
-              <div className="m" style={{ fontSize: 10, color: 'var(--color-text-400)' }}>{h.v}</div>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{h.k}</Lbl>
+              <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-1)' }}>{h.name}</div>
+              <div className="m" style={{ fontSize: 'var(--fs-label)', color: 'var(--color-text-400)' }}>{h.v}</div>
             </div>
           ))}
         </div>
@@ -121,20 +121,20 @@ function DamageTable({ players }: { players: VizPlayer[] }) {
   });
   return (
     <div data-parity="retro-viz.damage" style={{ overflowX: 'auto' }}>
-      <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 10, padding: '6px 0' }}>
-        <Lbl style={{ fontSize: 9 }}>player</Lbl>
-        <Lbl style={{ fontSize: 9, textAlign: 'right' }}>dmg given</Lbl>
-        <Lbl style={{ fontSize: 9, textAlign: 'right' }}>dmg recv</Lbl>
-        <Lbl style={{ fontSize: 9, textAlign: 'right' }}>tk dmg</Lbl>
-        <Lbl style={{ fontSize: 9, textAlign: 'right' }}>tk recv</Lbl>
+      <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>dmg given</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>dmg recv</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>tk dmg</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>tk recv</Lbl>
       </div>
       {rows.map((p) => (
-        <div key={p.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 10, alignItems: 'baseline', padding: '5px 0' }}>
-          <span className="m" style={{ fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
-          <span className="m" style={{ fontSize: 11, textAlign: 'right', padding: '1px 6px', ...heat(p.damage_given, colMax.given, '96,165,250') }}>{p.damage_given.toLocaleString('en-US')}</span>
-          <span className="m" style={{ fontSize: 11, textAlign: 'right', padding: '1px 6px', ...heat(p.damage_received, colMax.received, '251,113,133') }}>{p.damage_received.toLocaleString('en-US')}</span>
-          <span className="m" style={{ fontSize: 11, textAlign: 'right', padding: '1px 6px', ...heat(p.team_damage_given, colMax.tk, '251,191,36') }}>{p.team_damage_given}</span>
-          <span className="m" style={{ fontSize: 11, textAlign: 'right', padding: '1px 6px', ...heat(p.team_damage_received, colMax.tkr, '167,139,250') }}>{p.team_damage_received}</span>
+        <div key={p.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0' }}>
+          <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.damage_given, colMax.given, '96,165,250') }}>{p.damage_given.toLocaleString('en-US')}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.damage_received, colMax.received, '251,113,133') }}>{p.damage_received.toLocaleString('en-US')}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.team_damage_given, colMax.tk, '251,191,36') }}>{p.team_damage_given}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.team_damage_received, colMax.tkr, '167,139,250') }}>{p.team_damage_received}</span>
         </div>
       ))}
     </div>
@@ -164,19 +164,19 @@ export function RetroViz() {
   const fraggers = useMemo(() => [...players].sort((a, b) => a.kills - b.kills), [players]);
   const chartHeight = Math.max(200, players.length * 32);
   return (
-    <div style={{ paddingTop: 44, paddingBottom: 40, maxWidth: 980 }}>
+    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>retro viz · one round, six instruments</Lbl>
-      <h1 style={{ fontSize: 34, letterSpacing: '0.03em', textTransform: 'uppercase', margin: '12px 0 0', fontWeight: 500 }}>
+      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: '0.03em', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
         The round, replotted.
       </h1>
-      <div data-parity="retro-viz.picker" style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginTop: 18, flexWrap: 'wrap' }}>
-        <Lbl style={{ fontSize: 9 }}>round</Lbl>
+      <div data-parity="retro-viz.picker" style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-4)', marginTop: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>round</Lbl>
         <select
           value={roundId ?? ''}
           onChange={(e) => { setPicked(Number(e.target.value)); }}
           aria-label="Round"
           className="m"
-          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 13, padding: '6px 10px', maxWidth: 420 }}
+          style={{ background: 'var(--color-ink-800)', color: 'var(--color-text-100)', border: '1px solid var(--color-rule-700)', fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-2)', maxWidth: 420 }}
         >
           {selectable.map((r) => (
             <option key={r.id} value={r.id}>
@@ -187,19 +187,19 @@ export function RetroViz() {
         {rounds.isPending && <Pending label="rounds" />}
         {rounds.isError && <Unavailable what="rounds" />}
         {rounds.isSuccess && selectable.length === 0 && (
-          <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no rounds available</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no rounds available</span>
         )}
       </div>
 
-      {viz.isPending && roundId != null && <div style={{ marginTop: 18 }}><Pending label="round data" /></div>}
-      {viz.isError && <div style={{ marginTop: 18 }}><Unavailable what="round data" /></div>}
+      {viz.isPending && roundId != null && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="round data" /></div>}
+      {viz.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="round data" /></div>}
       {v && players.length === 0 && (
-        <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 18 }}>no player data for this round</div>
+        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-4)' }}>no player data for this round</div>
       )}
       {v && players.length > 0 && (
-        <div style={{ marginTop: 18, display: 'grid', gap: 18 }}>
+        <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-4)' }}>
           <SummaryPanel viz={v} />
-          <div className="landing-split" style={{ gap: 18 }}>
+          <div className="landing-split" style={{ gap: 'var(--space-4)' }}>
             <div data-parity="retro-viz.radar" style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
               <SectionHead label="combat overview · top 5 by dpm, normalized" />
               <ChartCanvas
@@ -225,10 +225,10 @@ export function RetroViz() {
               />
             </div>
           </div>
-          <div className="landing-split" style={{ gap: 18 }}>
+          <div className="landing-split" style={{ gap: 'var(--space-4)' }}>
             <div style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
               <SectionHead label="damage breakdown" />
-              <div style={{ marginTop: 8 }}><DamageTable players={players} /></div>
+              <div style={{ marginTop: 'var(--space-2)' }}><DamageTable players={players} /></div>
             </div>
             <div data-parity="retro-viz.support" style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
               <SectionHead label="support · revives, denied playtime, dead time" />

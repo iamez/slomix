@@ -54,8 +54,6 @@
 /api/proximity/vehicle-progress
 /api/replay/round
 /api/rivalries/h2h
-/api/rivalries/leaderboard
-/api/rivalries/player
 /api/server-activity/history
 /api/skill/ssr
 /api/stats/live-session

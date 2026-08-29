@@ -17,8 +17,10 @@ import type {
   MapStatsRow,
   MatchRow,
   PlayerProfile,
+  PlayerRivalries,
   QuickLeaders,
   RecentRound,
+  RivalryLeaderboard,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -455,5 +457,26 @@ export function useSessionRounds(sessionId: number | null) {
       apiGet('/api/stats/session/{gaming_session_id}/rounds', {
         pathParams: { gaming_session_id: sessionId! },
       }) as Promise<SessionRounds>,
+  });
+}
+
+/** The community's rivalry pairs, ordered by how often the two have met. */
+export function useRivalryLeaderboard(limit: number) {
+  return useQuery({
+    queryKey: ['rivalry-leaderboard', limit],
+    queryFn: () =>
+      apiGet('/api/rivalries/leaderboard', { query: { limit } }) as Promise<RivalryLeaderboard>,
+  });
+}
+
+/** One player's opponents. Either GUID length works since #834. */
+export function usePlayerRivalries(guid: string | null) {
+  return useQuery({
+    queryKey: ['player-rivalries', guid],
+    enabled: !!guid,
+    queryFn: () =>
+      apiGet('/api/rivalries/player/{guid}', {
+        pathParams: { guid: guid! },
+      }) as Promise<PlayerRivalries>,
   });
 }

@@ -53,14 +53,14 @@ function LivePanel() {
   // field says which.
   const voiceData = voice.isError || voice.data?.status === 'unavailable' ? undefined : voice.data;
   return (
-    <div data-parity="landing.live" style={{ border: '1px solid var(--color-rule-700)', padding: '14px 16px' }}>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+    <div data-parity="landing.live" style={{ border: '1px solid var(--color-rule-700)', padding: 'var(--space-4) var(--space-4)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
         {live.isPending && <Pending label="live" />}
         {live.isError && <Unavailable what="game server" />}
         {liveData && (
           <>
             <StatusDot state={liveData.is_live ? 'ok' : 'idle'} />
-            <span className="m" style={{ fontSize: 13, color: 'var(--color-text-100)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-100)' }}>
               {liveData.is_live ? 'LIVE' : 'SERVER IDLE'}
             </span>
             {/* The reducer keeps _current_map indefinitely after events
@@ -71,7 +71,7 @@ function LivePanel() {
               * beside it would be the same rule in two places with two
               * values (brother's review — the 300 here left a 180–300 s
               * window showing SERVER IDLE next to a bare map). */}
-            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>
               {liveData.current_map == null
                 ? 'unknown map'
                 : liveData.map_confirmed === false
@@ -88,7 +88,7 @@ function LivePanel() {
             {/* After a delivery gap the reducer keeps the old lineup for up
               * to 600 s and exposes its age — an aged count says so instead
               * of posing as current (Codex on #806, wave 4). */}
-            <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)', marginLeft: 'auto' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', marginLeft: 'auto' }}>
               {liveData.roster.player_count} players
               {liveData.roster.player_count > 0
                 && liveData.roster.roster_age_seconds != null
@@ -101,7 +101,7 @@ function LivePanel() {
       </div>
       {/* The voice row renders from its own query — a dead game server must
         * not silence a perfectly healthy voice report (Codex on #806). */}
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-rule-900)' }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', flexWrap: 'wrap', marginTop: 'var(--space-2)', paddingTop: 'var(--space-2)', borderTop: '1px solid var(--color-rule-900)' }}>
         {/* ⛔ A STALE REPORT IS NOT A GREEN DOT. The count alone drove this,
           * so an undateable report — `status: "stale"` with `age_seconds:
           * null` — rendered a green dot beside a bare "3 in voice" (Codex on
@@ -124,7 +124,7 @@ function LivePanel() {
               * honest one. When the endpoint starts exposing updated_at
               * (wave 5 — today it does not), a stale snapshot says its age
               * instead of posing as live. */}
-            <span className="m" style={{ fontSize: 13, color: 'var(--color-text-400)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)' }}>
               {voiceData.total_count > 0 ? `${voiceData.total_count} in voice` : 'No one in voice'}
               {/* The STALENESS VERDICT is the backend's (#808): status
                 * 'stale' at its own 180 s threshold, age measured on the
@@ -155,9 +155,9 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
   // (Codex on #806, wave 7) — only sessionRecency() may earn the label.
   if (pending) {
     return (
-      <div data-parity="landing.last-night" style={{ marginTop: 22 }}>
+      <div data-parity="landing.last-night" style={{ marginTop: 'var(--space-5)' }}>
         <Lbl>latest session</Lbl>
-        <div style={{ marginTop: 8 }}><Pending label="last session" /></div>
+        <div style={{ marginTop: 'var(--space-2)' }}><Pending label="last session" /></div>
       </div>
     );
   }
@@ -165,11 +165,11 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
     // A successful empty answer is not a failure (Codex on #806, wave 3):
     // a fresh database has no last session, but the endpoint is fine.
     return (
-      <div data-parity="landing.last-night" style={{ marginTop: 22 }}>
+      <div data-parity="landing.last-night" style={{ marginTop: 'var(--space-5)' }}>
         <Lbl>latest session</Lbl>
-        <div style={{ marginTop: 8 }}>
+        <div style={{ marginTop: 'var(--space-2)' }}>
           {empty
-            ? <span className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>no sessions recorded yet</span>
+            ? <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no sessions recorded yet</span>
             : <Unavailable what="last session" />}
         </div>
       </div>
@@ -179,35 +179,35 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
     session.team_1_name != null && session.team_2_name != null
     && session.team_1_score != null && session.team_2_score != null;
   return (
-    <div data-parity="landing.last-night" style={{ marginTop: 22 }}>
+    <div data-parity="landing.last-night" style={{ marginTop: 'var(--space-5)' }}>
       <Lbl>{sessionRecency(session).label}</Lbl>
-      <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 8 }}>
+      <div style={{ fontSize: 'var(--fs-figure)', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 'var(--space-2)' }}>
         {session.formatted_date.replace(/,.*$/, '')} {monthDay(session.date).split(' ').slice(1).join(' ')}
       </div>
       {attributed ? (
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginTop: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
           <div>
-            <Lbl style={{ fontSize: 9 }}>{session.team_1_name?.toLowerCase()}</Lbl>
-            <div className="m" style={{ fontSize: 44, lineHeight: 0.86, color: 'var(--color-accent)' }}>{session.team_1_score}</div>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{session.team_1_name?.toLowerCase()}</Lbl>
+            <div className="m" style={{ fontSize: 'var(--fs-display-lg)', lineHeight: 0.86, color: 'var(--color-accent)' }}>{session.team_1_score}</div>
           </div>
-          <div className="m" style={{ fontSize: 20, color: '#3f3d38', paddingBottom: 6 }}>/</div>
+          <div className="m" style={{ fontSize: 'var(--fs-lead)', color: '#3f3d38', paddingBottom: 'var(--space-2)' }}>/</div>
           <div>
-            <Lbl style={{ fontSize: 9 }}>{session.team_2_name?.toLowerCase()}</Lbl>
-            <div className="m" style={{ fontSize: 44, lineHeight: 0.86, color: 'var(--color-accent-warm)' }}>{session.team_2_score}</div>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{session.team_2_name?.toLowerCase()}</Lbl>
+            <div className="m" style={{ fontSize: 'var(--fs-display-lg)', lineHeight: 0.86, color: 'var(--color-accent-warm)' }}>{session.team_2_score}</div>
           </div>
           {/* 2 points per map won, 1–1 on a draw — a BOX score, not a count
             * of maps (stopwatch_scoring_service; Codex on #806). */}
-          <Lbl style={{ fontSize: 9, paddingBottom: 6 }}>box score · sides swap every map</Lbl>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', paddingBottom: 'var(--space-2)' }}>box score · sides swap every map</Lbl>
         </div>
       ) : (
-        <Lbl style={{ fontSize: 9, marginTop: 10 }}>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
           score not attributed to teams for this session
         </Lbl>
       )}
-      <div className="m" style={{ fontSize: 12, color: 'var(--color-text-400)', marginTop: 10 }}>
+      <div className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', marginTop: 'var(--space-2)' }}>
         {session.rounds} rounds · {session.maps} maps · {session.players} players
       </div>
-      <ActLink to={`/session-detail/${session.session_id}`} style={{ display: 'inline-block', marginTop: 14 }}>
+      <ActLink to={`/session-detail/${session.session_id}`} style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>
         Open the evening →
       </ActLink>
     </div>
@@ -221,20 +221,20 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
  * says "no data", never a silent blank. */
 function LeaderBoard({ title, rows, hadErrors }: { title: string; rows: QuickLeaderRow[]; hadErrors: boolean }) {
   return (
-    <div style={{ marginBottom: 14 }}>
-      <Lbl style={{ fontSize: 9 }}>{title}</Lbl>
+    <div style={{ marginBottom: 'var(--space-4)' }}>
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
       {rows.length === 0 && (hadErrors
-        ? <div style={{ marginTop: 6 }}><Unavailable what="board" /></div>
-        : <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)', marginTop: 6 }}>no data in this window</div>
+        ? <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="board" /></div>
+        : <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no data in this window</div>
       )}
       {rows.map((row) => (
         /* minmax(0,1fr): a 1fr track keeps min-content width, so one long
          * stored name forced the row past a phone viewport (Codex wave 9);
          * the name itself ellipsizes rather than pushing the value out. */
-        <div key={row.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) auto', gap: 10, alignItems: 'baseline', padding: '7px 0' }}>
-          <span className="m" style={{ ...lblStyle, fontSize: 10 }}>{String(row.rank).padStart(2, '0')}</span>
-          <span className="m" style={{ fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-          <span className="m" style={{ fontSize: 12, color: 'var(--color-text-300)' }}>
+        <div key={row.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr) auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
+          <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>
             {figure(row.value)}
           </span>
         </div>
@@ -263,18 +263,18 @@ export function Landing() {
     && overviewData.sessions === 0 && overviewData.players_all_time === 0;
 
   return (
-    <div style={{ paddingBottom: 40 }}>
+    <div style={{ paddingBottom: 'var(--space-7)' }}>
       <div className="landing-hero">
         <div data-parity="landing.hero">
           <Lbl>enemy territory: legacy · stopwatch · since january 2025</Lbl>
-          <h1 style={{ fontSize: 52, fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.04, margin: '14px 0 0', maxWidth: '13em' }}>
+          <h1 style={{ fontSize: 'var(--fs-display-lg)', fontWeight: 600, letterSpacing: '0.02em', textTransform: 'uppercase', lineHeight: 1.04, margin: 'var(--space-4) 0 0', maxWidth: '13em' }}>
             Every round we play, written down.
           </h1>
-          <p style={{ color: 'var(--color-text-300)', maxWidth: '36em', marginTop: 18 }}>
+          <p style={{ color: 'var(--color-text-300)', maxWidth: '36em', marginTop: 'var(--space-4)' }}>
             Scoreboard and telemetry from our own server, kept since january 2025.
           </p>
-          <div style={{ display: 'flex', gap: 18, marginTop: 26, alignItems: 'center' }}>
-            <ActLink to="/auth/login" style={{ border: '1px solid #33322e', padding: '10px 14px', borderBottom: '1px solid #33322e' }}>
+          <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-6)', alignItems: 'center' }}>
+            <ActLink to="/auth/login" style={{ border: '1px solid #33322e', padding: 'var(--space-2) var(--space-4)', borderBottom: '1px solid #33322e' }}>
               Connect your ID
             </ActLink>
             {lastNight && (
@@ -283,13 +283,13 @@ export function Landing() {
               </ActLink>
             )}
           </div>
-          <Lbl style={{ fontSize: 9, marginTop: 18 }}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)' }}>
             discord login · your stats are already here, waiting to be claimed
           </Lbl>
         </div>
 
         <div>
-          <div style={{ marginBottom: 8 }}>
+          <div style={{ marginBottom: 'var(--space-2)' }}>
             <SectionHead label="live now" parity="landing.live-head" />
           </div>
           <LivePanel />
@@ -297,9 +297,9 @@ export function Landing() {
         </div>
       </div>
 
-      <div className="landing-quad" data-parity="landing.figures" style={{ marginTop: 48, borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
-        {overview.isPending && <div style={{ padding: '18px 0' }}><Pending label="figures" /></div>}
-        {(overview.isError || overviewSuspect) && <div style={{ padding: '18px 0' }}><Unavailable what="figures" /></div>}
+      <div className="landing-quad" data-parity="landing.figures" style={{ marginTop: 'var(--space-7)', borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)' }}>
+        {overview.isPending && <div style={{ padding: 'var(--space-4) 0' }}><Pending label="figures" /></div>}
+        {(overview.isError || overviewSuspect) && <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="figures" /></div>}
         {overviewData && !overviewSuspect && (
           [
             { v: overviewData.rounds, k: 'rounds kept' },
@@ -317,9 +317,9 @@ export function Landing() {
         )}
       </div>
 
-      <div style={{ marginTop: 40 }}>
+      <div style={{ marginTop: 'var(--space-7)' }}>
         <SectionHead label="where to go" parity="landing.where-to-go" />
-        <div className="landing-quad" style={{ gap: 28, marginTop: 14 }}>
+        <div className="landing-quad" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
           {[
             { to: '/profile', title: 'Your profile', body: 'Your rounds, against your own form.', bar: 'var(--color-accent)' },
             { to: '/sessions2', title: 'The evenings', body: 'Maps, teams, how the night went.', bar: 'var(--color-accent-warm)' },
@@ -328,25 +328,25 @@ export function Landing() {
           ].map((card) => (
             <Link key={card.title} to={card.to} style={{ textDecoration: 'none', color: 'var(--color-text-100)' }}>
               <div style={{ height: 2, background: card.bar }} />
-              <div style={{ fontSize: 17, letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 12 }}>{card.title}</div>
-              <div style={{ fontSize: 14, color: 'var(--color-text-400)', marginTop: 4 }}>{card.body}</div>
+              <div style={{ fontSize: 'var(--fs-row-lg)', letterSpacing: '0.04em', textTransform: 'uppercase', marginTop: 'var(--space-3)' }}>{card.title}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{card.body}</div>
             </Link>
           ))}
         </div>
       </div>
 
-      <div className="landing-split" style={{ marginTop: 48 }}>
+      <div className="landing-split" style={{ marginTop: 'var(--space-7)' }}>
         <div>
           <SectionHead
             label="recent evenings"
             parity="landing.recent-evenings"
-            aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>all sessions →</Link>}
+            aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>all sessions →</Link>}
           />
-          <div style={{ marginTop: 10 }}>
+          <div style={{ marginTop: 'var(--space-2)' }}>
             {sessions.isPending && <Pending label="sessions" />}
             {sessions.isError && <Unavailable what="sessions" />}
             {sessionsData?.length === 0 && (
-              <div className="m" style={{ fontSize: 11, color: 'var(--color-text-500)' }}>
+              <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
                 no sessions recorded yet
               </div>
             )}
@@ -354,11 +354,11 @@ export function Landing() {
               <Link
                 key={row.session_id}
                 to={`/session-detail/${row.session_id}`}
-                style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 16, alignItems: 'baseline', padding: '10px 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
+                style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 'var(--space-4)', alignItems: 'baseline', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
               >
-                <span style={{ fontSize: 15, letterSpacing: '0.04em', textTransform: 'uppercase' }}>{monthDay(row.date)}</span>
-                <span className="m" style={{ fontSize: 12, color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
-                <span className="m" style={{ fontSize: 14, minWidth: 58, textAlign: 'right' }}>
+                <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{monthDay(row.date)}</span>
+                <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{row.rounds} rd</span>
+                <span className="m" style={{ fontSize: 'var(--fs-body)', minWidth: 58, textAlign: 'right' }}>
                   {row.team_1_score != null && row.team_2_score != null
                     ? `${row.team_1_score} / ${row.team_2_score}`
                     : '—'}
@@ -372,12 +372,12 @@ export function Landing() {
           <SectionHead
             label="leading this week"
             parity="landing.leaders"
-            aside={<Link to="/leaderboards" style={{ ...lblStyle, fontSize: 9, textDecoration: 'none' }}>leaderboards →</Link>}
+            aside={<Link to="/leaderboards" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>leaderboards →</Link>}
           />
-          {leaders.isPending && <div style={{ marginTop: 10 }}><Pending label="leaders" /></div>}
-          {leaders.isError && <div style={{ marginTop: 10 }}><Unavailable what="leaders" /></div>}
+          {leaders.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="leaders" /></div>}
+          {leaders.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="leaders" /></div>}
           {leadersData && (
-            <div style={{ marginTop: 10 }}>
+            <div style={{ marginTop: 'var(--space-2)' }}>
               <LeaderBoard
                 title={`top xp · ${leadersData.window_days} days`}
                 rows={leadersData.xp.slice(0, 3)}
@@ -393,16 +393,16 @@ export function Landing() {
         </div>
       </div>
 
-      <div data-parity="landing.cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 24, marginTop: 56, paddingTop: 22, borderTop: '1px solid var(--color-rule-900)' }}>
+      <div data-parity="landing.cta" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-5)', marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
         <div>
-          <div style={{ fontSize: 22, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          <div style={{ fontSize: 'var(--fs-figure)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
             Played with us? Your stats are already in here.
           </div>
-          <div className="m" style={{ fontSize: 12, color: 'var(--color-text-500)', marginTop: 6 }}>
+          <div className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
             connect your discord to claim your name, set availability, and upload clips
           </div>
         </div>
-        <a href="/auth/login" style={{ ...actStyle, border: '1px solid #33322e', padding: '10px 14px', flex: 'none', borderBottom: '1px solid #33322e' }}>
+        <a href="/auth/login" style={{ ...actStyle, border: '1px solid #33322e', padding: 'var(--space-2) var(--space-4)', flex: 'none', borderBottom: '1px solid #33322e' }}>
           Connect your ID
         </a>
       </div>
