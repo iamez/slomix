@@ -5332,6 +5332,25 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * ActivityCalendar
+         * @description Rounds played per day over the lookback window.
+         *
+         *     Both branches of the handler return the same two keys — the failure path
+         *     answers `{"days": lookback_days, "activity": {}}` after logging. That means
+         *     an empty calendar and a failed query look identical to a client, which is a
+         *     real gap; typing it does not close that, and inventing a flag here would be
+         *     a schema making a promise the handler does not keep. Recorded rather than
+         *     papered over.
+         */
+        ActivityCalendar: {
+            /** Activity */
+            activity: {
+                [key: string]: number;
+            };
+            /** Days */
+            days: number;
+        };
+        /**
          * AwardLeaderRow
          * @description One row of the awards leaderboard, as this endpoint returns it.
          *
@@ -5629,6 +5648,90 @@ export interface components {
             level_ms?: number | null;
             /** Type */
             type: string;
+        };
+        /**
+         * MapObjectiveRecord
+         * @description The fastest completion recorded for one map.
+         */
+        MapObjectiveRecord: {
+            /** Fastest Seconds */
+            fastest_seconds: number;
+            /** Fastest Time */
+            fastest_time: string;
+            /** Gaming Session Id */
+            gaming_session_id: number | null;
+            /** Map Name */
+            map_name: string | null;
+            /** Played */
+            played: string;
+            /** Winner Side */
+            winner_side: string;
+            /** Winner Team */
+            winner_team: number | null;
+        };
+        /**
+         * MapObjectiveRecords
+         * @description ⛔ `status` CARRIES A FAILURE THAT STILL ANSWERS 200.
+         *
+         *     The handler catches its own exception and returns
+         *     `{"status": "error", "records": []}`. A model that dropped `status` would
+         *     make that indistinguishable from a database with no records — the reader
+         *     would see an empty list either way. It is kept, and typed as a plain string
+         *     rather than an enum so a new state cannot be silently filtered out.
+         */
+        MapObjectiveRecords: {
+            /** Records */
+            records: components["schemas"]["MapObjectiveRecord"][];
+            /** Status */
+            status: string;
+        };
+        /**
+         * MapStats
+         * @description One map's aggregate line.
+         *
+         *     ⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes
+         *     through a `x or 0` / `int(x) if x else 0` guard, so they are genuinely
+         *     non-null — the handler already decided that. `last_played` is the one that
+         *     does NOT: `row[8]` goes through untouched and `rounds.round_date` is a
+         *     nullable column, so it is typed nullable even though no live row shows it.
+         */
+        MapStats: {
+            /** Allies Win Rate */
+            allies_win_rate: number;
+            /** Allies Wins */
+            allies_wins: number;
+            /** Avg Dpm */
+            avg_dpm: number;
+            /** Avg Duration */
+            avg_duration: number;
+            /** Axis Win Rate */
+            axis_win_rate: number;
+            /** Axis Wins */
+            axis_wins: number;
+            /** Grenade Kills */
+            grenade_kills: number;
+            /** Last Played */
+            last_played: string | null;
+            /** Matches Played */
+            matches_played: number;
+            /** Max Duration */
+            max_duration: number;
+            /** Min Duration */
+            min_duration: number;
+            /** Mortar Kills */
+            mortar_kills: number;
+            /** Name */
+            name: string;
+            /** Panzer Kills */
+            panzer_kills: number;
+            /** Total Deaths */
+            total_deaths: number;
+            /** Total Kills */
+            total_kills: number;
+            /** Total Rounds */
+            total_rounds: number;
+            /** Unique Players */
+            unique_players: number;
         };
         /**
          * MostActivePlayer
@@ -10787,7 +10890,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MapObjectiveRecords"];
                 };
             };
         };
@@ -11811,7 +11914,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActivityCalendar"];
                 };
             };
             /** @description Validation Error */
@@ -11977,7 +12080,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["MapStats"][];
                 };
             };
         };

@@ -24,6 +24,7 @@ from pydantic import create_model
 
 from website.backend.routers.players_router import QuickLeaders, get_quick_leaders
 from website.backend.routers.records_overview import (
+    ActivityCalendar,
     StatsOverview,
     get_stats_overview,
 )
@@ -198,6 +199,7 @@ from website.backend.routers.records_matches import (
     RoundViz,
 )
 from website.backend.routers.challenges_router import CurrentChallenge
+from website.backend.routers.records_maps import MapObjectiveRecords, MapStats
 from website.backend.routers.records_trends import StatsTrends
 from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.records_seasons import CurrentSeason
@@ -582,3 +584,85 @@ class TestShapesNoResponseCanShow:
         award = SeasonAwards.model_validate(payload).awards[0]
         assert award.value_text == "1.8"
         assert award.value_num == pytest.approx(1.8)
+
+
+class TestTheMapEndpoints:
+    """Three endpoints where the handler, not the sample, decides nullability.
+
+    Every numeric field on `/stats/maps` passes through `x or 0` before it
+    leaves the handler, so those are genuinely non-null. `last_played` does not
+    — `row[8]` goes through untouched and `rounds.round_date` is nullable — so
+    it is typed nullable although no live row shows it. Reading the handler is
+    what separates "guarded" from "just happens to be populated".
+    """
+
+    def _map_row(self, **over):
+        row = {"name": "supply", "total_rounds": 12, "matches_played": 6,
+               "allies_wins": 5, "axis_wins": 7, "allies_win_rate": 41.7,
+               "axis_win_rate": 58.3, "avg_duration": 480, "min_duration": 120,
+               "max_duration": 900, "last_played": "2026-08-27",
+               "total_kills": 700, "total_deaths": 700, "avg_dpm": 310.5,
+               "unique_players": 8, "grenade_kills": 20, "panzer_kills": 5,
+               "mortar_kills": 2}
+        row.update(over)
+        return row
+
+    def test_a_map_row_survives_intact(self):
+        row = self._map_row()
+        modelled = _json.loads(MapStats.model_validate(row).model_dump_json())
+        assert missing_keys(row, modelled) == []
+        assert modelled == row
+
+    def test_an_unplayed_map_has_no_last_played(self):
+        row = self._map_row(last_played=None)
+        assert MapStats.model_validate(row).last_played is None
+
+
+class TestAFailureThatStillAnswers200:
+    """⛔ `/records/maps/segments` CATCHES ITS OWN EXCEPTION.
+
+    On failure it returns `{"status": "error", "records": []}` with a 200. A
+    model that dropped `status` would make that indistinguishable from a
+    database holding no records — the reader sees an empty list either way.
+    """
+
+    def test_the_error_state_survives(self):
+        payload = {"status": "error", "records": []}
+        modelled = _json.loads(
+            MapObjectiveRecords.model_validate(payload).model_dump_json())
+        assert modelled == payload
+        assert modelled["status"] == "error", "the failure became indistinguishable"
+
+    def test_the_ok_state_reads_differently(self):
+        assert MapObjectiveRecords.model_validate(
+            {"status": "ok", "records": []}).status == "ok"
+
+    def test_a_record_with_no_resolved_winner_is_accepted(self):
+        """`rounds.winner_team`, `map_name` and `gaming_session_id` are all
+        nullable; the group-by carries the nulls through."""
+        payload = {"status": "ok", "records": [
+            {"map_name": None, "fastest_seconds": 100, "fastest_time": "1:40",
+             "played": "2026-08-01", "winner_team": None, "winner_side": "Draw",
+             "gaming_session_id": None}]}
+        modelled = _json.loads(
+            MapObjectiveRecords.model_validate(payload).model_dump_json())
+        assert modelled == payload
+
+    def test_status_is_not_an_enum(self):
+        """A new state must not be filtered out by the schema before anyone
+        sees it."""
+        assert MapObjectiveRecords.model_validate(
+            {"status": "degraded", "records": []}).status == "degraded"
+
+
+def test_activity_calendar_keeps_both_of_its_keys():
+    """Both branches return `{days, activity}` — including the failure path,
+    which answers `{"days": n, "activity": {}}` after logging. That means an
+    empty calendar and a failed query look alike to a client. The model does
+    not fix that; it must not make it worse by dropping `days`, which is what
+    the caller labels the chart with."""
+    payload = {"days": 30, "activity": {"2026-08-27": 12, "2026-08-26": 18}}
+    modelled = _json.loads(ActivityCalendar.model_validate(payload).model_dump_json())
+    assert modelled == payload
+    empty = ActivityCalendar.model_validate({"days": 30, "activity": {}})
+    assert empty.days == 30, "the window size is lost on the failure path"

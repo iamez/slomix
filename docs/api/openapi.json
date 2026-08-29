@@ -1,6 +1,28 @@
 {
  "components": {
   "schemas": {
+   "ActivityCalendar": {
+    "description": "Rounds played per day over the lookback window.\n\nBoth branches of the handler return the same two keys — the failure path\nanswers `{\"days\": lookback_days, \"activity\": {}}` after logging. That means\nan empty calendar and a failed query look identical to a client, which is a\nreal gap; typing it does not close that, and inventing a flag here would be\na schema making a promise the handler does not keep. Recorded rather than\npapered over.",
+    "properties": {
+     "activity": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Activity",
+      "type": "object"
+     },
+     "days": {
+      "title": "Days",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "days",
+     "activity"
+    ],
+    "title": "ActivityCalendar",
+    "type": "object"
+   },
    "AwardLeaderRow": {
     "description": "One row of the awards leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live\nresponse, not the first row: `guid` is null on some of them, and a model\nthat read only row 0 would have typed it `str` and dropped the nulls.\n\n⛔ `response_model` FILTERS. A field the handler returns and a model omits\ndisappears from the payload, silently, with a 200 — which is why\n`tests/unit/test_response_models_drop_nothing.py` compares handler output\nagainst the serialised model instead of trusting these classes.",
     "properties": {
@@ -708,6 +730,199 @@
      "type"
     ],
     "title": "LiveEventIn",
+    "type": "object"
+   },
+   "MapObjectiveRecord": {
+    "description": "The fastest completion recorded for one map.",
+    "properties": {
+     "fastest_seconds": {
+      "title": "Fastest Seconds",
+      "type": "integer"
+     },
+     "fastest_time": {
+      "title": "Fastest Time",
+      "type": "string"
+     },
+     "gaming_session_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gaming Session Id"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "played": {
+      "title": "Played",
+      "type": "string"
+     },
+     "winner_side": {
+      "title": "Winner Side",
+      "type": "string"
+     },
+     "winner_team": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Team"
+     }
+    },
+    "required": [
+     "map_name",
+     "fastest_seconds",
+     "fastest_time",
+     "played",
+     "winner_team",
+     "winner_side",
+     "gaming_session_id"
+    ],
+    "title": "MapObjectiveRecord",
+    "type": "object"
+   },
+   "MapObjectiveRecords": {
+    "description": "⛔ `status` CARRIES A FAILURE THAT STILL ANSWERS 200.\n\nThe handler catches its own exception and returns\n`{\"status\": \"error\", \"records\": []}`. A model that dropped `status` would\nmake that indistinguishable from a database with no records — the reader\nwould see an empty list either way. It is kept, and typed as a plain string\nrather than an enum so a new state cannot be silently filtered out.",
+    "properties": {
+     "records": {
+      "items": {
+       "$ref": "#/components/schemas/MapObjectiveRecord"
+      },
+      "title": "Records",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "records"
+    ],
+    "title": "MapObjectiveRecords",
+    "type": "object"
+   },
+   "MapStats": {
+    "description": "One map's aggregate line.\n\n⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes\nthrough a `x or 0` / `int(x) if x else 0` guard, so they are genuinely\nnon-null — the handler already decided that. `last_played` is the one that\ndoes NOT: `row[8]` goes through untouched and `rounds.round_date` is a\nnullable column, so it is typed nullable even though no live row shows it.",
+    "properties": {
+     "allies_win_rate": {
+      "title": "Allies Win Rate",
+      "type": "number"
+     },
+     "allies_wins": {
+      "title": "Allies Wins",
+      "type": "integer"
+     },
+     "avg_dpm": {
+      "title": "Avg Dpm",
+      "type": "number"
+     },
+     "avg_duration": {
+      "title": "Avg Duration",
+      "type": "integer"
+     },
+     "axis_win_rate": {
+      "title": "Axis Win Rate",
+      "type": "number"
+     },
+     "axis_wins": {
+      "title": "Axis Wins",
+      "type": "integer"
+     },
+     "grenade_kills": {
+      "title": "Grenade Kills",
+      "type": "integer"
+     },
+     "last_played": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Played"
+     },
+     "matches_played": {
+      "title": "Matches Played",
+      "type": "integer"
+     },
+     "max_duration": {
+      "title": "Max Duration",
+      "type": "integer"
+     },
+     "min_duration": {
+      "title": "Min Duration",
+      "type": "integer"
+     },
+     "mortar_kills": {
+      "title": "Mortar Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "panzer_kills": {
+      "title": "Panzer Kills",
+      "type": "integer"
+     },
+     "total_deaths": {
+      "title": "Total Deaths",
+      "type": "integer"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "total_rounds": {
+      "title": "Total Rounds",
+      "type": "integer"
+     },
+     "unique_players": {
+      "title": "Unique Players",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "total_rounds",
+     "matches_played",
+     "allies_wins",
+     "axis_wins",
+     "allies_win_rate",
+     "axis_win_rate",
+     "avg_duration",
+     "min_duration",
+     "max_duration",
+     "last_played",
+     "total_kills",
+     "total_deaths",
+     "avg_dpm",
+     "unique_players",
+     "grenade_kills",
+     "panzer_kills",
+     "mortar_kills"
+    ],
+    "title": "MapStats",
     "type": "object"
    },
    "MostActivePlayer": {
@@ -12308,7 +12523,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/MapObjectiveRecords"
+        }
        }
       },
       "description": "Successful Response"
@@ -13810,7 +14027,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ActivityCalendar"
+        }
        }
       },
       "description": "Successful Response"
@@ -14042,7 +14261,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/MapStats"
+         },
+         "title": "Response Get Maps Api Stats Maps Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"

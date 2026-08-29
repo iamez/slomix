@@ -11,6 +11,24 @@ from website.backend.logging_config import get_app_logger
 from website.backend.routers.api_helpers import resolve_display_name
 
 router = APIRouter()
+
+
+class ActivityCalendar(BaseModel):
+    """Rounds played per day over the lookback window.
+
+    Both branches of the handler return the same two keys — the failure path
+    answers `{"days": lookback_days, "activity": {}}` after logging. That means
+    an empty calendar and a failed query look identical to a client, which is a
+    real gap; typing it does not close that, and inventing a flag here would be
+    a schema making a promise the handler does not keep. Recorded rather than
+    papered over.
+    """
+
+    #: Size of the lookback window, echoed so the caller can label the chart.
+    days: int
+    #: ISO date -> rounds played. Days with none are absent, not zero.
+    activity: dict[str, int]
+
 logger = get_app_logger("api.records.overview")
 
 
@@ -295,7 +313,7 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/stats/activity-calendar")
+@router.get("/stats/activity-calendar", response_model=ActivityCalendar)
 async def get_activity_calendar(
     days: int = 90,
     db: DatabaseAdapter = Depends(get_db),

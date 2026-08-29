@@ -1,6 +1,7 @@
 """Records sub-router: Map stats endpoints."""
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 
 from shared.round_time import round_duration_sql
 from website.backend.dependencies import get_db
@@ -8,6 +9,70 @@ from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.logging_config import get_app_logger
 
 router = APIRouter()
+
+
+class MapStats(BaseModel):
+    """One map's aggregate line.
+
+    ⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes
+    through a `x or 0` / `int(x) if x else 0` guard, so they are genuinely
+    non-null — the handler already decided that. `last_played` is the one that
+    does NOT: `row[8]` goes through untouched and `rounds.round_date` is a
+    nullable column, so it is typed nullable even though no live row shows it.
+    """
+
+    name: str
+    total_rounds: int
+    matches_played: int
+    allies_wins: int
+    axis_wins: int
+    allies_win_rate: float
+    axis_win_rate: float
+    avg_duration: int
+    min_duration: int
+    max_duration: int
+    #: Passed through unguarded from a nullable column.
+    last_played: str | None
+    total_kills: int
+    total_deaths: int
+    avg_dpm: float
+    unique_players: int
+    grenade_kills: int
+    panzer_kills: int
+    mortar_kills: int
+
+
+class MapObjectiveRecord(BaseModel):
+    """The fastest completion recorded for one map."""
+
+    #: `rounds.map_name` is nullable; the group-by carries the null through.
+    map_name: str | None
+    fastest_seconds: int
+    #: `M:SS`, rendered from the MEASURED duration — not the `actual_time`
+    #: header, which is the stopwatch target and overstates ~15% of rounds.
+    fastest_time: str
+    played: str
+    #: Nullable column: an unresolved round has no winner.
+    winner_team: int | None
+    #: 'Axis' | 'Allies' | 'Draw' — derived, so never null.
+    winner_side: str
+    gaming_session_id: int | None
+
+
+class MapObjectiveRecords(BaseModel):
+    """⛔ `status` CARRIES A FAILURE THAT STILL ANSWERS 200.
+
+    The handler catches its own exception and returns
+    `{"status": "error", "records": []}`. A model that dropped `status` would
+    make that indistinguishable from a database with no records — the reader
+    would see an empty list either way. It is kept, and typed as a plain string
+    rather than an enum so a new state cannot be silently filtered out.
+    """
+
+    #: 'ok' when the query ran; 'error' when it raised and was swallowed.
+    status: str
+    records: list[MapObjectiveRecord]
+
 logger = get_app_logger("api.records.maps")
 
 # Measured duration (webhook first, header text fallback) — actual_time
@@ -16,7 +81,7 @@ logger = get_app_logger("api.records.maps")
 _DUR = round_duration_sql("r")
 
 
-@router.get("/stats/maps")
+@router.get("/stats/maps", response_model=list[MapStats])
 async def get_maps(db: DatabaseAdapter = Depends(get_db)):
     """
     Get comprehensive statistics for all maps.
@@ -134,7 +199,7 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
         return []
 
 
-@router.get("/records/maps/segments")
+@router.get("/records/maps/segments", response_model=MapObjectiveRecords)
 async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
     """Fastest objective-completion time per map + when/which side held it.
 
