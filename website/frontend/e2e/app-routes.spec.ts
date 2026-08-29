@@ -1,12 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { test, expect, type ConsoleMessage, type Page } from '@playwright/test';
-
-/** Read rather than imported: the runner's loader demands an import
- *  attribute for JSON, and a spec is not the place to argue with it. Same
- *  file the app routes with either way, which is the whole point. */
-const routes = JSON.parse(
-  readFileSync(new URL('../src/app/routes.data.json', import.meta.url), 'utf8'),
-) as { key: string; path: string }[];
+// The runner's loader requires the attribute; without it the import fails
+// with "needs an import attribute of type json" and no tests are collected.
+import routes from '../src/app/routes.data.json' with { type: 'json' };
 
 /**
  * Every route of the standalone app, loaded once (docs/design/09 §H3).

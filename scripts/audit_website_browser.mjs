@@ -113,7 +113,9 @@ const ROUTES = [
  * it is a plain ES module — so the join is a check, not a copy.
  */
 async function assertRegistryCovered() {
-    const registry = await import(path.join(REPO_ROOT, 'website/js/route-registry.js'));
+    // A literal specifier, relative to this file: a computed import path is
+    // a finding for every scanner and buys nothing here.
+    const registry = await import('../website/js/route-registry.js');
     const known = new Set(Object.keys(registry.listRouteDefinitions()));
     const audited = new Set(ROUTES.map((r) => r.key));
     const missing = [...known].filter((k) => !audited.has(k));
@@ -139,7 +141,7 @@ async function assertRegistryCovered() {
  */
 function appRoutes() {
     const table = JSON.parse(
-        readFileSync(path.join(REPO_ROOT, 'website/frontend/src/app/routes.data.json'), 'utf8'),
+        readFileSync(new URL('../website/frontend/src/app/routes.data.json', import.meta.url), 'utf8'),
     );
     // A Map, not an object: the key comes out of a file, and an object
     // indexed by a value read from data is an injection sink to every
