@@ -21,6 +21,7 @@ import { RetroViz } from './pages/RetroViz';
 import { PlayerProfilePage } from './pages/PlayerProfile';
 import { DesignCatalog } from './pages/DesignCatalog';
 import { Rivalries } from './pages/Rivalries';
+import { SessionDetail } from './pages/SessionDetail';
 import { Story } from './pages/Story';
 import { SkillRating } from './pages/SkillRating';
 import { RoundsPage } from './pages/RoundsPage';
@@ -87,6 +88,8 @@ const PAGES: Record<string, React.ReactElement> = {
   // and renders cleanly, so "the sweep is green" says nothing about whether
   // the right component is behind the route.
   'story-date': <Story />,
+  'session-detail': <SessionDetail />,
+  'session-detail-date': <SessionDetail />,
 };
 
 const router = createBrowserRouter(
