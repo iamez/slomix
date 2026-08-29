@@ -489,6 +489,15 @@ class TonightHoldPoint(BaseModel):
 
 
 class TonightHoldProbability(BaseModel):
+    """⭐ `map` IS NON-NULL HERE WHILE `TonightMap.map` AND `current_map` ARE
+    NOT, and the asymmetry is structural rather than an oversight. The handler
+    computes the curve as `_hold_prob_curve(db, current_map) if current_map
+    else []`, and then emits this object only `if hold` — so a null map name
+    yields an empty curve, an empty curve yields `hold_probability: None`, and
+    this object never exists with a null map. Same kind of guarantee as
+    `head_pct` under its `HAVING` floor: a fact about the code, not about
+    today's rows."""
+
     map: str
     curve: list[TonightHoldPoint]
 
