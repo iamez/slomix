@@ -987,6 +987,11 @@ async def get_proximity_revives(
 ):
     """Revive summary and medic leaderboard from proximity_revive table."""
     safe_limit = max(1, min(limit, 50))
+    # Parsed BEFORE the try: a malformed date is a bad request, and the
+    # blanket `except Exception` below would otherwise turn its 400 into
+    # "revives computation failed" — an input error reported as a server
+    # fault, which sends the reader to the wrong place entirely.
+    parsed_sd = _parse_iso_date(session_date)
     try:
         clauses: list[str] = []
         params: list = []
@@ -997,6 +1002,29 @@ async def get_proximity_revives(
         if player_guid:
             params.append(player_guid.strip())
             clauses.append(f"medic_guid = ${len(params)}")
+        # These three were DECLARED and never read. proximity.js sends all
+        # of them on every scoped call (buildScopeParams), so a reader who
+        # narrowed the page to one round still saw the 30-day revive total
+        # sitting beside per-round panels — measured 2026-08-29: 1,873
+        # revives with `session_date=2026-08-27`, and 1,873 without it, while
+        # `map_name` correctly cut the same query to 320.
+        #
+        # A parameter that is accepted, validated and then discarded is the
+        # worst of the three states: the validation is what makes it look
+        # like it works.
+        # Parsed, not passed as text: the column is a `date`, so asyncpg
+        # infers the parameter type from it and rejects a string outright
+        # ('str' object has no attribute 'toordinal') — which is how the
+        # first version of this fix failed.
+        if parsed_sd is not None:
+            params.append(parsed_sd)
+            clauses.append(f"session_date = ${len(params)}")
+        if round_number is not None:
+            params.append(round_number)
+            clauses.append(f"round_number = ${len(params)}")
+        if round_start_unix is not None:
+            params.append(round_start_unix)
+            clauses.append(f"round_start_unix = ${len(params)}")
 
         # Audit P8 + migration 043: filter on session_date (play time)
         # now that the column exists and is backfilled. Rows with NULL
