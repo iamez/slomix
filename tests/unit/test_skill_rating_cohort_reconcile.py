@@ -22,6 +22,7 @@ tests hold it to every player.
 """
 
 import sys
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
@@ -39,12 +40,25 @@ class _RecordingDB:
     def __init__(self, rows):
         self._rows = rows
         self.executed: list[tuple[str, tuple]] = []
+        self.in_transaction = False
+        self.outside_transaction: list[str] = []
 
     async def fetch_all(self, query, params=()):
         return self._rows
 
+    @asynccontextmanager
+    async def transaction(self):
+        self.in_transaction = True
+        try:
+            yield self
+        finally:
+            self.in_transaction = False
+
     async def execute(self, query, params=()):
-        self.executed.append((" ".join(query.split()), params))
+        flat = " ".join(query.split())
+        if not self.in_transaction:
+            self.outside_transaction.append(flat)
+        self.executed.append((flat, params))
 
     def deletes_from(self, table: str) -> list[tuple[str, tuple]]:
         return [
@@ -123,15 +137,50 @@ async def test_history_is_never_reconciled_away():
 
 
 @pytest.mark.asyncio
-async def test_an_empty_run_deletes_nothing():
-    """A failed or empty computation must not empty the table.
+async def test_an_empty_run_clears_the_published_board():
+    """An empty cohort is a result, and the board has to show it.
 
-    Without this guard the reconciliation turns one bad run into data loss —
-    the failure mode is silent, permanent, and worse than the staleness it
-    was written to fix.
+    This test asserted the opposite first, on the reasoning that an empty run
+    must not "turn a bad run into data loss". These rows are a cache of a
+    computation over player_comprehensive_stats — the next run rebuilds them
+    and player_skill_history keeps every snapshot — so nothing is lost, while
+    exempting the empty case left the previous cohort published under old
+    timestamps and re-computed on every request (Codex on #835).
+
+    The delete is still bounded in time, so an empty run cannot wipe a
+    concurrent one's writes.
     """
     db = _RecordingDB([])
 
     await compute_and_store_ratings(db)
 
-    assert [q for q, _ in db.deletes_from("player_skill_ratings") if "<> ALL" in q] == []
+    reconcile = [
+        (q, p) for q, p in db.deletes_from("player_skill_ratings")
+        if "last_rated_at <" in q
+    ]
+    assert reconcile, "an empty run left the previous board published"
+    query, params = reconcile[0]
+    assert "<> ALL" not in query, (
+        "an empty keep-list leaves the array's element type to the driver"
+    )
+    assert params[0].tzinfo is not None
+
+
+@pytest.mark.asyncio
+async def test_the_replacement_is_one_transaction():
+    """Every write of a run lands together or not at all.
+
+    db.execute() commits on its own, so without this the delete-then-write
+    sequence was that many visible states — and one successful upsert
+    refreshes last_rated_at, which makes a half-written board look fresh for
+    an hour and poisons the pool mean derived from it (Codex on #835).
+    """
+    db = _RecordingDB([_row("a", "A", 300), _row("b", "B", 200)])
+
+    await compute_and_store_ratings(db)
+
+    assert db.executed, "nothing was written"
+    assert db.outside_transaction == [], (
+        "write(s) issued outside the transaction:\n"
+        + "\n".join(db.outside_transaction)
+    )

@@ -549,6 +549,24 @@ async def compute_and_store_ratings(db) -> int:
     run_started_at = datetime.now(timezone.utc)
     results = await compute_all_ratings(db)
 
+    # One transaction for the whole replacement. Every db.execute() commits on
+    # its own, so the sequence below — delete the bots, reconcile the cohort,
+    # write each player — used to be that many separately-visible states. A
+    # failure part-way left a board mixing this run with the last one, and
+    # because a single successful upsert refreshes last_rated_at, the next
+    # request saw a fresh timestamp and published that mixture for an hour;
+    # _pool_mean() then derived a prior from a population that never existed
+    # (Codex on #835). Either the run replaces the board or it changes
+    # nothing.
+    async with db.transaction():
+        await _replace_published_ratings(db, results, run_started_at)
+
+    logger.info("Stored ratings + history for %d players", len(results))
+    return len(results)
+
+
+async def _replace_published_ratings(db, results: list[dict], run_started_at) -> None:
+    """The write half of a rating run — called inside one transaction."""
     # Upserts never remove rows, so bot entries rated before the bot gate
     # existed would sit in the table forever — self-heal on every refresh.
     await db.execute(
@@ -574,20 +592,43 @@ async def compute_and_store_ratings(db) -> int:
     # table is reconciled to that run. History is NOT touched: player_skill_
     # history keeps every snapshot, which is where the past belongs.
     #
-    # ⛔ Guarded on a non-empty result. A failed or empty computation must
-    # not be allowed to empty the table — that would turn a bad run into
-    # data loss.
-    # ⛔ And it must not delete a CONCURRENT run's work. Two requests can
-    # cross the one-hour staleness boundary together, each execute()
-    # auto-commits, so without this the second run's reconcile could remove
-    # rows the first had just written. Deleting only rows older than this
-    # run's own start makes the operation safe under interleaving: a fresher
-    # row is never somebody else's mistake (Codex on #835).
+    # ⛔ It must not delete a CONCURRENT run's work. Two requests can cross
+    # the one-hour staleness boundary together, so the delete only ever
+    # touches rows older than this run's own start: a fresher row is somebody
+    # else's finished work, never this run's leftover (Codex on #835).
+    #
+    # An EMPTY result reconciles too, and my first version was wrong to
+    # exempt it. I guarded it as "a bad run must not empty the table — that
+    # would turn a bad run into data loss", and that reason does not hold:
+    # these rows are a cache of a computation over player_comprehensive_stats,
+    # the next run rebuilds them, and player_skill_history keeps every
+    # snapshot regardless. Nothing is lost. What the guard did buy was the
+    # opposite of safety — an empty cohort left the previous board published
+    # under old timestamps, so the site kept showing players who no longer
+    # qualify while every request re-ran the full computation and threw the
+    # answer away. Between a board that goes visibly empty and a board that
+    # silently describes a population that no longer exists, empty is the one
+    # that gets noticed and fixed (Codex on #835).
+    #
+    # Note the compute side can return [] without raising: `if not rows`
+    # above logs a warning and returns. That is exactly the case worth
+    # surfacing rather than papering over.
     if results:
         await db.execute(
             "DELETE FROM player_skill_ratings "
             "WHERE player_guid <> ALL($1) AND last_rated_at < $2",
             ([p["player_guid"] for p in results], run_started_at),
+        )
+    else:
+        # Same delete without the keep-list — an empty array parameter would
+        # leave asyncpg to guess the element type of `<> ALL($1)`.
+        logger.warning(
+            "Rating run produced no players; clearing the published board "
+            "(history is kept, the next successful run republishes)"
+        )
+        await db.execute(
+            "DELETE FROM player_skill_ratings WHERE last_rated_at < $1",
+            (run_started_at,),
         )
 
     for player in results:
@@ -618,9 +659,6 @@ async def compute_and_store_ratings(db) -> int:
             (player["player_guid"], player["et_rating"],
              components_json, player["rounds"]),
         )
-
-    logger.info("Stored ratings + history for %d players", len(results))
-    return len(results)
 
 
 # ---------------------------------------------------------------------------
