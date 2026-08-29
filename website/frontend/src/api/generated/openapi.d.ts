@@ -5990,6 +5990,36 @@ export interface components {
             /** Status */
             status: string;
         };
+        /**
+         * SessionLeaderRow
+         * @description One row of the session DPM leaderboard.
+         *
+         *     ⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.
+         *
+         *       name    `MAX(player_name)` over a NOT NULL column — never null.
+         *       dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.
+         *       kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every
+         *       deaths  summed value is NULL, and the handler passes the result through
+         *               with no guard. Zero such rows exist today; the column and the
+         *               aggregate both say it is reachable, and "zero rows today" is not
+         *               a type — a stricter model would answer 500 the first time it
+         *               happened rather than dropping a field.
+         *
+         *     Requested by the session-detail workstream ahead of phase 4, so that page
+         *     can be written against a schema instead of against a sample.
+         */
+        SessionLeaderRow: {
+            /** Deaths */
+            deaths: number | null;
+            /** Dpm */
+            dpm: number;
+            /** Kills */
+            kills: number | null;
+            /** Name */
+            name: string;
+            /** Rank */
+            rank: number;
+        };
         /** SessionLineups */
         SessionLineups: {
             /** Changes */
@@ -12345,7 +12375,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SessionLeaderRow"][];
                 };
             };
             /** @description Validation Error */

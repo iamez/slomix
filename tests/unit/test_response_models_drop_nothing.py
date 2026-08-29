@@ -200,6 +200,7 @@ from website.backend.routers.records_matches import (
 )
 from website.backend.routers.challenges_router import CurrentChallenge
 from website.backend.routers.records_maps import MapObjectiveRecords, MapStats
+from website.backend.routers.sessions_router import SessionLeaderRow
 from website.backend.routers.records_trends import StatsTrends
 from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.records_seasons import CurrentSeason
@@ -666,3 +667,56 @@ def test_activity_calendar_keeps_both_of_its_keys():
     assert modelled == payload
     empty = ActivityCalendar.model_validate({"days": 30, "activity": {}})
     assert empty.days == 30, "the window size is lost on the failure path"
+
+
+class TestSessionLeaderboard:
+    """Requested by the session-detail workstream ahead of its phase 4, so that
+    page can be written against a schema rather than against a sample.
+
+    ⛔ `kills` and `deaths` are nullable and no live row shows it. They come
+    from `SUM(kills)` over a NULLABLE column: SUM returns NULL when every
+    summed value is NULL, and the handler passes the result through with no
+    guard. Zero such rows exist today. `name` is `MAX(player_name)` over a NOT
+    NULL column and `dpm`'s CASE has an `ELSE 0` — those two really are
+    non-null, and the difference is visible only in the aggregate, not the
+    payload.
+    """
+
+    def test_an_ordinary_row_survives(self):
+        row = {"rank": 1, "name": "one", "dpm": 408, "kills": 12, "deaths": 5}
+        modelled = _json.loads(SessionLeaderRow.model_validate(row).model_dump_json())
+        assert missing_keys(row, modelled) == []
+        assert modelled == row
+
+    def test_a_row_whose_sums_are_null_is_accepted(self):
+        row = {"rank": 1, "name": "one", "dpm": 0, "kills": None, "deaths": None}
+        modelled = SessionLeaderRow.model_validate(row)
+        assert modelled.kills is None
+        assert modelled.deaths is None
+
+    def test_nullable_is_not_optional(self):
+        """⚠️ TWO DIFFERENT THINGS, AND I CONFLATED THEM WRITING THIS TEST.
+
+        `kills` is REQUIRED (the key is always in the payload) and NULLABLE
+        (its value may be None). Optional would mean the key can be absent,
+        which is what `/stats/trends` does and this endpoint does not.
+
+        `name` and `dpm` are guarded at the source — `MAX` over a NOT NULL
+        column, and a CASE with `ELSE 0` — so widening them would invite
+        callers to handle a case that cannot occur.
+        """
+        fields = SessionLeaderRow.model_fields
+        assert all(fields[k].is_required() for k in ("rank", "name", "dpm",
+                                                     "kills", "deaths")), \
+            "a key went optional — the client would have to check presence"
+        assert fields["name"].annotation is str
+        assert fields["dpm"].annotation is int
+        assert type(None) in fields["kills"].annotation.__args__
+        assert type(None) in fields["deaths"].annotation.__args__
+
+    def test_an_empty_leaderboard_is_a_list_not_an_object(self):
+        """Three of the handler's four branches return `[]` — an unknown
+        session, no rounds, no latest date. A wrapper object would have
+        reshaped all three."""
+        from pydantic import TypeAdapter
+        assert TypeAdapter(list[SessionLeaderRow]).validate_python([]) == []

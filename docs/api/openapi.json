@@ -1514,6 +1514,54 @@
     "title": "SeasonAwards",
     "type": "object"
    },
+   "SessionLeaderRow": {
+    "description": "One row of the session DPM leaderboard.\n\n⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.\n\n  name    `MAX(player_name)` over a NOT NULL column — never null.\n  dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.\n  kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every\n  deaths  summed value is NULL, and the handler passes the result through\n          with no guard. Zero such rows exist today; the column and the\n          aggregate both say it is reachable, and \"zero rows today\" is not\n          a type — a stricter model would answer 500 the first time it\n          happened rather than dropping a field.\n\nRequested by the session-detail workstream ahead of phase 4, so that page\ncan be written against a schema instead of against a sample.",
+    "properties": {
+     "deaths": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deaths"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "integer"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rank",
+     "name",
+     "dpm",
+     "kills",
+     "deaths"
+    ],
+    "title": "SessionLeaderRow",
+    "type": "object"
+   },
    "SessionLineups": {
     "properties": {
      "changes": {
@@ -14658,7 +14706,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/SessionLeaderRow"
+         },
+         "title": "Response Get Session Leaderboard Api Stats Session Leaderboard Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"

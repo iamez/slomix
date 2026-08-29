@@ -29,6 +29,33 @@ from website.backend.services.website_session_data_service import (
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
+class SessionLeaderRow(BaseModel):
+    """One row of the session DPM leaderboard.
+
+    ⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.
+
+      name    `MAX(player_name)` over a NOT NULL column — never null.
+      dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.
+      kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every
+      deaths  summed value is NULL, and the handler passes the result through
+              with no guard. Zero such rows exist today; the column and the
+              aggregate both say it is reachable, and "zero rows today" is not
+              a type — a stricter model would answer 500 the first time it
+              happened rather than dropping a field.
+
+    Requested by the session-detail workstream ahead of phase 4, so that page
+    can be written against a schema instead of against a sample.
+    """
+
+    #: 1-based position, assigned by the handler after ordering by dpm.
+    rank: int
+    name: str
+    dpm: int
+    kills: int | None
+    deaths: int | None
+
+
+
 logger = get_app_logger("api.sessions")
 
 
@@ -350,7 +377,8 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/stats/session-leaderboard")
+@router.get("/stats/session-leaderboard",
+            response_model=list[SessionLeaderRow])
 async def get_session_leaderboard(
     limit: int = 5,
     session_id: int | None = None,
