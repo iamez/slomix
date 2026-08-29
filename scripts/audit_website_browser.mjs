@@ -35,6 +35,10 @@ const { chromium } = await import(
 const BASE_URL = process.env.AUDIT_BASE_URL ?? 'http://127.0.0.1:8000';
 const ANON_ONLY = process.argv.includes('--anon-only');
 const MANIFEST = process.argv.includes('--manifest');
+// --app sweeps the NEW standalone SPA under /app instead of the legacy hash
+// site. Same passes, same viewports, same manifest format, so the two can be
+// diffed against each other (docs/design/09 §H2).
+const APP_MODE = process.argv.includes('--app');
 const OWNER_ONLY = process.argv.includes('--owner-only');
 const OUT_DIR = (() => {
     const i = process.argv.indexOf('--out');
@@ -53,44 +57,18 @@ const VIEWPORTS = [
     { name: 'phone-390', width: 390, height: 844, shot: false },
 ];
 
-// Every route from docs/ROUTE_MAP_2026-07.md. Parametrised ones carry real
-// values so they are actually exercised rather than bouncing off a guard — the
-// stale-contract findings in the master review all live behind a param.
-const ROUTES = [
-    { name: 'home', hash: '' },
-    { name: 'sessions', hash: '#/sessions' },
-    { name: 'sessions2', hash: '#/sessions2' },
-    { name: 'session-detail (date, multi-session)', hash: '#/session-detail/date/2026-08-04' },
-    { name: 'leaderboards', hash: '#/leaderboards' },
-    { name: 'form', hash: '#/form' },
-    { name: 'maps', hash: '#/maps' },
-    { name: 'weapons', hash: '#/weapons' },
-    { name: 'records (alias)', hash: '#/records' },
-    { name: 'record-book', hash: '#/record-book' },
-    { name: 'hall-of-fame', hash: '#/hall-of-fame' },
-    { name: 'awards', hash: '#/awards' },
-    { name: 'profile (owner)', hash: '#/profile/E587CA5F' },
-    { name: 'profile (other)', hash: '#/profile/D8423F90' },
-    { name: 'skill-rating', hash: '#/skill-rating' },
-    { name: 'rivalries', hash: '#/rivalries' },
-    { name: 'story', hash: '#/story' },
-    { name: 'replay', hash: '#/replay' },
-    { name: 'retro-viz', hash: '#/retro-viz' },
-    { name: 'tonight', hash: '#/tonight' },
-    { name: 'proximity', hash: '#/proximity' },
-    { name: 'proximity-player', hash: '#/proximity/player/D8423F90' },
-    { name: 'proximity-replay', hash: '#/proximity/round/11175' },
-    { name: 'proximity-teams', hash: '#/proximity/round/11175/teams' },
-    { name: 'smart-stats-diag', hash: '#/smart-stats-diag' },
-    { name: 'greatshot', hash: '#/greatshot/demos' },
-    { name: 'uploads', hash: '#/uploads' },
-    { name: 'availability', hash: '#/availability' },
-    { name: 'admin', hash: '#/admin' },
-];
+// The route lists and the registry check live in route_audit_list.mjs, which
+// imports no browser — so the guard can run in CI without Playwright (the
+// reason it could not is the reason it never did: brother's review on #839).
+import { ROUTES, appRoutes, assertRegistryCovered } from './route_audit_list.mjs';
 
 // ---------------------------------------------------------------------------
 // Session cookie
 // ---------------------------------------------------------------------------
+
+// Legacy or app, chosen once so every pass below sweeps the same list.
+const ACTIVE_ROUTES = APP_MODE ? appRoutes() : ROUTES;
+if (!APP_MODE) await assertRegistryCovered();
 
 /**
  * Locate the interpreter, in the same order and with the same override as
@@ -390,7 +368,7 @@ if (MANIFEST) {
         ]);
     }
     const routesOut = {};
-    for (const route of ROUTES) {
+    for (const route of ACTIVE_ROUTES) {
         routesOut[route.name] = await manifestRoute(context, route);
         process.stdout.write(`  manifest ${route.name.padEnd(38)} ${routesOut[route.name].apiPaths.length} api, ${routesOut[route.name].panelTitles.length} panels\n`);
     }
@@ -532,7 +510,7 @@ for (const { label, asOwner } of passes) {
             { name: 'session', value: ownerCookie, domain: hostname, path: '/' },
         ]);
     }
-    for (const route of ROUTES) {
+    for (const route of ACTIVE_ROUTES) {
         for (const viewport of VIEWPORTS) {
             const r = await auditRoute(context, route, viewport, label, OUT_DIR);
             results.push(r);
