@@ -481,6 +481,13 @@ export interface LiveStatus {
 export interface ActivityCalendar {
   days: number;
   activity: Record<string, number>;
+  /** Three states, and the page must not collapse them: `ok` (measured),
+   *  `no_data` (measured and empty) and `unavailable` (the query failed and
+   *  the endpoint still answered 200). Optional because the field arrives
+   *  with #830 — until then it is absent and the emptiness heuristic below
+   *  is all there is. `note` carries the reason when the state is not ok. */
+  status?: string;
+  note?: string;
 }
 
 /* ---------- phase 2, batch 2: leaderboards · record-book · awards ---------- */
@@ -686,6 +693,12 @@ export interface WeaponRow {
  * api_stats_weapons_hall_of_fame.json (object keyed by weapon_key). */
 export interface WeaponsHallOfFame {
   period: string;
+  /** Same three states as the activity calendar (#830): `ok`, `no_data`,
+   *  `unavailable`. Absent until that lands; present afterwards, and then
+   *  it — not the emptiness of `leaders` — decides whether this is an
+   *  outage rather than a quiet season. */
+  status?: string;
+  note?: string;
   leaders: Record<string, {
     weapon: string;
     weapon_key: string;

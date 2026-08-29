@@ -317,7 +317,16 @@ function SeasonBlock() {
   // An empty activity object is the endpoint's failure shape inside a 200
   // (and a 90-day window with zero active days does not happen in this
   // dataset) — no line beats a false 'active on 0 days' (Codex wave 3).
-  const activeDaysCount = calendar.data ? Object.keys(calendar.data.activity).length : 0;
+  //
+  // #830 gives the endpoint a status field, which says the same thing
+  // without the inference: when it reports a failure the count is suppressed
+  // even if some days did come back. Absent until that lands, so this stays
+  // a strictly stronger version of the heuristic, never a weaker one.
+  const calendarFailed = calendar.data?.status != null
+    && ['error', 'unavailable'].includes(calendar.data.status);
+  const activeDaysCount = calendar.data && !calendarFailed
+    ? Object.keys(calendar.data.activity).length
+    : 0;
   const activeDays = activeDaysCount > 0 ? activeDaysCount : null;
   return (
     <div data-parity="home.season">

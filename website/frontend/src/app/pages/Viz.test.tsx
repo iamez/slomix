@@ -120,15 +120,37 @@ describe('MapsPage', () => {
     expect(screen.getAllByText('—').length).toBeGreaterThan(0);
   });
 
-  it('a 200 with status:"error" from segments reads as an outage, not an empty record book', async () => {
-    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/records/maps/segments': { status: 'error', records: [] } })));
+  it.each(['error', 'unavailable'])(
+    'a 200 with status:"%s" from segments reads as an outage, not an empty record book',
+    async (status) => {
+    // Both spellings: #830 renames the failure status from "error" to
+    // "unavailable", and a consumer that knows only the old one goes
+    // silently blind the day the rename lands — the outage then reads as
+    // "no objective records yet", which is the opposite claim.
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/records/maps/segments': { status, records: [] } })));
     renderPage(<MapsPage />);
     await waitFor(() => expect(screen.getByText('objective records: unavailable')).toBeInTheDocument());
     expect(screen.queryByText(/no objective records yet/)).toBeNull();
-  });
+  },
+  );
 });
 
 describe('WeaponsPage', () => {
+  it.each(['error', 'unavailable'])(
+    'a hall of fame that FAILED (%s) is not a quiet season',
+    async (status) => {
+      // The endpoint answers 200 with an empty board when its query raises,
+      // so emptiness alone cannot tell an outage from a season nobody
+      // played. #830 adds the status that can (Codex on that PR).
+      vi.stubGlobal('fetch', vi.fn(overrideFetch({
+        '/api/stats/weapons/hall-of-fame': { period: 'all', leaders: {}, status },
+      })));
+      renderPage(<WeaponsPage />);
+      await waitFor(() => expect(screen.getByText('hall of fame: unavailable')).toBeInTheDocument());
+      expect(screen.queryByText(/no hall of fame data yet/)).toBeNull();
+    },
+  );
+
   it('renders hof, grid with GLOBAL share, and mastery with honest labels', async () => {
     vi.stubGlobal('fetch', vi.fn(fixtureFetch));
     renderPage(<WeaponsPage />);

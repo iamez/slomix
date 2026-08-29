@@ -216,4 +216,21 @@ describe('Home', () => {
     renderHome();
     await waitFor(() => expect(screen.getByText(/4 of 8 looking for tonight/)).toBeInTheDocument());
   });
+  it('suppresses the active-days line when the calendar itself failed', async () => {
+    // The endpoint answers 200 with an empty (or partial) activity map when
+    // its query fails. Counting keys then reports a number about the
+    // outage, not about the season — #830 adds the status that says so.
+    const failed = { ...(calendar as object), status: 'unavailable', note: 'the activity query failed' };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/activity-calendar') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(failed) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    // The line the healthy fixture DOES render, so its absence here means
+    // the status was read — not that the text never appears.
+    await waitFor(() => expect(screen.getAllByText(/days left/).length).toBeGreaterThan(0));
+    expect(screen.queryByText(/active on \d+ of the last/)).toBeNull();
+  });
 });
