@@ -286,6 +286,26 @@ describe('RetroViz', () => {
     expect(screen.getByText('26 kills')).toBeInTheDocument();
   });
 
+  it('leaves out a round with no round_number and names a missing date', async () => {
+    // /api/rounds/recent types round_number and round_date as NULLABLE (#830
+    // typed the endpoint; records_matches.py emits `str(row[2]) if row[2]
+    // else None`). `round_number !== 0` alone let a null through — and a
+    // round this page cannot number is one it cannot plot — while a null
+    // date rendered as nothing at all, so the option read "R1 — (6 players)".
+    const rows = recentRounds as Record<string, unknown>[];
+    const withNulls = [
+      { ...rows[0], id: 999001, round_number: null },
+      { ...rows[0], id: 999002, round_date: null },
+      ...rows.slice(1),
+    ];
+    vi.stubGlobal('fetch', vi.fn(overrideFetch({ '/api/rounds/recent': withNulls })));
+    renderPage(<RetroViz />);
+    await waitFor(() => expect(screen.getAllByRole('option').length).toBeGreaterThan(0));
+    const options = screen.getAllByRole('option');
+    expect(options.some((o) => o.getAttribute('value') === '999001')).toBe(false);
+    expect(options.some((o) => o.textContent?.includes('date unknown'))).toBe(true);
+  });
+
   it('a round with the 0-sentinel duration says unknown, not 0:00', async () => {
     // test_round_duration_truth defines zero as MISSING, not a measurement;
     // winner_team 0 is a server-restart artifact, not a draw.

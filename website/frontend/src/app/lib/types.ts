@@ -584,8 +584,14 @@ export interface WeaponsByPlayer {
 export interface RecentRound {
   id: number;
   map_name: string;
-  round_date: string;
-  round_number: number;
+  /** NULLABLE, not optional — the key is always present and the value can be
+   *  null: `records_matches.py` emits `str(row[2]) if row[2] else None`. The
+   *  brother's typing pass (#830) confirmed the same for `round_number`.
+   *  Nullable means check the VALUE; optional would mean check presence, and
+   *  conflating the two is how a page ends up rendering nothing where it
+   *  should say something. */
+  round_date: string | null;
+  round_number: number | null;
   round_label: string;
   player_count: number;
 }

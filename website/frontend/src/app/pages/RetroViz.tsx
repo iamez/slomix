@@ -153,8 +153,13 @@ const BAR_OPTS = {
 export function RetroViz() {
   const rounds = useRecentRounds();
   const [picked, setPicked] = useState<number | null>(null);
-  // R0 rows are the legacy Match Summary aggregate, not a playable round.
-  const selectable = (rounds.data ?? []).filter((r) => r.round_number !== 0);
+  // R0 rows are the legacy Match Summary aggregate, not a playable round —
+  // and neither is a row whose round_number is NULL, which this endpoint can
+  // return (#830 typed it nullable). `!== 0` alone let those through, and a
+  // null round is one this page has nothing to plot for.
+  const selectable = (rounds.data ?? []).filter(
+    (r) => r.round_number != null && r.round_number !== 0,
+  );
   // .at(0), not [0]: without noUncheckedIndexedAccess the index read is typed
   // as always-present, which erases the null branch the empty list needs.
   const roundId = picked ?? selectable.at(0)?.id ?? null;
@@ -180,7 +185,7 @@ export function RetroViz() {
         >
           {selectable.map((r) => (
             <option key={r.id} value={r.id}>
-              {mapLabel(r.map_name)} {r.round_label} — {r.round_date} ({r.player_count} players)
+              {mapLabel(r.map_name)} {r.round_label} — {r.round_date ?? 'date unknown'} ({r.player_count} players)
             </option>
           ))}
         </select>
