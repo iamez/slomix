@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { ApiError } from '../lib/api';
 import {
   useStoryBoxScore, useStoryEnabler, useStoryGravity, useStoryKillImpact,
   useStoryLurker, useStoryMoments, useStoryMomentum, useStoryNarrative,
@@ -384,11 +385,32 @@ function Roles({ gsid }: { gsid: number }) {
 
 /** Everything below the scoreboard hangs off one resolved session. */
 function SessionStory({ gsid }: { gsid: number }) {
+  const narrative = useStoryNarrative(gsid);
   const box = useStoryBoxScore(gsid);
   const momentum = useStoryMomentum(gsid);
   const synergy = useStorySynergy(gsid);
   const kis = useStoryKillImpact(gsid);
   const narratives = useStoryPlayerNarratives(gsid);
+
+  // All thirteen endpoints resolve the same scope, so they 404 together:
+  // "gaming_session_id=151 has no accepted rounds". Rendering that as nine
+  // separate `unavailable` lines describes nine broken panels instead of one
+  // fact about the session — measured on 151, 146, 145 and 128, which is
+  // half the sessions a picker click can reach.
+  const noRounds = narrative.error instanceof ApiError && narrative.error.status === 404;
+  if (noRounds) {
+    return (
+      <Stack gap={2} parity="story.no-rounds" style={{ paddingTop: 'var(--space-5)' }}>
+        <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
+          this session has no accepted rounds, so there is no story to tell
+        </span>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+          every panel here is built from counted rounds — the session detail page
+          still lists what was played
+        </Lbl>
+      </Stack>
+    );
+  }
 
   return (
     <Stack gap={7} style={{ paddingTop: 'var(--space-5)' }}>

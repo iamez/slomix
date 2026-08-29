@@ -152,6 +152,31 @@ describe('Story', () => {
     expect(screen.queryByText('mvp')).toBeNull();
   });
 
+  it('says a session with no accepted rounds has no story, once', async () => {
+    // Measured on sessions 151, 146, 145 and 128: every storytelling
+    // endpoint resolves the same scope, so they 404 together with
+    // "has no accepted rounds". Nine `unavailable` lines describe nine
+    // broken panels; this is one fact about the session.
+    renderPage((input) => {
+      if (String(input).includes('/storytelling/scopes')) return fixtureFetch(input);
+      return Promise.resolve({
+        ok: false, status: 404,
+        json: () => Promise.resolve({ detail: 'gaming_session_id=151 has no accepted rounds.' }),
+      } as Response);
+    });
+    await waitFor(() => expect(screen.getByText(/no accepted rounds, so there is no story/)).toBeInTheDocument());
+    expect(screen.queryByText(/moments: unavailable/)).toBeNull();
+    expect(screen.queryByText(/synergy: unavailable/)).toBeNull();
+  });
+
+  it('still shows per-panel failures when only one endpoint is down', async () => {
+    // The single-line message must not swallow a genuine partial failure.
+    renderPage(withOverride('/storytelling/synergy', () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
+    await waitFor(() => expect(screen.getByText(/synergy: unavailable/)).toBeInTheDocument());
+    expect(screen.getByText(/The night's story was resilience/)).toBeInTheDocument();
+  });
+
   it('draws both momentum series on one scale, one drawing per round', async () => {
     renderPage();
     await waitFor(() => expect(screen.getAllByRole('img', { name: /momentum/ }).length).toBeGreaterThan(0));
