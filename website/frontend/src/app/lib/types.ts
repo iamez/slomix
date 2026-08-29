@@ -180,10 +180,16 @@ export interface StorytellingCompleteness {
   kis_computed: boolean;
   rounds_total: number;
   rounds_correlated: number;
-  completeness_ratio: number | null;
-  linkage_ratio: number | null;
-  correlation_ratio: number | null;
-  kis_total_impact_sum: number | null;
+  /** NOT nullable — every one has an `else 0.0` in diagnostics_router, so a
+   *  missing denominator answers 0, never null. Measured on three sessions
+   *  (154, 153, 152): 1.0 / 1.0 / 1.0 and a real impact sum each time.
+   *  Typing them nullable cost nothing at runtime and bought a dead branch
+   *  in `ratioState`, which is the mirror of the AwardRow.round_id mistake:
+   *  a guard placed where nothing can arrive. */
+  completeness_ratio: number;
+  linkage_ratio: number;
+  correlation_ratio: number;
+  kis_total_impact_sum: number;
   warnings: { level: string; message: string }[];
   known_issues: { key: string; title: string; detail: string }[];
 }
