@@ -989,7 +989,43 @@ async def compare_players(
     }
 
 
-@router.get("/stats/leaderboard")
+class LeaderboardRow(BaseModel):
+    """One row of the generic stat leaderboard, as this endpoint returns it.
+
+    ⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4
+    distinct `period` branches (`7d`, `30d`, `season`, and the else-branch
+    all-time). Zero nulls in every field.
+
+    ⭐ `kills` and `deaths` are NOT nullable here even though the underlying
+    `kills` / `deaths` columns are `NOT NULL = NO`, and even though — unlike
+    `value` and `kd` in the very same dict — the handler passes them through
+    with no `or 0`. `SUM(x)` returns NULL only when EVERY row in the group is
+    NULL, and `GROUP BY` never produces an empty group, so a null needs null
+    data: there is none (0 null `kills` / `deaths` / `damage_given` rows in the
+    whole table). The coalesce asymmetry three lines apart is untidy, not a
+    signal that these two can be null.
+    ⛔ The residual is real and belongs to the DATA, not to this model: the day
+    a null `kills` row is written, this endpoint 500s. No test can catch that —
+    only the table can. Type it, don't widen it: `int | None` would buy nothing
+    but a null check on every consumer.
+
+    `value` is `float` and not `int | float`: the handler's `else 0` branch
+    (an int) needs a NULL `SUM`, unreachable for the same reason.
+    """
+
+    rank: int
+    guid: str
+    name: str
+    value: float
+    #: Rounds, NOT sessions — the field was renamed, the participation unit
+    #: changed with it, and the handler still carries the old comment.
+    rounds: int
+    kills: int
+    deaths: int
+    kd: float
+
+
+@router.get("/stats/leaderboard", response_model=list[LeaderboardRow])
 async def get_leaderboard(
     stat: str = "dpm",
     period: str = "30d",

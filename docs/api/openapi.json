@@ -598,6 +598,55 @@
     "title": "HallOfFameRow",
     "type": "object"
    },
+   "LeaderboardRow": {
+    "description": "One row of the generic stat leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4\ndistinct `period` branches (`7d`, `30d`, `season`, and the else-branch\nall-time). Zero nulls in every field.\n\n⭐ `kills` and `deaths` are NOT nullable here even though the underlying\n`kills` / `deaths` columns are `NOT NULL = NO`, and even though — unlike\n`value` and `kd` in the very same dict — the handler passes them through\nwith no `or 0`. `SUM(x)` returns NULL only when EVERY row in the group is\nNULL, and `GROUP BY` never produces an empty group, so a null needs null\ndata: there is none (0 null `kills` / `deaths` / `damage_given` rows in the\nwhole table). The coalesce asymmetry three lines apart is untidy, not a\nsignal that these two can be null.\n⛔ The residual is real and belongs to the DATA, not to this model: the day\na null `kills` row is written, this endpoint 500s. No test can catch that —\nonly the table can. Type it, don't widen it: `int | None` would buy nothing\nbut a null check on every consumer.\n\n`value` is `float` and not `int | float`: the handler's `else 0` branch\n(an int) needs a NULL `SUM`, unreachable for the same reason.",
+    "properties": {
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "kd": {
+      "title": "Kd",
+      "type": "number"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "rank",
+     "guid",
+     "name",
+     "value",
+     "rounds",
+     "kills",
+     "deaths",
+     "kd"
+    ],
+    "title": "LeaderboardRow",
+    "type": "object"
+   },
    "LineupChange": {
     "description": "Membership delta of ONE team between two consecutive rounds.",
     "properties": {
@@ -1098,6 +1147,42 @@
      "player_count"
     ],
     "title": "RecentRound",
+    "type": "object"
+   },
+   "RecordEntry": {
+    "description": "One record holder in one category, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED. `value` is `int` for the counting categories and\n`float` for `accuracy`, `xp` and `match_xp` — the union keeps each on the\nwire exactly as the query produced it. Widening it to a bare `float` would\nrewrite `\"value\": 5994` as `\"value\": 5994.0` for every counting category:\na silent wire change on a page nobody would think to re-check.\n\n`map` and `date` are `str` and NOT nullable, even though\n`information_schema` reports all three columns of the `player_match_stats`\nVIEW as `is_nullable = YES`. That report is about aggregates, not about\ndata: the view produces them as `max(map_name)` / `min(round_date)` over\ncolumns that are `NOT NULL` in `player_comprehensive_stats`, and an\naggregate over a non-empty group cannot be null. Measured: 0 nulls in\n6,863 view rows.\n\n⛔ This is the MIRROR of the `LEFT JOIN` trap in `SessionSummary`. There a\n`NOT NULL` column arrives null because there was no row to join; here a\n\"nullable\" column can never be null because the aggregate has one. The\nschema is wrong in BOTH cases, in opposite directions — which is why the\nrule is `schema -> handler -> what the query does to it`, and never the\nschema alone.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "number"
+       }
+      ],
+      "title": "Value"
+     }
+    },
+    "required": [
+     "player",
+     "value",
+     "map",
+     "date"
+    ],
+    "title": "RecordEntry",
     "type": "object"
    },
    "RenderRequest": {
@@ -1994,6 +2079,279 @@
      "window_days"
     ],
     "title": "StatsOverview",
+    "type": "object"
+   },
+   "StatsRecords": {
+    "description": "All-time records, keyed by category. EVERY FIELD IS OPTIONAL ON PURPOSE.\n\n⛔ DO NOT make any category required. The handler omits a category's key\nentirely when its query succeeded with no rows (`if rows:` below), so a\nrequired field is a 500 on exactly the view that is hardest to notice: a\nfiltered one. Measured, not theorised — `?map_name=goldrush` (a real ET map\nthis server has never recorded) answers `{}` with HTTP 200, and every one\nof the 19 categories is absent. All 18 maps that DO have data return all 19.\n\n⚠️ ABSENCE AND `[]` MEAN DIFFERENT THINGS HERE, and the meanings are the\nreverse of the intuitive reading:\n  - key ABSENT  -> the query ran and found nothing (no records for this map)\n  - key PRESENT as `[]` -> the query RAISED and was swallowed per-category\n`response_model_exclude_none=True` on the route preserves both states\nexactly: an absent category stays absent, a failed one stays `[]`. A reader\ncannot be expected to guess this, which is why it is written down here.",
+    "properties": {
+     "accuracy": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Accuracy"
+     },
+     "damage": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Damage"
+     },
+     "dyna_defused": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dyna Defused"
+     },
+     "dyna_planted": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dyna Planted"
+     },
+     "gibs": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gibs"
+     },
+     "headshots": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Headshots"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "match_damage": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Damage"
+     },
+     "match_gibs": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Gibs"
+     },
+     "match_headshots": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Headshots"
+     },
+     "match_kills": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Kills"
+     },
+     "match_revives": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Revives"
+     },
+     "match_xp": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Xp"
+     },
+     "obj_returned": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Obj Returned"
+     },
+     "obj_stolen": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Obj Stolen"
+     },
+     "revived": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Revived"
+     },
+     "revives": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Revives"
+     },
+     "useful_kills": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Useful Kills"
+     },
+     "xp": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Xp"
+     }
+    },
+    "title": "StatsRecords",
     "type": "object"
    },
    "StatsTrends": {
@@ -14545,7 +14903,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/LeaderboardRow"
+         },
+         "title": "Response Get Leaderboard Api Stats Leaderboard Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -14934,7 +15298,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StatsRecords"
+        }
        }
       },
       "description": "Successful Response"

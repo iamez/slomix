@@ -1,0 +1,268 @@
+{
+  "kills": [
+    {
+      "player": "bronze.",
+      "value": 36,
+      "map": "supply",
+      "date": "2025-03-04"
+    },
+    {
+      "player": "bronze.",
+      "value": 36,
+      "map": "supply",
+      "date": "2025-12-28"
+    }
+  ],
+  "damage": [
+    {
+      "player": "r7'squAzefucking",
+      "value": 5994,
+      "map": "etl_sp_delivery",
+      "date": "2026-07-21"
+    },
+    {
+      "player": "It's squAziii",
+      "value": 5686,
+      "map": "supply",
+      "date": "2026-08-27"
+    }
+  ],
+  "revives": [
+    {
+      "player": "//^?/M.rAzzdOG",
+      "value": 18,
+      "map": "etl_sp_delivery",
+      "date": "2025-12-25"
+    },
+    {
+      "player": "vid",
+      "value": 17,
+      "map": "sw_goldrush_te",
+      "date": "2026-01-26"
+    }
+  ],
+  "gibs": [
+    {
+      "player": "carniee",
+      "value": 19,
+      "map": "supply",
+      "date": "2025-01-04"
+    },
+    {
+      "player": "SuperBoyy",
+      "value": 19,
+      "map": "te_escape2",
+      "date": "2026-07-13"
+    }
+  ],
+  "headshots": [
+    {
+      "player": "endekk",
+      "value": 44,
+      "map": "te_escape2",
+      "date": "2025-12-30"
+    },
+    {
+      "player": "It's squAziii",
+      "value": 43,
+      "map": "etl_adlernest",
+      "date": "2026-08-27"
+    }
+  ],
+  "xp": [
+    {
+      "player": "r7'squAzefucking",
+      "value": 246.0,
+      "map": "etl_sp_delivery",
+      "date": "2026-07-21"
+    },
+    {
+      "player": "Cru3lzor.",
+      "value": 235.0,
+      "map": "sw_goldrush_te",
+      "date": "2026-08-21"
+    }
+  ],
+  "accuracy": [
+    {
+      "player": "vid",
+      "value": 64.1891860961914,
+      "map": "etl_sp_delivery",
+      "date": "2026-03-10"
+    },
+    {
+      "player": "SuperBoyy",
+      "value": 61.946903228759766,
+      "map": "et_brewdog",
+      "date": "2026-06-02"
+    }
+  ],
+  "revived": [
+    {
+      "player": "v_kt_r",
+      "value": 19,
+      "map": "sw_goldrush_te",
+      "date": "2026-01-26"
+    },
+    {
+      "player": "qmr",
+      "value": 18,
+      "map": "et_brewdog",
+      "date": "2026-05-05"
+    }
+  ],
+  "useful_kills": [
+    {
+      "player": "carniee",
+      "value": 20,
+      "map": "erdenberg_t2",
+      "date": "2025-05-08"
+    },
+    {
+      "player": "vid",
+      "value": 18,
+      "map": "sw_goldrush_te",
+      "date": "2025-03-25"
+    }
+  ],
+  "obj_stolen": [
+    {
+      "player": "wiseBoy",
+      "value": 14,
+      "map": "etl_sp_delivery",
+      "date": "2026-05-26"
+    },
+    {
+      "player": "bronze",
+      "value": 12,
+      "map": "etl_sp_delivery",
+      "date": "2026-04-09"
+    }
+  ],
+  "obj_returned": [
+    {
+      "player": "r7'squAzefucking",
+      "value": 9,
+      "map": "etl_sp_delivery",
+      "date": "2026-07-21"
+    },
+    {
+      "player": "SQUUAZE",
+      "value": 6,
+      "map": "etl_sp_delivery",
+      "date": "2026-08-11"
+    }
+  ],
+  "dyna_planted": [
+    {
+      "player": "carniee",
+      "value": 7,
+      "map": "supply",
+      "date": "2026-03-10"
+    },
+    {
+      "player": "endekk",
+      "value": 6,
+      "map": "supply",
+      "date": "2026-05-31"
+    }
+  ],
+  "dyna_defused": [
+    {
+      "player": "s&o.lgz",
+      "value": 7,
+      "map": "erdenberg_t2",
+      "date": "2025-01-28"
+    },
+    {
+      "player": "s&o.lgz",
+      "value": 5,
+      "map": "erdenberg_t2",
+      "date": "2025-01-23"
+    }
+  ],
+  "match_damage": [
+    {
+      "player": "r7'squAzefucking",
+      "value": 10573,
+      "map": "etl_sp_delivery",
+      "date": "2026-07-21"
+    },
+    {
+      "player": "SQUUAZE",
+      "value": 10326,
+      "map": "supply",
+      "date": "2026-08-17"
+    }
+  ],
+  "match_kills": [
+    {
+      "player": "vid",
+      "value": 60,
+      "map": "sw_goldrush_te",
+      "date": "2025-01-21"
+    },
+    {
+      "player": "SQUUAZE",
+      "value": 56,
+      "map": "supply",
+      "date": "2026-08-17"
+    }
+  ],
+  "match_headshots": [
+    {
+      "player": "[MOD] squAze",
+      "value": 79,
+      "map": "etl_sp_delivery",
+      "date": "2026-07-13"
+    },
+    {
+      "player": "r7'squAzefucking",
+      "value": 76,
+      "map": "etl_sp_delivery",
+      "date": "2026-07-21"
+    }
+  ],
+  "match_xp": [
+    {
+      "player": "//^?/M.Demonslayer",
+      "value": 381.0,
+      "map": "sp_delivery_te",
+      "date": "2025-12-26"
+    },
+    {
+      "player": "bronze.",
+      "value": 354.0,
+      "map": "etl_sp_delivery",
+      "date": "2026-02-06"
+    }
+  ],
+  "match_revives": [
+    {
+      "player": "vid",
+      "value": 26,
+      "map": "sw_goldrush_te",
+      "date": "2026-01-26"
+    },
+    {
+      "player": "//^?/M.rAzzdOG",
+      "value": 21,
+      "map": "etl_sp_delivery",
+      "date": "2025-12-25"
+    }
+  ],
+  "match_gibs": [
+    {
+      "player": "SuperBoyy",
+      "value": 31,
+      "map": "te_escape2",
+      "date": "2026-07-13"
+    },
+    {
+      "player": "vid",
+      "value": 29,
+      "map": "sw_goldrush_te",
+      "date": "2025-01-21"
+    }
+  ]
+}

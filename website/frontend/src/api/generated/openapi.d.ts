@@ -5606,6 +5606,48 @@ export interface components {
             value: number;
         };
         /**
+         * LeaderboardRow
+         * @description One row of the generic stat leaderboard, as this endpoint returns it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4
+         *     distinct `period` branches (`7d`, `30d`, `season`, and the else-branch
+         *     all-time). Zero nulls in every field.
+         *
+         *     ⭐ `kills` and `deaths` are NOT nullable here even though the underlying
+         *     `kills` / `deaths` columns are `NOT NULL = NO`, and even though — unlike
+         *     `value` and `kd` in the very same dict — the handler passes them through
+         *     with no `or 0`. `SUM(x)` returns NULL only when EVERY row in the group is
+         *     NULL, and `GROUP BY` never produces an empty group, so a null needs null
+         *     data: there is none (0 null `kills` / `deaths` / `damage_given` rows in the
+         *     whole table). The coalesce asymmetry three lines apart is untidy, not a
+         *     signal that these two can be null.
+         *     ⛔ The residual is real and belongs to the DATA, not to this model: the day
+         *     a null `kills` row is written, this endpoint 500s. No test can catch that —
+         *     only the table can. Type it, don't widen it: `int | None` would buy nothing
+         *     but a null check on every consumer.
+         *
+         *     `value` is `float` and not `int | float`: the handler's `else 0` branch
+         *     (an int) needs a NULL `SUM`, unreachable for the same reason.
+         */
+        LeaderboardRow: {
+            /** Deaths */
+            deaths: number;
+            /** Guid */
+            guid: string;
+            /** Kd */
+            kd: number;
+            /** Kills */
+            kills: number;
+            /** Name */
+            name: string;
+            /** Rank */
+            rank: number;
+            /** Rounds */
+            rounds: number;
+            /** Value */
+            value: number;
+        };
+        /**
          * LineupChange
          * @description Membership delta of ONE team between two consecutive rounds.
          */
@@ -5838,6 +5880,41 @@ export interface components {
             round_label: string;
             /** Round Number */
             round_number: number | null;
+        };
+        /**
+         * RecordEntry
+         * @description One record holder in one category, as this endpoint returns it.
+         *
+         *     ⚠️ MEASURED, NOT DESIGNED. `value` is `int` for the counting categories and
+         *     `float` for `accuracy`, `xp` and `match_xp` — the union keeps each on the
+         *     wire exactly as the query produced it. Widening it to a bare `float` would
+         *     rewrite `"value": 5994` as `"value": 5994.0` for every counting category:
+         *     a silent wire change on a page nobody would think to re-check.
+         *
+         *     `map` and `date` are `str` and NOT nullable, even though
+         *     `information_schema` reports all three columns of the `player_match_stats`
+         *     VIEW as `is_nullable = YES`. That report is about aggregates, not about
+         *     data: the view produces them as `max(map_name)` / `min(round_date)` over
+         *     columns that are `NOT NULL` in `player_comprehensive_stats`, and an
+         *     aggregate over a non-empty group cannot be null. Measured: 0 nulls in
+         *     6,863 view rows.
+         *
+         *     ⛔ This is the MIRROR of the `LEFT JOIN` trap in `SessionSummary`. There a
+         *     `NOT NULL` column arrives null because there was no row to join; here a
+         *     "nullable" column can never be null because the aggregate has one. The
+         *     schema is wrong in BOTH cases, in opposite directions — which is why the
+         *     rule is `schema -> handler -> what the query does to it`, and never the
+         *     schema alone.
+         */
+        RecordEntry: {
+            /** Date */
+            date: string;
+            /** Map */
+            map: string;
+            /** Player */
+            player: string;
+            /** Value */
+            value: number;
         };
         /** RenderRequest */
         RenderRequest: {
@@ -6211,6 +6288,65 @@ export interface components {
              * @example 14
              */
             window_days: number;
+        };
+        /**
+         * StatsRecords
+         * @description All-time records, keyed by category. EVERY FIELD IS OPTIONAL ON PURPOSE.
+         *
+         *     ⛔ DO NOT make any category required. The handler omits a category's key
+         *     entirely when its query succeeded with no rows (`if rows:` below), so a
+         *     required field is a 500 on exactly the view that is hardest to notice: a
+         *     filtered one. Measured, not theorised — `?map_name=goldrush` (a real ET map
+         *     this server has never recorded) answers `{}` with HTTP 200, and every one
+         *     of the 19 categories is absent. All 18 maps that DO have data return all 19.
+         *
+         *     ⚠️ ABSENCE AND `[]` MEAN DIFFERENT THINGS HERE, and the meanings are the
+         *     reverse of the intuitive reading:
+         *       - key ABSENT  -> the query ran and found nothing (no records for this map)
+         *       - key PRESENT as `[]` -> the query RAISED and was swallowed per-category
+         *     `response_model_exclude_none=True` on the route preserves both states
+         *     exactly: an absent category stays absent, a failed one stays `[]`. A reader
+         *     cannot be expected to guess this, which is why it is written down here.
+         */
+        StatsRecords: {
+            /** Accuracy */
+            accuracy?: components["schemas"]["RecordEntry"][] | null;
+            /** Damage */
+            damage?: components["schemas"]["RecordEntry"][] | null;
+            /** Dyna Defused */
+            dyna_defused?: components["schemas"]["RecordEntry"][] | null;
+            /** Dyna Planted */
+            dyna_planted?: components["schemas"]["RecordEntry"][] | null;
+            /** Gibs */
+            gibs?: components["schemas"]["RecordEntry"][] | null;
+            /** Headshots */
+            headshots?: components["schemas"]["RecordEntry"][] | null;
+            /** Kills */
+            kills?: components["schemas"]["RecordEntry"][] | null;
+            /** Match Damage */
+            match_damage?: components["schemas"]["RecordEntry"][] | null;
+            /** Match Gibs */
+            match_gibs?: components["schemas"]["RecordEntry"][] | null;
+            /** Match Headshots */
+            match_headshots?: components["schemas"]["RecordEntry"][] | null;
+            /** Match Kills */
+            match_kills?: components["schemas"]["RecordEntry"][] | null;
+            /** Match Revives */
+            match_revives?: components["schemas"]["RecordEntry"][] | null;
+            /** Match Xp */
+            match_xp?: components["schemas"]["RecordEntry"][] | null;
+            /** Obj Returned */
+            obj_returned?: components["schemas"]["RecordEntry"][] | null;
+            /** Obj Stolen */
+            obj_stolen?: components["schemas"]["RecordEntry"][] | null;
+            /** Revived */
+            revived?: components["schemas"]["RecordEntry"][] | null;
+            /** Revives */
+            revives?: components["schemas"]["RecordEntry"][] | null;
+            /** Useful Kills */
+            useful_kills?: components["schemas"]["RecordEntry"][] | null;
+            /** Xp */
+            xp?: components["schemas"]["RecordEntry"][] | null;
         };
         /**
          * StatsTrends
@@ -12234,7 +12370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["LeaderboardRow"][];
                 };
             };
             /** @description Validation Error */
@@ -12516,7 +12652,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StatsRecords"];
                 };
             };
             /** @description Validation Error */

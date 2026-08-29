@@ -189,10 +189,12 @@ import json as _json
 from pathlib import Path as _Path
 
 from website.backend.routers.challenges_router import CurrentChallenge
+from website.backend.routers.players_router import LeaderboardRow
 from website.backend.routers.records_awards import (
     AwardLeaderboard,
     AwardsPage,
     HallOfFame,
+    StatsRecords,
 )
 from website.backend.routers.records_maps import MapObjectiveRecords, MapStats
 from website.backend.routers.records_matches import (
@@ -1010,19 +1012,62 @@ def test_exclude_none_is_only_on_the_route_where_absence_is_the_meaning():
 
     Measured rather than assumed: `?metrics=rounds` returns `{dates, rounds}`
     with `kills` ABSENT, so consumers check presence, not value.
+
+    ⛔ THIS GUARD USED TO GREP THE ROUTER FILES FOR THE STRING, AND THAT WAS
+    WRONG. Deleting `response_model_exclude_none=True` from the `/stats/records`
+    route left the phrase behind in the model's own docstring, so the grep still
+    found the file and the guard still passed while the behaviour had changed:
+    every absent category would have started arriving as `null`. A guard that
+    reads PROSE can be satisfied by a comment. This one reads the ROUTE OBJECTS,
+    which is the only thing FastAPI actually acts on.
     """
+    import importlib
     from pathlib import Path
 
-    routers = Path("website/backend/routers")
-    users = []
-    for path in routers.glob("*.py"):
-        text = path.read_text()
-        if "response_model_exclude_none" in text:
-            users.append(path.name)
+    from fastapi.routing import APIRoute
 
-    assert users == ["records_trends.py"], (
-        f"exclude_none appeared on {users} — it drops every None in the model, "
-        f"so a field whose null carries meaning would vanish from the payload")
+    users = {}
+    for path in sorted(Path("website/backend/routers").glob("*.py")):
+        if path.stem == "__init__":
+            continue
+        module = importlib.import_module(f"website.backend.routers.{path.stem}")
+        router_obj = getattr(module, "router", None)
+        if router_obj is None:
+            continue
+        for route in router_obj.routes:
+            if isinstance(route, APIRoute) and route.response_model_exclude_none:
+                users[route.path] = path.name
+
+    assert sorted(users) == ["/stats/records", "/stats/trends"], (
+        f"exclude_none appeared on {sorted(users)} — it drops every None in the "
+        f"model, so a field whose null carries meaning would vanish from the "
+        f"payload. Adding a file here means asserting that NONE of its "
+        f"exclude_none model's fields uses null as a value.")
+
+    # `records_awards.py` earns it the same way trends does, and the claim is
+    # checked rather than asserted in prose: on `StatsRecords` every field is
+    # `list[RecordEntry] | None`, where None means "the category key was never
+    # in the dict". Nothing there uses null AS A VALUE, so dropping the Nones
+    # loses no information — it is what reproduces the handler's own behaviour
+    # of omitting a category that came back empty.
+    from website.backend.routers.records_awards import RecordEntry, StatsRecords
+
+    for name, field in StatsRecords.model_fields.items():
+        assert field.annotation == (list[RecordEntry] | None), (
+            f"StatsRecords.{name} is {field.annotation!r}, not "
+            f"list[RecordEntry] | None. exclude_none is on this route: a field "
+            f"whose null means anything other than 'key absent' would be "
+            f"silently dropped from the response.")
+        assert field.default is None, (
+            f"StatsRecords.{name} must default to None so an unset category is "
+            f"omitted rather than sent as null or []")
+
+    # And the entries themselves carry no Nones at all, so exclude_none can
+    # never reach inside a category and thin out a record.
+    for name, field in RecordEntry.model_fields.items():
+        assert type(None) not in getattr(field.annotation, "__args__", ()), (
+            f"RecordEntry.{name} became nullable — under exclude_none that key "
+            f"would vanish from a record instead of reading null")
 
 
 class TestSessionSummaryNullsHideBehindTheDefaultLimit:
@@ -1079,3 +1124,82 @@ class TestSessionSummaryNullsHideBehindTheDefaultLimit:
         for name in ("rounds", "maps", "players", "total_kills", "draws"):
             assert type(None) not in getattr(
                 fields[name].annotation, "__args__", (fields[name].annotation,))
+
+
+class TestTheTwoFilteredBoards:
+    """`/stats/leaderboard` and `/stats/records` — both take filters, and a
+    filter is where a response_model mistake hides best.
+
+    ⚠️ THE MUTATION THAT MOTIVATED THIS CLASS: deleting `deaths` from
+    `LeaderboardRow` changed nothing anywhere in this file. 101 tests passed
+    while the field silently vanished from every leaderboard payload — the
+    exact failure this module is named after, on a model the module did not
+    know about. Recording the fixtures is what gives it something to compare.
+
+    Coverage of the filters is measured, not assumed: all 9 valid `stat` values
+    × all 4 distinct `period` branches (`7d`, `30d`, `season`, and the
+    else-branch all-time) = 635 rows, zero nulls in any field. `min_games` is
+    accepted and then IGNORED — `having` is the empty string — so
+    `min_games=1` and `min_games=999` return identical rows.
+    """
+
+    def _fixture(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def test_no_leaderboard_field_is_dropped_or_altered(self):
+        rows = self._fixture("api_stats_leaderboard.json")
+        assert len(rows) == 25, "fixture trimmed — it no longer covers a full page"
+        for raw in rows:
+            modelled = _json.loads(
+                LeaderboardRow.model_validate(raw).model_dump_json())
+            assert not missing_keys(raw, modelled), (
+                f"LeaderboardRow dropped {missing_keys(raw, modelled)}")
+            assert raw == modelled, "LeaderboardRow altered a value"
+
+    def test_all_nineteen_record_categories_survive(self):
+        raw = self._fixture("api_stats_records.json")
+        assert len(raw) == 19, "fixture no longer holds every category"
+        modelled = _json.loads(
+            StatsRecords.model_validate(raw).model_dump_json(exclude_none=True))
+        assert not missing_keys(raw, modelled), (
+            f"StatsRecords dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, "StatsRecords altered a value"
+
+    def test_a_counting_record_stays_an_int_and_accuracy_stays_a_float(self):
+        """`value: int | float`, not `float`. A bare `float` would rewrite
+        `"value": 5994` as `"value": 5994.0` on every counting category —
+        a wire change nobody would think to re-check."""
+        raw = self._fixture("api_stats_records.json")
+        modelled = StatsRecords.model_validate(raw)
+        assert isinstance(modelled.damage[0].value, int)
+        assert isinstance(modelled.accuracy[0].value, float)
+        assert not isinstance(modelled.damage[0].value, bool)
+
+    def test_a_map_with_no_records_is_an_empty_object_not_a_500(self):
+        """⛔ THE REASON EVERY CATEGORY IS OPTIONAL.
+
+        `?map_name=goldrush` — a real ET map this server has never recorded —
+        answers `{}` with HTTP 200 and all 19 keys absent. One required field
+        would turn that into a 500 on a filtered view, which is the hardest
+        kind to notice. Recorded from the live endpoint, not constructed.
+        """
+        raw = self._fixture("api_stats_records_map_with_no_records.json")
+        assert raw == {}
+        modelled = _json.loads(
+            StatsRecords.model_validate(raw).model_dump_json(exclude_none=True))
+        assert modelled == {}, (
+            f"an empty result grew keys: {modelled} — exclude_none is what "
+            f"keeps 'category absent' distinguishable from 'category failed'")
+
+    def test_the_records_route_still_carries_exclude_none(self):
+        """The class above proves `{}` survives the MODEL. This proves the
+        ROUTE still asks for it — without `exclude_none` the same response
+        leaves as 19 nulls, and the absent/failed distinction is gone."""
+        from fastapi.routing import APIRoute
+
+        from website.backend.routers import records_awards
+
+        route = next(r for r in records_awards.router.routes
+                     if isinstance(r, APIRoute) and r.path == "/stats/records")
+        assert route.response_model is StatsRecords
+        assert route.response_model_exclude_none is True

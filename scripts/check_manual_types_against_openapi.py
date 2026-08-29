@@ -188,6 +188,19 @@ def main() -> int:
     for name, field, why, ts_type in findings:
         suffix = f"   (types.ts: {ts_type})" if ts_type else ""
         print(f"  {name}.{field}: {why}{suffix}")
+    if compared == 0:
+        # ⛔ NOT THE SAME AS AGREEMENT. An empty comparison and a clean
+        # comparison have the same shape — zero disagreements — and printing
+        # the reassuring line for both is how a tool tells you it checked
+        # something it never looked at. Measured: `--schema StatsRecords`
+        # reported "agree" while comparing nothing, because the hand-written
+        # side is `export type StatsRecords = Record<string, RecordEntry[]>`
+        # — a TYPE ALIAS. This parser reads `interface` declarations only, so
+        # every alias is invisible to it and silently counts as fine.
+        print("NOT COMPARED — no matching `interface` in types.ts.")
+        print("  A `type X = ...` alias is invisible to this parser; absence of")
+        print("  a finding here is absence of a check, not a clean result.")
+        return 2
     if not findings:
         print("hand-written types agree with the generated schema")
     return 1 if findings else 0
