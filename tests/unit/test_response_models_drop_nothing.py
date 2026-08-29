@@ -202,7 +202,12 @@ from website.backend.routers.records_matches import (
 )
 from website.backend.routers.records_seasons import CurrentSeason
 from website.backend.routers.records_trends import StatsTrends
-from website.backend.routers.records_weapons import WeaponsByPlayer
+from website.backend.routers.records_weapons import (
+    WeaponAggregate,
+    WeaponLeader,
+    WeaponsByPlayer,
+    WeaponsHallOfFame,
+)
 from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.sessions_router import SessionLeaderRow
 
@@ -810,3 +815,89 @@ class TestTheHandlersActuallyEmitTheThreeStates:
         assert quiet["status"] == "no_data"
         assert broken["status"] == "unavailable"
         assert quiet["days"] == broken["days"] == 30
+
+
+class TestWeaponEndpoints:
+    """`/stats/weapons` and `/stats/weapons/hall-of-fame` — and the difference
+    between them is worth stating, because it decides whether `status` belongs.
+
+    `/stats/weapons` does NOT swallow its exceptions: a failure propagates and
+    the caller gets a 500, which is an honest answer. It needs no state field.
+
+    The hall-of-fame DOES swallow, returning `{"period": p, "leaders": {}}`
+    with a 200 — so a failed query and a period with no weapon data were
+    identical on the wire. It gets the same three states as the map records and
+    the activity calendar.
+    """
+
+    def test_a_weapon_aggregate_survives(self):
+        row = {"name": "Mp40", "weapon_key": "mp40", "kills": 16308,
+               "headshots": 19461, "hs_rate": 12.9, "accuracy": 42.6}
+        modelled = _json.loads(WeaponAggregate.model_validate(row).model_dump_json())
+        assert missing_keys(row, modelled) == []
+        assert modelled == row
+
+    def test_the_rates_stay_fractional(self):
+        """`hs_rate` and `accuracy` are percentages with one decimal; typing
+        either `int` truncates silently, still with a 200."""
+        row = {"name": "K43", "weapon_key": "k43", "kills": 1, "headshots": 1,
+               "hs_rate": 12.9, "accuracy": 42.6}
+        modelled = WeaponAggregate.model_validate(row)
+        assert modelled.hs_rate == pytest.approx(12.9)
+        assert modelled.accuracy == pytest.approx(42.6)
+
+    def test_a_hall_of_fame_leader_survives(self):
+        payload = {"period": "all", "status": "ok", "note": None, "leaders": {
+            "mp40": {"weapon": "Mp40", "weapon_key": "mp40",
+                     "player_guid": "A" * 8, "player_name": "one",
+                     "kills": 900, "headshots": 300, "accuracy": 41.2}}}
+        modelled = _json.loads(
+            WeaponsHallOfFame.model_validate(payload).model_dump_json())
+        assert missing_keys(payload, modelled) == []
+        assert modelled == payload
+
+    def test_its_two_empties_are_distinguishable(self):
+        quiet = WeaponsHallOfFame.model_validate(
+            {"period": "month", "leaders": {}, "status": "no_data",
+             "note": "no weapon data for this period"})
+        broken = WeaponsHallOfFame.model_validate(
+            {"period": "month", "leaders": {}, "status": "unavailable",
+             "note": "the hall-of-fame query failed"})
+        assert quiet.leaders == broken.leaders == {}
+        assert quiet.status != broken.status
+
+    def test_the_leader_identity_stays_required(self):
+        """`player_guid` and `player_name` are NOT NULL columns. Widening them
+        would invite callers to handle a case the schema forbids."""
+        fields = WeaponLeader.model_fields
+        assert fields["player_guid"].annotation is str
+        assert fields["player_name"].annotation is str
+
+
+class TestTheWeaponHallOfFameHandlerEmitsItsStates:
+    """Again: the model allowing three states is not the handler producing
+    them."""
+
+    @pytest.mark.asyncio
+    async def test_it_says_no_data_for_an_empty_period(self):
+        from website.backend.routers.records_weapons import get_weapon_hall_of_fame
+
+        class _Empty:
+            async def fetch_all(self, *_a, **_k):
+                return []
+
+        out = await get_weapon_hall_of_fame(db=_Empty())
+        assert out["status"] == "no_data"
+        assert out["leaders"] == {}
+
+    @pytest.mark.asyncio
+    async def test_it_says_unavailable_when_the_query_raises(self):
+        from website.backend.routers.records_weapons import get_weapon_hall_of_fame
+
+        class _Broken:
+            async def fetch_all(self, *_a, **_k):
+                raise RuntimeError("connection lost")
+
+        out = await get_weapon_hall_of_fame(db=_Broken())
+        assert out["status"] == "unavailable"
+        assert "not an empty set" in out["note"]

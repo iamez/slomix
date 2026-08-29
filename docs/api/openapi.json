@@ -2316,6 +2316,89 @@
     "title": "VoiceMember",
     "type": "object"
    },
+   "WeaponAggregate": {
+    "description": "One weapon's line in the overall table.\n\n⚠️ Named apart from `WeaponRow` (the per-player row in the same file) on\npurpose: they share five field names and differ in two, and a single class\ncovering both would have to widen every field that only one of them has.\n\nAll six are guarded at the source — `int(...)` casts and a `hs_rate` whose\nbranch has `else 0.0` — so none is nullable. `weapon_comprehensive_stats`\ndeclares `weapon_name` NOT NULL, and the handler derives `name` and\n`weapon_key` from it.",
+    "properties": {
+     "accuracy": {
+      "title": "Accuracy",
+      "type": "number"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "hs_rate": {
+      "title": "Hs Rate",
+      "type": "number"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "weapon_key": {
+      "title": "Weapon Key",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "weapon_key",
+     "kills",
+     "headshots",
+     "hs_rate",
+     "accuracy"
+    ],
+    "title": "WeaponAggregate",
+    "type": "object"
+   },
+   "WeaponLeader": {
+    "description": "The top player for one weapon.\n\n`player_guid` and `player_name` are NOT NULL columns, so they stay\nrequired — widening them would invite callers to handle a case the schema\nforbids.",
+    "properties": {
+     "accuracy": {
+      "title": "Accuracy",
+      "type": "number"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "weapon": {
+      "title": "Weapon",
+      "type": "string"
+     },
+     "weapon_key": {
+      "title": "Weapon Key",
+      "type": "string"
+     }
+    },
+    "required": [
+     "weapon",
+     "weapon_key",
+     "player_guid",
+     "player_name",
+     "kills",
+     "headshots",
+     "accuracy"
+    ],
+    "title": "WeaponLeader",
+    "type": "object"
+   },
    "WeaponRow": {
     "description": "One weapon's line for one player.\n\nTypes are the union over 125 weapon rows of a live response: `hs_rate` and\n`accuracy` are fractional percentages, the rest are counts. Typing the two\npercentages `int` would truncate them — a schema can corrupt a number as\neasily as it can drop a field.",
     "properties": {
@@ -2394,6 +2477,44 @@
      "players"
     ],
     "title": "WeaponsByPlayer",
+    "type": "object"
+   },
+   "WeaponsHallOfFame": {
+    "description": "⛔ THREE STATES: the handler swallows its own exception and answers 200.\n\nBefore this, a failed query and a period with no weapon data both returned\n`{\"period\": p, \"leaders\": {}}` — so a client reading `Object.keys(leaders)`\ncould not tell a measured emptiness from an unmeasured one. Same shape as\n`/records/maps/segments` and `/stats/activity-calendar`, agreed with the\nworkstream that renders them.",
+    "properties": {
+     "leaders": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/WeaponLeader"
+      },
+      "title": "Leaders",
+      "type": "object"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "period": {
+      "title": "Period",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "period",
+     "leaders",
+     "status"
+    ],
+    "title": "WeaponsHallOfFame",
     "type": "object"
    },
    "WeeklyChallenge": {
@@ -15271,7 +15392,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/WeaponAggregate"
+         },
+         "title": "Response Get Weapon Stats Api Stats Weapons Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -15535,7 +15662,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/WeaponsHallOfFame"
+        }
        }
       },
       "description": "Successful Response"

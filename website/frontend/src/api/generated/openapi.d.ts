@@ -6341,6 +6341,57 @@ export interface components {
             name: string;
         };
         /**
+         * WeaponAggregate
+         * @description One weapon's line in the overall table.
+         *
+         *     ⚠️ Named apart from `WeaponRow` (the per-player row in the same file) on
+         *     purpose: they share five field names and differ in two, and a single class
+         *     covering both would have to widen every field that only one of them has.
+         *
+         *     All six are guarded at the source — `int(...)` casts and a `hs_rate` whose
+         *     branch has `else 0.0` — so none is nullable. `weapon_comprehensive_stats`
+         *     declares `weapon_name` NOT NULL, and the handler derives `name` and
+         *     `weapon_key` from it.
+         */
+        WeaponAggregate: {
+            /** Accuracy */
+            accuracy: number;
+            /** Headshots */
+            headshots: number;
+            /** Hs Rate */
+            hs_rate: number;
+            /** Kills */
+            kills: number;
+            /** Name */
+            name: string;
+            /** Weapon Key */
+            weapon_key: string;
+        };
+        /**
+         * WeaponLeader
+         * @description The top player for one weapon.
+         *
+         *     `player_guid` and `player_name` are NOT NULL columns, so they stay
+         *     required — widening them would invite callers to handle a case the schema
+         *     forbids.
+         */
+        WeaponLeader: {
+            /** Accuracy */
+            accuracy: number;
+            /** Headshots */
+            headshots: number;
+            /** Kills */
+            kills: number;
+            /** Player Guid */
+            player_guid: string;
+            /** Player Name */
+            player_name: string;
+            /** Weapon */
+            weapon: string;
+            /** Weapon Key */
+            weapon_key: string;
+        };
+        /**
          * WeaponRow
          * @description One weapon's line for one player.
          *
@@ -6377,6 +6428,28 @@ export interface components {
             player_count: number;
             /** Players */
             players: components["schemas"]["PlayerWeapons"][];
+        };
+        /**
+         * WeaponsHallOfFame
+         * @description ⛔ THREE STATES: the handler swallows its own exception and answers 200.
+         *
+         *     Before this, a failed query and a period with no weapon data both returned
+         *     `{"period": p, "leaders": {}}` — so a client reading `Object.keys(leaders)`
+         *     could not tell a measured emptiness from an unmeasured one. Same shape as
+         *     `/records/maps/segments` and `/stats/activity-calendar`, agreed with the
+         *     workstream that renders them.
+         */
+        WeaponsHallOfFame: {
+            /** Leaders */
+            leaders: {
+                [key: string]: components["schemas"]["WeaponLeader"];
+            };
+            /** Note */
+            note?: string | null;
+            /** Period */
+            period: string;
+            /** Status */
+            status: string;
         };
         /**
          * WeeklyChallenge
@@ -12768,7 +12841,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WeaponAggregate"][];
                 };
             };
             /** @description Validation Error */
@@ -12871,7 +12944,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WeaponsHallOfFame"];
                 };
             };
             /** @description Validation Error */
