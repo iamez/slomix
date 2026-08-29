@@ -558,6 +558,30 @@ async def compute_and_store_ratings(db) -> int:
         "DELETE FROM player_skill_history WHERE player_guid LIKE 'OMNIBOT%'"
     )
 
+    # The same sentence, one word wider: a row for ANY player who is no
+    # longer in the cohort sits in the table forever too. Measured on dev
+    # 2026-08-29 — three rows written 2026-05-06 (G4rch4, -C3jZi, MrAvAc)
+    # were still on the public leaderboard four months later. Their players
+    # had fallen under MIN_ROUNDS (the table said 6 rounds; they have 4), so
+    # no later run touched them, and their ratings predate the shrinkage fix
+    # entirely: MrAvAc's published rating equalled his raw score. A rating is
+    # a percentile against the cohort it was computed with, so a row from a
+    # different cohort is not comparable with the rest of the board — it is
+    # a different measurement wearing the same column.
+    #
+    # A rating is only ever published for players in the current run, so the
+    # table is reconciled to that run. History is NOT touched: player_skill_
+    # history keeps every snapshot, which is where the past belongs.
+    #
+    # ⛔ Guarded on a non-empty result. A failed or empty computation must
+    # not be allowed to empty the table — that would turn a bad run into
+    # data loss.
+    if results:
+        await db.execute(
+            "DELETE FROM player_skill_ratings WHERE player_guid <> ALL($1)",
+            ([p["player_guid"] for p in results],),
+        )
+
     for player in results:
         components_json = json.dumps(player["components"])
 

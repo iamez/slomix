@@ -1000,6 +1000,9 @@ export interface SkillLeaderboard {
     constant: number;
     version: string;
     shrinkage_k: number;
+    /** Mean RAW rating over the rated cohort — the shrinkage prior. Null
+     * when nothing is rated, which the page says rather than printing 0. */
+    pool_mean?: number | null;
   };
   players: RatedPlayer[];
 }

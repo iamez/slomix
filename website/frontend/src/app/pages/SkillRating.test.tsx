@@ -68,8 +68,33 @@ describe('SkillRating', () => {
     expect(screen.getByText('+0.12')).toBeInTheDocument();
     // The raw sum is printed as the raw sum…
     expect(screen.getByText(/raw = constant \+ Σ = 0\.7523/)).toBeInTheDocument();
-    // …and the step between it and the published number is named.
-    expect(screen.getByText(/published 0\.7481 — the raw score shrunk toward the pool mean/)).toBeInTheDocument();
+    // …and the second step is performed, not just named: weight n/(n+k) with
+    // n=1760 and k=40 is 0.978, and the recording's pool mean is 0.5701.
+    // 0.978 × 0.7523 + 0.022 × 0.5701 = 0.7483, and the published figure is
+    // 0.7481. The 0.0002 gap is the components' own rounding to four
+    // decimals — the same residual the whole cohort shows once the table
+    // holds one run's worth of rows.
+    expect(screen.getByText(/× 0\.978 \+ pool 0\.5701 × 0\.022 = 0\.7483 → published 0\.7481/))
+      .toBeInTheDocument();
+  });
+
+  it('says so when the pool mean is missing instead of inventing the step', async () => {
+    // Nothing rated yet → pool_mean is null. A page that quietly substituted
+    // zero would print a shrinkage that never happened.
+    const noPool = {
+      ...(leaderboard as object),
+      meta: { ...(leaderboard as { meta: object }).meta, pool_mean: null },
+    };
+    renderPage((input) => {
+      const url = String(input);
+      if (url.includes('/skill/leaderboard')) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(noPool) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getAllByRole('button', { name: 'why' }).length).toBeGreaterThan(0));
+    screen.getAllByRole('button', { name: 'why' })[0].click();
+    await waitFor(() => expect(screen.getByText(/pool mean unavailable/)).toBeInTheDocument());
   });
 
   it('does not call the SSR endpoint until its panel is opened', async () => {

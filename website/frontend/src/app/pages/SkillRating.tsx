@@ -16,18 +16,19 @@ import type { RatedPlayer, SsrPlayer } from '../lib/types';
  * kept apart, labelled by version, and the SSR panel prints coverage beside
  * every score rather than under a footnote.
  *
- * WHAT THE COMPONENT PANEL IS, AND IS NOT. The first version of this page
- * said the components "are the sum the rating is". They are not, and the
- * review was right to stop it. `constant + Σ contribution` produces the RAW
- * score; the published rating then passes through
- * `(n·raw + k·pool_mean)/(n+k)`, and `pool_mean` is not in the payload.
- * Measured on dev 2026-08-28: for vid the two differ by 0.004, for SQUUAZE
- * by 0.051, and only 12 of 31 rows reconstruct at all — one of them,
- * MrAvAc at 6 rounds, has a published rating exactly equal to its raw score,
- * i.e. no shrinkage applied where shrinkage matters most. That is a backend
- * question, not a page one; the page's duty is to stop claiming an identity
- * that does not hold. So the panel is labelled as the RAW side, and the
- * shrinkage step is named rather than recomputed.
+ * WHAT THE COMPONENT PANEL SHOWS. `constant + Σ contribution` produces the
+ * RAW score; the published rating is that shrunk toward the pool mean by
+ * `(n·raw + k·pool_mean)/(n+k)`. The first version of this page called the
+ * components "the sum the rating is", which skipped the second step — the
+ * review was right to stop it. The panel now prints BOTH steps.
+ *
+ * ⚠️ A correction to my own earlier note, which claimed "only 12 of 31 rows
+ * reconstruct" as evidence of inconsistent shrinkage. That was a bad read:
+ * three rows in the table were four months stale and were poisoning the
+ * pool mean I reconstructed with. With the cohort reconciled (see
+ * skill_rating_service.compute_and_store_ratings) every published rating
+ * reconstructs to within 0.0003 — the components' own rounding. Shrinkage
+ * was consistent all along; my pool was not.
  */
 
 const TIER_COLOUR = new Map<string, string>([
@@ -53,9 +54,15 @@ function ContributionBar({ value, scale }: { value: number; scale: number }) {
   );
 }
 
-function Components({ player, constant }: { player: RatedPlayer; constant: number }) {
+function Components({ player, constant, shrinkageK, poolMean }: {
+  player: RatedPlayer; constant: number; shrinkageK: number; poolMean: number | null;
+}) {
   const entries = Object.entries(player.components);
   const raw = constant + entries.reduce((sum, [, c]) => sum + c.contribution, 0);
+  // The shrinkage weight, computed rather than read: `confidence` in the
+  // payload is min(1, n/30), a different quantity that reads like this one.
+  const weight = player.games_rated / (player.games_rated + shrinkageK);
+  const shrunk = poolMean == null ? raw : weight * raw + (1 - weight) * poolMean;
   const scale = Math.max(...entries.map(([, c]) => Math.abs(c.contribution)), 0.01);
   const sorted = [...entries].sort((a, b) => Math.abs(b[1].contribution) - Math.abs(a[1].contribution));
   return (
@@ -68,9 +75,17 @@ function Components({ player, constant }: { player: RatedPlayer; constant: numbe
         <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-300)' }}>
           raw = constant + Σ = {raw.toFixed(4)}
         </span>
-        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
-          published {player.et_rating.toFixed(4)} — the raw score shrunk toward the pool mean by n/(n+k), n={player.games_rated}
-        </span>
+        {poolMean == null ? (
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+            published {player.et_rating.toFixed(4)} · pool mean unavailable, so the
+            shrinkage step cannot be shown
+          </span>
+        ) : (
+          <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+            × {weight.toFixed(3)} + pool {poolMean.toFixed(4)} × {(1 - weight).toFixed(3)}
+            {' = '}{shrunk.toFixed(4)} → published {player.et_rating.toFixed(4)}
+          </span>
+        )}
       </Cluster>
       {sorted.map(([name, c]) => (
         <Cluster key={name} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-1) 0' }}>
@@ -96,8 +111,9 @@ function Components({ player, constant }: { player: RatedPlayer; constant: numbe
   );
 }
 
-function RatedRow({ player, open, onToggle, ambiguous, constant }: {
-  player: RatedPlayer; open: boolean; onToggle: () => void; ambiguous: boolean; constant: number;
+function RatedRow({ player, open, onToggle, ambiguous, constant, shrinkageK, poolMean }: {
+  player: RatedPlayer; open: boolean; onToggle: () => void; ambiguous: boolean;
+  constant: number; shrinkageK: number; poolMean: number | null;
 }) {
   return (
     <Stack gap={1}>
@@ -142,7 +158,7 @@ function RatedRow({ player, open, onToggle, ambiguous, constant }: {
           </button>
         </Cluster>
       </Cluster>
-      {open && <Components player={player} constant={constant} />}
+      {open && <Components player={player} constant={constant} shrinkageK={shrinkageK} poolMean={poolMean} />}
     </Stack>
   );
 }
@@ -232,7 +248,9 @@ export function SkillRating() {
                 open={open === p.player_guid}
                 onToggle={() => { setOpen(open === p.player_guid ? null : p.player_guid); }}
                 ambiguous={(nameCounts.get(p.display_name) ?? 0) > 1}
-                constant={board.data?.meta.constant ?? 0}
+                constant={board.data.meta.constant}
+                shrinkageK={board.data.meta.shrinkage_k}
+                poolMean={board.data.meta.pool_mean ?? null}
               />
             ))}
           </Stack>
