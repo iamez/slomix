@@ -29,6 +29,44 @@ from website.backend.services.website_session_data_service import (
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
+class SessionSummary(BaseModel):
+    """One session in the list.
+
+    ⛔ THE COLUMN'S NULLABILITY IS NOT THE FIELD'S. `session_results.
+    team_1_score` and `winning_team` are NOT NULL in the schema — and null in
+    84 of 137 responses, because the query LEFT JOINs the BOX table and a
+    session without team attribution has no row to join. Reading
+    `information_schema` alone would have typed all five team fields
+    non-null and answered 500 on the majority of sessions.
+
+    So the rule needs a third step after "schema, then handler": what the JOIN
+    does to it. A LEFT JOIN manufactures nulls from columns that forbid them.
+    """
+
+    date: str
+    session_id: int
+    rounds: int
+    maps: int
+    players: int
+    total_kills: int
+    #: Split from a comma-joined string; empty when the column was null.
+    maps_played: list[str]
+    #: Map wins by SIDE — sides swap every map, so these are not team totals.
+    allies_wins: int
+    axis_wins: int
+    draws: int
+    #: All five are null together when the session has no BOX attribution.
+    team_1_name: str | None
+    team_2_name: str | None
+    team_1_score: int | None
+    team_2_score: int | None
+    winning_team: int | None
+    #: Rendered by the handler ("2 days ago", "Friday, August 28, 2026") —
+    #: presentation the legacy pages already depend on, not raw data.
+    time_ago: str
+    formatted_date: str
+
+
 class SessionLeaderRow(BaseModel):
     """One row of the session DPM leaderboard.
 
@@ -490,7 +528,7 @@ async def get_matches(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
     return await data_service.get_recent_matches(limit)
 
 
-@router.get("/sessions")
+@router.get("/sessions", response_model=list[SessionSummary])
 async def get_sessions_list(
     limit: int = 20, offset: int = 0, db: DatabaseAdapter = Depends(get_db)
 ):

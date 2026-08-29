@@ -1756,6 +1756,138 @@
     "title": "SessionRounds",
     "type": "object"
    },
+   "SessionSummary": {
+    "description": "One session in the list.\n\n⛔ THE COLUMN'S NULLABILITY IS NOT THE FIELD'S. `session_results.\nteam_1_score` and `winning_team` are NOT NULL in the schema — and null in\n84 of 137 responses, because the query LEFT JOINs the BOX table and a\nsession without team attribution has no row to join. Reading\n`information_schema` alone would have typed all five team fields\nnon-null and answered 500 on the majority of sessions.\n\nSo the rule needs a third step after \"schema, then handler\": what the JOIN\ndoes to it. A LEFT JOIN manufactures nulls from columns that forbid them.",
+    "properties": {
+     "allies_wins": {
+      "title": "Allies Wins",
+      "type": "integer"
+     },
+     "axis_wins": {
+      "title": "Axis Wins",
+      "type": "integer"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "draws": {
+      "title": "Draws",
+      "type": "integer"
+     },
+     "formatted_date": {
+      "title": "Formatted Date",
+      "type": "string"
+     },
+     "maps": {
+      "title": "Maps",
+      "type": "integer"
+     },
+     "maps_played": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Maps Played",
+      "type": "array"
+     },
+     "players": {
+      "title": "Players",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "session_id": {
+      "title": "Session Id",
+      "type": "integer"
+     },
+     "team_1_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 1 Name"
+     },
+     "team_1_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 1 Score"
+     },
+     "team_2_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 2 Name"
+     },
+     "team_2_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 2 Score"
+     },
+     "time_ago": {
+      "title": "Time Ago",
+      "type": "string"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "winning_team": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winning Team"
+     }
+    },
+    "required": [
+     "date",
+     "session_id",
+     "rounds",
+     "maps",
+     "players",
+     "total_kills",
+     "maps_played",
+     "allies_wins",
+     "axis_wins",
+     "draws",
+     "team_1_name",
+     "team_2_name",
+     "team_1_score",
+     "team_2_score",
+     "winning_team",
+     "time_ago",
+     "formatted_date"
+    ],
+    "title": "SessionSummary",
+    "type": "object"
+   },
    "StatsOverview": {
     "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per\nmetric when its aggregate raises, and the endpoint still answers 200 — so\na zero here means \"none, or the query failed\", and no schema can tell them\napart. Naming that is the honest thing a type can do about it; fixing it\nmeans giving `_safe_val` a per-metric error flag, which is a separate\nchange.",
     "properties": {
@@ -13645,7 +13777,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/SessionSummary"
+         },
+         "title": "Response Get Sessions List Api Sessions Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"

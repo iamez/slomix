@@ -6110,6 +6110,56 @@ export interface components {
             total_rounds: number;
         };
         /**
+         * SessionSummary
+         * @description One session in the list.
+         *
+         *     ⛔ THE COLUMN'S NULLABILITY IS NOT THE FIELD'S. `session_results.
+         *     team_1_score` and `winning_team` are NOT NULL in the schema — and null in
+         *     84 of 137 responses, because the query LEFT JOINs the BOX table and a
+         *     session without team attribution has no row to join. Reading
+         *     `information_schema` alone would have typed all five team fields
+         *     non-null and answered 500 on the majority of sessions.
+         *
+         *     So the rule needs a third step after "schema, then handler": what the JOIN
+         *     does to it. A LEFT JOIN manufactures nulls from columns that forbid them.
+         */
+        SessionSummary: {
+            /** Allies Wins */
+            allies_wins: number;
+            /** Axis Wins */
+            axis_wins: number;
+            /** Date */
+            date: string;
+            /** Draws */
+            draws: number;
+            /** Formatted Date */
+            formatted_date: string;
+            /** Maps */
+            maps: number;
+            /** Maps Played */
+            maps_played: string[];
+            /** Players */
+            players: number;
+            /** Rounds */
+            rounds: number;
+            /** Session Id */
+            session_id: number;
+            /** Team 1 Name */
+            team_1_name: string | null;
+            /** Team 1 Score */
+            team_1_score: number | null;
+            /** Team 2 Name */
+            team_2_name: string | null;
+            /** Team 2 Score */
+            team_2_score: number | null;
+            /** Time Ago */
+            time_ago: string;
+            /** Total Kills */
+            total_kills: number;
+            /** Winning Team */
+            winning_team: number | null;
+        };
+        /**
          * StatsOverview
          * @description The homepage figures, as this endpoint actually returns them.
          *
@@ -6174,9 +6224,24 @@ export interface components {
          *     because a client cannot tell "you did not ask for kills" from "there were
          *     no kills".
          *
-         *     `exclude_none` is NOT set on the route: a field the caller did not request
-         *     must stay out of the payload, which is what omitting it from the handler's
-         *     dict already does.
+         *     ⚠️ THIS PARAGRAPH USED TO SAY `exclude_none` IS NOT SET. It is — line 53 —
+         *     and I wrote both. A comment that contradicts the decorator three lines away
+         *     is worse than no comment: the next reader trusts it and reasons from it.
+         *
+         *     MEASURED, so the client knows which check to write:
+         *
+         *         ?metrics=rounds  ->  {"dates": [...], "rounds": [...]}
+         *                              `kills` is ABSENT. Not null — the key is gone.
+         *
+         *     So a consumer checks PRESENCE (`'kills' in data`), never value. Reading an
+         *     absent key as nullable is what crashed `session-detail` next door:
+         *     `total_votes === 0` is false for `undefined`, so the drawing branch ran.
+         *
+         *     ⛔ `exclude_none` is safe HERE and would not be everywhere: it drops any
+         *     field whose value is None, so a model where null carries meaning — an
+         *     unresolved award guid, a round with no clock — must not use it. Those
+         *     models return their nulls, and none of this route's fields uses null as a
+         *     value; the handler either builds the series or omits the key.
          */
         StatsTrends: {
             /** Active Players */
@@ -11654,7 +11719,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SessionSummary"][];
                 };
             };
             /** @description Validation Error */

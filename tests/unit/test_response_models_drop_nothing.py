@@ -209,7 +209,10 @@ from website.backend.routers.records_weapons import (
     WeaponsHallOfFame,
 )
 from website.backend.routers.season_awards_router import SeasonAwards
-from website.backend.routers.sessions_router import SessionLeaderRow
+from website.backend.routers.sessions_router import (
+    SessionLeaderRow,
+    SessionSummary,
+)
 
 _FIXTURES = _Path(__file__).resolve().parents[1] / "fixtures" / "api_responses"
 
@@ -1020,3 +1023,59 @@ def test_exclude_none_is_only_on_the_route_where_absence_is_the_meaning():
     assert users == ["records_trends.py"], (
         f"exclude_none appeared on {users} — it drops every None in the model, "
         f"so a field whose null carries meaning would vanish from the payload")
+
+
+class TestSessionSummaryNullsHideBehindTheDefaultLimit:
+    """⛔ THE DEFAULT CALL SHOWS NO NULLS AT ALL.
+
+        /api/sessions              20 sessions,   0 null values
+        /api/sessions?limit=1       1 session,    0 null values
+        /api/sessions?limit=200   137 sessions, 420 null values
+
+    Typing this from the default response — the obvious thing to do — would
+    have made all five team fields non-null and answered 500 on the majority of
+    sessions, because 84 of 137 have no BOX attribution.
+
+    ⚠️ AND `information_schema` WOULD NOT HAVE SAVED IT EITHER.
+    `session_results.team_1_score` and `winning_team` are NOT NULL columns. The
+    nulls come from the query's LEFT JOIN: a session with no team row has
+    nothing to join, so the column's own nullability says nothing about the
+    field's. The rule needs a third step — schema, then handler, then what the
+    JOIN does to it.
+    """
+
+    def _row(self, **over):
+        row = {"date": "2026-08-26", "session_id": 153, "rounds": 18, "maps": 6,
+               "players": 6, "total_kills": 887, "maps_played": ["supply"],
+               "allies_wins": 3, "axis_wins": 4, "draws": 1,
+               "team_1_name": "A", "team_2_name": "B", "team_1_score": 3,
+               "team_2_score": 2, "winning_team": 1,
+               "time_ago": "2 days ago", "formatted_date": "Wednesday, August 26, 2026"}
+        row.update(over)
+        return row
+
+    def test_a_session_with_team_attribution_survives(self):
+        row = self._row()
+        modelled = _json.loads(SessionSummary.model_validate(row).model_dump_json())
+        assert missing_keys(row, modelled) == []
+        assert modelled == row
+
+    def test_a_session_without_it_is_accepted(self):
+        """The 84-of-137 case that the default limit never shows."""
+        row = self._row(team_1_name=None, team_2_name=None, team_1_score=None,
+                        team_2_score=None, winning_team=None)
+        modelled = SessionSummary.model_validate(row)
+        assert modelled.team_1_score is None
+        assert modelled.winning_team is None
+        #: the non-team fields are unaffected — the join only nulls its own side
+        assert modelled.rounds == 18
+        assert modelled.allies_wins == 3
+
+    def test_the_counts_stay_required(self):
+        """Widening everything would be the safe-looking move. `rounds`,
+        `maps`, `players` come from the driving table, not the joined one, so
+        they cannot be null and typing them so would invite dead checks."""
+        fields = SessionSummary.model_fields
+        for name in ("rounds", "maps", "players", "total_kills", "draws"):
+            assert type(None) not in getattr(
+                fields[name].annotation, "__args__", (fields[name].annotation,))
