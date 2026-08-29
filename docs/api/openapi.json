@@ -5303,6 +5303,7 @@
     "type": "object"
    },
    "TonightHoldProbability": {
+    "description": "⭐ `map` IS NON-NULL HERE WHILE `TonightMap.map` AND `current_map` ARE\nNOT, and the asymmetry is structural rather than an oversight. The handler\ncomputes the curve as `_hold_prob_curve(db, current_map) if current_map\nelse []`, and then emits this object only `if hold` — so a null map name\nyields an empty curve, an empty curve yields `hold_probability: None`, and\nthis object never exists with a null map. Same kind of guarantee as\n`head_pct` under its `HAVING` floor: a fact about the code, not about\ntoday's rows.",
     "properties": {
      "curve": {
       "items": {
