@@ -14,12 +14,27 @@ router = APIRouter()
 logger = get_app_logger("api.records.overview")
 
 
-# Legal rounds = completed / substitution, plus pre-round_status rows.
+# Legal rounds = completed / substitution, plus pre-round_status rows, and
+# `is_valid` — the column the parser sets FALSE on filler and mixed
+# human/bot test rounds, and the gate the rating service already applies.
+# Without it the row-level bot predicates below strip the bot rows from a
+# test round and keep the human tester's kills (Codex on #837). Measured
+# 2026-08-29: it removes 95 of 1,977 rounds and 36 of 110,816 kills — the
+# excluded rounds are nearly empty, which is why nobody noticed, and is also
+# why counting them was never worth defending.
 # Applied to every `rounds` aggregation so the overview matches what the
 # rest of the site counts as a valid round.
 _ROUND_FILTER = """
     WHERE round_number IN (1, 2)
       AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
+      AND is_valid
+"""
+
+# The same gate expressed for a query that reads player rows: bots are not
+# players, and a round the parser rejected is not a round.
+_HUMAN_ROWS = """
+          AND player_guid NOT LIKE 'OMNIBOT%'
+          AND player_name NOT LIKE '[BOT]%'
 """
 
 
@@ -127,27 +142,27 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
     # says so; this figure now agrees with them.
     players_all_time = await _safe_val(
         db,
-        """
+        f"""
         SELECT COUNT(DISTINCT player_guid)
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
-          AND player_guid NOT LIKE 'OMNIBOT%'
-          AND player_name NOT LIKE '[BOT]%'
-        """,
+          {_HUMAN_ROWS}
+          AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
+        """,  # nosec B608 - trusted module constants, not user input
         metric="players_all_time",
     )
     players_recent = await _safe_val(
         db,
-        """
+        f"""
         SELECT COUNT(DISTINCT player_guid)
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
-          AND player_guid NOT LIKE 'OMNIBOT%'
-          AND player_name NOT LIKE '[BOT]%'
+          {_HUMAN_ROWS}
+          AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-        """,
+        """,  # nosec B608 - trusted module constants, not user input
         (start_date_str,),
         metric="players_recent",
     )
@@ -163,8 +178,7 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         SELECT COALESCE(SUM(kills), 0)
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
-          AND player_guid NOT LIKE 'OMNIBOT%'
-          AND player_name NOT LIKE '[BOT]%'
+          {_HUMAN_ROWS}
           AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
         """,  # nosec B608 - trusted module constant, not user input
         metric="total_kills",
@@ -175,8 +189,7 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         SELECT COALESCE(SUM(kills), 0)
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
-          AND player_guid NOT LIKE 'OMNIBOT%'
-          AND player_name NOT LIKE '[BOT]%'
+          {_HUMAN_ROWS}
           AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,  # nosec B608 - trusted module constant, not user input
@@ -193,35 +206,43 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
 
 async def _fetch_most_active(db: DatabaseAdapter, start_date_str: str) -> tuple:
     """Top player by round count, overall and in the lookback."""
+    # Same gate as every other figure here. A bot never actually topped this
+    # (measured 2026-08-29: olz 1,811 rounds either way), but an ungated
+    # SELECT beside gated headlines is a contradiction waiting for the first
+    # heavy OMNIBOT week to surface it (Codex on #837).
     active_overall = await _safe_one(
         db,
-        """
+        f"""
         SELECT canonical_guid(player_guid) as player_guid,
                MAX(player_name) as player_name,
                COUNT(DISTINCT round_id) as rounds_played
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
+          {_HUMAN_ROWS}
+          AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
         GROUP BY canonical_guid(player_guid)
         ORDER BY rounds_played DESC
         LIMIT 1
-        """,
+        """,  # nosec B608 - trusted module constants, not user input
         metric="active_overall",
     )
     active_recent = await _safe_one(
         db,
-        """
+        f"""
         SELECT canonical_guid(player_guid) as player_guid,
                MAX(player_name) as player_name,
                COUNT(DISTINCT round_id) as rounds_played
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
+          {_HUMAN_ROWS}
+          AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         GROUP BY canonical_guid(player_guid)
         ORDER BY rounds_played DESC
         LIMIT 1
-        """,
+        """,  # nosec B608 - trusted module constants, not user input
         (start_date_str,),
         metric="active_recent",
     )
