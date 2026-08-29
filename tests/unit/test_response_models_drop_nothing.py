@@ -1634,3 +1634,48 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         raw = self._f("api_availability_anonymous.json")
         assert "from" in raw and "from_" not in raw
         assert "from" in self._roundtrip(raw)
+
+
+def test_availability_viewer_authenticated_is_the_include_users_gate():
+    """⭐ THE AMBIGUITY IS RESOLVABLE WITHOUT ADDING A FIELD, and this pins why.
+
+    `users_by_status` is gated on `include_users and user_id is not None`, and
+    `viewer.authenticated` is literally `user_id is not None` — the SAME
+    expression. So a caller who sent the flag and did not get the field can
+    read `viewer.authenticated` to learn which of the two reasons applies:
+    "nobody was on any status" (true) or "you were not allowed to ask" (false).
+
+    ⛔ This is a source-level assertion on purpose. The equivalence lives in
+    two places in one handler, and a fixture cannot notice them drifting
+    apart — it would just show a field missing, which is what it shows today.
+    """
+    import ast
+    from pathlib import Path
+
+    src = Path("website/backend/routers/availability.py").read_text()
+    tree = ast.parse(src)
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.AsyncFunctionDef)
+              and n.name == "get_availability_range")
+
+    gates = [ast.unparse(n) for n in ast.walk(fn)
+             if isinstance(n, ast.BoolOp) and isinstance(n.op, ast.And)
+             and any(isinstance(v, ast.Name) and v.id == "include_users"
+                     for v in n.values)]
+    # The gate is written TWICE — once to decide whether to run the roster
+    # query, once to decide whether to attach the field to each day. Both must
+    # say the same thing; a set comparison catches one of them drifting.
+    assert gates, "the include_users gate disappeared"
+    assert set(gates) == {"include_users and user_id is not None"}, (
+        f"the include_users gate(s) changed to {sorted(set(gates))} — "
+        f"`viewer.authenticated` may no longer tell a caller why the field "
+        f"is missing")
+
+    viewer_values = [ast.unparse(v)
+                     for n in ast.walk(fn) if isinstance(n, ast.Dict)
+                     for k, v in zip(n.keys, n.values)
+                     if isinstance(k, ast.Constant) and k.value == "authenticated"]
+    assert viewer_values == ["user_id is not None"], (
+        f"viewer.authenticated is now {viewer_values}, which no longer matches "
+        f"the include_users gate — consumers lose the only way to distinguish "
+        f"'no users' from 'not allowed to ask'")

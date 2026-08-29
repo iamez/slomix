@@ -109,7 +109,7 @@
    },
    "AvailabilityDayViewerWithUsers": {
     "additionalProperties": false,
-    "description": "…and with `?include_users=true`, who was on each status that day.\n\n⚠️ `include_users=true` IS SILENTLY IGNORED FOR AN ANONYMOUS CALLER. The\nhandler gates it on `include_users and user_id is not None`, so the API\naccepts the parameter, answers 200, and simply omits the field. Measured:\nanonymous with and without the flag are byte-identical.",
+    "description": "…and with `?include_users=true`, who was on each status that day.\n\n⚠️ `include_users=true` IS SILENTLY IGNORED FOR AN ANONYMOUS CALLER. The\nhandler gates it on `include_users and user_id is not None`, so the API\naccepts the parameter, answers 200, and simply omits the field. Measured:\nanonymous with and without the flag are byte-identical.\n\n⭐ THE CALLER CAN STILL TELL, AND NO NEW FIELD IS NEEDED: `viewer.\nauthenticated` IS `user_id is not None` — the same expression that gates\nthis field. So `authenticated: false` means \"the flag could not be\nhonoured\", and `authenticated: true` with the field absent would mean the\nflag was not sent. The distinction was always derivable; what was missing\nwas anyone saying so. That equivalence is the contract, so it is pinned in\n`tests/unit/test_response_models_drop_nothing.py` — if the gate and\n`viewer.authenticated` ever stop agreeing, the guarantee breaks loudly\ninstead of leaving consumers with a flag that quietly does nothing.",
     "properties": {
      "counts": {
       "additionalProperties": {
@@ -16745,11 +16745,13 @@
       }
      },
      {
+      "description": "Accepted and ignored — the handler applies no HAVING clause. Kept only so that existing callers do not change behaviour; do not build on it.",
       "in": "query",
       "name": "min_games",
       "required": false,
       "schema": {
        "default": 3,
+       "description": "Accepted and ignored — the handler applies no HAVING clause. Kept only so that existing callers do not change behaviour; do not build on it.",
        "title": "Min Games",
        "type": "integer"
       }

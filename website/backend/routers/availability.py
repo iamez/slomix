@@ -486,6 +486,16 @@ class AvailabilityDayViewerWithUsers(AvailabilityDayViewer):
     handler gates it on `include_users and user_id is not None`, so the API
     accepts the parameter, answers 200, and simply omits the field. Measured:
     anonymous with and without the flag are byte-identical.
+
+    ⭐ THE CALLER CAN STILL TELL, AND NO NEW FIELD IS NEEDED: `viewer.
+    authenticated` IS `user_id is not None` — the same expression that gates
+    this field. So `authenticated: false` means "the flag could not be
+    honoured", and `authenticated: true` with the field absent would mean the
+    flag was not sent. The distinction was always derivable; what was missing
+    was anyone saying so. That equivalence is the contract, so it is pinned in
+    `tests/unit/test_response_models_drop_nothing.py` — if the gate and
+    `viewer.authenticated` ever stop agreeing, the guarantee breaks loudly
+    instead of leaving consumers with a flag that quietly does nothing.
     """
 
     model_config = ConfigDict(extra="forbid")

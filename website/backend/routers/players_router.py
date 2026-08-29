@@ -1154,7 +1154,20 @@ class LeaderboardRow(BaseModel):
 async def get_leaderboard(
     stat: str = "dpm",
     period: str = "30d",
-    min_games: int = 3,
+    #: ⛔ ACCEPTED AND IGNORED. `having` below is the empty string, so this
+    #: value never reaches the query: `min_games=1` and `min_games=999` return
+    #: identical rows (measured). It is NOT removed, because removing it would
+    #: change an observable response — `min_games=abc` answers 422 today and
+    #: would answer 200 once FastAPI stops knowing the parameter — and no
+    #: caller sends it, so that change would buy nothing. Left declared and
+    #: labelled instead: a parameter that VALIDATES a value and then discards
+    #: it is the worst of the three states, because rejecting bad input is
+    #: exactly what makes it look like it works.
+    min_games: int = Query(
+        default=3,
+        description="Accepted and ignored — the handler applies no HAVING "
+                    "clause. Kept only so that existing callers do not change "
+                    "behaviour; do not build on it."),
     limit: int = 50,
     db: DatabaseAdapter = Depends(get_db),
 ):
