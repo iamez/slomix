@@ -7297,6 +7297,134 @@ export interface components {
             a: components["schemas"]["TonightTeam"];
             b: components["schemas"]["TonightTeam"];
         };
+        /**
+         * UploadDetail
+         * @description One upload, in full.
+         *
+         *     ⚠️ `description` here is the WHOLE text; the list sends
+         *     `description_preview`, capped at 160 characters. Two names, two lengths —
+         *     a shared renderer that reads `description` off a list item finds nothing.
+         *
+         *     `can_delete` is the only field on this endpoint that depends on the
+         *     session: it is `_may_delete(request, uploader_discord_id)`, the same rule
+         *     the DELETE endpoint enforces, so the button a user sees and the answer
+         *     they get cannot drift apart. Measured: identical payload for anonymous and
+         *     owner except this one boolean.
+         */
+        UploadDetail: {
+            /** Can Delete */
+            can_delete: boolean;
+            /** Category */
+            category: string;
+            /** Content Hash */
+            content_hash: string;
+            /** Created At */
+            created_at: string | null;
+            /** Description */
+            description: string | null;
+            /** Download Count */
+            download_count: number | null;
+            /** Download Url */
+            download_url: string;
+            /** Expires At */
+            expires_at: string | null;
+            /** Extension */
+            extension: string;
+            /** File Size Bytes */
+            file_size_bytes: number;
+            /** Filename */
+            filename: string;
+            /** Id */
+            id: string;
+            /** Is Playable */
+            is_playable: boolean;
+            /** Mime Type */
+            mime_type: string | null;
+            /** Poster Url */
+            poster_url: string | null;
+            /** Share Url */
+            share_url: string;
+            /** Tags */
+            tags: string[];
+            /** Title */
+            title: string;
+            /** Uploader Discord Id */
+            uploader_discord_id: number | null;
+            /** Uploader Name */
+            uploader_name: string;
+        };
+        /**
+         * UploadList
+         * @description A page of the library.
+         *
+         *     ⭐ VISIBILITY IS NOT AUTH-DEPENDENT, and that is worth stating because the
+         *     opposite is the reasonable guess. The only gate on this query is `_LIVE`
+         *     (`status = 'active'` and not expired) — no user condition anywhere — so an
+         *     anonymous caller and the uploader receive byte-identical lists. "No files"
+         *     therefore means one thing here, unlike `/api/availability`, where an empty
+         *     answer has two readings.
+         *
+         *     `total` is the count BEFORE limit/offset, so `offset=999` correctly returns
+         *     `items: []` with `total: 2` rather than pretending the library is empty.
+         */
+        UploadList: {
+            /** Items */
+            items: components["schemas"]["UploadListItem"][];
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+            /** Sort */
+            sort: string;
+            /** Total */
+            total: number;
+        };
+        /**
+         * UploadListItem
+         * @description One card in the upload library.
+         *
+         *     ⚠️ THREE FIELDS ARE NULL IN EVERY LIVE ROW and they are NULLABLE, NOT
+         *     OPTIONAL — the keys are always present. `description_preview` is
+         *     `LEFT(COALESCE(description,''),160) or None`, so an upload with no
+         *     description sends null rather than `""`; `expires_at` is null when the
+         *     uploader kept the file forever, which is the default; `poster_url` is null
+         *     for anything that never had a thumbnail captured. A model that made any of
+         *     them a required non-null field would answer 500 on the FIRST item.
+         *
+         *     ⭐ `poster_url` is the only one of the three where the corpus shows both
+         *     states (2 of 7 sampled rows carry a URL), so the other two are typed from
+         *     the handler's own `if … else None`, not from a reading.
+         */
+        UploadListItem: {
+            /** Category */
+            category: string;
+            /** Created At */
+            created_at: string | null;
+            /** Description Preview */
+            description_preview: string | null;
+            /** Download Count */
+            download_count: number | null;
+            /** Expires At */
+            expires_at: string | null;
+            /** Extension */
+            extension: string;
+            /** File Size Bytes */
+            file_size_bytes: number;
+            /** Filename */
+            filename: string;
+            /** Id */
+            id: string;
+            /** Poster Url */
+            poster_url: string | null;
+            /** Share Url */
+            share_url: string;
+            /** Title */
+            title: string;
+            /** Uploader Discord Id */
+            uploader_discord_id: number | null;
+            /** Uploader Name */
+            uploader_name: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -14823,7 +14951,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UploadList"];
                 };
             };
             /** @description Validation Error */
@@ -15097,7 +15225,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["UploadDetail"];
                 };
             };
             /** @description Validation Error */

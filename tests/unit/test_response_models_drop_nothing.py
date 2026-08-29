@@ -235,6 +235,11 @@ from website.backend.routers.sessions_router import (
     SessionLeaderRow,
     SessionSummary,
 )
+from website.backend.routers.uploads import (
+    UploadDetail,
+    UploadList,
+    UploadListItem,
+)
 
 _FIXTURES = _Path(__file__).resolve().parents[1] / "fixtures" / "api_responses"
 
@@ -1679,3 +1684,100 @@ def test_availability_viewer_authenticated_is_the_include_users_gate():
         f"viewer.authenticated is now {viewer_values}, which no longer matches "
         f"the include_users gate — consumers lose the only way to distinguish "
         f"'no users' from 'not allowed to ask'")
+
+
+class TestUploadsWhereTheAnswerIsUnambiguous:
+    """`/api/uploads` and `/api/uploads/{id}` — recorded partly as a NEGATIVE
+    result, which is the kind that never gets written down.
+
+    Neither of the two failure classes found elsewhere on this branch is
+    present here: no query parameter is accepted and ignored (`sort=nonsense`
+    and `category=nonexistent` answer 400, not a silent fallback), and
+    visibility does not depend on the session, so an empty list means one
+    thing. `offset=999` returns `items: []` with the honest `total: 2` rather
+    than pretending the library is empty.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, model, raw):
+        modelled = _json.loads(model.model_validate(raw).model_dump_json())
+        assert not missing_keys(raw, modelled), (
+            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, f"{model.__name__} altered a value"
+        return modelled
+
+    @pytest.mark.parametrize("fixture", [
+        "api_uploads_list.json",
+        "api_uploads_list_empty.json",
+        "api_uploads_list_offset_past_end.json",
+    ])
+    def test_the_list_survives_every_recorded_state(self, fixture):
+        self._roundtrip(UploadList, self._f(fixture))
+
+    def test_the_three_fields_that_are_null_in_every_live_row(self):
+        """⚠️ NULLABLE, NOT OPTIONAL — the keys are present and the values are
+        null. A required non-null type here is a 500 on the FIRST item, and
+        the whole corpus would agree with the mistake."""
+        items = self._f("api_uploads_list.json")["items"]
+        assert items, "the fixture lost its items"
+        for item in items:
+            for field in ("description_preview", "expires_at"):
+                assert field in item, f"{field} became optional"
+                assert item[field] is None
+        modelled = UploadList.model_validate(self._f("api_uploads_list.json"))
+        assert all(i.description_preview is None for i in modelled.items)
+        assert all(i.expires_at is None for i in modelled.items)
+
+    def test_an_offset_past_the_end_still_reports_the_real_total(self):
+        past = self._f("api_uploads_list_offset_past_end.json")
+        assert past["items"] == [] and past["total"] > 0, (
+            "the fixture no longer distinguishes 'past the end' from 'empty'")
+        self._roundtrip(UploadList, past)
+
+    def test_detail_survives_and_can_delete_is_the_only_session_field(self):
+        """⭐ MEASURED AGAINST BOTH SESSIONS: the anonymous and owner payloads
+        are identical except for `can_delete`. That is what makes it safe to
+        say upload visibility is not auth-dependent — not the absence of a
+        user clause in the query, which is only where I went looking."""
+        anon = self._f("api_uploads_detail.json")
+        owner = self._f("api_uploads_detail_owner.json")
+        differing = {k for k in anon if anon[k] != owner.get(k)}
+        assert differing == {"can_delete"}, (
+            f"the two sessions now differ on {sorted(differing)} — visibility "
+            f"may have become auth-dependent, and an empty library would then "
+            f"have two meanings")
+        assert anon["can_delete"] is False and owner["can_delete"] is True
+        self._roundtrip(UploadDetail, anon)
+        self._roundtrip(UploadDetail, owner)
+
+    def test_description_and_description_preview_are_different_fields(self):
+        """⚠️ The list sends `description_preview` (160 chars); the detail
+        sends `description` (the whole text). A shared renderer that reads
+        `description` off a list item finds nothing."""
+        item = self._f("api_uploads_list.json")["items"][0]
+        detail = self._f("api_uploads_detail.json")
+        assert "description_preview" in item and "description" not in item
+        assert "description" in detail and "description_preview" not in detail
+        assert set(UploadListItem.model_fields) & {"description"} == set()
+        assert set(UploadDetail.model_fields) & {"description_preview"} == set()
+
+    def test_an_upload_that_actually_has_tags(self):
+        """⛔ THE CORPUS HAS NO TAGGED UPLOAD, so `tags: list[str]` could be
+        widened to `list[Any]` with every test still green — the third time on
+        this branch that a fixture could not fail on a value it does not
+        contain. Both recorded uploads carry `tags: []`, and an empty list
+        proves nothing about its element type. Constructed here instead.
+        """
+        raw = dict(self._f("api_uploads_detail.json"))
+        assert raw["tags"] == [], "the fixture grew tags; update this test"
+        raw["tags"] = ["demo", "frag-movie"]
+        modelled = UploadDetail.model_validate(raw)
+        assert modelled.tags == ["demo", "frag-movie"]
+        assert all(isinstance(t, str) for t in modelled.tags)
+        # …and a non-string must be refused rather than carried through.
+        broken = dict(raw)
+        broken["tags"] = [{"tag": "demo"}]
+        with pytest.raises(Exception):
+            UploadDetail.model_validate(broken)

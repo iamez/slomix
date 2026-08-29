@@ -1,0 +1,22 @@
+{
+  "id": "de4f8d8628c148e5a8756a522aeb43b0",
+  "title": "etconfig.cfg",
+  "description": null,
+  "filename": "etconfig.cfg",
+  "category": "config",
+  "extension": ".cfg",
+  "file_size_bytes": 16801,
+  "mime_type": "text/plain; charset=utf-8",
+  "uploader_name": "seareal",
+  "uploader_discord_id": 231165917604741121,
+  "download_count": 1,
+  "content_hash": "95153c7b356707f1adf9ab8dda23059fc151e6cee7b1632024afd0ecd8f6d092",
+  "created_at": "2026-02-16 14:12:31.435938",
+  "expires_at": null,
+  "can_delete": false,
+  "tags": [],
+  "share_url": "/share/de4f8d8628c148e5a8756a522aeb43b0",
+  "download_url": "/api/uploads/de4f8d8628c148e5a8756a522aeb43b0/download",
+  "is_playable": false,
+  "poster_url": null
+}

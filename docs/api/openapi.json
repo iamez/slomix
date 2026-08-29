@@ -4309,6 +4309,325 @@
     "title": "TonightTeams",
     "type": "object"
    },
+   "UploadDetail": {
+    "description": "One upload, in full.\n\n⚠️ `description` here is the WHOLE text; the list sends\n`description_preview`, capped at 160 characters. Two names, two lengths —\na shared renderer that reads `description` off a list item finds nothing.\n\n`can_delete` is the only field on this endpoint that depends on the\nsession: it is `_may_delete(request, uploader_discord_id)`, the same rule\nthe DELETE endpoint enforces, so the button a user sees and the answer\nthey get cannot drift apart. Measured: identical payload for anonymous and\nowner except this one boolean.",
+    "properties": {
+     "can_delete": {
+      "title": "Can Delete",
+      "type": "boolean"
+     },
+     "category": {
+      "title": "Category",
+      "type": "string"
+     },
+     "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "download_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Download Count"
+     },
+     "download_url": {
+      "title": "Download Url",
+      "type": "string"
+     },
+     "expires_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expires At"
+     },
+     "extension": {
+      "title": "Extension",
+      "type": "string"
+     },
+     "file_size_bytes": {
+      "title": "File Size Bytes",
+      "type": "integer"
+     },
+     "filename": {
+      "title": "Filename",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "is_playable": {
+      "title": "Is Playable",
+      "type": "boolean"
+     },
+     "mime_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mime Type"
+     },
+     "poster_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Poster Url"
+     },
+     "share_url": {
+      "title": "Share Url",
+      "type": "string"
+     },
+     "tags": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "uploader_discord_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uploader Discord Id"
+     },
+     "uploader_name": {
+      "title": "Uploader Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "description",
+     "filename",
+     "category",
+     "extension",
+     "file_size_bytes",
+     "mime_type",
+     "uploader_name",
+     "uploader_discord_id",
+     "download_count",
+     "content_hash",
+     "created_at",
+     "expires_at",
+     "can_delete",
+     "tags",
+     "share_url",
+     "download_url",
+     "is_playable",
+     "poster_url"
+    ],
+    "title": "UploadDetail",
+    "type": "object"
+   },
+   "UploadList": {
+    "description": "A page of the library.\n\n⭐ VISIBILITY IS NOT AUTH-DEPENDENT, and that is worth stating because the\nopposite is the reasonable guess. The only gate on this query is `_LIVE`\n(`status = 'active'` and not expired) — no user condition anywhere — so an\nanonymous caller and the uploader receive byte-identical lists. \"No files\"\ntherefore means one thing here, unlike `/api/availability`, where an empty\nanswer has two readings.\n\n`total` is the count BEFORE limit/offset, so `offset=999` correctly returns\n`items: []` with `total: 2` rather than pretending the library is empty.",
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/UploadListItem"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "sort": {
+      "title": "Sort",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset",
+     "sort"
+    ],
+    "title": "UploadList",
+    "type": "object"
+   },
+   "UploadListItem": {
+    "description": "One card in the upload library.\n\n⚠️ THREE FIELDS ARE NULL IN EVERY LIVE ROW and they are NULLABLE, NOT\nOPTIONAL — the keys are always present. `description_preview` is\n`LEFT(COALESCE(description,''),160) or None`, so an upload with no\ndescription sends null rather than `\"\"`; `expires_at` is null when the\nuploader kept the file forever, which is the default; `poster_url` is null\nfor anything that never had a thumbnail captured. A model that made any of\nthem a required non-null field would answer 500 on the FIRST item.\n\n⭐ `poster_url` is the only one of the three where the corpus shows both\nstates (2 of 7 sampled rows carry a URL), so the other two are typed from\nthe handler's own `if … else None`, not from a reading.",
+    "properties": {
+     "category": {
+      "title": "Category",
+      "type": "string"
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "description_preview": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description Preview"
+     },
+     "download_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Download Count"
+     },
+     "expires_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expires At"
+     },
+     "extension": {
+      "title": "Extension",
+      "type": "string"
+     },
+     "file_size_bytes": {
+      "title": "File Size Bytes",
+      "type": "integer"
+     },
+     "filename": {
+      "title": "Filename",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "poster_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Poster Url"
+     },
+     "share_url": {
+      "title": "Share Url",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "uploader_discord_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uploader Discord Id"
+     },
+     "uploader_name": {
+      "title": "Uploader Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "filename",
+     "category",
+     "extension",
+     "file_size_bytes",
+     "uploader_name",
+     "uploader_discord_id",
+     "download_count",
+     "created_at",
+     "description_preview",
+     "expires_at",
+     "share_url",
+     "poster_url"
+    ],
+    "title": "UploadListItem",
+    "type": "object"
+   },
    "ValidationError": {
     "properties": {
      "ctx": {
@@ -19603,7 +19922,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/UploadList"
+        }
        }
       },
       "description": "Successful Response"
@@ -19993,7 +20314,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/UploadDetail"
+        }
        }
       },
       "description": "Successful Response"
