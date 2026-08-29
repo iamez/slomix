@@ -447,6 +447,8 @@ export interface HallOfFame {
   categories: Record<string, HallOfFameEntry[]>;
   period: string;
   delta_window_days: number | null;
+  /** When the board was computed — the page can say how old it is. */
+  generated_at: string;
 }
 
 /** GET /api/seasons/current/awards — corpus: api_seasons_current_awards.json
@@ -469,13 +471,29 @@ export interface AwardRow {
   date: string;
   map: string;
   round_number: number;
-  round_id: number | null;
+  /** NOT nullable, and this type said it was. `round_awards.round_id` is
+   *  NOT NULL in the schema (measured: 0 of 26,301 rows), and the response
+   *  model declares `int`, so a null could not reach a client — the
+   *  endpoint would 500 first. Found by the brother's
+   *  check_manual_types_against_openapi.py (#830), which is the first thing
+   *  that ever compared these 75 hand-written interfaces to the generated
+   *  schema. */
+  round_id: number;
 }
+/** The filter set the response echoes back — every field null when the
+ *  request carried no such filter. */
+export interface AwardsFilters {
+  player: string | null;
+  award_type: string | null;
+  days: number | null;
+}
+
 export interface AwardsPage {
   awards: AwardRow[];
   total: number;
   limit: number;
   offset: number;
+  filters: AwardsFilters;
 }
 
 /** One row of GET /api/awards/leaderboard — corpus:
@@ -541,13 +559,19 @@ export interface MapSegments {
 /** One weapon row — corpus: api_stats_weapons.json. `headshots` are HIT
  * LOCATIONS, not headshot kills (they exceed kills: Mp40 110k kills /
  * 129k head hits) — the label must say 'head hits'. */
+/** Every field the schema declares. `deaths`, `shots` and `hits` used to be
+ *  bolted onto the by-player variant with an intersection, as though the
+ *  base row lacked them — the schema says otherwise and always did. */
 export interface WeaponRow {
   name: string;
   weapon_key: string;
   kills: number;
+  deaths: number;
   headshots: number;
   hs_rate: number;
   accuracy: number;
+  shots: number;
+  hits: number;
 }
 
 /** GET /api/stats/weapons/hall-of-fame — corpus:
@@ -568,15 +592,17 @@ export interface WeaponsHallOfFame {
 /** GET /api/stats/weapons/by_player — corpus:
  * api_stats_weapons_by_player.json. The by-player hs_rate is headshots/hits
  * — a HEAD-HIT rate, never a kill rate (records_weapons.py:150). */
+export interface PlayerWeapons {
+  player_guid: string;
+  player_name: string;
+  total_kills: number;
+  weapons: WeaponRow[];
+}
+
 export interface WeaponsByPlayer {
   period: string;
   player_count: number;
-  players: {
-    player_guid: string;
-    player_name: string;
-    total_kills: number;
-    weapons: (WeaponRow & { deaths: number; shots: number; hits: number })[];
-  }[];
+  players: PlayerWeapons[];
 }
 
 /** One round in the retro-viz picker — corpus: api_rounds_recent.json.
