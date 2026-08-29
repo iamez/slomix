@@ -61,6 +61,7 @@ if str(_REPO_ROOT) not in sys.path:
 from bot.community_stats_parser import (  # noqa: E402 (needs the sys.path bootstrap above)
     C0RNP0RN3StatsParser,
 )
+from shared.round_time import MMSS_SQL_REGEX  # noqa: E402 (needs the sys.path bootstrap above)
 
 # Same threshold normalize_header_playtime() uses to tell ms from seconds: no
 # real round lasts 10 000 s, and every real round lasts more than 10 s
@@ -170,14 +171,18 @@ def find_rounds(cur, since: str) -> list[dict]:
     parser assigned when it had no per-player TAB field to override it — and
     it is identical for every player of the round.
     """
+    # The clock test comes from shared.round_time, not from a third spelling
+    # of it: this script REPAIRS rows by comparing stored playtime with the
+    # parsed clock, so a looser rule here would "repair" against a value the
+    # canonical reader calls unknown (brother's review on #840).
     cur.execute(  # nosemgrep: fixed column list, %s params
-        """
+        f"""
         SELECT r.id, r.match_id, r.round_number, r.map_name,
                r.round_date::date::text, r.round_time
         FROM rounds r
         WHERE r.round_number IN (1, 2) AND r.round_date >= %s
           AND r.round_status = 'completed' AND r.is_valid = TRUE
-          AND r.actual_time ~ '^[0-9]+:[0-9]{2}$'
+          AND r.actual_time ~ '{MMSS_SQL_REGEX}'
           AND EXISTS (
               SELECT 1 FROM player_comprehensive_stats p
               WHERE p.round_id = r.id
@@ -197,7 +202,7 @@ def clock_seconds(cur, round_id: int) -> int | None:
     the pre-fix parser handed to every player. NOT a duration: see
     shared/round_time and RCA 2026-08-18."""
     cur.execute(  # nosemgrep: fixed column list, %s params
-        "SELECT CASE WHEN actual_time ~ '^[0-9]+:[0-9]{2}$' "
+        f"SELECT CASE WHEN actual_time ~ '{MMSS_SQL_REGEX}' "
         "THEN split_part(actual_time, ':', 1)::int * 60 "
         "   + split_part(actual_time, ':', 2)::int END "
         "FROM rounds WHERE id = %s",
