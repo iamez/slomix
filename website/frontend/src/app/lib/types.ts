@@ -1043,3 +1043,210 @@ export interface SsrBoard {
   rated: number;
   players: SsrPlayer[];
 }
+
+// ---------------------------------------------------------------------------
+// Smart Stats / storytelling — corpus: api_storytelling_*.json, recorded
+// 2026-08-29 against gaming session 154 (12 rounds, 6 maps).
+//
+// None of these endpoints declares a response_model, so every field below is
+// read off a recording AND checked against the handler that builds it
+// (storytelling_router.py). Where the two disagree the handler wins: a
+// session that happens to have no null today does not make a field non-null.
+// ---------------------------------------------------------------------------
+
+/** One entry of GET /api/storytelling/scopes — the session picker's row.
+ *  `end_date` differs from `start_date` exactly when the session crossed
+ *  midnight, which is why the gsid, not a date, is this page's key. */
+export interface StoryScope {
+  gaming_session_id: number;
+  start_date: string;
+  end_date: string;
+  accepted_round_count: number;
+  distinct_map_names: string[];
+  scope_version: string;
+}
+
+export interface StoryScopes {
+  scope_version: string;
+  sessions: StoryScope[];
+}
+
+/** GET /api/storytelling/narrative. `session_arc` is built from the map
+ *  results and is absent when the session has no completed maps to shape. */
+export interface StoryNarrative {
+  status: string;
+  session_date: string;
+  narrative: string;
+  session_arc: { shape: string; winner: string; ws: number; ls: number } | null;
+}
+
+export interface StoryBoxScoreMap {
+  map_number: number;
+  map_name: string;
+  alpha_points: number;
+  beta_points: number;
+  winner: string;
+  is_fullhold_draw: boolean;
+  /** Seconds; null for a half with no recorded time. */
+  r1_time: number | null;
+  r2_time: number | null;
+}
+
+/** GET /api/storytelling/box-score — the scoreboard, straight off the rounds. */
+export interface StoryBoxScore {
+  status: string;
+  gaming_session_id: number;
+  alpha_team: string;
+  beta_team: string;
+  alpha_score: number;
+  beta_score: number;
+  maps_completed: number;
+  winner: string;
+  winner_name: string;
+  maps: StoryBoxScoreMap[];
+}
+
+/** GET /api/storytelling/moments. `detail` varies by `type` — a carrier run
+ *  carries distances, a clutch carries counts — so it stays unknown until a
+ *  panel needs one specific type and earns that type. */
+export interface StoryMoment {
+  type: string;
+  round_number: number;
+  map_name: string;
+  time_ms: number;
+  player: string;
+  narrative: string;
+  impact_stars: number;
+  time_formatted: string;
+  detail?: unknown;
+}
+
+export interface StoryMoments {
+  status: string;
+  moments: StoryMoment[];
+  total: number;
+}
+
+/** One sample of GET /api/storytelling/momentum: team strength at t_ms. */
+export interface StoryMomentumPoint {
+  t_ms: number;
+  axis: number;
+  allies: number;
+}
+
+export interface StoryMomentumRound {
+  round_number: number;
+  map_name: string;
+  points: StoryMomentumPoint[];
+}
+
+export interface StoryMomentum {
+  status: string;
+  rounds: StoryMomentumRound[];
+}
+
+/** GET /api/storytelling/win-contribution.
+ *
+ *  `mvp` and the top of `players` are DIFFERENT selections: the board sorts
+ *  by total_pwc, the MVP is picked by waa_bayes with an eligibility floor,
+ *  and `mvp` is null when the session has no eligible player at all. */
+export interface StoryPwcPlayer {
+  guid: string;
+  name: string;
+  total_pwc: number;
+  wis: number;
+  waa: number;
+  waa_bayes: number;
+  rounds_won: number;
+  rounds_lost: number;
+  total_rounds: number;
+  components: Record<string, number>;
+}
+
+export interface StoryWinContribution {
+  status: string;
+  mvp: {
+    guid: string;
+    name: string;
+    total_pwc: number;
+    wis: number;
+    waa_bayes: number;
+    selected_by: string;
+  } | null;
+  players: StoryPwcPlayer[];
+}
+
+/** GET /api/storytelling/kill-impact — KIS, the per-kill impact model. */
+export interface StoryKisPlayer {
+  guid: string;
+  name: string;
+  total_kis: number;
+  kills: number;
+  carrier_kills: number;
+  push_kills: number;
+  crossfire_kills: number;
+  clutch_kills: number;
+  avg_impact: number;
+  archetype: string;
+}
+
+export interface StoryKillImpact {
+  status: string;
+  players: StoryKisPlayer[];
+  total: number;
+  total_kills: number;
+}
+
+export interface StorySynergyGroup {
+  players: string[];
+  crossfire: number;
+  trade: number;
+  cohesion: number;
+  push: number;
+  medic: number;
+  composite: number;
+}
+
+/** GET /api/storytelling/synergy. `defaulted_players_count` is how many
+ *  players had no telemetry and were scored at the default — the composite
+ *  is that much less measured, which the page has to say out loud. */
+export interface StorySynergy {
+  status: string;
+  groups: { group_a: StorySynergyGroup; group_b: StorySynergyGroup };
+  weights: Record<string, number>;
+  defaulted_players_count: number;
+}
+
+/** The four role boards (gravity / space-created / enabler / lurker-profile)
+ *  return one players[] each with a shared identity and their own score
+ *  field, so one row type carries all four rather than four near-copies. */
+export interface StoryRolePlayer {
+  name: string;
+  guid?: string;
+  guid_short?: string;
+  gravity_score?: number;
+  space_score?: number;
+  enabler_score?: number;
+  solo_pct?: number;
+}
+
+export interface StoryRoleBoard {
+  status: string;
+  metric: string;
+  description: string;
+  players: StoryRolePlayer[];
+}
+
+/** GET /api/storytelling/player-narratives — generated prose per player. */
+export interface StoryPlayerNarrative {
+  guid_short: string;
+  name: string;
+  narrative: string;
+  archetype: string;
+  top_trait: string;
+}
+
+export interface StoryPlayerNarratives {
+  status: string;
+  player_narratives: StoryPlayerNarrative[];
+}

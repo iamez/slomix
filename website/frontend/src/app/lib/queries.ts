@@ -21,6 +21,16 @@ import type {
   QuickLeaders,
   RecentRound,
   RivalryLeaderboard,
+  StoryBoxScore,
+  StoryKillImpact,
+  StoryMomentum,
+  StoryMoments,
+  StoryNarrative,
+  StoryPlayerNarratives,
+  StoryRoleBoard,
+  StoryScopes,
+  StorySynergy,
+  StoryWinContribution,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -512,4 +522,97 @@ export function useSsr(enabled: boolean) {
     enabled,
     queryFn: () => apiGet('/api/skill/ssr') as Promise<SsrBoard>,
   });
+}
+
+// ---------------------------------------------------------------------------
+// Smart Stats. Thirteen endpoints, one session key.
+//
+// Every one is rate-limited to 10/minute on the server and several are slow
+// (the role boards read the position tracker), so they share the gsid in
+// their key and nothing re-fetches when the picker re-renders. The page
+// mounts them together on purpose: they answer different questions about the
+// same session, and a reader comparing them needs them to be the same run.
+// ---------------------------------------------------------------------------
+
+/** The session picker. gsid, never a date: a session can cross midnight. */
+export function useStoryScopes(limit: number) {
+  return useQuery({
+    queryKey: ['story-scopes', limit],
+    queryFn: () =>
+      apiGet('/api/storytelling/scopes', { query: { limit } }) as Promise<StoryScopes>,
+  });
+}
+
+function storyQuery<T>(name: string, path: StoryPath, gsid: number, extra?: Record<string, number>) {
+  return {
+    queryKey: [name, gsid, extra],
+    queryFn: () =>
+      apiGet(path, {
+        query: { gaming_session_id: gsid, ...extra },
+      }) as Promise<T>,
+  };
+}
+
+/** The paths this module reads. Named so a typo is a compile error rather
+ *  than a 404 at runtime — apiGet checks it against the OpenAPI spec. */
+type StoryPath =
+  | '/api/storytelling/narrative'
+  | '/api/storytelling/box-score'
+  | '/api/storytelling/moments'
+  | '/api/storytelling/momentum'
+  | '/api/storytelling/win-contribution'
+  | '/api/storytelling/kill-impact'
+  | '/api/storytelling/synergy'
+  | '/api/storytelling/gravity'
+  | '/api/storytelling/space-created'
+  | '/api/storytelling/enabler'
+  | '/api/storytelling/lurker-profile'
+  | '/api/storytelling/player-narratives';
+
+export function useStoryNarrative(gsid: number) {
+  return useQuery(storyQuery<StoryNarrative>('story-narrative', '/api/storytelling/narrative', gsid));
+}
+
+export function useStoryBoxScore(gsid: number) {
+  return useQuery(storyQuery<StoryBoxScore>('story-box-score', '/api/storytelling/box-score', gsid));
+}
+
+export function useStoryMoments(gsid: number) {
+  return useQuery(storyQuery<StoryMoments>('story-moments', '/api/storytelling/moments', gsid, { limit: 10 }));
+}
+
+export function useStoryMomentum(gsid: number) {
+  return useQuery(storyQuery<StoryMomentum>('story-momentum', '/api/storytelling/momentum', gsid));
+}
+
+export function useStoryWinContribution(gsid: number) {
+  return useQuery(storyQuery<StoryWinContribution>('story-pwc', '/api/storytelling/win-contribution', gsid));
+}
+
+export function useStoryKillImpact(gsid: number) {
+  return useQuery(storyQuery<StoryKillImpact>('story-kis', '/api/storytelling/kill-impact', gsid, { limit: 50 }));
+}
+
+export function useStorySynergy(gsid: number) {
+  return useQuery(storyQuery<StorySynergy>('story-synergy', '/api/storytelling/synergy', gsid));
+}
+
+export function useStoryGravity(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-gravity', '/api/storytelling/gravity', gsid));
+}
+
+export function useStorySpace(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-space', '/api/storytelling/space-created', gsid));
+}
+
+export function useStoryEnabler(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-enabler', '/api/storytelling/enabler', gsid));
+}
+
+export function useStoryLurker(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-lurker', '/api/storytelling/lurker-profile', gsid));
+}
+
+export function useStoryPlayerNarratives(gsid: number) {
+  return useQuery(storyQuery<StoryPlayerNarratives>('story-player-narratives', '/api/storytelling/player-narratives', gsid));
 }

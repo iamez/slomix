@@ -21,6 +21,7 @@ import { RetroViz } from './pages/RetroViz';
 import { PlayerProfilePage } from './pages/PlayerProfile';
 import { DesignCatalog } from './pages/DesignCatalog';
 import { Rivalries } from './pages/Rivalries';
+import { Story } from './pages/Story';
 import { SkillRating } from './pages/SkillRating';
 import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
@@ -77,6 +78,8 @@ const PAGES: Record<string, React.ReactElement> = {
   rivalries: <Rivalries />,
   'skill-rating': <SkillRating />,
   rounds: <RoundsPage />,
+  story: <Story />,
+  'story-session': <Story />,
 };
 
 const router = createBrowserRouter(
