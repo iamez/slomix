@@ -116,3 +116,37 @@ async def test_a_malformed_date_is_rejected_not_ignored():
     with pytest.raises(HTTPException) as excinfo:
         await get_proximity_revives(session_date="27-08-2026", db=db)
     assert excinfo.value.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_an_explicit_date_replaces_the_rolling_window():
+    """An old session must not fall out of its own scope.
+
+    proximity.js sends `range_days=30` ALONGSIDE `session_date`, so ANDing
+    the two makes any session older than thirty days answer zero — which is
+    a worse bug than the 12x overstatement the scope fix cured. Measured
+    while self-reviewing: 2026-06-21 answered 0 revives with the window
+    ANDed, and 9 with `range_days=365`.
+
+    Every test above scopes to a RECENT session and passes either way; a
+    sample that cannot fail proves nothing, which is exactly why this one
+    uses a date outside the default window.
+    """
+    db = _CaptureDB()
+    await get_proximity_revives(session_date="2026-06-21", db=db)
+
+    sql = db.summary_sql()
+    assert "session_date = $" in sql
+    assert "CURRENT_DATE" not in sql, (
+        "the rolling window is still ANDed onto an explicit date"
+    )
+
+
+@pytest.mark.asyncio
+async def test_the_window_still_applies_when_no_date_is_given():
+    db = _CaptureDB()
+    await get_proximity_revives(range_days=7, db=db)
+
+    sql = db.summary_sql()
+    assert "CURRENT_DATE" in sql
+    assert 7 in db.summary_params()

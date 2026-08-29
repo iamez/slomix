@@ -1026,16 +1026,26 @@ async def get_proximity_revives(
             params.append(round_start_unix)
             clauses.append(f"round_start_unix = ${len(params)}")
 
-        # Audit P8 + migration 043: filter on session_date (play time)
-        # now that the column exists and is backfilled. Rows with NULL
-        # session_date (re-linker hasn't populated round_id yet) fall
-        # back to created_at so the endpoint still surfaces them during
-        # the catch-up window.
-        params.append(range_days)
-        clauses.append(
-            "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
-            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
-        )
+        # ELSE, not AND — an explicit date REPLACES the rolling window, the
+        # same shape the scoped query above already uses. Adding the window
+        # on top turned my own scope fix into a worse bug than the one it
+        # cured: proximity.js sends range_days=30 alongside session_date, so
+        # any session older than thirty days answered ZERO instead of 12×
+        # too many (measured: 2026-06-21 → 0 revives, and 9 with
+        # range_days=365). My first tests could not catch it — every one of
+        # them scoped to a RECENT session, and a sample that cannot fail
+        # proves nothing.
+        #
+        # Audit P8 + migration 043: the window filters on session_date (play
+        # time). Rows with NULL session_date (re-linker hasn't populated
+        # round_id yet) fall back to created_at so the endpoint still
+        # surfaces them during the catch-up window.
+        if parsed_sd is None:
+            params.append(range_days)
+            clauses.append(
+                "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
+                "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
+            )
 
         where_sql = "WHERE " + " AND ".join(clauses)
         medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"

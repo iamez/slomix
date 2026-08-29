@@ -1,5 +1,5 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
-import { apiGet } from './api';
+import { ApiError, apiGet } from './api';
 import type {
   ActivityCalendar,
   AvailabilityOverview,
@@ -73,7 +73,20 @@ export function makeQueryClient(): QueryClient {
       // non-live sections (overview, sessions, leaders) would never update
       // on a long-mounted page while the live panel keeps polling (Codex
       // on #806, wave 3).
-      queries: { staleTime: 5 * 60_000, retry: 1 },
+      queries: {
+        staleTime: 5 * 60_000,
+        // Retry only what a second ask could answer differently. A 4xx is a
+        // considered answer: asking again cannot change it, and it delays
+        // the page's honest "unavailable" by a round trip. On the
+        // rate-limited routes it is actively harmful — the storytelling
+        // endpoints allow 10 requests a minute EACH, the story page issues
+        // thirteen per session, and retrying a 429 doubles precisely the
+        // traffic that caused it. 5xx and network failures keep their retry.
+        retry: (failureCount: number, error: Error) => {
+          if (error instanceof ApiError && error.status < 500) return false;
+          return failureCount < 1;
+        },
+      },
     },
   });
 }
