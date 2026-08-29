@@ -555,6 +555,20 @@ function Tonight() {
       ) : (
         <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)' }}>nobody marked for the next {availability.data.days.length} days</Lbl>
       ))}
+      {/* The threshold belongs to the server — it is the number that fires
+        * the Discord notice — so the card quotes it rather than keeping its
+        * own copy, and cannot drift from the rule that actually decides. */}
+      {availability.data?.session_ready && !availability.data.session_ready.ready && (
+        <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
+          {availability.data.session_ready.looking_count} of{' '}
+          {availability.data.session_ready.threshold} looking for tonight
+        </Lbl>
+      )}
+      {availability.data?.session_ready?.ready && (
+        <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-2)', color: 'var(--color-pos)' }}>
+          tonight is on — {availability.data.session_ready.looking_count} looking
+        </div>
+      )}
       <ActLink to="/availability" style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>Mark yourself →</ActLink>
     </div>
   );

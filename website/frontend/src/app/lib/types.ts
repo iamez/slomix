@@ -356,11 +356,41 @@ export interface SeasonSummary {
 
 /** GET /api/availability — corpus: api_availability.json. Day counts only —
  * names per day live behind a different endpoint, so home shows counts. */
+/** One day in the window. `my_status` has THREE states and they are not
+ *  interchangeable (#830 measured all three on one range):
+ *
+ *      key absent   the question was never asked — an anonymous caller
+ *      null         asked, and this viewer has set nothing (50 of 55 days)
+ *      "LOOKING"    asked and answered (5 days)
+ *
+ *  Optional AND nullable is the honest shape here, which is rare: usually
+ *  one of the two is the wrong tool. `users_by_status` only appears for a
+ *  signed-in caller who asked for it. */
+export interface AvailabilityDay {
+  date: string;
+  counts: Record<string, number>;
+  total: number;
+  my_status?: string | null;
+  users_by_status?: Record<string, unknown[]>;
+}
+
 export interface AvailabilityOverview {
   from: string;
   to: string;
   statuses: string[];
-  days: { date: string; counts: Record<string, number>; total: number }[];
+  days: AvailabilityDay[];
+  /** Who is asking, as the server sees them. */
+  viewer?: { authenticated: boolean; linked_discord: boolean };
+  /** How far tonight is from happening: the threshold is the server's, not
+   *  the page's, so a card that quotes it cannot drift from the rule that
+   *  actually fires the Discord notice. */
+  session_ready?: {
+    date: string;
+    ready: boolean;
+    looking_count: number;
+    threshold: number;
+    event_key: string;
+  };
 }
 
 /** One breakdown contribution (Overall only) — corpus: api_skill_movers.json */

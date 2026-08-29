@@ -196,4 +196,24 @@ describe('Home', () => {
     await waitFor(() => expect(screen.getAllByText(/players/i).length).toBeGreaterThan(0));
     expect(screen.queryByText('Team A')).toBeNull();
   });
+  it('quotes the server threshold rather than keeping its own', async () => {
+    // session_ready.threshold is the number that fires the Discord notice.
+    // A card with its own copy of it drifts the day somebody changes the
+    // rule, and nobody finds out from the page.
+    const ready = {
+      ...(availability as object),
+      // NOT 6. The recorded threshold is 6, so a page with a hardcoded 6
+      // would satisfy a test written against 6 — the control mutation
+      // proved exactly that before this line said 8.
+      session_ready: { date: '2026-08-29', ready: false, looking_count: 4, threshold: 8, event_key: 'x' },
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/availability') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(ready) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    await waitFor(() => expect(screen.getByText(/4 of 8 looking for tonight/)).toBeInTheDocument());
+  });
 });
