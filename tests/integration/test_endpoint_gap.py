@@ -27,6 +27,17 @@ from tests.integration.test_route_contract import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FRONTEND_SRC = REPO_ROOT / "website" / "frontend" / "src"
+# The NEW frontend is `src/app` — nothing else. `src/` also holds the older
+# React tree (src/pages, src/api/hooks.ts), which is a THIRD frontend: not the
+# vanilla site in production, not the app being built. Scanning all of `src`
+# counted its calls as migration progress, so an endpoint only that tree ever
+# called looked covered. Measured when the miscount was found: gap 64 as
+# reported, 120 when only `app` counts — 56 paths hidden (Codex on #835 found
+# the first of them, /api/skill/adjusted-lifetime, one endpoint at a time).
+# The mistake it prevents is silent; the direction it can still err in is not:
+# an app call made from a shared module OUTSIDE this root simply goes unseen
+# and its path stays listed, which shows up as work that will not delete.
+APP_SRC = FRONTEND_SRC / "app"
 GAP_FILE = REPO_ROOT / "tests" / "data" / "endpoint_gap.txt"
 EXTRA_FILE = REPO_ROOT / "tests" / "data" / "endpoint_required_extra.txt"
 
@@ -57,7 +68,7 @@ def _strip_comments(text: str) -> str:
     return _LINE_COMMENT_RE.sub("", _BLOCK_COMMENT_RE.sub("", text))
 
 
-def _extract_new_frontend_paths() -> tuple[set[str], set[str]]:
+def _extract_new_frontend_paths(root: Path | None = None) -> tuple[set[str], set[str]]:
     """Returns (exact, dynamic_prefixes): a capture that stopped at an
     interpolation (`${`) is a truncated DYNAMIC prefix and may claim deeper
     coverage; an exact literal covers only itself (Codex on #802 — an exact
@@ -73,7 +84,8 @@ def _extract_new_frontend_paths() -> tuple[set[str], set[str]]:
             candidate = "/api" + candidate
         (dynamic if text[end:end + 2] == "${" else exact).add(candidate)
 
-    for ts_file in sorted(FRONTEND_SRC.rglob("*.ts")) + sorted(FRONTEND_SRC.rglob("*.tsx")):
+    root = APP_SRC if root is None else root
+    for ts_file in sorted(root.rglob("*.ts")) + sorted(root.rglob("*.tsx")):
         if "generated" in ts_file.parts or ts_file.name.endswith((".test.ts", ".test.tsx")):
             continue
         # probes.ts is the About page's diagnostics table: it PINGS endpoints
@@ -215,6 +227,43 @@ def test_endpoint_gap_matches_reality():
         "deleting each line, verify the path against live /openapi.json and "
         "call it once (docs/design/07 §C.1), then remove:\n"
         + "\n".join(stale)
+    )
+
+
+def test_the_other_react_tree_does_not_count_as_migrated():
+    """A call from `src/pages` is not progress on `src/app`.
+
+    This is the guard for the miscount described at APP_SRC, and it asserts
+    the consequence rather than the setting: every path that the WIDER scan
+    would call covered, but the app tree does not actually call, has to still
+    be in the gap. Asserting `FRONTEND_SRC != APP_SRC` would pass for a scan
+    root pointed anywhere at all.
+
+    The first assertion is the load-bearing one: if the two trees ever stop
+    differing the guard is vacuous, and a vacuous guard reads exactly like a
+    passing one.
+    """
+    required_exact, required_dynamic = _extract_legacy_paths_tagged()
+    required = required_exact | required_dynamic
+    wide = _extract_new_frontend_paths(FRONTEND_SRC)
+    narrow = _extract_new_frontend_paths(APP_SRC)
+
+    def covered_by(sets: tuple[set[str], set[str]], path: str) -> bool:
+        return _covered(path, path in required_dynamic and path not in required_exact, *sets)
+
+    only_the_old_tree = {
+        path for path in required
+        if covered_by(wide, path) and not covered_by(narrow, path)
+    }
+    assert only_the_old_tree, (
+        "no required path is called by the old React tree alone — either that "
+        "tree is gone (delete this guard and the narrowing) or the scan root "
+        "has drifted back to covering both"
+    )
+    leaked = sorted(only_the_old_tree - compute_gap())
+    assert not leaked, (
+        "path(s) counted as migrated on the strength of the OLD React tree:\n"
+        + "\n".join(leaked)
     )
 
 

@@ -965,3 +965,81 @@ export interface PlayerRivalries {
   all_pairs: RivalryOpponent[];
   total_opponents: number;
 }
+
+/* ── ET Rating (v2.1) and SSR (v0.3) ──────────────────────────────────────
+ * Two different formulas over the same players. Keeping them in one file is
+ * deliberate: the page shows both, and the whole risk is a reader taking a
+ * number from one and comparing it with a number from the other. */
+
+export interface RatingComponent {
+  raw: number | null;
+  weight: number;
+  percentile: number | null;
+  contribution: number;
+}
+
+export interface RatedPlayer {
+  rank: number;
+  player_guid: string;
+  display_name: string;
+  et_rating: number;
+  games_rated: number;
+  last_rated_at: string | null;
+  tier: string;
+  /** Shrinkage confidence, 0..1 — how far the published number trusts n. */
+  confidence: number;
+  components: Record<string, RatingComponent>;
+}
+
+export interface SkillLeaderboard {
+  status: string;
+  meta: {
+    total: number;
+    min_rounds: number;
+    weights: Record<string, number>;
+    constant: number;
+    version: string;
+    shrinkage_k: number;
+    /** Mean RAW rating over the rated cohort — the shrinkage prior. Null
+     * when nothing is rated, which the page says rather than printing 0. */
+    pool_mean?: number | null;
+  };
+  players: RatedPlayer[];
+}
+
+export interface SkillFormula {
+  status: string;
+  version: string;
+  name: string;
+  description: string;
+  formula: string;
+  constant: number;
+  min_rounds: number;
+  shrinkage_k: number;
+  normalization: string;
+  range: string;
+}
+
+export interface SsrComponent {
+  raw: number | null;
+  pct: number | null;
+}
+
+export interface SsrPlayer {
+  player_guid: string;
+  name: string;
+  n_sessions: number;
+  ssr: number;
+  /** "3/8" — how many of the eight components were measurable at all. */
+  coverage: string;
+  components: Record<string, SsrComponent>;
+}
+
+export interface SsrBoard {
+  status: string;
+  formula_version: string;
+  min_sessions: number;
+  min_components: number;
+  rated: number;
+  players: SsrPlayer[];
+}
