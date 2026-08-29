@@ -5339,12 +5339,18 @@ export interface components {
          * ActivityCalendar
          * @description Rounds played per day over the lookback window.
          *
-         *     Both branches of the handler return the same two keys — the failure path
-         *     answers `{"days": lookback_days, "activity": {}}` after logging. That means
-         *     an empty calendar and a failed query look identical to a client, which is a
-         *     real gap; typing it does not close that, and inventing a flag here would be
-         *     a schema making a promise the handler does not keep. Recorded rather than
-         *     papered over.
+         *     ⛔ THREE STATES, NOT TWO, AND THE CLIENT MUST NOT DERIVE THEM FROM LENGTH.
+         *     Until now both branches returned `{days, activity}`, so an empty calendar
+         *     and a failed query were identical on the wire — the page could only guess
+         *     from `Object.keys(activity).length === 0`, which reads a measurement and a
+         *     missing measurement the same way.
+         *
+         *       ok           the query ran; `activity` is what was measured, empty or not
+         *       no_data      the query ran and the window genuinely holds no rounds
+         *       unavailable  the query failed; `activity` is empty because we do not know
+         *
+         *     `status` is a plain string, not an enum, so a state added later is not
+         *     filtered out by the schema before anyone sees it.
          */
         ActivityCalendar: {
             /** Activity */
@@ -5353,6 +5359,10 @@ export interface components {
             };
             /** Days */
             days: number;
+            /** Note */
+            note?: string | null;
+            /** Status */
+            status: string;
         };
         /**
          * AwardLeaderRow
@@ -5675,15 +5685,23 @@ export interface components {
         };
         /**
          * MapObjectiveRecords
-         * @description ⛔ `status` CARRIES A FAILURE THAT STILL ANSWERS 200.
+         * @description ⛔ THREE STATES, NOT TWO, AND NONE OF THEM DERIVED FROM LENGTH.
          *
-         *     The handler catches its own exception and returns
-         *     `{"status": "error", "records": []}`. A model that dropped `status` would
-         *     make that indistinguishable from a database with no records — the reader
-         *     would see an empty list either way. It is kept, and typed as a plain string
-         *     rather than an enum so a new state cannot be silently filtered out.
+         *     The handler catches its own exception and answers 200. Before this it said
+         *     `status: "error"` on failure and `"ok"` otherwise, which left the page
+         *     deriving "no records" from `records.length === 0` — and that reads a
+         *     measured emptiness and an unmeasured one the same way.
+         *
+         *       ok           the query ran and returned records
+         *       no_data      the query ran and there are none
+         *       unavailable  the query failed; the empty list means we do not know
+         *
+         *     A plain string, not an enum: a state added later must not be filtered out
+         *     by the schema before anyone sees it.
          */
         MapObjectiveRecords: {
+            /** Note */
+            note?: string | null;
             /** Records */
             records: components["schemas"]["MapObjectiveRecord"][];
             /** Status */

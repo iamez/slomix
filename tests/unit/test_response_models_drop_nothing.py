@@ -188,23 +188,23 @@ async def test_both_boards_are_populated_so_the_comparison_can_see_them():
 import json as _json
 from pathlib import Path as _Path
 
+from website.backend.routers.challenges_router import CurrentChallenge
 from website.backend.routers.records_awards import (
     AwardLeaderboard,
     AwardsPage,
     HallOfFame,
 )
+from website.backend.routers.records_maps import MapObjectiveRecords, MapStats
 from website.backend.routers.records_matches import (
     RecentRound,
     RoundAwards,
     RoundViz,
 )
-from website.backend.routers.challenges_router import CurrentChallenge
-from website.backend.routers.records_maps import MapObjectiveRecords, MapStats
-from website.backend.routers.sessions_router import SessionLeaderRow
-from website.backend.routers.records_trends import StatsTrends
-from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.records_seasons import CurrentSeason
+from website.backend.routers.records_trends import StatsTrends
 from website.backend.routers.records_weapons import WeaponsByPlayer
+from website.backend.routers.season_awards_router import SeasonAwards
+from website.backend.routers.sessions_router import SessionLeaderRow
 
 _FIXTURES = _Path(__file__).resolve().parents[1] / "fixtures" / "api_responses"
 
@@ -620,28 +620,45 @@ class TestTheMapEndpoints:
 
 
 class TestAFailureThatStillAnswers200:
-    """⛔ `/records/maps/segments` CATCHES ITS OWN EXCEPTION.
+    """⛔ THREE STATES, AND THE CLIENT MUST NOT DERIVE THEM FROM LENGTH.
 
-    On failure it returns `{"status": "error", "records": []}` with a 200. A
-    model that dropped `status` would make that indistinguishable from a
-    database holding no records — the reader sees an empty list either way.
+    `/records/maps/segments` catches its own exception and answers 200. It used
+    to say `error` on failure and `ok` otherwise, which left the page reading
+    "no records" off `records.length === 0` — and an empty list means two
+    different things:
+
+        no_data      the query ran; there genuinely are none
+        unavailable  the query failed; we do not know
+
+    Shape agreed with the workstream that renders it, so `MapsPage` can drop
+    its length check.
     """
 
-    def test_the_error_state_survives(self):
-        payload = {"status": "error", "records": []}
+    def test_the_unavailable_state_survives(self):
+        payload = {"status": "unavailable",
+                   "note": "the objective-records query failed", "records": []}
         modelled = _json.loads(
             MapObjectiveRecords.model_validate(payload).model_dump_json())
         assert modelled == payload
-        assert modelled["status"] == "error", "the failure became indistinguishable"
+
+    def test_no_data_and_unavailable_are_distinguishable(self):
+        """The whole point: two empty lists that mean different things."""
+        empty_measured = MapObjectiveRecords.model_validate(
+            {"status": "no_data", "note": "none recorded", "records": []})
+        empty_unknown = MapObjectiveRecords.model_validate(
+            {"status": "unavailable", "note": "query failed", "records": []})
+        assert empty_measured.records == empty_unknown.records == []
+        assert empty_measured.status != empty_unknown.status, (
+            "the two empties collapsed into one — the defect this shape fixes")
 
     def test_the_ok_state_reads_differently(self):
         assert MapObjectiveRecords.model_validate(
-            {"status": "ok", "records": []}).status == "ok"
+            {"status": "ok", "records": [], "note": None}).status == "ok"
 
     def test_a_record_with_no_resolved_winner_is_accepted(self):
         """`rounds.winner_team`, `map_name` and `gaming_session_id` are all
         nullable; the group-by carries the nulls through."""
-        payload = {"status": "ok", "records": [
+        payload = {"status": "ok", "note": None, "records": [
             {"map_name": None, "fastest_seconds": 100, "fastest_time": "1:40",
              "played": "2026-08-01", "winner_team": None, "winner_side": "Draw",
              "gaming_session_id": None}]}
@@ -653,20 +670,38 @@ class TestAFailureThatStillAnswers200:
         """A new state must not be filtered out by the schema before anyone
         sees it."""
         assert MapObjectiveRecords.model_validate(
-            {"status": "degraded", "records": []}).status == "degraded"
+            {"status": "degraded", "note": None, "records": []}).status == "degraded"
 
 
-def test_activity_calendar_keeps_both_of_its_keys():
-    """Both branches return `{days, activity}` — including the failure path,
-    which answers `{"days": n, "activity": {}}` after logging. That means an
-    empty calendar and a failed query look alike to a client. The model does
-    not fix that; it must not make it worse by dropping `days`, which is what
-    the caller labels the chart with."""
-    payload = {"days": 30, "activity": {"2026-08-27": 12, "2026-08-26": 18}}
-    modelled = _json.loads(ActivityCalendar.model_validate(payload).model_dump_json())
-    assert modelled == payload
-    empty = ActivityCalendar.model_validate({"days": 30, "activity": {}})
-    assert empty.days == 30, "the window size is lost on the failure path"
+class TestActivityCalendarSaysWhichEmpty:
+    """The same defect as the map records, in the other router: both branches
+    returned `{days, activity}`, so a failed query and a quiet month were
+    identical on the wire."""
+
+    def test_a_populated_calendar_survives(self):
+        payload = {"days": 30, "activity": {"2026-08-27": 12, "2026-08-26": 18},
+                   "status": "ok", "note": None}
+        modelled = _json.loads(
+            ActivityCalendar.model_validate(payload).model_dump_json())
+        assert missing_keys(payload, modelled) == []
+        assert modelled == payload
+
+    def test_a_quiet_window_and_a_failed_query_differ(self):
+        quiet = ActivityCalendar.model_validate(
+            {"days": 30, "activity": {}, "status": "no_data",
+             "note": "no rounds were played in this window"})
+        broken = ActivityCalendar.model_validate(
+            {"days": 30, "activity": {}, "status": "unavailable",
+             "note": "the activity query failed"})
+        assert quiet.activity == broken.activity == {}
+        assert quiet.status != broken.status
+
+    def test_the_window_size_survives_the_failure_path(self):
+        """`days` is what the caller labels the chart with — losing it on the
+        failure path would leave an unlabelled empty chart."""
+        broken = ActivityCalendar.model_validate(
+            {"days": 90, "activity": {}, "status": "unavailable", "note": "x"})
+        assert broken.days == 90
 
 
 class TestSessionLeaderboard:
@@ -720,3 +755,58 @@ class TestSessionLeaderboard:
         reshaped all three."""
         from pydantic import TypeAdapter
         assert TypeAdapter(list[SessionLeaderRow]).validate_python([]) == []
+
+
+class TestTheHandlersActuallyEmitTheThreeStates:
+    """⚠️ THE MODEL ALLOWING THREE STATES IS NOT THE HANDLER PRODUCING THEM.
+
+    The tests above pin the schema. They pass unchanged if the handler keeps
+    answering `status: "ok"` for an empty result — which is the defect, not the
+    fix. These drive the handlers with stub databases and read what comes out.
+    """
+
+    @pytest.mark.asyncio
+    async def test_map_records_says_no_data_for_an_empty_result(self):
+        from website.backend.routers.records_maps import get_map_objective_records
+
+        class _Empty:
+            async def fetch_all(self, *_a, **_k):
+                return []
+
+        out = await get_map_objective_records(db=_Empty())
+        assert out["status"] == "no_data", (
+            "an empty result still reads 'ok' — the page cannot tell it from "
+            "a measured set")
+        assert out["note"]
+
+    @pytest.mark.asyncio
+    async def test_map_records_says_unavailable_when_the_query_raises(self):
+        from website.backend.routers.records_maps import get_map_objective_records
+
+        class _Broken:
+            async def fetch_all(self, *_a, **_k):
+                raise RuntimeError("connection lost")
+
+        out = await get_map_objective_records(db=_Broken())
+        assert out["status"] == "unavailable"
+        assert out["records"] == []
+        assert "not an empty set" in out["note"]
+
+    @pytest.mark.asyncio
+    async def test_activity_calendar_distinguishes_its_two_empties(self):
+        from website.backend.routers.records_overview import get_activity_calendar
+
+        class _Empty:
+            async def fetch_all(self, *_a, **_k):
+                return []
+
+        class _Broken:
+            async def fetch_all(self, *_a, **_k):
+                raise RuntimeError("connection lost")
+
+        quiet = await get_activity_calendar(days=30, db=_Empty())
+        broken = await get_activity_calendar(days=30, db=_Broken())
+        assert quiet["activity"] == broken["activity"] == {}
+        assert quiet["status"] == "no_data"
+        assert broken["status"] == "unavailable"
+        assert quiet["days"] == broken["days"] == 30

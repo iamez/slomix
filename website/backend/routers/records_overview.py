@@ -16,18 +16,28 @@ router = APIRouter()
 class ActivityCalendar(BaseModel):
     """Rounds played per day over the lookback window.
 
-    Both branches of the handler return the same two keys — the failure path
-    answers `{"days": lookback_days, "activity": {}}` after logging. That means
-    an empty calendar and a failed query look identical to a client, which is a
-    real gap; typing it does not close that, and inventing a flag here would be
-    a schema making a promise the handler does not keep. Recorded rather than
-    papered over.
+    ⛔ THREE STATES, NOT TWO, AND THE CLIENT MUST NOT DERIVE THEM FROM LENGTH.
+    Until now both branches returned `{days, activity}`, so an empty calendar
+    and a failed query were identical on the wire — the page could only guess
+    from `Object.keys(activity).length === 0`, which reads a measurement and a
+    missing measurement the same way.
+
+      ok           the query ran; `activity` is what was measured, empty or not
+      no_data      the query ran and the window genuinely holds no rounds
+      unavailable  the query failed; `activity` is empty because we do not know
+
+    `status` is a plain string, not an enum, so a state added later is not
+    filtered out by the schema before anyone sees it.
     """
 
     #: Size of the lookback window, echoed so the caller can label the chart.
     days: int
     #: ISO date -> rounds played. Days with none are absent, not zero.
     activity: dict[str, int]
+    #: 'ok' | 'no_data' | 'unavailable'
+    status: str
+    #: One short sentence when the state is not `ok`; null otherwise.
+    note: str | None = None
 
 logger = get_app_logger("api.records.overview")
 
@@ -338,7 +348,13 @@ async def get_activity_calendar(
         rows = await db.fetch_all(query, (start_date,))
     except Exception as e:
         logger.warning("[activity-calendar] query failed: %s", e)
-        return {"days": lookback_days, "activity": {}}
+        return {"days": lookback_days, "activity": {}, "status": "unavailable",
+                "note": "the activity query failed; this is not an empty calendar"}
 
     activity = {str(row[0]): int(row[1]) for row in rows}
-    return {"days": lookback_days, "activity": activity}
+    return {
+        "days": lookback_days,
+        "activity": activity,
+        "status": "ok" if activity else "no_data",
+        "note": None if activity else "no rounds were played in this window",
+    }

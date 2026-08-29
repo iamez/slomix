@@ -60,17 +60,25 @@ class MapObjectiveRecord(BaseModel):
 
 
 class MapObjectiveRecords(BaseModel):
-    """⛔ `status` CARRIES A FAILURE THAT STILL ANSWERS 200.
+    """⛔ THREE STATES, NOT TWO, AND NONE OF THEM DERIVED FROM LENGTH.
 
-    The handler catches its own exception and returns
-    `{"status": "error", "records": []}`. A model that dropped `status` would
-    make that indistinguishable from a database with no records — the reader
-    would see an empty list either way. It is kept, and typed as a plain string
-    rather than an enum so a new state cannot be silently filtered out.
+    The handler catches its own exception and answers 200. Before this it said
+    `status: "error"` on failure and `"ok"` otherwise, which left the page
+    deriving "no records" from `records.length === 0` — and that reads a
+    measured emptiness and an unmeasured one the same way.
+
+      ok           the query ran and returned records
+      no_data      the query ran and there are none
+      unavailable  the query failed; the empty list means we do not know
+
+    A plain string, not an enum: a state added later must not be filtered out
+    by the schema before anyone sees it.
     """
 
-    #: 'ok' when the query ran; 'error' when it raised and was swallowed.
+    #: 'ok' | 'no_data' | 'unavailable'
     status: str
+    #: One short sentence when the state is not `ok`; null otherwise.
+    note: str | None = None
     records: list[MapObjectiveRecord]
 
 logger = get_app_logger("api.records.maps")
@@ -241,8 +249,16 @@ async def get_map_objective_records(db: DatabaseAdapter = Depends(get_db)):
                 "winner_side": side,
                 "gaming_session_id": row[5],
             })
-        records.sort(key=lambda r: r["map_name"])
-        return {"status": "ok", "records": records}
+        records.sort(key=lambda r: r["map_name"] or "")
+        return {
+            "status": "ok" if records else "no_data",
+            "note": None if records else "no objective records for these maps",
+            "records": records,
+        }
     except Exception as e:
         logger.error(f"Error fetching map objective records: {e}")
-        return {"status": "error", "records": []}
+        return {
+            "status": "unavailable",
+            "note": "the objective-records query failed; this is not an empty set",
+            "records": [],
+        }
