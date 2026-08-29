@@ -39,6 +39,92 @@
     "title": "ActivityCalendar",
     "type": "object"
    },
+   "AimCell": {
+    "description": "One grid cell of the aim map, with the direction fired from it.\n\n⚠️ NOT the same element as `HeatmapCell` or the hotzones endpoint's cell,\ndespite all three being `{x, y, count, …}`: this one adds a 16-bucket\n`rose` and the circular mean. Three near-identical shapes across one\nfamily is exactly where a shared renderer picks the wrong one.",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "mean_yaw": {
+      "title": "Mean Yaw",
+      "type": "number"
+     },
+     "r": {
+      "title": "R",
+      "type": "number"
+     },
+     "rose": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Rose",
+      "type": "array"
+     },
+     "x": {
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "count",
+     "rose",
+     "mean_yaw",
+     "r"
+    ],
+    "title": "AimCell",
+    "type": "object"
+   },
+   "AimCircularStats": {
+    "description": "Circular statistics over the shot directions.\n\n⭐ EVERY FIELD IS NON-NULL EVEN WITH NO SHOTS, and the empty values are\nchosen rather than zeroed: measured on a scope with 0 shots, this answers\n`circular_std_deg: 180.0` and `rayleigh_p: 1.0` — maximum spread and no\nevidence of a preferred direction, which is the honest reading of nothing.\nA model that made them nullable would invite a consumer to render \"—\" and\nlose that.",
+    "properties": {
+     "circular_std_deg": {
+      "title": "Circular Std Deg",
+      "type": "number"
+     },
+     "mean_yaw_deg": {
+      "title": "Mean Yaw Deg",
+      "type": "number"
+     },
+     "n": {
+      "title": "N",
+      "type": "integer"
+     },
+     "pitch_mean_deg": {
+      "title": "Pitch Mean Deg",
+      "type": "number"
+     },
+     "pitch_std_deg": {
+      "title": "Pitch Std Deg",
+      "type": "number"
+     },
+     "rayleigh_p": {
+      "title": "Rayleigh P",
+      "type": "number"
+     },
+     "resultant_length": {
+      "title": "Resultant Length",
+      "type": "number"
+     }
+    },
+    "required": [
+     "n",
+     "mean_yaw_deg",
+     "resultant_length",
+     "circular_std_deg",
+     "rayleigh_p",
+     "pitch_mean_deg",
+     "pitch_std_deg"
+    ],
+    "title": "AimCircularStats",
+    "type": "object"
+   },
    "AvailabilityDayAnonymous": {
     "additionalProperties": false,
     "description": "A day as an anonymous caller sees it: three keys, no viewer detail.",
@@ -1007,6 +1093,182 @@
     "title": "HitRegionScope",
     "type": "object"
    },
+   "HotzoneCell": {
+    "description": "One grid cell of the combat heatmap.\n\n⚠️ A THIRD `{x, y, count, …}` SHAPE IN THIS FAMILY, and all three differ:\n`HeatmapCell` (player-heatmap) has three fields, `AimCell` adds `rose`,\n`mean_yaw` and `r`, and this one splits the count into kills and deaths.\nA shared renderer that assumes one of them silently misreads the others.",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "x": {
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "count",
+     "kills",
+     "deaths"
+    ],
+    "title": "HotzoneCell",
+    "type": "object"
+   },
+   "HotzonesReady": {
+    "additionalProperties": false,
+    "description": "…and TEN keys once a map was selected, whether or not it had rows.\n\n⚠️ `status` is NOT the discriminator between these two shapes: a scope\nnaming a map that has no engagements answers ten keys with\n`status: \"prototype\"`, while an empty scope answers eight with the same\nstatus. Measured on `?map_name=ni_take_mape` versus\n`?session_date=2020-01-01`.",
+    "properties": {
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HotzoneCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Message"
+     },
+     "range_days": {
+      "title": "Range Days",
+      "type": "integer"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "source": {
+      "title": "Source",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "ready",
+     "message",
+     "range_days",
+     "generated_at",
+     "scope",
+     "map_name",
+     "hotzones",
+     "grid_size",
+     "source"
+    ],
+    "title": "HotzonesReady",
+    "type": "object"
+   },
+   "HotzonesUnready": {
+    "additionalProperties": false,
+    "description": "The EIGHT-key answer: no map could be selected for this scope.\n\n⛔ `status` is \"prototype\" here — the stub meta the handler starts from —\nand \"error\" when the query raised, but BOTH carry the same eight keys. So\nthe status, not the shape, is what tells a caller which happened, and a\nconsumer that branches on key presence cannot tell a scope with no data\nfrom a database failure.\n\n`message` carries the stub's own sentence in both cases, so it is a string\nhere while the ready shape sets it to null. That inversion is measured,\nnot designed: \"Proximity pipeline not connected.\" on the unready branch,\n`null` on the working one.",
+    "properties": {
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HotzoneCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Message"
+     },
+     "range_days": {
+      "title": "Range Days",
+      "type": "integer"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "ready",
+     "message",
+     "range_days",
+     "generated_at",
+     "scope",
+     "map_name",
+     "hotzones"
+    ],
+    "title": "HotzonesUnready",
+    "type": "object"
+   },
    "LastSession": {
     "description": "The most recent gaming session, as `/stats/last-session` returns it.\n\n⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all\neight sampled sessions, so none of their element shapes came from the\nsample. `warnings` and `stats_checks` are f-strings built in the handler;\n`unassigned_players` carries `SessionPlayerRow`, which was then confirmed\nby forcing the branch that fills it. An empty list tells you a field's\nname and nothing about its contents.\n\n`map_counts` is keyed by map name, so it is a dict, not a model.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
     "properties": {
@@ -1664,6 +1926,113 @@
      "rounds"
     ],
     "title": "MostActivePlayer",
+    "type": "object"
+   },
+   "PitchHistogram": {
+    "description": "⚠️ `edges` has ONE MORE ENTRY THAN `counts` — 7 edges, 6 bins. A\nconsumer that zips them silently drops the last bin.",
+    "properties": {
+     "counts": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "array"
+     },
+     "edges": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Edges",
+      "type": "array"
+     }
+    },
+    "required": [
+     "edges",
+     "counts"
+    ],
+    "title": "PitchHistogram",
+    "type": "object"
+   },
+   "PlayerAim": {
+    "description": "Where a player aims on one map, and how tightly.\n\nAn out-of-range scope answers 200 with `total: 0`, an empty `hotzones`\nlist and `narrative: [\"0 shots tracked\"]` — an answer, not an error.\n`map_name` and `player_guid` are both REQUIRED parameters and each\nanswers 400 when missing, so neither can be null in the payload.",
+    "properties": {
+     "circular": {
+      "$ref": "#/components/schemas/AimCircularStats"
+     },
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/AimCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "narrative": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Narrative",
+      "type": "array"
+     },
+     "pitch_hist": {
+      "$ref": "#/components/schemas/PitchHistogram"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "sampled": {
+      "title": "Sampled",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     },
+     "yaw_bucket_width_deg": {
+      "title": "Yaw Bucket Width Deg",
+      "type": "number"
+     },
+     "yaw_buckets": {
+      "title": "Yaw Buckets",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "status",
+     "map_name",
+     "player_guid",
+     "player_name",
+     "grid_size",
+     "total",
+     "sampled",
+     "scope",
+     "hotzones",
+     "yaw_buckets",
+     "yaw_bucket_width_deg",
+     "pitch_hist",
+     "circular",
+     "narrative"
+    ],
+    "title": "PlayerAim",
     "type": "object"
    },
    "PlayerHeatmap": {
@@ -13074,7 +13443,17 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/HotzonesReady"
+          },
+          {
+           "$ref": "#/components/schemas/HotzonesUnready"
+          }
+         ],
+         "title": "Response Get Proximity Hotzones Api Proximity Hotzones Get"
+        }
        }
       },
       "description": "Successful Response"
@@ -14281,7 +14660,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/PlayerAim"
+        }
        }
       },
       "description": "Successful Response"

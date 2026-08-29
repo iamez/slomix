@@ -206,6 +206,7 @@ from website.backend.routers.players_router import (
     TonightLive,
 )
 from website.backend.routers.proximity_positions import (
+    PlayerAim,
     PlayerHeatmap,
     PlayerHeatmapKillsOnly,
     ProximityHitRegions,
@@ -2102,3 +2103,97 @@ def test_no_router_hand_copies_the_round_duration_expression():
     assert not offenders, (
         "a router spells out the actual_time clock pattern instead of calling "
         "shared.round_time.round_duration_sql(): " + "; ".join(offenders))
+
+
+class TestTheLastTwoProximityBoards:
+    """`/proximity/player-aim` and `/proximity/hotzones` — the last two on the
+    frontend author's phase-5 list, typed before the page exists.
+
+    ⚠️ THREE NEAR-IDENTICAL CELL SHAPES LIVE IN THIS ONE FAMILY and none of
+    them is interchangeable:
+
+        HeatmapCell   x, y, count
+        AimCell       x, y, count, rose, mean_yaw, r
+        HotzoneCell   x, y, count, kills, deaths
+
+    A shared renderer that assumes one silently misreads the others, which is
+    why they are three models and not one with optional fields.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, model, raw):
+        modelled = _json.loads(model.model_validate(raw).model_dump_json())
+        assert not missing_keys(raw, modelled), (
+            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, f"{model.__name__} altered a value"
+        return modelled
+
+    def test_the_three_cell_shapes_are_actually_three(self):
+        aim = self._f("api_proximity_player_aim.json")["hotzones"][0]
+        hot = self._f("api_proximity_hotzones_ready.json")["hotzones"][0]
+        heat = self._f("api_proximity_player_heatmap.json")["hotzones"][0]
+        assert set(heat) == {"x", "y", "count"}
+        assert set(aim) == {"x", "y", "count", "rose", "mean_yaw", "r"}
+        assert set(hot) == {"x", "y", "count", "kills", "deaths"}
+
+    def test_player_aim_survives_both_states(self):
+        self._roundtrip(PlayerAim, self._f("api_proximity_player_aim.json"))
+        self._roundtrip(PlayerAim, self._f("api_proximity_player_aim_empty.json"))
+
+    def test_an_empty_scope_says_maximum_spread_not_zero(self):
+        """⭐ The zero-shot answer is CHOSEN, not zeroed: 180° circular
+        deviation and a Rayleigh p of 1.0 say "no preferred direction", which
+        is the honest reading of no shots. Typing these nullable would invite
+        a consumer to render "—" and lose the statement."""
+        empty = self._f("api_proximity_player_aim_empty.json")
+        assert empty["total"] == 0 and empty["hotzones"] == []
+        assert empty["circular"]["circular_std_deg"] == 180.0
+        assert empty["circular"]["rayleigh_p"] == 1.0
+        assert empty["narrative"] == ["0 shots tracked"]
+
+    def test_the_pitch_histogram_has_one_more_edge_than_bins(self):
+        """A consumer that zips edges with counts drops the last bin."""
+        for fixture in ("api_proximity_player_aim.json",
+                        "api_proximity_player_aim_empty.json"):
+            hist = self._f(fixture)["pitch_hist"]
+            assert len(hist["edges"]) == len(hist["counts"]) + 1
+
+    @pytest.mark.parametrize(("fixture", "keys"), [
+        ("api_proximity_hotzones_ready.json", 10),
+        ("api_proximity_hotzones_no_map.json", 8),
+        ("api_proximity_hotzones_unknown_map.json", 10),
+    ])
+    def test_hotzones_survives_every_recorded_shape(self, fixture, keys):
+        from fastapi.routing import APIRoute
+        from pydantic import TypeAdapter
+
+        from website.backend.routers import proximity_combat
+
+        route = next(r for r in proximity_combat.router.routes
+                     if isinstance(r, APIRoute) and r.path == "/proximity/hotzones")
+        raw = self._f(fixture)
+        assert len(raw) == keys
+        out = _json.loads(
+            TypeAdapter(route.response_model).validate_python(raw).model_dump_json())
+        assert out == raw
+
+    def test_status_is_not_the_discriminator_between_the_two_shapes(self):
+        """⛔ THE TRAP A CONSUMER WALKS INTO HERE.
+
+        `status: "prototype"` appears on BOTH the eight-key and the ten-key
+        shape — a scope naming a map with no engagements answers ten keys with
+        that status, while an empty scope answers eight with the same one. And
+        the eight-key shape is also what a swallowed database error produces,
+        with only `status: "error"` to say so. So neither the key set nor the
+        status alone identifies what happened; they have to be read together.
+        """
+        no_map = self._f("api_proximity_hotzones_no_map.json")
+        unknown = self._f("api_proximity_hotzones_unknown_map.json")
+        ready = self._f("api_proximity_hotzones_ready.json")
+        assert no_map["status"] == unknown["status"] == "prototype"
+        assert len(no_map) == 8 and len(unknown) == 10
+        assert ready["status"] == "ok" and len(ready) == 10
+        # …and `message` is inverted from what a reader expects:
+        assert no_map["message"] and ready["message"] is None

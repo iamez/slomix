@@ -923,7 +923,81 @@ async def get_proximity_player_heatmap(
     return result
 
 
-@router.get("/proximity/player-aim")
+class AimCell(BaseModel):
+    """One grid cell of the aim map, with the direction fired from it.
+
+    ⚠️ NOT the same element as `HeatmapCell` or the hotzones endpoint's cell,
+    despite all three being `{x, y, count, …}`: this one adds a 16-bucket
+    `rose` and the circular mean. Three near-identical shapes across one
+    family is exactly where a shared renderer picks the wrong one.
+    """
+
+    x: int
+    y: int
+    count: int
+    #: Shot counts per yaw bucket; its length is `yaw_buckets`.
+    rose: list[int]
+    mean_yaw: float
+    #: Resultant length, 0..1 — how concentrated the rose is.
+    r: float
+
+
+class PitchHistogram(BaseModel):
+    """⚠️ `edges` has ONE MORE ENTRY THAN `counts` — 7 edges, 6 bins. A
+    consumer that zips them silently drops the last bin."""
+
+    edges: list[int]
+    counts: list[int]
+
+
+class AimCircularStats(BaseModel):
+    """Circular statistics over the shot directions.
+
+    ⭐ EVERY FIELD IS NON-NULL EVEN WITH NO SHOTS, and the empty values are
+    chosen rather than zeroed: measured on a scope with 0 shots, this answers
+    `circular_std_deg: 180.0` and `rayleigh_p: 1.0` — maximum spread and no
+    evidence of a preferred direction, which is the honest reading of nothing.
+    A model that made them nullable would invite a consumer to render "—" and
+    lose that.
+    """
+
+    n: int
+    mean_yaw_deg: float
+    resultant_length: float
+    circular_std_deg: float
+    rayleigh_p: float
+    pitch_mean_deg: float
+    pitch_std_deg: float
+
+
+class PlayerAim(BaseModel):
+    """Where a player aims on one map, and how tightly.
+
+    An out-of-range scope answers 200 with `total: 0`, an empty `hotzones`
+    list and `narrative: ["0 shots tracked"]` — an answer, not an error.
+    `map_name` and `player_guid` are both REQUIRED parameters and each
+    answers 400 when missing, so neither can be null in the payload.
+    """
+
+    status: str
+    map_name: str
+    player_guid: str
+    player_name: str
+    grid_size: int
+    total: int
+    sampled: bool
+    scope: ProximityScope
+    hotzones: list[AimCell]
+    #: Number of yaw buckets in every cell's `rose`.
+    yaw_buckets: int
+    yaw_bucket_width_deg: float
+    pitch_hist: PitchHistogram
+    circular: AimCircularStats
+    #: Pre-rendered sentences; the page shows them verbatim.
+    narrative: list[str]
+
+
+@router.get("/proximity/player-aim", response_model=PlayerAim)
 @handle_router_errors("Proximity player-aim error")
 async def get_proximity_player_aim(
     map_name: str | None = None,

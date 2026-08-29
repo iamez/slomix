@@ -1,0 +1,376 @@
+{
+  "status": "ok",
+  "ready": true,
+  "message": null,
+  "range_days": 30,
+  "generated_at": "2026-08-29T21:02:53.292727Z",
+  "scope": {
+    "session_date": null,
+    "map_name": "te_escape2",
+    "round_number": null,
+    "round_start_unix": null,
+    "player_guid": null
+  },
+  "source": "combat_engagement",
+  "map_name": "te_escape2",
+  "grid_size": 512,
+  "hotzones": [
+    {
+      "x": -10,
+      "y": 4,
+      "count": 468,
+      "kills": 300,
+      "deaths": 168
+    },
+    {
+      "x": -6,
+      "y": 0,
+      "count": 456,
+      "kills": 258,
+      "deaths": 198
+    },
+    {
+      "x": -10,
+      "y": 3,
+      "count": 422,
+      "kills": 257,
+      "deaths": 165
+    },
+    {
+      "x": -6,
+      "y": 1,
+      "count": 365,
+      "kills": 238,
+      "deaths": 127
+    },
+    {
+      "x": -6,
+      "y": -1,
+      "count": 361,
+      "kills": 224,
+      "deaths": 137
+    },
+    {
+      "x": -7,
+      "y": 2,
+      "count": 271,
+      "kills": 173,
+      "deaths": 98
+    },
+    {
+      "x": -7,
+      "y": 1,
+      "count": 338,
+      "kills": 170,
+      "deaths": 168
+    },
+    {
+      "x": -7,
+      "y": 0,
+      "count": 338,
+      "kills": 166,
+      "deaths": 172
+    },
+    {
+      "x": -5,
+      "y": 0,
+      "count": 223,
+      "kills": 147,
+      "deaths": 76
+    },
+    {
+      "x": -9,
+      "y": 1,
+      "count": 273,
+      "kills": 145,
+      "deaths": 128
+    },
+    {
+      "x": -11,
+      "y": 3,
+      "count": 261,
+      "kills": 136,
+      "deaths": 125
+    },
+    {
+      "x": -11,
+      "y": 4,
+      "count": 253,
+      "kills": 133,
+      "deaths": 120
+    },
+    {
+      "x": -10,
+      "y": 1,
+      "count": 191,
+      "kills": 114,
+      "deaths": 77
+    },
+    {
+      "x": -9,
+      "y": 2,
+      "count": 185,
+      "kills": 114,
+      "deaths": 71
+    },
+    {
+      "x": -12,
+      "y": 2,
+      "count": 225,
+      "kills": 113,
+      "deaths": 112
+    },
+    {
+      "x": -11,
+      "y": 1,
+      "count": 157,
+      "kills": 102,
+      "deaths": 55
+    },
+    {
+      "x": -11,
+      "y": 2,
+      "count": 173,
+      "kills": 80,
+      "deaths": 93
+    },
+    {
+      "x": -12,
+      "y": 1,
+      "count": 152,
+      "kills": 74,
+      "deaths": 78
+    },
+    {
+      "x": -12,
+      "y": 3,
+      "count": 293,
+      "kills": 73,
+      "deaths": 220
+    },
+    {
+      "x": -5,
+      "y": -2,
+      "count": 95,
+      "kills": 73,
+      "deaths": 22
+    },
+    {
+      "x": -12,
+      "y": 4,
+      "count": 161,
+      "kills": 69,
+      "deaths": 92
+    },
+    {
+      "x": -10,
+      "y": 2,
+      "count": 103,
+      "kills": 61,
+      "deaths": 42
+    },
+    {
+      "x": -6,
+      "y": -2,
+      "count": 62,
+      "kills": 58,
+      "deaths": 4
+    },
+    {
+      "x": -13,
+      "y": 2,
+      "count": 77,
+      "kills": 57,
+      "deaths": 20
+    },
+    {
+      "x": -13,
+      "y": 1,
+      "count": 111,
+      "kills": 54,
+      "deaths": 57
+    },
+    {
+      "x": -9,
+      "y": 3,
+      "count": 71,
+      "kills": 38,
+      "deaths": 33
+    },
+    {
+      "x": -12,
+      "y": 0,
+      "count": 80,
+      "kills": 37,
+      "deaths": 43
+    },
+    {
+      "x": -7,
+      "y": -1,
+      "count": 57,
+      "kills": 35,
+      "deaths": 22
+    },
+    {
+      "x": -5,
+      "y": -1,
+      "count": 45,
+      "kills": 30,
+      "deaths": 15
+    },
+    {
+      "x": -8,
+      "y": 1,
+      "count": 104,
+      "kills": 29,
+      "deaths": 75
+    },
+    {
+      "x": -10,
+      "y": 0,
+      "count": 43,
+      "kills": 26,
+      "deaths": 17
+    },
+    {
+      "x": -8,
+      "y": 0,
+      "count": 59,
+      "kills": 25,
+      "deaths": 34
+    },
+    {
+      "x": -11,
+      "y": 0,
+      "count": 40,
+      "kills": 25,
+      "deaths": 15
+    },
+    {
+      "x": -4,
+      "y": -1,
+      "count": 49,
+      "kills": 23,
+      "deaths": 26
+    },
+    {
+      "x": -3,
+      "y": -1,
+      "count": 56,
+      "kills": 20,
+      "deaths": 36
+    },
+    {
+      "x": -9,
+      "y": 0,
+      "count": 30,
+      "kills": 20,
+      "deaths": 10
+    },
+    {
+      "x": -8,
+      "y": 2,
+      "count": 106,
+      "kills": 19,
+      "deaths": 87
+    },
+    {
+      "x": -13,
+      "y": 3,
+      "count": 31,
+      "kills": 15,
+      "deaths": 16
+    },
+    {
+      "x": -14,
+      "y": 1,
+      "count": 28,
+      "kills": 15,
+      "deaths": 13
+    },
+    {
+      "x": -12,
+      "y": 5,
+      "count": 14,
+      "kills": 10,
+      "deaths": 4
+    },
+    {
+      "x": -13,
+      "y": 0,
+      "count": 12,
+      "kills": 9,
+      "deaths": 3
+    },
+    {
+      "x": -13,
+      "y": 4,
+      "count": 16,
+      "kills": 7,
+      "deaths": 9
+    },
+    {
+      "x": -11,
+      "y": 5,
+      "count": 11,
+      "kills": 7,
+      "deaths": 4
+    },
+    {
+      "x": -4,
+      "y": -2,
+      "count": 10,
+      "kills": 6,
+      "deaths": 4
+    },
+    {
+      "x": -14,
+      "y": 0,
+      "count": 7,
+      "kills": 5,
+      "deaths": 2
+    },
+    {
+      "x": -4,
+      "y": 0,
+      "count": 13,
+      "kills": 4,
+      "deaths": 9
+    },
+    {
+      "x": -12,
+      "y": -1,
+      "count": 34,
+      "kills": 3,
+      "deaths": 31
+    },
+    {
+      "x": -2,
+      "y": 0,
+      "count": 77,
+      "kills": 2,
+      "deaths": 75
+    },
+    {
+      "x": -14,
+      "y": 2,
+      "count": 1,
+      "kills": 1,
+      "deaths": 0
+    },
+    {
+      "x": -2,
+      "y": -1,
+      "count": 15,
+      "kills": 0,
+      "deaths": 15
+    },
+    {
+      "x": -5,
+      "y": 1,
+      "count": 2,
+      "kills": 0,
+      "deaths": 2
+    }
+  ]
+}

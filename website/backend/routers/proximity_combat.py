@@ -1,6 +1,7 @@
 """Proximity combat endpoints: engagements, hotzones, duos, classes."""
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel, ConfigDict
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -11,6 +12,7 @@ from website.backend.routers.proximity_helpers import (
     _proximity_stub_meta,
     logger,
 )
+from website.backend.routers.proximity_positions import ProximityScope
 
 router = APIRouter()
 
@@ -77,7 +79,69 @@ async def get_proximity_engagements(
     return payload
 
 
-@router.get("/proximity/hotzones")
+class HotzoneCell(BaseModel):
+    """One grid cell of the combat heatmap.
+
+    ⚠️ A THIRD `{x, y, count, …}` SHAPE IN THIS FAMILY, and all three differ:
+    `HeatmapCell` (player-heatmap) has three fields, `AimCell` adds `rose`,
+    `mean_yaw` and `r`, and this one splits the count into kills and deaths.
+    A shared renderer that assumes one of them silently misreads the others.
+    """
+
+    x: int
+    y: int
+    count: int
+    kills: int
+    deaths: int
+
+
+class HotzonesUnready(BaseModel):
+    """The EIGHT-key answer: no map could be selected for this scope.
+
+    ⛔ `status` is "prototype" here — the stub meta the handler starts from —
+    and "error" when the query raised, but BOTH carry the same eight keys. So
+    the status, not the shape, is what tells a caller which happened, and a
+    consumer that branches on key presence cannot tell a scope with no data
+    from a database failure.
+
+    `message` carries the stub's own sentence in both cases, so it is a string
+    here while the ready shape sets it to null. That inversion is measured,
+    not designed: "Proximity pipeline not connected." on the unready branch,
+    `null` on the working one.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    ready: bool
+    message: str | None
+    range_days: int
+    generated_at: str
+    scope: ProximityScope
+    #: Null when no map could be selected at all.
+    map_name: str | None
+    hotzones: list[HotzoneCell]
+
+
+class HotzonesReady(HotzonesUnready):
+    """…and TEN keys once a map was selected, whether or not it had rows.
+
+    ⚠️ `status` is NOT the discriminator between these two shapes: a scope
+    naming a map that has no engagements answers ten keys with
+    `status: "prototype"`, while an empty scope answers eight with the same
+    status. Measured on `?map_name=ni_take_mape` versus
+    `?session_date=2020-01-01`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    grid_size: int
+    #: Which table the cells came from, e.g. "combat_engagement".
+    source: str
+
+
+@router.get("/proximity/hotzones",
+            response_model=HotzonesReady | HotzonesUnready)
 async def get_proximity_hotzones(
     range_days: int = 30,
     session_date: str | None = None,

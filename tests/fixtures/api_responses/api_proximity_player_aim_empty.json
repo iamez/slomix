@@ -1,0 +1,50 @@
+{
+  "status": "ok",
+  "map_name": "te_escape2",
+  "player_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+  "player_name": "#EDBB5DA9",
+  "grid_size": 512,
+  "total": 0,
+  "sampled": false,
+  "scope": {
+    "session_date": "2020-01-01",
+    "map_name": "te_escape2",
+    "round_number": null,
+    "round_start_unix": null,
+    "player_guid": "EDBB5DA97C9F52151865C5F223F9B951"
+  },
+  "hotzones": [],
+  "yaw_buckets": 16,
+  "yaw_bucket_width_deg": 22.5,
+  "pitch_hist": {
+    "edges": [
+      -90,
+      -60,
+      -30,
+      0,
+      30,
+      60,
+      90
+    ],
+    "counts": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ]
+  },
+  "circular": {
+    "n": 0,
+    "mean_yaw_deg": 0.0,
+    "resultant_length": 0.0,
+    "circular_std_deg": 180.0,
+    "rayleigh_p": 1.0,
+    "pitch_mean_deg": 0.0,
+    "pitch_std_deg": 0.0
+  },
+  "narrative": [
+    "0 shots tracked"
+  ]
+}
