@@ -23,7 +23,7 @@
  * into the repo.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -35,6 +35,10 @@ const { chromium } = await import(
 const BASE_URL = process.env.AUDIT_BASE_URL ?? 'http://127.0.0.1:8000';
 const ANON_ONLY = process.argv.includes('--anon-only');
 const MANIFEST = process.argv.includes('--manifest');
+// --app sweeps the NEW standalone SPA under /app instead of the legacy hash
+// site. Same passes, same viewports, same manifest format, so the two can be
+// diffed against each other (docs/design/09 §H2).
+const APP_MODE = process.argv.includes('--app');
 const OWNER_ONLY = process.argv.includes('--owner-only');
 const OUT_DIR = (() => {
     const i = process.argv.indexOf('--out');
@@ -53,44 +57,115 @@ const VIEWPORTS = [
     { name: 'phone-390', width: 390, height: 844, shot: false },
 ];
 
-// Every route from docs/ROUTE_MAP_2026-07.md. Parametrised ones carry real
-// values so they are actually exercised rather than bouncing off a guard — the
+// Every route in the legacy registry. Parametrised ones carry real values so
+// they are actually exercised rather than bouncing off a guard — the
 // stale-contract findings in the master review all live behind a param.
+//
+// `key` is the registry's own viewId, and assertRegistryCovered() below fails
+// the run when the registry grows a route this list does not exercise. That
+// guard was written after the list and the registry were compared for the
+// first time: 29 entries against 32 keys, with `system`, `spider-web`,
+// `greatshot-demo` and `upload-detail` never once loaded by an audit that
+// reported itself as covering every route.
 const ROUTES = [
-    { name: 'home', hash: '' },
-    { name: 'sessions', hash: '#/sessions' },
-    { name: 'sessions2', hash: '#/sessions2' },
-    { name: 'session-detail (date, multi-session)', hash: '#/session-detail/date/2026-08-04' },
-    { name: 'leaderboards', hash: '#/leaderboards' },
-    { name: 'form', hash: '#/form' },
-    { name: 'maps', hash: '#/maps' },
-    { name: 'weapons', hash: '#/weapons' },
-    { name: 'records (alias)', hash: '#/records' },
-    { name: 'record-book', hash: '#/record-book' },
-    { name: 'hall-of-fame', hash: '#/hall-of-fame' },
-    { name: 'awards', hash: '#/awards' },
-    { name: 'profile (owner)', hash: '#/profile/E587CA5F' },
-    { name: 'profile (other)', hash: '#/profile/D8423F90' },
-    { name: 'skill-rating', hash: '#/skill-rating' },
-    { name: 'rivalries', hash: '#/rivalries' },
-    { name: 'story', hash: '#/story' },
-    { name: 'replay', hash: '#/replay' },
-    { name: 'retro-viz', hash: '#/retro-viz' },
-    { name: 'tonight', hash: '#/tonight' },
-    { name: 'proximity', hash: '#/proximity' },
-    { name: 'proximity-player', hash: '#/proximity/player/D8423F90' },
-    { name: 'proximity-replay', hash: '#/proximity/round/11175' },
-    { name: 'proximity-teams', hash: '#/proximity/round/11175/teams' },
-    { name: 'smart-stats-diag', hash: '#/smart-stats-diag' },
-    { name: 'greatshot', hash: '#/greatshot/demos' },
-    { name: 'uploads', hash: '#/uploads' },
-    { name: 'availability', hash: '#/availability' },
-    { name: 'admin', hash: '#/admin' },
+    { key: 'home', name: 'home', hash: '' },
+    { key: 'sessions', name: 'sessions', hash: '#/sessions' },
+    { key: 'sessions2', name: 'sessions2', hash: '#/sessions2' },
+    { key: 'session-detail', name: 'session-detail (date, multi-session)', hash: '#/session-detail/date/2026-08-04' },
+    { key: 'leaderboards', name: 'leaderboards', hash: '#/leaderboards' },
+    { key: 'form', name: 'form', hash: '#/form' },
+    { key: 'maps', name: 'maps', hash: '#/maps' },
+    { key: 'weapons', name: 'weapons', hash: '#/weapons' },
+    { key: 'records', name: 'records (alias)', hash: '#/records' },
+    { key: 'record-book', name: 'record-book', hash: '#/record-book' },
+    { key: 'hall-of-fame', name: 'hall-of-fame', hash: '#/hall-of-fame' },
+    { key: 'awards', name: 'awards', hash: '#/awards' },
+    { key: 'profile', name: 'profile (owner)', hash: '#/profile/E587CA5F' },
+    { key: 'profile', name: 'profile (other)', hash: '#/profile/D8423F90' },
+    { key: 'skill-rating', name: 'skill-rating', hash: '#/skill-rating' },
+    { key: 'rivalries', name: 'rivalries', hash: '#/rivalries' },
+    { key: 'story', name: 'story', hash: '#/story' },
+    { key: 'replay', name: 'replay', hash: '#/replay' },
+    { key: 'retro-viz', name: 'retro-viz', hash: '#/retro-viz' },
+    { key: 'live', name: 'tonight', hash: '#/tonight' },
+    { key: 'proximity', name: 'proximity', hash: '#/proximity' },
+    { key: 'proximity-player', name: 'proximity-player', hash: '#/proximity/player/D8423F90' },
+    { key: 'proximity-replay', name: 'proximity-replay', hash: '#/proximity/round/11175' },
+    { key: 'proximity-teams', name: 'proximity-teams', hash: '#/proximity/round/11175/teams' },
+    { key: 'smart-stats-diag', name: 'smart-stats-diag', hash: '#/smart-stats-diag' },
+    { key: 'greatshot', name: 'greatshot', hash: '#/greatshot/demos' },
+    { key: 'uploads', name: 'uploads', hash: '#/uploads' },
+    { key: 'availability', name: 'availability', hash: '#/availability' },
+    { key: 'admin', name: 'admin', hash: '#/admin' },
+    // The four the guard found. Ids are real rows on the dev database; a
+    // missing one turns into an ordinary "page said no data" finding rather
+    // than a silent skip.
+    { key: 'system', name: 'system', hash: '#/system' },
+    { key: 'spider-web', name: 'spider-web', hash: '#/spider-web/round/11365' },
+    { key: 'greatshot-demo', name: 'greatshot-demo', hash: '#/greatshot/demo/7dc01a5727344cd8afece44a1cc572e6' },
+    { key: 'upload-detail', name: 'upload-detail', hash: '#/uploads/de4f8d8628c148e5a8756a522aeb43b0' },
 ];
+
+/**
+ * The list above and website/js/route-registry.js are two halves of one fact.
+ * Nothing joined them, so the audit could report "every route" while three
+ * whole pages had never been loaded. Node can import the registry directly —
+ * it is a plain ES module — so the join is a check, not a copy.
+ */
+async function assertRegistryCovered() {
+    const registry = await import(path.join(REPO_ROOT, 'website/js/route-registry.js'));
+    const known = new Set(Object.keys(registry.listRouteDefinitions()));
+    const audited = new Set(ROUTES.map((r) => r.key));
+    const missing = [...known].filter((k) => !audited.has(k));
+    const unknown = [...audited].filter((k) => !known.has(k));
+    if (missing.length || unknown.length) {
+        process.stderr.write(
+            `route list and the legacy registry disagree\n`
+            + (missing.length ? `  never audited: ${missing.join(', ')}\n` : '')
+            + (unknown.length ? `  not in the registry: ${unknown.join(', ')}\n` : ''),
+        );
+        process.exit(2);
+    }
+}
+
+/**
+ * The NEW app's routes, read from the table the app itself uses.
+ *
+ * routes.data.json exists so this line can be an import rather than a second
+ * copy: scripts run in plain Node and cannot read the TypeScript the app is
+ * written in, which is exactly how the two lists drifted apart before.
+ * Parameters are filled from the same sample values as the legacy pass, so a
+ * side-by-side manifest compares the same rows of data.
+ */
+function appRoutes() {
+    const table = JSON.parse(
+        readFileSync(path.join(REPO_ROOT, 'website/frontend/src/app/routes.data.json'), 'utf8'),
+    );
+    const samples = {
+        ':id?': 'D8423F90', ':guid': 'D8423F90', ':roundId': '11365',
+        ':sessionId': '154', ':sessionDate': '2026-08-04', ':gsid': '154',
+        ':date': '2026-08-27', ':section?': 'demos',
+        ':demoId': '7dc01a5727344cd8afece44a1cc572e6',
+        ':uploadId': 'de4f8d8628c148e5a8756a522aeb43b0',
+        ':tab?': '',
+    };
+    return table.map((row) => {
+        const filled = row.path
+            .split('/')
+            .map((seg) => (seg.startsWith(':') ? samples[seg] ?? seg.replace(/[:?]/g, '') : seg))
+            .filter((seg, i) => seg !== '' || i === 0)
+            .join('/');
+        return { key: row.key, name: row.key, hash: `app${filled === '/' ? '' : filled}` };
+    });
+}
 
 // ---------------------------------------------------------------------------
 // Session cookie
 // ---------------------------------------------------------------------------
+
+// Legacy or app, chosen once so every pass below sweeps the same list.
+const ACTIVE_ROUTES = APP_MODE ? appRoutes() : ROUTES;
+if (!APP_MODE) await assertRegistryCovered();
 
 /**
  * Locate the interpreter, in the same order and with the same override as
@@ -390,7 +465,7 @@ if (MANIFEST) {
         ]);
     }
     const routesOut = {};
-    for (const route of ROUTES) {
+    for (const route of ACTIVE_ROUTES) {
         routesOut[route.name] = await manifestRoute(context, route);
         process.stdout.write(`  manifest ${route.name.padEnd(38)} ${routesOut[route.name].apiPaths.length} api, ${routesOut[route.name].panelTitles.length} panels\n`);
     }
@@ -532,7 +607,7 @@ for (const { label, asOwner } of passes) {
             { name: 'session', value: ownerCookie, domain: hostname, path: '/' },
         ]);
     }
-    for (const route of ROUTES) {
+    for (const route of ACTIVE_ROUTES) {
         for (const viewport of VIEWPORTS) {
             const r = await auditRoute(context, route, viewport, label, OUT_DIR);
             results.push(r);
