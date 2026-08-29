@@ -2,14 +2,14 @@
 ## What it is
 
 ET:Legacy writes a stats file at the end of every round. Slomix reads those files,
-reconciles them into matches, and keeps them — **2,987 rounds since January 2025**,
-57 fields per player per round, 230,343 kills and counting.
+reconciles them into matches, and keeps them — **1,882 rounds since January 2025**,
+57 fields per player per round, 110,780 kills and counting.
 
 That much is ordinary. What makes the dataset unusual is the second source: a Lua
 tracker on the game server samples **every player's position, health, weapon, stance
 and speed every 200 ms**, alongside per-shot hit regions, engagements, revives and
 objective work. A four-minute round produces roughly 3,400 records across 22
-sections. There are 63,058 recorded paths in the database.
+sections. There are 71,752 recorded paths in the database.
 
 Stopwatch is what makes this hard. A map is two rounds with the sides swapped, the
 second round's stats file is cumulative rather than per-round, sessions cross
@@ -20,14 +20,19 @@ things right before anything is displayed.
 
 | | |
 |---|---|
-| Rounds parsed | 2,987 since January 2025 |
+| Rounds counted | 1,882 since January 2025 |
 | Stored per player, per round | 57 fields |
-| Telemetry | 29 tables, 1.26 GB, 63,058 player paths |
-| Database | 101 tables, 72 migrations |
+| Telemetry | 29 tables, 1,229 MB, 71,752 player paths |
+| Database | 104 tables, 81 migrations |
 | Discord | 107 commands across 21 cogs and their mixins |
-| Web API | 247 endpoints across 48 routers |
-| Code | ~107k lines of Python, ~8.8k of Lua |
-| Tests | 4,219 across 304 files |
+| Web API | 250 endpoints across 49 routers |
+| Code | ~149k lines of Python outside tests, ~10k of Lua on the game server |
+| Tests | 5,716 across 396 files |
+
+Counted 2026-08-29 against the running database and this checkout. Every
+row above had drifted — tables 101→104, migrations 72→81, endpoints
+247→250, tests 4,219→5,716 — which is what an unmeasured figure does
+while nobody re-runs it.
 
 ## What it does
 
@@ -40,7 +45,7 @@ handled by the parser rather than by each query.
 and per-map statistics, head-to-head records, availability polls for the next game
 night, and a post-session digest.
 
-**Shows the detail on the web.** A FastAPI backend over 101 tables serving player
+**Shows the detail on the web.** A FastAPI backend over 104 tables serving player
 profiles, session archives, a record book, a round replay with a 2D map and a
 scrubber, rivalries, and a skill rating built from nine percentile metrics.
 
@@ -93,14 +98,14 @@ with origin and view angles, hit regions, engagements and reaction times, aim-lo
 traces, spawn timing, kill outcomes with the killer's remaining health, crossfire
 geometry, team pushes, revives, trades and objective runs.
 
-That lands in **29 `proximity_*` tables**, currently **1.26 GB** and 63,058 recorded
+That lands in **29 `proximity_*` tables**, currently **1,229 MB** and 71,752 recorded
 player paths. Every row is linked back to a round, which is less trivial than it
 sounds: the tracker writes before the stats file exists, so rows are matched to their
 round afterwards by map, round number and start time.
 
 ### Stack
 
-Python 3.11+ with `asyncpg` throughout, PostgreSQL 17 (101 tables, schema managed by
+Python 3.11+ with `asyncpg` throughout, PostgreSQL 17 (104 tables, schema managed by
 committed migrations with a checksum ledger), FastAPI for the API, `discord.py` for
 the bot, Lua on the game server, and a web front end that runs legacy JS as the
 production surface with React 19 alongside it. Tests: 4,200, plus Playwright smoke
@@ -117,7 +122,7 @@ verification, and the database's own constraints. Four of the six block; the
 aggregate check warns rather than blocks, deliberately, because a mismatch there is
 usually a parser question rather than a corrupt file.
 
-**Schema changes are a ledger, not a habit.** All 72 migrations are recorded with
+**Schema changes are a ledger, not a habit.** All 81 migrations are recorded with
 who applied them and when, and 49 carry a SHA-256 of the file they were applied
 from. Editing an applied migration is caught as checksum drift at service startup;
 the fix goes in a new migration rather than the old one. A separate contract test
@@ -125,7 +130,7 @@ refuses to let a migration exist that no release configuration ships, and anothe
 compares the bootstrap schema dump against what the migrations actually produce —
 so a fresh install cannot silently come up missing a column.
 
-**4,219 tests across 304 files**, plus Playwright smoke runs that load the real
+**5,716 tests across 396 files**, plus Playwright smoke runs that load the real
 pages and fail on a console error, a failed request, an error state, or a loading
 placeholder that never resolved. Twelve checks run on every pull request: two Python
 versions, JavaScript and shell linting, a React typecheck, dependency audit, static
@@ -163,13 +168,27 @@ in [Scale](#scale) above; these are the games themselves.
 
 | Metric | Value |
 |--------|-------|
-| **Kills** | 230,343 |
-| **Headshot kills** | 49,918 |
-| **Damage dealt** | 45.2 million |
-| **Revives given** | 26,412 |
-| **Rounds** | 2,987 |
-| **Unique players** | 65 |
+| **Kills** | 110,780 |
+| **Headshot kills** | 24,046 |
+| **Damage dealt** | 22.2 million |
+| **Revives given** | 13,671 |
+| **Rounds** | 1,882 |
+| **Unique players** | 37 |
 | **Span** | January 2025 — August 2026 |
+
+Measured 2026-08-29 over the rounds this project counts as real: the two
+halves of a match (`round_number IN (1, 2)`), status completed or
+substitution, `is_valid` (the flag the parser clears on filler and mixed
+human/bot test rounds), and human players only. Every figure in this table comes from
+that one filter, which is the point — the first draft of this correction
+took its player count from the bot-excluded query and its kills from a query
+that still counted them, and the two disagreed by 6,098 kills without
+anything on the page saying so.
+
+The figures this replaces were roughly double, because they counted
+`round_number = 0` rows as well. Those rows are a copy of the second half's
+cumulative totals — they exist, nothing reads them, and adding them to the
+halves counts most of the season twice.
 
 ---
 
@@ -244,7 +263,7 @@ in [Scale](#scale) above; these are the games themselves.
 ┌──────────────────────────────────────────────────┐
 │  Layer 5-6: PostgreSQL (ACID) + Constraints      │
 │  ✓ Transaction safety  ✓ FK/NOT NULL/UNIQUE      │
-│  101 tables  |  57 columns per player per round   │
+│  104 tables  |  57 columns per player per round   │
 └──────────────────────┬───────────────────────────┘
                        │
               ┌────────┼────────┐
