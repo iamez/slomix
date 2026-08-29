@@ -48,10 +48,43 @@ const SAMPLES = new Map<string, string>([
   [':tab?', ''],
 ]);
 
-function fill(path: string): string {
+/**
+ * The SECOND sample set: the same routes against data that is thin, old or
+ * absent rather than the healthy night everything was built against.
+ *
+ * This exists because one sample hid a crash. session-detail was written
+ * against session 154, which fills every field; pointed at 151, 146 and 128
+ * — sessions whose endpoints answer with a SHORT form — it threw
+ * `Cannot read properties of undefined` on three of four. No unit test could
+ * see it: they all ran against the same recording.
+ *
+ * The ids are chosen so the pass can FAIL for the original reason: 151 is a
+ * session whose /detail answers 200 while its mvp, verdicts and good-night
+ * answer the short form — pointing it at 145 instead (six orphan_r2 rounds,
+ * /detail 404s) made the sweep green against the very crash it was written
+ * for, because the panel that threw never rendered. Checked by mutation, not
+ * assumed. 3C89435D is a player with a single round, 11306 a round the
+ * position tracker never covered, and 2026-06-21 a date whose session is
+ * likewise thin.
+ */
+const SAMPLES_THIN = new Map<string, string>([
+  [':id?', '3C89435D'],
+  [':guid', '3C89435D'],
+  [':roundId', '11306'],
+  [':sessionId', '151'],
+  [':sessionDate', '2026-06-21'],
+  [':gsid', '151'],
+  [':date', '2026-06-21'],
+  [':section?', 'clips'],
+  [':demoId', '7dc01a5727344cd8afece44a1cc572e6'],
+  [':uploadId', 'de4f8d8628c148e5a8756a522aeb43b0'],
+  [':tab?', ''],
+]);
+
+function fill(path: string, samples: Map<string, string> = SAMPLES): string {
   const filled = path
     .split('/')
-    .map((seg) => (seg.startsWith(':') ? SAMPLES.get(seg) ?? seg.replace(/[:?]/g, '') : seg))
+    .map((seg) => (seg.startsWith(':') ? samples.get(seg) ?? seg.replace(/[:?]/g, '') : seg))
     .filter((seg, i) => seg !== '' || i === 0)
     .join('/');
   return `/app${filled === '/' ? '' : filled}`;
@@ -137,5 +170,39 @@ for (const route of routes) {
 
     expect(seen.consoleErrors, `${url} logged console errors`).toEqual([]);
     expect(seen.badResponses, `${url} made failing requests`).toEqual([]);
+  });
+}
+
+/**
+ * Second pass, parametrised routes only: the same assertions against thin
+ * data. A route with no parameters cannot differ between the two sets, so
+ * running it twice would only cost time.
+ */
+for (const route of routes.filter((r) => r.path.includes(':'))) {
+  const url = fill(route.path, SAMPLES_THIN);
+  test(`app route ${route.key} (${url}) survives thin data`, async ({ page }) => {
+    const seen = collect(page);
+
+    const response = await page.goto(url, { waitUntil: 'networkidle' });
+    expect(response?.status(), `${url} did not answer 200`).toBe(200);
+
+    const text = (await page.locator('body').innerText()).trim();
+    expect(text.length, `${url} rendered an empty page`).toBeGreaterThan(120);
+    expect(text).not.toMatch(/Something went wrong|Unhandled error|TypeError:/);
+    expect(text).not.toMatch(/\bundefined\b|\bNaN\b|\[object Object\]/);
+    // 404s are EXPECTED here — a session with no counted rounds answers one,
+    // and the page is required to SAY so rather than to break. The browser
+    // logs its own line for each of those, so both channels exempt exactly
+    // that status and nothing else: a 500, a failed request or any other
+    // console error still fails this pass.
+    const notFoundNoise = /Failed to load resource.*\b404\b/;
+    expect(
+      seen.consoleErrors.filter((line) => !notFoundNoise.test(line)),
+      `${url} logged console errors`,
+    ).toEqual([]);
+    expect(
+      seen.badResponses.filter((line) => !/^404 /.test(line)),
+      `${url} made failing requests`,
+    ).toEqual([]);
   });
 }
