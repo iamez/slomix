@@ -847,7 +847,7 @@
     "type": "object"
    },
    "MapStats": {
-    "description": "One map's aggregate line.\n\n⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes\nthrough a `x or 0` / `int(x) if x else 0` guard, so they are genuinely\nnon-null — the handler already decided that. `last_played` is the one that\ndoes NOT: `row[8]` goes through untouched and `rounds.round_date` is a\nnullable column, so it is typed nullable even though no live row shows it.",
+    "description": "One map's aggregate line.\n\n⚠️ THIS ENDPOINT USED TO SWALLOW ITS EXCEPTION AND RETURN `[]`, which made\na failed query indistinguishable from a database with no maps. Three\nsibling endpoints solved that with an explicit `status` field; this one\nreturns a bare ARRAY read by four callers, so a wrapper would reshape the\npayload for all of them.\n\n⭐ The third option was the right one, and it came from the workstream that\nrenders this: the ambiguity was never a missing `status`, it was the\n`except` turning a failure into a valid answer. Removing it restores `[]`\nto meaning exactly one thing, with HTTP carrying the other — no new\nchannel, no reshaped payload, and no field the OpenAPI generator cannot\nsee.\n\n⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes\nthrough a `x or 0` / `int(x) if x else 0` guard, so they are genuinely\nnon-null — the handler already decided that. `last_played` is the one that\ndoes NOT: `row[8]` goes through untouched and `rounds.round_date` is a\nnullable column, so it is typed nullable even though no live row shows it.",
     "properties": {
      "allies_win_rate": {
       "title": "Allies Win Rate",

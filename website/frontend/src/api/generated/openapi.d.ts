@@ -5711,6 +5711,19 @@ export interface components {
          * MapStats
          * @description One map's aggregate line.
          *
+         *     ⚠️ THIS ENDPOINT USED TO SWALLOW ITS EXCEPTION AND RETURN `[]`, which made
+         *     a failed query indistinguishable from a database with no maps. Three
+         *     sibling endpoints solved that with an explicit `status` field; this one
+         *     returns a bare ARRAY read by four callers, so a wrapper would reshape the
+         *     payload for all of them.
+         *
+         *     ⭐ The third option was the right one, and it came from the workstream that
+         *     renders this: the ambiguity was never a missing `status`, it was the
+         *     `except` turning a failure into a valid answer. Removing it restores `[]`
+         *     to meaning exactly one thing, with HTTP carrying the other — no new
+         *     channel, no reshaped payload, and no field the OpenAPI generator cannot
+         *     see.
+         *
          *     ⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes
          *     through a `x or 0` / `int(x) if x else 0` guard, so they are genuinely
          *     non-null — the handler already decided that. `last_played` is the one that

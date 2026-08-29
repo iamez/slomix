@@ -903,24 +903,41 @@ class TestTheWeaponHallOfFameHandlerEmitsItsStates:
         assert "not an empty set" in out["note"]
 
 
-@pytest.mark.asyncio
-async def test_stats_maps_still_hides_which_empty_and_that_is_recorded():
-    """⛔ A KNOWN GAP, PINNED SO IT CANNOT BE FORGOTTEN OR SILENTLY CHANGED.
+class TestStatsMapsLetsItsFailuresThrough:
+    """⛔ AN EMPTY ARRAY MUST MEAN EXACTLY ONE THING.
 
-    `/stats/maps` swallows its exception and returns `[]`, so a failed query
-    reads as "no maps". The three sibling endpoints were fixed; this one was
-    not, because it returns a bare ARRAY and four callers consume it that way —
-    reshaping it is a decision for the pages, not a schema detail.
+    `/stats/maps` used to catch its own exception and return `[]`, so a failed
+    query and a database with no maps answered identically — and `MapsPage`
+    renders `maps.length === 0` as nothing at all, so an outage looked like a
+    quiet week.
 
-    This test asserts the CURRENT behaviour. When someone changes it, the test
-    fails and they read why it was left alone, instead of discovering the
-    reasoning is gone.
+    Three sibling endpoints solved this with a `status` field. This one returns
+    a bare ARRAY read by four callers, so the fix is the other direction:
+    remove the swallow. `[]` then means "no rows" again and HTTP carries the
+    failure — no new channel, no reshaped payload, and nothing the OpenAPI
+    generator cannot see. `/stats/weapons` has always worked this way.
     """
-    from website.backend.routers.records_maps import get_maps
 
-    class _Broken:
-        async def fetch_all(self, *_a, **_k):
-            raise RuntimeError("connection lost")
+    @pytest.mark.asyncio
+    async def test_a_failed_query_raises_rather_than_answering_empty(self):
+        from website.backend.routers.records_maps import get_maps
 
-    out = await get_maps(db=_Broken())
-    assert out == [], "behaviour changed — update the docstring and this test"
+        class _Broken:
+            async def fetch_all(self, *_a, **_k):
+                raise RuntimeError("connection lost")
+
+        with pytest.raises(RuntimeError):
+            await get_maps(db=_Broken())
+
+    @pytest.mark.asyncio
+    async def test_a_genuinely_empty_database_still_answers_empty(self):
+        """The other half: removing the swallow must not turn "no maps" into
+        an error. Both halves matter — a guard that fails closed on real
+        emptiness would be a different defect wearing the same fix."""
+        from website.backend.routers.records_maps import get_maps
+
+        class _Empty:
+            async def fetch_all(self, *_a, **_k):
+                return []
+
+        assert await get_maps(db=_Empty()) == []

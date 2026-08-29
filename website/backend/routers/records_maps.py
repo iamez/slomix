@@ -14,19 +14,18 @@ router = APIRouter()
 class MapStats(BaseModel):
     """One map's aggregate line.
 
-    ⚠️ THIS ENDPOINT SWALLOWS ITS EXCEPTION AND RETURNS `[]` (line ~206), so a
-    failed query is indistinguishable from a database with no maps — the same
-    defect fixed on `/records/maps/segments`, `/stats/activity-calendar` and
-    `/stats/weapons/hall-of-fame`, and NOT fixed here.
-    ⛔ The reason is deliberate: those three return objects, so a `status` field
-    slots in beside the data. This one returns a bare ARRAY, and four callers
-    read it that way (`MapsPage`, `queries.ts`, legacy `matches.js` and
-    `records.js`). Wrapping it would reshape the payload for all four, which is
-    a decision for whoever owns those pages, not a schema detail to slip in
-    while typing the rows.
+    ⚠️ THIS ENDPOINT USED TO SWALLOW ITS EXCEPTION AND RETURN `[]`, which made
+    a failed query indistinguishable from a database with no maps. Three
+    sibling endpoints solved that with an explicit `status` field; this one
+    returns a bare ARRAY read by four callers, so a wrapper would reshape the
+    payload for all of them.
 
-    Found by sweeping for the pattern rather than meeting it a fourth time by
-    accident; raised with the workstream that renders it.
+    ⭐ The third option was the right one, and it came from the workstream that
+    renders this: the ambiguity was never a missing `status`, it was the
+    `except` turning a failure into a valid answer. Removing it restores `[]`
+    to meaning exactly one thing, with HTTP carrying the other — no new
+    channel, no reshaped payload, and no field the OpenAPI generator cannot
+    see.
 
     ⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes
     through a `x or 0` / `int(x) if x else 0` guard, so they are genuinely
@@ -216,9 +215,27 @@ async def get_maps(db: DatabaseAdapter = Depends(get_db)):
             )
 
         return maps
-    except Exception as e:
-        logger.error(f"Error fetching map stats: {e}")
-        return []
+    except Exception:
+        # ⛔ NO `return []` HERE. Swallowing the error made a failed query
+        # indistinguishable from a database with no maps: both answered 200
+        # with an empty array, and MapsPage renders `maps.length === 0` as
+        # nothing at all — so an outage looked like a quiet week.
+        #
+        # The three sibling endpoints gained an explicit `status` field, but
+        # this one returns a bare ARRAY and four callers consume it that way.
+        # Letting the error through is the smaller change AND the more honest
+        # one: `[]` then means exactly one thing again, and HTTP carries the
+        # other. `/stats/weapons` has always worked this way.
+        #
+        # Checked before doing it — every caller already handles a throw:
+        #   matches.js:119   catch → renders "Failed to load map statistics"
+        #                    (a message that until now could never appear)
+        #   records.js:73    catch → logs, leaves the filter empty
+        #   queries.ts       react-query → isError
+        # `fetchJSON` (utils.js:120) raises on !res.ok, so the legacy pair
+        # reach their catch blocks rather than dying mid-render.
+        logger.exception("Error fetching map stats")
+        raise
 
 
 @router.get("/records/maps/segments", response_model=MapObjectiveRecords)
