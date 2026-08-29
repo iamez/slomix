@@ -116,13 +116,45 @@ def _ts_is_nullable(ts_type: str) -> bool:
     return "null" in outer or "undefined" in outer
 
 
+def _top_level_union(ts_type: str) -> list[str]:
+    """Split a TS type on `|` at depth zero, keeping nested types intact."""
+    parts, depth, buf = [], 0, ""
+    for ch in ts_type:
+        if ch in "{([<":
+            depth += 1
+        elif ch in "})]>":
+            depth -= 1
+        if ch == "|" and depth == 0:
+            parts.append(buf.strip())
+            buf = ""
+        else:
+            buf += ch
+    parts.append(buf.strip())
+    return [p for p in parts if p]
+
+
 def _ts_matches(primitive: str, ts_type: str) -> bool:
-    base = ts_type.replace("| null", "").replace("| undefined", "").strip()
-    # a string-literal union ("ok" | "no_data") satisfies `string`
-    if primitive == "string" and base.startswith(("'", '"')):
-        return True
-    return any(base == spelling or base.startswith(f"{spelling} ")
-               for spelling in _PRIMITIVES[primitive])
+    """Does EVERY member of the declared union fit the API's primitive?
+
+    ⛔ THE PREFIX TEST THIS REPLACES ACCEPTED A WIDER TYPE. `base.startswith(
+    f"{spelling} ")` reads `number | string` as satisfying an integer field,
+    because the text begins with `number ` — so the client was allowed to hold
+    values the API contract forbids, and the checker reported agreement for
+    exactly the primitive drift it exists to catch (Codex on #830). Every
+    top-level member must fit; one that does not is the whole point.
+    """
+    members = [m for m in _top_level_union(ts_type)
+               if m not in ("null", "undefined")]
+    if not members:
+        return False
+    for member in members:
+        # a string-literal union ("ok" | "no_data") satisfies `string`
+        if primitive == "string" and member.startswith(("'", '"')):
+            continue
+        if member in _PRIMITIVES[primitive]:
+            continue
+        return False
+    return True
 
 
 def _interface_body(source: str, name: str) -> str | None:
@@ -216,11 +248,25 @@ def main() -> int:
     compared = 0
     findings: list[tuple[str, str, str, str]] = []
     unreadable: list[tuple[str, str, str]] = []
+    skipped: list[str] = []
     for name, schema in sorted(schemas.items()):
         if args.schema and name != args.schema:
             continue
         body = _interface_body(source, name)
         if body is None:
+            # ⛔ SKIPPED IS NOT CHECKED, AND THE ALL-SCHEMA RUN USED TO SAY
+            # NOTHING. The `compared == 0` guard below only fires when NOTHING
+            # matched, so on the documented default invocation a schema whose
+            # hand-written side is a `type X = …` alias — `StatsRecords` today —
+            # was silently passed over while the run still printed agreement.
+            # `--schema StatsRecords` exits 2 correctly; the sweep did not
+            # mention it at all (Codex on #830). Tracked per schema now.
+            # Only the ones with a counterpart the parser cannot read are a
+            # hazard: a schema with NO hand-written type at all is simply not
+            # mirrored on the client, which is the normal case for the ~96
+            # backend-internal models and would drown the signal.
+            if re.search(rf"\b(type|interface)\s+{re.escape(name)}\b", source):
+                skipped.append(name)
             continue
         compared += 1
         declared = _fields(body)
@@ -278,6 +324,11 @@ def main() -> int:
     stamp = datetime.fromtimestamp(types_path.stat().st_mtime, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
     print(f"types.ts: {types_path}  (last modified {stamp})")
     print(f"schemas compared: {compared}   disagreements: {len(findings)}")
+    if skipped:
+        print(f"  ~ NOT COMPARED ({len(skipped)}): no matching `interface` — a "
+              f"`type X = …` alias is invisible to this parser")
+        for name in skipped:
+            print(f"      {name}")
     for name, field, ts_type in unreadable:
         print(f"  ~ {name}.{field}: NOT JUDGED — this parser cannot resolve "
               f"`{ts_type}`")
@@ -298,7 +349,10 @@ def main() -> int:
         print("  a finding here is absence of a check, not a clean result.")
         return 2
     if not findings:
-        if unreadable:
+        if skipped:
+            print(f"compared fields agree, but {len(skipped)} schema(s) were "
+                  f"never compared — that is not agreement about them")
+        elif unreadable:
             print(f"top-level fields agree, EXCEPT {len(unreadable)} this parser "
                   f"could not read — that is not agreement about them")
         else:
