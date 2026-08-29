@@ -901,3 +901,26 @@ class TestTheWeaponHallOfFameHandlerEmitsItsStates:
         out = await get_weapon_hall_of_fame(db=_Broken())
         assert out["status"] == "unavailable"
         assert "not an empty set" in out["note"]
+
+
+@pytest.mark.asyncio
+async def test_stats_maps_still_hides_which_empty_and_that_is_recorded():
+    """⛔ A KNOWN GAP, PINNED SO IT CANNOT BE FORGOTTEN OR SILENTLY CHANGED.
+
+    `/stats/maps` swallows its exception and returns `[]`, so a failed query
+    reads as "no maps". The three sibling endpoints were fixed; this one was
+    not, because it returns a bare ARRAY and four callers consume it that way —
+    reshaping it is a decision for the pages, not a schema detail.
+
+    This test asserts the CURRENT behaviour. When someone changes it, the test
+    fails and they read why it was left alone, instead of discovering the
+    reasoning is gone.
+    """
+    from website.backend.routers.records_maps import get_maps
+
+    class _Broken:
+        async def fetch_all(self, *_a, **_k):
+            raise RuntimeError("connection lost")
+
+    out = await get_maps(db=_Broken())
+    assert out == [], "behaviour changed — update the docstring and this test"

@@ -14,6 +14,20 @@ router = APIRouter()
 class MapStats(BaseModel):
     """One map's aggregate line.
 
+    ⚠️ THIS ENDPOINT SWALLOWS ITS EXCEPTION AND RETURNS `[]` (line ~206), so a
+    failed query is indistinguishable from a database with no maps — the same
+    defect fixed on `/records/maps/segments`, `/stats/activity-calendar` and
+    `/stats/weapons/hall-of-fame`, and NOT fixed here.
+    ⛔ The reason is deliberate: those three return objects, so a `status` field
+    slots in beside the data. This one returns a bare ARRAY, and four callers
+    read it that way (`MapsPage`, `queries.ts`, legacy `matches.js` and
+    `records.js`). Wrapping it would reshape the payload for all four, which is
+    a decision for whoever owns those pages, not a schema detail to slip in
+    while typing the rows.
+
+    Found by sweeping for the pattern rather than meeting it a fourth time by
+    accident; raised with the workstream that renders it.
+
     ⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes
     through a `x or 0` / `int(x) if x else 0` guard, so they are genuinely
     non-null — the handler already decided that. `last_played` is the one that
