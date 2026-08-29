@@ -1,0 +1,46 @@
+{
+  "session_date": "2026-07-18",
+  "session_dates": [
+    "2026-07-18",
+    "2026-07-19"
+  ],
+  "gaming_session_id": 137,
+  "scope": "gaming_session",
+  "status": "degraded",
+  "kills_total": 1152,
+  "kills_with_round": 1152,
+  "unlinked_kills": 0,
+  "wrong_round_kills": 42,
+  "distinct_rounds_in_kills": 22,
+  "kis_rows": 1152,
+  "kis_computed": true,
+  "rounds_total": 22,
+  "rounds_correlated": 22,
+  "completeness_ratio": 1.0,
+  "linkage_ratio": 1.0,
+  "correlation_ratio": 1.0,
+  "kis_total_impact_sum": 2839.49,
+  "warnings": [
+    {
+      "level": "warning",
+      "message": "42 kills ima round_id, ki kaže na NAPAČNO rundo (round_start_unix se ne ujema) — ne samo manjkajoč link."
+    }
+  ],
+  "known_issues": [
+    {
+      "key": "time_played_per_player",
+      "title": "time_played_seconds ni per-player",
+      "detail": "Parser nastavi za vse igralce time_played_seconds = round duration. Vpliva na soft cap, gravity, lurker profile."
+    },
+    {
+      "key": "headshot_pct",
+      "title": "headshot_percentage uporablja napačno razmerje",
+      "detail": "Računa headshot_kills/total_kills namesto headshot_hits/total_hits."
+    },
+    {
+      "key": "distance_mult_hardcoded",
+      "title": "Distance multiplier hardcoded na 1.0",
+      "detail": "kis.py:229 — per-kill distance data še ni implementirana."
+    }
+  ]
+}

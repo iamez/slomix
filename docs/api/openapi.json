@@ -851,6 +851,92 @@
     "title": "LinkPlayerRequest",
     "type": "object"
    },
+   "LinkageAvailable": {
+    "description": "The linkage assessment came back.\n\n⚠️ `metrics` IS AN OPEN DICT ON PURPOSE. The assessor starts it empty and\nfills it per query, so a failed subquery yields PARTIAL metrics with the\nstatus set to \"error\" — verified in\n`bot/services/round_linkage_anomaly_service.py`, not assumed from the\nrouter's comment. A fixed model with the eleven keys the healthy path\nreturns would answer 500 exactly when the system is already degraded.\n\n`status` carries the assessor's own verdict and is read with `.get()`, so\nit is nullable here. It is load-bearing: an empty `breaches` list proves\nnothing when the status is \"error\", and without this field the frontend's\npartial-assessment guard cannot fire (Codex on #809).",
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     },
+     "breach_count": {
+      "title": "Breach Count",
+      "type": "integer"
+     },
+     "breaches": {
+      "items": {
+       "$ref": "#/components/schemas/LinkageBreach"
+      },
+      "title": "Breaches",
+      "type": "array"
+     },
+     "metrics": {
+      "additionalProperties": true,
+      "title": "Metrics",
+      "type": "object"
+     },
+     "status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status"
+     }
+    },
+    "required": [
+     "available",
+     "status",
+     "metrics",
+     "breach_count",
+     "breaches"
+    ],
+    "title": "LinkageAvailable",
+    "type": "object"
+   },
+   "LinkageBreach": {
+    "description": "One threshold the linkage assessor found breached. Every field comes\nfrom a `.get()` on a dict this router did not build, so all three are\nnullable — none was null in the live sample (there were no breaches at\nall, which is the same thing as no evidence).",
+    "properties": {
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Metric"
+     },
+     "threshold": {
+      "title": "Threshold"
+     },
+     "value": {
+      "title": "Value"
+     }
+    },
+    "required": [
+     "metric"
+    ],
+    "title": "LinkageBreach",
+    "type": "object"
+   },
+   "LinkageUnavailable": {
+    "description": "The assessment raised or came back as something other than a dict:\n`{\"available\": false}`, a SINGLE key.\n\n⛔ Not `LinkageAvailable` with optional fields — that would put\n`\"metrics\": null` and `\"breach_count\": null` on the wire for a payload the\nhandler deliberately keeps to one key.",
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "available"
+    ],
+    "title": "LinkageUnavailable",
+    "type": "object"
+   },
    "LiveEventBatch": {
     "properties": {
      "events": {
@@ -3304,6 +3390,248 @@
     "title": "StatsTrends",
     "type": "object"
    },
+   "StorytellingCompleteness": {
+    "description": "Smart Stats coverage for one date or one gaming session.\n\nMeasured across the states that matter rather than one happy call — all\nTHREE values of `status` were exercised (`ok`, `no_data`, `degraded`),\nboth scopes, and both refusals:\n\n    ?session_date=2026-08-27       200  ok         scope=date\n    ?session_date=2020-01-01       200  no_data    scope=date, 1 warning\n    ?gaming_session_id=153         200  ok         scope=gaming_session\n    ?gaming_session_id=137         200  degraded   scope=gaming_session\n    (neither parameter)            422  one of the two is required\n    ?session_date=ni-datum         400  must be YYYY-MM-DD\n\nThe key set is 20 in every 200, so nothing here is optional — but\n`gaming_session_id` IS null on all three date-scoped answers, which is the\nfield a date-scoped sample would have typed `int`.\n\n⭐ All three ratios are `float` and stay float on the empty path, because\nthe guard is `else 0.0`. That is worth stating next to\n`SeasonTotals.avg_rounds_per_day`, whose guard is `else 0` and which is\ntherefore `int | float`. Same shape of code, one character apart, two\ndifferent contracts.",
+    "properties": {
+     "completeness_ratio": {
+      "title": "Completeness Ratio",
+      "type": "number"
+     },
+     "correlation_ratio": {
+      "title": "Correlation Ratio",
+      "type": "number"
+     },
+     "distinct_rounds_in_kills": {
+      "title": "Distinct Rounds In Kills",
+      "type": "integer"
+     },
+     "gaming_session_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gaming Session Id"
+     },
+     "kills_total": {
+      "title": "Kills Total",
+      "type": "integer"
+     },
+     "kills_with_round": {
+      "title": "Kills With Round",
+      "type": "integer"
+     },
+     "kis_computed": {
+      "title": "Kis Computed",
+      "type": "boolean"
+     },
+     "kis_rows": {
+      "title": "Kis Rows",
+      "type": "integer"
+     },
+     "kis_total_impact_sum": {
+      "title": "Kis Total Impact Sum",
+      "type": "number"
+     },
+     "known_issues": {
+      "items": {
+       "$ref": "#/components/schemas/StorytellingKnownIssue"
+      },
+      "title": "Known Issues",
+      "type": "array"
+     },
+     "linkage_ratio": {
+      "title": "Linkage Ratio",
+      "type": "number"
+     },
+     "rounds_correlated": {
+      "title": "Rounds Correlated",
+      "type": "integer"
+     },
+     "rounds_total": {
+      "title": "Rounds Total",
+      "type": "integer"
+     },
+     "scope": {
+      "title": "Scope",
+      "type": "string"
+     },
+     "session_date": {
+      "title": "Session Date",
+      "type": "string"
+     },
+     "session_dates": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Session Dates",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "unlinked_kills": {
+      "title": "Unlinked Kills",
+      "type": "integer"
+     },
+     "warnings": {
+      "items": {
+       "$ref": "#/components/schemas/StorytellingWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
+     },
+     "wrong_round_kills": {
+      "title": "Wrong Round Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "session_date",
+     "session_dates",
+     "gaming_session_id",
+     "scope",
+     "status",
+     "kills_total",
+     "kills_with_round",
+     "unlinked_kills",
+     "wrong_round_kills",
+     "distinct_rounds_in_kills",
+     "kis_rows",
+     "kis_computed",
+     "rounds_total",
+     "rounds_correlated",
+     "completeness_ratio",
+     "linkage_ratio",
+     "correlation_ratio",
+     "kis_total_impact_sum",
+     "warnings",
+     "known_issues"
+    ],
+    "title": "StorytellingCompleteness",
+    "type": "object"
+   },
+   "StorytellingKnownIssue": {
+    "description": "A standing caveat about the data, returned with every answer so a ratio\nis never read without the reasons it might be off.",
+    "properties": {
+     "detail": {
+      "title": "Detail",
+      "type": "string"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "title",
+     "detail"
+    ],
+    "title": "StorytellingKnownIssue",
+    "type": "object"
+   },
+   "StorytellingWarning": {
+    "description": "⚠️ A WARNING HERE IS AN OBJECT, not a string.\n\n`/stats/last-session` also has a `warnings` field and it is `list[str]`.\nSame name, same site, different element type — which is exactly the kind of\nthing a shared frontend helper gets wrong once and then everywhere.",
+    "properties": {
+     "level": {
+      "title": "Level",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     }
+    },
+    "required": [
+     "level",
+     "message"
+    ],
+    "title": "StorytellingWarning",
+    "type": "object"
+   },
+   "SystemOverview": {
+    "description": "End-to-end state of the pipeline.\n\nEvery section degrades on its own — a failing source sets that stage to\n`state: \"unknown\"` rather than taking the page down — so the states worth\ntyping for are the DEGRADED ones, and none of them is reachable by varying\na URL. This endpoint takes no parameters at all.",
+    "properties": {
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "linkage": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/LinkageAvailable"
+       },
+       {
+        "$ref": "#/components/schemas/LinkageUnavailable"
+       }
+      ],
+      "title": "Linkage"
+     },
+     "overall": {
+      "title": "Overall",
+      "type": "string"
+     },
+     "stages": {
+      "items": {
+       "$ref": "#/components/schemas/SystemStage"
+      },
+      "title": "Stages",
+      "type": "array"
+     }
+    },
+    "required": [
+     "generated_at",
+     "overall",
+     "stages",
+     "linkage"
+    ],
+    "title": "SystemOverview",
+    "type": "object"
+   },
+   "SystemStage": {
+    "description": "One link in the capture -> parse -> derive chain.\n\n`detail` is `**detail` in `_stage()` — every caller passes different\nkeyword arguments, so it is an open dict BY CONSTRUCTION. Typing it as a\nmodel would drop whichever keys that particular stage happened to add.",
+    "properties": {
+     "detail": {
+      "additionalProperties": true,
+      "title": "Detail",
+      "type": "object"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "summary": {
+      "title": "Summary",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "label",
+     "state",
+     "summary",
+     "detail"
+    ],
+    "title": "SystemStage",
+    "type": "object"
+   },
    "TeamLineup": {
     "properties": {
      "key": {
@@ -3328,6 +3656,401 @@
      "players"
     ],
     "title": "TeamLineup",
+    "type": "object"
+   },
+   "TonightCurrent": {
+    "description": "The map being played right now.\n\n`beat_seconds` is the R1 duration R2's attack has to beat, and it is\npopulated ONLY while `r2_pending` is true. All four sampled nights had\nalready finished their R2, so every sample showed null — the int branch is\ntyped from `cur_by_round.get(1, {}).get(\"duration\")`, not from a reading.",
+    "properties": {
+     "beat_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Beat Seconds"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "r2_pending": {
+      "title": "R2 Pending",
+      "type": "boolean"
+     },
+     "round": {
+      "title": "Round",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map",
+     "round",
+     "status",
+     "r2_pending",
+     "beat_seconds"
+    ],
+    "title": "TonightCurrent",
+    "type": "object"
+   },
+   "TonightHoldPoint": {
+    "properties": {
+     "p": {
+      "title": "P",
+      "type": "number"
+     },
+     "t": {
+      "title": "T",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "p"
+    ],
+    "title": "TonightHoldPoint",
+    "type": "object"
+   },
+   "TonightHoldProbability": {
+    "properties": {
+     "curve": {
+      "items": {
+       "$ref": "#/components/schemas/TonightHoldPoint"
+      },
+      "title": "Curve",
+      "type": "array"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map",
+     "curve"
+    ],
+    "title": "TonightHoldProbability",
+    "type": "object"
+   },
+   "TonightIdle": {
+    "description": "No live session — the NINE-key shape, with `{}` and `[]` where the live\nshape carries structure.\n\n⛔ SAMPLING THIS ENDPOINT TODAY RETURNS THIS SHAPE AND ONLY THIS SHAPE, and\nthat is the reverse of the trap on `/stats/last-session`. The query is\n`WHERE captured_at::date = CURRENT_DATE`, the last capture was two days\nago, so the live response is the EMPTY one and the twelve-key shape is the\nunreachable branch. Measured by rewriting CURRENT_DATE to five days that do\nhave captures: 2026-08-27/26/23/20 answer twelve keys, and 2026-08-21\nanswers nine — that is the SECOND idle return, where rows exist but every\none was a bot round the identity filter dropped.\n\n⚠️ `teams` and `score` are `{}` here and structured objects there, so the\ntwo shapes are a union, not one model with optional fields. `current`,\n`director` and `hold_probability` are literally None on this branch.",
+    "properties": {
+     "active": {
+      "title": "Active",
+      "type": "boolean"
+     },
+     "current": {
+      "title": "Current",
+      "type": "null"
+     },
+     "director": {
+      "title": "Director",
+      "type": "null"
+     },
+     "hold_probability": {
+      "title": "Hold Probability",
+      "type": "null"
+     },
+     "maps": {
+      "items": {},
+      "title": "Maps",
+      "type": "array"
+     },
+     "momentum": {
+      "items": {},
+      "title": "Momentum",
+      "type": "array"
+     },
+     "score": {
+      "additionalProperties": true,
+      "title": "Score",
+      "type": "object"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "teams": {
+      "additionalProperties": true,
+      "title": "Teams",
+      "type": "object"
+     }
+    },
+    "required": [
+     "status",
+     "active",
+     "teams",
+     "maps",
+     "momentum",
+     "score",
+     "current",
+     "director",
+     "hold_probability"
+    ],
+    "title": "TonightIdle",
+    "type": "object"
+   },
+   "TonightLive": {
+    "description": "A night with rounds in it — the TWELVE-key shape.",
+    "properties": {
+     "active": {
+      "title": "Active",
+      "type": "boolean"
+     },
+     "age_seconds": {
+      "title": "Age Seconds",
+      "type": "integer"
+     },
+     "current": {
+      "$ref": "#/components/schemas/TonightCurrent"
+     },
+     "current_map": {
+      "title": "Current Map",
+      "type": "string"
+     },
+     "director": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Director"
+     },
+     "hold_probability": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/TonightHoldProbability"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "last_update_unix": {
+      "title": "Last Update Unix",
+      "type": "integer"
+     },
+     "maps": {
+      "items": {
+       "$ref": "#/components/schemas/TonightMap"
+      },
+      "title": "Maps",
+      "type": "array"
+     },
+     "momentum": {
+      "items": {
+       "$ref": "#/components/schemas/TonightMomentum"
+      },
+      "title": "Momentum",
+      "type": "array"
+     },
+     "score": {
+      "$ref": "#/components/schemas/TonightScore"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "teams": {
+      "$ref": "#/components/schemas/TonightTeams"
+     }
+    },
+    "required": [
+     "status",
+     "active",
+     "current_map",
+     "last_update_unix",
+     "age_seconds",
+     "teams",
+     "score",
+     "maps",
+     "momentum",
+     "current",
+     "director",
+     "hold_probability"
+    ],
+    "title": "TonightLive",
+    "type": "object"
+   },
+   "TonightMap": {
+    "properties": {
+     "a_points": {
+      "title": "A Points",
+      "type": "integer"
+     },
+     "b_points": {
+      "title": "B Points",
+      "type": "integer"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "map_number": {
+      "title": "Map Number",
+      "type": "integer"
+     },
+     "rounds": {
+      "items": {
+       "$ref": "#/components/schemas/TonightRound"
+      },
+      "title": "Rounds",
+      "type": "array"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map",
+     "map_number",
+     "rounds",
+     "winner",
+     "a_points",
+     "b_points"
+    ],
+    "title": "TonightMap",
+    "type": "object"
+   },
+   "TonightMomentum": {
+    "properties": {
+     "a": {
+      "title": "A",
+      "type": "number"
+     },
+     "b": {
+      "title": "B",
+      "type": "number"
+     }
+    },
+    "required": [
+     "a",
+     "b"
+    ],
+    "title": "TonightMomentum",
+    "type": "object"
+   },
+   "TonightRound": {
+    "properties": {
+     "a_on_axis": {
+      "title": "A On Axis",
+      "type": "boolean"
+     },
+     "allies_score": {
+      "title": "Allies Score",
+      "type": "integer"
+     },
+     "axis_score": {
+      "title": "Axis Score",
+      "type": "integer"
+     },
+     "duration": {
+      "title": "Duration",
+      "type": "integer"
+     },
+     "is_fullhold": {
+      "title": "Is Fullhold",
+      "type": "boolean"
+     },
+     "round": {
+      "title": "Round",
+      "type": "integer"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     }
+    },
+    "required": [
+     "round",
+     "winner",
+     "axis_score",
+     "allies_score",
+     "duration",
+     "a_on_axis",
+     "is_fullhold"
+    ],
+    "title": "TonightRound",
+    "type": "object"
+   },
+   "TonightScore": {
+    "properties": {
+     "a_maps": {
+      "title": "A Maps",
+      "type": "integer"
+     },
+     "a_rounds": {
+      "title": "A Rounds",
+      "type": "integer"
+     },
+     "b_maps": {
+      "title": "B Maps",
+      "type": "integer"
+     },
+     "b_rounds": {
+      "title": "B Rounds",
+      "type": "integer"
+     },
+     "maps_completed": {
+      "title": "Maps Completed",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "a_maps",
+     "b_maps",
+     "a_rounds",
+     "b_rounds",
+     "maps_completed"
+    ],
+    "title": "TonightScore",
+    "type": "object"
+   },
+   "TonightTeam": {
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "roster": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roster",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name",
+     "roster"
+    ],
+    "title": "TonightTeam",
+    "type": "object"
+   },
+   "TonightTeams": {
+    "properties": {
+     "a": {
+      "$ref": "#/components/schemas/TonightTeam"
+     },
+     "b": {
+      "$ref": "#/components/schemas/TonightTeam"
+     }
+    },
+    "required": [
+     "a",
+     "b"
+    ],
+    "title": "TonightTeams",
     "type": "object"
    },
    "ValidationError": {
@@ -5268,7 +5991,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StorytellingCompleteness"
+        }
        }
       },
       "description": "Successful Response"
@@ -16683,7 +17408,17 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/TonightLive"
+          },
+          {
+           "$ref": "#/components/schemas/TonightIdle"
+          }
+         ],
+         "title": "Response Get Tonight Api Stats Tonight Get"
+        }
        }
       },
       "description": "Successful Response"
@@ -18483,7 +19218,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/SystemOverview"
+        }
        }
       },
       "description": "Successful Response"

@@ -5728,6 +5728,64 @@ export interface components {
             /** Player Name */
             player_name: string;
         };
+        /**
+         * LinkageAvailable
+         * @description The linkage assessment came back.
+         *
+         *     ⚠️ `metrics` IS AN OPEN DICT ON PURPOSE. The assessor starts it empty and
+         *     fills it per query, so a failed subquery yields PARTIAL metrics with the
+         *     status set to "error" — verified in
+         *     `bot/services/round_linkage_anomaly_service.py`, not assumed from the
+         *     router's comment. A fixed model with the eleven keys the healthy path
+         *     returns would answer 500 exactly when the system is already degraded.
+         *
+         *     `status` carries the assessor's own verdict and is read with `.get()`, so
+         *     it is nullable here. It is load-bearing: an empty `breaches` list proves
+         *     nothing when the status is "error", and without this field the frontend's
+         *     partial-assessment guard cannot fire (Codex on #809).
+         */
+        LinkageAvailable: {
+            /** Available */
+            available: boolean;
+            /** Breach Count */
+            breach_count: number;
+            /** Breaches */
+            breaches: components["schemas"]["LinkageBreach"][];
+            /** Metrics */
+            metrics: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string | null;
+        };
+        /**
+         * LinkageBreach
+         * @description One threshold the linkage assessor found breached. Every field comes
+         *     from a `.get()` on a dict this router did not build, so all three are
+         *     nullable — none was null in the live sample (there were no breaches at
+         *     all, which is the same thing as no evidence).
+         */
+        LinkageBreach: {
+            /** Metric */
+            metric: string | null;
+            /** Threshold */
+            threshold?: unknown;
+            /** Value */
+            value?: unknown;
+        };
+        /**
+         * LinkageUnavailable
+         * @description The assessment raised or came back as something other than a dict:
+         *     `{"available": false}`, a SINGLE key.
+         *
+         *     ⛔ Not `LinkageAvailable` with optional fields — that would put
+         *     `"metrics": null` and `"breach_count": null` on the wire for a payload the
+         *     handler deliberately keeps to one key.
+         */
+        LinkageUnavailable: {
+            /** Available */
+            available: boolean;
+        };
         /** LiveEventBatch */
         LiveEventBatch: {
             /** Events */
@@ -6785,6 +6843,141 @@ export interface components {
             /** Rounds */
             rounds?: number[] | null;
         };
+        /**
+         * StorytellingCompleteness
+         * @description Smart Stats coverage for one date or one gaming session.
+         *
+         *     Measured across the states that matter rather than one happy call — all
+         *     THREE values of `status` were exercised (`ok`, `no_data`, `degraded`),
+         *     both scopes, and both refusals:
+         *
+         *         ?session_date=2026-08-27       200  ok         scope=date
+         *         ?session_date=2020-01-01       200  no_data    scope=date, 1 warning
+         *         ?gaming_session_id=153         200  ok         scope=gaming_session
+         *         ?gaming_session_id=137         200  degraded   scope=gaming_session
+         *         (neither parameter)            422  one of the two is required
+         *         ?session_date=ni-datum         400  must be YYYY-MM-DD
+         *
+         *     The key set is 20 in every 200, so nothing here is optional — but
+         *     `gaming_session_id` IS null on all three date-scoped answers, which is the
+         *     field a date-scoped sample would have typed `int`.
+         *
+         *     ⭐ All three ratios are `float` and stay float on the empty path, because
+         *     the guard is `else 0.0`. That is worth stating next to
+         *     `SeasonTotals.avg_rounds_per_day`, whose guard is `else 0` and which is
+         *     therefore `int | float`. Same shape of code, one character apart, two
+         *     different contracts.
+         */
+        StorytellingCompleteness: {
+            /** Completeness Ratio */
+            completeness_ratio: number;
+            /** Correlation Ratio */
+            correlation_ratio: number;
+            /** Distinct Rounds In Kills */
+            distinct_rounds_in_kills: number;
+            /** Gaming Session Id */
+            gaming_session_id: number | null;
+            /** Kills Total */
+            kills_total: number;
+            /** Kills With Round */
+            kills_with_round: number;
+            /** Kis Computed */
+            kis_computed: boolean;
+            /** Kis Rows */
+            kis_rows: number;
+            /** Kis Total Impact Sum */
+            kis_total_impact_sum: number;
+            /** Known Issues */
+            known_issues: components["schemas"]["StorytellingKnownIssue"][];
+            /** Linkage Ratio */
+            linkage_ratio: number;
+            /** Rounds Correlated */
+            rounds_correlated: number;
+            /** Rounds Total */
+            rounds_total: number;
+            /** Scope */
+            scope: string;
+            /** Session Date */
+            session_date: string;
+            /** Session Dates */
+            session_dates: string[];
+            /** Status */
+            status: string;
+            /** Unlinked Kills */
+            unlinked_kills: number;
+            /** Warnings */
+            warnings: components["schemas"]["StorytellingWarning"][];
+            /** Wrong Round Kills */
+            wrong_round_kills: number;
+        };
+        /**
+         * StorytellingKnownIssue
+         * @description A standing caveat about the data, returned with every answer so a ratio
+         *     is never read without the reasons it might be off.
+         */
+        StorytellingKnownIssue: {
+            /** Detail */
+            detail: string;
+            /** Key */
+            key: string;
+            /** Title */
+            title: string;
+        };
+        /**
+         * StorytellingWarning
+         * @description ⚠️ A WARNING HERE IS AN OBJECT, not a string.
+         *
+         *     `/stats/last-session` also has a `warnings` field and it is `list[str]`.
+         *     Same name, same site, different element type — which is exactly the kind of
+         *     thing a shared frontend helper gets wrong once and then everywhere.
+         */
+        StorytellingWarning: {
+            /** Level */
+            level: string;
+            /** Message */
+            message: string;
+        };
+        /**
+         * SystemOverview
+         * @description End-to-end state of the pipeline.
+         *
+         *     Every section degrades on its own — a failing source sets that stage to
+         *     `state: "unknown"` rather than taking the page down — so the states worth
+         *     typing for are the DEGRADED ones, and none of them is reachable by varying
+         *     a URL. This endpoint takes no parameters at all.
+         */
+        SystemOverview: {
+            /** Generated At */
+            generated_at: string;
+            /** Linkage */
+            linkage: components["schemas"]["LinkageAvailable"] | components["schemas"]["LinkageUnavailable"];
+            /** Overall */
+            overall: string;
+            /** Stages */
+            stages: components["schemas"]["SystemStage"][];
+        };
+        /**
+         * SystemStage
+         * @description One link in the capture -> parse -> derive chain.
+         *
+         *     `detail` is `**detail` in `_stage()` — every caller passes different
+         *     keyword arguments, so it is an open dict BY CONSTRUCTION. Typing it as a
+         *     model would drop whichever keys that particular stage happened to add.
+         */
+        SystemStage: {
+            /** Detail */
+            detail: {
+                [key: string]: unknown;
+            };
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** State */
+            state: string;
+            /** Summary */
+            summary: string;
+        };
         /** TeamLineup */
         TeamLineup: {
             /** Key */
@@ -6793,6 +6986,173 @@ export interface components {
             name: string;
             /** Players */
             players: components["schemas"]["LineupPlayer"][];
+        };
+        /**
+         * TonightCurrent
+         * @description The map being played right now.
+         *
+         *     `beat_seconds` is the R1 duration R2's attack has to beat, and it is
+         *     populated ONLY while `r2_pending` is true. All four sampled nights had
+         *     already finished their R2, so every sample showed null — the int branch is
+         *     typed from `cur_by_round.get(1, {}).get("duration")`, not from a reading.
+         */
+        TonightCurrent: {
+            /** Beat Seconds */
+            beat_seconds: number | null;
+            /** Map */
+            map: string;
+            /** R2 Pending */
+            r2_pending: boolean;
+            /** Round */
+            round: number;
+            /** Status */
+            status: string;
+        };
+        /** TonightHoldPoint */
+        TonightHoldPoint: {
+            /** P */
+            p: number;
+            /** T */
+            t: number;
+        };
+        /** TonightHoldProbability */
+        TonightHoldProbability: {
+            /** Curve */
+            curve: components["schemas"]["TonightHoldPoint"][];
+            /** Map */
+            map: string;
+        };
+        /**
+         * TonightIdle
+         * @description No live session — the NINE-key shape, with `{}` and `[]` where the live
+         *     shape carries structure.
+         *
+         *     ⛔ SAMPLING THIS ENDPOINT TODAY RETURNS THIS SHAPE AND ONLY THIS SHAPE, and
+         *     that is the reverse of the trap on `/stats/last-session`. The query is
+         *     `WHERE captured_at::date = CURRENT_DATE`, the last capture was two days
+         *     ago, so the live response is the EMPTY one and the twelve-key shape is the
+         *     unreachable branch. Measured by rewriting CURRENT_DATE to five days that do
+         *     have captures: 2026-08-27/26/23/20 answer twelve keys, and 2026-08-21
+         *     answers nine — that is the SECOND idle return, where rows exist but every
+         *     one was a bot round the identity filter dropped.
+         *
+         *     ⚠️ `teams` and `score` are `{}` here and structured objects there, so the
+         *     two shapes are a union, not one model with optional fields. `current`,
+         *     `director` and `hold_probability` are literally None on this branch.
+         */
+        TonightIdle: {
+            /** Active */
+            active: boolean;
+            /** Current */
+            current: null;
+            /** Director */
+            director: null;
+            /** Hold Probability */
+            hold_probability: null;
+            /** Maps */
+            maps: unknown[];
+            /** Momentum */
+            momentum: unknown[];
+            /** Score */
+            score: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Teams */
+            teams: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * TonightLive
+         * @description A night with rounds in it — the TWELVE-key shape.
+         */
+        TonightLive: {
+            /** Active */
+            active: boolean;
+            /** Age Seconds */
+            age_seconds: number;
+            current: components["schemas"]["TonightCurrent"];
+            /** Current Map */
+            current_map: string;
+            /** Director */
+            director: string | null;
+            hold_probability: components["schemas"]["TonightHoldProbability"] | null;
+            /** Last Update Unix */
+            last_update_unix: number;
+            /** Maps */
+            maps: components["schemas"]["TonightMap"][];
+            /** Momentum */
+            momentum: components["schemas"]["TonightMomentum"][];
+            score: components["schemas"]["TonightScore"];
+            /** Status */
+            status: string;
+            teams: components["schemas"]["TonightTeams"];
+        };
+        /** TonightMap */
+        TonightMap: {
+            /** A Points */
+            a_points: number;
+            /** B Points */
+            b_points: number;
+            /** Map */
+            map: string;
+            /** Map Number */
+            map_number: number;
+            /** Rounds */
+            rounds: components["schemas"]["TonightRound"][];
+            /** Winner */
+            winner: string;
+        };
+        /** TonightMomentum */
+        TonightMomentum: {
+            /** A */
+            a: number;
+            /** B */
+            b: number;
+        };
+        /** TonightRound */
+        TonightRound: {
+            /** A On Axis */
+            a_on_axis: boolean;
+            /** Allies Score */
+            allies_score: number;
+            /** Axis Score */
+            axis_score: number;
+            /** Duration */
+            duration: number;
+            /** Is Fullhold */
+            is_fullhold: boolean;
+            /** Round */
+            round: number;
+            /** Winner */
+            winner: string;
+        };
+        /** TonightScore */
+        TonightScore: {
+            /** A Maps */
+            a_maps: number;
+            /** A Rounds */
+            a_rounds: number;
+            /** B Maps */
+            b_maps: number;
+            /** B Rounds */
+            b_rounds: number;
+            /** Maps Completed */
+            maps_completed: number;
+        };
+        /** TonightTeam */
+        TonightTeam: {
+            /** Name */
+            name: string;
+            /** Roster */
+            roster: string[];
+        };
+        /** TonightTeams */
+        TonightTeams: {
+            a: components["schemas"]["TonightTeam"];
+            b: components["schemas"]["TonightTeam"];
         };
         /** ValidationError */
         ValidationError: {
@@ -8045,7 +8405,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["StorytellingCompleteness"];
                 };
             };
             /** @description Validation Error */
@@ -13392,7 +13752,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TonightLive"] | components["schemas"]["TonightIdle"];
                 };
             };
         };
@@ -14291,7 +14651,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["SystemOverview"];
                 };
             };
         };

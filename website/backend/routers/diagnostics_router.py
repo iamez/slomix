@@ -8,6 +8,7 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
@@ -270,7 +271,83 @@ async def _system_pipeline(db: DatabaseAdapter) -> list[dict]:
     return stages
 
 
-@router.get("/system/overview")
+class SystemStage(BaseModel):
+    """One link in the capture -> parse -> derive chain.
+
+    `detail` is `**detail` in `_stage()` — every caller passes different
+    keyword arguments, so it is an open dict BY CONSTRUCTION. Typing it as a
+    model would drop whichever keys that particular stage happened to add.
+    """
+
+    key: str
+    label: str
+    state: str
+    summary: str
+    detail: dict[str, Any]
+
+
+class LinkageBreach(BaseModel):
+    """One threshold the linkage assessor found breached. Every field comes
+    from a `.get()` on a dict this router did not build, so all three are
+    nullable — none was null in the live sample (there were no breaches at
+    all, which is the same thing as no evidence)."""
+
+    metric: str | None
+    value: Any = None
+    threshold: Any = None
+
+
+class LinkageAvailable(BaseModel):
+    """The linkage assessment came back.
+
+    ⚠️ `metrics` IS AN OPEN DICT ON PURPOSE. The assessor starts it empty and
+    fills it per query, so a failed subquery yields PARTIAL metrics with the
+    status set to "error" — verified in
+    `bot/services/round_linkage_anomaly_service.py`, not assumed from the
+    router's comment. A fixed model with the eleven keys the healthy path
+    returns would answer 500 exactly when the system is already degraded.
+
+    `status` carries the assessor's own verdict and is read with `.get()`, so
+    it is nullable here. It is load-bearing: an empty `breaches` list proves
+    nothing when the status is "error", and without this field the frontend's
+    partial-assessment guard cannot fire (Codex on #809).
+    """
+
+    available: bool
+    status: str | None
+    metrics: dict[str, Any]
+    breach_count: int
+    breaches: list[LinkageBreach]
+
+
+class LinkageUnavailable(BaseModel):
+    """The assessment raised or came back as something other than a dict:
+    `{"available": false}`, a SINGLE key.
+
+    ⛔ Not `LinkageAvailable` with optional fields — that would put
+    `"metrics": null` and `"breach_count": null` on the wire for a payload the
+    handler deliberately keeps to one key.
+    """
+
+    available: bool
+
+
+class SystemOverview(BaseModel):
+    """End-to-end state of the pipeline.
+
+    Every section degrades on its own — a failing source sets that stage to
+    `state: "unknown"` rather than taking the page down — so the states worth
+    typing for are the DEGRADED ones, and none of them is reachable by varying
+    a URL. This endpoint takes no parameters at all.
+    """
+
+    generated_at: str
+    overall: str
+    stages: list[SystemStage]
+    linkage: LinkageAvailable | LinkageUnavailable
+
+
+@router.get("/system/overview", response_model=SystemOverview)
 async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
     """End-to-end state of the pipeline, one stage per link in the chain.
 
@@ -964,7 +1041,82 @@ async def get_time_audit(
     }
 
 
-@router.get("/diagnostics/storytelling-completeness")
+class StorytellingWarning(BaseModel):
+    """⚠️ A WARNING HERE IS AN OBJECT, not a string.
+
+    `/stats/last-session` also has a `warnings` field and it is `list[str]`.
+    Same name, same site, different element type — which is exactly the kind of
+    thing a shared frontend helper gets wrong once and then everywhere.
+    """
+
+    level: str
+    message: str
+
+
+class StorytellingKnownIssue(BaseModel):
+    """A standing caveat about the data, returned with every answer so a ratio
+    is never read without the reasons it might be off."""
+
+    key: str
+    title: str
+    detail: str
+
+
+class StorytellingCompleteness(BaseModel):
+    """Smart Stats coverage for one date or one gaming session.
+
+    Measured across the states that matter rather than one happy call — all
+    THREE values of `status` were exercised (`ok`, `no_data`, `degraded`),
+    both scopes, and both refusals:
+
+        ?session_date=2026-08-27       200  ok         scope=date
+        ?session_date=2020-01-01       200  no_data    scope=date, 1 warning
+        ?gaming_session_id=153         200  ok         scope=gaming_session
+        ?gaming_session_id=137         200  degraded   scope=gaming_session
+        (neither parameter)            422  one of the two is required
+        ?session_date=ni-datum         400  must be YYYY-MM-DD
+
+    The key set is 20 in every 200, so nothing here is optional — but
+    `gaming_session_id` IS null on all three date-scoped answers, which is the
+    field a date-scoped sample would have typed `int`.
+
+    ⭐ All three ratios are `float` and stay float on the empty path, because
+    the guard is `else 0.0`. That is worth stating next to
+    `SeasonTotals.avg_rounds_per_day`, whose guard is `else 0` and which is
+    therefore `int | float`. Same shape of code, one character apart, two
+    different contracts.
+    """
+
+    #: The date asked for, or the scope's first date when asked by session id.
+    session_date: str
+    #: EVERY date the counted scope touches — a session can cross midnight, so
+    #: the single date above would label only half of what was counted.
+    session_dates: list[str]
+    #: Null whenever the answer was scoped by DATE (3 of 5 sampled calls).
+    gaming_session_id: int | None
+    #: "date" or "gaming_session".
+    scope: str
+    #: "ok", "no_data" or "degraded" — all three measured.
+    status: str
+    kills_total: int
+    kills_with_round: int
+    unlinked_kills: int
+    wrong_round_kills: int
+    distinct_rounds_in_kills: int
+    kis_rows: int
+    kis_computed: bool
+    rounds_total: int
+    rounds_correlated: int
+    completeness_ratio: float
+    linkage_ratio: float
+    correlation_ratio: float
+    kis_total_impact_sum: float
+    warnings: list[StorytellingWarning]
+    known_issues: list[StorytellingKnownIssue]
+
+
+@router.get("/diagnostics/storytelling-completeness",
+            response_model=StorytellingCompleteness)
 async def get_storytelling_completeness(
     session_date: str | None = Query(None, description="YYYY-MM-DD (date-wide)"),
     # `db` keeps its position so existing positional callers (and the contract

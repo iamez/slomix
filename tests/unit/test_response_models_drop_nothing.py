@@ -189,7 +189,15 @@ import json as _json
 from pathlib import Path as _Path
 
 from website.backend.routers.challenges_router import CurrentChallenge
-from website.backend.routers.players_router import LeaderboardRow
+from website.backend.routers.diagnostics_router import (
+    StorytellingCompleteness,
+    SystemOverview,
+)
+from website.backend.routers.players_router import (
+    LeaderboardRow,
+    TonightIdle,
+    TonightLive,
+)
 from website.backend.routers.records_awards import (
     AwardLeaderboard,
     AwardsPage,
@@ -1319,3 +1327,174 @@ class TestTheEndpointsWithoutFilters:
         modelled = LastSession.model_validate(rich)
         assert modelled.warnings == []
         assert modelled.unassigned_players == []
+
+
+class TestTheStatesNoUrlCanReach:
+    """`/stats/tonight`, `/system/overview` and
+    `/diagnostics/storytelling-completeness` — three endpoints whose degraded
+    and empty states are the ones worth typing for, and two of the three cannot
+    be reached by varying a URL at all.
+    """
+
+    def _f(self, name):
+        return _json.loads((_FIXTURES / name).read_text())
+
+    def _roundtrip(self, model, raw):
+        modelled = _json.loads(model.model_validate(raw).model_dump_json())
+        assert not missing_keys(raw, modelled), (
+            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert raw == modelled, f"{model.__name__} altered a value"
+        return modelled
+
+    # ---- /stats/tonight -------------------------------------------------
+
+    def test_tonight_live_shape_survives(self):
+        raw = self._f("api_stats_tonight_live.json")
+        assert len(raw) == 12
+        self._roundtrip(TonightLive, raw)
+
+    def test_tonight_idle_shape_survives(self):
+        raw = self._f("api_stats_tonight_idle.json")
+        assert len(raw) == 9
+        self._roundtrip(TonightIdle, raw)
+
+    def test_sampling_tonight_today_returns_the_wrong_shape(self):
+        """⛔ THE REVERSE OF THE last-session TRAP.
+
+        The query is `WHERE captured_at::date = CURRENT_DATE`. On any day
+        without a session — which is most days — the live response is the
+        NINE-key idle shape, and the twelve-key one is the branch you cannot
+        reach. Whichever shape you can see is not evidence about the other.
+        """
+        idle = self._f("api_stats_tonight_idle.json")
+        live = self._f("api_stats_tonight_live.json")
+        only_live = set(live) - set(idle)
+        assert only_live == {"current_map", "last_update_unix", "age_seconds"}
+        # …and the keys they SHARE do not share a type.
+        assert idle["teams"] == {} and live["teams"] != {}
+        assert idle["score"] == {} and live["score"] != {}
+        assert idle["current"] is None and live["current"] is not None
+
+    def test_the_union_picks_each_shape_without_padding_the_other(self):
+        """A union rather than one model with optional fields: optional fields
+        would put `"current_map": null` on the idle payload.
+
+        ⛔ THIS TEST USED TO HAND-PICK THE MODEL and therefore never exercised
+        the union at all. Loosening `TonightIdle.current` from `None` to
+        `Any` — which destroys the discriminator, so an idle payload and a live
+        payload both match the idle member — changed nothing and 108 tests
+        passed. It must go through the SAME TypeAdapter FastAPI builds from the
+        annotation, and it must assert WHICH member was chosen.
+        """
+        from pydantic import TypeAdapter
+
+        adapter = TypeAdapter(TonightLive | TonightIdle)
+        for fixture, expected_model, expected_keys in (
+            ("api_stats_tonight_idle.json", TonightIdle, 9),
+            ("api_stats_tonight_live.json", TonightLive, 12),
+        ):
+            raw = self._f(fixture)
+            chosen = adapter.validate_python(raw)
+            assert type(chosen) is expected_model, (
+                f"{fixture} was matched by {type(chosen).__name__}, not "
+                f"{expected_model.__name__} — the union no longer discriminates")
+            out = _json.loads(chosen.model_dump_json())
+            assert len(out) == expected_keys, f"{fixture} came back {len(out)} keys"
+            assert out == raw, f"{fixture} changed passing through the union"
+
+    def test_a_night_with_no_hold_curve_and_nothing_to_say_is_accepted(self):
+        """⚠️ TYPED FROM THE CODE, UNPINNED BY ANY SAMPLE — so pinned here.
+
+        `hold_probability` is `{…} if hold else None` and `director` is
+        annotated `str | None` ("returns None before there is anything to
+        say"). All four sampled nights had both, so no fixture carries the
+        null. Making either field required passed every test that existed
+        until this one: the fixtures cannot fail on a value they do not
+        contain. This builds the case the corpus lacks instead.
+        """
+        raw = dict(self._f("api_stats_tonight_live.json"))
+        raw["hold_probability"] = None
+        raw["director"] = None
+        out = _json.loads(TonightLive.model_validate(raw).model_dump_json())
+        assert out["hold_probability"] is None
+        assert out["director"] is None
+        assert out == raw
+
+    # ---- /system/overview -----------------------------------------------
+
+    def test_system_overview_healthy_survives(self):
+        self._roundtrip(SystemOverview, self._f("api_system_overview.json"))
+
+    def test_linkage_unavailable_stays_a_single_key(self):
+        """⛔ `{"available": false}` is ONE key. Typed as its own member of a
+        union so the model cannot pad it with `"metrics": null`."""
+        raw = self._f("api_system_overview_linkage_unavailable.json")
+        assert raw["linkage"] == {"available": False}
+        out = self._roundtrip(SystemOverview, raw)
+        assert out["linkage"] == {"available": False}
+
+    def test_partial_metrics_are_accepted_rather_than_rejected(self):
+        """⚠️ THE STATE THAT ONLY HAPPENS WHEN THINGS ARE ALREADY BROKEN.
+
+        The assessor fills `metrics` per query, so a failed subquery returns
+        FEWER keys with `status: "error"`. The healthy path returns eleven.
+        A model that pinned those eleven would answer 500 precisely when the
+        page is needed most, which is why `metrics` is an open dict.
+        """
+        raw = self._f("api_system_overview_linkage_partial.json")
+        assert raw["linkage"]["status"] == "error"
+        assert len(raw["linkage"]["metrics"]) == 1
+        healthy = self._f("api_system_overview.json")
+        assert len(healthy["linkage"]["metrics"]) == 11
+        self._roundtrip(SystemOverview, raw)
+
+    # ---- /diagnostics/storytelling-completeness --------------------------
+
+    @pytest.mark.parametrize("fixture", [
+        "api_diagnostics_storytelling_completeness.json",
+        "api_diagnostics_storytelling_completeness_no_data.json",
+        "api_diagnostics_storytelling_completeness_degraded.json",
+    ])
+    def test_all_three_status_values_survive(self, fixture):
+        raw = self._f(fixture)
+        assert len(raw) == 20
+        self._roundtrip(StorytellingCompleteness, raw)
+
+    def test_the_three_states_are_actually_three(self):
+        seen = {self._f(f)["status"] for f in (
+            "api_diagnostics_storytelling_completeness.json",
+            "api_diagnostics_storytelling_completeness_no_data.json",
+            "api_diagnostics_storytelling_completeness_degraded.json")}
+        assert seen == {"ok", "no_data", "degraded"}, (
+            f"the fixtures no longer cover all three states: {seen}")
+
+    def test_gaming_session_id_is_null_when_scoped_by_date(self):
+        """The field a date-scoped sample would have typed `int`."""
+        by_date = self._f("api_diagnostics_storytelling_completeness.json")
+        by_gsid = self._f("api_diagnostics_storytelling_completeness_degraded.json")
+        assert by_date["scope"] == "date"
+        assert by_date["gaming_session_id"] is None
+        assert by_gsid["scope"] == "gaming_session"
+        assert by_gsid["gaming_session_id"] is not None
+
+    def test_a_warning_here_is_an_object_not_a_string(self):
+        """⚠️ `/stats/last-session` also has `warnings` and it is `list[str]`.
+        Same field name, same site, different element type."""
+        raw = self._f("api_diagnostics_storytelling_completeness_no_data.json")
+        assert raw["warnings"], "the no_data fixture lost its warning"
+        assert all(isinstance(w, dict) for w in raw["warnings"])
+        assert set(raw["warnings"][0]) == {"level", "message"}
+        last_session = _json.loads(
+            (_FIXTURES / "api_stats_last-session.json").read_text())
+        assert all(isinstance(w, str) for w in last_session["warnings"])
+
+    def test_the_ratios_stay_float_on_the_empty_path(self):
+        """`else 0.0`, not `else 0` — one character away from
+        `SeasonTotals.avg_rounds_per_day`, which IS `int | float`."""
+        raw = self._f("api_diagnostics_storytelling_completeness_no_data.json")
+        for field in ("completeness_ratio", "linkage_ratio", "correlation_ratio"):
+            assert raw[field] == 0.0
+            assert isinstance(raw[field], float), f"{field} arrived as an int"
+        empty_season = _json.loads(
+            (_FIXTURES / "api_seasons_current_summary_empty.json").read_text())
+        assert isinstance(empty_season["totals"]["avg_rounds_per_day"], int)

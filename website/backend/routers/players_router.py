@@ -7,6 +7,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 import json
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -417,7 +418,127 @@ def _tonight_director_line(score: dict, momentum: list, current: dict,
     return f"{lead}{tail}{chase}."
 
 
-@router.get("/stats/tonight")
+class TonightRound(BaseModel):
+    round: int
+    winner: str
+    axis_score: int
+    allies_score: int
+    duration: int
+    a_on_axis: bool
+    is_fullhold: bool
+
+
+class TonightMap(BaseModel):
+    map: str
+    map_number: int
+    rounds: list[TonightRound]
+    winner: str
+    a_points: int
+    b_points: int
+
+
+class TonightTeam(BaseModel):
+    name: str
+    #: Player display names, sorted case-insensitively.
+    roster: list[str]
+
+
+class TonightTeams(BaseModel):
+    a: TonightTeam
+    b: TonightTeam
+
+
+class TonightScore(BaseModel):
+    a_maps: int
+    b_maps: int
+    a_rounds: int
+    b_rounds: int
+    maps_completed: int
+
+
+class TonightMomentum(BaseModel):
+    a: float
+    b: float
+
+
+class TonightCurrent(BaseModel):
+    """The map being played right now.
+
+    `beat_seconds` is the R1 duration R2's attack has to beat, and it is
+    populated ONLY while `r2_pending` is true. All four sampled nights had
+    already finished their R2, so every sample showed null — the int branch is
+    typed from `cur_by_round.get(1, {}).get("duration")`, not from a reading.
+    """
+
+    map: str
+    round: int
+    status: str
+    r2_pending: bool
+    beat_seconds: int | None
+
+
+class TonightHoldPoint(BaseModel):
+    t: int
+    p: float
+
+
+class TonightHoldProbability(BaseModel):
+    map: str
+    curve: list[TonightHoldPoint]
+
+
+class TonightLive(BaseModel):
+    """A night with rounds in it — the TWELVE-key shape."""
+
+    status: str
+    active: bool
+    current_map: str
+    last_update_unix: int
+    age_seconds: int
+    teams: TonightTeams
+    score: TonightScore
+    maps: list[TonightMap]
+    momentum: list[TonightMomentum]
+    current: TonightCurrent
+    #: `_tonight_director_line` is annotated `str | None` and returns None
+    #: before there is anything to say. All four samples had a sentence.
+    director: str | None
+    #: `{"map": …, "curve": […]} if hold else None` — null when the curve is
+    #: empty, which no sampled night was.
+    hold_probability: TonightHoldProbability | None
+
+
+class TonightIdle(BaseModel):
+    """No live session — the NINE-key shape, with `{}` and `[]` where the live
+    shape carries structure.
+
+    ⛔ SAMPLING THIS ENDPOINT TODAY RETURNS THIS SHAPE AND ONLY THIS SHAPE, and
+    that is the reverse of the trap on `/stats/last-session`. The query is
+    `WHERE captured_at::date = CURRENT_DATE`, the last capture was two days
+    ago, so the live response is the EMPTY one and the twelve-key shape is the
+    unreachable branch. Measured by rewriting CURRENT_DATE to five days that do
+    have captures: 2026-08-27/26/23/20 answer twelve keys, and 2026-08-21
+    answers nine — that is the SECOND idle return, where rows exist but every
+    one was a bot round the identity filter dropped.
+
+    ⚠️ `teams` and `score` are `{}` here and structured objects there, so the
+    two shapes are a union, not one model with optional fields. `current`,
+    `director` and `hold_probability` are literally None on this branch.
+    """
+
+    status: str
+    active: bool
+    teams: dict[str, Any]
+    maps: list[Any]
+    momentum: list[Any]
+    score: dict[str, Any]
+    current: None
+    director: None
+    hold_probability: None
+
+
+@router.get("/stats/tonight",
+            response_model=TonightLive | TonightIdle)
 async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     """Consolidated live payload for the Tonight hub. Reads the real-time
     lua_round_teams feed and resolves it into LOGICAL TEAMS (not Axis/Allies —
