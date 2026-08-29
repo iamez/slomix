@@ -10,6 +10,13 @@ import mvp from './__fixtures__/api_stats_session_gaming_session_id_mvp.json';
 import verdicts from './__fixtures__/api_stats_session_gaming_session_id_verdicts.json';
 import goodNight from './__fixtures__/api_stats_session_gaming_session_id_good_night.json';
 import sessions from './__fixtures__/api_sessions_list.json';
+// Session 151 answers 200 with the SHORT form of three endpoints — the
+// fields the long form carries are absent, not zero. One session's corpus
+// could never show that, and typing from it produced a page that crashed on
+// three of the four older sessions it was first pointed at.
+import mvp151 from './__fixtures__/api_session_151_mvp.json';
+import verdicts151 from './__fixtures__/api_session_151_verdicts.json';
+import goodNight151 from './__fixtures__/api_session_151_good_night.json';
 
 /** Session 154, recorded 2026-08-29: 12 rounds, 6 maps, 6 players, 5–7. */
 const BODIES: [string, unknown][] = [
@@ -115,6 +122,51 @@ describe('SessionDetail', () => {
   it('says an empty ballot is empty rather than showing a tie', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText(/an empty ballot, not a tie/)).toBeInTheDocument());
+  });
+
+  it('survives the short form every one of these endpoints can return', async () => {
+    // Measured on sessions 151, 146 and 128: an unavailable good-night is
+    // `{status, available: false, gaming_session_id}` — no score, no hours,
+    // no components — verdicts drop `baseline`, and the MVP panel drops
+    // `total_votes` entirely. The page read `total_votes === 0`, which is
+    // false for `undefined`, fell through to the render path and crashed the
+    // whole route on `figure(undefined)`.
+    renderPage((input) => {
+      const url = String(input);
+      if (url.includes('/mvp')) return json(mvp151);
+      if (url.includes('/verdicts')) return json(verdicts151);
+      if (url.includes('/good-night')) return json(goodNight151);
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument());
+    // Each of the three says what it is rather than throwing or inventing a 0.
+    await waitFor(() => expect(screen.getByText(/different from a low score/)).toBeInTheDocument());
+    expect(screen.getByText(/nobody in this session has a baseline/)).toBeInTheDocument();
+    expect(screen.getByText(/an empty ballot, not a tie/)).toBeInTheDocument();
+  });
+
+  it('survives a session whose scoring block is only {available:false}', async () => {
+    // The handler's own unavailable payload — no team names, no maps array.
+    const bare = { ...detail, scoring: { available: false }, team_matrix: { available: false, reason: 'no_teams' } };
+    renderPage(withOverride('/detail', () => json(bare)));
+    await waitFor(() => expect(screen.getByText(/could not be paired/)).toBeInTheDocument());
+    expect(screen.getByText(/lua roster for every round/)).toBeInTheDocument();
+  });
+
+  it('tells a session with no counted rounds apart from a broken one', async () => {
+    // Session 145 on dev: six rounds, every one orphan_r2, so /detail
+    // answers 404 while /rounds lists all six. "unavailable" would send the
+    // reader hunting a bug that is not there.
+    renderPage(withOverride('/detail', () =>
+      Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'Session not found' }) } as Response)));
+    await waitFor(() => expect(screen.getByText(/no counted rounds in this session/)).toBeInTheDocument());
+    expect(screen.queryByText(/session: unavailable/)).toBeNull();
+  });
+
+  it('still says unavailable when the endpoint actually fails', async () => {
+    renderPage(withOverride('/detail', () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
+    await waitFor(() => expect(screen.getByText(/session: unavailable/)).toBeInTheDocument());
   });
 
   it('lists every round, marking the ones that do not count', async () => {

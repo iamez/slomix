@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Lbl, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { ApiError } from '../lib/api';
 import {
   useSessionDetail, useSessionGoodNight, useSessionMvp, useSessionRounds,
   useSessionVerdicts, useSessions,
@@ -68,7 +69,7 @@ function Scoreboard({ scoring }: { scoring: SessionScoring }) {
         }
       />
       <Stack gap={1} className="rows">
-        {scoring.maps.map((m, i) => (
+        {(scoring.maps ?? []).map((m, i) => (
           <Cluster key={`${m.map}:${m.match_id ?? i}`} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
             <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
               <span className="m lbl" style={{ width: 20, textAlign: 'right' }}>{i + 1}</span>
@@ -150,13 +151,18 @@ function GoodNight({ data }: { data: SessionGoodNight }) {
       </span>
     );
   }
-  const components = Object.entries(data.components);
+  const components = Object.entries(data.components ?? {});
   const max = Math.max(1, ...components.map(([, v]) => v));
   return (
     <Stack gap={3} parity="session.goodnight">
       <SectionHead
         label="night score"
-        aside={<span className="lbl">{data.maps} maps · {data.players} players · {data.hours.toFixed(1)} h</span>}
+        aside={
+          <span className="lbl">
+            {data.maps ?? '—'} maps · {data.players ?? '—'} players
+            {data.hours == null ? '' : ` · ${data.hours.toFixed(1)} h`}
+          </span>
+        }
       />
       <Cluster gap={4} align="baseline">
         <span className="m" style={{ fontSize: 'var(--fs-kpi-lg)' }}>{data.score}</span>
@@ -172,9 +178,9 @@ function GoodNight({ data }: { data: SessionGoodNight }) {
           ))}
         </Stack>
       </Cluster>
-      {data.reasons.length > 0 && (
+      {(data.reasons ?? []).length > 0 && (
         <Stack gap={1}>
-          {data.reasons.map((r) => (
+          {(data.reasons ?? []).map((r) => (
             <span key={r} className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{r}</span>
           ))}
         </Stack>
@@ -188,9 +194,17 @@ function GoodNight({ data }: { data: SessionGoodNight }) {
 function Verdicts({ data }: { data: SessionVerdicts }) {
   return (
     <Stack gap={3} parity="session.verdicts">
-      <SectionHead label="form" aside={<span className="lbl">against {data.baseline}</span>} />
+      <SectionHead
+        label="form"
+        aside={<span className="lbl">against {data.baseline ?? 'their own previous sessions'}</span>}
+      />
       <Stack gap={1} className="rows">
-        {data.players.map((p) => (
+        {data.players.length === 0 && (
+        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+          nobody in this session has a baseline to be measured against yet
+        </span>
+      )}
+      {data.players.map((p) => (
           <Cluster key={p.guid} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
             <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
               <Link to={`/profile/${p.guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
@@ -222,7 +236,13 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
   const q = useSessionMvp(sessionId);
   if (q.isPending) return <Pending label="votes" />;
   if (q.isError) return <Unavailable what="votes" />;
-  if (q.data.total_votes === 0) {
+  // ⚠️ `?? 0`, not `=== 0`: when nobody qualified the field is ABSENT, and
+  // `undefined === 0` is false — which sent this panel into the render path
+  // and crashed the route on `figure(undefined)`. Found on session 151, not
+  // by a test: the fixture corpus was one session and that session had the
+  // field.
+  const totalVotes = q.data.total_votes ?? 0;
+  if (totalVotes === 0) {
     return (
       <Stack gap={2} parity="session.mvp">
         <SectionHead label="mvp votes" />
@@ -236,7 +256,7 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
     <Stack gap={3} parity="session.mvp">
       <SectionHead
         label="mvp votes"
-        aside={<span className="lbl">{figure(q.data.total_votes)} votes cast by players</span>}
+        aside={<span className="lbl">{figure(totalVotes)} votes cast by players</span>}
       />
       <Stack gap={1} className="rows">
         {q.data.candidates.filter((c) => c.votes > 0).map((c) => (
@@ -460,7 +480,23 @@ export function SessionDetail() {
           </div>
 
           {detail.isPending && <div style={{ paddingTop: 'var(--space-4)' }}><Pending label="session" /></div>}
-          {detail.isError && <div style={{ paddingTop: 'var(--space-4)' }}><Unavailable what="session" /></div>}
+          {/* A 404 here is a different fact from a failure, and session 145
+            * is the proof: six rounds, every one of them orphan_r2, so the
+            * detail endpoint answers "Session not found" while the rounds
+            * tab lists all six. "unavailable" would send the reader looking
+            * for a bug that is not there. */}
+          {detail.isError && (
+            <div style={{ paddingTop: 'var(--space-4)' }}>
+              {detail.error instanceof ApiError && detail.error.status === 404 ? (
+                <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+                  no counted rounds in this session — its totals do not exist,
+                  which is why the rounds tab can still show what was played
+                </span>
+              ) : (
+                <Unavailable what="session" />
+              )}
+            </div>
+          )}
 
           {detail.data && current === 'summary' && (
             <Summary detail={detail.data} sessionId={sessionId} />

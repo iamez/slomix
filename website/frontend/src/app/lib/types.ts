@@ -1278,15 +1278,20 @@ export interface SessionScoringMap {
 
 /** `available: false` when the session predates stopwatch scoring or its
  *  halves could not be paired — the page says which, rather than showing a
- *  0–0 that looks like a real draw (the 2026-08-12 bug). */
+ *  0–0 that looks like a real draw (the 2026-08-12 bug).
+ *
+ *  ⚠️ An unavailable block carries ONLY `{available: false}` — every field
+ *  below it is ABSENT, not zero (sessions_router: `scoring_payload =
+ *  {"available": False}`). Measured on session 151: reading a name off it
+ *  is reading `undefined`. */
 export interface SessionScoring {
   available: boolean;
-  team_a_name: string;
-  team_b_name: string;
-  team_a_score: number;
-  team_b_score: number;
-  maps: SessionScoringMap[];
-  total_maps: number;
+  team_a_name?: string;
+  team_b_name?: string;
+  team_a_score?: number;
+  team_b_score?: number;
+  maps?: SessionScoringMap[];
+  total_maps?: number;
 }
 
 export interface SessionTeamAggregate {
@@ -1303,10 +1308,13 @@ export interface SessionTeamAggregate {
   accuracy_avg: number | null;
 }
 
+/** Same rule as the scoring block: unavailable means `{available: false,
+ *  reason}` and nothing else. */
 export interface SessionTeamMatrix {
   available: boolean;
-  team_a_name: string;
-  team_b_name: string;
+  reason?: string;
+  team_a_name?: string;
+  team_b_name?: string;
   aggregates?: { team_a: SessionTeamAggregate; team_b: SessionTeamAggregate };
 }
 
@@ -1370,12 +1378,14 @@ export interface SessionGoodNight {
   status: string;
   available: boolean;
   gaming_session_id: number;
-  score: number;
-  components: Record<string, number>;
-  reasons: string[];
-  maps: number;
-  players: number;
-  hours: number;
+  /** Present only when `available` — the handler returns `{status,
+   *  available: false, gaming_session_id}` and nothing else. */
+  score?: number;
+  components?: Record<string, number>;
+  reasons?: string[];
+  maps?: number;
+  players?: number;
+  hours?: number;
 }
 
 /** GET /api/stats/session/{id}/verdicts — each player against their OWN
@@ -1396,7 +1406,9 @@ export interface SessionVerdictPlayer {
 export interface SessionVerdicts {
   status: string;
   gaming_session_id: number;
-  baseline: string;
+  /** Absent when there is nothing to compare against: the early return is
+   *  `{status, gaming_session_id, players: []}`. */
+  baseline?: string;
   players: SessionVerdictPlayer[];
 }
 
@@ -1416,8 +1428,13 @@ export interface SessionMvpCandidate {
 export interface SessionMvp {
   status: string;
   gaming_session_id: number;
-  total_votes: number;
-  my_vote: string | null;
-  most_underrated_guid: string | null;
+  /** ⚠️ ABSENT, not 0, when no candidate qualified — the early return is
+   *  `{status, gaming_session_id, candidates: []}`. Typed as a required
+   *  number, `total_votes === 0` was false for `undefined` and the page fell
+   *  through to `figure(undefined)`, which crashed the whole route. Measured
+   *  on sessions 151, 146 and 128. */
+  total_votes?: number;
+  my_vote?: string | null;
+  most_underrated_guid?: string | null;
   candidates: SessionMvpCandidate[];
 }
