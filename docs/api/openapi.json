@@ -703,11 +703,18 @@
     "type": "object"
    },
    "LeaderboardRow": {
-    "description": "One row of the generic stat leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4\ndistinct `period` branches (`7d`, `30d`, `season`, and the else-branch\nall-time). Zero nulls in every field.\n\n⭐ `kills` and `deaths` are NOT nullable here even though the underlying\n`kills` / `deaths` columns are `NOT NULL = NO`, and even though — unlike\n`value` and `kd` in the very same dict — the handler passes them through\nwith no `or 0`. `SUM(x)` returns NULL only when EVERY row in the group is\nNULL, and `GROUP BY` never produces an empty group, so a null needs null\ndata: there is none (0 null `kills` / `deaths` / `damage_given` rows in the\nwhole table). The coalesce asymmetry three lines apart is untidy, not a\nsignal that these two can be null.\n⛔ The residual is real and belongs to the DATA, not to this model: the day\na null `kills` row is written, this endpoint 500s. No test can catch that —\nonly the table can. Type it, don't widen it: `int | None` would buy nothing\nbut a null check on every consumer.\n\n`value` is `float` and not `int | float`: the handler's `else 0` branch\n(an int) needs a NULL `SUM`, unreachable for the same reason.",
+    "description": "One row of the generic stat leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4\ndistinct `period` branches (`7d`, `30d`, `season`, and the else-branch\nall-time). Zero nulls in every field.\n\n⚠️ `kills` and `deaths` are `int | None`, AND THIS IS A CORRECTION. They\nwere typed `int` on the argument that `SUM(x)` is null only for an\nall-null group, that there is no null `kills` row in the table, and that\nwidening \"buys nothing but a null check on every consumer\". Comparing this\nfile against the frontend's hand-written types showed the flaw: exactly\nthe same evidence — column nullable, zero nulls observed — had produced\n`RecentRound.map_name: str | None` two endpoints away. The rule cannot be\n\"it depends on how I felt\".\n\n⛔ The tiebreak is which mistake is recoverable. A `| None` the data never\nexercises costs one `?? 0` on the consumer. An `int` the data eventually\ncontradicts is a 500 on a page that was rendering, and no test can catch\nit — only the table can. A response_model is a promise about what the\nserver MAY send, and with a nullable column passed through raw (unlike\n`value` and `kd` three lines away, which the handler coalesces) the server\nmay send null.\n\n`value` is `float` and not `int | float`: the handler's `else 0` branch\n(an int) needs a NULL `SUM`, unreachable for the same reason.",
     "properties": {
      "deaths": {
-      "title": "Deaths",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deaths"
      },
      "guid": {
       "title": "Guid",
@@ -718,8 +725,15 @@
       "type": "number"
      },
      "kills": {
-      "title": "Kills",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
      },
      "name": {
       "title": "Name",

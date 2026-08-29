@@ -51,6 +51,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -79,6 +80,40 @@ def _primitive(schema: dict) -> str | None:
     if len(branches) == 1:
         return _primitive(branches[0])
     return None
+
+
+def _unreadable_ts(ts_type: str) -> bool:
+    """True for a TS construct this parser cannot resolve, so it must not
+    judge it. `SystemStage['state']` is an INDEXED ACCESS: the answer lives in
+    another interface, and reporting "API says string" against it is a finding
+    about the parser, not about the file. (`SystemStage['state']` ends in
+    `| string`, so it does satisfy `string` — the tool simply could not see
+    that.)"""
+    base = ts_type.replace("| null", "").replace("| undefined", "").strip()
+    return "[" in base and "]" in base and "'" in base
+
+
+def _ts_is_nullable(ts_type: str) -> bool:
+    """Is the FIELD nullable — not "does the word null appear anywhere".
+
+    ⛔ Substring matching got this wrong in the direction that costs most: it
+    reported a correctly-typed field as a defect. `{ name: string | null;
+    plays: number }` describes an object that is never null whose `name` may
+    be, and reading `null` out of the middle of it produced the finding
+    "TS nullable, API never is" against a file that had just been fixed.
+    Only a `| null` OUTSIDE every brace makes the field itself nullable.
+    """
+    depth = 0
+    top = []
+    for ch in ts_type:
+        if ch in "{([<":
+            depth += 1
+        elif ch in "})]>":
+            depth -= 1
+        elif depth == 0:
+            top.append(ch)
+    outer = "".join(top)
+    return "null" in outer or "undefined" in outer
 
 
 def _ts_matches(primitive: str, ts_type: str) -> bool:
@@ -134,6 +169,18 @@ def _fields(body: str) -> dict[str, tuple[str, bool]]:
         else:
             buf += " " + stripped
             depth += stripped.count("{") - stripped.count("}")
+            # ⛔ THIS WRITE WAS MISSING, AND THE BUG WAS NOT "A FIELD IS
+            # SKIPPED" — IT WAS "A FIELD IS REPORTED AS ABSENT". A type
+            # written as a MULTI-LINE inline object accumulated into `buf`
+            # and then fell off the end of the loop, so the field looked
+            # like it had never been declared. That produced confident,
+            # wrong findings against a file that was correct:
+            # `SystemOverview.linkage` and `SeasonSummary.totals` are both
+            # present and both were reported "absent from types.ts".
+            # A parser that cannot read a construct must not answer
+            # questions about it.
+            if depth == 0:
+                out[name] = (buf.rstrip(";").strip(), opt == "?")
     return out
 
 
@@ -149,6 +196,13 @@ def _is_nullable(schema: dict) -> bool:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schema", help="check one schema instead of all")
+    parser.add_argument(
+        "--types", type=Path, default=TYPES,
+        help="which types.ts to compare against. ⛔ THE DEFAULT IS THIS "
+             "WORKTREE'S COPY, which is not necessarily the one the "
+             "frontend author is editing — every finding below is about "
+             "the file named in the header, and a stale file produces "
+             "confident findings about problems that were already fixed.")
     args = parser.parse_args()
 
     if not SPEC.exists():
@@ -156,10 +210,12 @@ def main() -> int:
         return 2
 
     schemas = json.loads(SPEC.read_text())["components"]["schemas"]
-    source = TYPES.read_text()
+    types_path = args.types
+    source = types_path.read_text()
 
     compared = 0
     findings: list[tuple[str, str, str, str]] = []
+    unreadable: list[tuple[str, str, str]] = []
     for name, schema in sorted(schemas.items()):
         if args.schema and name != args.schema:
             continue
@@ -174,7 +230,7 @@ def main() -> int:
                 findings.append((name, field, "absent from types.ts", ""))
                 continue
             ts_type, ts_optional = declared[field]
-            ts_nullable = "null" in ts_type or "undefined" in ts_type
+            ts_nullable = _ts_is_nullable(ts_type)
             api_nullable = _is_nullable(field_schema)
             api_optional = field not in required
 
@@ -194,11 +250,18 @@ def main() -> int:
                 findings.append((name, field, "TS optional, API always sends it", ts_type))
 
             expected = _primitive(field_schema)
-            if expected and not _ts_matches(expected, ts_type):
+            if expected and _unreadable_ts(ts_type):
+                unreadable.append((name, field, ts_type))
+            elif expected and not _ts_matches(expected, ts_type):
                 findings.append(
                     (name, field, f"API says {expected}", ts_type))
 
+    stamp = datetime.fromtimestamp(types_path.stat().st_mtime, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
+    print(f"types.ts: {types_path}  (last modified {stamp})")
     print(f"schemas compared: {compared}   disagreements: {len(findings)}")
+    for name, field, ts_type in unreadable:
+        print(f"  ~ {name}.{field}: NOT JUDGED — this parser cannot resolve "
+              f"`{ts_type}`")
     for name, field, why, ts_type in findings:
         suffix = f"   (types.ts: {ts_type})" if ts_type else ""
         print(f"  {name}.{field}: {why}{suffix}")
@@ -216,7 +279,11 @@ def main() -> int:
         print("  a finding here is absence of a check, not a clean result.")
         return 2
     if not findings:
-        print("hand-written types agree with the generated schema")
+        if unreadable:
+            print(f"top-level fields agree, EXCEPT {len(unreadable)} this parser "
+                  f"could not read — that is not agreement about them")
+        else:
+            print("hand-written types agree with the generated schema")
     return 1 if findings else 0
 
 

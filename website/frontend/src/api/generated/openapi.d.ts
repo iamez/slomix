@@ -5657,31 +5657,35 @@ export interface components {
          *     distinct `period` branches (`7d`, `30d`, `season`, and the else-branch
          *     all-time). Zero nulls in every field.
          *
-         *     ⭐ `kills` and `deaths` are NOT nullable here even though the underlying
-         *     `kills` / `deaths` columns are `NOT NULL = NO`, and even though — unlike
-         *     `value` and `kd` in the very same dict — the handler passes them through
-         *     with no `or 0`. `SUM(x)` returns NULL only when EVERY row in the group is
-         *     NULL, and `GROUP BY` never produces an empty group, so a null needs null
-         *     data: there is none (0 null `kills` / `deaths` / `damage_given` rows in the
-         *     whole table). The coalesce asymmetry three lines apart is untidy, not a
-         *     signal that these two can be null.
-         *     ⛔ The residual is real and belongs to the DATA, not to this model: the day
-         *     a null `kills` row is written, this endpoint 500s. No test can catch that —
-         *     only the table can. Type it, don't widen it: `int | None` would buy nothing
-         *     but a null check on every consumer.
+         *     ⚠️ `kills` and `deaths` are `int | None`, AND THIS IS A CORRECTION. They
+         *     were typed `int` on the argument that `SUM(x)` is null only for an
+         *     all-null group, that there is no null `kills` row in the table, and that
+         *     widening "buys nothing but a null check on every consumer". Comparing this
+         *     file against the frontend's hand-written types showed the flaw: exactly
+         *     the same evidence — column nullable, zero nulls observed — had produced
+         *     `RecentRound.map_name: str | None` two endpoints away. The rule cannot be
+         *     "it depends on how I felt".
+         *
+         *     ⛔ The tiebreak is which mistake is recoverable. A `| None` the data never
+         *     exercises costs one `?? 0` on the consumer. An `int` the data eventually
+         *     contradicts is a 500 on a page that was rendering, and no test can catch
+         *     it — only the table can. A response_model is a promise about what the
+         *     server MAY send, and with a nullable column passed through raw (unlike
+         *     `value` and `kd` three lines away, which the handler coalesces) the server
+         *     may send null.
          *
          *     `value` is `float` and not `int | float`: the handler's `else 0` branch
          *     (an int) needs a NULL `SUM`, unreachable for the same reason.
          */
         LeaderboardRow: {
             /** Deaths */
-            deaths: number;
+            deaths: number | null;
             /** Guid */
             guid: string;
             /** Kd */
             kd: number;
             /** Kills */
-            kills: number;
+            kills: number | null;
             /** Name */
             name: string;
             /** Rank */
