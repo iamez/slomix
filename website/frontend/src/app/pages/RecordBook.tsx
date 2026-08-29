@@ -129,11 +129,17 @@ function RecordsTab() {
     <div style={{ marginTop: 'var(--space-4)' }}>
       <SectionHead label={title} />
       <div className="about-grid-5" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-        {order.map((cat) => (
-          data?.[cat.key]?.length
-            ? <RecordCard key={cat.key} label={cat.label} rows={data[cat.key]} />
-            : null
-        ))}
+        {order.map((cat) => {
+          // One read, then a narrowed local: `data?.[cat.key]?.length` guarded
+          // the render but the second lookup re-widened the type, so the
+          // compiler had to be told twice what the guard already knew. The
+          // category CAN be absent — a filter that matches nothing answers
+          // `{}` with all nineteen keys missing (#830).
+          const rows = data?.[cat.key];
+          return rows?.length
+            ? <RecordCard key={cat.key} label={cat.label} rows={rows} />
+            : null;
+        })}
       </div>
     </div>
   );

@@ -15,9 +15,15 @@ import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from
  * real top_award values, plus the legacy twelve as the floor); rank is the
  * API's own, not index+1.
  *
- * Grouping stays by (date, map, round_number) — the legacy key — because
- * award rows can carry a null round_id; the crack (a midnight-crossing
- * round split by date) is inherited and documented rather than hidden.
+ * Grouping stays by (date, map, round_number) — the legacy key — and the
+ * crack it carries (a midnight-crossing round split by date) is inherited
+ * and documented rather than hidden.
+ *
+ * The reason this comment used to give for that grouping was wrong: it said
+ * award rows can carry a null round_id. They cannot. `round_awards.round_id`
+ * is NOT NULL (0 of 26,301 rows), and the endpoint's response model declares
+ * `int`, so a null would 500 before reaching a client. The grouping stands on
+ * legacy parity alone; the type is `number` now.
  */
 
 const LEGACY_TYPES = [

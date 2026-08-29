@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from bot.config import load_config
 from bot.core.database_adapter import create_adapter
 from bot.services.session_data_service import SessionDataService
+from shared.round_time import MMSS_SQL_REGEX
 from website.backend.routers import sessions_router as api_router
 
 UNRESOLVED_FIELDS = ["A", "EFFORT", "EXPECTED", "PERF"]
@@ -267,7 +268,7 @@ async def _resolve_gaming_session_id(adapter, session_date: str) -> int:
 
 async def _fetch_round_rows(adapter, gaming_session_id: int) -> list[dict[str, Any]]:
     rows = await adapter.fetch_all(
-        """
+        f"""
         SELECT
             r.id,
             r.map_name,
@@ -276,7 +277,10 @@ async def _fetch_round_rows(adapter, gaming_session_id: int) -> list[dict[str, A
             COALESCE(
                 l.actual_duration_seconds,
                 CASE
-                    WHEN r.actual_time ~ '^[0-9]+:[0-9]+$' THEN
+                    -- shared.round_time's rule, not a fourth spelling of it:
+                    -- this one accepted UNBOUNDED seconds, so "4:75" scored
+                    -- 315 s here and unknown everywhere else.
+                    WHEN r.actual_time ~ '{MMSS_SQL_REGEX}' THEN
                         SPLIT_PART(r.actual_time, ':', 1)::int * 60 +
                         SPLIT_PART(r.actual_time, ':', 2)::int
                     ELSE 0

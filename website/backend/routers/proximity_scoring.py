@@ -987,6 +987,11 @@ async def get_proximity_revives(
 ):
     """Revive summary and medic leaderboard from proximity_revive table."""
     safe_limit = max(1, min(limit, 50))
+    # Parsed BEFORE the try: a malformed date is a bad request, and the
+    # blanket `except Exception` below would otherwise turn its 400 into
+    # "revives computation failed" — an input error reported as a server
+    # fault, which sends the reader to the wrong place entirely.
+    parsed_sd = _parse_iso_date(session_date)
     try:
         clauses: list[str] = []
         params: list = []
@@ -997,17 +1002,50 @@ async def get_proximity_revives(
         if player_guid:
             params.append(player_guid.strip())
             clauses.append(f"medic_guid = ${len(params)}")
+        # These three were DECLARED and never read. proximity.js sends all
+        # of them on every scoped call (buildScopeParams), so a reader who
+        # narrowed the page to one round still saw the 30-day revive total
+        # sitting beside per-round panels — measured 2026-08-29: 1,873
+        # revives with `session_date=2026-08-27`, and 1,873 without it, while
+        # `map_name` correctly cut the same query to 320.
+        #
+        # A parameter that is accepted, validated and then discarded is the
+        # worst of the three states: the validation is what makes it look
+        # like it works.
+        # Parsed, not passed as text: the column is a `date`, so asyncpg
+        # infers the parameter type from it and rejects a string outright
+        # ('str' object has no attribute 'toordinal') — which is how the
+        # first version of this fix failed.
+        if parsed_sd is not None:
+            params.append(parsed_sd)
+            clauses.append(f"session_date = ${len(params)}")
+        if round_number is not None:
+            params.append(round_number)
+            clauses.append(f"round_number = ${len(params)}")
+        if round_start_unix is not None:
+            params.append(round_start_unix)
+            clauses.append(f"round_start_unix = ${len(params)}")
 
-        # Audit P8 + migration 043: filter on session_date (play time)
-        # now that the column exists and is backfilled. Rows with NULL
-        # session_date (re-linker hasn't populated round_id yet) fall
-        # back to created_at so the endpoint still surfaces them during
-        # the catch-up window.
-        params.append(range_days)
-        clauses.append(
-            "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
-            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
-        )
+        # ELSE, not AND — an explicit date REPLACES the rolling window, the
+        # same shape the scoped query above already uses. Adding the window
+        # on top turned my own scope fix into a worse bug than the one it
+        # cured: proximity.js sends range_days=30 alongside session_date, so
+        # any session older than thirty days answered ZERO instead of 12×
+        # too many (measured: 2026-06-21 → 0 revives, and 9 with
+        # range_days=365). My first tests could not catch it — every one of
+        # them scoped to a RECENT session, and a sample that cannot fail
+        # proves nothing.
+        #
+        # Audit P8 + migration 043: the window filters on session_date (play
+        # time). Rows with NULL session_date (re-linker hasn't populated
+        # round_id yet) fall back to created_at so the endpoint still
+        # surfaces them during the catch-up window.
+        if parsed_sd is None:
+            params.append(range_days)
+            clauses.append(
+                "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
+                "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
+            )
 
         where_sql = "WHERE " + " AND ".join(clauses)
         medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"

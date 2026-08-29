@@ -20,8 +20,12 @@ function fmtPct(ratio: number | null): string {
 }
 
 /** Legacy ratioBadge thresholds, per metric, unchanged. */
-function ratioState(ratio: number | null, good: number, warn: number): string {
-  if (ratio == null || Number.isNaN(ratio)) return 'idle';
+/** The ratios are never null (diagnostics_router guards each with an
+ *  `else 0.0`), but NaN is still worth refusing: it would compare false
+ *  against both thresholds and silently render as 'error', which is a
+ *  judgement about the data rather than about the measurement. */
+function ratioState(ratio: number, good: number, warn: number): string {
+  if (Number.isNaN(ratio)) return 'idle';
   if (ratio >= good) return 'ok';
   if (ratio >= warn) return 'warn';
   return 'error';

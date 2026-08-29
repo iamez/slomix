@@ -197,7 +197,7 @@ function Insights() {
   const trends = useTrends(days);
   const data = trends.isError ? undefined : trends.data;
   const mapRows = data
-    ? Object.entries(data.map_distribution).sort((a, b) => b[1] - a[1]).slice(0, 8)
+    ? Object.entries(data.map_distribution ?? {}).sort((a, b) => b[1] - a[1]).slice(0, 8)
     : [];
   const mapMax = mapRows.length > 0 ? mapRows[0][1] : 1;
   const chart = (label: string, values: number[] | undefined, color: string, note: string) => (
@@ -214,7 +214,19 @@ function Insights() {
           </div>
         </>
       ) : (
-        <div style={{ marginTop: 'var(--space-2)' }}>{trends.isPending ? <Pending label="trend" /> : <Unavailable what="trend" />}</div>
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          {trends.isPending && <Pending label="trend" />}
+          {trends.isError && <Unavailable what="trend" />}
+          {/* Answered, but this series is not in it. `/api/stats/trends`
+            * omits a series the request did not ask for — the KEY is
+            * absent, not null — so "unavailable" would blame the endpoint
+            * for doing what it was asked. */}
+          {trends.isSuccess && (
+            <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+              not in this response
+            </span>
+          )}
+        </div>
       )}
     </div>
   );
@@ -305,7 +317,16 @@ function SeasonBlock() {
   // An empty activity object is the endpoint's failure shape inside a 200
   // (and a 90-day window with zero active days does not happen in this
   // dataset) — no line beats a false 'active on 0 days' (Codex wave 3).
-  const activeDaysCount = calendar.data ? Object.keys(calendar.data.activity).length : 0;
+  //
+  // #830 gives the endpoint a status field, which says the same thing
+  // without the inference: when it reports a failure the count is suppressed
+  // even if some days did come back. Absent until that lands, so this stays
+  // a strictly stronger version of the heuristic, never a weaker one.
+  const calendarFailed = calendar.data?.status != null
+    && ['error', 'unavailable'].includes(calendar.data.status);
+  const activeDaysCount = calendar.data && !calendarFailed
+    ? Object.keys(calendar.data.activity).length
+    : 0;
   const activeDays = activeDaysCount > 0 ? activeDaysCount : null;
   return (
     <div data-parity="home.season">
@@ -543,6 +564,23 @@ function Tonight() {
       ) : (
         <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-4)' }}>nobody marked for the next {availability.data.days.length} days</Lbl>
       ))}
+      {/* The threshold belongs to the server — it is the number that fires
+        * the Discord notice — so the card quotes it rather than keeping its
+        * own copy, and cannot drift from the rule that actually decides. */}
+      {/* `?.` on the QUERY (it can be loading), never on the field: the
+        * handler always sends session_ready, so a check there would be a
+        * guard against something that does not happen. */}
+      {availability.data && !availability.data.session_ready.ready && (
+        <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
+          {availability.data.session_ready.looking_count} of{' '}
+          {availability.data.session_ready.threshold} looking for tonight
+        </Lbl>
+      )}
+      {availability.data?.session_ready.ready && (
+        <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-2)', color: 'var(--color-pos)' }}>
+          tonight is on — {availability.data.session_ready.looking_count} looking
+        </div>
+      )}
       <ActLink to="/availability" style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>Mark yourself →</ActLink>
     </div>
   );

@@ -1,5 +1,5 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
-import { apiGet } from './api';
+import { ApiError, apiGet } from './api';
 import type {
   ActivityCalendar,
   AvailabilityOverview,
@@ -38,6 +38,10 @@ import type {
   SeasonSummary,
   SessionLineups,
   SessionRounds,
+  SessionDetail,
+  SessionGoodNight,
+  SessionMvp,
+  SessionVerdicts,
   SessionSummary,
   SkillFormula,
   SkillLeaderboard,
@@ -69,7 +73,20 @@ export function makeQueryClient(): QueryClient {
       // non-live sections (overview, sessions, leaders) would never update
       // on a long-mounted page while the live panel keeps polling (Codex
       // on #806, wave 3).
-      queries: { staleTime: 5 * 60_000, retry: 1 },
+      queries: {
+        staleTime: 5 * 60_000,
+        // Retry only what a second ask could answer differently. A 4xx is a
+        // considered answer: asking again cannot change it, and it delays
+        // the page's honest "unavailable" by a round trip. On the
+        // rate-limited routes it is actively harmful — the storytelling
+        // endpoints allow 10 requests a minute EACH, the story page issues
+        // thirteen per session, and retrying a 429 doubles precisely the
+        // traffic that caused it. 5xx and network failures keep their retry.
+        retry: (failureCount: number, error: Error) => {
+          if (error instanceof ApiError && error.status < 500) return false;
+          return failureCount < 1;
+        },
+      },
     },
   });
 }
@@ -136,9 +153,10 @@ export function useSessionLineups(sessionId: number, enabled: boolean) {
   });
 }
 
-export function useSessions(limit = 6) {
+export function useSessions(limit = 6, enabled = true) {
   return useQuery({
     queryKey: ['sessions', limit],
+    enabled,
     queryFn: () => apiGet('/api/sessions', { query: { limit } }) as Promise<SessionSummary[]>,
   });
 }
@@ -615,4 +633,57 @@ export function useStoryLurker(gsid: number) {
 
 export function useStoryPlayerNarratives(gsid: number) {
   return useQuery(storyQuery<StoryPlayerNarratives>('story-player-narratives', '/api/storytelling/player-narratives', gsid));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — session detail. `useSessionRounds` above is shared with the
+// /rounds page; these four are the panels around it.
+// ---------------------------------------------------------------------------
+
+/** Everything the session totals are built from: matches, per-player totals,
+ *  stopwatch scoring and the team matrix. One 39 KB response rather than the
+ *  legacy page's five calls. */
+export function useSessionDetail(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-detail', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/detail', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionDetail>,
+  });
+}
+
+export function useSessionGoodNight(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-good-night', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/good-night', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionGoodNight>,
+  });
+}
+
+export function useSessionVerdicts(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-verdicts', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/verdicts', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionVerdicts>,
+  });
+}
+
+/** Peer votes, not a computed rating — see the type's note. */
+export function useSessionMvp(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-mvp', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/mvp', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionMvp>,
+  });
 }

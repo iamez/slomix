@@ -59,10 +59,17 @@ function Summary({ maps }: { maps: MapStatsRow[] }) {
 function ObjectiveRecords() {
   const segments = useMapSegments();
   const rows = segments.data?.records ?? [];
-  // The endpoint catches its own query failures and answers 200 with
-  // {status: "error", records: []} — success + empty there is an OUTAGE,
+  // The endpoint catches its own query failures and answers 200 with a
+  // failure STATUS and an empty list — success + empty there is an OUTAGE,
   // not an empty record book (same family as the #811 waves).
-  const failed = segments.isError || segments.data?.status === 'error';
+  //
+  // Both spellings on purpose: the field is being renamed from "error" to
+  // "unavailable" in #830, and a consumer that knows only the old one goes
+  // silently blind the moment the rename lands (Codex on that PR). Reading
+  // both is correct before and after, and costs one array.
+  const FAILED_STATUS = ['error', 'unavailable'];
+  const failed = segments.isError
+    || (segments.data?.status != null && FAILED_STATUS.includes(segments.data.status));
   return (
     <div data-parity="maps.objective-records" style={{ marginTop: 'var(--space-6)' }}>
       <SectionHead label="fastest objective completions · full map records" />
