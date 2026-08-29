@@ -120,6 +120,11 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
 
 async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
     """Distinct player counts and total kills, overall and in the lookback."""
+    # Bots are not players. Measured 2026-08-29: 67 distinct guids matched
+    # this query and 30 of them were OMNIBOT/[BOT] — so the site's headline
+    # "players known" was counting the training bots as most of the
+    # community. Every leaderboard in this product already excludes them and
+    # says so; this figure now agrees with them.
     players_all_time = await _safe_val(
         db,
         """
@@ -127,6 +132,8 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
+          AND player_guid NOT LIKE 'OMNIBOT%'
+          AND player_name NOT LIKE '[BOT]%'
         """,
         metric="players_all_time",
     )
@@ -137,28 +144,42 @@ async def _fetch_player_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
           AND time_played_seconds > 0
+          AND player_guid NOT LIKE 'OMNIBOT%'
+          AND player_name NOT LIKE '[BOT]%'
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         """,
         (start_date_str,),
         metric="players_recent",
     )
+    # …and counted over the same rounds this endpoint counts. rounds_count
+    # applies _ROUND_FILTER; this sum did not, so one response published
+    # 124,629 kills across 1,977 rounds — a total drawn partly from rounds
+    # the same response had excluded, by players it did not count. Measured
+    # 2026-08-29: 124,629 unfiltered, 116,914 with the round filter alone,
+    # 110,816 with both.
     total_kills = await _safe_val(
         db,
-        """
+        f"""
         SELECT COALESCE(SUM(kills), 0)
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
-        """,
+          AND player_guid NOT LIKE 'OMNIBOT%'
+          AND player_name NOT LIKE '[BOT]%'
+          AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
+        """,  # nosec B608 - trusted module constant, not user input
         metric="total_kills",
     )
     total_kills_recent = await _safe_val(
         db,
-        """
+        f"""
         SELECT COALESCE(SUM(kills), 0)
         FROM player_comprehensive_stats
         WHERE round_number IN (1, 2)
+          AND player_guid NOT LIKE 'OMNIBOT%'
+          AND player_name NOT LIKE '[BOT]%'
+          AND round_id IN (SELECT id FROM rounds {_ROUND_FILTER})
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
-        """,
+        """,  # nosec B608 - trusted module constant, not user input
         (start_date_str,),
         metric="total_kills_recent",
     )

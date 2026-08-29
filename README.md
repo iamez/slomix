@@ -2,14 +2,14 @@
 ## What it is
 
 ET:Legacy writes a stats file at the end of every round. Slomix reads those files,
-reconciles them into matches, and keeps them — **2,987 rounds since January 2025**,
-57 fields per player per round, 230,343 kills and counting.
+reconciles them into matches, and keeps them — **1,977 rounds since January 2025**,
+57 fields per player per round, 110,816 kills and counting.
 
 That much is ordinary. What makes the dataset unusual is the second source: a Lua
 tracker on the game server samples **every player's position, health, weapon, stance
 and speed every 200 ms**, alongside per-shot hit regions, engagements, revives and
 objective work. A four-minute round produces roughly 3,400 records across 22
-sections. There are 63,058 recorded paths in the database.
+sections. There are 71,752 recorded paths in the database.
 
 Stopwatch is what makes this hard. A map is two rounds with the sides swapped, the
 second round's stats file is cumulative rather than per-round, sessions cross
@@ -20,14 +20,19 @@ things right before anything is displayed.
 
 | | |
 |---|---|
-| Rounds parsed | 2,987 since January 2025 |
+| Rounds parsed | 1,977 since January 2025 |
 | Stored per player, per round | 57 fields |
-| Telemetry | 29 tables, 1.26 GB, 63,058 player paths |
-| Database | 101 tables, 72 migrations |
+| Telemetry | 29 tables, 1,229 MB, 71,752 player paths |
+| Database | 104 tables, 81 migrations |
 | Discord | 107 commands across 21 cogs and their mixins |
-| Web API | 247 endpoints across 48 routers |
-| Code | ~107k lines of Python, ~8.8k of Lua |
-| Tests | 4,219 across 304 files |
+| Web API | 250 endpoints across 49 routers |
+| Code | ~149k lines of Python outside tests, ~10k of Lua on the game server |
+| Tests | 5,716 across 396 files |
+
+Counted 2026-08-29 against the running database and this checkout. Every
+row above had drifted — tables 101→104, migrations 72→81, endpoints
+247→250, tests 4,219→5,716 — which is what an unmeasured figure does
+while nobody re-runs it.
 
 ## What it does
 
@@ -93,7 +98,7 @@ with origin and view angles, hit regions, engagements and reaction times, aim-lo
 traces, spawn timing, kill outcomes with the killer's remaining health, crossfire
 geometry, team pushes, revives, trades and objective runs.
 
-That lands in **29 `proximity_*` tables**, currently **1.26 GB** and 63,058 recorded
+That lands in **29 `proximity_*` tables**, currently **1,229 MB** and 71,752 recorded
 player paths. Every row is linked back to a round, which is less trivial than it
 sounds: the tracker writes before the stats file exists, so rows are matched to their
 round afterwards by map, round number and start time.
@@ -163,13 +168,26 @@ in [Scale](#scale) above; these are the games themselves.
 
 | Metric | Value |
 |--------|-------|
-| **Kills** | 230,343 |
-| **Headshot kills** | 49,918 |
-| **Damage dealt** | 45.2 million |
-| **Revives given** | 26,412 |
-| **Rounds** | 2,987 |
-| **Unique players** | 65 |
+| **Kills** | 110,816 |
+| **Headshot kills** | 24,059 |
+| **Damage dealt** | 22.2 million |
+| **Revives given** | 13,675 |
+| **Rounds** | 1,977 |
+| **Unique players** | 37 |
 | **Span** | January 2025 — August 2026 |
+
+Measured 2026-08-29 over the rounds this project counts as real: the two
+halves of a match (`round_number IN (1, 2)`) with a status of completed or
+substitution, and human players only. Every figure in this table comes from
+that one filter, which is the point — the first draft of this correction
+took its player count from the bot-excluded query and its kills from a query
+that still counted them, and the two disagreed by 6,098 kills without
+anything on the page saying so.
+
+The figures this replaces were roughly double, because they counted
+`round_number = 0` rows as well. Those rows are a copy of the second half's
+cumulative totals — they exist, nothing reads them, and adding them to the
+halves counts most of the season twice.
 
 ---
 
