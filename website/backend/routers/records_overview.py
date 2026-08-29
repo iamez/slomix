@@ -339,6 +339,14 @@ async def get_activity_calendar(
         FROM rounds
         WHERE round_number IN (1, 2)
           AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
+          -- ⛔ `round_status` ALONE IS NOT THE VALIDITY GATE, and this counted
+          -- rounds nobody played. Measured before the fix: 2026-08-12 showed
+          -- 9 rounds where the real answer is 0 — every one a bot or invalid
+          -- round; 2026-08-11 showed 22 where 14 were real. Six days in the
+          -- last 90 were wrong, always upward, so the calendar drew activity
+          -- on days the server sat idle.
+          AND is_valid IS NOT FALSE
+          AND NOT COALESCE(is_bot_round, FALSE)
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT)
         GROUP BY SUBSTR(CAST(round_date AS TEXT), 1, 10)
         ORDER BY day

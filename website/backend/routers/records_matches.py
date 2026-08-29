@@ -524,7 +524,12 @@ async def get_recent_rounds(
                COUNT(pcs.id) AS player_count
         FROM rounds r
         JOIN player_comprehensive_stats pcs ON pcs.round_id = r.id
+        -- Same gate as the calendar: a bot or invalid round is not something
+        -- to offer in a round picker. `round_number > 0` already excludes the
+        -- R0 summary rows.
         WHERE r.round_number > 0
+          AND r.is_valid IS NOT FALSE
+          AND NOT COALESCE(r.is_bot_round, FALSE)
         GROUP BY r.id, r.map_name, r.round_date, r.round_number
         ORDER BY r.id DESC
         LIMIT $1

@@ -941,3 +941,53 @@ class TestStatsMapsLetsItsFailuresThrough:
                 return []
 
         assert await get_maps(db=_Empty()) == []
+
+
+class TestTheValidityGateOnRoundCounts:
+    """⛔ `round_status` ALONE IS NOT THE VALIDITY GATE.
+
+    Flagged by the workstream next door, which hit the same shape in its own
+    aggregate: a query can filter bots at the ROW level and still count invalid
+    or bot ROUNDS, because those are different columns.
+
+    Measured on this database before the fix, over the last 90 days:
+
+        2026-08-12   calendar showed  9   real answer  0   (all bot/invalid)
+        2026-08-11   calendar showed 22   real answer 14
+        2026-08-21   calendar showed  7   real answer  4
+
+    Six days were wrong, always upward, so the activity calendar drew bars on
+    days the server sat idle. `/rounds/recent` had the same gap and was
+    offering those rounds in the picker.
+    """
+
+    def _gate_present(self, source: str, query_marker: str) -> bool:
+        from pathlib import Path
+        text = Path(f"website/backend/routers/{source}").read_text()
+        start = text.index(query_marker)
+        block = text[start:start + 1400]
+        where = block.split("WHERE", 1)[1] if "WHERE" in block else ""
+        return "is_valid" in where and "is_bot_round" in where
+
+    def test_the_activity_calendar_excludes_invalid_and_bot_rounds(self):
+        assert self._gate_present("records_overview.py",
+                                  "SELECT SUBSTR(CAST(round_date AS TEXT), 1, 10) as day")
+
+    def test_the_round_picker_excludes_them_too(self):
+        assert self._gate_present("records_matches.py",
+                                  "SELECT r.id, r.map_name, r.round_date, r.round_number")
+
+    def test_the_session_rounds_endpoint_deliberately_does_not(self):
+        """⭐ THE ONE PLACE THAT MUST NOT FILTER, and the difference is the
+        point of that endpoint.
+
+        `/stats/session/{id}/rounds` returns every round the session recorded
+        and labels each with `counts_toward_totals` — which DOES apply the
+        gate. Filtering there would repeat the defect it was built to fix: a
+        player who played an excluded round would find it missing with no
+        explanation.
+        """
+        from website.backend.routers.sessions_router import _counts_toward_totals
+        assert _counts_toward_totals("completed", True, False) is True
+        assert _counts_toward_totals("completed", False, False) is False
+        assert _counts_toward_totals("completed", True, True) is False
