@@ -428,7 +428,23 @@ export interface RecordEntry {
   map: string;
   date: string;
 }
-export type StatsRecords = Record<string, RecordEntry[]>;
+/** Nineteen categories, EVERY ONE optional — measured on #830:
+ *  `?map_name=goldrush` (a real ET map this server never recorded) answers
+ *  `{}` with HTTP 200 and all nineteen keys absent, while all eighteen maps
+ *  that do have data answer with all nineteen.
+ *
+ *  ⚠️ And absence means the opposite of what it looks like: a MISSING key is
+ *  "the query ran and found nothing", while a key present as `[]` is "the
+ *  query threw and a per-category except swallowed it". `| undefined` is
+ *  what makes the first case visible to the compiler — this alias used to
+ *  promise every key was there, and `RecordBook.tsx` only survived because
+ *  it happened to guard with `?.` anyway.
+ *
+ *  (An alias, not an interface: the brother's checker reads interfaces only,
+ *  so it reported "agree" over ZERO compared schemas here — an empty
+ *  comparison and a clean one have the same shape. It says NOT COMPARED now.
+ *  This one is checked by hand against the generated schema.) */
+export type StatsRecords = Record<string, RecordEntry[] | undefined>;
 
 /** One map row of GET /api/stats/maps — corpus: api_stats_maps.json (only
  * the fields this batch reads; the maps PAGE in batch 3 will widen it). */

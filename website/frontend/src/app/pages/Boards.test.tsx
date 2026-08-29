@@ -92,6 +92,29 @@ describe('RecordBook', () => {
     expect(screen.getByText(/full map · both rounds combined/)).toBeInTheDocument();
   });
 
+  it('renders nothing rather than breaking when a filter matches no records', async () => {
+    // Measured on #830 and re-measured here: /api/stats/records?map_name=
+    // goldrush — a real ET map this server never recorded — answers `{}`
+    // with HTTP 200 and ALL NINETEEN categories absent. The type used to
+    // promise every key was present; the page survived only because it
+    // happened to guard with `?.`.
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/records') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderPage(<RecordBook />);
+    // The page already answers this correctly — an empty object is truthy,
+    // so two headings over empty grids would claim records that do not
+    // exist (Codex on #813). What was missing was the TYPE saying the keys
+    // can be absent at all; this test pins the behaviour to the measurement
+    // rather than to that earlier review alone.
+    await waitFor(() => expect(screen.getByText(/no records for this selection yet/)).toBeInTheDocument());
+    expect(screen.queryByText('bronze.')).toBeNull();
+    expect(screen.queryByText(/click a card for the top 5/)).toBeNull();
+  });
+
   it('?tab=hof lands on the hall of fame (the hash-alias contract)', async () => {
     vi.stubGlobal('fetch', vi.fn(fixtureFetch));
     renderPage(<RecordBook />, '/record-book?tab=hof');
