@@ -69,6 +69,10 @@ function Scoreboard({ scoring }: { scoring: SessionScoring }) {
         }
       />
       <Stack gap={1} className="rows">
+        {/* `?? []` is belt and braces too: an available scoring block always
+          * carries `maps` (0 of 149 sessions said otherwise). It stays
+          * because the type allows the absence and the compiler would
+          * otherwise demand a non-null assertion here — a worse trade. */}
         {(scoring.maps ?? []).map((m, i) => (
           <Cluster key={`${m.map}:${m.match_id ?? i}`} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
             <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
@@ -100,6 +104,12 @@ function Scoreboard({ scoring }: { scoring: SessionScoring }) {
 /** Team totals side by side. Sums, not rates — the rates below them are
  * averages of per-player rates and do not recompute from these. */
 function TeamTotals({ matrix }: { matrix: SessionTeamMatrix }) {
+  // ⚠️ `!matrix.aggregates` is BELT AND BRACES, not load-bearing, and that
+  // is worth saying because a mutation test will report it as dead: the
+  // service has exactly one return with `available: true` and it always
+  // carries `aggregates`, and 149 sampled sessions produced no counterexample
+  // (brother's review on this PR). Kept because the two facts live in
+  // different files; a reader deleting it should know it is a choice.
   if (!matrix.available || !matrix.aggregates) {
     return (
       <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
