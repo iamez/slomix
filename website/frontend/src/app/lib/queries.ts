@@ -38,6 +38,10 @@ import type {
   SeasonSummary,
   SessionLineups,
   SessionRounds,
+  SessionDetail,
+  SessionGoodNight,
+  SessionMvp,
+  SessionVerdicts,
   SessionSummary,
   SkillFormula,
   SkillLeaderboard,
@@ -615,4 +619,57 @@ export function useStoryLurker(gsid: number) {
 
 export function useStoryPlayerNarratives(gsid: number) {
   return useQuery(storyQuery<StoryPlayerNarratives>('story-player-narratives', '/api/storytelling/player-narratives', gsid));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — session detail. `useSessionRounds` above is shared with the
+// /rounds page; these four are the panels around it.
+// ---------------------------------------------------------------------------
+
+/** Everything the session totals are built from: matches, per-player totals,
+ *  stopwatch scoring and the team matrix. One 39 KB response rather than the
+ *  legacy page's five calls. */
+export function useSessionDetail(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-detail', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/detail', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionDetail>,
+  });
+}
+
+export function useSessionGoodNight(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-good-night', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/good-night', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionGoodNight>,
+  });
+}
+
+export function useSessionVerdicts(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-verdicts', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/verdicts', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionVerdicts>,
+  });
+}
+
+/** Peer votes, not a computed rating — see the type's note. */
+export function useSessionMvp(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-mvp', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/mvp', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionMvp>,
+  });
 }

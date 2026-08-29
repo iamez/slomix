@@ -1250,3 +1250,174 @@ export interface StoryPlayerNarratives {
   status: string;
   player_narratives: StoryPlayerNarrative[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 4 — session detail. Corpus: api_stats_session_*.json, recorded
+// 2026-08-29 against gaming session 154 (12 rounds, 6 maps, 6 players).
+//
+// The nullability below comes from stats_router.py and session_scoring.py,
+// not from the recording: session 154 fills nearly everything, and an early
+// session with no Lua mirror fills much less.
+// ---------------------------------------------------------------------------
+
+/** One map's line in the stopwatch scoring block. `team_a_time` is a clock
+ *  string OR the word "fullhold" — the two are different outcomes and the
+ *  page must not print one as the other. */
+export interface SessionScoringMap {
+  map: string;
+  team_a_points: number;
+  team_b_points: number;
+  team_a_time: string | null;
+  team_b_time: string | null;
+  winner: string | null;
+  description: string | null;
+  /** False when the map was played but is not counted (cancelled halves). */
+  counted: boolean;
+  match_id: string | null;
+}
+
+/** `available: false` when the session predates stopwatch scoring or its
+ *  halves could not be paired — the page says which, rather than showing a
+ *  0–0 that looks like a real draw (the 2026-08-12 bug). */
+export interface SessionScoring {
+  available: boolean;
+  team_a_name: string;
+  team_b_name: string;
+  team_a_score: number;
+  team_b_score: number;
+  maps: SessionScoringMap[];
+  total_maps: number;
+}
+
+export interface SessionTeamAggregate {
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  revives: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  dpm_avg: number | null;
+  kd_avg: number | null;
+  accuracy_avg: number | null;
+}
+
+export interface SessionTeamMatrix {
+  available: boolean;
+  team_a_name: string;
+  team_b_name: string;
+  aggregates?: { team_a: SessionTeamAggregate; team_b: SessionTeamAggregate };
+}
+
+/** One player's session totals. `alive_pct` and `alive_pct_lua` are two
+ *  measurements of the same thing — stats file against Lua mirror — and
+ *  `alive_pct_diff` is their disagreement, which is data about the capture
+ *  rather than about the player. */
+export interface SessionPlayerTotals {
+  player_guid: string;
+  player_name: string;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  dpm: number;
+  kd: number;
+  efficiency: number;
+  headshot_kills: number;
+  headshot_pct: number;
+  gibs: number;
+  revives_given: number;
+  times_revived: number;
+  kill_assists: number;
+  accuracy: number;
+  time_played_seconds: number;
+  alive_pct: number | null;
+  alive_pct_lua: number | null;
+  alive_pct_diff: number | null;
+}
+
+export interface SessionMatchRound {
+  round_id: number;
+  round_number: number;
+  winner_team: number | null;
+  allies_score: number;
+  axis_score: number;
+  duration_seconds: number | null;
+}
+
+export interface SessionMatch {
+  map_name: string;
+  rounds: SessionMatchRound[];
+}
+
+/** GET /api/stats/session/{id}/detail */
+export interface SessionDetail {
+  session_id: number;
+  date: string;
+  player_count: number;
+  round_count: number;
+  matches: SessionMatch[];
+  players: SessionPlayerTotals[];
+  scoring: SessionScoring;
+  team_matrix: SessionTeamMatrix;
+}
+
+/** GET /api/stats/session/{id}/good-night — a 0-100 index over seven named
+ *  components. `available: false` means it could not be computed; a low
+ *  score means it was, and the night was quiet. */
+export interface SessionGoodNight {
+  status: string;
+  available: boolean;
+  gaming_session_id: number;
+  score: number;
+  components: Record<string, number>;
+  reasons: string[];
+  maps: number;
+  players: number;
+  hours: number;
+}
+
+/** GET /api/stats/session/{id}/verdicts — each player against their OWN
+ *  form, never against each other. `first_night` marks a player with no
+ *  baseline: a verdict about them would be a comparison with nothing. */
+export interface SessionVerdictPlayer {
+  guid: string;
+  name: string;
+  dpm: number;
+  avg_dpm: number | null;
+  kills: number;
+  first_night: boolean;
+  percentile: number | null;
+  label: string;
+  sessions_in_baseline: number;
+}
+
+export interface SessionVerdicts {
+  status: string;
+  gaming_session_id: number;
+  baseline: string;
+  players: SessionVerdictPlayer[];
+}
+
+/** GET /api/stats/session/{id}/mvp — PEER VOTES, not a computed rating.
+ *  Unrelated to storytelling's PWC MVP, and the page has to keep them
+ *  apart: one is what people thought, the other is what the model says. */
+export interface SessionMvpCandidate {
+  guid: string;
+  name: string;
+  kills: number;
+  dpm: number;
+  votes: number;
+  vote_pct: number;
+  kis_rank: number | null;
+}
+
+export interface SessionMvp {
+  status: string;
+  gaming_session_id: number;
+  total_votes: number;
+  my_vote: string | null;
+  most_underrated_guid: string | null;
+  candidates: SessionMvpCandidate[];
+}
