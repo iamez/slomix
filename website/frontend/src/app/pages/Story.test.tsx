@@ -56,6 +56,7 @@ function renderPage(fetchImpl = fixtureFetch, entry = '/story') {
         <Routes>
           <Route path="/story" element={<Story />} />
           <Route path="/story/session/:gsid" element={<Story />} />
+          <Route path="/story/date/:date" element={<Story />} />
         </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
@@ -178,6 +179,35 @@ describe('Story', () => {
     // The rest of the page still renders — one dead endpoint is not a dead
     // session.
     expect(await screen.findByText(/The night's story was resilience/)).toBeInTheDocument();
+  });
+
+  it('resolves a dated legacy link to that night, not the newest one', async () => {
+    // /story/date/:date was a legacy hash, and the recording holds one
+    // session on 2026-08-26 (gsid 153). Ignoring the date and showing the
+    // newest session is the silent-wrong-answer this route exists to avoid.
+    renderPage(fixtureFetch, '/story/date/2026-08-26');
+    await waitFor(() => expect(screen.getByRole('button', { name: /2026-08-26/ })).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  it('asks which session when a date holds two of them', async () => {
+    const twoOnOneDay = {
+      ...scopes,
+      sessions: [
+        { ...(scopes as { sessions: Record<string, unknown>[] }).sessions[0], gaming_session_id: 900, start_date: '2026-08-27', end_date: '2026-08-27' },
+        { ...(scopes as { sessions: Record<string, unknown>[] }).sessions[1], gaming_session_id: 901, start_date: '2026-08-27', end_date: '2026-08-27' },
+      ],
+    };
+    renderPage(withOverride('/storytelling/scopes', () =>
+      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(twoOnOneDay) } as Response)),
+    '/story/date/2026-08-27');
+    await waitFor(() => expect(screen.getByText(/two sessions were played on 2026-08-27/)).toBeInTheDocument());
+    // …and nothing is shown as if it were the answer.
+    expect(screen.queryByText(/scoreboard/i)).toBeNull();
+  });
+
+  it('says a dated link fell outside the window instead of showing another night', async () => {
+    renderPage(fixtureFetch, '/story/date/2019-01-01');
+    await waitFor(() => expect(screen.getByText(/no session in the recent window/)).toBeInTheDocument());
   });
 
   it('shows each player note with the archetype that produced it', async () => {

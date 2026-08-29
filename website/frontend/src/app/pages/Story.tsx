@@ -504,17 +504,30 @@ export function Story() {
   const [params, setParams] = useSearchParams();
   const scopes = useStoryScopes(20);
 
-  // Three ways in, one key: the legacy hash carried /story/session/:gsid,
-  // the app links with ?gsid=, and a first visit has neither and takes the
-  // most recent session. A date is deliberately NOT a key here — a session
-  // that crosses midnight has two of them.
+  // Four ways in, one key. The legacy hashes carried /story/session/:gsid and
+  // /story/date/:date, the app links with ?gsid=, and a first visit has none
+  // of them and takes the most recent session.
+  //
+  // The gsid is the key everywhere BELOW this line, because a date is not
+  // one: a session that crosses midnight has two, and a date can hold two
+  // sessions. So a dated link is resolved here, and when it resolves to more
+  // than one session the page asks instead of picking — silently showing the
+  // wrong night is the failure a deep link exists to prevent.
   const fromRoute = Number(routeParams.gsid);
   const fromQuery = Number(params.get('gsid'));
   const explicit = Number.isFinite(fromRoute) && fromRoute > 0
     ? fromRoute
     : Number.isFinite(fromQuery) && fromQuery > 0 ? fromQuery : null;
+
+  const dateParam = routeParams.date ?? null;
+  const dated = dateParam && scopes.data
+    ? scopes.data.sessions.filter(
+      (s) => s.start_date === dateParam || s.end_date === dateParam,
+    )
+    : [];
   const latest = scopes.data?.sessions[0]?.gaming_session_id ?? null;
-  const gsid = explicit ?? latest;
+  const gsid = explicit
+    ?? (dateParam ? (dated.length === 1 ? dated[0].gaming_session_id : null) : latest);
 
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-8)' }}>
@@ -545,6 +558,37 @@ export function Story() {
           </Cluster>
         )}
       </Stack>
+
+      {/* A dated link that did not resolve to exactly one session. Both
+        * cases below are answers, not errors, and they read differently on
+        * purpose: one is a choice to make, the other is a fact about the
+        * window this page can see. */}
+      {gsid == null && dateParam && scopes.data && (
+        <Stack gap={2} parity="story.ambiguous" style={{ paddingTop: 'var(--space-5)' }}>
+          {dated.length > 1 ? (
+            <>
+              <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
+                two sessions were played on {dateParam} — which one?
+              </span>
+              <Cluster gap={2}>
+                {dated.map((s) => (
+                  <ScopeChip
+                    key={s.gaming_session_id}
+                    scope={s}
+                    active={false}
+                    onPick={(picked) => { setParams({ gsid: String(picked) }); }}
+                  />
+                ))}
+              </Cluster>
+            </>
+          ) : (
+            <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+              no session in the recent window started or ended on {dateParam} — it
+              may be older than the {scopes.data.sessions.length} shown above
+            </span>
+          )}
+        </Stack>
+      )}
 
       {gsid != null && <SessionStory key={gsid} gsid={gsid} />}
     </div>
