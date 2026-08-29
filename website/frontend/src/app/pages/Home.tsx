@@ -558,13 +558,16 @@ function Tonight() {
       {/* The threshold belongs to the server — it is the number that fires
         * the Discord notice — so the card quotes it rather than keeping its
         * own copy, and cannot drift from the rule that actually decides. */}
-      {availability.data?.session_ready && !availability.data.session_ready.ready && (
+      {/* `?.` on the QUERY (it can be loading), never on the field: the
+        * handler always sends session_ready, so a check there would be a
+        * guard against something that does not happen. */}
+      {availability.data && !availability.data.session_ready.ready && (
         <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
           {availability.data.session_ready.looking_count} of{' '}
           {availability.data.session_ready.threshold} looking for tonight
         </Lbl>
       )}
-      {availability.data?.session_ready?.ready && (
+      {availability.data?.session_ready.ready && (
         <div className="m" style={{ fontSize: 'var(--fs-value)', marginTop: 'var(--space-2)', color: 'var(--color-pos)' }}>
           tonight is on — {availability.data.session_ready.looking_count} looking
         </div>

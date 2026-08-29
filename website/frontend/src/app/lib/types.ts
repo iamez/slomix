@@ -324,6 +324,12 @@ export interface SeasonCurrent {
 
 /** GET /api/seasons/current/leaders — corpus: api_seasons_current_leaders.json.
  * A metric can be null (longest_session in the recording). */
+/** A deliberate SUBSET: the response also carries `start_date` and
+ *  `end_date`, which nothing renders — the board shows the season window
+ *  from /seasons/current instead. (The brother's checker reports this type
+ *  as absent from the API; that is a NAME collision, not drift — his schema
+ *  for this route is `SeasonLeadersResponse`, and `SeasonLeaders` there is
+ *  the inner object.) */
 export interface SeasonLeaders {
   leaders: Record<string, { player: string; value: number } | null>;
 }
@@ -379,12 +385,16 @@ export interface AvailabilityOverview {
   to: string;
   statuses: string[];
   days: AvailabilityDay[];
-  /** Who is asking, as the server sees them. */
-  viewer?: { authenticated: boolean; linked_discord: boolean };
+  /** Who is asking, as the server sees them. ALWAYS sent: the handler has a
+   *  single return and both this and `session_ready` are in it — marking
+   *  them optional was the same over-permissive mistake as a `| null` the
+   *  data cannot produce, and it made every reader check for an absence
+   *  that does not happen (brother's checker, #830). */
+  viewer: { authenticated: boolean; linked_discord: boolean };
   /** How far tonight is from happening: the threshold is the server's, not
    *  the page's, so a card that quotes it cannot drift from the rule that
    *  actually fires the Discord notice. */
-  session_ready?: {
+  session_ready: {
     date: string;
     ready: boolean;
     looking_count: number;
