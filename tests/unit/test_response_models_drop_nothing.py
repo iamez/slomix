@@ -991,3 +991,32 @@ class TestTheValidityGateOnRoundCounts:
         assert _counts_toward_totals("completed", True, False) is True
         assert _counts_toward_totals("completed", False, False) is False
         assert _counts_toward_totals("completed", True, True) is False
+
+
+def test_exclude_none_is_only_on_the_route_where_absence_is_the_meaning():
+    """⛔ `response_model_exclude_none` DROPS EVERY None IN THE MODEL.
+
+    On `/stats/trends` that is exactly right: a series the caller did not ask
+    for should not appear at all, and none of its fields uses null as a value.
+
+    On the others it would be a silent data loss. `RoundAwardEntry.guid` is
+    null when the award could not be resolved to a player, `RoundViz.
+    duration_seconds` is null when the clock could not be read — dropping those
+    keys would turn "we know this is unresolved" into "we did not mention it",
+    and the client could no longer tell them apart.
+
+    Measured rather than assumed: `?metrics=rounds` returns `{dates, rounds}`
+    with `kills` ABSENT, so consumers check presence, not value.
+    """
+    from pathlib import Path
+
+    routers = Path("website/backend/routers")
+    users = []
+    for path in routers.glob("*.py"):
+        text = path.read_text()
+        if "response_model_exclude_none" in text:
+            users.append(path.name)
+
+    assert users == ["records_trends.py"], (
+        f"exclude_none appeared on {users} — it drops every None in the model, "
+        f"so a field whose null carries meaning would vanish from the payload")

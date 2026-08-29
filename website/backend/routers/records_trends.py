@@ -31,9 +31,24 @@ class StatsTrends(BaseModel):
     because a client cannot tell "you did not ask for kills" from "there were
     no kills".
 
-    `exclude_none` is NOT set on the route: a field the caller did not request
-    must stay out of the payload, which is what omitting it from the handler's
-    dict already does.
+    ⚠️ THIS PARAGRAPH USED TO SAY `exclude_none` IS NOT SET. It is — line 53 —
+    and I wrote both. A comment that contradicts the decorator three lines away
+    is worse than no comment: the next reader trusts it and reasons from it.
+
+    MEASURED, so the client knows which check to write:
+
+        ?metrics=rounds  ->  {"dates": [...], "rounds": [...]}
+                             `kills` is ABSENT. Not null — the key is gone.
+
+    So a consumer checks PRESENCE (`'kills' in data`), never value. Reading an
+    absent key as nullable is what crashed `session-detail` next door:
+    `total_votes === 0` is false for `undefined`, so the drawing branch ran.
+
+    ⛔ `exclude_none` is safe HERE and would not be everywhere: it drops any
+    field whose value is None, so a model where null carries meaning — an
+    unresolved award guid, a round with no clock — must not use it. Those
+    models return their nulls, and none of this route's fields uses null as a
+    value; the handler either builds the series or omits the key.
     """
 
     #: Always present: one ISO date per day in the window, and the index every
