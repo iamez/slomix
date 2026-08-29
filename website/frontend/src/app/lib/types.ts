@@ -254,6 +254,9 @@ export interface LastSession {
   /** Substitutes and players mapped to neither persistent team — the
    * evening totals must include them (Codex on #811). */
   unassigned_players: LastSessionPlayer[];
+  /* A SUBSET by design: the response also carries `map_counts` and
+   * `stats_checks`, which nothing on this page renders. Absent from the type
+   * because unused, not because unsent (#830). */
   /** A DISCRIMINATED UNION, because the endpoint answers with two different
    *  shapes and the short one carries neither names nor scores:
    *
@@ -450,8 +453,15 @@ export interface LeaderboardRow {
   name: string;
   value: number;
   rounds: number;
-  kills: number;
-  deaths: number;
+  /** Nullable from #830 onward: the aggregate can be NULL and the model
+   *  says so. Measured 0 nulls in 3,176 rows today — this is the branch
+   *  that has not happened yet, not the one that cannot.
+   *
+   *  ⚠️ Rendered as "—", never as 0: a player with an unknown kill count
+   *  and a player who killed nobody are different facts, and the column is
+   *  auxiliary here (the picked stat is `value`). */
+  kills: number | null;
+  deaths: number | null;
   kd: number;
 }
 
@@ -667,7 +677,12 @@ export interface WeaponsByPlayer {
  * round_number 0 is the legacy Match Summary aggregate and is filtered out. */
 export interface RecentRound {
   id: number;
-  map_name: string;
+  /** Schema-nullable only: 0 nulls in 3,176 rows, and no handler branch
+   *  produces one. Typed nullable anyway on the brother's reasoning, which
+   *  I agree with — a `| null` the data never triggers costs one `??`,
+   *  while a non-null type the data contradicts is a broken render on a
+   *  page that was working. */
+  map_name: string | null;
   /** NULLABLE, not optional — the key is always present and the value can be
    *  null: `records_matches.py` emits `str(row[2]) if row[2] else None`. The
    *  brother's typing pass (#830) confirmed the same for `round_number`.
@@ -707,7 +722,11 @@ export interface VizPlayer {
 export interface RoundViz {
   round_id: number;
   map_name: string;
-  round_date: string;
+  /** Nullable in the handler — `str(row[2]) if row[2] else None`, the same
+   *  expression as /rounds/recent. Neither of us has ever seen a null here;
+   *  the branch exists, so the type says so and the page prints "unknown"
+   *  rather than a blank cell (#830). */
+  round_date: string | null;
   round_number: number;
   round_label: string;
   winner_team: number | null;

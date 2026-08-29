@@ -80,6 +80,25 @@ describe('Leaderboards', () => {
       expect(calls.some((u) => u.includes('stat=dpm'))).toBe(true);
     });
   });
+
+  it('prints a dash, not a zero, for an unknown kill count', async () => {
+    // #830 types LeaderboardRow.kills as nullable: the aggregate can be
+    // NULL. Zero kills and an unknown kill count are different facts, and
+    // this column is auxiliary — the picked stat is `value`.
+    // The endpoint answers a bare ARRAY, not an object with a key.
+    const rows = leaderboard as Record<string, unknown>[];
+    const withNull = [{ ...rows[0], kills: null }, ...rows.slice(1)];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/leaderboard') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withNull) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderPage(<Leaderboards />);
+    await waitFor(() => expect(screen.getAllByText('—').length).toBeGreaterThan(0));
+    // …and no invented zero next to it.
+    expect(screen.queryByText('0')).toBeNull();
+  });
 });
 
 describe('RecordBook', () => {

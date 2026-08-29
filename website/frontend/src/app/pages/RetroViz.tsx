@@ -40,7 +40,7 @@ function SummaryPanel({ viz }: { viz: RoundViz }) {
   const cells = [
     ['map', mapLabel(viz.map_name)],
     ['round', viz.round_label],
-    ['date', viz.round_date],
+    ['date', viz.round_date ?? 'unknown'],
     ['duration', fmtDuration(viz.duration_seconds)],
     ['players', String(viz.player_count)],
   ];
@@ -185,7 +185,7 @@ export function RetroViz() {
         >
           {selectable.map((r) => (
             <option key={r.id} value={r.id}>
-              {mapLabel(r.map_name)} {r.round_label} — {r.round_date ?? 'date unknown'} ({r.player_count} players)
+              {r.map_name ? mapLabel(r.map_name) : 'unknown map'} {r.round_label} — {r.round_date ?? 'date unknown'} ({r.player_count} players)
             </option>
           ))}
         </select>
