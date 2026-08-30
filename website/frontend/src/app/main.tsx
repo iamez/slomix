@@ -5,6 +5,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import './tokens.css';
 import { applyHashShim } from './hashShim';
 import { AppShell } from './components/AppShell';
+import { RouteErrorBoundary } from './components/ErrorBoundary';
+import { installErrorReporting } from './lib/errorReporting';
 import { Landing } from './pages/Landing';
 import { About } from './pages/About';
 import { SystemPage } from './pages/SystemPage';
@@ -30,6 +32,12 @@ import { APP_ROUTES } from './routes';
 
 // Must run before the router reads window.location (docs/design/06 §3).
 applyHashShim('/app');
+
+// Before the first render, so an error thrown while mounting is reported
+// rather than lost. The install is idempotent and shares its window flag with
+// the legacy site's copy, so a document that somehow loads both does not
+// double-report and burn the server's per-IP budget twice as fast.
+installErrorReporting();
 
 /**
  * Phase 0: every route renders a stub inside the real shell — the point is
@@ -97,9 +105,18 @@ const router = createBrowserRouter(
     {
       element: <AppShell />,
       children: [
+        // One boundary per route, and RouteErrorBoundary keys it by pathname
+        // so it cannot stay latched across a navigation — a boundary is
+        // state, and `hasError` does not clear itself. The route key travels
+        // into the report too, which is the difference between "the app
+        // threw" and "the story page threw".
         ...APP_ROUTES.map((r) => ({
           path: r.path,
-          element: PAGES[r.key] ?? <Stub label={r.label} phase={r.phase} />,
+          element: (
+            <RouteErrorBoundary viewId={r.key}>
+              {PAGES[r.key] ?? <Stub label={r.label} phase={r.phase} />}
+            </RouteErrorBoundary>
+          ),
         })),
         { path: '*', element: <Stub label="Not found" phase={0} /> },
       ],
