@@ -212,3 +212,32 @@ def test_the_checks_above_can_fail():
     assert (rich["tir"], rich["ci"], rich["kpi"]) != (poor["tir"], poor["ci"], poor["kpi"]), (
         "both fixtures produce the same scores — the tests above would pass "
         "against a handler that ignores its inputs entirely")
+
+
+class _ShortRowDb(_ScriptedDb):
+    """A database whose coverage query answers with a row of the wrong width.
+
+    Not hypothetical: `tests/unit/test_composite_validity_gate.py` uses a stub
+    whose `fetch_one` answers EVERY query with a 1-tuple, and the first
+    version of the coverage block unpacked five names from it — turning a
+    working endpoint into a 500 over a field no caller reads yet.
+    """
+
+    async def fetch_one(self, query, params=None):
+        if "storytelling_kill_impact" in query:
+            return ("2026-08-11",)
+        return await super().fetch_one(query, params)
+
+
+def test_a_malformed_coverage_row_does_not_take_the_answer_down():
+    """⛔ The annotation must never be able to break the thing it annotates."""
+    db = _ShortRowDb([RICH_PLAYER], source_counts=[9, 9, 9, 9, 9])
+    response = _client(db).get("/api/skill/composite?gaming_session_id=1")
+    assert response.status_code == 200, (
+        f"a coverage row of the wrong width returned {response.status_code}; "
+        "the players are still there and must still be served")
+    body = response.json()
+    assert body["players"], "the answer itself was lost"
+    assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR, (
+        "a coverage row that could not be read must report unmeasured — the "
+        "cautious direction — not silently claim everything was measured")

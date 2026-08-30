@@ -723,8 +723,27 @@ async def get_composite_stats(
     """,
         (scope_param,),
     )
+
+    # ⚠️ Read positionally and defensively, never by unpacking. This block is
+    # an ANNOTATION on the answer; it must never be able to take the answer
+    # down. Unpacking five names from the row raises ValueError on a row of
+    # any other width — which is exactly what happened the first time this
+    # shipped: `tests/unit/test_composite_validity_gate.py` uses a stub whose
+    # `fetch_one` answers every query with a 1-tuple, and a working endpoint
+    # turned into a 500 over a field nobody reads yet. A missing count reads
+    # as 0, which flags the metric as unmeasured — the cautious direction.
+    def _count(index: int) -> int:
+        try:
+            return int(coverage_row[index] or 0)
+        except (TypeError, IndexError, ValueError):
+            return 0
+
     crossfire_rows, trade_rows, combat_rows, outcome_rows, spawn_rows = (
-        int(v or 0) for v in (coverage_row or (0, 0, 0, 0, 0))
+        _count(0),
+        _count(1),
+        _count(2),
+        _count(3),
+        _count(4),
     )
 
     # metric -> the source counts it needs. A metric is "measured" when at
