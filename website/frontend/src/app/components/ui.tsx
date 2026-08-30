@@ -143,6 +143,58 @@ export function Unavailable({ what }: { what: string }) {
   );
 }
 
+/**
+ * The third state, and the one this project keeps getting wrong: the request
+ * succeeded, and the answer is empty.
+ *
+ * `Pending` says a request is out and `Unavailable` says one failed. Until
+ * now there was nothing for "the server answered, and the answer is
+ * nothing" — so nineteen page files hand-wrote the same grey span forty-four
+ * times, the workshop page among them, which exists precisely to show every
+ * piece in every state (docs/design/11 §A lists this as EmptyState; it was
+ * never built).
+ *
+ * The older React tree DID have an EmptyState, and it defaulted to "No data
+ * available." with an emoji — which is the failure this one exists to
+ * prevent: a generic message makes "nobody cleared the threshold", "this
+ * window is empty" and "the query broke" read the same. So `reason` is
+ * REQUIRED rather than defaulted, and the type enforces it instead of a
+ * convention somebody has to remember (docs/design/11 §C: rules a component
+ * enforces in place of discipline).
+ *
+ * Write the reason as a fact about the DATA, not about the request: "no map
+ * has been played twice in this window", never "no results".
+ */
+export function Absent({ reason, block, style }: {
+  reason: ReactNode;
+  /** Render a <div> rather than a <span>. The call sites that were divs
+   *  before this component existed pass it, so extracting them could not
+   *  move a pixel — a refactor that also relayouts is two changes wearing
+   *  one diff. */
+  block?: boolean;
+  style?: CSSProperties;
+}) {
+  const s: CSSProperties = { fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', ...style };
+  return block
+    ? <div className="m" style={s}>{reason}</div>
+    : <span className="m" style={s}>{reason}</span>;
+}
+
+/**
+ * Secondary detail beside something that is there — a ping, a timestamp, the
+ * map and round under a match row. Same grey as `Absent` and a different
+ * job: this one carries a VALUE, so it never means absence. Keeping the two
+ * apart in the source is what stops "no data" and "43 ms" from being the
+ * same anonymous span with different children.
+ */
+export function Meta({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  return (
+    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', ...style }}>
+      {children}
+    </span>
+  );
+}
+
 /** Integer figures grouped, non-integers to one decimal — columns must not dance. */
 export function figure(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1);
