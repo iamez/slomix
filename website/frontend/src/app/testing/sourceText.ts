@@ -35,4 +35,3 @@ export function stripJsComments(text: string): string {
     .filter((line) => !/^\s*(\/\/|\*)/.test(line))
     .join('\n');
 }
-
