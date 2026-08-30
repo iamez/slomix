@@ -1481,7 +1481,7 @@ export interface paths {
         };
         /**
          * Get Recent Predictions
-         * @description Get recent match predictions.
+         * @description Recent match predictions that have been published.
          */
         get: operations["get_recent_predictions_api_predictions_recent_get"];
         put?: never;
@@ -4267,7 +4267,7 @@ export interface paths {
          * @description Return per-player weapon stats keyed by player GUID.
          *     Useful for comprehensive weapon mastery views.
          */
-        get: operations["get_weapon_stats_by_player_api_stats_weapons_by_player_get"];
+        get: operations["get_weapon_stats_by_player_hyphen_alias"];
         put?: never;
         post?: never;
         delete?: never;
@@ -8061,6 +8061,7 @@ export interface operations {
     get_recent_predictions_api_predictions_recent_get: {
         parameters: {
             query?: {
+                /** @description How many published predictions to return. */
                 limit?: number;
             };
             header?: never;
@@ -12261,7 +12262,8 @@ export interface operations {
     get_weapon_stats_api_stats_weapons_get: {
         parameters: {
             query?: {
-                period?: string;
+                /** @description Time window: all time, last 7/30 days, or the current season. */
+                period?: "all" | "7d" | "30d" | "season";
                 limit?: number;
             };
             header?: never;
@@ -12290,10 +12292,11 @@ export interface operations {
             };
         };
     };
-    get_weapon_stats_by_player_api_stats_weapons_by_player_get: {
+    get_weapon_stats_by_player_hyphen_alias: {
         parameters: {
             query?: {
-                period?: string;
+                /** @description Time window: all time, last 7/30 days, or the current season. */
+                period?: "all" | "7d" | "30d" | "season";
                 player_limit?: number;
                 weapon_limit?: number;
                 player_guid?: string | null;
@@ -12312,7 +12315,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WeaponsByPlayer"];
                 };
             };
             /** @description Validation Error */
@@ -12329,7 +12332,8 @@ export interface operations {
     get_weapon_stats_by_player_api_stats_weapons_by_player_get: {
         parameters: {
             query?: {
-                period?: string;
+                /** @description Time window: all time, last 7/30 days, or the current season. */
+                period?: "all" | "7d" | "30d" | "season";
                 player_limit?: number;
                 weapon_limit?: number;
                 player_guid?: string | null;
@@ -12365,7 +12369,8 @@ export interface operations {
     get_weapon_hall_of_fame_api_stats_weapons_hall_of_fame_get: {
         parameters: {
             query?: {
-                period?: string;
+                /** @description Time window: all time, last 7/30 days, or the current season. */
+                period?: "all" | "7d" | "30d" | "season";
             };
             header?: never;
             path?: never;

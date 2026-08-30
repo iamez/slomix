@@ -321,7 +321,19 @@ async def get_weapon_hall_of_fame(period: WeaponPeriod = "all", db: DatabaseAdap
 # can be removed — but a handler may only have one contract, so both
 # carry the same model. Measured before the change: the two paths
 # already returned byte-identical bodies.
-@router.get("/stats/weapons/by-player", response_model=WeaponsByPlayer)
+@router.get(
+    "/stats/weapons/by-player",
+    response_model=WeaponsByPlayer,
+    # ⛔ Explicit, because FastAPI derives the id from the function name
+    # plus the path and normalises "-" to "_" — so both spellings of
+    # this one handler produced the SAME operationId. The spec requires
+    # it to be unique, and the generated TypeScript declared the same
+    # interface member twice: before both routes carried this model the
+    # two declarations DIFFERED (`unknown` against `WeaponsByPlayer`)
+    # and the compiler silently kept one of them, so a caller could be
+    # typed by the route it was not calling.
+    operation_id="get_weapon_stats_by_player_hyphen_alias",
+)
 @router.get("/stats/weapons/by_player", response_model=WeaponsByPlayer)
 @handle_router_errors("Database error")
 async def get_weapon_stats_by_player(

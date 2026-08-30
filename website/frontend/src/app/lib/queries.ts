@@ -1,4 +1,5 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
+import type { paths } from '../../api/generated/openapi.d';
 import { ApiError, apiGet } from './api';
 import type {
   ActivityCalendar,
@@ -420,7 +421,20 @@ export function useMapSegments() {
   });
 }
 
-export function useWeapons(period: string) {
+/** The four windows the weapon endpoints accept, taken FROM THE SCHEMA rather
+ * than retyped here.
+ *
+ * The backend used to take `period` as a bare string and let anything it did
+ * not recognise fall through to all-time — so `period=nonsense` answered 200
+ * with all-time numbers and echoed the value back as though it had been
+ * honoured. It is now a closed set in Python, which reaches the generated
+ * types through `openapi.json`; deriving the alias here keeps that ONE fact in
+ * ONE place. A hand-written copy would be a second place to forget. */
+export type WeaponPeriod = NonNullable<
+  NonNullable<paths['/api/stats/weapons']['get']['parameters']['query']>['period']
+>;
+
+export function useWeapons(period: WeaponPeriod) {
   return useQuery({
     queryKey: ['weapons', period],
     queryFn: () =>
@@ -428,7 +442,7 @@ export function useWeapons(period: string) {
   });
 }
 
-export function useWeaponsHof(period: string) {
+export function useWeaponsHof(period: WeaponPeriod) {
   return useQuery({
     queryKey: ['weapons-hof', period],
     queryFn: () =>
@@ -438,7 +452,7 @@ export function useWeaponsHof(period: string) {
 
 /** by_player FIXED (underscore): the legacy 404-fallback to by-player is
  * not carried — one path, one truth. */
-export function useWeaponsByPlayer(period: string) {
+export function useWeaponsByPlayer(period: WeaponPeriod) {
   return useQuery({
     queryKey: ['weapons-by-player', period],
     queryFn: () =>

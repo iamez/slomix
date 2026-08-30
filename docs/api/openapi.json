@@ -14164,7 +14164,7 @@
   "/api/stats/weapons/by-player": {
    "get": {
     "description": "Return per-player weapon stats keyed by player GUID.\nUseful for comprehensive weapon mastery views.",
-    "operationId": "get_weapon_stats_by_player_api_stats_weapons_by_player_get",
+    "operationId": "get_weapon_stats_by_player_hyphen_alias",
     "parameters": [
      {
       "description": "Time window: all time, last 7/30 days, or the current season.",

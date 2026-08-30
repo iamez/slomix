@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { hasFailed } from '../lib/responseStatus';
 import { useWeapons, useWeaponsByPlayer, useWeaponsHof } from '../lib/queries';
+import type { WeaponPeriod } from '../lib/queries';
 import type { WeaponRow } from '../lib/types';
 import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
@@ -35,7 +36,12 @@ const WEAPON_CATEGORIES = new Map<string, string>(Object.entries({
   smokegrenade: 'support', airstrike: 'support', artillery: 'support', syringe: 'support', smoke: 'support',
 }));
 const CATEGORIES = ['all', 'smg', 'rifle', 'heavy', 'pistol', 'melee', 'explosive', 'support', 'other'];
-const PERIODS = ['all', 'season', '30d', '7d'];
+// ⛔ Typed against the schema, not just written down. The backend accepts
+// exactly these four (it used to accept anything and quietly answer with
+// all-time numbers), and `WeaponPeriod` is derived from `openapi.json`, so a
+// chip added here that the API does not take fails the typecheck instead of
+// shipping a 422 to whoever clicks it.
+const PERIODS: readonly WeaponPeriod[] = ['all', 'season', '30d', '7d'];
 
 function categoryOf(weaponKey: string): string {
   const key = weaponKey.toLowerCase().replace(/^ws[_ ]/, '').replace(/[_ ]/g, '');
@@ -50,7 +56,7 @@ function categoryOf(weaponKey: string): string {
 }
 
 
-function HallOfFameStrip({ period }: { period: string }) {
+function HallOfFameStrip({ period }: { period: WeaponPeriod }) {
   const hof = useWeaponsHof(period);
   const leaders = hof.data ? Object.values(hof.data.leaders) : [];
   // The endpoint answers 200 with an empty board when its query FAILS, so
@@ -84,7 +90,7 @@ function HallOfFameStrip({ period }: { period: string }) {
   );
 }
 
-function WeaponsGrid({ period, category }: { period: string; category: string }) {
+function WeaponsGrid({ period, category }: { period: WeaponPeriod; category: string }) {
   const weapons = useWeapons(period);
   const data = weapons.isError ? undefined : weapons.data;
   // GLOBAL denominator — one weapon, one share, whatever the filter shows.
@@ -118,7 +124,7 @@ function WeaponsGrid({ period, category }: { period: string; category: string })
   );
 }
 
-function MasteryGrid({ period }: { period: string }) {
+function MasteryGrid({ period }: { period: WeaponPeriod }) {
   const byPlayer = useWeaponsByPlayer(period);
   const players = byPlayer.data?.players ?? [];
   return (
@@ -157,7 +163,7 @@ function MasteryGrid({ period }: { period: string }) {
 }
 
 export function WeaponsPage() {
-  const [period, setPeriod] = useState('all');
+  const [period, setPeriod] = useState<WeaponPeriod>('all');
   const [category, setCategory] = useState('all');
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
