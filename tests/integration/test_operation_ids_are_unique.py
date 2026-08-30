@@ -20,12 +20,27 @@ reader could grep for.
 """
 
 import collections
+import json
+import sys
+from pathlib import Path
 
-from website.backend.main import app
+REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(REPO_ROOT / "scripts"))
+
+from dump_openapi import generate_spec  # noqa: E402
+
+# ⚠️ Read the RENDERED document, the same way `test_openapi_snapshot.py` does,
+# rather than importing the app here. Two reasons, and the second is the one
+# that bit: the generator consumes this document and not the Python objects,
+# so it is the artefact the claim is about; and importing `website.backend.main`
+# at module scope demands a real environment — CI has no `BOT_ENVIRONMENT`, so
+# the first version of this file failed collection with a ValueError instead of
+# running. `generate_spec()` renders it in a subprocess with a minimal, DB-free
+# environment.
 
 
 def _operation_ids() -> list[str]:
-    schema = app.openapi()
+    schema = json.loads(generate_spec())
     return [
         operation["operationId"]
         for operations in schema["paths"].values()
