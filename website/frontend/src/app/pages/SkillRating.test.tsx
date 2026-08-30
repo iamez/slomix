@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -7,16 +7,23 @@ import { SkillRating } from './SkillRating';
 import leaderboard from './__fixtures__/api_skill_leaderboard.json';
 import formula from './__fixtures__/api_skill_formula.json';
 import ssr from './__fixtures__/api_skill_ssr.json';
+import adjusted from './__fixtures__/api_skill_adjusted_lifetime.json';
 
+/** Dispatch on the exact path. The previous chain fell through to the
+ *  leaderboard for anything it did not recognise, so a new /skill/* endpoint
+ *  would have been served a rating board — plausible data from the wrong
+ *  place, which reads as a bug in the page rather than in the test. */
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
-  const url = String(input);
-  const body = url.includes('/skill/formula') ? formula
-    : url.includes('/skill/ssr') ? ssr
-      : leaderboard;
-  if (url.includes('/api/skill/')) {
-    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
-  }
-  return Promise.reject(new Error(`unexpected endpoint: ${url}`));
+  const path = new URL(String(input), 'http://test.local').pathname;
+  const bodies: Record<string, unknown> = {
+    '/api/skill/formula': formula,
+    '/api/skill/ssr': ssr,
+    '/api/skill/adjusted-lifetime': adjusted,
+    '/api/skill/leaderboard': leaderboard,
+  };
+  const body = bodies[path];
+  if (body === undefined) return Promise.reject(new Error(`unexpected endpoint: ${String(input)}`));
+  return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 }
 
 function renderPage(fetchImpl = fixtureFetch) {
@@ -159,5 +166,80 @@ describe('SkillRating', () => {
     // Labelled as what the field is — a sample-size confidence — not as the
     // shrinkage weight, which is n/(n+k) and a different number entirely.
     await waitFor(() => expect(screen.getByText('sample conf. 42%')).toBeInTheDocument());
+  });
+  it('does not fetch the adjusted board until it is asked for', async () => {
+    // It recomputes an SRS iteration server-side and measured 1.0 s cold —
+    // ten times the rest of this page. A panel that costs a second belongs
+    // behind a click, not in the page load.
+    const spy = vi.fn(fixtureFetch);
+    renderPage(spy);
+    await waitFor(() => expect(screen.getByText(/adjusted for who they played/i)).toBeInTheDocument());
+    const asked = () => spy.mock.calls.some(([u]) => String(u).includes('/skill/adjusted-lifetime'));
+    expect(asked()).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(asked()).toBe(true));
+  });
+
+  it('shows the correction beside the sample it was computed from', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+
+    const players = (adjusted as { players: { name: string; lifetime_rating: number | null; adjusted_lifetime: number; n_sessions: number }[] }).players;
+    const rated = players.find((p) => p.lifetime_rating != null)!;
+    await waitFor(() => expect(screen.getAllByText(rated.adjusted_lifetime.toFixed(3)).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(rated.lifetime_rating!.toFixed(3)).length).toBeGreaterThan(0);
+    const delta = rated.adjusted_lifetime - rated.lifetime_rating!;
+    expect(screen.getAllByText(`${delta > 0 ? '+' : ''}${delta.toFixed(3)}`).length).toBeGreaterThan(0);
+  });
+
+  it('says a player has no lifetime rating rather than crediting them a delta', async () => {
+    // Measured on the recording: 3 of 31 players have lifetime_rating null —
+    // they appear in the session history and not in the lifetime table, all
+    // with one session. A delta against 0 would credit one of them with a
+    // +0.63 improvement that never happened.
+    const players = (adjusted as { players: { lifetime_rating: number | null }[] }).players;
+    expect(players.filter((p) => p.lifetime_rating == null).length).toBeGreaterThan(0);
+
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(screen.getAllByText('no lifetime yet').length)
+      .toBe(players.filter((p) => p.lifetime_rating == null).length));
+    // …and none of them is shown a delta equal to their adjusted rating.
+    const orphan = (adjusted as { players: { lifetime_rating: number | null; adjusted_lifetime: number }[] })
+      .players.find((p) => p.lifetime_rating == null)!;
+    expect(screen.queryByText(`+${orphan.adjusted_lifetime.toFixed(3)}`)).toBeNull();
+  });
+
+  it('marks a thin sample, because that is where the correction is largest', async () => {
+    // 0.143 average correction below five sessions against 0.028 above
+    // twenty — five times larger exactly where the evidence is thinnest, and
+    // three of the top ten have played once or twice.
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+
+    const players = (adjusted as { players: { n_sessions: number }[] }).players;
+    const thin = players.filter((p) => p.n_sessions < 5);
+    expect(thin.length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.getAllByText(/^\d+ sessions?$/).length).toBe(thin.length));
+  });
+
+  it('says an unbuilt board is unbuilt, not unavailable', async () => {
+    renderPage((input: RequestInfo | URL) => {
+      const path = new URL(String(input), 'http://test.local').pathname;
+      if (path === '/api/skill/adjusted-lifetime') {
+        return Promise.resolve({
+          ok: true, status: 200,
+          json: () => Promise.resolve({ status: 'ok', available: false, formula_version: 's.effort-v0.2', players: [] }),
+        } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(screen.getByText(/no session history has been persisted yet/)).toBeInTheDocument());
+    expect(screen.queryByText(/adjusted ratings: unavailable/)).toBeNull();
   });
 });

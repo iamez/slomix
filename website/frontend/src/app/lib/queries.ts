@@ -1,6 +1,7 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import { ApiError, apiGet } from './api';
 import type {
+  AdjustedLifetime,
   ActivityCalendar,
   AvailabilityOverview,
   AwardsLeaderboard,
@@ -534,6 +535,18 @@ export function useSkillFormula() {
  * `enabled` is not optional politeness: the endpoint takes a measured 2.4 s,
  * and the panel that shows it starts closed, so an unconditional query spent
  * that on every visit for data nobody had asked to see (Codex on #835). */
+/** The pool-adjusted lifetime board. Gated behind a toggle like SSR, and for
+ *  a sharper reason than tidiness: it recomputes an SRS iteration server-side
+ *  and measured 1.0 s cold, ten times the rest of this page. */
+export function useAdjustedLifetime(enabled: boolean) {
+  return useQuery({
+    queryKey: ['skill-adjusted-lifetime'],
+    enabled,
+    queryFn: () => apiGet('/api/skill/adjusted-lifetime') as Promise<AdjustedLifetime>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useSsr(enabled: boolean) {
   return useQuery({
     queryKey: ['skill-ssr'],

@@ -1206,6 +1206,40 @@ export interface SsrBoard {
   players: SsrPlayer[];
 }
 
+/** One player in GET /api/skill/adjusted-lifetime — the lifetime rating and
+ *  the same rating after a strength-of-schedule correction (SRS over the
+ *  persisted per-session rows). Both are on the same 0–1 scale, which is why
+ *  the difference between them is the panel's whole point. */
+export interface AdjustedLifetimePlayer {
+  player_guid: string;
+  /** Falls back to the GUID when the player has no lifetime row to take a
+   *  display name from — measured: the three such players are exactly the
+   *  three with a null rating below. */
+  name: string;
+  /** NULL, and by CODE rather than by accident: the rows are built from
+   *  `player_skill_history`, and this field is filled only when the player
+   *  also appears in `player_skill_ratings` (s_effort_service.py:260 —
+   *  `if p in life else None`). Measured 2026-08-30: 3 of 31 players, all
+   *  with a single session. The correction then has nothing to correct, and
+   *  the page has to say so rather than print a delta against zero. */
+  lifetime_rating: number | null;
+  adjusted_lifetime: number;
+  n_sessions: number;
+  formula_version: string;
+}
+
+/** GET /api/skill/adjusted-lifetime — global, no scope. `available` is just
+ *  `bool(rows)` (skill_router.py:300), so an empty pool answers `false` with
+ *  an empty list rather than an error. Pre-sorted by `adjusted_lifetime`
+ *  descending. Cold cost measured at 1.0 s — the heaviest of the skill
+ *  endpoints, because it recomputes an SRS iteration on every call. */
+export interface AdjustedLifetime {
+  status: string;
+  available: boolean;
+  formula_version: string;
+  players: AdjustedLifetimePlayer[];
+}
+
 // ---------------------------------------------------------------------------
 // Smart Stats / storytelling — corpus: api_storytelling_*.json, recorded
 // 2026-08-29 against gaming session 154 (12 rounds, 6 maps).

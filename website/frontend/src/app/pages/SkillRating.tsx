@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Chip, figure, Lbl, Pending, SectionHead, Unavailable } from '../components/ui';
-import { useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
+import { Absent, Chip, Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
 import type { RatedPlayer, SsrPlayer } from '../lib/types';
 
 /**
@@ -192,6 +192,110 @@ function SsrRow({ player }: { player: SsrPlayer }) {
   );
 }
 
+/** Below this the correction does most of its work on the least evidence —
+ * measured, not chosen: |correction| averages 0.143 under five sessions and
+ * 0.028 at twenty or more. */
+const THIN_SESSIONS = 5;
+
+/** The lifetime rating, and the same rating after the pool it was earned
+ * against is taken into account.
+ *
+ * Both numbers are on one 0–1 scale, so unlike SSR above these two ARE
+ * comparable — the difference between them is the whole panel. What the
+ * difference is not, is a ranking of who is best, and the measurement says
+ * why: the correction averages 0.143 for players with fewer than five
+ * sessions and 0.028 for players with twenty or more, five times larger
+ * exactly where the evidence is thinnest. Three of the top ten by adjusted
+ * rating have played one or two sessions.
+ *
+ * So `n_sessions` sits beside every row rather than in a footnote, and the
+ * thin ones are marked. A board that hides its sample size is a board that
+ * invites the reader to trust its top.
+ */
+function AdjustedLifetimeBoard() {
+  const [open, setOpen] = useState(false);
+  const q = useAdjustedLifetime(open);
+  return (
+    <Stack gap={2} parity="skill.adjusted" style={{ paddingTop: 'var(--space-6)' }}>
+      <SectionHead
+        label="adjusted for who they played"
+        aside={
+          <Chip
+            active={open}
+            label={open ? 'hide adjusted' : 'show adjusted'}
+            onClick={() => { setOpen(!open); }}
+          />
+        }
+      />
+      <Absent reason="the same lifetime rating, corrected for the strength of the pool each session was played against — same 0–1 scale, so the difference is readable" />
+      {open && (
+        <>
+          {q.isPending && <Pending label="adjusted ratings" />}
+          {q.isError && <Unavailable what="adjusted ratings" />}
+          {q.data && !q.data.available && (
+            <Absent reason="no session history has been persisted yet, so there is nothing to adjust" />
+          )}
+          {q.data?.available && (
+            <>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+                {q.data.formula_version} · {figure(q.data.players.length)} players ·
+                {' '}the correction is ~5× larger below five sessions than above twenty
+              </Lbl>
+              <Stack gap={1} className="rows">
+                {q.data.players.map((p) => {
+                  const thin = p.n_sessions < THIN_SESSIONS;
+                  const delta = p.lifetime_rating == null ? null : p.adjusted_lifetime - p.lifetime_rating;
+                  return (
+                    <Cluster key={p.player_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
+                      <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
+                        <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
+                          {p.name}
+                        </Link>
+                        {thin && (
+                          <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                            {p.n_sessions} session{p.n_sessions === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </Cluster>
+                      <Cluster gap={3} align="baseline">
+                        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 52, textAlign: 'right' }}>
+                          {/* No lifetime row to correct — a delta against 0
+                            * would invent a 0.63 improvement out of nothing. */}
+                          {p.lifetime_rating == null ? '—' : p.lifetime_rating.toFixed(3)}
+                        </span>
+                        <span className="m" style={{ fontSize: 'var(--fs-value)', width: 56, textAlign: 'right' }}>
+                          {p.adjusted_lifetime.toFixed(3)}
+                        </span>
+                        <span
+                          className="m"
+                          style={{
+                            fontSize: 'var(--fs-small)', width: 64, textAlign: 'right',
+                            color: delta == null ? 'var(--color-text-500)'
+                              : delta > 0 ? 'var(--color-pos)' : delta < 0 ? 'var(--color-neg)' : 'var(--color-text-400)',
+                          }}
+                        >
+                          {delta == null ? 'no lifetime yet' : `${delta > 0 ? '+' : ''}${delta.toFixed(3)}`}
+                        </span>
+                        <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)', width: 40, textAlign: 'right' }}>
+                          {p.n_sessions}
+                        </span>
+                      </Cluster>
+                    </Cluster>
+                  );
+                })}
+              </Stack>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+                lifetime · adjusted · correction · sessions — ordered by adjusted,
+                which is not the same as ordered by evidence
+              </Lbl>
+            </>
+          )}
+        </>
+      )}
+    </Stack>
+  );
+}
+
 export function SkillRating() {
   const [open, setOpen] = useState<string | null>(null);
   const [showSsr, setShowSsr] = useState(false);
@@ -235,7 +339,9 @@ export function SkillRating() {
         {board.isPending && <Pending label="ratings" />}
         {board.isError && <Unavailable what="ratings" />}
         {board.data && board.data.players.length === 0 && (
-          <Absent reason={<>nobody has played the {board.data.meta.min_rounds} rounds a rating needs yet</>} />
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+            nobody has played the {board.data.meta.min_rounds} rounds a rating needs yet
+          </span>
         )}
         {board.data && board.data.players.length > 0 && (
           <Stack gap={1} className="rows">
@@ -254,6 +360,8 @@ export function SkillRating() {
           </Stack>
         )}
       </Stack>
+
+      <AdjustedLifetimeBoard />
 
       <Stack gap={2} parity="skill.ssr" style={{ paddingTop: 'var(--space-6)' }}>
         <SectionHead
