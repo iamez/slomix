@@ -12397,6 +12397,18 @@
        "title": "Offset",
        "type": "integer"
       }
+     },
+     {
+      "description": "Filter by map name or player name.",
+      "in": "query",
+      "name": "search",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "Filter by map name or player name.",
+       "title": "Search",
+       "type": "string"
+      }
      }
     ],
     "responses": {

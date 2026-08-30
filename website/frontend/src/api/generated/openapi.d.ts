@@ -11064,6 +11064,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 offset?: number;
+                /** @description Filter by map name or player name. */
+                search?: string;
             };
             header?: never;
             path?: never;

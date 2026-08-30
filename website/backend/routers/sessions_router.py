@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from shared.config import load_config
+from shared.round_time import round_duration_sql
 from shared.services.session_stats_aggregator import SessionStatsAggregator
 from shared.services.stopwatch_scoring_service import StopwatchScoringService
 from shared.utils import escape_like_pattern
@@ -459,13 +460,52 @@ async def get_matches(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
 async def get_sessions_list(
     limit: int = Query(default=20, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    search: str = Query(default="", description="Filter by map name or player name."),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """
     Get list of all gaming sessions (like !sessions command).
     Returns sessions grouped by gaming_session_id to handle midnight-spanning sessions.
     """
-    query = """
+    # Same filter, same escaping and the same two subqueries as
+    # `/api/stats/sessions`: match on map name OR on a player who was there.
+    # `escape_like_pattern` neutralises the LIKE wildcards so a search for
+    # "100%" is a search and not a match-everything.
+    search_filter = ""
+    search_params: list = []
+    if search.strip():
+        safe_search = escape_like_pattern(search.strip())
+        search_filter = """
+            AND (
+                sr.gaming_session_id IN (
+                    SELECT r2.gaming_session_id FROM rounds r2
+                    WHERE r2.gaming_session_id IS NOT NULL
+                      AND r2.round_number IN (1, 2)
+                      AND r2.is_valid IS DISTINCT FROM FALSE
+                      AND (r2.round_status IN ('completed', 'substitution')
+                           OR r2.round_status IS NULL)
+                      AND LOWER(r2.map_name) LIKE LOWER($3)
+                )
+                OR sr.gaming_session_id IN (
+                    SELECT r3.gaming_session_id FROM rounds r3
+                    INNER JOIN player_comprehensive_stats p2 ON p2.round_id = r3.id
+                    WHERE r3.gaming_session_id IS NOT NULL
+                      AND r3.round_number IN (1, 2)
+                      AND r3.is_valid IS DISTINCT FROM FALSE
+                      AND (r3.round_status IN ('completed', 'substitution')
+                           OR r3.round_status IS NULL)
+                      AND LOWER(p2.player_name) LIKE LOWER($3)
+                )
+            )
+        """
+        search_params.append(f"%{safe_search}%")
+
+    # ⚠️ The duration expression is interpolated, not concatenated by hand:
+    # `round_duration_sql()` is a pure expression with no bind parameters
+    # (that is its documented contract), so the placeholder style of the
+    # adapter is irrelevant and nothing user-controlled reaches the SQL.
+    # nosec B608 — the only interpolation is that fixed expression.
+    query = f"""
         WITH session_rounds AS (
             SELECT
                 r.gaming_session_id,
@@ -477,7 +517,22 @@ async def get_sessions_list(
                 -- see lua TEAM_AXIS / parser). These aliases were previously inverted.
                 COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as allies_wins,
                 COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as axis_wins,
-                COUNT(CASE WHEN r.round_number = 1 AND (r.winner_team NOT IN (1, 2) OR r.winner_team IS NULL) THEN 1 END) as draws
+                COUNT(CASE WHEN r.round_number = 1 AND (r.winner_team NOT IN (1, 2) OR r.winner_team IS NULL) THEN 1 END) as draws,
+                -- ⛔ THE DURATION COMES FROM THE CANONICAL EXPRESSION, not from
+                -- lua_round_teams the way /stats/sessions builds it. That one
+                -- sums lrt.actual_duration_seconds with NO fallback, and the
+                -- webhook only covers part of the history: 877 of 2030 valid
+                -- R1/R2 rounds have a Lua measurement, so 84 of 151 sessions
+                -- come out with duration_seconds = 0 there — 56 % of them,
+                -- reported as a number rather than as "not measured".
+                -- round_duration_sql() falls back to the parsed actual_time
+                -- and covers 2030 of 2030.
+                SUM({round_duration_sql("r")}) as duration_seconds,
+                -- Clock times of the first and last round, same derivation as
+                -- /stats/sessions: order by date+time as text, then keep the
+                -- time half.
+                SUBSTRING(MIN(CAST(r.round_date AS TEXT) || r.round_time) FROM 11) as first_time,
+                SUBSTRING(MAX(CAST(r.round_date AS TEXT) || r.round_time) FROM 11) as last_time
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
@@ -489,7 +544,9 @@ async def get_sessions_list(
             SELECT
                 r.gaming_session_id,
                 COUNT(DISTINCT p.player_guid) as player_count,
-                COALESCE(SUM(p.kills), 0) as total_kills
+                COALESCE(SUM(p.kills), 0) as total_kills,
+                COALESCE(SUM(p.deaths), 0) as total_deaths,
+                STRING_AGG(DISTINCT p.player_name, ', ' ORDER BY p.player_name) as player_names
             FROM rounds r
             INNER JOIN player_comprehensive_stats p
                 ON p.round_id = r.id
@@ -529,16 +586,26 @@ async def get_sessions_list(
             sb.team_2_name,
             sb.team_1_score,
             sb.team_2_score,
-            sb.winning_team
+            sb.winning_team,
+            -- ⚠️ APPENDED, never inserted. The row is unpacked BY POSITION
+            -- below (`row[10]`..`row[14]` are the BOX team fields), so a
+            -- column added in the middle silently renames five existing
+            -- ones. New columns go on the end.
+            COALESCE(sp.total_deaths, 0) as total_deaths,
+            COALESCE(sr.duration_seconds, 0) as duration_seconds,
+            COALESCE(sp.player_names, '') as player_names,
+            sr.first_time,
+            sr.last_time
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
         LEFT JOIN session_box sb ON sr.gaming_session_id = sb.gaming_session_id
+        WHERE 1 = 1{search_filter}
         ORDER BY sr.session_date DESC, sr.gaming_session_id DESC
         LIMIT $1 OFFSET $2
     """
 
     try:
-        rows = await db.fetch_all(query, (limit, offset))
+        rows = await db.fetch_all(query, (limit, offset, *search_params))
     except Exception as e:
         logger.error(f"Error fetching sessions list: {e}")
         raise HTTPException(status_code=500, detail="Database error")
@@ -587,6 +654,23 @@ async def get_sessions_list(
                 "team_1_score": row[12],
                 "team_2_score": row[13],
                 "winning_team": row[14],
+                # The five the sibling `/api/stats/sessions` had and this one
+                # did not. Same names, same shapes — `player_names` a list and
+                # the clock times "HH:MM" strings — so the two endpoints speak
+                # one vocabulary rather than two.
+                "total_deaths": row[15],
+                "duration_seconds": row[16],
+                "player_names": ([n.strip() for n in row[17].split(",")] if row[17] else []),
+                "start_time": (
+                    f"{str(row[18]).replace(':', '')[:2]}:{str(row[18]).replace(':', '')[2:4]}"
+                    if row[18] and len(str(row[18]).replace(":", "")) >= 6
+                    else ""
+                ),
+                "end_time": (
+                    f"{str(row[19]).replace(':', '')[:2]}:{str(row[19]).replace(':', '')[2:4]}"
+                    if row[19] and len(str(row[19]).replace(":", "")) >= 6
+                    else ""
+                ),
                 "time_ago": time_ago,
                 "formatted_date": dt.strftime("%A, %B %d, %Y"),
             }
@@ -1289,11 +1373,24 @@ async def get_stats_sessions(
             GROUP BY r.gaming_session_id
         ),
         session_duration AS (
+            -- ⛔ THIS USED TO SUM lua_round_teams.actual_duration_seconds AND
+            -- REPORT A PARTIAL SUM AS A TOTAL. The Lua webhook covers part of
+            -- the history — 877 of 2030 valid R1/R2 rounds — and a LEFT JOIN
+            -- contributes nothing for the rest, so a session with 16 rounds of
+            -- which 10 were measured returned the length of those 10. Measured
+            -- on dev: session 88 answered 5209 s against an actual 7260 s, and
+            -- 46 of 100 sessions answered 0 seconds outright. Zero is not
+            -- "unmeasured" on the wire, it is a duration, and the legacy
+            -- session card renders it as one.
+            --
+            -- round_duration_sql() is the project's canonical expression
+            -- (CLAUDE.md: take round duration from shared/round_time.py): the
+            -- Lua measurement where it exists, the parsed actual_time where it
+            -- does not. It covers 2030 of 2030.
             SELECT
                 r.gaming_session_id,
-                COALESCE(SUM(lrt.actual_duration_seconds), 0) as total_duration_seconds
+                COALESCE(SUM({round_duration_sql("r")}), 0) as total_duration_seconds
             FROM rounds r
-            LEFT JOIN lua_round_teams lrt ON lrt.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
