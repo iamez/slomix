@@ -1,9 +1,9 @@
 """Records sub-router: Weapon stats endpoints."""
 
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
@@ -62,19 +62,32 @@ class WeaponsByPlayer(BaseModel):
     players: list[PlayerWeapons]
 
 
-
 def _looks_like_missing_mv(exc: Exception) -> bool:
     """Detect ``weapon_stats_mv does not exist`` without importing asyncpg."""
     msg = str(exc).lower()
-    return "weapon_stats_mv" in msg and (
-        "does not exist" in msg or "undefinedtable" in msg
-    )
+    return "weapon_stats_mv" in msg and ("does not exist" in msg or "undefinedtable" in msg)
+
+
+# The four values both frontends can produce: the legacy pages
+# (data-weapon-period in website/js/) and the SPA (PERIODS in
+# WeaponsPage.tsx) offer exactly this set, and "all" is the default in
+# both. Before this was a Literal, `period` was a bare `str`: the
+# handlers below branch on "7d"/"30d"/"season" and let *everything else*
+# fall through to the no-date-filter branch, so `period=nonsense`
+# answered 200 with all-time numbers and echoed "nonsense" back as
+# though it had been honoured. An ignored parameter is a wrong answer
+# that looks like a right one; FastAPI now rejects it with a 422 before
+# the handler runs.
+WeaponPeriod = Annotated[
+    Literal["all", "7d", "30d", "season"],
+    Query(description="Time window: all time, last 7/30 days, or the current season."),
+]
 
 
 @router.get("/stats/weapons")
 @handle_router_errors("Database error")
 async def get_weapon_stats(
-    period: str = "all",
+    period: WeaponPeriod = "all",
     limit: int = 20,
     db: DatabaseAdapter = Depends(get_db),
 ):
@@ -156,9 +169,7 @@ async def get_weapon_stats(
             logger.debug("get_weapon_stats served from weapon_stats_mv")
         except Exception as exc:
             if _looks_like_missing_mv(exc):
-                logger.info(
-                    "weapon_stats_mv not present — falling back to live query"
-                )
+                logger.info("weapon_stats_mv not present — falling back to live query")
             else:
                 logger.warning(
                     "weapon_stats_mv query failed (%s) — falling back to live query",
@@ -201,9 +212,7 @@ async def get_weapon_stats(
 
 
 @router.get("/stats/weapons/hall-of-fame")
-async def get_weapon_hall_of_fame(
-    period: str = "all", db: DatabaseAdapter = Depends(get_db)
-):
+async def get_weapon_hall_of_fame(period: WeaponPeriod = "all", db: DatabaseAdapter = Depends(get_db)):
     """
     Get top player per weapon for Hall of Fame.
     Focuses on iconic weapons (pistols, smgs, rifles, heavy, explosives).
@@ -226,7 +235,9 @@ async def get_weapon_hall_of_fame(
     weapon_key_expr = "REPLACE(REPLACE(LOWER(weapon_name), 'ws_', ''), ' ', '')"
     # Exclude bots (OMNIBOT* guids / [BOT] names) — test artifacts must not hold
     # weapon records or appear in per-player weapon stats (audit 2026-08-13).
-    where_clause = "WHERE weapon_name IS NOT NULL AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%'"
+    where_clause = (
+        "WHERE weapon_name IS NOT NULL AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%'"
+    )
     params = []
     param_idx = 1
 
@@ -247,9 +258,7 @@ async def get_weapon_hall_of_fame(
         params.append(start_date)
         param_idx += 1
 
-    weapon_placeholders = ",".join(
-        f"${i}" for i in range(param_idx, param_idx + len(hall_weapons))
-    )
+    weapon_placeholders = ",".join(f"${i}" for i in range(param_idx, param_idx + len(hall_weapons)))
     where_clause += f" AND {weapon_key_expr} IN ({weapon_placeholders})"
     params.extend(hall_weapons)
 
@@ -303,11 +312,20 @@ async def get_weapon_hall_of_fame(
     return {"period": period, "leaders": leaders}
 
 
-@router.get("/stats/weapons/by-player")
+# One handler, two spellings, and until now two contracts: the
+# underscore route was typed and the hyphen route was not, which meant
+# the response_model guarded the path that legacy matches.js calls
+# *first* and left the one session-detail.js and the old React client
+# call unguarded. Both spellings have live callers (matches.js:379 uses
+# the underscore as primary and the hyphen as its fallback), so neither
+# can be removed — but a handler may only have one contract, so both
+# carry the same model. Measured before the change: the two paths
+# already returned byte-identical bodies.
+@router.get("/stats/weapons/by-player", response_model=WeaponsByPlayer)
 @router.get("/stats/weapons/by_player", response_model=WeaponsByPlayer)
 @handle_router_errors("Database error")
 async def get_weapon_stats_by_player(
-    period: str = "all",
+    period: WeaponPeriod = "all",
     player_limit: int = 25,
     weapon_limit: int = 5,
     player_guid: str | None = None,
@@ -321,7 +339,9 @@ async def get_weapon_stats_by_player(
     """
     # Exclude bots (OMNIBOT* guids / [BOT] names) — test artifacts must not hold
     # weapon records or appear in per-player weapon stats (audit 2026-08-13).
-    where_clause = "WHERE weapon_name IS NOT NULL AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%'"
+    where_clause = (
+        "WHERE weapon_name IS NOT NULL AND UPPER(player_guid) NOT LIKE 'OMNIBOT%' AND player_name NOT LIKE '%[BOT]%'"
+    )
     params: list[Any] = []
     param_idx = 1
 
