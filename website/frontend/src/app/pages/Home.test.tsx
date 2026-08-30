@@ -233,4 +233,38 @@ describe('Home', () => {
     await waitFor(() => expect(screen.getAllByText(/days left/).length).toBeGreaterThan(0));
     expect(screen.queryByText(/active on \d+ of the last/)).toBeNull();
   });
+  it('names a missing map and drops the link when a round can name no evening', async () => {
+    // Both fields are nullable in `rounds` and this query filters neither,
+    // so the row can arrive with no map and with neither of the two ways to
+    // identify an evening. Linking anyway spells the missing half into the
+    // URL (/session-detail/date/null) — a 404 dressed as a working row —
+    // and an unnamed map renders as an empty gap. Codex on #841; the
+    // backend half of the same finding stops `str(None)` from answering
+    // the string "None", which would sail past this guard looking present.
+    const rows = matches as { id: number }[];
+    const orphan = [
+      { ...rows[0], id: 999001, map_name: null, date: null, gaming_session_id: null },
+      ...rows.slice(1),
+    ];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/matches') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(orphan) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    const { container } = renderHome();
+
+    await waitFor(() => expect(screen.getByText('unknown map')).toBeInTheDocument());
+    // No link anywhere on the page carries the missing half in its href.
+    const hrefs = screen.getAllByRole('link').map((a) => a.getAttribute('href'));
+    expect(hrefs.some((h) => h?.includes('/date/null') || h?.includes('/date/None'))).toBe(false);
+    // …and the row it belongs to is still on the page, just not clickable.
+    // Counted inside the panel, because the rest of Home links to
+    // /session-detail/ too and a page-wide count would answer about them.
+    const panel = container.querySelector('[data-parity="home.latest-games"]')!;
+    const rowLinks = [...panel.querySelectorAll('a')]
+      .filter((a) => a.getAttribute('href')?.startsWith('/session-detail/'));
+    expect(rowLinks.length).toBe(orphan.length - 1);
+    expect(panel.textContent).toContain('unknown map');
+  });
 });
