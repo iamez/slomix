@@ -12381,6 +12381,8 @@
       "required": false,
       "schema": {
        "default": 20,
+       "maximum": 1000,
+       "minimum": 1,
        "title": "Limit",
        "type": "integer"
       }
@@ -12391,6 +12393,7 @@
       "required": false,
       "schema": {
        "default": 0,
+       "minimum": 0,
        "title": "Offset",
        "type": "integer"
       }
