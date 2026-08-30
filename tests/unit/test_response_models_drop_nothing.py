@@ -2263,3 +2263,44 @@ class TestAnOutageMustNotReadAsAnEmptyDatabase:
             "the model stopped declaring the fields that say an outage "
             "happened; the handler still returns them and they will be "
             "dropped from the response with a 200")
+
+
+class TestOnePlayerTwoGuids:
+    """`/api/skill/player/{identifier}` could not find a player it had.
+
+    ⛔ THE SEAM. This database stores a player under TWO guids:
+    `player_comprehensive_stats` and `player_skill_ratings` hold an 8-char
+    form (37 distinct players, every row 8 chars), while `player_track` and
+    the proximity tables hold the 32-char canonical one. A caller holding a
+    guid from the second family — which is every proximity surface — asked
+    this router about it and was told the player does not exist.
+
+    Measured before the fix: `5D9891600C7948FF85709360E669D5A4` answered
+    "not found" while `5D989160`, its own first eight characters, answered
+    with the player. Reported by the crashed session's subagent, verified here
+    rather than taken on report: the subagent said "404", and it is actually
+    HTTP **200** carrying `status: "error"` — which is a second problem and a
+    contract decision, so it is left alone and named instead.
+    """
+
+    def test_the_truncation_rule_is_universal_in_this_data(self):
+        """⭐ THE FALLBACK RESTS ON THIS, so it was measured, not assumed:
+        all 19 distinct 32-char guids in `player_track` have their 8-char
+        prefix present in `player_comprehensive_stats`. 19 of 19."""
+        from website.backend.routers.skill_router import _short_guid
+
+        assert _short_guid("5D9891600C7948FF85709360E669D5A4") == "5D989160"
+        assert _short_guid("5D989160") is None, "an 8-char guid is not truncated"
+        assert _short_guid("olz") is None, "a display name is not truncated"
+
+    def test_a_non_hex_32_char_string_is_not_truncated(self):
+        """⛔ THE GUARD THAT KEEPS THIS FROM BECOMING A SECOND BUG. Without
+        the hex check, `OMNIBOT0d8c83455294644450c51bac9` — 32 characters —
+        would be truncated to `OMNIBOT0` and looked up as if it were a
+        player's short guid."""
+        from website.backend.routers.skill_router import _short_guid
+
+        assert _short_guid("OMNIBOT0d8c83455294644450c51bac9") is None
+        assert _short_guid("Z" * 32) is None
+        assert _short_guid("") is None
+        assert _short_guid("  5D9891600C7948FF85709360E669D5A4  ") == "5D989160"
