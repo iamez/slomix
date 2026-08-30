@@ -205,6 +205,7 @@ verbatim.
 - Don't recalculate R2 differential (parser output is correct)
 - Don't provide destructive commands unprompted
 - DO read `docs/AI_COMPREHENSIVE_SYSTEM_GUIDE.md` before claiming bugs
+- Don't "fix" the 25 handlers that answer **HTTP 200 with `{"status": "error"}`** — it reads like a bug and is a deliberate convention (owner, 2026-08-30). Legacy `fetchJSON` throws on any non-2xx and every call site catches and returns, so a lone 404 renders *nothing* instead of "not rated", and one route changed leaves two vocabularies for one situation. Pinned by `tests/unit/test_ok_with_status_error_is_a_deliberate_convention.py`, which also carries the open half: the new SPA's `apiGet` throws only on `!res.ok`, and 20 of the 25 are proximity handlers — i.e. phase 5.
 - DO test with edge cases: midnight crossovers, name changes, multiple sessions/day
 
 ---
