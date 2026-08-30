@@ -4947,8 +4947,15 @@
     "type": "object"
    },
    "StatsOverview": {
-    "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per\nmetric when its aggregate raises, and the endpoint still answers 200 — so\na zero here means \"none, or the query failed\", and no schema can tell them\napart. Naming that is the honest thing a type can do about it; fixing it\nmeans giving `_safe_val` a per-metric error flag, which is a separate\nchange.",
+    "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⭐ THE ZEROS NOW SAY WHICH KIND THEY ARE, and this class used to end by\nnaming that as an unfixed limit: \"a zero here means 'none, or the query\nfailed', and no schema can tell them apart… fixing it means giving\n`_safe_val` a per-metric error flag, which is a separate change.\" This is\nthat change. `status`, `note` and `failed_metrics` carry it, the same\ncontract `activity-calendar` already answers one endpoint over.\n\n⛔ HOW THE GAP WAS FOUND, because reading would not have: every GET\nendpoint was run against a database adapter that raises on every query.\nEleven answered 200 with a payload indistinguishable from an empty\ndatabase — this one among them, reporting `rounds: 0, players: 0,\ntotal_kills: 0` as the site's headline figures during an outage.\n\n⚠️ AND THE FIRST ATTEMPT AT THIS FIX WAS SWALLOWED BY THIS VERY MODEL.\nThe handler returned the three new keys and the response did not carry\nthem, because `response_model` drops what the model does not declare —\nsilently, with a 200. The paragraph above warns about exactly that, and it\nstill took a measurement to notice.",
     "properties": {
+     "failed_metrics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Metrics",
+      "type": "array"
+     },
      "most_active_14d": {
       "anyOf": [
        {
@@ -4968,6 +4975,17 @@
         "type": "null"
        }
       ]
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
      },
      "players": {
       "title": "Players",
@@ -5019,6 +5037,10 @@
       "title": "Sessions 14D",
       "type": "integer"
      },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
      "total_kills": {
       "title": "Total Kills",
       "type": "integer"
@@ -5036,6 +5058,9 @@
      }
     },
     "required": [
+     "status",
+     "note",
+     "failed_metrics",
      "rounds",
      "players",
      "sessions",

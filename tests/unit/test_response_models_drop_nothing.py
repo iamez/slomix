@@ -2197,3 +2197,69 @@ class TestTheLastTwoProximityBoards:
         assert ready["status"] == "ok" and len(ready) == 10
         # …and `message` is inverted from what a reader expects:
         assert no_map["message"] and ready["message"] is None
+
+
+class TestAnOutageMustNotReadAsAnEmptyDatabase:
+    """`/api/stats/overview` — the site's headline figures.
+
+    ⛔ HOW THIS WAS FOUND, because reading would not have: every GET endpoint
+    was run against a database adapter that raises on every query. ELEVEN
+    answered 200 with a payload indistinguishable from an empty database, and
+    this one is the most visible of them — `rounds: 0, players: 0,
+    total_kills: 0` on the homepage, during an outage, with nothing saying so.
+
+    `_safe_val` substitutes its default per metric and the endpoint still
+    answers 200. That is deliberate (one failed aggregate must not take the
+    page down) and it is only half a contract without a way to say it
+    happened.
+    """
+
+    @staticmethod
+    def _broken_client():
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+
+        from website.backend import dependencies as deps
+        from website.backend.routers import records_overview
+
+        class Broken:
+            async def fetch_all(self, *a, **k):
+                raise RuntimeError("database is down")
+            async def fetch_one(self, *a, **k):
+                raise RuntimeError("database is down")
+            async def fetch_val(self, *a, **k):
+                raise RuntimeError("database is down")
+
+        app = FastAPI()
+        app.include_router(records_overview.router, prefix="/api")
+        app.dependency_overrides[deps.get_db] = lambda: Broken()
+        return TestClient(app, raise_server_exceptions=False)
+
+    def test_a_dead_database_says_so_instead_of_reporting_zeros(self):
+        with self._broken_client() as client:
+            response = client.get("/api/stats/overview")
+        assert response.status_code == 200, (
+            "one failed aggregate must not take the homepage down")
+        body = response.json()
+        assert body["rounds"] == 0 and body["total_kills"] == 0
+        assert body["status"] == "partial", (
+            "every query raised and the payload still called itself ok — the "
+            "zeros above are indistinguishable from a quiet fortnight")
+        assert body["failed_metrics"], "no metric was named as failed"
+        assert body["note"] and "not zero" in body["note"]
+
+    def test_the_three_new_fields_reach_the_wire(self):
+        """⚠️ THE FIRST ATTEMPT AT THIS FIX WAS SWALLOWED BY THE MODEL.
+
+        The handler returned `status`, `note` and `failed_metrics`, and the
+        response did not carry them, because `response_model` drops what the
+        model does not declare — silently, with a 200. This asserts the
+        DECLARATION, not the handler, because the handler was already right.
+        """
+        from website.backend.routers.records_overview import StatsOverview
+
+        assert {"status", "note", "failed_metrics"} <= set(
+            StatsOverview.model_fields), (
+            "the model stopped declaring the fields that say an outage "
+            "happened; the handler still returns them and they will be "
+            "dropped from the response with a 200")

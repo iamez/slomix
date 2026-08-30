@@ -1,5 +1,6 @@
 """Records sub-router: Overview + activity calendar endpoints."""
 
+from contextvars import ContextVar
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends
@@ -66,6 +67,30 @@ _HUMAN_ROWS = """
 """
 
 
+#: Which overview queries failed while serving THIS request.
+#:
+#: ⛔ WHY THIS EXISTS. `_safe_val` returns its default and `_safe_one` returns
+#: None, so a database outage arrived at the homepage as `rounds: 0,
+#: players: 0, total_kills: 0` — a payload identical to a database that has
+#: never recorded a round. Measured by running the endpoint against an adapter
+#: that raises on every query: HTTP 200, every figure zero, nothing saying so.
+#:
+#: A ContextVar rather than a parameter: the twelve call sites live inside
+#: three fetch helpers, and threading a list through all of them would touch
+#: far more code than the fix is worth. Each request runs in its own asyncio
+#: task, so each gets its own copy of this context — a concurrent request
+#: cannot see another's failures.
+_OVERVIEW_FAILURES: ContextVar[list[str] | None] = ContextVar(
+    "overview_failures", default=None,
+)
+
+
+def _note_failure(metric: str) -> None:
+    bucket = _OVERVIEW_FAILURES.get()
+    if bucket is not None:
+        bucket.append(metric or "unknown")
+
+
 async def _safe_val(
     db: DatabaseAdapter,
     query: str,
@@ -81,6 +106,7 @@ async def _safe_val(
         # this endpoint under 6 back-to-back queries was ambiguous.
         label = metric or "unknown"
         logger.warning("[overview] query failed (%s): %s", label, e)
+        _note_failure(label)
         return default
 
 
@@ -95,6 +121,7 @@ async def _safe_one(
     except Exception as e:
         label = metric or "unknown"
         logger.warning("[overview] query failed (%s): %s", label, e)
+        _note_failure(label)
         return None
 
 
@@ -307,14 +334,32 @@ class StatsOverview(BaseModel):
     own keys against the serialised model rather than trusting this class to
     be complete.
 
-    ⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per
-    metric when its aggregate raises, and the endpoint still answers 200 — so
-    a zero here means "none, or the query failed", and no schema can tell them
-    apart. Naming that is the honest thing a type can do about it; fixing it
-    means giving `_safe_val` a per-metric error flag, which is a separate
-    change.
+    ⭐ THE ZEROS NOW SAY WHICH KIND THEY ARE, and this class used to end by
+    naming that as an unfixed limit: "a zero here means 'none, or the query
+    failed', and no schema can tell them apart… fixing it means giving
+    `_safe_val` a per-metric error flag, which is a separate change." This is
+    that change. `status`, `note` and `failed_metrics` carry it, the same
+    contract `activity-calendar` already answers one endpoint over.
+
+    ⛔ HOW THE GAP WAS FOUND, because reading would not have: every GET
+    endpoint was run against a database adapter that raises on every query.
+    Eleven answered 200 with a payload indistinguishable from an empty
+    database — this one among them, reporting `rounds: 0, players: 0,
+    total_kills: 0` as the site's headline figures during an outage.
+
+    ⚠️ AND THE FIRST ATTEMPT AT THIS FIX WAS SWALLOWED BY THIS VERY MODEL.
+    The handler returned the three new keys and the response did not carry
+    them, because `response_model` drops what the model does not declare —
+    silently, with a 200. The paragraph above warns about exactly that, and it
+    still took a measurement to notice.
     """
 
+    #: "ok" when every query answered, "partial" when at least one did not.
+    status: str
+    #: Null when `status` is "ok"; otherwise says the zeros are missing data.
+    note: str | None
+    #: Names of the metrics whose query raised — empty on the healthy path.
+    failed_metrics: list[str]
     rounds: int
     players: int
     sessions: int
@@ -343,11 +388,33 @@ async def get_stats_overview(db: DatabaseAdapter = Depends(get_db)):
         .strftime("%Y-%m-%d")
     )
 
-    rounds_stats = await _fetch_rounds_stats(db, start_date_str)
-    player_stats = await _fetch_player_stats(db, start_date_str)
-    active_overall, active_recent = await _fetch_most_active(db, start_date_str)
+    failures: list[str] = []
+    token = _OVERVIEW_FAILURES.set(failures)
+    try:
+        rounds_stats = await _fetch_rounds_stats(db, start_date_str)
+        player_stats = await _fetch_player_stats(db, start_date_str)
+        active_overall, active_recent = await _fetch_most_active(db, start_date_str)
+    finally:
+        _OVERVIEW_FAILURES.reset(token)
 
     return {
+        # ⛔ THE FIGURES BELOW ARE ZERO FOR TWO DIFFERENT REASONS and until
+        # now the payload could not tell them apart: a quiet fortnight, and a
+        # database that answered nothing. `_safe_val` returns its default on
+        # failure, so an outage rendered as "0 rounds, 0 players, 0 kills" on
+        # the homepage — the site's most visible numbers, stating a fact
+        # nobody had measured. `activity-calendar` in this same file already
+        # answers `status`/`note`; this is the same contract, one endpoint
+        # over.
+        #
+        # `ok` means every query answered. `partial` names which ones did not,
+        # so a reader knows the zeros beside them are missing rather than
+        # true.
+        "status": "ok" if not failures else "partial",
+        "note": None if not failures
+                else f"{len(failures)} of the overview queries failed; the "
+                     f"figures they feed are missing, not zero",
+        "failed_metrics": failures,
         "rounds": rounds_stats["rounds_count"] or 0,
         "players": player_stats["players_recent"] or 0,
         "sessions": rounds_stats["sessions_count"] or 0,
