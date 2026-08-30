@@ -21,6 +21,7 @@ import type {
   QuickLeaders,
   RecentRound,
   RivalryLeaderboard,
+  HeadToHead,
   StoryBoxScore,
   StoryKillImpact,
   StoryMomentum,
@@ -497,6 +498,21 @@ export function useRivalryLeaderboard(limit: number) {
     queryKey: ['rivalry-leaderboard', limit],
     queryFn: () =>
       apiGet('/api/rivalries/leaderboard', { query: { limit } }) as Promise<RivalryLeaderboard>,
+  });
+}
+
+/** The duel between two named players: kills each way, the weapons each
+ *  used on the other, and the per-map split. Only fetched once BOTH ids are
+ *  known — the endpoint 400s on anything shorter than 8 characters, so a
+ *  half-typed pair would spend a request on a guaranteed error. */
+export function useHeadToHead(guid1: string | null, guid2: string | null) {
+  return useQuery({
+    queryKey: ['rivalry-h2h', guid1, guid2],
+    enabled: (guid1?.length ?? 0) >= 8 && (guid2?.length ?? 0) >= 8,
+    queryFn: () =>
+      apiGet('/api/rivalries/h2h/{guid1}/{guid2}', {
+        pathParams: { guid1: guid1!, guid2: guid2! },
+      }) as Promise<HeadToHead>,
   });
 }
 
