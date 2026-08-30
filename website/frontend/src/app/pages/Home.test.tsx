@@ -158,4 +158,79 @@ describe('Home', () => {
     const call = fetchSpy.mock.calls.map((c) => String(c[0])).find((u) => u.includes('players/search'));
     expect(call).toContain('q=vi');
   });
+  it('says a missing trend series is missing, not unavailable', async () => {
+    // /api/stats/trends omits a series the request did not ask for: the KEY
+    // is absent, not null (measured on #830, where the route gains
+    // response_model_exclude_none). "unavailable" would blame the endpoint
+    // for doing what it was asked.
+    const partial = { ...(trends as object), rounds: undefined, active_players: undefined };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/stats/trends') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(partial) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    await waitFor(() => expect(screen.getAllByText('not in this response').length).toBeGreaterThan(0));
+    expect(screen.queryByText(/trend: unavailable/)).toBeNull();
+  });
+  it('shows the hero without scores when the session has no scoring', async () => {
+    // The short form: {available: false, reason} — no names, no scores. All
+    // eight sessions in the database answer the long form, so this shape can
+    // only be reached by forcing it (the brother did, on #830), and a page
+    // typed off the corpus would read names that are not there.
+    const short = {
+      ...(lastSession as object),
+      scoring: { available: false, reason: 'no persistent teams' },
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/stats/last-session') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(short) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    // The evening still renders — date, players, rounds — without a scoreline.
+    await waitFor(() => expect(screen.getAllByText(/players/i).length).toBeGreaterThan(0));
+    expect(screen.queryByText('Team A')).toBeNull();
+  });
+  it('quotes the server threshold rather than keeping its own', async () => {
+    // session_ready.threshold is the number that fires the Discord notice.
+    // A card with its own copy of it drifts the day somebody changes the
+    // rule, and nobody finds out from the page.
+    const ready = {
+      ...(availability as object),
+      // NOT 6. The recorded threshold is 6, so a page with a hardcoded 6
+      // would satisfy a test written against 6 — the control mutation
+      // proved exactly that before this line said 8.
+      session_ready: { date: '2026-08-29', ready: false, looking_count: 4, threshold: 8, event_key: 'x' },
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/availability') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(ready) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    await waitFor(() => expect(screen.getByText(/4 of 8 looking for tonight/)).toBeInTheDocument());
+  });
+  it('suppresses the active-days line when the calendar itself failed', async () => {
+    // The endpoint answers 200 with an empty (or partial) activity map when
+    // its query fails. Counting keys then reports a number about the
+    // outage, not about the season — #830 adds the status that says so.
+    const failed = { ...(calendar as object), status: 'unavailable', note: 'the activity query failed' };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/activity-calendar') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(failed) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    // The line the healthy fixture DOES render, so its absence here means
+    // the status was read — not that the text never appears.
+    await waitFor(() => expect(screen.getAllByText(/days left/).length).toBeGreaterThan(0));
+    expect(screen.queryByText(/active on \d+ of the last/)).toBeNull();
+  });
 });

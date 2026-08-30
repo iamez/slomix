@@ -56,6 +56,24 @@ async def _resolve_guid(db: DatabaseAdapter, identifier: str) -> str | None:
     return row[0] if row else None
 
 
+async def _pool_mean(db) -> float | None:
+    """Mean RAW rating over every rated player — the shrinkage prior.
+
+    Raw is `constant + Σ contribution`, which is what the stored components
+    add up to (shrinkage is applied after they are built and never folded
+    back into them). Returns None when nothing is rated, so the page can say
+    so instead of printing a zero it would have to explain.
+    """
+    rows = await db.fetch_all("SELECT components FROM player_skill_ratings")
+    raws = []
+    for row in rows or []:
+        components = _parse_components(row[0])
+        if not components:
+            continue
+        raws.append(CONSTANT + sum(c.get("contribution", 0.0) for c in components.values()))
+    return round(sum(raws) / len(raws), 4) if raws else None
+
+
 @router.get("/skill/leaderboard")
 async def get_skill_leaderboard(
     limit: int = 50,
@@ -108,6 +126,17 @@ async def get_skill_leaderboard(
             "tier": get_tier(float(r[2])),
         })
 
+    # The pool mean the shrinkage was computed against. Without it a reader
+    # can see the components (which decompose the RAW rating) and the
+    # published rating, and has no way to get from one to the other:
+    #   published = (n·raw + k·pool_mean) / (n + k)
+    # It is recomputed here from the same stored components rather than
+    # persisted, because since the cohort reconciliation the table holds
+    # exactly the players of the last run — the same set the write-time mean
+    # was taken over. Verified on dev: reconstructing every published rating
+    # this way lands within 0.0003, which is the components' own rounding.
+    pool_mean = await _pool_mean(db)
+
     return {
         "status": "ok",
         "players": players,
@@ -118,6 +147,7 @@ async def get_skill_leaderboard(
             "constant": CONSTANT,
             "version": "2.1",
             "shrinkage_k": SHRINKAGE_K,
+            "pool_mean": pool_mean,
         },
     }
 

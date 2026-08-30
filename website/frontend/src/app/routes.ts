@@ -24,62 +24,26 @@ export interface AppRoute {
   nav: NavSection;
   /** Build phase from docs/design/08; shell renders a stub until then. */
   phase: number;
+  /** Why this row exists, when that is not obvious from the row. */
+  note?: string;
 }
 
-export const APP_ROUTES: readonly AppRoute[] = Object.freeze([
-  { key: 'home', path: '/', label: 'Home', nav: 'primary', phase: 2 },
-  { key: 'landing', path: '/welcome', label: 'Welcome', nav: 'hidden', phase: 1 },
+import routeData from './routes.data.json';
 
-  // Stats sub-navigation (STATS_VIEWS in the legacy registry).
-  { key: 'sessions', path: '/sessions', label: 'Sessions', nav: 'stats', phase: 2 },
-  { key: 'sessions2', path: '/sessions2', label: 'Sessions 2.0', nav: 'stats', phase: 2 },
-  { key: 'session-detail', path: '/session-detail/:sessionId/:tab?', label: 'Session Detail', nav: 'hidden', phase: 4 },
-  { key: 'session-detail-date', path: '/session-detail/date/:sessionDate/:tab?', label: 'Session Detail', nav: 'hidden', phase: 4 },
-  { key: 'leaderboards', path: '/leaderboards', label: 'Leaderboards', nav: 'stats', phase: 2 },
-  { key: 'maps', path: '/maps', label: 'Maps', nav: 'stats', phase: 2 },
-  { key: 'weapons', path: '/weapons', label: 'Weapons', nav: 'stats', phase: 2 },
-  { key: 'form', path: '/form', label: 'Form', nav: 'stats', phase: 2 },
-  { key: 'awards', path: '/awards', label: 'Awards', nav: 'stats', phase: 2 },
-  // records + hall-of-fame are tabs of one route; their legacy hashes land on
-  // ?tab= via hashToPath (grammar: route-registry.js parseHash for both keys).
-  { key: 'record-book', path: '/record-book', label: 'Record Book', nav: 'stats', phase: 2 },
-  { key: 'retro-viz', path: '/retro-viz', label: 'Retro Viz', nav: 'stats', phase: 2 },
-  // Per-round stats the profile (phase 3) and session-detail (phase 4) will
-  // eventually host; a route of its own so the data is reachable now
-  // without colliding with those pages.
-  { key: 'rounds', path: '/rounds', label: 'Rounds', nav: 'stats', phase: 2 },
-  { key: 'profile', path: '/profile/:id?', label: 'Profile', nav: 'stats', phase: 3 },
-  { key: 'skill-rating', path: '/skill-rating', label: 'ET Rating', nav: 'stats', phase: 3 },
-  { key: 'rivalries', path: '/rivalries', label: 'Rivalries', nav: 'stats', phase: 3 },
-  { key: 'story', path: '/story', label: 'Smart Stats', nav: 'stats', phase: 3 },
-  { key: 'story-session', path: '/story/session/:gsid', label: 'Smart Stats', nav: 'hidden', phase: 3 },
-  { key: 'story-date', path: '/story/date/:date', label: 'Smart Stats', nav: 'hidden', phase: 3 },
-  { key: 'replay', path: '/replay', label: 'Replay', nav: 'stats', phase: 5 },
-  { key: 'smart-stats-diag', path: '/smart-stats-diag', label: 'Smart Stats — Diag', nav: 'footer', phase: 1 },
+/**
+ * The table itself lives in routes.data.json, not in this file.
+ *
+ * Not a style choice: the parity harness runs in plain Node (scripts/*.mjs,
+ * which cannot import TypeScript), so as long as the table was TS, every
+ * script that needed it kept its own copy — audit_website_browser.mjs carried
+ * 29 hand-listed legacy routes while this table had 36, and nothing could
+ * tell you they disagreed. JSON is the one format both worlds read, so there
+ * is now one list and no generation step to forget. Each row's `note` carries
+ * the reason that used to sit in a comment above it, which also means the
+ * Node side can read the reason.
+ */
+export const APP_ROUTES: readonly AppRoute[] = Object.freeze(routeData as AppRoute[]);
 
-  { key: 'live', path: '/live', label: 'Live', nav: 'primary', phase: 6 },
-
-  // Telemetry sub-navigation.
-  { key: 'proximity', path: '/proximity', label: 'Proximity', nav: 'telemetry', phase: 5 },
-  { key: 'proximity-player', path: '/proximity/player/:guid', label: 'Player Profile', nav: 'hidden', phase: 5 },
-  { key: 'proximity-replay', path: '/proximity/round/:roundId', label: 'Round Replay', nav: 'hidden', phase: 5 },
-  { key: 'proximity-teams', path: '/proximity/round/:roundId/teams', label: 'Team Comparison', nav: 'hidden', phase: 5 },
-  // New page owned by the spider-web workstream (PR #800); registered now so
-  // the route exists the day that page needs a home (docs/design/17 §3.5).
-  { key: 'spider-web', path: '/spider-web/round/:roundId', label: 'Spider Web', nav: 'hidden', phase: 5 },
-
-  { key: 'greatshot', path: '/greatshot/:section?', label: 'Greatshot', nav: 'primary', phase: 6 },
-  { key: 'greatshot-demo', path: '/greatshot/demo/:demoId', label: 'Greatshot Demo', nav: 'hidden', phase: 6 },
-  { key: 'uploads', path: '/uploads', label: 'Uploads', nav: 'primary', phase: 6 },
-  { key: 'upload-detail', path: '/uploads/:uploadId', label: 'Upload Detail', nav: 'hidden', phase: 6 },
-  { key: 'availability', path: '/availability', label: '#ETL', nav: 'primary', phase: 6 },
-  { key: 'admin', path: '/admin', label: 'About', nav: 'primary', phase: 1 },
-  { key: 'system', path: '/system', label: 'System', nav: 'footer', phase: 1 },
-  // The component workshop (docs/design/11, plan A3). Deliberately `hidden`:
-  // it is a surface for whoever is reworking layout, not a page for readers,
-  // and it calls no endpoint so it cannot break with the data.
-  { key: 'design', path: '/design', label: 'Design', nav: 'hidden', phase: 1 },
-]);
 
 const GREATSHOT_SECTIONS = new Set(['demos', 'highlights', 'clips', 'renders']);
 const SESSION_DETAIL_TABS = new Set(['summary', 'players', 'teamplay', 'charts']);

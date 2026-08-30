@@ -180,10 +180,16 @@ export interface StorytellingCompleteness {
   kis_computed: boolean;
   rounds_total: number;
   rounds_correlated: number;
-  completeness_ratio: number | null;
-  linkage_ratio: number | null;
-  correlation_ratio: number | null;
-  kis_total_impact_sum: number | null;
+  /** NOT nullable — every one has an `else 0.0` in diagnostics_router, so a
+   *  missing denominator answers 0, never null. Measured on three sessions
+   *  (154, 153, 152): 1.0 / 1.0 / 1.0 and a real impact sum each time.
+   *  Typing them nullable cost nothing at runtime and bought a dead branch
+   *  in `ratioState`, which is the mirror of the AwardRow.round_id mistake:
+   *  a guard placed where nothing can arrive. */
+  completeness_ratio: number;
+  linkage_ratio: number;
+  correlation_ratio: number;
+  kis_total_impact_sum: number;
   warnings: { level: string; message: string }[];
   known_issues: { key: string; title: string; detail: string }[];
 }
@@ -225,6 +231,16 @@ export interface LastSessionPlayer {
 
 /** GET /api/stats/last-session — corpus: api_stats_last_session.json.
  * scoring is the real BOX (2/1/0 per map) with per-map rows. */
+export type LastSessionScoring =
+  | {
+    available: true;
+    team_a_name: string;
+    team_b_name: string;
+    team_a_score: number;
+    team_b_score: number;
+  }
+  | { available: false; reason?: string };
+
 export interface LastSession {
   date: string;
   /** null when the latest rounds carry no session id (sessions_router) —
@@ -238,23 +254,39 @@ export interface LastSession {
   /** Substitutes and players mapped to neither persistent team — the
    * evening totals must include them (Codex on #811). */
   unassigned_players: LastSessionPlayer[];
-  scoring: {
-    available: boolean;
-    team_a_name: string;
-    team_b_name: string;
-    team_a_score: number;
-    team_b_score: number;
-  };
+  /* A SUBSET by design: the response also carries `map_counts` and
+   * `stats_checks`, which nothing on this page renders. Absent from the type
+   * because unused, not because unsent (#830). */
+  /** A DISCRIMINATED UNION, because the endpoint answers with two different
+   *  shapes and the short one carries neither names nor scores:
+   *
+   *      available: true   → 8 keys (names, scores, maps, debug)
+   *      available: false  → 2 keys: {available, reason}
+   *
+   *  All eight sessions in the database answer the long form, so a type read
+   *  off the corpus would have made the names required — and 500'd (or here,
+   *  crashed) the first time a session took one of the four early returns.
+   *  The brother forced the short form on #830 to measure it. Written as a
+   *  union rather than one shape with optional fields, so the compiler makes
+   *  the `available` check mandatory before a name can be read. */
+  scoring: LastSessionScoring;
   warnings: unknown[];
 }
 
 /** GET /api/stats/trends?days= — corpus: api_stats_trends.json */
 export interface StatsTrends {
   dates: string[];
-  rounds: number[];
-  active_players: number[];
-  kills: number[];
-  map_distribution: Record<string, number>;
+  /** OPTIONAL, not nullable: `?metrics=rounds` returns `{dates, rounds}`
+   *  with `kills` ABSENT — measured by the brother on #830, where the route
+   *  gains `response_model_exclude_none`. The key is missing, so the check
+   *  is on PRESENCE; reading these as nullable is the shape of the
+   *  `total_votes` crash. This page never filters, so it receives all four
+   *  today — which is precisely the reasoning that failed on session 154,
+   *  so the type states the contract rather than this caller's habit. */
+  rounds?: number[];
+  active_players?: number[];
+  kills?: number[];
+  map_distribution?: Record<string, number>;
 }
 
 /** One row of GET /api/stats/matches — corpus: api_stats_matches.json.
@@ -292,6 +324,12 @@ export interface SeasonCurrent {
 
 /** GET /api/seasons/current/leaders — corpus: api_seasons_current_leaders.json.
  * A metric can be null (longest_session in the recording). */
+/** A deliberate SUBSET: the response also carries `start_date` and
+ *  `end_date`, which nothing renders — the board shows the season window
+ *  from /seasons/current instead. (The brother's checker reports this type
+ *  as absent from the API; that is a NAME collision, not drift — his schema
+ *  for this route is `SeasonLeadersResponse`, and `SeasonLeaders` there is
+ *  the inner object.) */
 export interface SeasonLeaders {
   leaders: Record<string, { player: string; value: number } | null>;
 }
@@ -299,23 +337,70 @@ export interface SeasonLeaders {
 /** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
 export interface SeasonSummary {
   season_id: string;
+  start_date: string;
+  end_date: string;
   totals: {
     rounds: number;
     players: number;
     sessions: number;
     maps: number;
     kills: number;
+    active_days: number;
+    /** int OR float on the wire: a real season answers 13.1, an empty one
+     *  answers 0 as an integer (#830). `number` covers both in TS; the note
+     *  is here so nobody formats it assuming a decimal. */
+    avg_rounds_per_day: number;
   };
-  top_map: { name: string; plays: number } | null;
+  /** ⚠️ The NULL is inside, not outside. This said
+   *  `{ name: string; plays: number } | null`, which defended against a case
+   *  that does not happen and promised one that does: a season with no
+   *  rounds answers `{"name": null, "plays": 0}` — the object is always
+   *  there, the name is what goes missing (#830). Nullability at the wrong
+   *  level is not a smaller mistake than no nullability at all. */
+  top_map: { name: string | null; plays: number };
 }
 
 /** GET /api/availability — corpus: api_availability.json. Day counts only —
  * names per day live behind a different endpoint, so home shows counts. */
+/** One day in the window. `my_status` has THREE states and they are not
+ *  interchangeable (#830 measured all three on one range):
+ *
+ *      key absent   the question was never asked — an anonymous caller
+ *      null         asked, and this viewer has set nothing (50 of 55 days)
+ *      "LOOKING"    asked and answered (5 days)
+ *
+ *  Optional AND nullable is the honest shape here, which is rare: usually
+ *  one of the two is the wrong tool. `users_by_status` only appears for a
+ *  signed-in caller who asked for it. */
+export interface AvailabilityDay {
+  date: string;
+  counts: Record<string, number>;
+  total: number;
+  my_status?: string | null;
+  users_by_status?: Record<string, unknown[]>;
+}
+
 export interface AvailabilityOverview {
   from: string;
   to: string;
   statuses: string[];
-  days: { date: string; counts: Record<string, number>; total: number }[];
+  days: AvailabilityDay[];
+  /** Who is asking, as the server sees them. ALWAYS sent: the handler has a
+   *  single return and both this and `session_ready` are in it — marking
+   *  them optional was the same over-permissive mistake as a `| null` the
+   *  data cannot produce, and it made every reader check for an absence
+   *  that does not happen (brother's checker, #830). */
+  viewer: { authenticated: boolean; linked_discord: boolean };
+  /** How far tonight is from happening: the threshold is the server's, not
+   *  the page's, so a card that quotes it cannot drift from the rule that
+   *  actually fires the Discord notice. */
+  session_ready: {
+    date: string;
+    ready: boolean;
+    looking_count: number;
+    threshold: number;
+    event_key: string;
+  };
 }
 
 /** One breakdown contribution (Overall only) — corpus: api_skill_movers.json */
@@ -396,6 +481,13 @@ export interface LiveStatus {
 export interface ActivityCalendar {
   days: number;
   activity: Record<string, number>;
+  /** Three states, and the page must not collapse them: `ok` (measured),
+   *  `no_data` (measured and empty) and `unavailable` (the query failed and
+   *  the endpoint still answered 200). Optional because the field arrives
+   *  with #830 — until then it is absent and the emptiness heuristic below
+   *  is all there is. `note` carries the reason when the state is not ok. */
+  status?: string;
+  note?: string;
 }
 
 /* ---------- phase 2, batch 2: leaderboards · record-book · awards ---------- */
@@ -408,8 +500,15 @@ export interface LeaderboardRow {
   name: string;
   value: number;
   rounds: number;
-  kills: number;
-  deaths: number;
+  /** Nullable from #830 onward: the aggregate can be NULL and the model
+   *  says so. Measured 0 nulls in 3,176 rows today — this is the branch
+   *  that has not happened yet, not the one that cannot.
+   *
+   *  ⚠️ Rendered as "—", never as 0: a player with an unknown kill count
+   *  and a player who killed nobody are different facts, and the column is
+   *  auxiliary here (the picked stat is `value`). */
+  kills: number | null;
+  deaths: number | null;
   kd: number;
 }
 
@@ -421,7 +520,23 @@ export interface RecordEntry {
   map: string;
   date: string;
 }
-export type StatsRecords = Record<string, RecordEntry[]>;
+/** Nineteen categories, EVERY ONE optional — measured on #830:
+ *  `?map_name=goldrush` (a real ET map this server never recorded) answers
+ *  `{}` with HTTP 200 and all nineteen keys absent, while all eighteen maps
+ *  that do have data answer with all nineteen.
+ *
+ *  ⚠️ And absence means the opposite of what it looks like: a MISSING key is
+ *  "the query ran and found nothing", while a key present as `[]` is "the
+ *  query threw and a per-category except swallowed it". `| undefined` is
+ *  what makes the first case visible to the compiler — this alias used to
+ *  promise every key was there, and `RecordBook.tsx` only survived because
+ *  it happened to guard with `?.` anyway.
+ *
+ *  (An alias, not an interface: the brother's checker reads interfaces only,
+ *  so it reported "agree" over ZERO compared schemas here — an empty
+ *  comparison and a clean one have the same shape. It says NOT COMPARED now.
+ *  This one is checked by hand against the generated schema.) */
+export type StatsRecords = Record<string, RecordEntry[] | undefined>;
 
 /** One map row of GET /api/stats/maps — corpus: api_stats_maps.json (only
  * the fields this batch reads; the maps PAGE in batch 3 will widen it). */
@@ -447,6 +562,8 @@ export interface HallOfFame {
   categories: Record<string, HallOfFameEntry[]>;
   period: string;
   delta_window_days: number | null;
+  /** When the board was computed — the page can say how old it is. */
+  generated_at: string;
 }
 
 /** GET /api/seasons/current/awards — corpus: api_seasons_current_awards.json
@@ -469,13 +586,29 @@ export interface AwardRow {
   date: string;
   map: string;
   round_number: number;
-  round_id: number | null;
+  /** NOT nullable, and this type said it was. `round_awards.round_id` is
+   *  NOT NULL in the schema (measured: 0 of 26,301 rows), and the response
+   *  model declares `int`, so a null could not reach a client — the
+   *  endpoint would 500 first. Found by the brother's
+   *  check_manual_types_against_openapi.py (#830), which is the first thing
+   *  that ever compared these 75 hand-written interfaces to the generated
+   *  schema. */
+  round_id: number;
 }
+/** The filter set the response echoes back — every field null when the
+ *  request carried no such filter. */
+export interface AwardsFilters {
+  player: string | null;
+  award_type: string | null;
+  days: number | null;
+}
+
 export interface AwardsPage {
   awards: AwardRow[];
   total: number;
   limit: number;
   offset: number;
+  filters: AwardsFilters;
 }
 
 /** One row of GET /api/awards/leaderboard — corpus:
@@ -541,19 +674,31 @@ export interface MapSegments {
 /** One weapon row — corpus: api_stats_weapons.json. `headshots` are HIT
  * LOCATIONS, not headshot kills (they exceed kills: Mp40 110k kills /
  * 129k head hits) — the label must say 'head hits'. */
+/** Every field the schema declares. `deaths`, `shots` and `hits` used to be
+ *  bolted onto the by-player variant with an intersection, as though the
+ *  base row lacked them — the schema says otherwise and always did. */
 export interface WeaponRow {
   name: string;
   weapon_key: string;
   kills: number;
+  deaths: number;
   headshots: number;
   hs_rate: number;
   accuracy: number;
+  shots: number;
+  hits: number;
 }
 
 /** GET /api/stats/weapons/hall-of-fame — corpus:
  * api_stats_weapons_hall_of_fame.json (object keyed by weapon_key). */
 export interface WeaponsHallOfFame {
   period: string;
+  /** Same three states as the activity calendar (#830): `ok`, `no_data`,
+   *  `unavailable`. Absent until that lands; present afterwards, and then
+   *  it — not the emptiness of `leaders` — decides whether this is an
+   *  outage rather than a quiet season. */
+  status?: string;
+  note?: string;
   leaders: Record<string, {
     weapon: string;
     weapon_key: string;
@@ -568,24 +713,37 @@ export interface WeaponsHallOfFame {
 /** GET /api/stats/weapons/by_player — corpus:
  * api_stats_weapons_by_player.json. The by-player hs_rate is headshots/hits
  * — a HEAD-HIT rate, never a kill rate (records_weapons.py:150). */
+export interface PlayerWeapons {
+  player_guid: string;
+  player_name: string;
+  total_kills: number;
+  weapons: WeaponRow[];
+}
+
 export interface WeaponsByPlayer {
   period: string;
   player_count: number;
-  players: {
-    player_guid: string;
-    player_name: string;
-    total_kills: number;
-    weapons: (WeaponRow & { deaths: number; shots: number; hits: number })[];
-  }[];
+  players: PlayerWeapons[];
 }
 
 /** One round in the retro-viz picker — corpus: api_rounds_recent.json.
  * round_number 0 is the legacy Match Summary aggregate and is filtered out. */
 export interface RecentRound {
   id: number;
-  map_name: string;
-  round_date: string;
-  round_number: number;
+  /** Schema-nullable only: 0 nulls in 3,176 rows, and no handler branch
+   *  produces one. Typed nullable anyway on the brother's reasoning, which
+   *  I agree with — a `| null` the data never triggers costs one `??`,
+   *  while a non-null type the data contradicts is a broken render on a
+   *  page that was working. */
+  map_name: string | null;
+  /** NULLABLE, not optional — the key is always present and the value can be
+   *  null: `records_matches.py` emits `str(row[2]) if row[2] else None`. The
+   *  brother's typing pass (#830) confirmed the same for `round_number`.
+   *  Nullable means check the VALUE; optional would mean check presence, and
+   *  conflating the two is how a page ends up rendering nothing where it
+   *  should say something. */
+  round_date: string | null;
+  round_number: number | null;
   round_label: string;
   player_count: number;
 }
@@ -617,7 +775,11 @@ export interface VizPlayer {
 export interface RoundViz {
   round_id: number;
   map_name: string;
-  round_date: string;
+  /** Nullable in the handler — `str(row[2]) if row[2] else None`, the same
+   *  expression as /rounds/recent. Neither of us has ever seen a null here;
+   *  the branch exists, so the type says so and the page prints "unknown"
+   *  rather than a blank cell (#830). */
+  round_date: string | null;
   round_number: number;
   round_label: string;
   winner_team: number | null;
@@ -964,4 +1126,482 @@ export interface PlayerRivalries {
   rival: RivalryOpponent | null;
   all_pairs: RivalryOpponent[];
   total_opponents: number;
+}
+
+/* ── ET Rating (v2.1) and SSR (v0.3) ──────────────────────────────────────
+ * Two different formulas over the same players. Keeping them in one file is
+ * deliberate: the page shows both, and the whole risk is a reader taking a
+ * number from one and comparing it with a number from the other. */
+
+export interface RatingComponent {
+  raw: number | null;
+  weight: number;
+  percentile: number | null;
+  contribution: number;
+}
+
+export interface RatedPlayer {
+  rank: number;
+  player_guid: string;
+  display_name: string;
+  et_rating: number;
+  games_rated: number;
+  last_rated_at: string | null;
+  tier: string;
+  /** Shrinkage confidence, 0..1 — how far the published number trusts n. */
+  confidence: number;
+  components: Record<string, RatingComponent>;
+}
+
+export interface SkillLeaderboard {
+  status: string;
+  meta: {
+    total: number;
+    min_rounds: number;
+    weights: Record<string, number>;
+    constant: number;
+    version: string;
+    shrinkage_k: number;
+    /** Mean RAW rating over the rated cohort — the shrinkage prior. Null
+     * when nothing is rated, which the page says rather than printing 0. */
+    pool_mean?: number | null;
+  };
+  players: RatedPlayer[];
+}
+
+export interface SkillFormula {
+  status: string;
+  version: string;
+  name: string;
+  description: string;
+  formula: string;
+  constant: number;
+  min_rounds: number;
+  shrinkage_k: number;
+  normalization: string;
+  range: string;
+}
+
+export interface SsrComponent {
+  raw: number | null;
+  pct: number | null;
+}
+
+export interface SsrPlayer {
+  player_guid: string;
+  name: string;
+  n_sessions: number;
+  ssr: number;
+  /** "3/8" — how many of the eight components were measurable at all. */
+  coverage: string;
+  components: Record<string, SsrComponent>;
+}
+
+export interface SsrBoard {
+  status: string;
+  formula_version: string;
+  min_sessions: number;
+  min_components: number;
+  rated: number;
+  players: SsrPlayer[];
+}
+
+// ---------------------------------------------------------------------------
+// Smart Stats / storytelling — corpus: api_storytelling_*.json, recorded
+// 2026-08-29 against gaming session 154 (12 rounds, 6 maps).
+//
+// None of these endpoints declares a response_model, so every field below is
+// read off a recording AND checked against the handler that builds it
+// (storytelling_router.py). Where the two disagree the handler wins: a
+// session that happens to have no null today does not make a field non-null.
+// ---------------------------------------------------------------------------
+
+/** One entry of GET /api/storytelling/scopes — the session picker's row.
+ *  `end_date` differs from `start_date` exactly when the session crossed
+ *  midnight, which is why the gsid, not a date, is this page's key. */
+export interface StoryScope {
+  gaming_session_id: number;
+  start_date: string;
+  end_date: string;
+  accepted_round_count: number;
+  distinct_map_names: string[];
+  scope_version: string;
+}
+
+export interface StoryScopes {
+  scope_version: string;
+  sessions: StoryScope[];
+}
+
+/** GET /api/storytelling/narrative. `session_arc` is built from the map
+ *  results and is absent when the session has no completed maps to shape. */
+export interface StoryNarrative {
+  status: string;
+  session_date: string;
+  narrative: string;
+  session_arc: { shape: string; winner: string; ws: number; ls: number } | null;
+}
+
+export interface StoryBoxScoreMap {
+  map_number: number;
+  map_name: string;
+  alpha_points: number;
+  beta_points: number;
+  winner: string;
+  is_fullhold_draw: boolean;
+  /** Seconds; null for a half with no recorded time. */
+  r1_time: number | null;
+  r2_time: number | null;
+}
+
+/** GET /api/storytelling/box-score — the scoreboard, straight off the rounds. */
+export interface StoryBoxScore {
+  status: string;
+  gaming_session_id: number;
+  alpha_team: string;
+  beta_team: string;
+  alpha_score: number;
+  beta_score: number;
+  maps_completed: number;
+  winner: string;
+  winner_name: string;
+  maps: StoryBoxScoreMap[];
+}
+
+/** GET /api/storytelling/moments. `detail` varies by `type` — a carrier run
+ *  carries distances, a clutch carries counts — so it stays unknown until a
+ *  panel needs one specific type and earns that type. */
+export interface StoryMoment {
+  type: string;
+  round_number: number;
+  map_name: string;
+  time_ms: number;
+  player: string;
+  narrative: string;
+  impact_stars: number;
+  time_formatted: string;
+  detail?: unknown;
+}
+
+export interface StoryMoments {
+  status: string;
+  moments: StoryMoment[];
+  total: number;
+}
+
+/** One sample of GET /api/storytelling/momentum: team strength at t_ms. */
+export interface StoryMomentumPoint {
+  t_ms: number;
+  axis: number;
+  allies: number;
+}
+
+export interface StoryMomentumRound {
+  round_number: number;
+  map_name: string;
+  points: StoryMomentumPoint[];
+}
+
+export interface StoryMomentum {
+  status: string;
+  rounds: StoryMomentumRound[];
+}
+
+/** GET /api/storytelling/win-contribution.
+ *
+ *  `mvp` and the top of `players` are DIFFERENT selections: the board sorts
+ *  by total_pwc, the MVP is picked by waa_bayes with an eligibility floor,
+ *  and `mvp` is null when the session has no eligible player at all. */
+export interface StoryPwcPlayer {
+  guid: string;
+  name: string;
+  total_pwc: number;
+  wis: number;
+  waa: number;
+  waa_bayes: number;
+  rounds_won: number;
+  rounds_lost: number;
+  total_rounds: number;
+  components: Record<string, number>;
+}
+
+export interface StoryWinContribution {
+  status: string;
+  mvp: {
+    guid: string;
+    name: string;
+    total_pwc: number;
+    wis: number;
+    waa_bayes: number;
+    selected_by: string;
+  } | null;
+  players: StoryPwcPlayer[];
+}
+
+/** GET /api/storytelling/kill-impact — KIS, the per-kill impact model. */
+export interface StoryKisPlayer {
+  guid: string;
+  name: string;
+  total_kis: number;
+  kills: number;
+  carrier_kills: number;
+  push_kills: number;
+  crossfire_kills: number;
+  clutch_kills: number;
+  avg_impact: number;
+  archetype: string;
+}
+
+export interface StoryKillImpact {
+  status: string;
+  players: StoryKisPlayer[];
+  total: number;
+  total_kills: number;
+}
+
+export interface StorySynergyGroup {
+  players: string[];
+  crossfire: number;
+  trade: number;
+  cohesion: number;
+  push: number;
+  medic: number;
+  composite: number;
+}
+
+/** GET /api/storytelling/synergy. `defaulted_players_count` is how many
+ *  players had no telemetry and were scored at the default — the composite
+ *  is that much less measured, which the page has to say out loud. */
+export interface StorySynergy {
+  status: string;
+  groups: { group_a: StorySynergyGroup; group_b: StorySynergyGroup };
+  weights: Record<string, number>;
+  defaulted_players_count: number;
+}
+
+/** The four role boards (gravity / space-created / enabler / lurker-profile)
+ *  return one players[] each with a shared identity and their own score
+ *  field, so one row type carries all four rather than four near-copies. */
+export interface StoryRolePlayer {
+  name: string;
+  guid?: string;
+  guid_short?: string;
+  gravity_score?: number;
+  space_score?: number;
+  enabler_score?: number;
+  solo_pct?: number;
+}
+
+export interface StoryRoleBoard {
+  status: string;
+  metric: string;
+  description: string;
+  players: StoryRolePlayer[];
+}
+
+/** GET /api/storytelling/player-narratives — generated prose per player. */
+export interface StoryPlayerNarrative {
+  guid_short: string;
+  name: string;
+  narrative: string;
+  archetype: string;
+  top_trait: string;
+}
+
+export interface StoryPlayerNarratives {
+  status: string;
+  player_narratives: StoryPlayerNarrative[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — session detail. Corpus: api_stats_session_*.json, recorded
+// 2026-08-29 against gaming session 154 (12 rounds, 6 maps, 6 players).
+//
+// The nullability below comes from stats_router.py and session_scoring.py,
+// not from the recording: session 154 fills nearly everything, and an early
+// session with no Lua mirror fills much less.
+// ---------------------------------------------------------------------------
+
+/** One map's line in the stopwatch scoring block. `team_a_time` is a clock
+ *  string OR the word "fullhold" — the two are different outcomes and the
+ *  page must not print one as the other. */
+export interface SessionScoringMap {
+  map: string;
+  team_a_points: number;
+  team_b_points: number;
+  team_a_time: string | null;
+  team_b_time: string | null;
+  winner: string | null;
+  description: string | null;
+  /** False when the map was played but is not counted (cancelled halves). */
+  counted: boolean;
+  match_id: string | null;
+}
+
+/** `available: false` when the session predates stopwatch scoring or its
+ *  halves could not be paired — the page says which, rather than showing a
+ *  0–0 that looks like a real draw (the 2026-08-12 bug).
+ *
+ *  ⚠️ An unavailable block carries ONLY `{available: false}` — every field
+ *  below it is ABSENT, not zero (sessions_router: `scoring_payload =
+ *  {"available": False}`). Measured on session 151: reading a name off it
+ *  is reading `undefined`. */
+export interface SessionScoring {
+  available: boolean;
+  team_a_name?: string;
+  team_b_name?: string;
+  team_a_score?: number;
+  team_b_score?: number;
+  maps?: SessionScoringMap[];
+  total_maps?: number;
+}
+
+export interface SessionTeamAggregate {
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  revives: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  dpm_avg: number | null;
+  kd_avg: number | null;
+  accuracy_avg: number | null;
+}
+
+/** Same rule as the scoring block: unavailable means `{available: false,
+ *  reason}` and nothing else. */
+export interface SessionTeamMatrix {
+  available: boolean;
+  reason?: string;
+  team_a_name?: string;
+  team_b_name?: string;
+  aggregates?: { team_a: SessionTeamAggregate; team_b: SessionTeamAggregate };
+}
+
+/** One player's session totals. `alive_pct` and `alive_pct_lua` are two
+ *  measurements of the same thing — stats file against Lua mirror — and
+ *  `alive_pct_diff` is their disagreement, which is data about the capture
+ *  rather than about the player. */
+export interface SessionPlayerTotals {
+  player_guid: string;
+  player_name: string;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  dpm: number;
+  kd: number;
+  efficiency: number;
+  headshot_kills: number;
+  headshot_pct: number;
+  gibs: number;
+  revives_given: number;
+  times_revived: number;
+  kill_assists: number;
+  accuracy: number;
+  time_played_seconds: number;
+  alive_pct: number | null;
+  alive_pct_lua: number | null;
+  alive_pct_diff: number | null;
+}
+
+export interface SessionMatchRound {
+  round_id: number;
+  round_number: number;
+  winner_team: number | null;
+  /** Nullable, measured: one session in forty answers null for both scores.
+   *  Found by sampling every session rather than the newest — the brother's
+   *  rule from #830, where `/api/sessions?limit=200` produced 420 nulls that
+   *  `?limit=1` could not show, because they come from a LEFT JOIN and not
+   *  from a nullable column. */
+  allies_score: number | null;
+  axis_score: number | null;
+  duration_seconds: number | null;
+}
+
+export interface SessionMatch {
+  map_name: string;
+  rounds: SessionMatchRound[];
+}
+
+/** GET /api/stats/session/{id}/detail */
+export interface SessionDetail {
+  session_id: number;
+  date: string;
+  player_count: number;
+  round_count: number;
+  matches: SessionMatch[];
+  players: SessionPlayerTotals[];
+  scoring: SessionScoring;
+  team_matrix: SessionTeamMatrix;
+}
+
+/** GET /api/stats/session/{id}/good-night — a 0-100 index over seven named
+ *  components. `available: false` means it could not be computed; a low
+ *  score means it was, and the night was quiet. */
+export interface SessionGoodNight {
+  status: string;
+  available: boolean;
+  gaming_session_id: number;
+  /** Present only when `available` — the handler returns `{status,
+   *  available: false, gaming_session_id}` and nothing else. */
+  score?: number;
+  components?: Record<string, number>;
+  reasons?: string[];
+  maps?: number;
+  players?: number;
+  hours?: number;
+}
+
+/** GET /api/stats/session/{id}/verdicts — each player against their OWN
+ *  form, never against each other. `first_night` marks a player with no
+ *  baseline: a verdict about them would be a comparison with nothing. */
+export interface SessionVerdictPlayer {
+  guid: string;
+  name: string;
+  dpm: number;
+  avg_dpm: number | null;
+  kills: number;
+  first_night: boolean;
+  percentile: number | null;
+  label: string;
+  sessions_in_baseline: number;
+}
+
+export interface SessionVerdicts {
+  status: string;
+  gaming_session_id: number;
+  /** Absent when there is nothing to compare against: the early return is
+   *  `{status, gaming_session_id, players: []}`. */
+  baseline?: string;
+  players: SessionVerdictPlayer[];
+}
+
+/** GET /api/stats/session/{id}/mvp — PEER VOTES, not a computed rating.
+ *  Unrelated to storytelling's PWC MVP, and the page has to keep them
+ *  apart: one is what people thought, the other is what the model says. */
+export interface SessionMvpCandidate {
+  guid: string;
+  name: string;
+  kills: number;
+  dpm: number;
+  votes: number;
+  vote_pct: number;
+  kis_rank: number | null;
+}
+
+export interface SessionMvp {
+  status: string;
+  gaming_session_id: number;
+  /** ⚠️ ABSENT, not 0, when no candidate qualified — the early return is
+   *  `{status, gaming_session_id, candidates: []}`. Typed as a required
+   *  number, `total_votes === 0` was false for `undefined` and the page fell
+   *  through to `figure(undefined)`, which crashed the whole route. Measured
+   *  on sessions 151, 146 and 128. */
+  total_votes?: number;
+  my_vote?: string | null;
+  most_underrated_guid?: string | null;
+  candidates: SessionMvpCandidate[];
 }

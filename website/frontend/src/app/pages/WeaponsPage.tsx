@@ -52,12 +52,18 @@ function categoryOf(weaponKey: string): string {
 function HallOfFameStrip({ period }: { period: string }) {
   const hof = useWeaponsHof(period);
   const leaders = hof.data ? Object.values(hof.data.leaders) : [];
+  // The endpoint answers 200 with an empty board when its query FAILS, so
+  // emptiness alone cannot tell an outage from a quiet season. #830 adds the
+  // status field that can; until it lands the field is absent and this
+  // reduces to today's behaviour.
+  const hofFailed = hof.isError
+    || (hof.data?.status != null && ['error', 'unavailable'].includes(hof.data.status));
   return (
     <div data-parity="weapons.hof" style={{ marginTop: 'var(--space-5)' }}>
       <SectionHead label="hall of fame · best hand per weapon" />
       {hof.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="hall of fame" /></div>}
-      {hof.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="hall of fame" /></div>}
-      {hof.isSuccess && leaders.length === 0 && (
+      {hofFailed && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="hall of fame" /></div>}
+      {hof.isSuccess && !hofFailed && leaders.length === 0 && (
         <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no hall of fame data yet</div>
       )}
       <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>

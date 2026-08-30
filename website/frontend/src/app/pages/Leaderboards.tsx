@@ -100,7 +100,7 @@ export function Leaderboards() {
               <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
               <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right', color: 'var(--color-text-100)' }}>{formatValue(stat, row.value)}</span>
               {stat !== 'games' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.rounds}</span>}
-              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills}</span>}
+              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills ?? '—'}</span>}
               {stat !== 'kd' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>}
             </Link>
           ))}

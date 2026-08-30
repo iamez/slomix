@@ -158,6 +158,14 @@ jobs:
         run: npm ci
       - name: Lint JavaScript
         run: npm run lint:js
+      - name: Route lists agree with the legacy registry
+        # The guard that caught "29 routes audited, 32 in the registry, 36 in
+        # the app table" lived inside audit_website_browser.mjs, which imports
+        # Playwright — so it could only run where a browser was installed, i.e.
+        # when somebody remembered. That is the same condition under which the
+        # original gap survived unnoticed (brother's review on #839). This
+        # runner needs Node and two files.
+        run: node scripts/check_route_coverage.mjs
 
   react-frontend:
     name: React Typecheck + Tests

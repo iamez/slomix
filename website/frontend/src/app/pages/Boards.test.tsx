@@ -80,6 +80,25 @@ describe('Leaderboards', () => {
       expect(calls.some((u) => u.includes('stat=dpm'))).toBe(true);
     });
   });
+
+  it('prints a dash, not a zero, for an unknown kill count', async () => {
+    // #830 types LeaderboardRow.kills as nullable: the aggregate can be
+    // NULL. Zero kills and an unknown kill count are different facts, and
+    // this column is auxiliary — the picked stat is `value`.
+    // The endpoint answers a bare ARRAY, not an object with a key.
+    const rows = leaderboard as Record<string, unknown>[];
+    const withNull = [{ ...rows[0], kills: null }, ...rows.slice(1)];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/leaderboard') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withNull) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderPage(<Leaderboards />);
+    await waitFor(() => expect(screen.getAllByText('—').length).toBeGreaterThan(0));
+    // …and no invented zero next to it.
+    expect(screen.queryByText('0')).toBeNull();
+  });
 });
 
 describe('RecordBook', () => {
@@ -90,6 +109,29 @@ describe('RecordBook', () => {
     await waitFor(() => expect(screen.getByText('bronze.')).toBeInTheDocument());
     // Full-map section renders too.
     expect(screen.getByText(/full map · both rounds combined/)).toBeInTheDocument();
+  });
+
+  it('renders nothing rather than breaking when a filter matches no records', async () => {
+    // Measured on #830 and re-measured here: /api/stats/records?map_name=
+    // goldrush — a real ET map this server never recorded — answers `{}`
+    // with HTTP 200 and ALL NINETEEN categories absent. The type used to
+    // promise every key was present; the page survived only because it
+    // happened to guard with `?.`.
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      if (String(input).split('?')[0] === '/api/stats/records') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({}) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderPage(<RecordBook />);
+    // The page already answers this correctly — an empty object is truthy,
+    // so two headings over empty grids would claim records that do not
+    // exist (Codex on #813). What was missing was the TYPE saying the keys
+    // can be absent at all; this test pins the behaviour to the measurement
+    // rather than to that earlier review alone.
+    await waitFor(() => expect(screen.getByText(/no records for this selection yet/)).toBeInTheDocument());
+    expect(screen.queryByText('bronze.')).toBeNull();
+    expect(screen.queryByText(/click a card for the top 5/)).toBeNull();
   });
 
   it('?tab=hof lands on the hall of fame (the hash-alias contract)', async () => {

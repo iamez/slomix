@@ -1,5 +1,5 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
-import { apiGet } from './api';
+import { ApiError, apiGet } from './api';
 import type {
   ActivityCalendar,
   AvailabilityOverview,
@@ -21,6 +21,16 @@ import type {
   QuickLeaders,
   RecentRound,
   RivalryLeaderboard,
+  StoryBoxScore,
+  StoryKillImpact,
+  StoryMomentum,
+  StoryMoments,
+  StoryNarrative,
+  StoryPlayerNarratives,
+  StoryRoleBoard,
+  StoryScopes,
+  StorySynergy,
+  StoryWinContribution,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -28,8 +38,15 @@ import type {
   SeasonSummary,
   SessionLineups,
   SessionRounds,
+  SessionDetail,
+  SessionGoodNight,
+  SessionMvp,
+  SessionVerdicts,
   SessionSummary,
+  SkillFormula,
+  SkillLeaderboard,
   SkillMovers,
+  SsrBoard,
   StatsOverview,
   StatsRecords,
   StatsTrends,
@@ -56,7 +73,20 @@ export function makeQueryClient(): QueryClient {
       // non-live sections (overview, sessions, leaders) would never update
       // on a long-mounted page while the live panel keeps polling (Codex
       // on #806, wave 3).
-      queries: { staleTime: 5 * 60_000, retry: 1 },
+      queries: {
+        staleTime: 5 * 60_000,
+        // Retry only what a second ask could answer differently. A 4xx is a
+        // considered answer: asking again cannot change it, and it delays
+        // the page's honest "unavailable" by a round trip. On the
+        // rate-limited routes it is actively harmful — the storytelling
+        // endpoints allow 10 requests a minute EACH, the story page issues
+        // thirteen per session, and retrying a 429 doubles precisely the
+        // traffic that caused it. 5xx and network failures keep their retry.
+        retry: (failureCount: number, error: Error) => {
+          if (error instanceof ApiError && error.status < 500) return false;
+          return failureCount < 1;
+        },
+      },
     },
   });
 }
@@ -123,9 +153,10 @@ export function useSessionLineups(sessionId: number, enabled: boolean) {
   });
 }
 
-export function useSessions(limit = 6) {
+export function useSessions(limit = 6, enabled = true) {
   return useQuery({
     queryKey: ['sessions', limit],
+    enabled,
     queryFn: () => apiGet('/api/sessions', { query: { limit } }) as Promise<SessionSummary[]>,
   });
 }
@@ -478,5 +509,181 @@ export function usePlayerRivalries(guid: string | null) {
       apiGet('/api/rivalries/player/{guid}', {
         pathParams: { guid: guid! },
       }) as Promise<PlayerRivalries>,
+  });
+}
+
+/** ET Rating v2.1 — the number the profile shows, with its components. */
+export function useSkillLeaderboard(limit: number) {
+  return useQuery({
+    queryKey: ['skill-leaderboard', limit],
+    queryFn: () =>
+      apiGet('/api/skill/leaderboard', { query: { limit } }) as Promise<SkillLeaderboard>,
+  });
+}
+
+/** The formula itself, so the page can quote it rather than paraphrase it. */
+export function useSkillFormula() {
+  return useQuery({
+    queryKey: ['skill-formula'],
+    queryFn: () => apiGet('/api/skill/formula') as Promise<SkillFormula>,
+  });
+}
+
+/** SSR v0.3 — a second, session-scoped formula, still partially covered.
+ *
+ * `enabled` is not optional politeness: the endpoint takes a measured 2.4 s,
+ * and the panel that shows it starts closed, so an unconditional query spent
+ * that on every visit for data nobody had asked to see (Codex on #835). */
+export function useSsr(enabled: boolean) {
+  return useQuery({
+    queryKey: ['skill-ssr'],
+    enabled,
+    queryFn: () => apiGet('/api/skill/ssr') as Promise<SsrBoard>,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Smart Stats. Thirteen endpoints, one session key.
+//
+// Every one is rate-limited to 10/minute on the server and several are slow
+// (the role boards read the position tracker), so they share the gsid in
+// their key and nothing re-fetches when the picker re-renders. The page
+// mounts them together on purpose: they answer different questions about the
+// same session, and a reader comparing them needs them to be the same run.
+// ---------------------------------------------------------------------------
+
+/** The session picker. gsid, never a date: a session can cross midnight. */
+export function useStoryScopes(limit: number) {
+  return useQuery({
+    queryKey: ['story-scopes', limit],
+    queryFn: () =>
+      apiGet('/api/storytelling/scopes', { query: { limit } }) as Promise<StoryScopes>,
+  });
+}
+
+function storyQuery<T>(name: string, path: StoryPath, gsid: number, extra?: Record<string, number>) {
+  return {
+    queryKey: [name, gsid, extra],
+    queryFn: () =>
+      apiGet(path, {
+        query: { gaming_session_id: gsid, ...extra },
+      }) as Promise<T>,
+  };
+}
+
+/** The paths this module reads. Named so a typo is a compile error rather
+ *  than a 404 at runtime — apiGet checks it against the OpenAPI spec. */
+type StoryPath =
+  | '/api/storytelling/narrative'
+  | '/api/storytelling/box-score'
+  | '/api/storytelling/moments'
+  | '/api/storytelling/momentum'
+  | '/api/storytelling/win-contribution'
+  | '/api/storytelling/kill-impact'
+  | '/api/storytelling/synergy'
+  | '/api/storytelling/gravity'
+  | '/api/storytelling/space-created'
+  | '/api/storytelling/enabler'
+  | '/api/storytelling/lurker-profile'
+  | '/api/storytelling/player-narratives';
+
+export function useStoryNarrative(gsid: number) {
+  return useQuery(storyQuery<StoryNarrative>('story-narrative', '/api/storytelling/narrative', gsid));
+}
+
+export function useStoryBoxScore(gsid: number) {
+  return useQuery(storyQuery<StoryBoxScore>('story-box-score', '/api/storytelling/box-score', gsid));
+}
+
+export function useStoryMoments(gsid: number) {
+  return useQuery(storyQuery<StoryMoments>('story-moments', '/api/storytelling/moments', gsid, { limit: 10 }));
+}
+
+export function useStoryMomentum(gsid: number) {
+  return useQuery(storyQuery<StoryMomentum>('story-momentum', '/api/storytelling/momentum', gsid));
+}
+
+export function useStoryWinContribution(gsid: number) {
+  return useQuery(storyQuery<StoryWinContribution>('story-pwc', '/api/storytelling/win-contribution', gsid));
+}
+
+export function useStoryKillImpact(gsid: number) {
+  return useQuery(storyQuery<StoryKillImpact>('story-kis', '/api/storytelling/kill-impact', gsid, { limit: 50 }));
+}
+
+export function useStorySynergy(gsid: number) {
+  return useQuery(storyQuery<StorySynergy>('story-synergy', '/api/storytelling/synergy', gsid));
+}
+
+export function useStoryGravity(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-gravity', '/api/storytelling/gravity', gsid));
+}
+
+export function useStorySpace(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-space', '/api/storytelling/space-created', gsid));
+}
+
+export function useStoryEnabler(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-enabler', '/api/storytelling/enabler', gsid));
+}
+
+export function useStoryLurker(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-lurker', '/api/storytelling/lurker-profile', gsid));
+}
+
+export function useStoryPlayerNarratives(gsid: number) {
+  return useQuery(storyQuery<StoryPlayerNarratives>('story-player-narratives', '/api/storytelling/player-narratives', gsid));
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — session detail. `useSessionRounds` above is shared with the
+// /rounds page; these four are the panels around it.
+// ---------------------------------------------------------------------------
+
+/** Everything the session totals are built from: matches, per-player totals,
+ *  stopwatch scoring and the team matrix. One 39 KB response rather than the
+ *  legacy page's five calls. */
+export function useSessionDetail(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-detail', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/detail', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionDetail>,
+  });
+}
+
+export function useSessionGoodNight(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-good-night', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/good-night', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionGoodNight>,
+  });
+}
+
+export function useSessionVerdicts(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-verdicts', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/verdicts', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionVerdicts>,
+  });
+}
+
+/** Peer votes, not a computed rating — see the type's note. */
+export function useSessionMvp(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-mvp', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/mvp', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionMvp>,
   });
 }

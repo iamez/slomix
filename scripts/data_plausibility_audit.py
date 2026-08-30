@@ -51,7 +51,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from shared.round_time import round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
+from shared.round_time import MMSS_SQL_REGEX, round_duration_sql  # noqa: E402 (needs the sys.path bootstrap above)
 
 # The date the backfill import (supastats history) hands off to live capture.
 # Every historical row before this date came through the lossy backfill path;
@@ -120,14 +120,14 @@ VALID_TABLES = {"player_comprehensive_stats", "rounds"}
 # against every row in the dev DB on 2026-08-17: 100% match `^[0-9]+:[0-9]{2}$`).
 # Guard the regex before the split_part cast so a future malformed value fails
 # the *audit rule* (correctly, as "unparseable duration") instead of the query.
-_ACTUAL_TIME_LOOKS_VALID = "r.actual_time ~ '^[0-9]+:[0-9]{2}$'"
+_ACTUAL_TIME_LOOKS_VALID = f"r.actual_time ~ '{MMSS_SQL_REGEX}'"
 # PostgreSQL does NOT guarantee left-to-right short-circuit evaluation of AND/OR
 # operands, so pairing the regex guard and the cast as separate conjuncts is not
 # actually safe — the planner may evaluate the cast first and raise on a
 # malformed value. The CASE expression makes the guard part of the expression
 # itself: a non-matching actual_time yields NULL instead of a cast error.
 _ACTUAL_TIME_SECONDS = (
-    "(CASE WHEN r.actual_time ~ '^[0-9]+:[0-9]{2}$' "
+    f"(CASE WHEN r.actual_time ~ '{MMSS_SQL_REGEX}' "
     "THEN split_part(r.actual_time, ':', 1)::int * 60 + split_part(r.actual_time, ':', 2)::int "
     "END)"
 )
