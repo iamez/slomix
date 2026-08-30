@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -17,16 +17,37 @@ import space from './__fixtures__/api_storytelling_space_created.json';
 import enabler from './__fixtures__/api_storytelling_enabler.json';
 import lurker from './__fixtures__/api_storytelling_lurker_profile.json';
 import playerNarratives from './__fixtures__/api_storytelling_player_narratives.json';
+import momentumSession from './__fixtures__/api_storytelling_momentum_session.json';
+import killMatrix from './__fixtures__/api_storytelling_kill_matrix.json';
+import movement from './__fixtures__/api_storytelling_movement.json';
+import uselessDefense from './__fixtures__/api_storytelling_useless_defense_deaths.json';
+import kisFormula from './__fixtures__/api_storytelling_formula.json';
+import pwcFormula from './__fixtures__/api_storytelling_win_contribution_formula.json';
+import kisDetails from './__fixtures__/api_storytelling_kill_impact_details.json';
 
-/** The recorded session 154 — 12 rounds over 6 maps, 2026-08-27. */
+/** The recorded session 154 — 12 rounds over 6 maps, 2026-08-27.
+ *
+ * `api_storytelling_kill_impact_details.json` is the one recording that was
+ * edited: kanii's 78 kills were cut to the first 25 so the fixture stays a
+ * fifth of its recorded size. `summary` is left exactly as the server sent
+ * it (78), which makes the pair a test in itself — a page that counted the
+ * array instead of reading the summary would now disagree with the server.
+ */
 const BODIES: [string, unknown][] = [
   ['/storytelling/scopes', scopes],
   ['/storytelling/narrative', narrative],
   ['/storytelling/box-score', boxScore],
   ['/storytelling/moments', moments],
   ['/storytelling/momentum', momentum],
+  ['/storytelling/momentum-session', momentumSession],
   ['/storytelling/win-contribution', pwc],
+  ['/storytelling/win-contribution/formula', pwcFormula],
   ['/storytelling/kill-impact', kis],
+  ['/storytelling/kill-impact/details', kisDetails],
+  ['/storytelling/kill-matrix', killMatrix],
+  ['/storytelling/movement', movement],
+  ['/storytelling/useless-defense-deaths', uselessDefense],
+  ['/storytelling/formula', kisFormula],
   ['/storytelling/synergy', synergy],
   ['/storytelling/gravity', gravity],
   ['/storytelling/space-created', space],
@@ -35,8 +56,19 @@ const BODIES: [string, unknown][] = [
   ['/storytelling/player-narratives', playerNarratives],
 ];
 
+/** Match the PATH, not a substring of the URL.
+ *
+ * The first version of this matched with `url.includes(path)`, which was
+ * fine while no endpoint was a prefix of another — and then
+ * `/storytelling/momentum` started answering for
+ * `/storytelling/momentum-session`, and `/storytelling/kill-impact` for
+ * `/storytelling/kill-impact/details`. The page did not crash on nonsense
+ * data; it crashed on plausible data from the wrong endpoint, which is the
+ * harder failure to read. Compare the pathname exactly.
+ */
 function bodyFor(url: string): unknown | undefined {
-  return BODIES.find(([path]) => url.includes(path))?.[1];
+  const path = new URL(url, 'http://test.local').pathname.replace(/^\/api/, '');
+  return BODIES.find(([p]) => p === path)?.[1];
 }
 
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
@@ -63,10 +95,21 @@ function renderPage(fetchImpl = fixtureFetch, entry = '/story') {
   );
 }
 
-/** Replace one endpoint's response, keeping the rest of the corpus. */
+/** Replace one endpoint's response, keeping the rest of the corpus.
+ *
+ *  Same exact-path rule as bodyFor, and for the same reason: an override on
+ *  `/storytelling/momentum` written with `includes` also silently replaced
+ *  `/storytelling/momentum-session`, so a test aimed at one panel changed
+ *  two. */
 function withOverride(path: string, make: (input: RequestInfo | URL) => Promise<Response>) {
-  return (input: RequestInfo | URL) =>
-    String(input).includes(path) ? make(input) : fixtureFetch(input);
+  return (input: RequestInfo | URL) => {
+    const p = new URL(String(input), 'http://test.local').pathname.replace(/^\/api/, '');
+    return p === path ? make(input) : fixtureFetch(input);
+  };
+}
+
+function jsonOnce(body: unknown) {
+  return () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 }
 
 afterEach(() => {
@@ -178,9 +221,13 @@ describe('Story', () => {
   });
 
   it('draws both momentum series on one scale, one drawing per round', async () => {
-    renderPage();
+    const { container } = renderPage();
     await waitFor(() => expect(screen.getAllByRole('img', { name: /momentum/ }).length).toBeGreaterThan(0));
-    const charts = screen.getAllByRole('img', { name: /momentum/ });
+    // Counted inside the per-round panel. A page-wide count answers about
+    // the session curve too, which is a DIFFERENT drawing (by roster, not by
+    // side) and would make this assertion drift by one for the wrong reason.
+    const panel = container.querySelector('[data-parity="story.momentum"]')!;
+    const charts = [...panel.querySelectorAll('svg')];
     // The recording holds 12 rounds; the sides swap between halves, so each
     // round is its own drawing and never one line across the session.
     expect(charts.length).toBe((momentum as { rounds: unknown[] }).rounds.length);
@@ -260,5 +307,166 @@ describe('Story', () => {
     await waitFor(() => expect(screen.getAllByText(first.name).length).toBeGreaterThan(0));
     expect(screen.getAllByText(first.archetype).length).toBeGreaterThan(0);
     expect(screen.getByText(first.narrative)).toBeInTheDocument();
+  });
+
+  it('draws the evening as one curve and names the rosters it belongs to', async () => {
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByRole('img', { name: /across the session/ })).toBeInTheDocument());
+    const svg = screen.getByRole('img', { name: /across the session/ });
+    // Two lines, and one dashed marker per round boundary: the curve is
+    // continuous, so without the markers a reader cannot tell where one
+    // round ended and the next began.
+    expect(svg.querySelectorAll('path').length).toBe(2);
+    expect(svg.querySelectorAll('line').length)
+      .toBe((momentumSession as { round_boundaries: unknown[] }).round_boundaries.length);
+    // The lines mean nothing until you know who is in them.
+    const panel = container.querySelector('[data-parity="story.momentum-session"]')!;
+    for (const name of (momentumSession as { teams: { team_a: { players: string[] } } }).teams.team_a.players) {
+      expect(panel.textContent).toContain(name);
+    }
+  });
+
+  it('says which rounds the session curve leaves out', async () => {
+    // The recording has nothing to leave out (unmapped_rounds 0), so this
+    // sentence can only be produced by a payload that HAS a gap — and the
+    // healthy fixture proves the sentence is not printed unconditionally.
+    expect((momentumSession as { meta: { unmapped_rounds: number } }).meta.unmapped_rounds).toBe(0);
+    const gapped = {
+      ...momentumSession,
+      meta: { ...(momentumSession as { meta: object }).meta, unmapped_rounds: 3, defaulted_players_count: 2 },
+    };
+    renderPage(withOverride('/storytelling/momentum-session', jsonOnce(gapped)));
+    await waitFor(() => expect(screen.getByText(/not attributable to either roster/)).toBeInTheDocument());
+    expect(screen.getByText(/scored at the default for lack of telemetry/)).toBeInTheDocument();
+  });
+
+  it('gives the server reason when no roster could be built', async () => {
+    // A third shape, not an error: rounds exist, teams do not. Rendering
+    // "unavailable" here would send a reader looking for an outage.
+    renderPage(withOverride('/storytelling/momentum-session', jsonOnce({
+      status: 'no_team_data', session_date: '2026-08-27', reason: 'no_pcs_rows', points: [],
+    })));
+    await waitFor(() => expect(screen.getByText(/no persistent teams could be built/)).toBeInTheDocument());
+    expect(screen.getByText(/no_pcs_rows/)).toBeInTheDocument();
+    expect(screen.queryByText(/session momentum: unavailable/)).toBeNull();
+  });
+
+  it('pairs killer with victim and leaves the diagonal blank', async () => {
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByText(/kills paired/)).toBeInTheDocument());
+    const panel = container.querySelector('[data-parity="story.kill-matrix"]')!;
+    const rows = panel.querySelectorAll('tbody tr');
+    const players = (killMatrix as { players: unknown[] }).players;
+    expect(rows.length).toBe(players.length);
+    // A player cannot duel himself: the diagonal carries the placeholder,
+    // not a 0, because 0 would claim a duel that was never possible.
+    const firstRow = rows[0].querySelectorAll('td');
+    expect(firstRow[1].textContent).toBe('\u00b7');
+    // A real pairing is the count the server sent, read at the position the
+    // two axes put it — both keyed the same way, or the grid stops being
+    // square. Picked from the payload rather than hardcoded, because only 18
+    // of the 30 ordered pairs exist.
+    const keys = (killMatrix as { players: { guid_short: string }[] }).players.map((p) => p.guid_short);
+    const cells = (killMatrix as { cells: { killer: string; victim: string; kills: number }[] }).cells;
+    const pair = cells.find((c) => keys.includes(c.killer) && keys.includes(c.victim))!;
+    const row = rows[keys.indexOf(pair.killer)].querySelectorAll('td');
+    expect(row[keys.indexOf(pair.victim) + 1].textContent).toBe(String(pair.kills));
+    // A pair the server never emitted is 0 kills, not a gap: the GROUP BY
+    // only produces rows for duels that happened.
+    const missing = keys.flatMap((k) => keys.map((v) => [k, v] as const))
+      .find(([k, v]) => k !== v && !cells.some((c) => c.killer === k && c.victim === v))!;
+    const emptyRow = rows[keys.indexOf(missing[0])].querySelectorAll('td');
+    expect(emptyRow[keys.indexOf(missing[1]) + 1].textContent).toBe('0');
+  });
+
+  it('says why the matrix is empty rather than drawing an empty grid', async () => {
+    renderPage(withOverride('/storytelling/kill-matrix', jsonOnce({
+      status: 'ok', available: false, reason: 'no_kill_data', players: [], cells: [],
+    })));
+    await waitFor(() => expect(screen.getByText(/no per-kill telemetry for this session/)).toBeInTheDocument());
+    expect(screen.getByText(/no_kill_data/)).toBeInTheDocument();
+  });
+
+  it('prints a dash, not a zero, when a player has no alive time to divide by', async () => {
+    // distance_per_min is null exactly when alive_ms is 0. Nobody in the
+    // recording is (the fixture proves the healthy path renders numbers), so
+    // the null case is forced — and 0 here would read as "stood still".
+    const players = (movement as { players: { distance_per_min: number | null }[] }).players;
+    expect(players.every((p) => p.distance_per_min != null)).toBe(true);
+    const withNull = {
+      ...movement,
+      players: [{ ...players[0], distance_per_min: null, sprint_pct: null }, ...players.slice(1)],
+    };
+    const { container } = renderPage(withOverride('/storytelling/movement', jsonOnce(withNull)));
+    await waitFor(() => expect(screen.getByText(/engine units, not metres/)).toBeInTheDocument());
+    const panel = container.querySelector('[data-parity="story.movement"]')!;
+    // The dash is asserted on the ROW, not on the panel: the panel's own
+    // caption contains an em dash, so a page-wide `toContain` passed even
+    // with the guard removed. (Found by reverting the guard and watching
+    // this test stay green.)
+    const name = (players[0] as unknown as { name: string }).name;
+    const row = [...panel.querySelectorAll('.row')].find((r) => r.textContent?.startsWith(name))!;
+    expect(row.textContent).toContain('\u2014per min');
+    expect(row.textContent).not.toMatch(/\b0per min/);
+    // The sprint share disappears with the same denominator rather than
+    // printing 0%.
+    expect(row.textContent).not.toContain('% sprint');
+  });
+
+  it('shows the defensive-death thresholds that decide the count', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/free\s+objective time, no trade/)).toBeInTheDocument());
+    const t = (uselessDefense as { thresholds: { min_reinf_seconds: number; min_killer_health: number } }).thresholds;
+    // Quoted from the payload, not kept as a constant here: the thresholds
+    // are query parameters with defaults, and a page that hardcodes them
+    // would keep saying 25/80 after the server stopped meaning it.
+    expect(screen.getByText(new RegExp(`${t.min_reinf_seconds}s away`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`above ${t.min_killer_health} HP`))).toBeInTheDocument();
+  });
+
+  it('keeps the defensive board when the tracker boards are all unavailable', async () => {
+    // The four role boards read the position tracker; this one is counted
+    // from kill outcomes, so a tracker outage must not take it down with
+    // them — that would hide a measurement that is perfectly available.
+    const fail = () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
+    renderPage((input: RequestInfo | URL) => {
+      const p = new URL(String(input), 'http://test.local').pathname.replace(/^\/api/, '');
+      return ['/storytelling/gravity', '/storytelling/space-created', '/storytelling/enabler', '/storytelling/lurker-profile'].includes(p)
+        ? fail()
+        : fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/roles: unavailable/)).toBeInTheDocument());
+    expect(screen.getByText(/free\s+objective time, no trade/)).toBeInTheDocument();
+  });
+
+  it('fetches a formula only when the reader opens it', async () => {
+    const spy = vi.fn(fixtureFetch);
+    renderPage(spy);
+    await waitFor(() => expect(screen.getByText(/how is kis computed\?/)).toBeInTheDocument());
+    const called = () => spy.mock.calls.some(([u]) => String(u).includes('/storytelling/formula'));
+    expect(called()).toBe(false);
+    fireEvent.click(screen.getByText(/how is kis computed\?/));
+    await waitFor(() => expect(called()).toBe(true));
+    // The retired term is published WITH its status, and hiding that would
+    // leave a reader thinking push kills still score.
+    await waitFor(() => expect(screen.getByText(/retired in kis-v5/)).toBeInTheDocument());
+    expect(screen.getByText(/what it does and does not measure/)).toBeInTheDocument();
+  });
+
+  it('opens one player\'s kills and prints only the multipliers that moved', async () => {
+    renderPage();
+    const kisPlayers = (kis as { players: { name: string; guid: string }[] }).players;
+    const target = kisPlayers.find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    await waitFor(() => expect(screen.getAllByText(new RegExp(target.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name))!);
+    // The summary line is the SERVER's count. The fixture's kills array was
+    // truncated to 25 of 78, so a page that counted the array instead of
+    // reading the summary prints 25 here and fails.
+    const summary = (kisDetails as { summary: { kills: number } }).summary;
+    await waitFor(() => expect(screen.getByText(new RegExp(`${summary.kills} kills`))).toBeInTheDocument());
+    // Nine multipliers per kill, mostly x1.0; printing them all buries the
+    // two that did the work.
+    expect(screen.queryByText(/class ×1 · distance ×1/)).toBeNull();
   });
 });

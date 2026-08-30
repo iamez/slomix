@@ -17,6 +17,7 @@ import sessions from './__fixtures__/api_sessions_list.json';
 import mvp151 from './__fixtures__/api_session_151_mvp.json';
 import verdicts151 from './__fixtures__/api_session_151_verdicts.json';
 import goodNight151 from './__fixtures__/api_session_151_good_night.json';
+import bestLives from './__fixtures__/api_storytelling_best_lives.json';
 
 /** Session 154, recorded 2026-08-29: 12 rounds, 6 maps, 6 players, 5–7. */
 const BODIES: [string, unknown][] = [
@@ -25,6 +26,7 @@ const BODIES: [string, unknown][] = [
   ['/mvp', mvp],
   ['/verdicts', verdicts],
   ['/good-night', goodNight],
+  ['/storytelling/best-lives', bestLives],
   ['/api/sessions', sessions],
 ];
 
@@ -227,5 +229,31 @@ describe('SessionDetail', () => {
     await waitFor(() => expect(screen.getByText(/form: unavailable/)).toBeInTheDocument());
     // …and the rest of the session still renders.
     expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument();
+  });
+
+  it('shows the biggest single life, which the session totals flatten away', async () => {
+    const { container } = renderPage();
+    const lives = (bestLives as { lives: { name: string; kills: number; map_name: string; life_seconds: number }[] }).lives;
+    await waitFor(() => expect(container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    const panel = container.querySelector('[data-parity="session.lives"]')!;
+    // Every card, not just the best one: the strip is the point, and a page
+    // that renders only lives[0] looks identical for a five-card night.
+    expect(panel.querySelectorAll('a').length).toBe(lives.length);
+    const first = lives[0];
+    expect(panel.textContent).toContain(String(first.kills));
+    expect(panel.textContent).toContain(first.map_name);
+    expect(panel.textContent).toContain(`${first.life_seconds}s alive`);
+  });
+
+  it('tells an empty night apart from a failed request', async () => {
+    // The legacy panel did neither — it returned early on both, so "nobody
+    // had a standout life" and "the endpoint is down" looked the same.
+    renderPage(withOverride('/storytelling/best-lives', () => json({ status: 'ok', lives: [], total: 0 })));
+    await waitFor(() => expect(screen.getByText(/no life in this session cleared the minimum/)).toBeInTheDocument());
+    expect(screen.queryByText(/the best lives: unavailable/)).toBeNull();
+
+    renderPage(withOverride('/storytelling/best-lives', () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
+    await waitFor(() => expect(screen.getByText(/the best lives: unavailable/)).toBeInTheDocument());
   });
 });

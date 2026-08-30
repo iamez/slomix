@@ -1,0 +1,187 @@
+{
+ "status": "ok",
+ "available": true,
+ "players": [
+  {
+   "guid_short": "EDBB5DA9",
+   "name": "[TWK]CUJO",
+   "kills": 164,
+   "deaths": 116
+  },
+  {
+   "guid_short": "3C0354D3",
+   "name": "It's squAziii",
+   "kills": 161,
+   "deaths": 104
+  },
+  {
+   "guid_short": "2B5938F5",
+   "name": "bronze",
+   "kills": 140,
+   "deaths": 118
+  },
+  {
+   "guid_short": "1C747DF1",
+   "name": ".lgz",
+   "kills": 111,
+   "deaths": 158
+  },
+  {
+   "guid_short": "9F2B3930",
+   "name": "[TWK]Imb3ciL",
+   "kills": 89,
+   "deaths": 127
+  },
+  {
+   "guid_short": "1EDBF300",
+   "name": "kanii",
+   "kills": 78,
+   "deaths": 120
+  }
+ ],
+ "cells": [
+  {
+   "killer": "1C747DF1",
+   "victim": "1EDBF300",
+   "kills": 35,
+   "gibs": 1,
+   "revived": 10
+  },
+  {
+   "killer": "1C747DF1",
+   "victim": "3C0354D3",
+   "kills": 38,
+   "gibs": 1,
+   "revived": 9
+  },
+  {
+   "killer": "1C747DF1",
+   "victim": "EDBB5DA9",
+   "kills": 38,
+   "gibs": 0,
+   "revived": 4
+  },
+  {
+   "killer": "1EDBF300",
+   "victim": "1C747DF1",
+   "kills": 29,
+   "gibs": 0,
+   "revived": 8
+  },
+  {
+   "killer": "1EDBF300",
+   "victim": "2B5938F5",
+   "kills": 21,
+   "gibs": 0,
+   "revived": 5
+  },
+  {
+   "killer": "1EDBF300",
+   "victim": "9F2B3930",
+   "kills": 28,
+   "gibs": 0,
+   "revived": 3
+  },
+  {
+   "killer": "2B5938F5",
+   "victim": "1EDBF300",
+   "kills": 49,
+   "gibs": 0,
+   "revived": 9
+  },
+  {
+   "killer": "2B5938F5",
+   "victim": "3C0354D3",
+   "kills": 42,
+   "gibs": 0,
+   "revived": 10
+  },
+  {
+   "killer": "2B5938F5",
+   "victim": "EDBB5DA9",
+   "kills": 49,
+   "gibs": 0,
+   "revived": 12
+  },
+  {
+   "killer": "3C0354D3",
+   "victim": "1C747DF1",
+   "kills": 67,
+   "gibs": 2,
+   "revived": 12
+  },
+  {
+   "killer": "3C0354D3",
+   "victim": "2B5938F5",
+   "kills": 47,
+   "gibs": 2,
+   "revived": 5
+  },
+  {
+   "killer": "3C0354D3",
+   "victim": "9F2B3930",
+   "kills": 47,
+   "gibs": 0,
+   "revived": 11
+  },
+  {
+   "killer": "9F2B3930",
+   "victim": "1EDBF300",
+   "kills": 36,
+   "gibs": 2,
+   "revived": 7
+  },
+  {
+   "killer": "9F2B3930",
+   "victim": "3C0354D3",
+   "kills": 24,
+   "gibs": 1,
+   "revived": 5
+  },
+  {
+   "killer": "9F2B3930",
+   "victim": "EDBB5DA9",
+   "kills": 29,
+   "gibs": 1,
+   "revived": 6
+  },
+  {
+   "killer": "EDBB5DA9",
+   "victim": "1C747DF1",
+   "kills": 62,
+   "gibs": 0,
+   "revived": 18
+  },
+  {
+   "killer": "EDBB5DA9",
+   "victim": "2B5938F5",
+   "kills": 50,
+   "gibs": 0,
+   "revived": 8
+  },
+  {
+   "killer": "EDBB5DA9",
+   "victim": "9F2B3930",
+   "kills": 52,
+   "gibs": 0,
+   "revived": 9
+  }
+ ],
+ "total_kills": 743,
+ "scope": {
+  "kind": "gaming_session",
+  "version": "gaming-session-v1",
+  "gaming_session_id": 154,
+  "dates": [
+   "2026-08-27"
+  ],
+  "accepted_round_count": 12,
+  "distinct_map_names": [
+   "etl_adlernest",
+   "etl_sp_delivery",
+   "supply",
+   "te_escape2"
+  ],
+  "last_round_unix": 1787861734
+ }
+}

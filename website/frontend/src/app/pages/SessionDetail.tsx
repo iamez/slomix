@@ -5,7 +5,7 @@ import { Lbl, Pending, SectionHead, Tabs, Unavailable, figure } from '../compone
 import { ApiError } from '../lib/api';
 import {
   useSessionDetail, useSessionGoodNight, useSessionMvp, useSessionRounds,
-  useSessionVerdicts, useSessions,
+  useSessionVerdicts, useSessions, useStoryBestLives,
 } from '../lib/queries';
 import type {
   SessionDetail as SessionDetailData, SessionGoodNight, SessionPlayerTotals,
@@ -390,6 +390,59 @@ function RoundList({ rounds, counted, total }: { rounds: SessionRound[]; counted
   );
 }
 
+/** The best single life of the night — the most kills a player landed without
+ * dying once.
+ *
+ * It belongs on this page because the scoreboard cannot hold it: a session
+ * total flattens the six-kill run people actually remember. The legacy page
+ * drew the same cards from the same endpoint (`session-detail.js:717`), but
+ * treated any failure as a non-event and simply omitted the panel — which
+ * makes "the request failed" and "nobody had a standout life" look identical.
+ * This one says which. It sits with the scoreboard rather than with the
+ * models because it is a count of kills inside one life, not a rating.
+ */
+function LivesOfTheNight({ sessionId }: { sessionId: number }) {
+  const q = useStoryBestLives(sessionId);
+  if (q.isPending) return <Pending label="lives" />;
+  if (q.isError) return <Unavailable what="the best lives" />;
+  if (q.data.lives.length === 0) {
+    return (
+      <Stack gap={3} parity="session.lives">
+        <SectionHead label="lives of the night" />
+        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
+          no life in this session cleared the minimum — a fact about the night,
+          not a missing measurement
+        </span>
+      </Stack>
+    );
+  }
+  return (
+    <Stack gap={3} parity="session.lives">
+      <SectionHead label="lives of the night" aside={<span className="lbl">most kills on a single life</span>} />
+      <Cluster gap={5} align="start" style={{ flexWrap: 'wrap' }}>
+        {q.data.lives.map((l) => (
+          <Link
+            key={`${l.guid}:${l.map_name}:${l.round_number}:${l.life_seconds}`}
+            to={`/profile/${l.guid}`}
+            style={{ textDecoration: 'none', color: 'inherit', minWidth: 150 }}
+          >
+            <Stack gap={1}>
+              <Cluster gap={2} align="baseline">
+                <span className="m" style={{ fontSize: 'var(--fs-kpi)', color: 'var(--color-accent)' }}>{l.kills}</span>
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>kills · one life</Lbl>
+              </Cluster>
+              <span style={{ fontSize: 'var(--fs-row)' }}>{l.name}</span>
+              <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                {l.map_name} R{l.round_number} · {l.life_seconds}s alive
+              </span>
+            </Stack>
+          </Link>
+        ))}
+      </Cluster>
+    </Stack>
+  );
+}
+
 function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: number }) {
   const night = useSessionGoodNight(sessionId);
   const verdicts = useSessionVerdicts(sessionId);
@@ -397,6 +450,7 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
     <Stack gap={7} style={{ paddingTop: 'var(--space-5)' }}>
       <Scoreboard scoring={detail.scoring} />
       <TeamTotals matrix={detail.team_matrix} />
+      <LivesOfTheNight sessionId={sessionId} />
       {night.isPending && <Pending label="night score" />}
       {night.isError && <Unavailable what="night score" />}
       {night.data && <GoodNight data={night.data} />}
