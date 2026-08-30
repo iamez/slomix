@@ -243,9 +243,13 @@ class SessionMatchRow(BaseModel):
     """One round of the session, as the match list carries it."""
 
     id: int
-    map_name: str
+    #: `rounds.map_name` is nullable and neither query filters on
+    #: it — Codex on #830, second pass.
+    map_name: str | None
     round_number: int
-    date: str
+    #: `rounds.round_date` is nullable; an undated round in an otherwise
+    #: dated session reaches this field unchanged.
+    date: str | None
     #: NULL when neither `actual_duration_seconds` nor `actual_time`
     #: resolves — Codex on #830.
     duration: str | None
@@ -261,7 +265,9 @@ class _ScoringMapCommon(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    map: str
+    #: Nullable for the same reason as `SessionMatchRow.map_name`: the
+    #: scoring service copies the round's map name through unchanged.
+    map: str | None
     emoji: str
     description: str
     winner: str
@@ -301,7 +307,12 @@ class ScoringMapRow(_ScoringMapCommon):
     """A normally paired map: seventeen keys."""
 
     match_id: str | None
-    round_start_unix: int
+    #: ⚠️ `rounds.round_start_unix` is nullable AND 2,185 of 3,176 rows are
+    #: NULL right now — the most recent of them on 2026-08-27, the newest
+    #: session day there is. The service writes `r1.get('round_start_unix')`
+    #: with no filter. Eight sampled sessions passed only because their
+    #: paired maps happened to have it.
+    round_start_unix: int | None
     map_play_seq: int | None
 
 
@@ -319,11 +330,15 @@ class ScoringMapWithNote(ScoringMapRow):
 class ScoringDebugRow(BaseModel):
     """Per-map scoring trace. `note` was null on all 48 sampled rows."""
 
-    map: str
+    map: str | None
     counted: bool
     scoring_source: str
     winner_side: int | None
-    r1_defender_side: int
+    #: The R1-only and roster-change branches set this from
+    #: `r1.get('defender_team')` WITHOUT the normalisation the paired branch
+    #: applies, so a nullable column value arrives raw here even though
+    #: `_ScoringMapCommon` already accepts it — Codex on #830.
+    r1_defender_side: int | None
     team_a_r1_side: int | None
     team_a_r2_side: int | None
     note: str | None

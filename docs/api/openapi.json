@@ -3442,8 +3442,15 @@
       "type": "boolean"
      },
      "map": {
-      "title": "Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
      },
      "note": {
       "anyOf": [
@@ -3457,8 +3464,15 @@
       "title": "Note"
      },
      "r1_defender_side": {
-      "title": "R1 Defender Side",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
      },
      "scoring_source": {
       "title": "Scoring Source",
@@ -3528,8 +3542,15 @@
       "type": "string"
      },
      "map": {
-      "title": "Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
      },
      "note": {
       "title": "Note",
@@ -3641,8 +3662,15 @@
       "type": "string"
      },
      "map": {
-      "title": "Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
      },
      "map_play_seq": {
       "anyOf": [
@@ -3678,8 +3706,15 @@
       "title": "R1 Defender Side"
      },
      "round_start_unix": {
-      "title": "Round Start Unix",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
      },
      "scoring_source": {
       "title": "Scoring Source",
@@ -3778,8 +3813,15 @@
       "type": "string"
      },
      "map": {
-      "title": "Map",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
      },
      "map_play_seq": {
       "anyOf": [
@@ -3819,8 +3861,15 @@
       "title": "R1 Defender Side"
      },
      "round_start_unix": {
-      "title": "Round Start Unix",
-      "type": "integer"
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
      },
      "scoring_source": {
       "title": "Scoring Source",
@@ -4409,8 +4458,15 @@
     "description": "One round of the session, as the match list carries it.",
     "properties": {
      "date": {
-      "title": "Date",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Date"
      },
      "duration": {
       "anyOf": [
@@ -4428,8 +4484,15 @@
       "type": "integer"
      },
      "map_name": {
-      "title": "Map Name",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
      },
      "outcome": {
       "anyOf": [

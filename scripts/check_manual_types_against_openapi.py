@@ -357,7 +357,20 @@ def main() -> int:
                   f"could not read — that is not agreement about them")
         else:
             print("hand-written types agree with the generated schema")
-    return 1 if findings else 0
+
+    # ⛔ THE THIRD TIME THIS SCRIPT CONFUSED "CLEAN" WITH "EMPTY", and the
+    # first two fixes did not reach the only channel a shell can see. The
+    # single-schema path already exits 2 for a skipped alias, and the sweep
+    # already PRINTS the skipped names — but the status stayed `1 if findings`,
+    # so a caller reading `$?` was told an explicitly incomplete comparison had
+    # succeeded. A message nobody parses is not a result (Codex on #830).
+    #
+    # 1 = the comparison ran and disagreed.
+    # 2 = the comparison could not be completed — some declaration was never
+    #     examined. Louder than 0, distinguishable from a real disagreement.
+    if findings:
+        return 1
+    return 2 if (skipped or unreadable) else 0
 
 
 if __name__ == "__main__":
