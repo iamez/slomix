@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { hasFailed } from '../lib/responseStatus';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../lib/api';
@@ -322,8 +323,7 @@ function SeasonBlock() {
   // without the inference: when it reports a failure the count is suppressed
   // even if some days did come back. Absent until that lands, so this stays
   // a strictly stronger version of the heuristic, never a weaker one.
-  const calendarFailed = calendar.data?.status != null
-    && ['error', 'unavailable'].includes(calendar.data.status);
+  const calendarFailed = hasFailed(calendar, calendar.data);
   const activeDaysCount = calendar.data && !calendarFailed
     ? Object.keys(calendar.data.activity).length
     : 0;

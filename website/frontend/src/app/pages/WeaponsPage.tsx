@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { hasFailed } from '../lib/responseStatus';
 import { useWeapons, useWeaponsByPlayer, useWeaponsHof } from '../lib/queries';
 import type { WeaponRow } from '../lib/types';
 import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
@@ -56,8 +57,7 @@ function HallOfFameStrip({ period }: { period: string }) {
   // emptiness alone cannot tell an outage from a quiet season. #830 adds the
   // status field that can; until it lands the field is absent and this
   // reduces to today's behaviour.
-  const hofFailed = hof.isError
-    || (hof.data?.status != null && ['error', 'unavailable'].includes(hof.data.status));
+  const hofFailed = hasFailed(hof, hof.data);
   return (
     <div data-parity="weapons.hof" style={{ marginTop: 'var(--space-5)' }}>
       <SectionHead label="hall of fame · best hand per weapon" />

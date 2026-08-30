@@ -29,6 +29,7 @@ as an empty database. The frontend needs one place that recognises the shape.
 This test is an inventory, not a prohibition: adding a handler is fine, it just
 has to be a decision someone made rather than one that happened.
 """
+
 import ast
 from pathlib import Path
 
@@ -105,7 +106,8 @@ def test_the_inventory_is_current():
         "If you switched one route to a real status code, read this module's "
         "docstring first: the legacy pages throw on non-2xx and render nothing, "
         "and one route changed leaves two vocabularies for one situation. If "
-        "the change is deliberate, update KNOWN in the same commit.")
+        "the change is deliberate, update KNOWN in the same commit."
+    )
 
 
 def test_the_convention_is_still_concentrated_in_proximity():
@@ -118,7 +120,8 @@ def test_the_convention_is_still_concentrated_in_proximity():
     proximity = {h for h in KNOWN if h[0].startswith("proximity_")}
     assert len(proximity) >= 18, (
         f"only {len(proximity)} of {len(KNOWN)} are proximity handlers — the "
-        "docstring's reasoning about phase 5 no longer matches the code")
+        "docstring's reasoning about phase 5 no longer matches the code"
+    )
 
 
 def test_the_reader_can_fail():
@@ -127,9 +130,9 @@ def test_the_reader_can_fail():
     assert found, "the reader found no handlers at all — it is not measuring"
     assert ("skill_router.py", "get_player_skill") in found, (
         "the reader missed the handler this convention was reported against, "
-        "so it cannot be trusted to notice one leaving")
-    assert found != KNOWN | {("nonexistent.py", "nope")}, (
-        "the comparison cannot distinguish an extra entry")
+        "so it cannot be trusted to notice one leaving"
+    )
+    assert found != KNOWN | {("nonexistent.py", "nope")}, "the comparison cannot distinguish an extra entry"
 
 
 @pytest.mark.parametrize("path", ["get_player_skill", "get_proximity_scopes"])
@@ -144,6 +147,7 @@ def test_these_handlers_still_answer_200(path):
         if getattr(route, "endpoint", None) is getattr(module, path):
             assert route.status_code in (None, 200), (
                 f"{path} now declares status_code={route.status_code}; that is "
-                "the contract change this file records as not made")
+                "the contract change this file records as not made"
+            )
             return
     pytest.fail(f"{path} is no longer registered on its router")

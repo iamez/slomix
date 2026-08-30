@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMapSegments, useMapStats } from '../lib/queries';
+import { hasFailed } from '../lib/responseStatus';
 import type { MapStatsRow } from '../lib/types';
 import { mapImageFor, mapLabel } from '../lib/maps';
 import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
@@ -63,13 +64,12 @@ function ObjectiveRecords() {
   // failure STATUS and an empty list — success + empty there is an OUTAGE,
   // not an empty record book (same family as the #811 waves).
   //
-  // Both spellings on purpose: the field is being renamed from "error" to
-  // "unavailable" in #830, and a consumer that knows only the old one goes
-  // silently blind the moment the rename lands (Codex on that PR). Reading
-  // both is correct before and after, and costs one array.
-  const FAILED_STATUS = ['error', 'unavailable'];
-  const failed = segments.isError
-    || (segments.data?.status != null && FAILED_STATUS.includes(segments.data.status));
+  // Both spellings on purpose — see `hasFailed`: the field is being renamed
+  // from "error" to "unavailable" in #830, and a consumer that knows only one
+  // goes silently blind the moment the other lands (Codex on that PR). The
+  // list lives in one place now; three pages carried their own copy, and
+  // phase 5 adds twenty more endpoints that can answer this way.
+  const failed = hasFailed(segments, segments.data);
   return (
     <div data-parity="maps.objective-records" style={{ marginTop: 'var(--space-6)' }}>
       <SectionHead label="fastest objective completions · full map records" />
