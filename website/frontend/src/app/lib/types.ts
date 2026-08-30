@@ -1464,6 +1464,10 @@ export interface FormulaTerm {
   threshold?: number | string;
   status?: string;
   description?: string;
+  /** The soft-cap term publishes a compression factor beside its threshold:
+   *  above the threshold the total is 5.0 + (raw - 5.0) x compression, which
+   *  is why a high score is NOT the product of the multipliers. */
+  compression?: number;
   /** The reinforcement term nests its own graduated tiers. */
   tiers?: FormulaReinfTier[];
   /** The `alive` term nests two sub-terms instead of carrying a value. */

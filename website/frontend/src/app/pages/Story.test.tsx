@@ -309,6 +309,45 @@ describe('Story', () => {
     expect(screen.getByText(first.narrative)).toBeInTheDocument();
   });
 
+  it('keeps the server\'s 0–100 momentum domain instead of stretching the data', async () => {
+    // The endpoint normalises onto 0–100 and both legacy charts pin their
+    // axis there (story.js:638, :741). A min/max fit is a different claim:
+    // this recording never goes below 47.5, so a stretched chart draws a
+    // team at HALF strength sitting on the floor. Codex on #842.
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByRole('img', { name: /across the session/ })).toBeInTheDocument());
+    const svg = screen.getByRole('img', { name: /across the session/ });
+    const ys = [...svg.querySelectorAll('path')]
+      .flatMap((p) => [...(p.getAttribute('d') ?? '').matchAll(/[ML][\d.]+,([\d.]+)/g)].map((m) => Number(m[1])));
+    const H = Number(svg.getAttribute('height'));
+    const values = (momentumSession as { points: { team_a: number; team_b: number }[] }).points
+      .flatMap((p) => [p.team_a, p.team_b]);
+    const expected = (v: number) => H - 2 - (v / 100) * (H - 4);
+    // The lowest point of the drawing is where the data's minimum belongs on
+    // the fixed domain — NOT at the floor.
+    expect(Math.max(...ys)).toBeCloseTo(expected(Math.min(...values)), 1);
+    expect(Math.max(...ys)).toBeLessThan(H - 3);
+    expect(Math.min(...ys)).toBeCloseTo(expected(Math.max(...values)), 1);
+    // Same domain for the per-round sparklines, or one page shows two
+    // different pictures of the same numbers.
+    const round = container.querySelector('[data-parity="story.momentum"] svg')!;
+    const rh = Number(round.getAttribute('height'));
+    const rys = [...round.querySelectorAll('path')]
+      .flatMap((p) => [...(p.getAttribute('d') ?? '').matchAll(/[ML][\d.]+,([\d.]+)/g)].map((m) => Number(m[1])));
+    expect(Math.max(...rys)).toBeLessThan(rh - 3);
+  });
+
+  it('scales rather than clips on a narrow viewport', async () => {
+    // maxWidth:100% shrinks the VIEWPORT; without a viewBox the coordinates
+    // stay at 620 and the right-hand two thirds of the evening are simply
+    // not drawn on a phone (the shell leaves ~319 px on a 375 px screen).
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('img', { name: /across the session/ })).toBeInTheDocument());
+    for (const svg of screen.getAllByRole('img', { name: /momentum/ })) {
+      expect(svg.getAttribute('viewBox')).toBe(`0 0 ${svg.getAttribute('width')} ${svg.getAttribute('height')}`);
+    }
+  });
+
   it('draws the evening as one curve and names the rosters it belongs to', async () => {
     const { container } = renderPage();
     await waitFor(() => expect(screen.getByRole('img', { name: /across the session/ })).toBeInTheDocument());
@@ -451,6 +490,60 @@ describe('Story', () => {
     // leave a reader thinking push kills still score.
     await waitFor(() => expect(screen.getByText(/retired in kis-v5/)).toBeInTheDocument());
     expect(screen.getByText(/what it does and does not measure/)).toBeInTheDocument();
+  });
+
+  it('accounts for the objective-area term, which the payload spells as a flag', async () => {
+    // The six objective-area kills in the recording are exactly the six
+    // whose listed factors do not multiply out to total_impact, each short
+    // by the published x1.40 (measured; Codex on #842). A breakdown whose
+    // product cannot reach its own total is not a breakdown.
+    const kills = (kisDetails as { kills: { is_objective_area: boolean; total_impact: number }[] }).kills;
+    const objective = kills.filter((k) => k.is_objective_area);
+    expect(objective.length).toBeGreaterThan(0);
+
+    renderPage();
+    const target = (kis as { players: { name: string; guid: string }[] }).players
+      .find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    // Wait for the KIS ROW specifically: the formula toggles also carry
+    // aria-expanded=false, so "some collapsed button exists" is true before
+    // the board has rendered at all.
+    const row = () => screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name));
+    await waitFor(() => expect(row()).toBeDefined());
+    fireEvent.click(row()!);
+
+    const value = (kisFormula as { objective_multipliers: { objective_area: { value: number } } })
+      .objective_multipliers.objective_area.value;
+    // The value is quoted from the formula endpoint, not kept as a constant
+    // in the page — a constant is what goes stale when the scorer changes.
+    await waitFor(() => expect(screen.getAllByText(new RegExp(`objective area ×${value}`)).length).toBeGreaterThan(0));
+  });
+
+  it('says when a score was soft-capped, in the breakdown and in the formula', async () => {
+    // Above the threshold the total is NOT the product of the terms, so a
+    // breakdown that stays silent about the cap reads as arithmetic that
+    // does not work.
+    const cap = (kisFormula as { soft_cap: { threshold: number; compression: number } }).soft_cap;
+    const kills = (kisDetails as { kills: { total_impact: number }[] }).kills;
+    expect(kills.some((k) => k.total_impact > cap.threshold)).toBe(true);
+
+    renderPage();
+    const target = (kis as { players: { name: string; guid: string }[] }).players
+      .find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    // Wait for the KIS ROW specifically: the formula toggles also carry
+    // aria-expanded=false, so "some collapsed button exists" is true before
+    // the board has rendered at all.
+    const row = () => screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name));
+    await waitFor(() => expect(row()).toBeDefined());
+    fireEvent.click(row()!);
+    await waitFor(() => expect(screen.getAllByText(/soft-capped/).length).toBeGreaterThan(0));
+
+    // …and the panel that explains the score publishes both parameters.
+    fireEvent.click(screen.getByText(/how is kis computed\?/));
+    await waitFor(() => expect(screen.getByText('soft cap')).toBeInTheDocument());
+    expect(screen.getByText(new RegExp(`above ${cap.threshold}`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`×${cap.compression} above it`))).toBeInTheDocument();
   });
 
   it('opens one player\'s kills and prints only the multipliers that moved', async () => {

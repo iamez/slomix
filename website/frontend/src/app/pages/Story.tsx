@@ -168,6 +168,25 @@ function Moments({ gsid }: { gsid: number }) {
 const MOMENTUM_W = 220;
 const MOMENTUM_H = 34;
 
+/** The domain the SERVER draws on.
+ *
+ * `compute_momentum` normalises every value onto 0–100 per round, and both
+ * legacy charts pin their axis to exactly that (`story.js:638`, `:741`).
+ * Rescaling the observed min and max to the full drawing height instead
+ * looks like a nicer chart and is a different claim: measured on the
+ * recording, the values run 47.5–100, so a min/max fit draws 47.5 sitting on
+ * the floor as though a team had nothing left. Codex on #842.
+ */
+const MOMENTUM_MIN = 0;
+const MOMENTUM_MAX = 100;
+
+/** Place a value on the fixed domain, clamped, and flipped for SVG's y-down. */
+function momentumY(value: number, height: number): number {
+  const t = (value - MOMENTUM_MIN) / (MOMENTUM_MAX - MOMENTUM_MIN);
+  const clamped = Math.min(1, Math.max(0, t));
+  return height - 2 - clamped * (height - 4);
+}
+
 /** Round-by-round strength as two sparklines, axis and allies, exactly the
  * two series the legacy chart drew.
  *
@@ -175,25 +194,18 @@ const MOMENTUM_H = 34;
  * the clock and the sides swap between the halves, so a single continuous
  * line would draw a continuity the numbers do not have.
  *
- * The two lines share ONE scale — computed across both series — because two
- * lines auto-scaled apart would cross wherever the picture felt like it,
- * which is the one thing this chart must not do.
+ * Both lines sit on the server's 0–100 domain, which gives them one shared
+ * scale (two lines auto-scaled apart would cross wherever the picture felt
+ * like it) AND keeps the height meaning what the endpoint says it means.
  */
 function Momentum({ round }: { round: StoryMomentumRound }) {
   const pts = round.points;
   const paths = useMemo(() => {
     if (pts.length < 2) return null;
-    const values = pts.flatMap((p) => [p.axis, p.allies]);
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
-    const span = hi - lo || 1;
     const step = MOMENTUM_W / (pts.length - 1);
     const line = (pick: (p: { axis: number; allies: number }) => number) =>
       pts
-        .map((p, i) => {
-          const y = MOMENTUM_H - 2 - ((pick(p) - lo) / span) * (MOMENTUM_H - 4);
-          return `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${y.toFixed(1)}`;
-        })
+        .map((p, i) => `${i === 0 ? 'M' : 'L'}${(i * step).toFixed(1)},${momentumY(pick(p), MOMENTUM_H).toFixed(1)}`)
         .join(' ');
     return { axis: line((p) => p.axis), allies: line((p) => p.allies) };
   }, [pts]);
@@ -205,6 +217,9 @@ function Momentum({ round }: { round: StoryMomentumRound }) {
         <svg
           width={MOMENTUM_W}
           height={MOMENTUM_H}
+          viewBox={`0 0 ${MOMENTUM_W} ${MOMENTUM_H}`}
+          preserveAspectRatio="none"
+          style={{ maxWidth: '100%' }}
           role="img"
           aria-label={`momentum, ${round.map_name} round ${round.round_number}`}
         >
@@ -244,18 +259,14 @@ function SessionMomentum({ gsid }: { gsid: number }) {
   const paths = useMemo(() => {
     if (!data || data.status !== 'ok' || data.points.length < 2) return null;
     const pts = data.points;
-    const values = pts.flatMap((p) => [p.team_a, p.team_b]);
-    const lo = Math.min(...values);
-    const hi = Math.max(...values);
-    const span = hi - lo || 1;
     const tMax = pts[pts.length - 1].t_ms || 1;
     const x = (t: number) => (t / tMax) * SESSION_W;
+    // Same fixed 0–100 domain as the per-round charts: it is the scale the
+    // endpoint normalises onto, and a min/max fit would make this session's
+    // 47.5 look like a team with nothing left.
     const line = (pick: (p: { team_a: number; team_b: number }) => number) =>
       pts
-        .map((p, i) => {
-          const y = SESSION_H - 2 - ((pick(p) - lo) / span) * (SESSION_H - 4);
-          return `${i === 0 ? 'M' : 'L'}${x(p.t_ms).toFixed(1)},${y.toFixed(1)}`;
-        })
+        .map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.t_ms).toFixed(1)},${momentumY(pick(p), SESSION_H).toFixed(1)}`)
         .join(' ');
     return {
       a: line((p) => p.team_a),
@@ -279,8 +290,20 @@ function SessionMomentum({ gsid }: { gsid: number }) {
 
   return (
     <Stack gap={2}>
+      {/* viewBox, or `maxWidth: 100%` CLIPS instead of scaling: the shell
+        * leaves about 319 px of content on a 375 px viewport, and without it
+        * the last two thirds of the evening simply are not drawn on a phone
+        * (Codex on #842). */}
       {paths ? (
-        <svg width={SESSION_W} height={SESSION_H} role="img" aria-label="momentum across the session" style={{ maxWidth: '100%' }}>
+        <svg
+          width={SESSION_W}
+          height={SESSION_H}
+          viewBox={`0 0 ${SESSION_W} ${SESSION_H}`}
+          preserveAspectRatio="none"
+          role="img"
+          aria-label="momentum across the session"
+          style={{ maxWidth: '100%' }}
+        >
           {paths.marks.map((m) => (
             <line
               key={`${m.map_name}:${m.round_number}:${m.x_ms}`}
@@ -495,13 +518,15 @@ function WinContribution({ gsid }: { gsid: number }) {
 function Term({ name, term }: { name: string; term: FormulaTerm }) {
   const head = term.value != null
     ? `×${term.value}`
-    : term.range != null
-      ? term.range
-      : term.tiers != null
-        ? `${term.tiers.length} tiers`
-        : term.solo_clutch?.value != null
-          ? `×${term.solo_clutch.value} / ×${term.outnumbered?.value ?? '?'}`
-          : '';
+    : term.compression != null
+      ? `×${term.compression} above it`
+      : term.range != null
+        ? term.range
+        : term.tiers != null
+          ? `${term.tiers.length} tiers`
+          : term.solo_clutch?.value != null
+            ? `×${term.solo_clutch.value} / ×${term.outnumbered?.value ?? '?'}`
+            : '';
   return (
     <Stack gap={1} className="row" style={{ padding: 'var(--space-1) 0' }}>
       <Cluster gap={2} align="baseline" justify="between">
@@ -608,6 +633,14 @@ function KisFormula() {
           <TermGroup label="distance" terms={q.data.distance_multipliers} />
           <TermGroup label="objective area" terms={q.data.objective_multipliers} />
           <TermGroup label="oksii context" terms={q.data.oksii_multipliers} />
+          {/* The soft cap is the reason a high score is not the product of
+            * the terms above, so leaving it out makes the panel unable to
+            * explain exactly the kills a reader would look up (Codex on
+            * #842). */}
+          <Stack gap={1}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>soft cap</Lbl>
+            <Term name={`above ${q.data.soft_cap.threshold ?? '?'}`} term={q.data.soft_cap} />
+          </Stack>
           <Stack gap={1}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>what it does and does not measure</Lbl>
             {Object.entries(q.data.validity).map(([k, v]) => (
@@ -630,6 +663,18 @@ function KisFormula() {
  */
 function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: string }) {
   const q = useStoryKisDetails(gsid, guid);
+  // The per-kill payload carries `is_objective_area` as a FLAG and not as a
+  // multiplier, and the objective boost is the last term of the published
+  // formula — so a breakdown that lists only the numeric fields cannot
+  // explain those kills. Measured on the recording: the six objective-area
+  // kills are exactly the six whose factors did not multiply out, each short
+  // by ×1.40 (Codex on #842). The value comes from the formula endpoint
+  // rather than a constant here, because a constant is the thing that goes
+  // stale the day the scorer changes. Cached with staleTime: Infinity, so
+  // opening several rows costs one request.
+  const formula = useStoryKisFormula(true);
+  const objective = formula.data?.objective_multipliers.objective_area;
+  const softCap = formula.data?.soft_cap;
   if (q.isPending) return <Pending label={`${name}'s kills`} />;
   if (q.isError) return <Unavailable what={`${name}'s kills`} />;
   const { summary, kills } = q.data;
@@ -662,10 +707,19 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
             ['health', k.health_multiplier],
             ['alive', k.alive_multiplier],
             ['reinf', k.reinf_multiplier],
-          ] as const;
+          ] as [string, number][];
           // Only the multipliers that MOVED the score: printing nine ×1.0s
           // per row buries the two that did the work.
-          const applied = mults.filter(([, v]) => v !== 1);
+          const applied: [string, number][] = mults.filter(([, v]) => v !== 1);
+          // The tenth term, which the payload spells as a flag.
+          if (k.is_objective_area && objective?.value != null) {
+            applied.push(['objective area', objective.value]);
+          }
+          // `threshold` is `number | string` on FormulaTerm, because other
+          // terms publish it as prose ("<30 HP"). Here it is a number, and
+          // the comparison says so rather than assuming it.
+          const capThreshold = typeof softCap?.threshold === 'number' ? softCap.threshold : null;
+          const capped = capThreshold != null && k.total_impact > capThreshold;
           return (
             <Cluster key={k.kill_outcome_id ?? `${k.map_name}:${k.kill_time_ms}:${k.victim_guid}`} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0' }}>
               <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
@@ -679,6 +733,9 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
                 {applied.length === 0
                   ? 'base kill, no context'
                   : applied.map(([label, v]) => `${label} ×${v.toFixed(2).replace(/0$/, '')}`).join(' · ')}
+                {/* Above the threshold the total is NOT the product — saying
+                  * so is the difference between a breakdown and a riddle. */}
+                {capped && <span style={{ color: 'var(--color-text-500)' }}> · soft-capped</span>}
               </span>
             </Cluster>
           );
