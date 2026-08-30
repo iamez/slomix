@@ -396,7 +396,10 @@ function LatestGames() {
               </span>
             </span>
             <span className="m" style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>
-              <span>{m.map_name}</span>
+              {/* `?? 'unknown map'`: the column is nullable and no query
+                * filters it, so a null renders as an empty gap otherwise —
+                * the same silent hole /rounds/recent had (#830). */}
+              <span>{m.map_name ?? 'unknown map'}</span>
               <span>R{m.round_number}</span>
               <span>{m.format}</span>
               <span style={{ marginLeft: 'auto' }}>{m.time_ago.toLowerCase()}</span>
