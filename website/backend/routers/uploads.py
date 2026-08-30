@@ -494,7 +494,18 @@ class UploadListItem(BaseModel):
     file_size_bytes: int
     uploader_name: str
     #: `uploads.uploader_discord_id` is nullable and reaches the payload raw.
-    uploader_discord_id: int | None
+    #: ⛔ A STRING, NOT A NUMBER, AND THE DIFFERENCE IS A LIVE BUG. A Discord
+    #: snowflake is 18 digits; `Number.MAX_SAFE_INTEGER` is 16. Sent as a JSON
+    #: number, `JSON.parse` silently drops the last digit — measured:
+    #: 231165917604741121 arrives as ...120. `auth.py:314` already sends the
+    #: session id as `str()`, so `uploads.js:1191` compares an exact string
+    #: against a corrupted number and the uploader loses the delete
+    #: affordance on their own file whenever `can_delete` is absent.
+    #:
+    #: ⭐ The change is NOT lossy: a consumer doing `Number(x)` gets exactly
+    #: what it got before, and one doing `String(x)` now gets the right
+    #: digits instead of the wrong ones. (CodeRabbit on #830.)
+    uploader_discord_id: str | None
     #: `uploads.download_count` is nullable and reaches the payload raw.
     download_count: int | None
     #: `str(created_at) if created_at else None` — the column is nullable.
@@ -555,7 +566,18 @@ class UploadDetail(BaseModel):
     #: Nullable column, passed through raw.
     mime_type: str | None
     uploader_name: str
-    uploader_discord_id: int | None
+    #: ⛔ A STRING, NOT A NUMBER, AND THE DIFFERENCE IS A LIVE BUG. A Discord
+    #: snowflake is 18 digits; `Number.MAX_SAFE_INTEGER` is 16. Sent as a JSON
+    #: number, `JSON.parse` silently drops the last digit — measured:
+    #: 231165917604741121 arrives as ...120. `auth.py:314` already sends the
+    #: session id as `str()`, so `uploads.js:1191` compares an exact string
+    #: against a corrupted number and the uploader loses the delete
+    #: affordance on their own file whenever `can_delete` is absent.
+    #:
+    #: ⭐ The change is NOT lossy: a consumer doing `Number(x)` gets exactly
+    #: what it got before, and one doing `String(x)` now gets the right
+    #: digits instead of the wrong ones. (CodeRabbit on #830.)
+    uploader_discord_id: str | None
     download_count: int | None
     #: `content_hash_sha256` is NOT NULL in the schema.
     content_hash: str
@@ -641,7 +663,7 @@ async def list_uploads(
             "extension": r[4],
             "file_size_bytes": r[5],
             "uploader_name": r[6],
-            "uploader_discord_id": r[7],
+            "uploader_discord_id": str(r[7]) if r[7] is not None else None,
             "download_count": r[8],
             "created_at": str(r[9]) if r[9] else None,
             "description_preview": r[10] or None,
@@ -703,7 +725,7 @@ async def get_upload(upload_id: str, request: Request, db=Depends(get_db)):
         "file_size_bytes": row[6],
         "mime_type": row[7],
         "uploader_name": row[8],
-        "uploader_discord_id": row[9],
+        "uploader_discord_id": str(row[9]) if row[9] is not None else None,
         "download_count": row[10],
         "content_hash": row[11],
         "created_at": str(row[12]) if row[12] else None,

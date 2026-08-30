@@ -1647,8 +1647,16 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
                    if any(v for v in getattr(d, "users_by_status", {}).values()))
         entry = next(u for v in day.users_by_status.values() for u in v)
         assert isinstance(entry, AvailabilityUser)
-        assert isinstance(entry.user_id, int)
         assert isinstance(entry.display_name, str)
+        # ⛔ A STRING, AND THIS ASSERTION IS THE GUARD. A Discord snowflake is
+        # 18 digits and `Number.MAX_SAFE_INTEGER` is 16, so sending it as a
+        # JSON number loses the last one: 231165917604741121 arrives in a
+        # browser as ...120. This test asserted `int` until CodeRabbit found
+        # it on #830 — it was pinning the bug.
+        assert isinstance(entry.user_id, str)
+        assert int(entry.user_id) > 2 ** 53, (
+            "the fixture's id no longer exceeds Number.MAX_SAFE_INTEGER, so "
+            "it can no longer demonstrate why this field is a string")
 
     def test_what_the_day_union_actually_rests_on(self):
         """⭐ MEASURED, BECAUSE THE OBVIOUS EXPLANATIONS WERE BOTH WRONG.
@@ -2304,3 +2312,31 @@ class TestOnePlayerTwoGuids:
         assert _short_guid("Z" * 32) is None
         assert _short_guid("") is None
         assert _short_guid("  5D9891600C7948FF85709360E669D5A4  ") == "5D989160"
+
+
+def test_no_recorded_fixture_carries_a_real_discord_identity():
+    """⛔ THE REPOSITORY IS PUBLIC AND THESE FIXTURES ARE RECORDED FROM LIVE.
+
+    The first version of them carried a real Discord snowflake and the
+    uploader's name in eight rows across three files — a link between an
+    in-game identity and a Discord account, which is not what the site
+    publishes (CodeRabbit, CWE-359, on #830). Player names on a leaderboard
+    are public by design; a Discord account id is not, and that is the line.
+
+    ⚠️ The replacement keeps EIGHTEEN DIGITS on purpose. A shorter synthetic
+    id would fit in a JS double and the fixtures would quietly stop being
+    evidence for why `user_id` is a string.
+    """
+    import re
+    from pathlib import Path
+
+    offenders = []
+    for path in sorted(Path("tests/fixtures/api_responses").glob("*.json")):
+        text = path.read_text()
+        offenders.extend(
+            f"{path.name}: {m.group(1)} is an unquoted "
+            f"{len(m.group(2))}-digit number"
+            for m in re.finditer(r'"(user_id|uploader_discord_id)":\s*(\d{16,})', text))
+    assert not offenders, (
+        "a snowflake is on the wire as a JSON number, which a browser "
+        "truncates: " + "; ".join(offenders))

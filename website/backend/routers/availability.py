@@ -440,7 +440,18 @@ async def get_availability_access(request: Request, db=Depends(get_db)):
 
 
 class AvailabilityUser(BaseModel):
-    user_id: int
+    #: ⛔ A STRING, NOT A NUMBER, AND THE DIFFERENCE IS A LIVE BUG. A Discord
+    #: snowflake is 18 digits; `Number.MAX_SAFE_INTEGER` is 16. Sent as a JSON
+    #: number, `JSON.parse` silently drops the last digit — measured:
+    #: 231165917604741121 arrives as ...120. `auth.py:314` already sends the
+    #: session id as `str()`, so `uploads.js:1191` compares an exact string
+    #: against a corrupted number and the uploader loses the delete
+    #: affordance on their own file whenever `can_delete` is absent.
+    #:
+    #: ⭐ The change is NOT lossy: a consumer doing `Number(x)` gets exactly
+    #: what it got before, and one doing `String(x)` now gets the right
+    #: digits instead of the wrong ones. (CodeRabbit on #830.)
+    user_id: str
     #: `COALESCE(pl.player_name, ae.user_name, pl.discord_username)`, with a
     #: `"User {id}"` fallback in the handler — never null.
     display_name: str
@@ -633,7 +644,7 @@ async def get_availability_range(
             )
             day_map[status].append(
                 {
-                    "user_id": int(row[2]),
+                    "user_id": str(row[2]),
                     "display_name": row[3] or f"User {row[2]}",
                 }
             )
