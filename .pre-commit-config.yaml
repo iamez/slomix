@@ -3,7 +3,10 @@ repos:
     rev: v4.5.0
     hooks:
       - id: check-added-large-files
-        args: ['--maxkb=500']
+        # 1 MB, matching scripts/git-hooks/pre-push and the CI file-checks
+        # job. Raised from 500 on 2026-08-30: the tracked API snapshot outgrew
+        # it. Still 23x below the incident this guard was written for.
+        args: ['--maxkb=1024']
       - id: check-merge-conflict
       - id: end-of-file-fixer
       - id: trailing-whitespace

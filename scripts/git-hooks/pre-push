@@ -8,7 +8,7 @@
 # commit stayed reachable by SHA, and the SHA is printed in the PR timeline.
 #
 # The guard that would have stopped it already existed: .pre-commit-config.yaml
-# carries check-added-large-files --maxkb=500. It was never installed —
+# carries check-added-large-files --maxkb=1024. It was never installed —
 # .git/hooks held nothing but .sample files. And repo-hygiene.yml DID catch it
 # in CI, but CI runs after the push, which for a public repo is after exposure.
 #
@@ -21,7 +21,12 @@
 # Escape hatch, on purpose: git push --no-verify. If you mean it, say so.
 set -uo pipefail
 
-MAX_BYTES=512000          # same 500 kB threshold as CI and .pre-commit-config
+# Raised from 512000 on 2026-08-30 (owner's call). The guard exists because a
+# 23.8 MB spreadsheet of another player's data was once swept into a PUBLIC
+# repo — 1 MB still catches that by a factor of 23, while docs/api/openapi.json
+# (the frozen API snapshot, which MUST stay tracked: tests and CI compare
+# against it) had crossed 500 kB simply by describing more endpoints.
+MAX_BYTES=1048576         # same 1 MB threshold as CI and .pre-commit-config
 MAX_FILES=25              # a push touching more than this is probably a sweep
 ZERO=0000000000000000000000000000000000000000
 # NOTE: no `csv`. .gitignore documents that this repo DELIBERATELY tracks

@@ -25,11 +25,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-      - name: Check for large files (>500KB)
+      # 1 MB, matching scripts/git-hooks/pre-push and .pre-commit-config.
+      # ⛔ THE FOURTH COPY OF THIS NUMBER. Raising the other three and leaving
+      # this one would have moved the failure from the push to CI without
+      # changing anything else — the guard's own comment named CI and
+      # pre-commit but not this workflow.
+      - name: Check for large files (>1MB)
         run: |
-          large_files=$(find . -type f -size +500k -not -path './.git/*' -not -path './local_stats/*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './website/data/uploads/*' -not -path './website/assets/*')
+          large_files=$(find . -type f -size +1024k -not -path './.git/*' -not -path './local_stats/*' -not -path './node_modules/*' -not -path './.venv/*' -not -path './website/data/uploads/*' -not -path './website/assets/*')
           if [ -n "$large_files" ]; then
-            echo "::error::Large files detected (>500KB):"
+            echo "::error::Large files detected (>1MB):"
             echo "$large_files"
             exit 1
           fi
