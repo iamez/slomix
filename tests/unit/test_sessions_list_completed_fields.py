@@ -217,6 +217,19 @@ def test_the_search_term_is_bound_and_never_interpolated(client_and_db):
     assert "\\_" in str(params[-1]) and "\\%" in str(params[-1])
 
 
+def test_the_search_subqueries_gate_bots_too(client_and_db):
+    """:485 (Codex on #848): the CTE gates alone were not enough — a map or
+    player found ONLY in a valid bot round still matched the search
+    subqueries and returned the session. Counted over the built query: the
+    two search subqueries add two more bot gates on top of the CTE gates."""
+    client, db = client_and_db
+    client.get("/api/sessions?limit=5&search=supply")
+    query, _ = db.calls[0]
+    assert query.count("is_bot_round IS DISTINCT FROM TRUE") == 4, (
+        f"expected 2 CTE + 2 search bot gates, found {query.count('is_bot_round IS DISTINCT FROM TRUE')}"
+    )
+
+
 def test_no_search_means_no_filter(client_and_db):
     client, db = client_and_db
     client.get("/api/sessions?limit=5")

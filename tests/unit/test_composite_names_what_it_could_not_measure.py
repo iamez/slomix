@@ -96,7 +96,13 @@ class _ScriptedDb:
         return list(self.players)
 
     async def fetch_one(self, query, params=None):
-        if "MAX(session_date)" in query:
+        # ⚠️ "GREATEST", not a literal MAX spelling: the :508 gated rewrite
+        # renamed MAX(session_date) to MAX(t.session_date), this dispatch
+        # stopped matching, the no-scope resolver silently took the early
+        # return — and the keys-equality test compared short against SHORT, a
+        # tautology that only the partially_synthetic mutation exposed. A
+        # stub keyed on a query substring is a guard that dies of a rename.
+        if "GREATEST" in query or "MAX(session_date)" in query or "MAX(t.session_date)" in query:
             return (self.latest_date,)
         if "proximity_crossfire_opportunity" in query and "COUNT" in query:
             return tuple(self.source_counts)
@@ -208,6 +214,14 @@ def test_the_no_scope_answer_has_the_same_keys_as_every_other_answer():
         f"only in full {set(full) - set(short)}"
     )
     assert set(short["coverage"]) == set(full["coverage"])
+    # The third state (Codex on #848): CP's focus term is a constant 15 of
+    # 100 points, but the other 85 are measured — so "cp" must never appear
+    # in unmeasured_metrics (that would hide a real answer) and must ALWAYS
+    # appear in partially_synthetic_metrics, on both response paths, until
+    # focus gains a session-scoped source.
+    for body in (short, full):
+        assert body["coverage"]["partially_synthetic_metrics"] == ["cp"]
+        assert "cp" not in body["coverage"]["unmeasured_metrics"]
     assert set(short["coverage"]["source_rows"]) == set(full["coverage"]["source_rows"])
     assert short["meta"]["metrics"] == full["meta"]["metrics"], (
         "the two paths carry different metric descriptions — one dict, two copies, and they will drift"

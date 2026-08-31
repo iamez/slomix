@@ -482,6 +482,7 @@ async def get_sessions_list(
                     WHERE r2.gaming_session_id IS NOT NULL
                       AND r2.round_number IN (1, 2)
                       AND r2.is_valid IS DISTINCT FROM FALSE
+                      AND r2.is_bot_round IS DISTINCT FROM TRUE
                       AND (r2.round_status IN ('completed', 'substitution')
                            OR r2.round_status IS NULL)
                       AND LOWER(r2.map_name) LIKE LOWER($3)
@@ -492,6 +493,7 @@ async def get_sessions_list(
                     WHERE r3.gaming_session_id IS NOT NULL
                       AND r3.round_number IN (1, 2)
                       AND r3.is_valid IS DISTINCT FROM FALSE
+                      AND r3.is_bot_round IS DISTINCT FROM TRUE
                       AND (r3.round_status IN ('completed', 'substitution')
                            OR r3.round_status IS NULL)
                       AND LOWER(p2.player_name) LIKE LOWER($3)
@@ -1325,6 +1327,7 @@ async def get_stats_sessions(
                     WHERE r2.gaming_session_id IS NOT NULL
                       AND r2.round_number IN (1, 2)
                       AND r2.is_valid IS DISTINCT FROM FALSE
+                      AND r2.is_bot_round IS DISTINCT FROM TRUE
                       AND (r2.round_status IN ('completed', 'substitution') OR r2.round_status IS NULL)
                       AND LOWER(r2.map_name) LIKE LOWER(${param_idx})
                 )
@@ -1334,6 +1337,7 @@ async def get_stats_sessions(
                     WHERE r3.gaming_session_id IS NOT NULL
                       AND r3.round_number IN (1, 2)
                       AND r3.is_valid IS DISTINCT FROM FALSE
+                      AND r3.is_bot_round IS DISTINCT FROM TRUE
                       AND (r3.round_status IN ('completed', 'substitution') OR r3.round_status IS NULL)
                       AND LOWER(p2.player_name) LIKE LOWER(${param_idx})
                 )

@@ -547,6 +547,7 @@ async def get_composite_stats(
                     "players": [],
                     "coverage": {
                         "unmeasured_metrics": ["ci", "kpi", "sds", "tir"],
+                        "partially_synthetic_metrics": ["cp"],
                         "source_rows": {
                             "crossfire": 0,
                             "crossfire_cache": 0,
@@ -877,6 +878,15 @@ async def get_composite_stats(
             # in scope was measured", which is a different statement from the
             # key being absent, and the UI must be able to tell them apart.
             "unmeasured_metrics": unmeasured,
+            # ⚠️ A third state between measured and unmeasured (Codex on
+            # #848): CP's focus term is selected as literal zero for EVERY
+            # scope, so 15 of its 100 points are a constant, not a session
+            # measurement — but the other 85 ARE measured, so putting "cp"
+            # into unmeasured_metrics would hide a real answer. The list is
+            # static on purpose: the synthetic share is structural until
+            # focus_escapes gains a session-scoped source, at which point
+            # this line is the one to delete.
+            "partially_synthetic_metrics": ["cp"],
             "source_rows": {
                 "crossfire": crossfire_rows,
                 "crossfire_cache": crossfire_cache_rows,
