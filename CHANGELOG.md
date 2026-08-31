@@ -6,6 +6,41 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.42.0](https://github.com/iamez/slomix/compare/v1.41.0...v1.42.0) (2026-08-31)
+
+
+### Features
+
+* **proximity:** §8 stops being prose, and the outcome turns out to be a choice ([#818](https://github.com/iamez/slomix/issues/818)) ([dcab347](https://github.com/iamez/slomix/commit/dcab34790f85577e7ed3fe4ab5c88cbb24d5730e))
+* **website:** a workshop page that shows every piece in every state ([#827](https://github.com/iamez/slomix/issues/827)) ([362c6f9](https://github.com/iamez/slomix/commit/362c6f94ecd42ae60325b8892bed2b4c65ecd470))
+* **website:** every round, with the numbers that were missing ([#824](https://github.com/iamez/slomix/issues/824)) ([1710709](https://github.com/iamez/slomix/commit/1710709f5842aa56b49c2185e6305a70698b50f2))
+* **website:** five more endpoints describe what they return ([#820](https://github.com/iamez/slomix/issues/820)) ([4c00eca](https://github.com/iamez/slomix/commit/4c00eca72976fcb2fbcc4a2a362db3aca9127926))
+* **website:** rivalries, and the GUID that made everyone rival-less ([#834](https://github.com/iamez/slomix/issues/834)) ([13eb323](https://github.com/iamez/slomix/commit/13eb323d82e8bc64086dfe913b4bec5a278ea5ac))
+* **website:** session detail, with the four kinds of claim kept apart ([#840](https://github.com/iamez/slomix/issues/840)) ([898b16a](https://github.com/iamez/slomix/commit/898b16a2adcffad8351c84dc559318803b5f8dc6))
+* **website:** session lineups — who played with whom, and who replaced whom ([#821](https://github.com/iamez/slomix/issues/821)) ([5168d94](https://github.com/iamez/slomix/commit/5168d947ff54021c4802d5f60a96cd93d7253d76))
+* **website:** skill-rating reads the adjusted-lifetime endpoint ([#846](https://github.com/iamez/slomix/issues/846)) ([8bd59e3](https://github.com/iamez/slomix/commit/8bd59e3f63e42874cf7a0cf32bc6911801b59379))
+* **website:** smart stats, with the seams between its thirteen numbers left visible ([#839](https://github.com/iamez/slomix/issues/839)) ([1e22d41](https://github.com/iamez/slomix/commit/1e22d41d1dc94d461f3c1f4e8d88529372b8bf7f))
+* **website:** the duel behind the pair, kill by kill ([#844](https://github.com/iamez/slomix/issues/844)) ([671471f](https://github.com/iamez/slomix/commit/671471f6adf51407faa605b613061031cb2fd763))
+* **website:** the eight storytelling endpoints the story page never read ([#842](https://github.com/iamez/slomix/issues/842)) ([3ff7b10](https://github.com/iamez/slomix/commit/3ff7b10976d071a5f453d4f1a23f6ef77a8525dc))
+* **website:** the layout primitives, and one chip instead of five ([#826](https://github.com/iamez/slomix/issues/826)) ([22d8497](https://github.com/iamez/slomix/commit/22d8497b260b1a815ac36b6fdb49235cb08926f2))
+* **website:** the player page (phase 3 opens) ([#822](https://github.com/iamez/slomix/issues/822)) ([5db9e00](https://github.com/iamez/slomix/commit/5db9e0061297b94492bf655fd46ee11361c98d57))
+* **website:** the rating, with the arithmetic that produced it ([#835](https://github.com/iamez/slomix/issues/835)) ([626e40f](https://github.com/iamez/slomix/commit/626e40fb9ca052b3306f141c9792de5d519f6443))
+* **website:** the response models describe what the API actually returns ([#830](https://github.com/iamez/slomix/issues/830)) ([f7beffe](https://github.com/iamez/slomix/commit/f7beffee385a74b3019f160c752d76f81e7a82b1))
+
+
+### Bug Fixes
+
+* **ci:** the ratchet was counting the tree we are replacing ([#838](https://github.com/iamez/slomix/issues/838)) ([1fef24d](https://github.com/iamez/slomix/commit/1fef24de26b9d3e68254b5d9c3fde1f61489e829))
+* **ci:** the release config regains its shellcheck directives ([#854](https://github.com/iamez/slomix/issues/854)) ([a2e49d7](https://github.com/iamez/slomix/commit/a2e49d7b54bb359d8c40cb0393ac4f7d307703a2))
+* **lua:** the round roster is cumulative, not an intermission snapshot ([#819](https://github.com/iamez/slomix/issues/819)) ([362aba7](https://github.com/iamez/slomix/commit/362aba78b5afc671788b1c2a32d36e48ce9d6138))
+* **website:** four live endpoint bugs, and the vocabulary that keeps them fixed ([#848](https://github.com/iamez/slomix/issues/848)) ([b323762](https://github.com/iamez/slomix/commit/b323762a0819e0d10fce4ad61b8acb39d357b2de))
+* **website:** season summary counts its days, and the sweep gets its indexes ([#815](https://github.com/iamez/slomix/issues/815)) ([6195161](https://github.com/iamez/slomix/commit/6195161fd2586febe41140ba77e70d38469f0870))
+* **website:** the catalogue stops misrepresenting the design it shows ([#828](https://github.com/iamez/slomix/issues/828)) ([f4ac655](https://github.com/iamez/slomix/commit/f4ac65525d11681814e52466cd2470c48ce1d4f3))
+* **website:** the new site had no way to say it crashed ([#843](https://github.com/iamez/slomix/issues/843)) ([878172e](https://github.com/iamez/slomix/commit/878172e11cb030e379c222283f1e8986993e9ff1))
+* **website:** the public numbers, measured once and from one filter ([#837](https://github.com/iamez/slomix/issues/837)) ([6a6f0b7](https://github.com/iamez/slomix/commit/6a6f0b74a00605da83d69d8ef19df797475b8d15))
+* **website:** the theme has to reach the browser, not just the stylesheet ([#823](https://github.com/iamez/slomix/issues/823)) ([efa6370](https://github.com/iamez/slomix/commit/efa63702a3f43386736987dd3708c62d41276d74))
+* **website:** two map names that the schema allows to be missing ([#841](https://github.com/iamez/slomix/issues/841)) ([202dc11](https://github.com/iamez/slomix/commit/202dc11882f95d5f09964a1766b58c000bd79a32))
+
 ## [1.41.0](https://github.com/iamez/slomix/compare/v1.40.0...v1.41.0) (2026-08-26)
 
 
