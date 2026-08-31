@@ -409,9 +409,15 @@ function LivesOfTheNight({ sessionId }: { sessionId: number }) {
     return (
       <Stack gap={3} parity="session.lives">
         <SectionHead label="lives of the night" />
+        {/* NOT "not a missing measurement": a session with no player_track
+          * rows (untracked or partially tracked night) returns the SAME
+          * `lives: []` as a fully tracked one where nobody hit the minimum —
+          * the payload carries no coverage field to tell them apart, a
+          * backend contract gap (Codex on #842). So the wording claims only
+          * what the wire can back. */}
         <Absent
-          reason={<>no life in this session cleared the minimum — a fact about the night,
-          not a missing measurement</>}
+          reason={<>no tracked life in this session cleared the minimum — though the
+          endpoint cannot say how much of the night was tracked at all</>}
         />
       </Stack>
     );

@@ -1527,8 +1527,18 @@ export interface StoryPwcFormula {
   weights: Record<string, FormulaTerm>;
   zero_objective_rounds: FormulaTerm;
   /** Says in the payload that the MVP is picked by `waa_bayes` and not by
-   *  the leaderboard's `total_pwc` — the distinction the board itself makes. */
-  mvp: FormulaTerm & { metric?: string };
+   *  the leaderboard's `total_pwc` — the distinction the board itself makes.
+   *  The server also publishes the selection rules themselves: who may win
+   *  (`eligibility`), how equal `waa_bayes` scores are resolved (ordered
+   *  `tiebreakers`), and what happens when nobody qualifies (`fallback`).
+   *  Optional like every FormulaTerm field, because the formula endpoints
+   *  hand-build their dicts and omission is how they spell "not published". */
+  mvp: FormulaTerm & {
+    metric?: string;
+    eligibility?: string;
+    tiebreakers?: string[];
+    fallback?: string;
+  };
 }
 
 /** One kill inside GET /api/storytelling/kill-impact/details — every

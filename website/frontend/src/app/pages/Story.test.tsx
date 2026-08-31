@@ -460,7 +460,11 @@ describe('Story', () => {
     // are query parameters with defaults, and a page that hardcodes them
     // would keep saying 25/80 after the server stopped meaning it.
     expect(screen.getByText(new RegExp(`${t.min_reinf_seconds}s away`))).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(`above ${t.min_killer_health} HP`))).toBeInTheDocument();
+    // ≥, not "above": the backend counts killer_health >= min_killer_health
+    // (advanced_metrics.py `ski.killer_health >= $3`), so the caption must
+    // agree with the count at exactly the bound (Codex on #842).
+    expect(screen.getByText(new RegExp(`at ≥${t.min_killer_health} HP`))).toBeInTheDocument();
+    expect(screen.queryByText(/above \d+ HP/)).toBeNull();
   });
 
   it('keeps the defensive board when the tracker boards are all unavailable', async () => {
@@ -561,5 +565,168 @@ describe('Story', () => {
     // Nine multipliers per kill, mostly x1.0; printing them all buries the
     // two that did the work.
     expect(screen.queryByText(/class ×1 · distance ×1/)).toBeNull();
+  });
+
+  it('renders every published reinforcement tier, not a count of them', async () => {
+    // The endpoint publishes seven (cutoff, multiplier) pairs; "7 tiers"
+    // reduces five of them to hearsay, so a reader could not reproduce the
+    // factor (Codex on #842). Every cutoff is quoted from the fixture, and
+    // the open-ended last tier (max_reinf_seconds: null) is labelled from the
+    // PREVIOUS tier's cutoff rather than a constant.
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/how is kis computed\?/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/how is kis computed\?/));
+    const tiers = (kisFormula as {
+      oksii_multipliers: { reinforcement: { tiers: { max_reinf_seconds: number | null; multiplier: number }[] } };
+    }).oksii_multipliers.reinforcement.tiers;
+    expect(tiers.length).toBe(7);
+    await waitFor(() => expect(screen.getByText(`≤ ${tiers[0].max_reinf_seconds}s`)).toBeInTheDocument());
+    for (const t of tiers) {
+      if (t.max_reinf_seconds != null) {
+        expect(screen.getByText(`≤ ${t.max_reinf_seconds}s`)).toBeInTheDocument();
+      }
+      expect(screen.getAllByText(`×${t.multiplier}`).length).toBeGreaterThan(0);
+    }
+    const lastCutoff = tiers[tiers.length - 2].max_reinf_seconds;
+    expect(screen.getByText(`> ${lastCutoff}s`)).toBeInTheDocument();
+  });
+
+  it('shows the alive sub-terms with their published thresholds', async () => {
+    // solo_clutch and outnumbered each publish the threshold that decides
+    // which applies; the head's "×2 / ×1.5" alone left both unstated
+    // (Codex on #842, the same thread as the tiers).
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/how is kis computed\?/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/how is kis computed\?/));
+    const alive = (kisFormula as {
+      oksii_multipliers: { alive: { solo_clutch: { threshold: string }; outnumbered: { threshold: string } } };
+    }).oksii_multipliers.alive;
+    await waitFor(() => expect(screen.getByText('solo clutch')).toBeInTheDocument());
+    expect(screen.getByText(alive.solo_clutch.threshold)).toBeInTheDocument();
+    expect(screen.getByText(alive.outnumbered.threshold)).toBeInTheDocument();
+  });
+
+  it('declares the formula half unavailable rather than quietly dropping its factors', async () => {
+    // /storytelling/kill-impact/details succeeded, /storytelling/formula did
+    // not — before this guard the breakdown rendered anyway, minus the
+    // objective-area factor and the soft-cap marker, with no sign anything
+    // was missing (Codex on #842). A failed request is a FAILURE (red
+    // unavailable), never a grey absence.
+    renderPage(withOverride('/storytelling/formula', () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
+    const target = (kis as { players: { name: string; guid: string }[] }).players
+      .find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    const row = () => screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name));
+    await waitFor(() => expect(row()).toBeDefined());
+    fireEvent.click(row()!);
+    await waitFor(() => expect(screen.getByText(/the formula request failed\): unavailable/)).toBeInTheDocument());
+    // The rows themselves still render — their multipliers come from the
+    // details payload, which answered.
+    const summary = (kisDetails as { summary: { kills: number } }).summary;
+    expect(screen.getByText(new RegExp(`${summary.kills} kills`))).toBeInTheDocument();
+    // …but no annotation is invented from the formula that never arrived.
+    expect(screen.queryByText(/objective area ×/)).toBeNull();
+    expect(screen.queryByText(/soft-capped/)).toBeNull();
+  });
+
+  it('keeps the breakdown pending until the formula answers too', async () => {
+    // The breakdown depends on two requests. Gating only on the details one
+    // meant a window where the rows rendered with the formula still in
+    // flight — the same incomplete arithmetic as a failure, just transient.
+    // A formula fetch that never settles pins the window open.
+    renderPage(withOverride('/storytelling/formula', () => new Promise<Response>(() => { /* never settles */ })));
+    const target = (kis as { players: { name: string; guid: string }[] }).players
+      .find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    const row = () => screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name));
+    await waitFor(() => expect(row()).toBeDefined());
+    fireEvent.click(row()!);
+    const pending = () => screen.queryAllByText(
+      (_, el) => (el?.textContent ?? '') === `${target.name}'s kills…`,
+    ).length;
+    await waitFor(() => expect(pending()).toBeGreaterThan(0));
+    // ⛔ The line above alone is satisfiable by the DETAILS request's own
+    // transient pending window — the first mutation run proved it: with the
+    // gate reverted to q.isPending only, this test still passed. So let the
+    // details request settle (its fixture resolves in microtasks; 150 ms is
+    // margin) and assert the panel is STILL pending — a state only the
+    // formula gate can hold open.
+    await new Promise((r) => setTimeout(r, 150));
+    expect(pending()).toBeGreaterThan(0);
+    const summary = (kisDetails as { summary: { kills: number } }).summary;
+    expect(screen.queryByText(new RegExp(`${summary.kills} kills`))).toBeNull();
+  });
+
+  it('states the movement cutoff when the session has more than ten tracked players', async () => {
+    // The recording holds 6 players, below the cutoff — so first prove the
+    // line is not printed unconditionally…
+    const players = (movement as { players: { guid_short: string; name: string }[] }).players;
+    expect(players.length).toBeLessThanOrEqual(10);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/engine units, not metres/)).toBeInTheDocument());
+    expect(screen.queryByText(/showing the top/)).toBeNull();
+
+    // …then a 12-player night (substitutes) forces it: without the line the
+    // two players below the slice read as having no telemetry at all
+    // (Codex on #842). Counts are measured from the payload, not hardcoded
+    // in the page.
+    const twelve = Array.from({ length: 12 }, (_, i) => ({
+      ...players[0], guid_short: `SYNTH${i}`, name: `player${i}`,
+    }));
+    renderPage(withOverride('/storytelling/movement', jsonOnce({ ...movement, players: twelve })));
+    await waitFor(() => expect(
+      screen.getByText(/showing the top 10 of 12 tracked players by total distance/),
+    ).toBeInTheDocument());
+  });
+
+  it('names each dashed round boundary on the session curve, in order', async () => {
+    // The payload sends map_name and round_number for every boundary; the
+    // first render consumed them only as React keys, leaving indistinguishable
+    // dashed lines (Codex on #842). The legend is keyed by position — the
+    // boundaries arrive sorted by x_ms — so the joined string also asserts
+    // the ORDER.
+    const { container } = renderPage();
+    await waitFor(() => expect(screen.getByRole('img', { name: /across the session/ })).toBeInTheDocument());
+    const expected = (momentumSession as { round_boundaries: { map_name: string; round_number: number }[] })
+      .round_boundaries.map((b) => `${b.map_name} R${b.round_number}`).join(' · ');
+    const panel = container.querySelector('[data-parity="story.momentum-session"]')!;
+    expect(panel.textContent).toContain(`dashed lines, left → right: ${expected}`);
+  });
+
+  it('does not claim an empty costly-deaths board is a measured zero', async () => {
+    // players: [] is also what a session with no storytelling_kill_impact
+    // rows returns — the KIS precompute is caller-triggered and public reads
+    // never trigger it — and the wire carries no coverage field to tell an
+    // unscored night from a clean one (Codex on #842; a backend contract
+    // gap). The wording may claim only what the wire can back.
+    const empty = { ...uselessDefense, players: [] };
+    renderPage(withOverride('/storytelling/useless-defense-deaths', jsonOnce(empty)));
+    await waitFor(() => expect(screen.getByText(/no defender cleared both thresholds among the scored kills/)).toBeInTheDocument());
+    expect(screen.getByText(/cannot say whether this session's kills were scored at all/)).toBeInTheDocument();
+    expect(screen.queryByText(/not a missing measurement/)).toBeNull();
+  });
+
+  it('renders the published MVP selection rules, not just the description', async () => {
+    // eligibility, ordered tiebreakers and the fallback decide who CAN win
+    // and how ties resolve; without them the disclosure cannot reproduce the
+    // badge for a player near the participation floor (Codex on #842).
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/how is pwc computed\?/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/how is pwc computed\?/));
+    const mvp = (pwcFormula as { mvp: { eligibility: string; tiebreakers: string[]; fallback: string } }).mvp;
+    // Substring matchers, not regexes built from data: eligibility carries
+    // parentheses and a division slash.
+    await waitFor(() => expect(
+      screen.getAllByText((_, el) => (el?.textContent ?? '').includes(mvp.eligibility)).length,
+    ).toBeGreaterThan(0));
+    // ", then" is the joiner because the array is ORDERED — asserting the
+    // joined string pins the order, not just membership.
+    expect(
+      screen.getAllByText((_, el) => (el?.textContent ?? '').includes(mvp.tiebreakers.join(', then '))).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByText((_, el) => (el?.textContent ?? '').includes(mvp.fallback)).length,
+    ).toBeGreaterThan(0);
   });
 });

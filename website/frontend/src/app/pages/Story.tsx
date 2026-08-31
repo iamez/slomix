@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import {
   useStoryBoxScore, useStoryEnabler, useStoryGravity,
@@ -325,6 +325,18 @@ function SessionMomentum({ gsid }: { gsid: number }) {
           {data.teams.team_b.label}: {data.teams.team_b.players.join(', ') || '—'}
         </span>
       </Cluster>
+      {/* The payload names every dashed line (map_name, round_number); until
+        * this legend the names were consumed only as React keys, so a reader
+        * could not tie a swing to a map or half (Codex on #842). The labels
+        * live OUTSIDE the SVG on purpose: preserveAspectRatio="none" squeezes
+        * 620 units into ~319 px of phone shell, and <text> glyphs squeezed to
+        * half width stop being glyphs — position order is the key instead,
+        * because boundaries arrive sorted by x_ms. */}
+      {paths && paths.marks.length > 0 && (
+        <Meta>
+          dashed lines, left → right: {paths.marks.map((m) => `${m.map_name} R${m.round_number}`).join(' · ')}
+        </Meta>
+      )}
       {/* Both counts name what the curve LEAVES OUT, which a line drawn
         * without them silently absorbs. */}
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
@@ -419,10 +431,14 @@ function Movement({ gsid }: { gsid: number }) {
       <Absent reason={<>the position tracker recorded no movement for this session ({data.reason})</>} />
     );
   }
+  // Same rule as the kill matrix: a cutoff that is not stated makes the
+  // players below it read as having no telemetry, when the endpoint measured
+  // every one of them (Codex on #842). Sessions with substitutes go past ten.
+  const shown = data.players.slice(0, 10);
   return (
     <Stack gap={2}>
       <Stack gap={1} className="rows">
-        {data.players.slice(0, 10).map((p) => (
+        {shown.map((p) => (
           <Cluster key={p.guid_short} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
             <span style={{ fontSize: 'var(--fs-row)', minWidth: 0 }}>{p.name}</span>
             <Cluster gap={3} align="baseline">
@@ -439,6 +455,9 @@ function Movement({ gsid }: { gsid: number }) {
           </Cluster>
         ))}
       </Stack>
+      {data.players.length > shown.length && (
+        <Meta>showing the top {shown.length} of {data.players.length} tracked players by total distance — the rest were measured too</Meta>
+      )}
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
         {data.unit === 'et_units' ? 'engine units, not metres — the conversion constant would be invented' : data.unit}
         {' · per minute ALIVE, so a longer life does not read as more movement'}
@@ -544,6 +563,41 @@ function Term({ name, term }: { name: string; term: FormulaTerm }) {
           {term.description}
         </span>
       )}
+      {/* The tiers ARE the definition: the head above says "7 tiers" and the
+        * description names only the endpoints (0.70 and 1.40), so the five
+        * cutoffs in between were published by the server and dropped by this
+        * page — a reader could not reproduce the factor (Codex on #842).
+        * The open-ended last tier publishes max_reinf_seconds: null; its
+        * lower bound is the previous tier's cutoff, so it is printed from
+        * that rather than from a constant that would go stale with the next
+        * tier table. */}
+      {term.tiers != null && (
+        <Stack gap={1} style={{ paddingLeft: 'var(--space-3)' }}>
+          {term.tiers.map((t, i, all) => {
+            const prev = i > 0 ? all[i - 1].max_reinf_seconds : null;
+            const label = t.max_reinf_seconds == null
+              ? (prev != null ? `> ${prev}s` : 'any wait')
+              : `${t.inclusive ? '≤' : '<'} ${t.max_reinf_seconds}s`;
+            return (
+              <Cluster key={label} gap={2} align="baseline">
+                <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 56, textAlign: 'right' }}>{label}</span>
+                <span className="m" style={{ fontSize: 'var(--fs-caption)' }}>×{t.multiplier}</span>
+              </Cluster>
+            );
+          })}
+        </Stack>
+      )}
+      {/* The alive term carries no value of its own — its two sub-terms do,
+        * and each publishes the threshold that decides which one applies
+        * ("1v3+" vs the dynamic outnumbered cut). The head above prints the
+        * two values; without this the thresholds never reached the page. */}
+      {(term.solo_clutch != null || term.outnumbered != null) && (
+        <Stack gap={1} style={{ paddingLeft: 'var(--space-3)' }}>
+          {([['solo_clutch', term.solo_clutch], ['outnumbered', term.outnumbered]] as [string, FormulaTerm | undefined][])
+            .filter((pair): pair is [string, FormulaTerm] => pair[1] != null)
+            .map(([subName, sub]) => <Term key={subName} name={subName} term={sub} />)}
+        </Stack>
+      )}
     </Stack>
   );
 }
@@ -595,6 +649,29 @@ function PwcFormula() {
               <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
                 {q.data.mvp.description}
               </span>
+              {/* The description says which metric picks the MVP; these three
+                * say who is ALLOWED to win and how equal scores resolve —
+                * without them the panel cannot reproduce the badge for a
+                * player near the participation floor or a tie (Codex on
+                * #842). Each is present-guarded because the formula endpoints
+                * omit what they do not publish. */}
+              {q.data.mvp.eligibility && (
+                <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
+                  <span className="lbl">eligible: </span>{q.data.mvp.eligibility}
+                </span>
+              )}
+              {q.data.mvp.tiebreakers != null && q.data.mvp.tiebreakers.length > 0 && (
+                <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
+                  {/* joined with "then": the array is ORDERED — a comma list
+                    * would read as alternatives rather than a sequence. */}
+                  <span className="lbl">ties broken by: </span>{q.data.mvp.tiebreakers.join(', then ')}
+                </span>
+              )}
+              {q.data.mvp.fallback && (
+                <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
+                  <span className="lbl">if nobody qualifies: </span>{q.data.mvp.fallback}
+                </span>
+              )}
             </Stack>
           )}
         </Stack>
@@ -671,7 +748,12 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
   const formula = useStoryKisFormula(true);
   const objective = formula.data?.objective_multipliers.objective_area;
   const softCap = formula.data?.soft_cap;
-  if (q.isPending) return <Pending label={`${name}'s kills`} />;
+  // Two requests, one breakdown — and the formula half must not fail
+  // silently: without it the objective-area factor and the soft-cap marker
+  // simply vanish, and the rows show arithmetic that cannot reach its own
+  // totals with no sign anything is missing (Codex on #842). Pending waits
+  // for BOTH; a formula failure is declared over the rows it degrades.
+  if (q.isPending || formula.isPending) return <Pending label={`${name}'s kills`} />;
   if (q.isError) return <Unavailable what={`${name}'s kills`} />;
   const { summary, kills } = q.data;
   if (kills.length === 0) {
@@ -689,6 +771,13 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
         {figure(summary.kills)} kills · {summary.total_kis.toFixed(1)} total · {summary.avg_impact.toFixed(2)} average
         {' · '}{figure(summary.carrier_kills)} carrier · {figure(summary.crossfire_kills)} crossfire
       </Lbl>
+      {/* A failed request is a failure, not an absence: the rows below still
+        * show the per-kill multipliers the details endpoint carries, but the
+        * two annotations that come from the formula endpoint are gone, and
+        * only this line says so. */}
+      {formula.isError && (
+        <Unavailable what="objective-area factors and soft-cap markers (the formula request failed)" />
+      )}
       <Stack gap={1} className="rows">
         {top.map((k) => {
           const mults = [
@@ -805,9 +894,17 @@ function DefenseBoard({ gsid }: { gsid: number }) {
     <Stack gap={2} style={{ minWidth: 260, flex: '1 1 260px' }}>
       <SectionHead label="costly deaths" />
       {players.length === 0 ? (
+        /* NOT "not a missing measurement": the count reads the
+         * storytelling_kill_impact pre-compute, and when that cache has no
+         * rows for the session (the service docstring says callers must
+         * trigger the KIS precompute; public reads never do) the wire sends
+         * the SAME `players: []` as a genuinely clean night. The payload
+         * carries no coverage field to tell the two apart — a backend
+         * contract gap (Codex on #842), so the wording claims only what the
+         * wire can back. */
         <Absent
-          reason={<>nobody cleared both thresholds this session — an answer about the
-          session, not a missing measurement</>}
+          reason={<>no defender cleared both thresholds among the scored kills — though
+          the endpoint cannot say whether this session's kills were scored at all</>}
         />
       ) : (
         <Stack gap={1} className="rows">
@@ -824,9 +921,13 @@ function DefenseBoard({ gsid }: { gsid: number }) {
           ))}
         </Stack>
       )}
+      {/* ≥ on BOTH bounds: the backend predicate is killer_health >=
+        * min_killer_health (advanced_metrics.py, `ski.killer_health >= $3`),
+        * so "above 80 HP" disagreed with the count at exactly 80 (Codex on
+        * #842). Same spelling as the reinforcement bound beside it. */}
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
         died in defence with the next spawn ≥{thresholds.min_reinf_seconds}s away
-        and the killer still above {thresholds.min_killer_health} HP — free
+        and the killer still at ≥{thresholds.min_killer_health} HP — free
         objective time, no trade. Higher is worse.
       </Lbl>
     </Stack>

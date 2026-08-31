@@ -249,7 +249,11 @@ describe('SessionDetail', () => {
     // The legacy panel did neither — it returned early on both, so "nobody
     // had a standout life" and "the endpoint is down" looked the same.
     renderPage(withOverride('/storytelling/best-lives', () => json({ status: 'ok', lives: [], total: 0 })));
-    await waitFor(() => expect(screen.getByText(/no life in this session cleared the minimum/)).toBeInTheDocument());
+    // The wording must not claim telemetry was present: lives:[] is also what
+    // an untracked night returns, and the wire carries no coverage field to
+    // tell the two apart (Codex on #842 — a backend contract gap).
+    await waitFor(() => expect(screen.getByText(/no tracked life in this session cleared the minimum/)).toBeInTheDocument());
+    expect(screen.getByText(/cannot say how much of the night was tracked/)).toBeInTheDocument();
     expect(screen.queryByText(/the best lives: unavailable/)).toBeNull();
 
     renderPage(withOverride('/storytelling/best-lives', () =>
