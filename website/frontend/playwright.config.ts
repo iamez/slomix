@@ -54,9 +54,31 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   projects: [
+    // H3 (docs/design/09): two eyes, not one. `anon` is the old `chromium`
+    // project under its real name — everything a logged-out visitor sees.
+    // `owner` runs the same browser with a storage state minted by
+    // owner.setup.ts (a session cookie signed with the backend's own
+    // SESSION_SECRET — see scripts/e2e_owner_session.py), because the only
+    // real login is Discord OAuth and a headless run cannot walk it.
+    // Surfaces only a signed-in visitor sees were unreviewed by
+    // construction until this project existed.
     {
-      name: 'chromium',
+      name: 'anon',
       use: { ...devices['Desktop Chrome'] },
+      testIgnore: /app-owner\.spec\.ts|owner\.setup\.ts/,
+    },
+    {
+      name: 'owner-setup',
+      testMatch: /owner\.setup\.ts/,
+    },
+    {
+      name: 'owner',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: 'e2e/.auth/owner.json',
+      },
+      dependencies: ['owner-setup'],
+      testMatch: /app-owner\.spec\.ts/,
     },
   ],
 });
