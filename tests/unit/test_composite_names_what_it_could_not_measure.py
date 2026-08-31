@@ -164,8 +164,11 @@ def test_a_metric_that_is_not_zero_is_still_flagged_when_its_source_is_empty():
 @pytest.mark.parametrize(
     ("counts", "expected"),
     [
-        ([1, 0, 0, 0, 0], ["ci", "kpi", "sds"]),  # crossfire alone measures tir
-        ([0, 1, 0, 0, 0], ["ci", "kpi", "sds"]),  # trades alone also measures tir
+        # ⛔ ONE half no longer measures tir (verifier on #848): the score is
+        # crossfire*50 + trade*50, a sum — a lone half floors it by 50 points.
+        ([1, 0, 0, 0, 0], ["ci", "kpi", "sds", "tir"]),
+        ([0, 1, 0, 0, 0], ["ci", "kpi", "sds", "tir"]),
+        ([1, 1, 0, 0, 0], ["ci", "kpi", "sds"]),  # both halves -> tir measured
         ([0, 0, 1, 0, 0], ["kpi", "sds", "tir"]),
         ([0, 0, 0, 1, 0], ["ci", "sds", "tir"]),
         ([0, 0, 0, 0, 1], ["ci", "kpi", "tir"]),

@@ -734,11 +734,14 @@ async def get_composite_stats(
     # - The crossfire leg counts the RAW instrument
     #   (proximity_crossfire_opportunity), not the KIS cache it feeds: a
     #   cached is_crossfire computed against an empty crossfire context is
-    #   a value, not a measurement. Measured: cache>0 with raw=0 in 0
-    #   sessions today, so nothing flips on that axis — but the cache also
-    #   BYPASSES the round gate, and in 5 live sessions ALL of its rows
-    #   are bot rows, so counting it reported tir as measured for sessions
-    #   session_pcs had emptied.
+    #   a value, not a measurement. ⚠️ Measured TWICE, because the first
+    #   number was wrong: UNGATED, cache>0 with raw=0 happens in 0
+    #   sessions — but this count runs THROUGH round_set, and gated it
+    #   happens in SIX. The verifier's independent measurement caught the
+    #   discrepancy; the first claim compared the raw table without the
+    #   gate the code applies. So this change flips tir to
+    #   honestly-unmeasured in 6 live sessions, plus the 5 where every
+    #   cache row is a bot row.
     # - Every count carries the canonical-GUID predicate its metric CTE
     #   carries (IS NOT NULL): a row the CTE filters out cannot make its
     #   metric "measured". 0 nulls in today's data; the predicate mirrors
@@ -800,7 +803,21 @@ async def get_composite_stats(
         "kpi": (outcome_rows,),
         "sds": (spawn_rows,),
     }
-    unmeasured = sorted(m for m, counts in metric_sources.items() if not any(counts))
+
+    # ⛔ TIR needs BOTH of its sources; the single-source metrics need
+    # their one (verifier's finding on #848): tir = crossfire*50 +
+    # trade*50 is a SUM of two halves, not a choice between substitutes,
+    # so one present half with the other missing floors the score by up
+    # to 50 points while any() called it measured. Measured: 1 live
+    # session carries exactly one half. The cautious direction costs a
+    # false "unmeasured" only for a session where genuinely nobody
+    # traded — a floor reported as a floor.
+    def _is_unmeasured(metric: str, counts: tuple[int, ...]) -> bool:
+        if metric == "tir":
+            return not all(counts)
+        return not any(counts)
+
+    unmeasured = sorted(m for m, counts in metric_sources.items() if _is_unmeasured(m, counts))
 
     return {
         "status": "ok",
