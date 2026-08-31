@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { apiGet } from '../lib/api';
 import { useHeadToHead, usePlayerRivalries, useRivalryLeaderboard } from '../lib/queries';
 import type { HeadToHeadWeapon, RivalryOpponent, RivalryPair } from '../lib/types';
@@ -325,9 +325,7 @@ function WeaponBars({ rows, colour }: { rows: HeadToHeadWeapon[]; colour: string
   return (
     <Stack gap={1} style={{ minWidth: 200, flex: '1 1 200px' }}>
       {top.length === 0 ? (
-        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-          never landed one
-        </span>
+        <Absent reason="never landed one" />
       ) : top.map((w) => (
         <Cluster key={w.kill_mod} gap={2} align="center">
           <span className="m" style={{ fontSize: 'var(--fs-caption)', width: 92, textAlign: 'right', color: 'var(--color-text-400)' }}>
@@ -359,10 +357,12 @@ function HeadToHeadPanel({ guid1, guid2, onClose }: { guid1: string; guid2: stri
     return (
       <Stack gap={2} parity="rivalries.h2h" style={{ paddingTop: 'var(--space-4)' }}>
         <SectionHead label="head to head" />
-        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-          no proximity rows are recorded under {d.unresolved.join(' or ')} — this is
-          not "they never met", it is "never tracked"
-        </span>
+        <Absent
+          reason={<>
+            no proximity rows are recorded under {d.unresolved.join(' or ')} — this is
+            not "they never met", it is "never tracked"
+          </>}
+        />
         <button type="button" className="act" style={{ background: 'transparent', border: 0, cursor: 'pointer' }} onClick={onClose}>
           ← back
         </button>
@@ -458,7 +458,29 @@ export function Rivalries() {
         </div>
       )}
 
-      {guid && vs && (
+      {/* ⛔ Validate BEFORE mounting (Codex on #844): useHeadToHead disables
+        * itself under 8 characters, and a disabled query is isPending
+        * forever — so a hand-edited ?vs= left the panel on "the duel…" for
+        * good. A short identifier is not an empty answer and not a failed
+        * request; it is a URL that cannot name a player, and the panel says
+        * exactly that instead of spinning. */}
+      {guid && vs && (guid.length < 8 || vs.length < 8) && (
+        <Stack gap={2} parity="rivalries.h2h" style={{ paddingTop: 'var(--space-4)' }}>
+          <SectionHead label="head to head" />
+          <Absent
+            reason={`"${guid.length < 8 ? guid : vs}" is not a player id — pick an opponent from the list below`}
+          />
+          <button
+            type="button"
+            className="act"
+            style={{ background: 'transparent', border: 0, cursor: 'pointer' }}
+            onClick={() => { setParams(guid.length >= 8 ? { guid } : {}); }}
+          >
+            ← back
+          </button>
+        </Stack>
+      )}
+      {guid && vs && guid.length >= 8 && vs.length >= 8 && (
         <HeadToHeadPanel guid1={guid} guid2={vs} onClose={() => { setParams({ guid }); }} />
       )}
 
