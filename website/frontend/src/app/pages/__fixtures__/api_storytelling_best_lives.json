@@ -64,5 +64,7 @@
    "narrative": "It's squAziii got 5 kills in one life (75s) on supply"
   }
  ],
- "total": 5
+ "total": 5,
+ "qualifying_total": 51,
+ "min_kills": 3
 }

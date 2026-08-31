@@ -1461,7 +1461,18 @@ export interface StoryBestLife {
 export interface StoryBestLives {
   status: string;
   lives: StoryBestLife[];
+  /** ⚠️ Historically len(lives) AFTER the endpoint's limit — a field named
+   *  total that is not a total. Kept as-is on the wire for compatibility;
+   *  use qualifying_total for "of N". */
   total: number;
+  /** Every life that cleared min_kills, counted BEFORE the limit — what the
+   *  cutoff line needs (Codex on #842). Optional because responses recorded
+   *  before 2026-08-31 do not carry it: an absent key is not 0, and the UI
+   *  must render nothing rather than crash on an older backend. */
+  qualifying_total?: number;
+  /** The kills threshold the endpoint enforced, published so the caption can
+   *  quote it instead of hardcoding the 3. Same vintage as qualifying_total. */
+  min_kills?: number;
 }
 
 /** One published term of a formula. The two formula endpoints hand-build

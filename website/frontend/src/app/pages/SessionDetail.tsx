@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import {
   useSessionDetail, useSessionGoodNight, useSessionMvp, useSessionRounds,
@@ -422,6 +422,7 @@ function LivesOfTheNight({ sessionId }: { sessionId: number }) {
       </Stack>
     );
   }
+  const { lives, qualifying_total: qualifying, min_kills: minKills } = q.data;
   return (
     <Stack gap={3} parity="session.lives">
       <SectionHead label="lives of the night" aside={<span className="lbl">most kills on a single life</span>} />
@@ -445,6 +446,19 @@ function LivesOfTheNight({ sessionId }: { sessionId: number }) {
           </Link>
         ))}
       </Cluster>
+      {/* Same rule as the story page's three cutoffs (Codex on #842, fourth
+        * of the family): the endpoint counts every qualifying life and this
+        * panel shows the requested top-N, so the sixth-best rampage must not
+        * read as "nothing else happened". Both numbers and the threshold are
+        * quoted from the payload. Guarded on presence, not truthiness:
+        * responses recorded before the fields existed simply omit them, and
+        * an absent key is not 0 — the line disappears on an older backend
+        * rather than lying or crashing. */}
+      {qualifying != null && minKills != null && qualifying > lives.length && (
+        <Meta>
+          showing the top {lives.length} of {figure(qualifying)} lives with ≥{minKills} kills
+        </Meta>
+      )}
     </Stack>
   );
 }

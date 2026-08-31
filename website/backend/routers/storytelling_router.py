@@ -202,12 +202,23 @@ async def get_best_lives(
     proximity_combat_position. Read-only. Ranked by kills, then by how explosive
     the life was (kills per second). Bots excluded.
     """
+    return await _best_lives_payload(scope, limit, db)
+
+
+async def _best_lives_payload(
+    scope: GamingSessionScope, limit: int, db: DatabaseAdapter
+) -> dict:
+    """Body of /storytelling/best-lives, extracted so it is testable — the
+    route itself is rate-limited and @limiter.limit needs a real Request
+    (same split this file already uses for _build_life_cards)."""
     # Full gaming-session scope (deep SS-C): player_track carries no
     # gaming_session_id, so filter the outer pt rows by session dates + the
     # canonical round key. The LATERAL cp subquery is already correlated to
     # pt's exact round, so it needs no separate scope filter.
     pt_dates = [date.fromisoformat(d) for d in scope.dates]
     pt_starts, pt_maps, pt_rnums = scope.round_key_arrays()
+    # Placeholder base 3 below: $1 dates, $2 min kills — the LIMIT that used
+    # to be $3 moved to Python, so the round-key arrays slide down one.
     rows = await db.fetch_all(
         f"""
         SELECT pt.player_guid AS guid, pt.player_name AS name, pt.map_name,
@@ -233,7 +244,7 @@ async def get_best_lives(
               AND cp.victim_guid NOT LIKE 'OMNIBOT%' AND cp.victim_name NOT LIKE '[BOT]%'
         ) k ON TRUE
         WHERE pt.session_date = ANY($1)
-          AND {scope.round_key_filter_sql(4, alias="pt")}
+          AND {scope.round_key_filter_sql(3, alias="pt")}
           AND pt.spawn_time_ms IS NOT NULL AND pt.death_time_ms IS NOT NULL
           -- round_start_unix 0/NULL is the legacy unlinked bucket; joining on it
           -- would merge every such round (event_time is round-relative) and
@@ -243,18 +254,32 @@ async def get_best_lives(
           AND k.kills >= $2
         ORDER BY k.kills DESC,
                  k.kills::float / GREATEST(pt.death_time_ms - pt.spawn_time_ms, 1000) DESC
-        LIMIT $3
         """,
-        (pt_dates, _BEST_LIFE_MIN_KILLS, limit, pt_starts, pt_maps, pt_rnums),
+        (pt_dates, _BEST_LIFE_MIN_KILLS, pt_starts, pt_maps, pt_rnums),
     )
 
-    lives = _build_life_cards(rows)
+    # The cut moved from SQL (LIMIT $3) to Python ON PURPOSE: the UI needs
+    # "top {limit} of N" and a LIMITed query cannot say N. A separate COUNT
+    # would be a second copy of this predicate — the drift risk this PR keeps
+    # finding — so one query carries both, which is safe because the row set
+    # is a session's lives with >= _BEST_LIFE_MIN_KILLS kills (measured live
+    # 2026-08-31 on session 154, the recorded fixture: 51 rows; bounded by
+    # lives per player per round).
+    qualifying_total = len(rows or [])
+    lives = _build_life_cards((rows or [])[:limit])
     return {
         "status": "ok",
         "session_date": scope.dates[0],
         "scope": scope.to_metadata(),
         "lives": lives,
+        # ⚠️ Historically len(lives) AFTER the cut — a field named total that
+        # is not a total. It keeps that meaning for wire compatibility;
+        # `qualifying_total` is the real count (Codex on #842).
         "total": len(lives),
+        "qualifying_total": qualifying_total,
+        # Published so the UI can quote the threshold instead of hardcoding
+        # the 3 (same rule as the useless-defense thresholds block).
+        "min_kills": _BEST_LIFE_MIN_KILLS,
     }
 
 

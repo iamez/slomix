@@ -245,6 +245,46 @@ describe('SessionDetail', () => {
     expect(panel.textContent).toContain(`${first.life_seconds}s alive`);
   });
 
+  it('states the lives cutoff from the payload, and stays silent on older wire shapes', async () => {
+    // The endpoint's `total` is len(lives) AFTER the limit — a total that is
+    // not a total — so the disclosure reads qualifying_total, counted before
+    // the cut (Codex on #842, fourth cutoff of the family). The recorded
+    // session really had 51 qualifying lives behind its top five, measured
+    // live 2026-08-31; all three numbers come from the fixture.
+    const f = bestLives as { lives: unknown[]; qualifying_total: number; min_kills: number };
+    expect(f.qualifying_total).toBeGreaterThan(f.lives.length);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(
+      new RegExp(`showing the top ${f.lives.length} of ${f.qualifying_total} lives with ≥${f.min_kills} kills`),
+    )).toBeInTheDocument());
+
+    // A response recorded before the fields existed omits them — an absent
+    // key is not 0, and the line must vanish rather than crash or claim
+    // "of undefined". Scoped to THIS render's container: the first tree
+    // above is still mounted and carries the line, so a screen-wide
+    // queryByText would look at the wrong page and could never fail.
+    const { qualifying_total: _qt, min_kills: _mk, ...old } = bestLives as Record<string, unknown>;
+    const second = renderPage(withOverride('/storytelling/best-lives', () => json(old)));
+    await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    expect(second.container.textContent).toContain('s alive');
+    expect(second.container.textContent).not.toContain('showing the top');
+
+    // And when everything qualifying is already on screen there is no cutoff
+    // to disclose.
+    const third = renderPage(withOverride('/storytelling/best-lives', () =>
+      json({ ...(bestLives as object), qualifying_total: f.lives.length })));
+    await waitFor(() => expect(third.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    expect(third.container.textContent).toContain('s alive');
+    expect(third.container.textContent).not.toContain('showing the top');
+
+    // The threshold is QUOTED, not hardcoded — the fixture's 3 equals the
+    // backend constant, so only a moved value can tell the two apart (a
+    // fixture cannot fail on a value it does not contain).
+    const fourth = renderPage(withOverride('/storytelling/best-lives', () =>
+      json({ ...(bestLives as object), min_kills: 4 })));
+    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'));
+  });
+
   it('tells an empty night apart from a failed request', async () => {
     // The legacy panel did neither — it returned early on both, so "nobody
     // had a standout life" and "the endpoint is down" looked the same.
