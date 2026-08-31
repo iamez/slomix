@@ -37,6 +37,8 @@
 # (2026-08-28) — this config exists so the contract holds and the dev/VM
 # upgrade path is ready, not as a deploy instruction.
 
+# shellcheck shell=bash
+# shellcheck disable=SC2034  # sourced by deploy_release.sh; nothing here runs
 MIGRATIONS=(
   "045_drop_orphan_monitoring_tables.sql"
   "046_fix_proximity_round_id_exact_match.sql"
