@@ -778,7 +778,7 @@ describe('Story', () => {
 
   it('states the spawn bonus coefficient, not just the range it produces', async () => {
     // The range is the OUTPUT: the multiplier is 1 + bonus × denial
-    // (kis.py:551), so "1.0 - 2.0" only holds while bonus is 1.0 — a panel
+    // (kis.py `_score_kill`), so "1.0 - 2.0" only holds while bonus is 1.0 — a panel
     // showing the range alone would silently keep it through a coefficient
     // change (Codex on #842). Both halves quoted from the fixture.
     renderPage();
