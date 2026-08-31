@@ -17,7 +17,6 @@ import routes from '../src/app/routes.data.json' with { type: 'json' };
  *  spec. Raising it by hand is what failed, so `routes.test.ts` now compares
  *  this number against what `main.tsx` actually wires: leave it too low and
  *  a unit test says so, in CI, without a browser. */
-const BUILT_THROUGH_PHASE = 4;
 
 /**
  * Every route of the standalone app, loaded once (docs/design/09 §H3).
@@ -167,7 +166,10 @@ for (const route of routes) {
     // hypothetical: /story/date/:date rendered the stub while its unit tests
     // passed, because those mount the component directly and only the
     // registry decides what the browser gets.
-    if (route.phase <= BUILT_THROUGH_PHASE) {
+    // Per-route, from the registry row itself: phases land page by page,
+    // and a hand-raised threshold was exactly the thing that once exempted
+    // the two newest pages (see routes.test.ts).
+    if (route.built === true) {
       // Case-insensitive on purpose: the stub's label is a `.lbl`, and that
       // class uppercases through CSS, so innerText returns "NOT BUILT YET".
       // The first version of this assertion matched lowercase and passed on

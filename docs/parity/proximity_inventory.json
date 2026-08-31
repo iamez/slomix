@@ -586,7 +586,8 @@
         "bytes": 2253,
         "file": "api_proximity_leaderboards.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/leaderboards"
     },
     {
       "path": "/api/proximity/lua-trades",

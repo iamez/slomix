@@ -273,8 +273,38 @@
       "note": "docs/design/08 phase 5"
     },
     "proximity": {
-      "status": "phase-5",
-      "note": "docs/design/08 phase 5; proximity_inventory.json is created when the phase starts"
+      "spa_route": "proximity",
+      "panels": {
+        "Aim Lock v7": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        },
+        "Crossfire Opportunities": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        },
+        "Spawn Timing Efficiency": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        },
+        "Team Cohesion": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        },
+        "Team Pushes": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        },
+        "Trade Kills (Lua-detected)": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        },
+        "table-0": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        }
+      },
+      "note": "first slice built 31. 8. (the ten-tab leaderboard section, parity proximity.leaderboards/lb-tabs); the six legacy panels captured by the inventory freeze are later slices"
     },
     "proximity-player": {
       "status": "phase-5",

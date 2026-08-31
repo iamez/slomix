@@ -68,7 +68,6 @@
 /api/proximity/hotzones
 /api/proximity/kill-outcomes
 /api/proximity/kill-outcomes/player-stats
-/api/proximity/leaderboards
 /api/proximity/lua-trades
 /api/proximity/movement-stats
 /api/proximity/movers

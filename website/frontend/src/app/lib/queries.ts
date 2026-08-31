@@ -72,6 +72,7 @@ import type {
   LiveSession,
   PlayerIdentity,
   PlayerMatchRound,
+  ProximityLeaderboard,
   RecentPrediction,
   SessionLeaderRow,
   SkillPlayer,
@@ -924,5 +925,24 @@ export function usePlayerMatchRounds(identifier: string | null, limit: number) {
         pathParams: { player_name: identifier! },
         query: { limit },
       }) as Promise<PlayerMatchRound[]>,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — proximity.
+
+/** One of the nine leaderboard categories over a rolling window. Measured
+ *  cold on 31. 8.: 20-500 ms per category at range_days=30 — this endpoint
+ *  is NOT the /proximity/players backbone and needs no scope to be safe,
+ *  but the range still ships with every call so the first paint is never
+ *  an unbounded query. */
+export function useProximityLeaderboard(category: string, rangeDays: number) {
+  return useQuery({
+    queryKey: ['proximity-leaderboard', category, rangeDays],
+    queryFn: () =>
+      apiGet('/api/proximity/leaderboards', {
+        query: { category, range_days: rangeDays, limit: 10 },
+      }) as Promise<ProximityLeaderboard>,
+    staleTime: 5 * 60 * 1000,
   });
 }

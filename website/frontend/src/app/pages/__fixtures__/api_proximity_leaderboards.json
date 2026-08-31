@@ -1,0 +1,165 @@
+{
+ "status": "ok",
+ "category": "power",
+ "formula_version": "power-v2",
+ "attribution": {
+  "total_rows": 26587,
+  "linked_valid": 24704,
+  "linked_invalid_excluded": 871,
+  "unlinked_accepted": 1012,
+  "attributable_coverage": 0.9606,
+  "mode": "compatibility"
+ },
+ "entries": [
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "value": 52.4,
+   "axes": {
+    "aggression": 47.5,
+    "awareness": 56.2,
+    "teamplay": 61.7,
+    "timing": 44.4
+   },
+   "unscored": {
+    "mechanical": 79.8
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "value": 52.0,
+   "axes": {
+    "aggression": 48.3,
+    "awareness": 56.5,
+    "teamplay": 60.0,
+    "timing": 43.0
+   },
+   "unscored": {
+    "mechanical": 77.0
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "value": 51.6,
+   "axes": {
+    "aggression": 47.9,
+    "awareness": 57.1,
+    "teamplay": 58.3,
+    "timing": 43.0
+   },
+   "unscored": {
+    "mechanical": 77.1
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "value": 51.1,
+   "axes": {
+    "aggression": 44.4,
+    "awareness": 54.0,
+    "teamplay": 62.6,
+    "timing": 43.3
+   },
+   "unscored": {
+    "mechanical": 78.2
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^e.^7lgz",
+   "value": 50.9,
+   "axes": {
+    "aggression": 50.4,
+    "awareness": 49.1,
+    "teamplay": 61.4,
+    "timing": 42.5
+   },
+   "unscored": {
+    "mechanical": 76.1
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "7B84BE88766731A4C985941B8814933C",
+   "name": "^7endekk",
+   "value": 49.1,
+   "axes": {
+    "aggression": 48.2,
+    "awareness": 50.9,
+    "teamplay": 51.4,
+    "timing": 45.9
+   },
+   "unscored": {
+    "mechanical": 77.9
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "EF561EAA92BE11A8E562A904A262C4C6",
+   "name": "ownator",
+   "value": 48.0,
+   "axes": {
+    "aggression": 51.6,
+    "awareness": 51.0,
+    "teamplay": 47.4,
+    "timing": 41.9
+   },
+   "unscored": {
+    "mechanical": 76.2
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "value": 47.8,
+   "axes": {
+    "aggression": 48.7,
+    "awareness": 56.0,
+    "teamplay": 44.8,
+    "timing": 41.8
+   },
+   "unscored": {
+    "mechanical": 81.5
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "652EB4A6311DBD8BD18E14CE9840EB1E",
+   "name": "^3qmr",
+   "value": 47.1,
+   "axes": {
+    "aggression": 48.6,
+    "awareness": 53.8,
+    "teamplay": 43.1,
+    "timing": 42.9
+   },
+   "unscored": {
+    "mechanical": 74.8
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "OMNIBOT0500000000000000000000000",
+   "name": "^o[BOT]^7wajs",
+   "value": 46.5,
+   "axes": {
+    "aggression": 40.7,
+    "awareness": 32.0,
+    "teamplay": 61.4,
+    "timing": 51.8
+   },
+   "unscored": {
+    "mechanical": 85.9
+   },
+   "axes_defaulted": []
+  }
+ ]
+}

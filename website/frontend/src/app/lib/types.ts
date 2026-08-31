@@ -2273,3 +2273,86 @@ export interface PlayerMatchRound {
   round_status: string | null;
   gaming_session_id: number | null;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — proximity. First slice: the ten-tab leaderboard section.
+
+/** GET /api/proximity/leaderboards — one endpoint, nine categories (the
+ *  tenth tab, comp_skill, is /api/skill/ssr: all-time and group-relative,
+ *  it ignores range and scope by owner decision A4). Entries are a
+ *  DISCRIMINATED family by request category — each branch of the handler
+ *  returns its own fixed extras (typed from the handler, not the sample).
+ *  An unknown category answers {status:'error'} inside a 200, the house
+ *  convention. Legacy read `partner_name` off crossfire entries — a field
+ *  only the teamplay duo boards have ever sent — so its crossfire board
+ *  rendered "name + ?" forever; not carried. */
+export interface LbEntryBase {
+  guid: string;
+  name: string;
+  value: number;
+}
+
+export interface LbPowerEntry extends LbEntryBase {
+  axes: { aggression: number; awareness: number; teamplay: number; timing: number };
+  components?: Record<string, number>;
+}
+
+export interface LbSpawnEntry extends LbEntryBase {
+  timed_kills: number;
+  avg_denial_ms: number;
+}
+
+export interface LbCrossfireEntry extends LbEntryBase {
+  avg_angle: number;
+}
+
+export interface LbTradesEntry extends LbEntryBase {
+  avg_reaction_ms: number;
+}
+
+export interface LbReactionsEntry extends LbEntryBase {
+  samples: number;
+}
+
+export interface LbSurvivorsEntry extends LbEntryBase {
+  total_engagements: number;
+  avg_duration_ms: number;
+}
+
+export interface LbMovementEntry extends LbEntryBase {
+  sprint_pct: number;
+  total_distance: number;
+  tracks: number;
+}
+
+export interface LbFocusFireEntry extends LbEntryBase {
+  times_focused: number;
+  avg_attackers: number;
+  avg_damage: number;
+}
+
+export interface LbKrogtEntry extends LbEntryBase {
+  lives: number;
+}
+
+export type LbCategory =
+  | 'power' | 'spawn' | 'crossfire' | 'trades' | 'reactions'
+  | 'survivors' | 'movement' | 'focus_fire' | 'krogt';
+
+export interface ProximityLeaderboard {
+  status: string;
+  category: string;
+  /** power only — quoted, never restated. */
+  formula_version?: string;
+  /** power only: how many source rows were linkable — the board's own
+   *  honesty block. */
+  attribution?: {
+    total_rows: number;
+    linked_valid: number;
+    linked_invalid?: number;
+    [k: string]: number | undefined;
+  };
+  entries: (LbEntryBase & Partial<LbPowerEntry & LbSpawnEntry & LbCrossfireEntry &
+    LbTradesEntry & LbReactionsEntry & LbSurvivorsEntry & LbMovementEntry &
+    LbFocusFireEntry & LbKrogtEntry>)[];
+}
