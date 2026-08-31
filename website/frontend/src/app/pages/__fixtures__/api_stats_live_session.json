@@ -1,3 +1,8 @@
 {
- "active": false
+ "active": true,
+ "rounds_completed": 8,
+ "current_players": 6,
+ "current_map": "te_escape2",
+ "last_round_time": "2:06",
+ "last_update": "2026-08-31 22:26:24.279790"
 }

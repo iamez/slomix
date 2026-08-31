@@ -361,7 +361,10 @@ function PlayerWeaponsRow({ sessionId, guid }: { sessionId: number; guid: string
             <span key={w.weapon_key} className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
               {w.name} · {figure(w.kills)}k
               {w.shots > 0 && <> · {w.accuracy.toFixed(1)}%</>}
-              {w.headshots > 0 && <> · {figure(w.headshots)} hs</>}
+              {/* head HITS (SUM(headshots)), not headshot kills — the parent
+                * row's hs column counts kills, and one shared abbreviation
+                * would invite comparing the two (Codex on #855). */}
+              {w.headshots > 0 && <> · {figure(w.headshots)} head hits</>}
             </span>
           ))}
         </Cluster>

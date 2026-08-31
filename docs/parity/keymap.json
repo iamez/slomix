@@ -10,7 +10,8 @@
     "retired (deliberately dropped, note says why), unmapped (DEBT - built",
     "route, missing piece). tests/unit/test_parity_keymap.py enforces the",
     "shape, the existence of every referenced parity key in the SPA source,",
-    "and pins the unmapped count so debt cannot grow silently."
+    "and pins the unmapped count so debt cannot grow silently.",
+    "'Built' means the NEW app tree (website/frontend/src/app) and nothing else: the OLD React tree (website/frontend/src/pages) does register proximity/greatshot/uploads/availability modules, but it is the tree being replaced and counting it as coverage is the exact miscount the endpoint ratchet made before #838. In src/app these routes exist only as phase-gated placeholders (routes.data.json), which is what phase-5/phase-6 says."
   ],
   "routes": {
     "home": {

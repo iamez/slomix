@@ -537,7 +537,16 @@ function RecentDetail({ playerId }: { playerId: string }) {
               {rounds.data.map((r: PlayerMatchRound) => (
                 <tr key={r.round_id} style={rowStyle}>
                   <td className="m" style={{ padding: 'var(--space-1) var(--space-2)', whiteSpace: 'nowrap' }}>{r.round_date.slice(0, 10)}</td>
-                  <td style={{ padding: 'var(--space-1) var(--space-2)' }}>{mapLabel(r.map_name)}</td>
+                  <td style={{ padding: 'var(--space-1) var(--space-2)' }}>
+                    {mapLabel(r.map_name)}
+                    {/* The wire sends round_status precisely so a cancelled
+                      * round does not render like a counted one — it is
+                      * absent from every total, and a row with kills but no
+                      * explanation reads as a bug (Codex on #855). */}
+                    {r.round_status != null && !['completed', 'substitution'].includes(r.round_status) && (
+                      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-accent-warm)' }}> · {r.round_status} — not counted</span>
+                    )}
+                  </td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.round_number}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.headshot_kills)}</td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.gibs)}</td>

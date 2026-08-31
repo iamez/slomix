@@ -2,21 +2,21 @@
  "name": "Zlatorog",
  "guid": "E587CA5F",
  "stats": {
-  "kills": 490,
-  "deaths": 540,
-  "damage": 99430,
-  "games": 56,
-  "wins": 24,
-  "losses": 32,
-  "win_rate": 42.9,
-  "kd": 0.91,
-  "dpm": 225,
-  "total_xp": 2656,
-  "playtime_hours": 7.3,
-  "last_seen": "2026-03-25",
+  "kills": 454,
+  "deaths": 521,
+  "damage": 95511,
+  "games": 54,
+  "wins": 23,
+  "losses": 31,
+  "win_rate": 42.6,
+  "kd": 0.87,
+  "dpm": 228,
+  "total_xp": 2459,
+  "playtime_hours": 7.0,
+  "last_seen": "2026-02-11",
   "favorite_weapon": "Thompson",
   "favorite_map": "etl_adlernest",
-  "highest_dpm": 789,
+  "highest_dpm": 403,
   "lowest_dpm": null
  },
  "aliases": [
@@ -57,16 +57,16 @@
     "threshold": 500,
     "emoji": "\ud83d\udca5",
     "title": "Killing Machine",
-    "current": 490,
-    "progress": 98.0
+    "current": 454,
+    "progress": 90.8
    },
    {
     "type": "games",
     "threshold": 100,
     "emoji": "\ud83c\udfc6",
     "title": "Dedicated Gamer",
-    "current": 56,
-    "progress": 56.0
+    "current": 54,
+    "progress": 54.0
    }
   ],
   "total_unlocked": 3,

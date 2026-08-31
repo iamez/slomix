@@ -106,12 +106,20 @@ def test_every_piece_is_mapped_or_carries_a_named_status():
 
 def test_named_debt_is_pinned():
     inventory, keymap = _load()
+    # Both levels, deliberately: a whole route demoted to
+    # {"status": "unmapped"} would otherwise vanish from this count while
+    # test_every_piece_… still accepts it — the docstring's "pinned" claim
+    # would be false at exactly the largest grain (CodeRabbit on #855).
     unmapped = [
         f"{route_key}: {piece}"
         for route_key, entry in keymap["routes"].items()
         if "panels" in entry
         for piece, val in entry["panels"].items()
         if val.get("status") == "unmapped"
+    ] + [
+        f"{route_key} (whole route)"
+        for route_key, entry in keymap["routes"].items()
+        if entry.get("status") == "unmapped"
     ]
     assert len(unmapped) == UNMAPPED_BUDGET, (
         f"unmapped debt is {len(unmapped)}, budget {UNMAPPED_BUDGET}: {unmapped} — "

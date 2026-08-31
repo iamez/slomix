@@ -459,10 +459,16 @@ async def get_weapon_stats_by_player(
 
     # Session-scoped: filter to rounds in the given gaming session
     if gaming_session_id is not None:
+        # The same counted-round predicate as the session detail's totals
+        # (sessions_router): a cancelled round's weapon events must not show
+        # up under a player whose totals row excludes them (Codex on #855).
         where_clause += (
             f" AND round_id IN ("
             f"SELECT id FROM rounds WHERE gaming_session_id = ${param_idx}"
-            f" AND round_number IN (1, 2))"
+            f" AND round_number IN (1, 2)"
+            f" AND is_valid IS DISTINCT FROM FALSE"
+            f" AND (round_status IN ('completed', 'substitution')"
+            f" OR round_status IS NULL))"
         )
         params.append(gaming_session_id)
         param_idx += 1
