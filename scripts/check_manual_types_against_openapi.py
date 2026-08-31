@@ -315,6 +315,7 @@ def main() -> int:
 
     strips_none = _routes_stripping_none()
     collisions: list[str] = []
+    projections: list[tuple[str, str]] = []
     compared = 0
     findings: list[tuple[str, str, str, str]] = []
     unreadable: list[tuple[str, str, str]] = []
@@ -368,7 +369,24 @@ def main() -> int:
 
         for field, field_schema in properties.items():
             if field not in declared:
-                findings.append((name, field, "absent from types.ts", ""))
+                # ⛔ THE TWO DIRECTIONS ARE NOT SYMMETRIC, and treating them as
+                # one made this checker call a deliberate design a defect.
+                #
+                #   declared in TS, absent from the API -> the client reads a
+                #     key the server stopped sending. That BREAKS at runtime.
+                #   present in the API, absent from TS  -> the page renders
+                #     fewer fields than the response carries. Nothing breaks.
+                #
+                # `types.ts` documents `LastSession.map_counts` and
+                # `stats_checks` as intentionally omitted, and the checker
+                # reported both as defects and exited nonzero (Codex on #830).
+                # Reported as a projection now — visible, because a NEW field
+                # the page ought to read shows up here, but never a failure.
+                #
+                # ⚠️ Deliberately NOT keyed off the prose that says "a
+                # deliberate SUBSET": a guard that reads comments can be
+                # satisfied by a comment.
+                projections.append((name, field))
                 continue
             ts_type, ts_optional = declared[field]
             ts_nullable = _ts_is_nullable(ts_type)
@@ -408,6 +426,11 @@ def main() -> int:
     stamp = datetime.fromtimestamp(types_path.stat().st_mtime, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
     print(f"types.ts: {types_path}  (last modified {stamp})")
     print(f"schemas compared: {compared}   disagreements: {len(findings)}")
+    if projections:
+        print(f"  ~ PROJECTION ({len(projections)}): the API carries these and "
+              f"types.ts does not — harmless unless a page should read them")
+        for name, field in projections:
+            print(f"      {name}.{field}")
     if collisions:
         print(f"  ~ NAME COLLISION ({len(collisions)}): a hand-written type shares "
               f"its name with an unrelated component and was not compared")
