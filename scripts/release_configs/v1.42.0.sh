@@ -23,6 +23,16 @@
 #         two contracts for one handler, zeros nobody measured) and the
 #         in-band status vocabulary that keeps them fixed
 #
+# ⚠️ 079 and website_app: proximity_reaction_metric is owned by website_app,
+# so the migration file deliberately skips it. After the runner finishes,
+# apply the one statement from the migration's header as website_app (or
+# superuser). Fresh deploys are unaffected — tools/schema_postgresql.sql
+# now carries all 30 indexes and is loaded with superuser rights.
+# (Carried verbatim from v1.41.1: the v1.39.0 production host's ledger
+# predates 079, so THIS is the config whose operator will actually need it —
+# the first draft dropped the note while an inline comment still pointed at
+# it, which the review caught.)
+#
 # Deploy note: prod remains FROZEN on v1.39.0 by the owner's decision
 # (2026-08-28) — this config exists so the contract holds and the dev/VM
 # upgrade path is ready, not as a deploy instruction.
