@@ -60,7 +60,10 @@ KNOWN = {
     ("proximity_trades.py", "get_proximity_trades_summary"),
     ("proximity_trades.py", "get_proximity_trades_player_stats"),
     ("proximity_trades.py", "get_proximity_trade_events"),
-    ("records_maps.py", "get_map_objective_records"),
+    # ("records_maps.py", "get_map_objective_records") left the convention
+    # with #830: the handler no longer answers status:"error" — its own
+    # docstring records the change. Removed here in the same merge, exactly
+    # the ceremony this inventory demands.
     ("skill_router.py", "get_player_skill"),
     ("skill_router.py", "get_player_skill_history"),
     ("skill_router.py", "get_et_performance_v3_shadow"),

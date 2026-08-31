@@ -28,6 +28,66 @@ router = APIRouter()
 logger = get_app_logger("api.records.weapons")
 
 
+class WeaponAggregate(BaseModel):
+    """One weapon's line in the overall table.
+
+    ⚠️ Named apart from `WeaponRow` (the per-player row in the same file) on
+    purpose: they share five field names and differ in two, and a single class
+    covering both would have to widen every field that only one of them has.
+
+    All six are guarded at the source — `int(...)` casts and a `hs_rate` whose
+    branch has `else 0.0` — so none is nullable. `weapon_comprehensive_stats`
+    declares `weapon_name` NOT NULL, and the handler derives `name` and
+    `weapon_key` from it.
+    """
+
+    name: str
+    weapon_key: str
+    kills: int
+    #: Headshot HITS, not kills — the column means hits in this table.
+    headshots: int
+    #: headshots / hits * 100, capped at 100; 0.0 when there were no hits.
+    hs_rate: float
+    accuracy: float
+
+
+class WeaponLeader(BaseModel):
+    """The top player for one weapon.
+
+    `player_guid` and `player_name` are NOT NULL columns, so they stay
+    required — widening them would invite callers to handle a case the schema
+    forbids.
+    """
+
+    weapon: str
+    weapon_key: str
+    player_guid: str
+    player_name: str
+    kills: int
+    headshots: int
+    accuracy: float
+
+
+class WeaponsHallOfFame(BaseModel):
+    """⛔ THREE STATES: the handler swallows its own exception and answers 200.
+
+    Before this, a failed query and a period with no weapon data both returned
+    `{"period": p, "leaders": {}}` — so a client reading `Object.keys(leaders)`
+    could not tell a measured emptiness from an unmeasured one. Same shape as
+    `/records/maps/segments` and `/stats/activity-calendar`, agreed with the
+    workstream that renders them.
+    """
+
+    period: str
+    #: weapon_key -> its leader. Empty when there is nothing to show; check
+    #: `status` to learn which kind of empty.
+    leaders: dict[str, WeaponLeader]
+    #: 'ok' | 'no_data' | 'unavailable'
+    status: str
+    #: One short sentence when the state is not `ok`; null otherwise.
+    note: str | None = None
+
+
 class WeaponRow(BaseModel):
     """One weapon's line for one player.
 
@@ -106,7 +166,7 @@ WeaponPeriodWithSession = Annotated[
 ]
 
 
-@router.get("/stats/weapons")
+@router.get("/stats/weapons", response_model=list[WeaponAggregate])
 @handle_router_errors("Database error")
 async def get_weapon_stats(
     period: WeaponPeriod = "all",
@@ -233,7 +293,7 @@ async def get_weapon_stats(
     return weapons
 
 
-@router.get("/stats/weapons/hall-of-fame")
+@router.get("/stats/weapons/hall-of-fame", response_model=WeaponsHallOfFame)
 async def get_weapon_hall_of_fame(period: WeaponPeriod = "all", db: DatabaseAdapter = Depends(get_db)):
     """
     Get top player per weapon for Hall of Fame.
@@ -304,7 +364,12 @@ async def get_weapon_hall_of_fame(period: WeaponPeriod = "all", db: DatabaseAdap
         rows = await db.fetch_all(query, tuple(params))
     except Exception as e:
         logger.error(f"Error fetching weapon hall of fame: {e}")
-        return {"period": period, "leaders": {}}
+        return {
+            "period": period,
+            "leaders": {},
+            "status": "unavailable",
+            "note": "the hall-of-fame query failed; this is not an empty set",
+        }
 
     leaders = {}
     for row in rows:
@@ -331,7 +396,12 @@ async def get_weapon_hall_of_fame(period: WeaponPeriod = "all", db: DatabaseAdap
                 "accuracy": round(accuracy, 1),
             }
 
-    return {"period": period, "leaders": leaders}
+    return {
+        "period": period,
+        "leaders": leaders,
+        "status": "ok" if leaders else "no_data",
+        "note": None if leaders else "no weapon data for this period",
+    }
 
 
 # One handler, two spellings, and until now two contracts: the

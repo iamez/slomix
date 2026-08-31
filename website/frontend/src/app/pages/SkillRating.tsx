@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Chip, figure, Lbl, Pending, SectionHead, Unavailable } from '../components/ui';
-import { useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
-import type { RatedPlayer, SsrPlayer } from '../lib/types';
+import { Absent, Chip, figure, Lbl, Meta, Pending, SectionHead, Unavailable } from '../components/ui';
+import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
+import type { AdjustedLifetimePlayer, RatedPlayer, SsrPlayer } from '../lib/types';
 
 /**
  * ET Rating (docs/design/12 row 24).
@@ -192,6 +192,172 @@ function SsrRow({ player }: { player: SsrPlayer }) {
   );
 }
 
+/** Below this the correction does most of its work on the least evidence —
+ * measured, not chosen: |correction| averages 0.143 under five sessions and
+ * 0.028 at twenty or more. */
+/** The size of the correction for thin histories, measured from the rows the
+ *  board is actually showing. Buckets follow the sentence: under five
+ *  sessions against over twenty; players without a lifetime rating have no
+ *  delta to measure and are excluded. */
+function correctionClaim(players: AdjustedLifetimePlayer[]): string {
+  const rated = players.filter((p) => p.lifetime_rating != null);
+  const size = (xs: AdjustedLifetimePlayer[]) =>
+    xs.reduce((sum, p) => sum + Math.abs(p.adjusted_lifetime - (p.lifetime_rating as number)), 0) / xs.length;
+  const thin = rated.filter((p) => p.n_sessions < 5);
+  const deep = rated.filter((p) => p.n_sessions > 20);
+  // ⛔ The DIRECTION is derived too, not asserted (Codex on #846, and the
+  // verifier's #851 finding independently): the first version derived the
+  // number but still claimed "larger below five sessions" whatever the data
+  // said — a missing bucket produced the claim with nothing behind it, and a
+  // ratio near or below 1 produced "~0× larger", a sentence the data denies.
+  // Same class as the "~5×" constant this function replaced, moved from
+  // magnitude to sign.
+  if (thin.length === 0 || deep.length === 0 || size(deep) === 0 || size(thin) === 0) {
+    // No comparison exists — say what the correction IS, claim no direction.
+    // Neutral by review (Codex on #846): adjusted_lifetime() applies the
+    // same fixed damping to everyone and takes an UNWEIGHTED mean of
+    // per-session values — n_sessions is never a confidence weight, so
+    // the old sentence ('weighs each rating by the history behind it')
+    // invented a mechanism the algorithm does not have.
+    return 'the correction rates each session against the opponents who actually played it';
+  }
+  const ratio = size(thin) / size(deep);
+  if (ratio >= 1.5) {
+    return `the correction is ~${Math.round(ratio)}× larger below five sessions than above twenty`;
+  }
+  if (ratio <= 1 / 1.5) {
+    return `the correction is ~${Math.round(1 / ratio)}× larger above twenty sessions than below five`;
+  }
+  return 'the correction is similar-sized below five and above twenty sessions';
+}
+
+const THIN_SESSIONS = 5;
+
+/** The lifetime rating, and the same rating after the pool it was earned
+ * against is taken into account.
+ *
+ * Both numbers use the SAME rating units, so unlike SSR above these two ARE
+ * comparable — the difference between them is the whole panel. (Not "a 0–1
+ * scale": skill_rating_service permits ratings up to 1.5, the published
+ * formula advertises exceptional values around 1.15, and the pool correction
+ * adds without clamping — today's pool happens to sit at 0.44–0.75, which is
+ * a fact about the sample, not the scale. Codex on #846.) What the
+ * difference is not, is a ranking of who is best, and the measurement says
+ * why: the correction averages 0.143 for players with fewer than five
+ * sessions and 0.028 for players with twenty or more, five times larger
+ * exactly where the evidence is thinnest. Three of the top ten by adjusted
+ * rating have played one or two sessions.
+ *
+ * So `n_sessions` sits beside every row rather than in a footnote, and the
+ * thin ones are marked. A board that hides its sample size is a board that
+ * invites the reader to trust its top.
+ */
+function AdjustedLifetimeBoard() {
+  const [open, setOpen] = useState(false);
+  const q = useAdjustedLifetime(open);
+  return (
+    <Stack gap={2} parity="skill.adjusted" style={{ paddingTop: 'var(--space-6)' }}>
+      <SectionHead
+        label="adjusted for who they played"
+        aside={
+          <Chip
+            active={open}
+            label={open ? 'hide adjusted' : 'show adjusted'}
+            onClick={() => { setOpen(!open); }}
+          />
+        }
+      />
+      <Absent reason="the same lifetime rating, corrected for the strength of the pool each session was played against — same 0–1 scale, so the difference is readable" />
+      {open && (
+        <>
+          {q.isPending && <Pending label="adjusted ratings" />}
+          {q.isError && <Unavailable what="adjusted ratings" />}
+          {/* ⚠️ Claims only what the wire can back (Codex on #846): the
+              * service filters history to the CURRENT formula_version
+              * (s_effort_service.py:243), so an empty list also covers
+              * "history exists, but under an earlier formula" — and the
+              * response carries no count of the filtered-out rows, so this
+              * line cannot tell the two apart. The version is quoted from
+              * the payload, never a constant; if the wire ever grows a
+              * stale-rows count, this is where it lands. */}
+          {q.data && !q.data.available && (
+            <Absent
+              reason={`no session history under the current formula (${q.data.formula_version}) has been persisted — history scored under an earlier formula, if any, is not adjustable`}
+            />
+          )}
+          {q.data?.available && (
+            <>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+                {q.data.formula_version} · {figure(q.data.players.length)} players ·
+                {/* ⛔ Derived from the rows on screen, not hard-coded (Codex on
+                  * #846): the "~5×" was measured against the committed fixture,
+                  * and the endpoint recomputes from THIS deployment's history —
+                  * a snapshot observation was being presented as a property of
+                  * every pool. When either bucket is empty the sentence drops
+                  * its number rather than inventing one. */}
+                {' '}{correctionClaim(q.data.players)}
+              </Lbl>
+              <Stack gap={1} className="rows">
+                {q.data.players.map((p) => {
+                  const thin = p.n_sessions < THIN_SESSIONS;
+                  const delta = p.lifetime_rating == null ? null : p.adjusted_lifetime - p.lifetime_rating;
+                  const shownName = p.name ?? p.player_guid.slice(0, 8);
+                  const dup = q.data.players.filter(
+                    (o) => (o.name ?? o.player_guid.slice(0, 8)) === shownName).length > 1;
+                  return (
+                    <Cluster key={p.player_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
+                      <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
+                        <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
+                          {shownName}
+                        </Link>
+                        {/* Same disambiguation as the main board (its fixture
+                          * proves the need: EF561EAA and FB0EC840 are both
+                          * "ownator"): identical names against different
+                          * ratings is a board contradicting itself. */}
+                        {dup && <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>{p.player_guid.slice(0, 8)}</span>}
+                        {thin && (
+                          <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                            {p.n_sessions} session{p.n_sessions === 1 ? '' : 's'}
+                          </span>
+                        )}
+                      </Cluster>
+                      <Cluster gap={3} align="baseline">
+                        <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', width: 52, textAlign: 'right' }}>
+                          {/* No lifetime row to correct — a delta against 0
+                            * would invent a 0.63 improvement out of nothing. */}
+                          {p.lifetime_rating == null ? '—' : p.lifetime_rating.toFixed(3)}
+                        </span>
+                        <span className="m" style={{ fontSize: 'var(--fs-value)', width: 56, textAlign: 'right' }}>
+                          {p.adjusted_lifetime.toFixed(3)}
+                        </span>
+                        <span
+                          className="m"
+                          style={{
+                            fontSize: 'var(--fs-small)', width: 64, textAlign: 'right',
+                            color: delta == null ? 'var(--color-text-500)'
+                              : delta > 0 ? 'var(--color-pos)' : delta < 0 ? 'var(--color-neg)' : 'var(--color-text-400)',
+                          }}
+                        >
+                          {delta == null ? 'no lifetime yet' : `${delta > 0 ? '+' : ''}${delta.toFixed(3)}`}
+                        </span>
+                        <Meta style={{ width: 40, textAlign: 'right' }}>{p.n_sessions}</Meta>
+                      </Cluster>
+                    </Cluster>
+                  );
+                })}
+              </Stack>
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+                lifetime · adjusted · correction · sessions — ordered by adjusted,
+                which is not the same as ordered by evidence
+              </Lbl>
+            </>
+          )}
+        </>
+      )}
+    </Stack>
+  );
+}
+
 export function SkillRating() {
   const [open, setOpen] = useState<string | null>(null);
   const [showSsr, setShowSsr] = useState(false);
@@ -254,6 +420,8 @@ export function SkillRating() {
           </Stack>
         )}
       </Stack>
+
+      <AdjustedLifetimeBoard />
 
       <Stack gap={2} parity="skill.ssr" style={{ paddingTop: 'var(--space-6)' }}>
         <SectionHead

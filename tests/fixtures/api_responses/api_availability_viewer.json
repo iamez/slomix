@@ -1,0 +1,628 @@
+{
+  "from": "2026-02-15",
+  "to": "2026-04-10",
+  "statuses": [
+    "LOOKING",
+    "AVAILABLE",
+    "MAYBE",
+    "NOT_PLAYING"
+  ],
+  "days": [
+    {
+      "date": "2026-02-15",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-16",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-17",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-18",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-19",
+      "counts": {
+        "LOOKING": 1,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 1,
+      "my_status": "LOOKING"
+    },
+    {
+      "date": "2026-02-20",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 1
+      },
+      "total": 1,
+      "my_status": "NOT_PLAYING"
+    },
+    {
+      "date": "2026-02-21",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-22",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-23",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-24",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 1,
+        "NOT_PLAYING": 0
+      },
+      "total": 1,
+      "my_status": "MAYBE"
+    },
+    {
+      "date": "2026-02-25",
+      "counts": {
+        "LOOKING": 1,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 1,
+      "my_status": "LOOKING"
+    },
+    {
+      "date": "2026-02-26",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-27",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-02-28",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-01",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-02",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-03",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-04",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-05",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-06",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-07",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-08",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-09",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-10",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-11",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-12",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-13",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-14",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-15",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-16",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-17",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-18",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-19",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-20",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-21",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-22",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-23",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-24",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-25",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-26",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-27",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-28",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-29",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-30",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-03-31",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-01",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-02",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-03",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-04",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-05",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-06",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 1,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 1,
+      "my_status": "AVAILABLE"
+    },
+    {
+      "date": "2026-04-07",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-08",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-09",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    },
+    {
+      "date": "2026-04-10",
+      "counts": {
+        "LOOKING": 0,
+        "AVAILABLE": 0,
+        "MAYBE": 0,
+        "NOT_PLAYING": 0
+      },
+      "total": 0,
+      "my_status": null
+    }
+  ],
+  "viewer": {
+    "authenticated": true,
+    "linked_discord": true
+  },
+  "session_ready": {
+    "date": "2026-08-29",
+    "ready": false,
+    "looking_count": 0,
+    "threshold": 6,
+    "event_key": "SESSION_READY:2026-08-29:threshold=6"
+  }
+}

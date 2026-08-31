@@ -6,6 +6,7 @@ import math
 import re
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -250,7 +251,161 @@ async def _resolve_player_guid_canonical(
     return str(row) if row else g
 
 
-@router.get("/proximity/players")
+class ProximityScope(BaseModel):
+    """What the answer was actually scoped to, echoed back.
+
+    ⭐ THIS OBJECT IS THE REASON THE SCOPE BUG WAS INVISIBLE. Every field is
+    nullable, and a null means "not filtered on" — so a panel that ignores a
+    parameter still echoes the scope it was ASKED for, and the number beside
+    it looks like it belongs to that scope. `/proximity/revives` shipped a
+    30-day aggregate under a one-round label for exactly this reason (fixed in
+    `cc8085ef`, 1,873 revives where the round had 90). Typing it does not fix
+    that class; only comparing counts across scopes does.
+    """
+
+    session_date: str | None
+    map_name: str | None
+    round_number: int | None
+    round_start_unix: int | None
+    player_guid: str | None
+
+
+class HitRegionScope(BaseModel):
+    """The scope echo for `/proximity/hit-regions`, which has ONE MORE FIELD.
+
+    ⛔ THE FAILURE THIS MODULE'S TEST FILE IS NAMED AFTER, IN MY OWN CODE. That
+    handler writes `scope["weapon_id"] = int(weapon_id)` when the filter is
+    used, `ProximityScope` does not declare it, and `response_model` therefore
+    DROPS it — the client gets results narrowed to one weapon while the echoed
+    scope no longer says which (Codex on #830). The scope object exists to let
+    a caller check what the answer was filtered to; silently removing a filter
+    from it is the worst field to lose.
+
+    A separate member rather than an optional field on `ProximityScope`,
+    because the key is absent when no weapon filter was sent and an optional
+    field would put `"weapon_id": null` on every other response.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    session_date: str | None
+    map_name: str | None
+    round_number: int | None
+    round_start_unix: int | None
+    player_guid: str | None
+    weapon_id: int
+
+
+class ProximityPlayerRef(BaseModel):
+    """A player in the scope, for the page's picker."""
+
+    guid: str
+    name: str
+
+
+class ProximityPlayers(BaseModel):
+    """Who appears in the current scope — the backbone of the proximity page.
+
+    `guid` and `name` are `str(...)` in the handler and the row is skipped
+    unless both are truthy, so neither can be null here. That is a HANDLER
+    guarantee, not a schema one.
+    """
+
+    status: str
+    scope: ProximityScope
+    players: list[ProximityPlayerRef]
+
+
+class HitRegionRow(BaseModel):
+    """One player's hit distribution across the four body regions.
+
+    ⭐ `head_pct` is `float`, NOT `int | float`, and the reason is worth
+    separating from the similar-looking cases elsewhere on this branch. The
+    handler writes `round(head * 100.0 / total, 1) if total > 0 else 0` — an
+    int on the else branch — but the query carries `HAVING COUNT(*) >= 10`
+    and `total_hits` IS that COUNT, so `total` cannot be 0. This is a
+    STRUCTURAL guarantee from the query in the same function, not a claim
+    about today's data. Compare `LeaderboardRow.kills`, where the only
+    guarantee was "no null rows exist right now" and the type had to widen.
+
+    `name` is `MAX(attacker_name)` passed through raw, with no
+    `IS NOT NULL` guard (unlike `/proximity/players`, which has one), so it
+    is nullable.
+    """
+
+    guid: str
+    name: str | None
+    head: int
+    arms: int
+    body: int
+    legs: int
+    head_pct: float
+    total_hits: int
+    total_damage: int
+
+
+class ProximityHitRegions(BaseModel):
+    status: str
+    scope: HitRegionScope | ProximityScope
+    players: list[HitRegionRow]
+
+
+class HeatmapCell(BaseModel):
+    """One grid cell. Coordinates are grid indices, not world units."""
+
+    x: int
+    y: int
+    count: int
+
+
+class PlayerHeatmap(BaseModel):
+    """Per-player combat heatmap for one map, in one of five modes.
+
+    ⚠️ EVERY PARAMETER THAT MATTERS IS REQUIRED AND REJECTED LOUDLY, which is
+    the opposite of the pattern found elsewhere on this branch: `map_name`,
+    `mode` and `player_guid` each answer 400 when missing, an unknown `mode`
+    answers 400 with the list of valid ones, and `weapon_id` combined with
+    `mode=presence` answers 400 rather than silently dropping the filter. That
+    last one is the behaviour every ignored parameter should have had.
+
+    An unknown `player_guid` or an out-of-range scope answers 200 with
+    `hotzones: []` and `total: 0` — an empty result, not an error, and
+    `player_name` falls back to `#` plus the first eight characters of the
+    guid, so it is never null.
+    """
+
+    status: str
+    map_name: str
+    mode: str
+    grid_size: int
+    player_guid: str
+    #: Resolved display name, or `#XXXXXXXX` when it cannot be resolved.
+    player_name: str
+    hotzones: list[HeatmapCell]
+    total: int
+    #: True when the server downsampled the path before returning it.
+    sampled: bool
+    scope: ProximityScope
+
+
+class PlayerHeatmapKillsOnly(PlayerHeatmap):
+    """`mode=player_dies` only — it carries one EXTRA key.
+
+    ⛔ Measured across all five modes: `kills_from`, `victims_die`,
+    `presence` and `aim` return ten keys; `player_dies` returns ELEVEN. World
+    and suicide deaths are not tracked, so that mode reports
+    `coverage: "kills_only"` to say the map is deaths-by-enemy, not all
+    deaths. A single model with `coverage: str | None = None` would put
+    `"coverage": null` on the other four modes, which reads as "coverage
+    unknown" — the opposite of the truth, since for them the question does
+    not arise. Hence a union, and `exclude_none` is NOT an option here
+    because `scope` uses null as a value throughout.
+    """
+
+    coverage: str
+
+
+@router.get("/proximity/players", response_model=ProximityPlayers)
 @handle_router_errors("Proximity players error")
 async def get_proximity_players(
     range_days: int = 365,
@@ -282,7 +437,7 @@ async def get_proximity_players(
     return {"status": "ok", "scope": scope, "players": players}
 
 
-@router.get("/proximity/hit-regions")
+@router.get("/proximity/hit-regions", response_model=ProximityHitRegions)
 @handle_router_errors("Proximity hit-regions error")
 async def get_proximity_hit_regions(
     range_days: int = 30,
@@ -626,7 +781,8 @@ async def get_proximity_push_deaths_heatmap(
     }
 
 
-@router.get("/proximity/player-heatmap")
+@router.get("/proximity/player-heatmap",
+            response_model=PlayerHeatmapKillsOnly | PlayerHeatmap)
 @handle_router_errors("Proximity player-heatmap error")
 async def get_proximity_player_heatmap(
     map_name: str | None = None,
@@ -767,7 +923,81 @@ async def get_proximity_player_heatmap(
     return result
 
 
-@router.get("/proximity/player-aim")
+class AimCell(BaseModel):
+    """One grid cell of the aim map, with the direction fired from it.
+
+    ⚠️ NOT the same element as `HeatmapCell` or the hotzones endpoint's cell,
+    despite all three being `{x, y, count, …}`: this one adds a 16-bucket
+    `rose` and the circular mean. Three near-identical shapes across one
+    family is exactly where a shared renderer picks the wrong one.
+    """
+
+    x: int
+    y: int
+    count: int
+    #: Shot counts per yaw bucket; its length is `yaw_buckets`.
+    rose: list[int]
+    mean_yaw: float
+    #: Resultant length, 0..1 — how concentrated the rose is.
+    r: float
+
+
+class PitchHistogram(BaseModel):
+    """⚠️ `edges` has ONE MORE ENTRY THAN `counts` — 7 edges, 6 bins. A
+    consumer that zips them silently drops the last bin."""
+
+    edges: list[int]
+    counts: list[int]
+
+
+class AimCircularStats(BaseModel):
+    """Circular statistics over the shot directions.
+
+    ⭐ EVERY FIELD IS NON-NULL EVEN WITH NO SHOTS, and the empty values are
+    chosen rather than zeroed: measured on a scope with 0 shots, this answers
+    `circular_std_deg: 180.0` and `rayleigh_p: 1.0` — maximum spread and no
+    evidence of a preferred direction, which is the honest reading of nothing.
+    A model that made them nullable would invite a consumer to render "—" and
+    lose that.
+    """
+
+    n: int
+    mean_yaw_deg: float
+    resultant_length: float
+    circular_std_deg: float
+    rayleigh_p: float
+    pitch_mean_deg: float
+    pitch_std_deg: float
+
+
+class PlayerAim(BaseModel):
+    """Where a player aims on one map, and how tightly.
+
+    An out-of-range scope answers 200 with `total: 0`, an empty `hotzones`
+    list and `narrative: ["0 shots tracked"]` — an answer, not an error.
+    `map_name` and `player_guid` are both REQUIRED parameters and each
+    answers 400 when missing, so neither can be null in the payload.
+    """
+
+    status: str
+    map_name: str
+    player_guid: str
+    player_name: str
+    grid_size: int
+    total: int
+    sampled: bool
+    scope: ProximityScope
+    hotzones: list[AimCell]
+    #: Number of yaw buckets in every cell's `rose`.
+    yaw_buckets: int
+    yaw_bucket_width_deg: float
+    pitch_hist: PitchHistogram
+    circular: AimCircularStats
+    #: Pre-rendered sentences; the page shows them verbatim.
+    narrative: list[str]
+
+
+@router.get("/proximity/player-aim", response_model=PlayerAim)
 @handle_router_errors("Proximity player-aim error")
 async def get_proximity_player_aim(
     map_name: str | None = None,

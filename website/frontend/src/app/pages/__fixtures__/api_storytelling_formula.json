@@ -1,0 +1,159 @@
+{
+ "status": "ok",
+ "version": "kis-v5",
+ "name": "Kill Impact Score (KIS)",
+ "description": "Contextual kill impact scoring for competitive ET:Legacy. Each kill starts at 1.0 base and is multiplied by context factors.",
+ "multipliers": {
+  "carrier_kill": {
+   "value": 3.0,
+   "description": "Killed flag/document carrier"
+  },
+  "carrier_chain": {
+   "value": 5.0,
+   "description": "Carrier kill + teammate returned objective within 10s"
+  },
+  "push": {
+   "value": 1.0,
+   "status": "retired in kis-v5 (2026-07-25)",
+   "threshold": 0.9,
+   "description": "NO LONGER SCORED. Kills during a push predicted the round winner 50.9% of the time vs 50.8% for all other kills — indistinguishable from the ~50% baseline — and push_quality was inverse with kill activity. The is_during_push flag is still recorded for narrative use."
+  },
+  "crossfire": {
+   "value": 1.5,
+   "description": "Kill as part of executed crossfire setup"
+  },
+  "spawn_timing": {
+   "range": "1.0 - 2.0",
+   "bonus": 1.0,
+   "description": "Bonus based on spawn wave denial (0.0=no denial, 1.0=max denial)"
+  }
+ },
+ "outcome_multipliers": {
+  "gibbed": {
+   "value": 1.3,
+   "description": "Permanent kill (no revive possible)"
+  },
+  "revived": {
+   "value": 0.5,
+   "description": "Kill undone by medic revive"
+  },
+  "tapped_out": {
+   "value": 1.0,
+   "description": "Normal death (tapped out)"
+  }
+ },
+ "class_weights": {
+  "MEDIC": {
+   "value": 1.5,
+   "description": "Target was MEDIC"
+  },
+  "ENGINEER": {
+   "value": 1.3,
+   "description": "Target was ENGINEER"
+  },
+  "FIELDOPS": {
+   "value": 1.1,
+   "description": "Target was FIELDOPS"
+  },
+  "SOLDIER": {
+   "value": 1.0,
+   "description": "Target was SOLDIER"
+  },
+  "COVERTOPS": {
+   "value": 1.0,
+   "description": "Target was COVERTOPS"
+  }
+ },
+ "distance_multipliers": {
+  "applied": false,
+  "note": "not applied: per-kill distance data is not implemented, so every kill scores with the normal multiplier",
+  "long_range": {
+   "value": 1.2,
+   "threshold": ">800u"
+  },
+  "normal": {
+   "value": 1.0,
+   "threshold": "100-800u"
+  },
+  "melee": {
+   "value": 0.9,
+   "threshold": "<100u"
+  }
+ },
+ "objective_multipliers": {
+  "objective_area": {
+   "value": 1.4,
+   "description": "Victim died inside one of the map's objective zones (3D sphere check vs objective_zones.json) — kills at the objective matter more (KIS v4)"
+  }
+ },
+ "oksii_multipliers": {
+  "health": {
+   "value": 1.3,
+   "threshold": "<30 HP",
+   "description": "Clutch kill with low health"
+  },
+  "alive": {
+   "solo_clutch": {
+    "value": 2.0,
+    "threshold": "1v3+"
+   },
+   "outnumbered": {
+    "value": 1.5,
+    "threshold": "dynamic: max(1, team_size//3)"
+   },
+   "description": "Kill while outnumbered or solo clutch"
+  },
+  "reinforcement": {
+   "tiers": [
+    {
+     "max_reinf_seconds": 2.0,
+     "inclusive": true,
+     "multiplier": 0.7
+    },
+    {
+     "max_reinf_seconds": 5.0,
+     "inclusive": true,
+     "multiplier": 0.85
+    },
+    {
+     "max_reinf_seconds": 10.0,
+     "inclusive": true,
+     "multiplier": 1.0
+    },
+    {
+     "max_reinf_seconds": 15.0,
+     "inclusive": true,
+     "multiplier": 1.1
+    },
+    {
+     "max_reinf_seconds": 20.0,
+     "inclusive": true,
+     "multiplier": 1.2
+    },
+    {
+     "max_reinf_seconds": 25.0,
+     "inclusive": true,
+     "multiplier": 1.3
+    },
+    {
+     "max_reinf_seconds": null,
+     "inclusive": true,
+     "multiplier": 1.4
+    }
+   ],
+   "description": "Graduated UTRO-inspired tiers (2026-04-20). The longer the victim has to wait before respawning, the more time the kill removed from the enemy team — so the multiplier scales from 0.70 (≤2s, they were about to respawn) up to 1.40 (>25s, full wave penalty — the ≤25s tier above it is inclusive, matching _graduated_reinf_mult). Replaces the previous binary 1.0/1.2 split."
+  }
+ },
+ "soft_cap": {
+  "threshold": 5.0,
+  "compression": 0.25,
+  "description": "Above 5.0: total = 5.0 + (raw - 5.0) × 0.25. Max ~8.5"
+ },
+ "formula": "total_impact = soft_cap(base × carrier × crossfire × spawn × outcome × class × distance × health × alive × reinf × objective_area)",
+ "validity": {
+  "measures": "the quality of a single kill — NOT how good a player is. Across players, KIS per kill tracks a ridge-APM with-or-without-you estimate at r=0.35, while plain kills per round tracks it at r=0.92 (1,938 rounds, 36 players). Whoever helps the team win is visible in VOLUME, not in per-kill quality.",
+  "context_ceiling": "Every kill-derived feature we have, combined and evaluated with cross-validation over held-out rounds, predicts the round winner 75.7% of the time; simply counting kills gets 73.2%. Both sit on top of a 64.1% floor — the attacking side does not win half the rounds, so a model that always picked the more common winner would already score that. The entire budget for all context weighting is the ~2.5 points between those two, not the distance from 50%.",
+  "known_defect_in_v5": "spawn_multiplier and reinf_multiplier are the SAME Lua quantity (time_to_next from calculateSpawnTimingScore) stored twice, so the enemy spawn clock is counted twice and owns ~38% of the score's spread (r=0.85 between the two). Several other multipliers do not survive a within-role test with a man-advantage control. Both are addressed in the v6 candidate.",
+  "sample": "34,597 kills over 638 rounds; 15 players with >=200 kills"
+ }
+}

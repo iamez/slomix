@@ -41,6 +41,35 @@ def _parse_components(raw) -> dict:
     return {}
 
 
+def _short_guid(identifier: str) -> str | None:
+    """The project's 8-character form of a 32-character canonical GUID.
+
+    ⛔ THE SEAM THIS BRIDGES. This database stores a player under TWO GUIDs:
+    `player_comprehensive_stats` and `player_skill_ratings` hold the 8-char
+    form (37 distinct players, every row 8 chars), while `player_track` and
+    the proximity tables hold the 32-char canonical one. A page holding a guid
+    from the second family and asking this router about it got "not found"
+    for a player that is right there — measured: `5D9891600C7948FF85709360E669D5A4`
+    answered "not found" while `5D989160`, its own first eight characters,
+    answered with the player.
+
+    The truncation rule was verified before being relied on, not assumed:
+    ALL 19 distinct 32-char guids in `player_track` have their 8-char prefix
+    present in `player_comprehensive_stats`. 19 of 19, no exceptions.
+
+    Returns None when the identifier is not a 32-char hex guid, so a display
+    name never gets silently truncated into a lookup key.
+    """
+    text = (identifier or "").strip()
+    if len(text) != 32:
+        return None
+    try:
+        int(text, 16)
+    except ValueError:
+        return None
+    return text[:8]
+
+
 async def _resolve_guid(db: DatabaseAdapter, identifier: str) -> str | None:
     """Resolve player identifier to GUID (try GUID first, then name)."""
     row = await db.fetch_one(
@@ -53,6 +82,14 @@ async def _resolve_guid(db: DatabaseAdapter, identifier: str) -> str | None:
         "SELECT player_guid FROM player_skill_ratings WHERE LOWER(display_name) = LOWER($1)",
         (identifier,),
     )
+    if row:
+        return row[0]
+    short = _short_guid(identifier)
+    if short:
+        row = await db.fetch_one(
+            "SELECT player_guid FROM player_skill_ratings WHERE player_guid = $1",
+            (short,),
+        )
     return row[0] if row else None
 
 
@@ -174,6 +211,19 @@ async def get_player_skill(
                FROM player_skill_ratings WHERE LOWER(display_name) = LOWER($1)""",
             (identifier,),
         )
+
+    if not row:
+        # A caller holding the 32-char canonical guid — the form `player_track`
+        # and the proximity tables use — is asking about a player this table
+        # stores under its 8-char prefix. See `_short_guid`.
+        short = _short_guid(identifier)
+        if short:
+            row = await db.fetch_one(
+                """SELECT player_guid, display_name, et_rating, games_rated,
+                          last_rated_at, components
+                   FROM player_skill_ratings WHERE player_guid = $1""",
+                (short,),
+            )
 
     if not row:
         return {

@@ -1,0 +1,252 @@
+[
+  {
+    "rank": 1,
+    "guid": "D8423F90",
+    "name": "vid",
+    "value": 17964.0,
+    "rounds": 1759,
+    "kills": 17964,
+    "deaths": 15003,
+    "kd": 1.2
+  },
+  {
+    "rank": 2,
+    "guid": "EDBB5DA9",
+    "name": "[TWK]CUJO",
+    "value": 16050.0,
+    "rounds": 1639,
+    "kills": 16050,
+    "deaths": 13338,
+    "kd": 1.2
+  },
+  {
+    "rank": 3,
+    "guid": "5D989160",
+    "name": ".olz",
+    "value": 14934.0,
+    "rounds": 1811,
+    "kills": 14934,
+    "deaths": 15967,
+    "kd": 0.94
+  },
+  {
+    "rank": 4,
+    "guid": "1C747DF1",
+    "name": ".lgz",
+    "value": 12469.0,
+    "rounds": 1363,
+    "kills": 12469,
+    "deaths": 13050,
+    "kd": 0.96
+  },
+  {
+    "rank": 5,
+    "guid": "2B5938F5",
+    "name": "bronze",
+    "value": 10473.0,
+    "rounds": 959,
+    "kills": 10473,
+    "deaths": 7833,
+    "kd": 1.34
+  },
+  {
+    "rank": 6,
+    "guid": "7B84BE88",
+    "name": "endekk",
+    "value": 9013.0,
+    "rounds": 1033,
+    "kills": 9013,
+    "deaths": 9467,
+    "kd": 0.95
+  },
+  {
+    "rank": 7,
+    "guid": "0A26D447",
+    "name": "carniee",
+    "value": 8528.0,
+    "rounds": 884,
+    "kills": 8528,
+    "deaths": 8019,
+    "kd": 1.06
+  },
+  {
+    "rank": 8,
+    "guid": "FDA127DF",
+    "name": "wiseBoy",
+    "value": 7143.0,
+    "rounds": 1025,
+    "kills": 7143,
+    "deaths": 9566,
+    "kd": 0.75
+  },
+  {
+    "rank": 9,
+    "guid": "652EB4A6",
+    "name": "qmr",
+    "value": 6437.0,
+    "rounds": 794,
+    "kills": 6437,
+    "deaths": 7405,
+    "kd": 0.87
+  },
+  {
+    "rank": 10,
+    "guid": "DB00AA45",
+    "name": "Cru3lzor.",
+    "value": 4407.0,
+    "rounds": 572,
+    "kills": 4407,
+    "deaths": 4830,
+    "kd": 0.91
+  },
+  {
+    "rank": 11,
+    "guid": "9CC78CFE",
+    "name": "v_kt_r",
+    "value": 3316.0,
+    "rounds": 442,
+    "kills": 3316,
+    "deaths": 4332,
+    "kd": 0.77
+  },
+  {
+    "rank": 12,
+    "guid": "1EDBF300",
+    "name": "kanii",
+    "value": 1988.0,
+    "rounds": 372,
+    "kills": 1988,
+    "deaths": 3336,
+    "kd": 0.6
+  },
+  {
+    "rank": 13,
+    "guid": "3C0354D3",
+    "name": "SHIFT+W squAzE__",
+    "value": 1657.0,
+    "rounds": 138,
+    "kills": 1657,
+    "deaths": 1137,
+    "kd": 1.46
+  },
+  {
+    "rank": 14,
+    "guid": "42E142B3",
+    "name": "immoo{",
+    "value": 901.0,
+    "rounds": 103,
+    "kills": 901,
+    "deaths": 1066,
+    "kd": 0.85
+  },
+  {
+    "rank": 15,
+    "guid": "EF561EAA",
+    "name": "carniee",
+    "value": 563.0,
+    "rounds": 78,
+    "kills": 563,
+    "deaths": 761,
+    "kd": 0.74
+  },
+  {
+    "rank": 16,
+    "guid": "E587CA5F",
+    "name": "Zlatorog",
+    "value": 489.0,
+    "rounds": 55,
+    "kills": 489,
+    "deaths": 540,
+    "kd": 0.91
+  },
+  {
+    "rank": 17,
+    "guid": "FB0EC840",
+    "name": "ownator",
+    "value": 357.0,
+    "rounds": 45,
+    "kills": 357,
+    "deaths": 448,
+    "kd": 0.8
+  },
+  {
+    "rank": 18,
+    "guid": "1C8F69CA",
+    "name": "//^?/M.Demonslayer",
+    "value": 210.0,
+    "rounds": 14,
+    "kills": 210,
+    "deaths": 165,
+    "kd": 1.27
+  },
+  {
+    "rank": 19,
+    "guid": "9F2B3930",
+    "name": "[TWK]Imb3ciL",
+    "value": 181.0,
+    "rounds": 22,
+    "kills": 181,
+    "deaths": 230,
+    "kd": 0.79
+  },
+  {
+    "rank": 20,
+    "guid": "31B54D18",
+    "name": "Peep",
+    "value": 153.0,
+    "rounds": 10,
+    "kills": 153,
+    "deaths": 125,
+    "kd": 1.22
+  },
+  {
+    "rank": 21,
+    "guid": "A2C6BEBA",
+    "name": "KaNii",
+    "value": 138.0,
+    "rounds": 30,
+    "kills": 138,
+    "deaths": 340,
+    "kd": 0.41
+  },
+  {
+    "rank": 22,
+    "guid": "4D5B6107",
+    "name": "//^?/M.rAzzdOG",
+    "value": 115.0,
+    "rounds": 14,
+    "kills": 115,
+    "deaths": 177,
+    "kd": 0.65
+  },
+  {
+    "rank": 23,
+    "guid": "3063A713",
+    "name": "'^/fnx",
+    "value": 111.0,
+    "rounds": 10,
+    "kills": 111,
+    "deaths": 111,
+    "kd": 1.0
+  },
+  {
+    "rank": 24,
+    "guid": "EDC010BC",
+    "name": "//^?/M.Gekku",
+    "value": 91.0,
+    "rounds": 10,
+    "kills": 91,
+    "deaths": 113,
+    "kd": 0.81
+  },
+  {
+    "rank": 25,
+    "guid": "2EF36AE2",
+    "name": "konrad!",
+    "value": 84.0,
+    "rounds": 10,
+    "kills": 84,
+    "deaths": 123,
+    "kd": 0.68
+  }
+]

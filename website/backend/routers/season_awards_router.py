@@ -5,6 +5,7 @@ Public reads of engraved season awards; admin recompute + manual insert.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
 from website.backend.dependencies import get_db, require_admin
@@ -13,6 +14,38 @@ from website.backend.middleware.auth_helpers import require_ajax_csrf_header
 from website.backend.services import season_awards_service
 
 router = APIRouter()
+
+
+class SeasonAward(BaseModel):
+    """One engraved award for a season.
+
+    ⛔ TYPED FROM `_serialize` AND THE SCHEMA. Every live call returned
+    `awards: []` — none are engraved yet — so the element shape is not
+    observable at all from a response. `player_name`, `value_text` and
+    `value_num` are nullable columns; `label` is derived by the serializer and
+    always present.
+    """
+
+    award_key: str
+    #: Human label, from `_AWARD_LABELS` or derived from the key.
+    label: str
+    player_guid: str
+    player_name: str | None
+    #: Pre-formatted figure; `value_num` is its sortable counterpart. Both are
+    #: nullable, and they are two views of one number — a client needs the text
+    #: to display and the number to rank.
+    value_text: str | None
+    value_num: float | None
+
+
+class SeasonAwards(BaseModel):
+    status: str
+    season_id: str
+    season_name: str
+    #: Empty until a season's awards are engraved. Empty is the answer, not a
+    #: failure.
+    awards: list[SeasonAward]
+
 
 _AWARD_LABELS = {
     "mvp": "Season MVP",
@@ -33,7 +66,7 @@ def _serialize(row) -> dict:
     }
 
 
-@router.get("/seasons/{season_id}/awards")
+@router.get("/seasons/{season_id}/awards", response_model=SeasonAwards)
 async def get_season_awards(season_id: str, db: DatabaseAdapter = Depends(get_db)):
     """Engraved awards for a season ('current' resolves to the live season)."""
     sid = SeasonManager().get_current_season() if season_id == "current" else season_id

@@ -1,0 +1,78 @@
+{
+  "status": "ok",
+  "scope": {
+    "session_date": "2026-08-27",
+    "map_name": "te_escape2",
+    "round_number": 1,
+    "round_start_unix": 1787861468,
+    "player_guid": null
+  },
+  "players": [
+    {
+      "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+      "name": "^c.^7lgz",
+      "head": 9,
+      "arms": 22,
+      "body": 27,
+      "legs": 4,
+      "head_pct": 14.5,
+      "total_hits": 62,
+      "total_damage": 1354
+    },
+    {
+      "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "name": "^6[^2T^6W^2K^6]^2C^6UJ^2O",
+      "head": 8,
+      "arms": 17,
+      "body": 21,
+      "legs": 9,
+      "head_pct": 14.5,
+      "total_hits": 55,
+      "total_damage": 1206
+    },
+    {
+      "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "name": "^7kan^6i^7i",
+      "head": 5,
+      "arms": 21,
+      "body": 13,
+      "legs": 13,
+      "head_pct": 9.6,
+      "total_hits": 52,
+      "total_damage": 1066
+    },
+    {
+      "guid": "2B5938F5C5EA384863A3B2862DC61778",
+      "name": "bronze",
+      "head": 8,
+      "arms": 17,
+      "body": 22,
+      "legs": 4,
+      "head_pct": 15.7,
+      "total_hits": 51,
+      "total_damage": 1134
+    },
+    {
+      "guid": "3C0354D32C5BAFC775198C8A9EAD8087",
+      "name": "^qIt's squAziii",
+      "head": 12,
+      "arms": 20,
+      "body": 16,
+      "legs": 2,
+      "head_pct": 24.0,
+      "total_hits": 50,
+      "total_damage": 1224
+    },
+    {
+      "guid": "9F2B3930797D7D142795B1B6EE194722",
+      "name": "^6[^2T^6W^2K^6]^2I^6mb3ci^2L",
+      "head": 1,
+      "arms": 16,
+      "body": 16,
+      "legs": 11,
+      "head_pct": 2.3,
+      "total_hits": 44,
+      "total_damage": 814
+    }
+  ]
+}

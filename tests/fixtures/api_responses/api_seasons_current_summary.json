@@ -1,0 +1,18 @@
+{
+  "season_id": "2026-Q3",
+  "start_date": "2026-07-01",
+  "end_date": "2026-09-30",
+  "totals": {
+    "rounds": 314,
+    "players": 15,
+    "sessions": 21,
+    "maps": 9,
+    "kills": 16565,
+    "active_days": 24,
+    "avg_rounds_per_day": 13.1
+  },
+  "top_map": {
+    "name": "te_escape2",
+    "plays": 150
+  }
+}

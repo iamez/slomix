@@ -8,8 +8,10 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from shared.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
 from website.backend.dependencies import get_db, require_admin_user
@@ -23,6 +25,53 @@ from website.backend.services.game_server_query import query_game_server
 from website.backend.services.session_scope import resolve_gaming_session_scope
 
 router = APIRouter()
+
+
+class VoiceMember(BaseModel):
+    """One person in voice, as this endpoint is willing to say it.
+
+    Deliberately narrow: the stored row carries more per member, and this
+    endpoint publishes a NAME and the channel it was heard in. Widening it is
+    a decision about what the site discloses, not a schema detail.
+    """
+
+    name: str
+    channel_name: str
+
+
+class VoiceChannel(BaseModel):
+    #: Null in the current writer — the channel is identified by name, and the
+    #: field is kept so a future writer can fill it without a schema change.
+    id: int | None
+    name: str
+    members: list[VoiceMember]
+
+
+class VoiceActivity(BaseModel):
+    """⛔ THREE STATES, AND THE WHOLE POINT IS THAT THEY DIFFER.
+
+    `ok` means we read the report and it is current — INCLUDING when nobody is
+    in voice. `stale` means we read it and it is too old to be called current.
+    `unavailable` means we could not read it at all. Before #808 all three
+    rendered as `total_count: 0`, so "voice is quiet" and "we cannot see voice"
+    looked identical to a client (Codex on #806, via Fable).
+
+    A response model has to preserve that distinction rather than flatten it:
+    `reason` is present in every branch and null in the healthy one, so its
+    ABSENCE never has to be interpreted.
+    """
+
+    #: 'ok' | 'stale' | 'unavailable'
+    status: str
+    #: Null when status is 'ok'; a sentence naming what went wrong otherwise.
+    reason: str | None
+    #: Null when there is nothing to be current about.
+    updated_at: str | None
+    age_seconds: int | None
+    total_count: int
+    members: list[VoiceMember]
+    channels: list[VoiceChannel]
+
 logger = get_app_logger("api.diagnostics")
 
 # Game server configuration (for direct UDP query)
@@ -222,7 +271,83 @@ async def _system_pipeline(db: DatabaseAdapter) -> list[dict]:
     return stages
 
 
-@router.get("/system/overview")
+class SystemStage(BaseModel):
+    """One link in the capture -> parse -> derive chain.
+
+    `detail` is `**detail` in `_stage()` — every caller passes different
+    keyword arguments, so it is an open dict BY CONSTRUCTION. Typing it as a
+    model would drop whichever keys that particular stage happened to add.
+    """
+
+    key: str
+    label: str
+    state: str
+    summary: str
+    detail: dict[str, Any]
+
+
+class LinkageBreach(BaseModel):
+    """One threshold the linkage assessor found breached. Every field comes
+    from a `.get()` on a dict this router did not build, so all three are
+    nullable — none was null in the live sample (there were no breaches at
+    all, which is the same thing as no evidence)."""
+
+    metric: str | None
+    value: Any = None
+    threshold: Any = None
+
+
+class LinkageAvailable(BaseModel):
+    """The linkage assessment came back.
+
+    ⚠️ `metrics` IS AN OPEN DICT ON PURPOSE. The assessor starts it empty and
+    fills it per query, so a failed subquery yields PARTIAL metrics with the
+    status set to "error" — verified in
+    `bot/services/round_linkage_anomaly_service.py`, not assumed from the
+    router's comment. A fixed model with the eleven keys the healthy path
+    returns would answer 500 exactly when the system is already degraded.
+
+    `status` carries the assessor's own verdict and is read with `.get()`, so
+    it is nullable here. It is load-bearing: an empty `breaches` list proves
+    nothing when the status is "error", and without this field the frontend's
+    partial-assessment guard cannot fire (Codex on #809).
+    """
+
+    available: bool
+    status: str | None
+    metrics: dict[str, Any]
+    breach_count: int
+    breaches: list[LinkageBreach]
+
+
+class LinkageUnavailable(BaseModel):
+    """The assessment raised or came back as something other than a dict:
+    `{"available": false}`, a SINGLE key.
+
+    ⛔ Not `LinkageAvailable` with optional fields — that would put
+    `"metrics": null` and `"breach_count": null` on the wire for a payload the
+    handler deliberately keeps to one key.
+    """
+
+    available: bool
+
+
+class SystemOverview(BaseModel):
+    """End-to-end state of the pipeline.
+
+    Every section degrades on its own — a failing source sets that stage to
+    `state: "unknown"` rather than taking the page down — so the states worth
+    typing for are the DEGRADED ones, and none of them is reachable by varying
+    a URL. This endpoint takes no parameters at all.
+    """
+
+    generated_at: str
+    overall: str
+    stages: list[SystemStage]
+    linkage: LinkageAvailable | LinkageUnavailable
+
+
+@router.get("/system/overview", response_model=SystemOverview)
 async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
     """End-to-end state of the pipeline, one stage per link in the chain.
 
@@ -916,7 +1041,82 @@ async def get_time_audit(
     }
 
 
-@router.get("/diagnostics/storytelling-completeness")
+class StorytellingWarning(BaseModel):
+    """⚠️ A WARNING HERE IS AN OBJECT, not a string.
+
+    `/stats/last-session` also has a `warnings` field and it is `list[str]`.
+    Same name, same site, different element type — which is exactly the kind of
+    thing a shared frontend helper gets wrong once and then everywhere.
+    """
+
+    level: str
+    message: str
+
+
+class StorytellingKnownIssue(BaseModel):
+    """A standing caveat about the data, returned with every answer so a ratio
+    is never read without the reasons it might be off."""
+
+    key: str
+    title: str
+    detail: str
+
+
+class StorytellingCompleteness(BaseModel):
+    """Smart Stats coverage for one date or one gaming session.
+
+    Measured across the states that matter rather than one happy call — all
+    THREE values of `status` were exercised (`ok`, `no_data`, `degraded`),
+    both scopes, and both refusals:
+
+        ?session_date=2026-08-27       200  ok         scope=date
+        ?session_date=2020-01-01       200  no_data    scope=date, 1 warning
+        ?gaming_session_id=153         200  ok         scope=gaming_session
+        ?gaming_session_id=137         200  degraded   scope=gaming_session
+        (neither parameter)            422  one of the two is required
+        ?session_date=ni-datum         400  must be YYYY-MM-DD
+
+    The key set is 20 in every 200, so nothing here is optional — but
+    `gaming_session_id` IS null on all three date-scoped answers, which is the
+    field a date-scoped sample would have typed `int`.
+
+    ⭐ All three ratios are `float` and stay float on the empty path, because
+    the guard is `else 0.0`. That is worth stating next to
+    `SeasonTotals.avg_rounds_per_day`, whose guard is `else 0` and which is
+    therefore `int | float`. Same shape of code, one character apart, two
+    different contracts.
+    """
+
+    #: The date asked for, or the scope's first date when asked by session id.
+    session_date: str
+    #: EVERY date the counted scope touches — a session can cross midnight, so
+    #: the single date above would label only half of what was counted.
+    session_dates: list[str]
+    #: Null whenever the answer was scoped by DATE (3 of 5 sampled calls).
+    gaming_session_id: int | None
+    #: "date" or "gaming_session".
+    scope: str
+    #: "ok", "no_data" or "degraded" — all three measured.
+    status: str
+    kills_total: int
+    kills_with_round: int
+    unlinked_kills: int
+    wrong_round_kills: int
+    distinct_rounds_in_kills: int
+    kis_rows: int
+    kis_computed: bool
+    rounds_total: int
+    rounds_correlated: int
+    completeness_ratio: float
+    linkage_ratio: float
+    correlation_ratio: float
+    kis_total_impact_sum: float
+    warnings: list[StorytellingWarning]
+    known_issues: list[StorytellingKnownIssue]
+
+
+@router.get("/diagnostics/storytelling-completeness",
+            response_model=StorytellingCompleteness)
 async def get_storytelling_completeness(
     session_date: str | None = Query(None, description="YYYY-MM-DD (date-wide)"),
     # `db` keeps its position so existing positional callers (and the contract
@@ -1766,7 +1966,7 @@ def _voice_report_age_seconds(updated_at: object) -> int | None:
     return max(0, int(age))
 
 
-@router.get("/voice-activity/current")
+@router.get("/voice-activity/current", response_model=VoiceActivity)
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
     # PUBLIC (owner-approved): Home current-voice widget. #80 regression
@@ -1796,9 +1996,20 @@ async def get_current_voice_activity(
                 status_data = json.loads(status_data)
 
             members = status_data.get("members") or []
-            channel_name = status_data.get("channel_name", "Gaming")
+            # ⛔ `or`, not `.get(key, default)`. The default only applies when
+            # the KEY IS ABSENT — a key present with an explicit null returns
+            # the null, and it would then be validated AFTER this try block
+            # returns, so the malformed-row fallback below could not catch it
+            # and the endpoint would answer 500 instead of its unavailable
+            # payload (Codex on #830).
+            #
+            # Normalised rather than typed nullable, because here the fallback
+            # IS the meaning: a member whose name we do not know is "Unknown",
+            # not "no name". Contrast the award guid in records_matches, where
+            # null genuinely means unresolved and the model says so.
+            channel_name = status_data.get("channel_name") or "Gaming"
             safe_members = [
-                {"name": m.get("name", "Unknown"), "channel_name": channel_name}
+                {"name": (m.get("name") or "Unknown"), "channel_name": channel_name}
                 for m in members
             ]
             age = _voice_report_age_seconds(row[1])

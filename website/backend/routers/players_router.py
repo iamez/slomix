@@ -7,6 +7,7 @@ Extracted from api.py to reduce file size and improve maintainability.
 import json
 from collections import Counter
 from datetime import datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -35,7 +36,12 @@ class LinkPlayerRequest(BaseModel):
     player_name: str
 
 
-@router.get("/player/search")
+#: ⛔ `list[str]`, not a wrapper object. The handler returns a bare list and
+#: the SPA reads it as one; declaring an envelope here would silently reshape
+#: the payload. The names may include `[BOT]` entries — a deliberate decision
+#: recorded in the ordering comment below, not an oversight: `[BOT]` is a
+#: naming convention, and filtering on it would be treating it as identity.
+@router.get("/player/search", response_model=list[str])
 @limiter.limit("30/minute")
 async def search_player(request: Request, query: str, db: DatabaseAdapter = Depends(get_db)):
     """Search for player aliases. Rate-limited to deter enumeration."""
@@ -412,7 +418,143 @@ def _tonight_director_line(score: dict, momentum: list, current: dict,
     return f"{lead}{tail}{chase}."
 
 
-@router.get("/stats/tonight")
+class TonightRound(BaseModel):
+    round: int
+    #: None when the Lua winner value is outside 1/2 — a live or
+    #: unlinked round, not an error (Codex on #830).
+    winner: str | None
+    axis_score: int
+    allies_score: int
+    #: None when neither `actual_duration_seconds` nor a usable timestamp
+    #: pair exists (Codex on #830).
+    duration: int | None
+    a_on_axis: bool
+    is_fullhold: bool
+
+
+class TonightMap(BaseModel):
+    #: `lua_round_teams.map_name` is nullable and preserved as null by
+    #: `_store_lua_round_teams` — Codex on #830.
+    map: str | None
+    map_number: int
+    rounds: list[TonightRound]
+    winner: str
+    a_points: int
+    b_points: int
+
+
+class TonightTeam(BaseModel):
+    name: str
+    #: Player display names, sorted case-insensitively.
+    roster: list[str]
+
+
+class TonightTeams(BaseModel):
+    a: TonightTeam
+    b: TonightTeam
+
+
+class TonightScore(BaseModel):
+    a_maps: int
+    b_maps: int
+    a_rounds: int
+    b_rounds: int
+    maps_completed: int
+
+
+class TonightMomentum(BaseModel):
+    a: float
+    b: float
+
+
+class TonightCurrent(BaseModel):
+    """The map being played right now.
+
+    `beat_seconds` is the R1 duration R2's attack has to beat, and it is
+    populated ONLY while `r2_pending` is true. All four sampled nights had
+    already finished their R2, so every sample showed null — the int branch is
+    typed from `cur_by_round.get(1, {}).get("duration")`, not from a reading.
+    """
+
+    map: str | None
+    round: int
+    status: str
+    r2_pending: bool
+    beat_seconds: int | None
+
+
+class TonightHoldPoint(BaseModel):
+    t: int
+    p: float
+
+
+class TonightHoldProbability(BaseModel):
+    """⭐ `map` IS NON-NULL HERE WHILE `TonightMap.map` AND `current_map` ARE
+    NOT, and the asymmetry is structural rather than an oversight. The handler
+    computes the curve as `_hold_prob_curve(db, current_map) if current_map
+    else []`, and then emits this object only `if hold` — so a null map name
+    yields an empty curve, an empty curve yields `hold_probability: None`, and
+    this object never exists with a null map. Same kind of guarantee as
+    `head_pct` under its `HAVING` floor: a fact about the code, not about
+    today's rows."""
+
+    map: str
+    curve: list[TonightHoldPoint]
+
+
+class TonightLive(BaseModel):
+    """A night with rounds in it — the TWELVE-key shape."""
+
+    status: str
+    active: bool
+    #: Nullable for the same reason as `TonightMap.map`.
+    current_map: str | None
+    last_update_unix: int
+    age_seconds: int
+    teams: TonightTeams
+    score: TonightScore
+    maps: list[TonightMap]
+    momentum: list[TonightMomentum]
+    current: TonightCurrent
+    #: `_tonight_director_line` is annotated `str | None` and returns None
+    #: before there is anything to say. All four samples had a sentence.
+    director: str | None
+    #: `{"map": …, "curve": […]} if hold else None` — null when the curve is
+    #: empty, which no sampled night was.
+    hold_probability: TonightHoldProbability | None
+
+
+class TonightIdle(BaseModel):
+    """No live session — the NINE-key shape, with `{}` and `[]` where the live
+    shape carries structure.
+
+    ⛔ SAMPLING THIS ENDPOINT TODAY RETURNS THIS SHAPE AND ONLY THIS SHAPE, and
+    that is the reverse of the trap on `/stats/last-session`. The query is
+    `WHERE captured_at::date = CURRENT_DATE`, the last capture was two days
+    ago, so the live response is the EMPTY one and the twelve-key shape is the
+    unreachable branch. Measured by rewriting CURRENT_DATE to five days that do
+    have captures: 2026-08-27/26/23/20 answer twelve keys, and 2026-08-21
+    answers nine — that is the SECOND idle return, where rows exist but every
+    one was a bot round the identity filter dropped.
+
+    ⚠️ `teams` and `score` are `{}` here and structured objects there, so the
+    two shapes are a union, not one model with optional fields. `current`,
+    `director` and `hold_probability` are literally None on this branch.
+    """
+
+    status: str
+    active: bool
+    teams: dict[str, Any]
+    maps: list[Any]
+    momentum: list[Any]
+    score: dict[str, Any]
+    current: None
+    director: None
+    hold_probability: None
+
+
+@router.get("/stats/tonight",
+            response_model=TonightLive | TonightIdle)
 async def get_tonight(db: DatabaseAdapter = Depends(get_db)):
     """Consolidated live payload for the Tonight hub. Reads the real-time
     lua_round_teams feed and resolves it into LOGICAL TEAMS (not Axis/Allies —
@@ -984,11 +1126,64 @@ async def compare_players(
     }
 
 
-@router.get("/stats/leaderboard")
+class LeaderboardRow(BaseModel):
+    """One row of the generic stat leaderboard, as this endpoint returns it.
+
+    ⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4
+    distinct `period` branches (`7d`, `30d`, `season`, and the else-branch
+    all-time). Zero nulls in every field.
+
+    ⚠️ `kills` and `deaths` are `int | None`, AND THIS IS A CORRECTION. They
+    were typed `int` on the argument that `SUM(x)` is null only for an
+    all-null group, that there is no null `kills` row in the table, and that
+    widening "buys nothing but a null check on every consumer". Comparing this
+    file against the frontend's hand-written types showed the flaw: exactly
+    the same evidence — column nullable, zero nulls observed — had produced
+    `RecentRound.map_name: str | None` two endpoints away. The rule cannot be
+    "it depends on how I felt".
+
+    ⛔ The tiebreak is which mistake is recoverable. A `| None` the data never
+    exercises costs one `?? 0` on the consumer. An `int` the data eventually
+    contradicts is a 500 on a page that was rendering, and no test can catch
+    it — only the table can. A response_model is a promise about what the
+    server MAY send, and with a nullable column passed through raw (unlike
+    `value` and `kd` three lines away, which the handler coalesces) the server
+    may send null.
+
+    `value` is `float` and not `int | float`: the handler's `else 0` branch
+    (an int) needs a NULL `SUM`, unreachable for the same reason.
+    """
+
+    rank: int
+    guid: str
+    name: str
+    value: float
+    #: Rounds, NOT sessions — the field was renamed, the participation unit
+    #: changed with it, and the handler still carries the old comment.
+    rounds: int
+    kills: int | None
+    deaths: int | None
+    kd: float
+
+
+@router.get("/stats/leaderboard", response_model=list[LeaderboardRow])
 async def get_leaderboard(
     stat: str = "dpm",
     period: str = "30d",
-    min_games: int = 3,
+    #: ⛔ ACCEPTED AND IGNORED. `having` below is the empty string, so this
+    #: value never reaches the query: `min_games=1` and `min_games=999` return
+    #: identical rows (measured). It is NOT removed, because removing it would
+    #: change an observable response — `min_games=abc` answers 422 today and
+    #: would answer 200 once FastAPI stops knowing the parameter — and no
+    #: caller sends it, so that change would buy nothing. Left declared and
+    #: labelled instead: a parameter that VALIDATES a value and then discards
+    #: it is the worst of the three states, because rejecting bad input is
+    #: exactly what makes it look like it works.
+    min_games: int = Query(
+        default=3,
+        description="Accepted and ignored — the handler applies no HAVING "
+                    "clause. Kept only so that existing callers do not change "
+                    "behaviour; do not build on it."),
     limit: int = 50,
     db: DatabaseAdapter = Depends(get_db),
 ):

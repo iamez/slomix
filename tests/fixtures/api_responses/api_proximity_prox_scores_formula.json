@@ -1,0 +1,58 @@
+{
+  "status": "ok",
+  "version": "3.0",
+  "min_engagements": 10,
+  "category_weights": {
+    "prox_combat": 0.4,
+    "prox_team": 0.35,
+    "prox_gamesense": 0.25
+  },
+  "categories": {
+    "prox_combat": {
+      "label": "Combat",
+      "description": "Individual fighting skill — surviving the fights you are in",
+      "weight_in_overall": 0.4,
+      "metrics": {
+        "escape_rate": {
+          "label": "Escape Rate",
+          "weight": 1.0,
+          "invert": false
+        }
+      }
+    },
+    "prox_team": {
+      "label": "Team",
+      "description": "Team coordination — arriving with the team, being worth reviving",
+      "weight_in_overall": 0.35,
+      "metrics": {
+        "spawn_score": {
+          "label": "Spawn Timing",
+          "weight": 0.571,
+          "invert": false
+        },
+        "revive_rate_as_victim": {
+          "label": "Revive Magnet",
+          "weight": 0.429,
+          "invert": false
+        }
+      }
+    },
+    "prox_gamesense": {
+      "label": "Game Sense",
+      "description": "Positioning and map presence, and time taken off the enemy",
+      "weight_in_overall": 0.25,
+      "metrics": {
+        "distance_per_life": {
+          "label": "Distance/Life",
+          "weight": 0.429,
+          "invert": false
+        },
+        "denied_time": {
+          "label": "Denied Enemy Time",
+          "weight": 0.571,
+          "invert": false
+        }
+      }
+    }
+  }
+}

@@ -2,6 +2,7 @@ import { QueryClient, useQuery } from '@tanstack/react-query';
 import type { paths } from '../../api/generated/openapi.d';
 import { ApiError, apiGet } from './api';
 import type {
+  AdjustedLifetime,
   ActivityCalendar,
   AvailabilityOverview,
   AwardsLeaderboard,
@@ -22,8 +23,17 @@ import type {
   QuickLeaders,
   RecentRound,
   RivalryLeaderboard,
+  HeadToHead,
+  StoryBestLives,
   StoryBoxScore,
   StoryKillImpact,
+  StoryKillMatrix,
+  StoryKisDetails,
+  StoryKisFormula,
+  StoryMomentumSession,
+  StoryMovement,
+  StoryPwcFormula,
+  StoryUselessDefense,
   StoryMomentum,
   StoryMoments,
   StoryNarrative,
@@ -514,6 +524,21 @@ export function useRivalryLeaderboard(limit: number) {
   });
 }
 
+/** The duel between two named players: kills each way, the weapons each
+ *  used on the other, and the per-map split. Only fetched once BOTH ids are
+ *  known — the endpoint 400s on anything shorter than 8 characters, so a
+ *  half-typed pair would spend a request on a guaranteed error. */
+export function useHeadToHead(guid1: string | null, guid2: string | null) {
+  return useQuery({
+    queryKey: ['rivalry-h2h', guid1, guid2],
+    enabled: (guid1?.length ?? 0) >= 8 && (guid2?.length ?? 0) >= 8,
+    queryFn: () =>
+      apiGet('/api/rivalries/h2h/{guid1}/{guid2}', {
+        pathParams: { guid1: guid1!, guid2: guid2! },
+      }) as Promise<HeadToHead>,
+  });
+}
+
 /** One player's opponents. Either GUID length works since #834. */
 export function usePlayerRivalries(guid: string | null) {
   return useQuery({
@@ -548,6 +573,18 @@ export function useSkillFormula() {
  * `enabled` is not optional politeness: the endpoint takes a measured 2.4 s,
  * and the panel that shows it starts closed, so an unconditional query spent
  * that on every visit for data nobody had asked to see (Codex on #835). */
+/** The pool-adjusted lifetime board. Gated behind a toggle like SSR, and for
+ *  a sharper reason than tidiness: it recomputes an SRS iteration server-side
+ *  and measured 1.0 s cold, ten times the rest of this page. */
+export function useAdjustedLifetime(enabled: boolean) {
+  return useQuery({
+    queryKey: ['skill-adjusted-lifetime'],
+    enabled,
+    queryFn: () => apiGet('/api/skill/adjusted-lifetime') as Promise<AdjustedLifetime>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useSsr(enabled: boolean) {
   return useQuery({
     queryKey: ['skill-ssr'],
@@ -599,7 +636,12 @@ type StoryPath =
   | '/api/storytelling/space-created'
   | '/api/storytelling/enabler'
   | '/api/storytelling/lurker-profile'
-  | '/api/storytelling/player-narratives';
+  | '/api/storytelling/player-narratives'
+  | '/api/storytelling/momentum-session'
+  | '/api/storytelling/kill-matrix'
+  | '/api/storytelling/movement'
+  | '/api/storytelling/useless-defense-deaths'
+  | '/api/storytelling/best-lives';
 
 export function useStoryNarrative(gsid: number) {
   return useQuery(storyQuery<StoryNarrative>('story-narrative', '/api/storytelling/narrative', gsid));
@@ -647,6 +689,64 @@ export function useStoryLurker(gsid: number) {
 
 export function useStoryPlayerNarratives(gsid: number) {
   return useQuery(storyQuery<StoryPlayerNarratives>('story-player-narratives', '/api/storytelling/player-narratives', gsid));
+}
+
+export function useStoryMomentumSession(gsid: number) {
+  return useQuery(storyQuery<StoryMomentumSession>('story-momentum-session', '/api/storytelling/momentum-session', gsid));
+}
+
+export function useStoryKillMatrix(gsid: number) {
+  return useQuery(storyQuery<StoryKillMatrix>('story-kill-matrix', '/api/storytelling/kill-matrix', gsid));
+}
+
+export function useStoryMovement(gsid: number) {
+  return useQuery(storyQuery<StoryMovement>('story-movement', '/api/storytelling/movement', gsid));
+}
+
+export function useStoryUselessDefense(gsid: number) {
+  return useQuery(storyQuery<StoryUselessDefense>('story-useless-defense', '/api/storytelling/useless-defense-deaths', gsid));
+}
+
+export function useStoryBestLives(gsid: number, limit = 5) {
+  return useQuery(storyQuery<StoryBestLives>('story-best-lives', '/api/storytelling/best-lives', gsid, { limit }));
+}
+
+/** The two formula endpoints take no scope and do not change between
+ *  sessions, so they are cached for as long as the tab lives rather than per
+ *  session — the legacy page kept a module-level cache for the same reason
+ *  (`story.js:_kisFormulaCache`). `enabled` keeps them unfetched until a
+ *  reader actually opens the disclosure. */
+export function useStoryKisFormula(enabled = true) {
+  return useQuery({
+    queryKey: ['story-kis-formula'],
+    queryFn: () => apiGet('/api/storytelling/formula') as Promise<StoryKisFormula>,
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
+export function useStoryPwcFormula(enabled = true) {
+  return useQuery({
+    queryKey: ['story-pwc-formula'],
+    queryFn: () => apiGet('/api/storytelling/win-contribution/formula') as Promise<StoryPwcFormula>,
+    staleTime: Infinity,
+    enabled,
+  });
+}
+
+/** Per-kill breakdown for ONE player, fetched only once a reader opens a row:
+ *  the response carries one object per kill (205 of them for the top player
+ *  of session 150), which is the right size for a disclosure and the wrong
+ *  size for a page load. */
+export function useStoryKisDetails(gsid: number, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['story-kis-details', gsid, playerGuid],
+    queryFn: () =>
+      apiGet('/api/storytelling/kill-impact/details', {
+        query: { gaming_session_id: gsid, player_guid: playerGuid ?? '' },
+      }) as Promise<StoryKisDetails>,
+    enabled: playerGuid !== null,
+  });
 }
 
 // ---------------------------------------------------------------------------

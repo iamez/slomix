@@ -1,0 +1,16 @@
+{
+  "status": "prototype",
+  "ready": false,
+  "message": "Proximity pipeline not connected.",
+  "range_days": 30,
+  "generated_at": "2026-08-29T21:03:14.424581Z",
+  "scope": {
+    "session_date": "2020-01-01",
+    "map_name": null,
+    "round_number": null,
+    "round_start_unix": null,
+    "player_guid": null
+  },
+  "map_name": null,
+  "hotzones": []
+}

@@ -10,12 +10,43 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel
 
 from website.backend.dependencies import get_db, require_admin
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.middleware.auth_helpers import require_ajax_csrf_header
 
 router = APIRouter()
+
+
+class WeeklyChallenge(BaseModel):
+    """The challenge posted for one ISO week.
+
+    ⛔ TYPED FROM `_serialize` AND THE SCHEMA, NOT FROM A RESPONSE. Every live
+    call I made returned `challenge: null` — no challenge is set this week — so
+    sampling could show only that the field is nullable and nothing about what
+    it holds when it is not. `weekly_challenges.description` and `created_at`
+    are nullable columns, and the serializer writes
+    `str(row[3]) if row[3] else None` for the timestamp outright.
+    """
+
+    week_start_date: str
+    title: str
+    description: str | None
+    created_at: str | None
+
+
+class CurrentChallenge(BaseModel):
+    #: 'ok' — the handler has no other state today, but the field exists so a
+    #: future failure has somewhere to say so rather than arriving as an empty
+    #: challenge.
+    status: str
+    #: The Monday this week began, whether or not a challenge was set.
+    week_start_date: str
+    #: Null when no challenge exists for the week. That is an answer, not a
+    #: failure: the endpoint returns 200 and says so.
+    challenge: WeeklyChallenge | None
+
 
 _TITLE_MAX = 80
 _DESC_MAX = 280
@@ -35,7 +66,7 @@ def _serialize(row) -> dict:
     }
 
 
-@router.get("/challenges/current")
+@router.get("/challenges/current", response_model=CurrentChallenge)
 async def get_current_challenge(db: DatabaseAdapter = Depends(get_db)):
     """The challenge for the current ISO week (or null)."""
     monday = _week_start(datetime.now().date())  # noqa: DTZ005 local week boundary

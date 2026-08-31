@@ -1,0 +1,359 @@
+{
+  "status": "ok",
+  "active": false,
+  "current_map": "te_escape2",
+  "last_update_unix": 1787861936,
+  "age_seconds": 139721,
+  "teams": {
+    "a": {
+      "name": "Team A",
+      "roster": [
+        "[TWK]CUJO",
+        "It's squAziii",
+        "kanii"
+      ]
+    },
+    "b": {
+      "name": "Team B",
+      "roster": [
+        ".lgz",
+        "[TWK]Imb3ciL",
+        "bronze"
+      ]
+    }
+  },
+  "score": {
+    "a_maps": 2,
+    "b_maps": 3,
+    "a_rounds": 6,
+    "b_rounds": 6,
+    "maps_completed": 6
+  },
+  "maps": [
+    {
+      "map_number": 1,
+      "map": "etl_adlernest",
+      "rounds": [
+        {
+          "round": 1,
+          "winner": "a",
+          "axis_score": 1,
+          "allies_score": 0,
+          "a_on_axis": true,
+          "duration": 599,
+          "is_fullhold": true
+        },
+        {
+          "round": 2,
+          "winner": "a",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": false,
+          "duration": 213,
+          "is_fullhold": false
+        }
+      ],
+      "winner": "a",
+      "a_points": 2,
+      "b_points": 0
+    },
+    {
+      "map_number": 2,
+      "map": "etl_sp_delivery",
+      "rounds": [
+        {
+          "round": 1,
+          "winner": "b",
+          "axis_score": 1,
+          "allies_score": 0,
+          "a_on_axis": false,
+          "duration": 720,
+          "is_fullhold": true
+        },
+        {
+          "round": 2,
+          "winner": "b",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": true,
+          "duration": 502,
+          "is_fullhold": false
+        }
+      ],
+      "winner": "b",
+      "a_points": 0,
+      "b_points": 2
+    },
+    {
+      "map_number": 3,
+      "map": "supply",
+      "rounds": [
+        {
+          "round": 1,
+          "winner": "a",
+          "axis_score": 1,
+          "allies_score": 0,
+          "a_on_axis": true,
+          "duration": 720,
+          "is_fullhold": true
+        },
+        {
+          "round": 2,
+          "winner": "b",
+          "axis_score": 1,
+          "allies_score": 0,
+          "a_on_axis": false,
+          "duration": 719,
+          "is_fullhold": true
+        }
+      ],
+      "winner": "draw",
+      "a_points": 1,
+      "b_points": 1
+    },
+    {
+      "map_number": 4,
+      "map": "te_escape2",
+      "rounds": [
+        {
+          "round": 1,
+          "winner": "a",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": false,
+          "duration": 232,
+          "is_fullhold": false
+        },
+        {
+          "round": 2,
+          "winner": "b",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": true,
+          "duration": 204,
+          "is_fullhold": false
+        }
+      ],
+      "winner": "b",
+      "a_points": 0,
+      "b_points": 2
+    },
+    {
+      "map_number": 5,
+      "map": "te_escape2",
+      "rounds": [
+        {
+          "round": 1,
+          "winner": "b",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": true,
+          "duration": 529,
+          "is_fullhold": false
+        },
+        {
+          "round": 2,
+          "winner": "a",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": false,
+          "duration": 382,
+          "is_fullhold": false
+        }
+      ],
+      "winner": "a",
+      "a_points": 2,
+      "b_points": 0
+    },
+    {
+      "map_number": 6,
+      "map": "te_escape2",
+      "rounds": [
+        {
+          "round": 1,
+          "winner": "a",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": false,
+          "duration": 227,
+          "is_fullhold": false
+        },
+        {
+          "round": 2,
+          "winner": "b",
+          "axis_score": 0,
+          "allies_score": 1,
+          "a_on_axis": true,
+          "duration": 179,
+          "is_fullhold": false
+        }
+      ],
+      "winner": "b",
+      "a_points": 0,
+      "b_points": 2
+    }
+  ],
+  "momentum": [
+    {
+      "a": 65.0,
+      "b": 35.0
+    },
+    {
+      "a": 75.5,
+      "b": 24.5
+    },
+    {
+      "a": 52.8,
+      "b": 47.2
+    },
+    {
+      "a": 37.0,
+      "b": 63.0
+    },
+    {
+      "a": 55.9,
+      "b": 44.1
+    },
+    {
+      "a": 39.1,
+      "b": 60.9
+    },
+    {
+      "a": 57.4,
+      "b": 42.6
+    },
+    {
+      "a": 40.2,
+      "b": 59.8
+    },
+    {
+      "a": 28.1,
+      "b": 71.9
+    },
+    {
+      "a": 49.7,
+      "b": 50.3
+    },
+    {
+      "a": 64.8,
+      "b": 35.2
+    },
+    {
+      "a": 45.3,
+      "b": 54.7
+    }
+  ],
+  "current": {
+    "map": "te_escape2",
+    "round": 2,
+    "status": "map complete",
+    "r2_pending": false,
+    "beat_seconds": null
+  },
+  "director": "Team B lead the night 3–2 on maps.",
+  "hold_probability": {
+    "map": "te_escape2",
+    "curve": [
+      {
+        "t": 0,
+        "p": 0.0
+      },
+      {
+        "t": 30,
+        "p": 0.0
+      },
+      {
+        "t": 60,
+        "p": 0.0
+      },
+      {
+        "t": 90,
+        "p": 0.0
+      },
+      {
+        "t": 120,
+        "p": 1.0
+      },
+      {
+        "t": 150,
+        "p": 5.0
+      },
+      {
+        "t": 180,
+        "p": 13.5
+      },
+      {
+        "t": 210,
+        "p": 21.6
+      },
+      {
+        "t": 240,
+        "p": 32.5
+      },
+      {
+        "t": 270,
+        "p": 42.0
+      },
+      {
+        "t": 300,
+        "p": 52.3
+      },
+      {
+        "t": 330,
+        "p": 58.4
+      },
+      {
+        "t": 360,
+        "p": 66.3
+      },
+      {
+        "t": 390,
+        "p": 74.3
+      },
+      {
+        "t": 420,
+        "p": 79.3
+      },
+      {
+        "t": 450,
+        "p": 83.8
+      },
+      {
+        "t": 480,
+        "p": 86.5
+      },
+      {
+        "t": 510,
+        "p": 89.1
+      },
+      {
+        "t": 540,
+        "p": 90.7
+      },
+      {
+        "t": 570,
+        "p": 92.6
+      },
+      {
+        "t": 600,
+        "p": 95.0
+      },
+      {
+        "t": 630,
+        "p": 96.0
+      },
+      {
+        "t": 660,
+        "p": 96.9
+      },
+      {
+        "t": 690,
+        "p": 98.1
+      },
+      {
+        "t": 720,
+        "p": 100.0
+      }
+    ]
+  }
+}

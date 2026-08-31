@@ -1,0 +1,97 @@
+{
+ "categories": {
+  "combat": {
+   "awards": [
+    {
+     "award": "Most damage given",
+     "guid": "00000004000000000000000000000000",
+     "numeric": 4999.0,
+     "player": "player5",
+     "value": "4999"
+    },
+    {
+     "award": "Most damage received",
+     "guid": "00000005000000000000000000000000",
+     "numeric": 5187.0,
+     "player": "player6",
+     "value": "5187"
+    },
+    {
+     "award": "Most kills per minute",
+     "guid": "00000003000000000000000000000000",
+     "numeric": 1.7999999523162842,
+     "player": "player7",
+     "value": "1.8"
+    },
+    {
+     "award": "Best K/D ratio",
+     "guid": "00000004000000000000000000000000",
+     "numeric": 3.25,
+     "player": "player5",
+     "value": "3.25"
+    },
+    {
+     "award": "Tank/Meatshield (Refuses to die)",
+     "guid": "00000004000000000000000000000000",
+     "numeric": null,
+     "player": "player5",
+     "value": "Damage received vs death ratio: 3.74x"
+    }
+   ],
+   "emoji": "\u2694\ufe0f",
+   "name": "Combat"
+  },
+  "teamwork": {
+   "awards": [
+    {
+     "award": "Most team damage given",
+     "guid": "00000006000000000000000000000000",
+     "numeric": 80.0,
+     "player": "player8",
+     "value": "80"
+    },
+    {
+     "award": "Most team damage received",
+     "guid": "00000003000000000000000000000000",
+     "numeric": 58.0,
+     "player": "player7",
+     "value": "58"
+    },
+    {
+     "award": "Most revives",
+     "guid": "00000004000000000000000000000000",
+     "numeric": 4.0,
+     "player": "player5",
+     "value": "4"
+    },
+    {
+     "award": "Most revived",
+     "guid": "00000003000000000000000000000000",
+     "numeric": 4.0,
+     "player": "player7",
+     "value": "4"
+    },
+    {
+     "award": "Most kill assists",
+     "guid": "00000007000000000000000000000000",
+     "numeric": 5.0,
+     "player": "player9",
+     "value": "5"
+    },
+    {
+     "award": "Most killsteals",
+     "guid": "00000006000000000000000000000000",
+     "numeric": 3.0,
+     "player": "player8",
+     "value": "3"
+    }
+   ],
+   "emoji": "\ud83e\udd1d",
+   "name": "Teamwork"
+  }
+ },
+ "map_name": "etl_adlernest",
+ "round_date": "2026-01-08",
+ "round_id": 9572,
+ "round_number": 2
+}
