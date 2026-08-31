@@ -3,6 +3,7 @@ import { useParams, useSearchParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
+import { stripEtColors } from '../lib/names';
 import {
   useStoryBoxScore, useStoryEnabler, useStoryGravity,
   useStoryKillImpact, useStoryKillMatrix, useStoryKisDetails, useStoryKisFormula,
@@ -318,11 +319,16 @@ function SessionMomentum({ gsid }: { gsid: number }) {
         <Absent reason="too few samples to draw" />
       )}
       <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
+        {/* Stripped HERE, not upstream: the momentum service builds these
+          * labels and rosters straight off player_comprehensive_stats and is
+          * the one storytelling path that never calls strip_et_colors
+          * (momentum.py _build_player_groups/_team_labels), so a ^1-coloured
+          * name would render as literal control tokens (Codex on #842). */}
         <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-team-a)' }}>
-          {data.teams.team_a.label}: {data.teams.team_a.players.join(', ') || '—'}
+          {stripEtColors(data.teams.team_a.label)}: {data.teams.team_a.players.map((p) => stripEtColors(p)).join(', ') || '—'}
         </span>
         <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-team-b)' }}>
-          {data.teams.team_b.label}: {data.teams.team_b.players.join(', ') || '—'}
+          {stripEtColors(data.teams.team_b.label)}: {data.teams.team_b.players.map((p) => stripEtColors(p)).join(', ') || '—'}
         </span>
       </Cluster>
       {/* The payload names every dashed line (map_name, round_number); until
@@ -536,7 +542,19 @@ function Term({ name, term }: { name: string; term: FormulaTerm }) {
     : term.compression != null
       ? `×${term.compression} above it`
       : term.range != null
-        ? term.range
+        // The range alone is the OUTPUT of the calculation, not the
+        // calculation: spawn_timing publishes `bonus` because the multiplier
+        // is 1 + bonus × denial (kis.py:551, `spawn_mult = 1.0 + best_score`
+        // with the 0–1 denial score the description defines) — the range
+        // 1.0–2.0 only holds while bonus is 1.0, so a panel without the
+        // coefficient would silently keep the old range through a bonus
+        // change (Codex on #842). ⚠️ This cascade assumes ONE head shape per
+        // term; spawn_timing is the first term with two published head
+        // fields, hence the nested ternary — the next such term must not
+        // fall silently into a single-field branch.
+        ? term.bonus != null
+          ? `${term.range} = 1 + ${term.bonus} × denial`
+          : term.range
         : term.tiers != null
           ? `${term.tiers.length} tiers`
           : term.solo_clutch?.value != null

@@ -473,7 +473,14 @@ async def get_kis_formula():
                 "description": "Kill as part of executed crossfire setup",
             },
             "spawn_timing": {
-                "range": "1.0 - 2.0",
+                # DERIVED, not written twice: the multiplier is
+                # 1 + bonus x denial (kis.py, spawn_mult = 1.0 + best_score
+                # over the 0-1 denial score), so the range's upper end IS
+                # 1.0 + SPAWN_TIMING_BONUS. The hand-written "1.0 - 2.0"
+                # would have kept publishing itself through a bonus change
+                # (Codex on #842; test_kis_formula_spawn_range.py moves the
+                # constant and reads the range).
+                "range": f"1.0 - {1.0 + SPAWN_TIMING_BONUS}",
                 "bonus": SPAWN_TIMING_BONUS,
                 "description": "Bonus based on spawn wave denial (0.0=no denial, 1.0=max denial)",
             },

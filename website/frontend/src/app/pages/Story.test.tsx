@@ -776,6 +776,45 @@ describe('Story', () => {
     ).toBeGreaterThan(0);
   });
 
+  it('states the spawn bonus coefficient, not just the range it produces', async () => {
+    // The range is the OUTPUT: the multiplier is 1 + bonus × denial
+    // (kis.py:551), so "1.0 - 2.0" only holds while bonus is 1.0 — a panel
+    // showing the range alone would silently keep it through a coefficient
+    // change (Codex on #842). Both halves quoted from the fixture.
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/how is kis computed\?/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/how is kis computed\?/));
+    const st = (kisFormula as { multipliers: { spawn_timing: { range: string; bonus: number } } })
+      .multipliers.spawn_timing;
+    await waitFor(() => expect(
+      screen.getByText(`${st.range} = 1 + ${st.bonus} × denial`),
+    ).toBeInTheDocument());
+  });
+
+  it('strips ET colour codes from the session-curve rosters', async () => {
+    // The momentum service is the one storytelling path that returns
+    // player_comprehensive_stats names raw (momentum.py imports no
+    // strip_et_colors), and the recorded fixture happens to hold clean names
+    // — pinned here, because a fixture cannot fail on a token it does not
+    // contain — so the coloured night is forced (Codex on #842).
+    const teams = (momentumSession as { teams: { team_a: { label: string; players: string[] } } }).teams;
+    expect(JSON.stringify(teams)).not.toContain('^');
+    const coloured = {
+      ...momentumSession,
+      teams: {
+        team_a: { label: '^1bronze^7 & ^4.^7lgz', players: ['^1bronze', '^4.^7lgz'] },
+        team_b: { label: '^2kanii & CUJO', players: ['^2kanii', 'CUJO'] },
+      },
+    };
+    const { container } = renderPage(withOverride('/storytelling/momentum-session', jsonOnce(coloured)));
+    await waitFor(() => expect(screen.getByRole('img', { name: /across the session/ })).toBeInTheDocument());
+    const panel = container.querySelector('[data-parity="story.momentum-session"]')!;
+    expect(panel.textContent).toContain('bronze & .lgz: bronze, .lgz');
+    expect(panel.textContent).toContain('kanii & CUJO: kanii, CUJO');
+    expect(panel.textContent).not.toContain('^1');
+    expect(panel.textContent).not.toContain('^2');
+  });
+
   it('renders the published MVP selection rules, not just the description', async () => {
     // eligibility, ordered tiebreakers and the fallback decide who CAN win
     // and how ties resolve; without them the disclosure cannot reproduce the
