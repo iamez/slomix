@@ -5,7 +5,7 @@ import type {
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
-import { Lbl, Pending, SectionHead, Unavailable, figure, lblStyle, rowStyle } from '../components/ui';
+import { Absent, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * The player (docs/design/08 phase 3, docs/design/12 row 18). One endpoint
@@ -34,9 +34,7 @@ function SectionBody({ available, empty, children, what }: {
   if (!available) return <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what={what} /></div>;
   if (empty) {
     return (
-      <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
-        no {what} recorded yet
-      </div>
+      <Absent block style={{ marginTop: 'var(--space-2)' }} reason={<>no {what} recorded yet</>} />
     );
   }
   return <>{children}</>;
@@ -190,7 +188,7 @@ function Streaks({ p }: { p: Profile }) {
         <span style={{ marginLeft: 'var(--space-2)' }}>
           {failed
             ? <Unavailable what="streaks" />
-            : <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no decided rounds yet</span>}
+            : <Absent reason="no decided rounds yet" />}
         </span>
       </div>
     );

@@ -1,10 +1,7 @@
 import { Link } from 'react-router';
 import { useLiveState, useOverview, useQuickLeaders, useSessions, useVoiceCurrent } from '../lib/queries';
 import type { QuickLeaderRow, SessionSummary } from '../lib/types';
-import {
-  ActLink, KpiTile, Lbl, Pending, SectionHead, StatusDot, Unavailable,
-  actStyle, figure, lblStyle, rowStyle,
-} from '../components/ui';
+import { Absent, ActLink, actStyle, figure, KpiTile, Lbl, lblStyle, Pending, rowStyle, SectionHead, StatusDot, Unavailable } from '../components/ui';
 
 /**
  * Landing — the first page of the new design (docs/design/12 row L), a
@@ -169,7 +166,7 @@ function LastNightPanel({ session, pending, empty }: { session: SessionSummary |
         <Lbl>latest session</Lbl>
         <div style={{ marginTop: 'var(--space-2)' }}>
           {empty
-            ? <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no sessions recorded yet</span>
+            ? <Absent reason="no sessions recorded yet" />
             : <Unavailable what="last session" />}
         </div>
       </div>
@@ -225,7 +222,7 @@ function LeaderBoard({ title, rows, hadErrors }: { title: string; rows: QuickLea
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
       {rows.length === 0 && (hadErrors
         ? <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="board" /></div>
-        : <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no data in this window</div>
+        : <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no data in this window" />
       )}
       {rows.map((row) => (
         /* minmax(0,1fr): a 1fr track keeps min-content width, so one long
@@ -346,9 +343,7 @@ export function Landing() {
             {sessions.isPending && <Pending label="sessions" />}
             {sessions.isError && <Unavailable what="sessions" />}
             {sessionsData?.length === 0 && (
-              <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-                no sessions recorded yet
-              </div>
+              <Absent block reason="no sessions recorded yet" />
             )}
             {sessionsData?.slice(0, 5).map((row) => (
               <Link
