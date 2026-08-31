@@ -347,7 +347,7 @@ def test_the_fallback_scope_asks_every_source_not_one():
     never counted."""
     db = _QueryLog([], source_counts=[0, 0, 0, 0, 0, 0], latest_date=None)
     _client(db).get("/api/skill/composite")
-    fallback = [q for q in db.queries if "MAX(session_date)" in q]
+    fallback = [q for q in db.queries if "MAX(t.session_date)" in q]
     assert fallback, "no fallback-scope query was built"
     for table in (
         "proximity_kill_outcome",
@@ -358,6 +358,12 @@ def test_the_fallback_scope_asks_every_source_not_one():
     ):
         assert table in fallback[0], f"the fallback scope no longer asks {table}"
     assert "GREATEST" in fallback[0]
+    # :508 — each MAX runs through the same gates as the counts; a source
+    # whose newest rows live only in invalid or bot rounds must not pick the
+    # default scope. Counted, not merely present: all five subqueries carry
+    # both gates.
+    assert fallback[0].count("r.is_valid IS DISTINCT FROM FALSE") == 5
+    assert fallback[0].count("r.is_bot_round IS DISTINCT FROM TRUE") == 5
 
 
 def test_the_query_readers_can_fail():
@@ -366,3 +372,28 @@ def test_the_query_readers_can_fail():
     _client(db).get("/api/skill/composite?gaming_session_id=1")
     assert _coverage_query(db) != "", "empty query accepted"
     assert not any("no_such_table" in q for q in db.queries)
+
+
+class _CoverageRaisesDb(_ScriptedDb):
+    """The coverage query raising is not hypothetical: one missing source
+    table on a dev database, one transient failure — and before :758 the
+    exception took the whole composite down over its own annotation."""
+
+    async def fetch_one(self, query, params=None):
+        if "proximity_crossfire_opportunity" in query and "COUNT" in query:
+            raise RuntimeError("relation does not exist")
+        return await super().fetch_one(query, params)
+
+
+def test_a_failing_coverage_query_does_not_take_the_answer_down():
+    db = _CoverageRaisesDb([RICH_PLAYER], source_counts=[9, 9, 9, 9, 9, 9])
+    response = _client(db).get("/api/skill/composite?gaming_session_id=1")
+    assert response.status_code == 200, (
+        f"a coverage failure returned {response.status_code}; the annotation "
+        "must never take down the thing it annotates"
+    )
+    body = response.json()
+    assert body["players"], "the answer itself was lost"
+    assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR, (
+        "an unanswerable coverage question must read as unmeasured — the cautious direction — not as measured-clean"
+    )

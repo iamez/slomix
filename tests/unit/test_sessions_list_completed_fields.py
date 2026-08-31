@@ -57,7 +57,11 @@ ROW = (
     2,  # BOX team fields  -> row[10]..row[14]
     743,
     5226,
-    "bronze, kanii",  # total_deaths, duration, names
+    # ⛔ A LIST from ARRAY_AGG — and the first name carries ', ' on purpose:
+    # under the old STRING_AGG+split contract "kanii, jr" came back as two
+    # phantom players. 0 comma names exist today; names are user-controlled,
+    # so the contract follows what a name CAN be (Codex on #848).
+    ["kanii, jr", "bronze"],  # names
     "20:15:00",
     "22:41:00",  # first_time, last_time
 )
@@ -137,7 +141,10 @@ def test_the_python_side_reads_the_fixture_positions_it_claims(client_and_db):
     assert (row["team_1_score"], row["team_2_score"], row["winning_team"]) == (5, 7, 2)
     assert row["total_deaths"] == 743
     assert row["duration_seconds"] == 5226
-    assert row["player_names"] == ["bronze", "kanii"]
+    assert row["player_names"] == ["kanii, jr", "bronze"], (
+        "a comma inside a name split it into phantom players — the wire must "
+        "carry the array through, never a joined string"
+    )
     assert (row["start_time"], row["end_time"]) == ("20:15", "22:41")
 
 
@@ -224,4 +231,41 @@ def test_the_checks_above_can_fail(client_and_db):
     assert round_duration_sql("r") != "", "the helper returns nothing to look for"
     assert "SUM(lrt.actual_duration_seconds)" not in round_duration_sql("r"), (
         "the two expressions this test distinguishes are the same string"
+    )
+
+
+@pytest.mark.parametrize(
+    ("route", "gates"),
+    [
+        # /api/sessions has TWO rounds-reading CTEs (session_box reads
+        # session_results, no rounds join to gate); the sibling has four.
+        # Exact counts: a gate added where none is possible is as
+        # suspicious as one lost.
+        ("/api/sessions", 2),
+        ("/api/stats/sessions", 4),
+    ],
+)
+def test_the_time_concat_is_padded_and_the_ctes_gate_bots(client_and_db, route, gates):
+    """Two latent-shape guards, both counted over the QUERY THE HANDLER BUILT
+    (a fixture cannot fail on a value it does not contain, and today's data
+    contains neither an unpadded round_time nor a bot round that passes the
+    other gates):
+
+    - LPAD (:535, Codex on #848): round_time is TEXT and MIN/MAX order the
+      concatenation lexically, so an unpadded pre-10:00 value like '4918'
+      would sort after '063000'. Measured: every round_time is 6 chars today.
+    - is_bot_round (:549): the flags answer different questions — measured
+      today 0 bot rounds pass the is_valid+status gates, but everywhere else
+      (round_set, pcs_where) the two stand together, and these CTEs must not
+      be the exception.
+    """
+    client, db = client_and_db
+    client.get(f"{route}?limit=1")
+    assert db.calls, "the handler never queried"
+    query = db.calls[0][0]
+    assert query.count("LPAD(r.round_time, 6, '0')") == 2, (
+        f"{route}: expected both time bounds padded, found {query.count(chr(76))} LPADs"
+    )
+    assert query.count("is_bot_round IS DISTINCT FROM TRUE") == gates, (
+        f"{route}: expected {gates} bot gates, found {query.count('is_bot_round IS DISTINCT FROM TRUE')}"
     )

@@ -531,12 +531,19 @@ async def get_sessions_list(
                 -- Clock times of the first and last round, same derivation as
                 -- /stats/sessions: order by date+time as text, then keep the
                 -- time half.
-                SUBSTRING(MIN(CAST(r.round_date AS TEXT) || r.round_time) FROM 11) as first_time,
-                SUBSTRING(MAX(CAST(r.round_date AS TEXT) || r.round_time) FROM 11) as last_time
+                -- LPAD (Codex on #848): round_time is TEXT and MIN/MAX order the
+                -- concatenation lexically, so an unpadded pre-10:00 value like
+                -- '4918' would sort after '063000' and also fail the HH:MM
+                -- formatter's len>=6 check downstream. Measured today: every
+                -- round_time is exactly 6 chars, so this is a latent-shape guard,
+                -- not a behaviour change.
+                SUBSTRING(MIN(CAST(r.round_date AS TEXT) || LPAD(r.round_time, 6, '0')) FROM 11) as first_time,
+                SUBSTRING(MAX(CAST(r.round_date AS TEXT) || LPAD(r.round_time, 6, '0')) FROM 11) as last_time
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -546,13 +553,18 @@ async def get_sessions_list(
                 COUNT(DISTINCT p.player_guid) as player_count,
                 COALESCE(SUM(p.kills), 0) as total_kills,
                 COALESCE(SUM(p.deaths), 0) as total_deaths,
-                STRING_AGG(DISTINCT p.player_name, ', ' ORDER BY p.player_name) as player_names
+                -- ARRAY_AGG, not STRING_AGG+split (Codex on #848): a player name
+                -- containing ', ' would be split into two phantom names on the way
+                -- out. 0 such names today — but names are user-controlled input,
+                -- so the type follows what a name CAN be, not what the sample has.
+                ARRAY_AGG(DISTINCT p.player_name ORDER BY p.player_name) as player_names
             FROM rounds r
             INNER JOIN player_comprehensive_stats p
                 ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -593,7 +605,7 @@ async def get_sessions_list(
             -- ones. New columns go on the end.
             COALESCE(sp.total_deaths, 0) as total_deaths,
             COALESCE(sr.duration_seconds, 0) as duration_seconds,
-            COALESCE(sp.player_names, '') as player_names,
+            COALESCE(sp.player_names, ARRAY[]::text[]) as player_names,
             sr.first_time,
             sr.last_time
         FROM session_rounds sr
@@ -660,7 +672,7 @@ async def get_sessions_list(
                 # one vocabulary rather than two.
                 "total_deaths": row[15],
                 "duration_seconds": row[16],
-                "player_names": ([n.strip() for n in row[17].split(",")] if row[17] else []),
+                "player_names": list(row[17] or []),
                 "start_time": (
                     f"{str(row[18]).replace(':', '')[:2]}:{str(row[18]).replace(':', '')[2:4]}"
                     if row[18] and len(str(row[18]).replace(":", "")) >= 6
@@ -1344,8 +1356,8 @@ async def get_stats_sessions(
                 -- crossing midnight (21:56 → 00:23) otherwise renders as
                 -- "00:23 — 23:57". round_date::text (YYYY-MM-DD, 10 chars) ||
                 -- round_time sorts chronologically; the time is chars 11+.
-                SUBSTRING(MIN(r.round_date::text || r.round_time) FROM 11) as first_time,
-                SUBSTRING(MAX(r.round_date::text || r.round_time) FROM 11) as last_time,
+                SUBSTRING(MIN(r.round_date::text || LPAD(r.round_time, 6, '0')) FROM 11) as first_time,
+                SUBSTRING(MAX(r.round_date::text || LPAD(r.round_time, 6, '0')) FROM 11) as last_time,
                 COUNT(r.id) as round_count,
                 STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
                 -- winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Aliases were inverted.
@@ -1355,6 +1367,7 @@ async def get_stats_sessions(
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1369,6 +1382,7 @@ async def get_stats_sessions(
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1394,18 +1408,24 @@ async def get_stats_sessions(
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
         session_names AS (
             SELECT
                 r.gaming_session_id,
-                STRING_AGG(DISTINCT p.player_name, ', ' ORDER BY p.player_name) as player_names
+                -- ARRAY_AGG, not STRING_AGG+split (Codex on #848): a player name
+                -- containing ', ' would be split into two phantom names on the way
+                -- out. 0 such names today — but names are user-controlled input,
+                -- so the type follows what a name CAN be, not what the sample has.
+                ARRAY_AGG(DISTINCT p.player_name ORDER BY p.player_name) as player_names
             FROM rounds r
             INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1442,7 +1462,7 @@ async def get_stats_sessions(
             COALESCE(sp.total_kills, 0) as total_kills,
             COALESCE(sp.total_deaths, 0) as total_deaths,
             COALESCE(sd.total_duration_seconds, 0) as duration_seconds,
-            COALESCE(sn.player_names, '') as player_names,
+            COALESCE(sn.player_names, ARRAY[]::text[]) as player_names,
             sb.team_1_name,
             sb.team_2_name,
             sb.team_1_score,
@@ -1481,7 +1501,7 @@ async def get_stats_sessions(
         total_kills = row[10]
         total_deaths = row[11]
         duration_seconds = row[12]
-        player_names_str = row[13] if len(row) > 13 else ""
+        player_names_list = row[13] if len(row) > 13 else []
         team_1_name = row[14]
         team_2_name = row[15]
         team_1_score = row[16]
@@ -1521,7 +1541,7 @@ async def get_stats_sessions(
             time_ago = dt.strftime("%b %d, %Y")
 
         maps_played = [m.strip() for m in maps_str.split(",")] if maps_str else []
-        player_names = [n.strip() for n in player_names_str.split(",")] if player_names_str else []
+        player_names = list(player_names_list or [])
 
         sessions.append(
             {

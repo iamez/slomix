@@ -501,12 +501,34 @@ async def get_composite_stats(
             # zeros are true by construction rather than by assertion.
             row = await db.fetch_one(
                 """
+                -- Each MAX runs through the SAME gates as the coverage
+                -- counts (:508, Codex on #848): a source whose newest rows
+                -- live only in invalid or bot rounds must not pick the
+                -- default scope — the date path would then gate those rows
+                -- away and answer an empty session for the date that looks
+                -- freshest. Measured today: gated and ungated MAX agree
+                -- (2026-08-27), so this is shape, not behaviour.
                 SELECT GREATEST(
-                    (SELECT MAX(session_date) FROM proximity_kill_outcome),
-                    (SELECT MAX(session_date) FROM proximity_crossfire_opportunity),
-                    (SELECT MAX(session_date) FROM proximity_lua_trade_kill),
-                    (SELECT MAX(session_date) FROM proximity_combat_position),
-                    (SELECT MAX(session_date) FROM proximity_spawn_timing)
+                    (SELECT MAX(t.session_date) FROM proximity_kill_outcome t
+                      JOIN rounds r ON r.id = t.round_id
+                      WHERE r.is_valid IS DISTINCT FROM FALSE
+                        AND r.is_bot_round IS DISTINCT FROM TRUE),
+                    (SELECT MAX(t.session_date) FROM proximity_crossfire_opportunity t
+                      JOIN rounds r ON r.id = t.round_id
+                      WHERE r.is_valid IS DISTINCT FROM FALSE
+                        AND r.is_bot_round IS DISTINCT FROM TRUE),
+                    (SELECT MAX(t.session_date) FROM proximity_lua_trade_kill t
+                      JOIN rounds r ON r.id = t.round_id
+                      WHERE r.is_valid IS DISTINCT FROM FALSE
+                        AND r.is_bot_round IS DISTINCT FROM TRUE),
+                    (SELECT MAX(t.session_date) FROM proximity_combat_position t
+                      JOIN rounds r ON r.id = t.round_id
+                      WHERE r.is_valid IS DISTINCT FROM FALSE
+                        AND r.is_bot_round IS DISTINCT FROM TRUE),
+                    (SELECT MAX(t.session_date) FROM proximity_spawn_timing t
+                      JOIN rounds r ON r.id = t.round_id
+                      WHERE r.is_valid IS DISTINCT FROM FALSE
+                        AND r.is_bot_round IS DISTINCT FROM TRUE)
                 )
                 """
             )
@@ -751,30 +773,40 @@ async def get_composite_stats(
     #   bot players. Through round_set alone 0 sessions flip today, but
     #   the round flag has been insufficient before and the count must not
     #   rely on it (8,358 OMNIBOT rows in kill_outcome alone).
-    coverage_row = await db.fetch_one(
-        f"""
-        SELECT
-            (SELECT COUNT(*) FROM proximity_crossfire_opportunity
-              WHERE {round_set}),
-            (SELECT COUNT(*) FROM storytelling_kill_impact
-              {ski_where} AND killer_guid_canonical IS NOT NULL
-                AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
-            (SELECT COUNT(*) FROM proximity_lua_trade_kill
-              WHERE {round_set} AND trader_guid_canonical IS NOT NULL
-                AND trader_guid_canonical NOT LIKE 'OMNIBOT%'),
-            (SELECT COUNT(*) FROM proximity_combat_position
-              WHERE {round_set} AND event_type = 'kill'
-                AND attacker_guid_canonical IS NOT NULL
-                AND attacker_guid_canonical NOT LIKE 'OMNIBOT%'),
-            (SELECT COUNT(*) FROM proximity_kill_outcome
-              WHERE {round_set} AND killer_guid_canonical IS NOT NULL
-                AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
-            (SELECT COUNT(*) FROM proximity_spawn_timing
-              WHERE {round_set} AND killer_guid_canonical IS NOT NULL
-                AND killer_guid_canonical NOT LIKE 'OMNIBOT%')
-    """,
-        (scope_param,),
-    )
+    # :758 (Codex on #848): the width-defensive _count below already survives
+    # a malformed row, but an EXCEPTION from this query — one source table
+    # missing on a dev database, a transient failure — would still take the
+    # whole composite down over its own annotation. Same contract, second
+    # half: a failed coverage query reads as counts unknown -> all metrics
+    # unmeasured (the cautious direction), and the players still ship.
+    try:
+        coverage_row = await db.fetch_one(
+            f"""
+            SELECT
+                (SELECT COUNT(*) FROM proximity_crossfire_opportunity
+                  WHERE {round_set}),
+                (SELECT COUNT(*) FROM storytelling_kill_impact
+                  {ski_where} AND killer_guid_canonical IS NOT NULL
+                    AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_lua_trade_kill
+                  WHERE {round_set} AND trader_guid_canonical IS NOT NULL
+                    AND trader_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_combat_position
+                  WHERE {round_set} AND event_type = 'kill'
+                    AND attacker_guid_canonical IS NOT NULL
+                    AND attacker_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_kill_outcome
+                  WHERE {round_set} AND killer_guid_canonical IS NOT NULL
+                    AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_spawn_timing
+                  WHERE {round_set} AND killer_guid_canonical IS NOT NULL
+                    AND killer_guid_canonical NOT LIKE 'OMNIBOT%')
+        """,
+            (scope_param,),
+        )
+    except Exception:
+        logger.warning("composite coverage query failed; reporting unmeasured", exc_info=True)
+        coverage_row = None
 
     # ⚠️ Read positionally and defensively, never by unpacking. This block is
     # an ANNOTATION on the answer; it must never be able to take the answer
