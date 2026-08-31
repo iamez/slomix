@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Chip, Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Chip, figure, Lbl, Pending, SectionHead, Unavailable } from '../components/ui';
 import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
 import type { RatedPlayer, SsrPlayer } from '../lib/types';
 
@@ -339,9 +339,7 @@ export function SkillRating() {
         {board.isPending && <Pending label="ratings" />}
         {board.isError && <Unavailable what="ratings" />}
         {board.data && board.data.players.length === 0 && (
-          <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-            nobody has played the {board.data.meta.min_rounds} rounds a rating needs yet
-          </span>
+          <Absent reason={<>nobody has played the {board.data.meta.min_rounds} rounds a rating needs yet</>} />
         )}
         {board.data && board.data.players.length > 0 && (
           <Stack gap={1} className="rows">

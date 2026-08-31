@@ -8,8 +8,16 @@ import routes from '../src/app/routes.data.json' with { type: 'json' };
  *
  *  This number is the reason the constant exists rather than being inlined:
  *  raise it when a phase lands, and every route of that phase is required to
- *  stop showing the stub. */
-const BUILT_THROUGH_PHASE = 3;
+ *  stop showing the stub.
+ *
+ *  ⛔ IT WAS LEFT AT 3 WHILE PHASE 4 SHIPPED. `session-detail` and
+ *  `session-detail-date` — the two newest pages, #839 and #840 — were the
+ *  only routes exempt from the one check that proves a stub is gone, and a
+ *  stub answers 200, renders cleanly and passes every other assertion in this
+ *  spec. Raising it by hand is what failed, so `routes.test.ts` now compares
+ *  this number against what `main.tsx` actually wires: leave it too low and
+ *  a unit test says so, in CI, without a browser. */
+const BUILT_THROUGH_PHASE = 4;
 
 /**
  * Every route of the standalone app, loaded once (docs/design/09 §H3).

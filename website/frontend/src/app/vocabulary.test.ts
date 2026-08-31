@@ -24,8 +24,27 @@ const SOURCES = import.meta.glob('./**/*.{ts,tsx}', {
   eager: true,
 }) as Record<string, string>;
 
-/** The grey secondary line, however it is spelled inline. */
-const GREY_NOTE = /fontSize:\s*'var\(--fs-(?:micro|caption)\)',\s*color:\s*'var\(--color-text-500\)'/g;
+/**
+ * The grey secondary line, however it is spelled inline.
+ *
+ * ⛔ ORDER-INSENSITIVE ON PURPOSE (Codex on #845). The first version matched
+ * the pair only as `fontSize, color` adjacent — so a hand-written note with
+ * the properties reversed, or with `whiteSpace` between them, slid past the
+ * ratchet unseen. Property order in an object literal is incidental; the
+ * VOCABULARY is the pair. Two patterns, one per order, each confined to a
+ * single object literal by `[^{}]*?` so a fontSize in one style and a color
+ * in the next cannot pair up across a brace.
+ */
+const FS = String.raw`fontSize:\s*'var\(--fs-(?:micro|caption)\)'`;
+const COL = String.raw`color:\s*'var\(--color-text-500\)'`;
+const GREY_NOTE_PATTERNS = [
+  new RegExp(`${FS}[^{}]*?${COL}`, 'g'),
+  new RegExp(`${COL}[^{}]*?${FS}`, 'g'),
+];
+
+function countGreyNotes(text: string): number {
+  return GREY_NOTE_PATTERNS.reduce((n, re) => n + [...text.matchAll(re)].length, 0);
+}
 
 /** Everything except the tests and the one file where the pattern is
  *  DEFINED: ui.tsx spells it three times, in Pending, Absent and Meta, and a
@@ -35,13 +54,26 @@ function appSources(): [string, string][] {
   return Object.entries(SOURCES)
     .filter(([file]) => !file.endsWith('.test.ts') && !file.endsWith('.test.tsx'))
     .filter(([file]) => file !== './components/ui.tsx')
+    // ErrorBoundary's grey <pre> is the crash screen showing error.message —
+    // neither an absent answer (Absent would claim the request succeeded) nor
+    // a value beside something present (Meta renders a span, this needs a
+    // pre with pre-wrap). It is a third thing: diagnostic text on the failure
+    // surface itself, deliberately subordinate to the headline. Excluded with
+    // this stated reason rather than counted, because the alternative was
+    // raising BUDGET by one — an allowance, which is the failure mode #823
+    // named. If a second file ever needs this exemption, that is the signal
+    // to design the component, not to lengthen this list.
+    .filter(([file]) => file !== './components/ErrorBoundary.tsx')
     .map(([file, text]) => [file, stripJsComments(text)]);
 }
 
 describe('design vocabulary', () => {
   it('keeps the hand-written grey note at exactly the budget', () => {
     // 66 on this branch's base before Absent and Meta existed; 43 now, after
-    // the 23 conversions. What remains is the absence notes on the four pages
+    // 24 conversions — the 24th surfaced only when the matcher above became
+    // order-insensitive: Home's map-count span interleaved `textAlign`
+    // between the pair and the original regex never saw it. What remains is
+    // the absence notes on the four pages
     // open in review right now (Home, Story, SessionDetail, Rivalries), which
     // a sweeping refactor would only turn into conflicts, plus the lines that
     // are not absence at all — a ping, a timestamp, the map under a match
@@ -59,7 +91,7 @@ describe('design vocabulary', () => {
     let count = 0;
     const perFile = new Map<string, number>();
     for (const [file, text] of appSources()) {
-      const n = [...text.matchAll(GREY_NOTE)].length;
+      const n = countGreyNotes(text);
       if (n > 0) perFile.set(file, n);
       count += n;
     }
@@ -99,8 +131,28 @@ describe('design vocabulary', () => {
     // prop that nobody passed.
     const ui = SOURCES['./components/ui.tsx'];
     const signature = ui.slice(ui.indexOf('export function Absent'), ui.indexOf('export function Meta'));
-    expect(signature).toMatch(/reason:\s*ReactNode/);
+    expect(signature).toMatch(/reason:\s*NonNullable<ReactNode>/);
     expect(signature).not.toMatch(/reason\?:/);
     expect(signature).not.toMatch(/reason\s*=\s*['"]/);
+  });
+
+  it('counts a grey note whichever way its properties are ordered', () => {
+    // The controls for the matcher itself, each seen failing against the
+    // old single-order regex before this shipped. A ratchet with a blind
+    // spot is worse than none: it certifies the pile is not growing while
+    // the pile grows in the one spelling it cannot see.
+    const forward = "style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}";
+    const reversed = "style={{ color: 'var(--color-text-500)', fontSize: 'var(--fs-micro)' }}";
+    const interleaved =
+      "style={{ fontSize: 'var(--fs-caption)', whiteSpace: 'pre-wrap', color: 'var(--color-text-500)' }}";
+    expect(countGreyNotes(forward)).toBe(1);
+    expect(countGreyNotes(reversed)).toBe(1);
+    expect(countGreyNotes(interleaved)).toBe(1);
+    // …and one of each across TWO style objects is not a pair: the brace
+    // boundary must stop the match, or every page with one grey fontSize
+    // and one unrelated grey color would count as a note it never wrote.
+    const acrossObjects =
+      "style={{ fontSize: 'var(--fs-micro)' }} … style={{ color: 'var(--color-text-500)' }}";
+    expect(countGreyNotes(acrossObjects)).toBe(0);
   });
 });

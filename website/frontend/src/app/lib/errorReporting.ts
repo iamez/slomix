@@ -6,6 +6,15 @@
  * separate TS file rather than importing the legacy .js directly: tsconfig.json
  * has allowJs: false and include: ["src"], so a cross-directory JS import would
  * fail type-checking. If you change one, change the other.
+ *
+ * MOVED here from src/lib on 2026-08-30, and the move is the point. The new
+ * SPA had no error reporting at all — an uncaught render error left a blank
+ * page and nothing in the log — and importing this from `src/lib` would have
+ * fixed that invisibly: the endpoint ratchet scans `src/app` only, so a call
+ * made from the tree we are replacing counts as no call, and
+ * /api/client-error would have stayed on the missing list while being used.
+ * The older React tree now imports it from here, which is the direction the
+ * dependency should point anyway.
  */
 
 declare global {
@@ -91,6 +100,25 @@ export function reportCaughtError(error: Error, componentStack?: string | null):
     message: error.message || String(error),
     stack: componentStack ? `${error.stack ?? ''}\n\nComponent stack:${componentStack}` : error.stack ?? null,
   });
+}
+
+/**
+ * Is this the failure of a lazily-loaded chunk rather than a bug in the page?
+ *
+ * Moved here from the older tree's ErrorBoundary so both boundaries ask the
+ * question the same way. It matters because the answer changes what the UI
+ * should do: a stale index referencing the previous deploy's hashed chunks is
+ * fixed by reloading, and no amount of "try again" in the same document will
+ * ever find a file that is not there.
+ *
+ * Covers Chrome/Firefox ("Loading chunk… failed", "Failed to fetch
+ * dynamically imported module") AND Safari/WebKit ("Importing a module script
+ * failed").
+ */
+export function isChunkLoadError(error: unknown): boolean {
+  const e = error as { message?: unknown; name?: unknown } | null | undefined;
+  const text = String((e && (e.message ?? e.name)) || '');
+  return /loading (?:css )?chunk|chunkloaderror|dynamically imported module|failed to fetch dynamically imported|importing a module script failed/i.test(text);
 }
 
 export function installErrorReporting(): void {

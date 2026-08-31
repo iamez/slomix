@@ -1,25 +1,15 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { reportCaughtError } from '../lib/errorReporting';
+import { isChunkLoadError, reportCaughtError } from '../app/lib/errorReporting';
 
 interface Props {
   children: ReactNode;
   viewId?: string;
 }
 
-// A lazy page chunk that 404s (e.g. a stale index referencing the previous
-// deploy's hashed chunks) surfaces here, NOT in modern-route-host's mount catch,
-// because React.lazy fetches the chunk later under Suspense. Detect that and do
-// a one-time, cache-busted full reload so the browser pulls the fresh
-// route-host.js + current chunk hashes. Guarded so a genuinely-missing chunk
-// can't reload-loop (at most once per 15s).
-function isChunkLoadError(error: unknown): boolean {
-  const e = error as { message?: unknown; name?: unknown } | null | undefined;
-  const text = String((e && (e.message ?? e.name)) || '');
-  // Covers Chrome/Firefox ("Loading chunk… failed", "Failed to fetch dynamically
-  // imported module") AND Safari/WebKit ("Importing a module script failed").
-  return /loading (?:css )?chunk|chunkloaderror|dynamically imported module|failed to fetch dynamically imported|importing a module script failed/i.test(text);
-}
-
+// The chunk-failure question now lives in app/lib/errorReporting, so both
+// boundaries ask it the same way. What THIS boundary does with the answer is
+// unchanged: a one-time, cache-busted reload, guarded so a genuinely-missing
+// chunk cannot reload-loop (at most once per 15 s).
 interface State {
   hasError: boolean;
   error: Error | null;
