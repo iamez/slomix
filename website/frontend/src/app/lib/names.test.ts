@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeMapKey } from './geo/mapTransforms';
+import { normalizeMapKey, stripEtColors as fromGeo } from './geo/mapTransforms';
 import { stripEtColors } from './names';
 
 describe('stripEtColors', () => {
@@ -51,9 +51,18 @@ describe('stripEtColors', () => {
     // geo/mapTransforms used to hand-roll `\^.` here; the discriminating
     // input is `^`+non-alnum, on which the two classes disagree. Behavioral,
     // not source-matching, so a reintroduced local copy fails this rather
-    // than slipping past a prose grep.
+    // than slipping past a prose grep. (Measured 2026-08-31: the semantic
+    // change is EMPTY for maps — 0 of 20 distinct map_names in `rounds`
+    // contain a caret, 0 in player_comprehensive_stats, 0 in
+    // map_transforms.json — so this pins semantics, it moves no key.)
     expect(normalizeMapKey('^1Etl_Supply^7 ')).toBe('etl_supply');
     expect(normalizeMapKey('^<odd')).toBe('^<odd');
+    // FUNCTION IDENTITY through the re-export, not behaviour on a sample:
+    // a fresh local copy in mapTransforms that normalizeMapKey happens not
+    // to call would pass every behavioural line above — the identity check
+    // fails the moment the module exports anything but the one canonical
+    // function.
+    expect(fromGeo).toBe(stripEtColors);
   });
 
   it('agrees with the backend on the doubled-caret edge', () => {

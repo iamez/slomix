@@ -13,6 +13,14 @@
 
 import { stripEtColors } from '../names';
 
+/** Re-exported ON PURPOSE, not for convenience: this module used to define
+ *  its own stripEtColors with `\^.` under a comment claiming legacy parity,
+ *  and a behavioral test cannot catch that copy coming back if nothing
+ *  imports it — so names.test.ts asserts FUNCTION IDENTITY through this
+ *  re-export (`fromGeo === stripEtColors`), which fails the moment anyone
+ *  redefines a local one here. */
+export { stripEtColors };
+
 export interface MapTransformEntry {
   map_name: string;
   image: string;
