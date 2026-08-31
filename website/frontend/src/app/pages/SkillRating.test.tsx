@@ -272,6 +272,86 @@ describe('SkillRating', () => {
     await waitFor(() => expect(screen.getAllByText(/^\d+ sessions?$/).length).toBe(thin.length));
   });
 
+  it('derives the DIRECTION of the correction claim, never asserts it', async () => {
+    // ⛔ The mirrored pool (Codex on #846 + the verifier's #851): deep
+    // corrections LARGER than thin ones must flip the sentence, not render
+    // "~0× larger below". A fixture cannot fail on a value it does not
+    // contain, so each branch gets a synthetic pool built for it.
+    const pool = (players: unknown[]) => ({
+      available: true, formula_version: 's-effort-v1', players,
+    });
+    const p = (guid: string, life: number, adj: number, n: number) => ({
+      player_guid: guid, name: guid, lifetime_rating: life,
+      adjusted_lifetime: adj, n_sessions: n, formula_version: 's-effort-v1',
+    });
+    const mirrored = pool([
+      p('AAAA0001', 1.0, 1.05, 2), p('AAAA0002', 1.0, 1.05, 3),   // thin ±0.05
+      p('AAAA0003', 1.0, 1.6, 30), p('AAAA0004', 1.0, 0.4, 40),   // deep ±0.6
+    ]);
+    renderPage((input) => {
+      const path = new URL(String(input), 'http://test.local').pathname;
+      if (path === '/api/skill/adjusted-lifetime') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(mirrored) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    return (async () => {
+      await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+      await waitFor(() => expect(screen.getByText(/the correction is/)).toBeInTheDocument());
+      const claim = screen.getByText(/the correction is/).textContent ?? '';
+      expect(claim).toContain('larger above twenty sessions than below five');
+      expect(claim).toContain('~12×');
+      expect(claim).not.toMatch(/~[01]× larger below/);
+    })();
+  });
+
+  it('claims no direction when a comparison bucket is missing', async () => {
+    const thinOnly = {
+      available: true, formula_version: 's-effort-v1',
+      players: [{ player_guid: 'AAAA0001', name: 'only-thin', lifetime_rating: 1.0,
+        adjusted_lifetime: 1.4, n_sessions: 2, formula_version: 's-effort-v1' }],
+    };
+    renderPage((input) => {
+      const path = new URL(String(input), 'http://test.local').pathname;
+      if (path === '/api/skill/adjusted-lifetime') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(thinOnly) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(screen.getByText(/the correction/)).toBeInTheDocument());
+    const claim = screen.getByText(/the correction/).textContent ?? '';
+    // No comparison exists: the sentence says what the correction IS and
+    // claims no direction — the old code asserted "largest for thin
+    // histories" here with nothing behind it.
+    expect(claim).toContain('weighs each rating by the history behind it');
+    expect(claim).not.toContain('larger');
+  });
+
+  it('names the current formula when history under it is empty', async () => {
+    // The service filters history to the CURRENT formula_version, so an
+    // empty list also covers "history exists, under an earlier formula" —
+    // the wording must not claim nothing was ever persisted, and the
+    // version must come from the payload, not a constant.
+    const empty = { available: false, formula_version: 's-effort-v9', players: [] };
+    renderPage((input) => {
+      const path = new URL(String(input), 'http://test.local').pathname;
+      if (path === '/api/skill/adjusted-lifetime') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(empty) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(screen.getByText(/no session history under the current formula/)).toBeInTheDocument());
+    const line = screen.getByText(/no session history under the current formula/).textContent ?? '';
+    expect(line).toContain('(s-effort-v9)');
+    expect(line).toContain('scored under an earlier formula');
+    expect(line).not.toMatch(/persisted yet, so there is nothing/);
+  });
+
   it('says an unbuilt board is unbuilt, not unavailable', async () => {
     renderPage((input: RequestInfo | URL) => {
       const path = new URL(String(input), 'http://test.local').pathname;
@@ -285,7 +365,11 @@ describe('SkillRating', () => {
     });
     await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
-    await waitFor(() => expect(screen.getByText(/no session history has been persisted yet/)).toBeInTheDocument());
+    // Wording follows the :252 review fix: the old line claimed "no session
+    // history has been persisted yet", which the wire cannot back — the
+    // service filters to the CURRENT formula_version, so empty also covers
+    // history under an earlier formula.
+    await waitFor(() => expect(screen.getByText(/no session history under the current formula/)).toBeInTheDocument());
     expect(screen.queryByText(/adjusted ratings: unavailable/)).toBeNull();
   });
 });

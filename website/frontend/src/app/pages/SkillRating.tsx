@@ -205,10 +205,25 @@ function correctionClaim(players: AdjustedLifetimePlayer[]): string {
     xs.reduce((sum, p) => sum + Math.abs(p.adjusted_lifetime - (p.lifetime_rating as number)), 0) / xs.length;
   const thin = rated.filter((p) => p.n_sessions < 5);
   const deep = rated.filter((p) => p.n_sessions > 20);
-  if (thin.length === 0 || deep.length === 0 || size(deep) === 0) {
-    return 'the correction is largest for thin histories';
+  // ⛔ The DIRECTION is derived too, not asserted (Codex on #846, and the
+  // verifier's #851 finding independently): the first version derived the
+  // number but still claimed "larger below five sessions" whatever the data
+  // said — a missing bucket produced the claim with nothing behind it, and a
+  // ratio near or below 1 produced "~0× larger", a sentence the data denies.
+  // Same class as the "~5×" constant this function replaced, moved from
+  // magnitude to sign.
+  if (thin.length === 0 || deep.length === 0 || size(deep) === 0 || size(thin) === 0) {
+    // No comparison exists — say what the correction IS, claim no direction.
+    return 'the correction weighs each rating by the history behind it';
   }
-  return `the correction is ~${Math.round(size(thin) / size(deep))}× larger below five sessions than above twenty`;
+  const ratio = size(thin) / size(deep);
+  if (ratio >= 1.5) {
+    return `the correction is ~${Math.round(ratio)}× larger below five sessions than above twenty`;
+  }
+  if (ratio <= 1 / 1.5) {
+    return `the correction is ~${Math.round(1 / ratio)}× larger above twenty sessions than below five`;
+  }
+  return 'the correction is similar-sized below five and above twenty sessions';
 }
 
 const THIN_SESSIONS = 5;
@@ -248,8 +263,18 @@ function AdjustedLifetimeBoard() {
         <>
           {q.isPending && <Pending label="adjusted ratings" />}
           {q.isError && <Unavailable what="adjusted ratings" />}
+          {/* ⚠️ Claims only what the wire can back (Codex on #846): the
+              * service filters history to the CURRENT formula_version
+              * (s_effort_service.py:243), so an empty list also covers
+              * "history exists, but under an earlier formula" — and the
+              * response carries no count of the filtered-out rows, so this
+              * line cannot tell the two apart. The version is quoted from
+              * the payload, never a constant; if the wire ever grows a
+              * stale-rows count, this is where it lands. */}
           {q.data && !q.data.available && (
-            <Absent reason="no session history has been persisted yet, so there is nothing to adjust" />
+            <Absent
+              reason={`no session history under the current formula (${q.data.formula_version}) has been persisted — history scored under an earlier formula, if any, is not adjustable`}
+            />
           )}
           {q.data?.available && (
             <>
