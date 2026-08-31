@@ -38,3 +38,28 @@ async def test_spawn_range_today_is_the_documented_one():
     st = payload["multipliers"]["spawn_timing"]
     assert st["range"] == f"1.0 - {1.0 + storytelling_router.SPAWN_TIMING_BONUS}"
     assert st["range"] == "1.0 - 2.0"
+
+
+def test_spawn_bonus_is_pinned_and_moving_it_is_a_formula_change():
+    # ⛔ Deliberately a hard pin, not a tautology: SPAWN_TIMING_BONUS is now
+    # WIRED into the scorer (kis.py spawn_mult = 1.0 + bonus x denial), so
+    # moving it re-scores every kill. At 1.0 the wiring was the arithmetic
+    # identity and needed no FORMULA_VERSION bump; any other value is a
+    # formula change and this test is the tripwire.
+    from website.backend.services.storytelling.base import SPAWN_TIMING_BONUS
+    assert SPAWN_TIMING_BONUS == 1.0, (
+        "SPAWN_TIMING_BONUS moved: that is a FORMULA change, not a tuning "
+        "knob. Required before relaxing this pin: bump FORMULA_VERSION in "
+        "kis.py (header rule — the cache must invalidate and every session "
+        "rescore), and get the owner's explicit sign-off (house rule: no "
+        "artificial stat weighting without one)."
+    )
+
+
+def test_router_and_scorer_read_the_same_binding():
+    # Introspect the OBJECTS, not the source text: both modules must expose
+    # the very attribute base defines, or the published range and the scored
+    # multiplier can drift apart again while a grep still "agrees".
+    from website.backend.services.storytelling import base, kis
+    assert storytelling_router.SPAWN_TIMING_BONUS is base.SPAWN_TIMING_BONUS
+    assert kis.SPAWN_TIMING_BONUS is base.SPAWN_TIMING_BONUS
