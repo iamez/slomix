@@ -166,7 +166,13 @@ export function Unavailable({ what }: { what: string }) {
  * has been played twice in this window", never "no results".
  */
 export function Absent({ reason, block, style }: {
-  reason: ReactNode;
+  /** ⛔ Not `ReactNode`: that set includes null, undefined and booleans, so a
+   *  caller forwarding optional data could satisfy the type while rendering
+   *  no explanation at all — which is the one thing this component exists to
+   *  make impossible. `NonNullable` closes the type-level half; the runtime
+   *  half below catches booleans and whitespace-only strings, which the type
+   *  system cannot. */
+  reason: NonNullable<ReactNode>;
   /** Render a <div> rather than a <span>. The call sites that were divs
    *  before this component existed pass it, so extracting them could not
    *  move a pixel — a refactor that also relayouts is two changes wearing
@@ -174,10 +180,31 @@ export function Absent({ reason, block, style }: {
   block?: boolean;
   style?: CSSProperties;
 }) {
-  const s: CSSProperties = { fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', ...style };
+  // ⛔ Semantic styles AFTER the caller's, not before. `style` exists for
+  // LAYOUT — every call site passes spacing only — but the prop accepts any
+  // CSSProperties, and with the spread last a caller could repaint absence
+  // in the failure colour and make it indistinguishable from Unavailable.
+  // The grey IS the meaning; layout is the only thing a caller may vary.
+  // (The colour goes unnamed here on purpose: the vocabulary test reads this
+  // function's RAW source and rightly forbids the failure token inside it.)
+  const s: CSSProperties = { ...style, fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' };
+  const shown = hasSubstance(reason)
+    ? reason
+    // A page that reaches this line has a bug, and the honest render is one
+    // that says so — not silence, which would quietly reintroduce the
+    // reason-less absence this component was built to end.
+    : 'absent — and the page gave no reason (page bug)';
   return block
-    ? <div className="m" style={s}>{reason}</div>
-    : <span className="m" style={s}>{reason}</span>;
+    ? <div className="m" style={s}>{shown}</div>
+    : <span className="m" style={s}>{shown}</span>;
+}
+
+/** The runtime half of Absent's required-reason guarantee: booleans render
+ *  as nothing, and a whitespace-only string is a reason in name only. */
+function hasSubstance(node: ReactNode): boolean {
+  if (node == null || typeof node === 'boolean') return false;
+  if (typeof node === 'string') return node.trim().length > 0;
+  return true;
 }
 
 /**
@@ -188,8 +215,9 @@ export function Absent({ reason, block, style }: {
  * same anonymous span with different children.
  */
 export function Meta({ children, style }: { children: ReactNode; style?: CSSProperties }) {
+  // Same ordering rule as Absent, same reason: the grey is the identity.
   return (
-    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', ...style }}>
+    <span className="m" style={{ ...style, fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
       {children}
     </span>
   );
