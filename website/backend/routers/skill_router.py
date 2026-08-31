@@ -151,17 +151,19 @@ async def get_skill_leaderboard(
 
     players = []
     for i, r in enumerate(rows):
-        players.append({
-            "rank": i + 1,
-            "player_guid": r[0],
-            "display_name": r[1] or "Unknown",
-            "et_rating": float(r[2]),
-            "games_rated": int(r[3]),
-            "last_rated_at": str(r[4]) if r[4] else None,
-            "components": _parse_components(r[5]),
-            "confidence": round(min(1.0, int(r[3]) / 30), 2),
-            "tier": get_tier(float(r[2])),
-        })
+        players.append(
+            {
+                "rank": i + 1,
+                "player_guid": r[0],
+                "display_name": r[1] or "Unknown",
+                "et_rating": float(r[2]),
+                "games_rated": int(r[3]),
+                "last_rated_at": str(r[4]) if r[4] else None,
+                "components": _parse_components(r[5]),
+                "confidence": round(min(1.0, int(r[3]) / 30), 2),
+                "tier": get_tier(float(r[2])),
+            }
+        )
 
     # The pool mean the shrinkage was computed against. Without it a reader
     # can see the components (which decompose the RAW rating) and the
@@ -224,7 +226,10 @@ async def get_player_skill(
             )
 
     if not row:
-        return {"status": "error", "detail": f"Player '{identifier}' not found or not rated (need {MIN_ROUNDS}+ rounds)"}
+        return {
+            "status": "error",
+            "detail": f"Player '{identifier}' not found or not rated (need {MIN_ROUNDS}+ rounds)",
+        }
 
     rank_row = await db.fetch_one(
         """SELECT rank, total FROM (
@@ -256,6 +261,7 @@ async def get_player_skill(
 # ---------------------------------------------------------------------------
 # History endpoints — session/map scoped
 # ---------------------------------------------------------------------------
+
 
 @router.get("/skill/player/{identifier}/history")
 async def get_player_skill_history(
@@ -318,6 +324,7 @@ async def get_s_effort(
     performance; pool variant A leave-one-out per owner decision). Computes
     live and idempotently persists scope='session' history rows."""
     from website.backend.services.s_effort_service import FORMULA_VERSION, SEffortService
+
     svc = SEffortService(db)
     rows = await svc.compute_session(session_date)
     if not rows:
@@ -327,16 +334,23 @@ async def get_s_effort(
             await svc.persist_session(session_date, rows=[])
         except Exception:
             import logging
+
             logging.getLogger(__name__).exception("s.effort stale-clear failed")
         return {"status": "ok", "available": False, "session_date": session_date}
     try:
         await svc.persist_session(session_date, rows=rows)
     except Exception:  # persist is best-effort; the response is the compute
         import logging
+
         logging.getLogger(__name__).exception("s.effort persist failed")
     rows.sort(key=lambda r: -(r.get("s_performance") or 0))
-    return {"status": "ok", "available": True, "session_date": session_date,
-            "formula_version": FORMULA_VERSION, "players": rows}
+    return {
+        "status": "ok",
+        "available": True,
+        "session_date": session_date,
+        "formula_version": FORMULA_VERSION,
+        "players": rows,
+    }
 
 
 @router.get("/skill/adjusted-lifetime")
@@ -346,9 +360,9 @@ async def get_adjusted_lifetime(db=Depends(get_db)):
     scope='session' history (run /skill/s-effort per session or the backfill
     script first)."""
     from website.backend.services.s_effort_service import FORMULA_VERSION, SEffortService
+
     rows = await SEffortService(db).compute_adjusted_lifetime()
-    return {"status": "ok", "available": bool(rows),
-            "formula_version": FORMULA_VERSION, "players": rows}
+    return {"status": "ok", "available": bool(rows), "formula_version": FORMULA_VERSION, "players": rows}
 
 
 @router.get("/skill/ssr")
@@ -358,6 +372,7 @@ async def get_ssr(db=Depends(get_db)):
     and spawn readiness. Research surface — numbers are percentile-based
     (0..1) within the rated cohort, min 5 sessions (A6)."""
     from website.backend.services.ssr_service import SsrService
+
     return {"status": "ok", **(await SsrService(db).compute())}
 
 
@@ -426,6 +441,7 @@ async def get_et_performance_v3_shadow(
     canonical at /skill/leaderboard.
     """
     from website.backend.services.skill_rating_v3 import compute_et_performance_v3
+
     try:
         result = await compute_et_performance_v3(db)
         return {"status": "ok", "shadow": True, **result}
@@ -437,6 +453,31 @@ async def get_et_performance_v3_shadow(
 # ---------------------------------------------------------------------------
 # Composite Stats — 5 advanced metrics per player per session
 # ---------------------------------------------------------------------------
+
+
+_COMPOSITE_METRIC_DESCRIPTIONS = {
+    "tir": "Team Impact Rating — crossfire + trade coordination (0-100)",
+    "ci": "Clutch Index — low HP + outnumbered kill rate (0-100)",
+    "kpi": "Kill Permanence Index — gib rate (0-100%)",
+    "sds": "Spawn Denial Score — timing + denied playtime (0-100)",
+    # ⚠️ Two of the three inputs this used to advertise are not
+    # measured per session. `focus_escapes`/`times_focused` are
+    # selected as literal 0 in the query above, so
+    # focus_escape_rate is 0.5 for every player in every session —
+    # a fixed 15 of the 100 points. Measured: 158 of 158 sampled
+    # players carry 0/0. The only source in the database
+    # (`player_teamplay_stats`) is a 32-row LIFETIME aggregate
+    # with no round or session key, so it cannot answer a
+    # per-session question; wiring it in would be wrong, not just
+    # missing. The description now says what the number is.
+    "cp": (
+        "Combat Presence — survival + alive time (0-100), "
+        "plus a fixed 15 points: the focus-escape term has no "
+        "per-session source and is held at its 0.5 default for "
+        "every player"
+    ),
+}
+
 
 @router.get("/skill/composite")
 async def get_composite_stats(
@@ -472,61 +513,145 @@ async def get_composite_stats(
         # proximity_* tables are round-keyed, so restrict to this session's
         # round set. Bot rounds are dropped at the driving table (session_pcs
         # LEFT-JOINs the rest, so excluding bots here removes them everywhere).
-        pcs_from = ("player_comprehensive_stats p "
-                    "JOIN rounds r ON r.id = p.round_id")
-        pcs_cols = ("p.player_guid, MAX(p.player_name) as player_name, "
-                    "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
-                    "SUM(p.gibs) as gibs")
+        pcs_from = "player_comprehensive_stats p JOIN rounds r ON r.id = p.round_id"
+        pcs_cols = (
+            "p.player_guid, MAX(p.player_name) as player_name, "
+            "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
+            "SUM(p.gibs) as gibs"
+        )
         # Round-quality gate, the same one every other KPI applies (S6 audit):
         # excluding bots by NAME is not enough. Session 121 carries one round
         # flagged is_valid = FALSE, and its 53 kills were inflating the
         # composite by 8-16 % for the four players in it (SuperBoyy 147 -> 135,
         # qmr 128 -> 108) — invisible, because the players are real.
-        pcs_where = ("WHERE r.gaming_session_id = $1 AND r.round_number > 0 "
-                     "AND r.is_valid IS DISTINCT FROM FALSE "
-                     "AND r.is_bot_round IS DISTINCT FROM TRUE "
-                     "AND p.player_guid NOT LIKE 'OMNIBOT%' "
-                     "AND p.player_name NOT LIKE '[BOT]%'")
+        pcs_where = (
+            "WHERE r.gaming_session_id = $1 AND r.round_number > 0 "
+            "AND r.is_valid IS DISTINCT FROM FALSE "
+            "AND r.is_bot_round IS DISTINCT FROM TRUE "
+            "AND p.player_guid NOT LIKE 'OMNIBOT%' "
+            "AND p.player_name NOT LIKE '[BOT]%'"
+        )
         pcs_group = "GROUP BY p.player_guid"
         pcs_alias = "p."
         ski_where = "WHERE gaming_session_id = $1"
-        round_set = ("round_id IN (SELECT id FROM rounds "
-                     "WHERE gaming_session_id = $1 "
-                     "  AND is_valid IS DISTINCT FROM FALSE "
-                     "  AND is_bot_round IS DISTINCT FROM TRUE)")
+        round_set = (
+            "round_id IN (SELECT id FROM rounds "
+            "WHERE gaming_session_id = $1 "
+            "  AND is_valid IS DISTINCT FROM FALSE "
+            "  AND is_bot_round IS DISTINCT FROM TRUE)"
+        )
     else:
         if not session_date:
-            row = await db.fetch_one(
-                "SELECT MAX(session_date) FROM proximity_kill_outcome"
-            )
+            # ⛔ The fallback scope reads ALL five coverage sources, not one
+            # (Codex on #848): with proximity_kill_outcome empty but any other
+            # instrument still writing, a single-table MAX said "nothing
+            # anywhere" and the early return below hard-coded five zeros that
+            # were never counted. GREATEST over the union makes that return
+            # reachable only when every source is empty — at which point the
+            # zeros are true by construction rather than by assertion.
+            # :503 (Codex on #848), the same contract as the coverage
+            # guard: a missing or unavailable telemetry table must not
+            # turn the no-scope path into a 500 — an unanswerable
+            # default-scope question reads as "no scope", which the
+            # early return below already answers honestly.
+            try:
+                row = await db.fetch_one(
+                    """
+                    -- Each MAX runs through the SAME gates as the coverage
+                    -- counts (:508, Codex on #848): a source whose newest rows
+                    -- live only in invalid or bot rounds must not pick the
+                    -- default scope — the date path would then gate those rows
+                    -- away and answer an empty session for the date that looks
+                    -- freshest. Measured today: gated and ungated MAX agree
+                    -- (2026-08-27), so this is shape, not behaviour.
+                    SELECT GREATEST(
+                        (SELECT MAX(t.session_date) FROM proximity_kill_outcome t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_crossfire_opportunity t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_lua_trade_kill t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_combat_position t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_spawn_timing t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE)
+                    )
+                    """
+                )
+            except Exception:
+                logger.warning(
+                    "composite default-scope lookup failed; answering no-scope",
+                    exc_info=True,
+                )
+                row = None
             if not row or not row[0]:
-                return {"status": "ok", "session_date": None,
-                        "gaming_session_id": None, "players": []}
+                # No proximity rows anywhere, so there is no default scope to
+                # pick. This used to return a SHORTER shape than the one
+                # below — no `coverage`, no `meta` — which is the same trap
+                # the coverage block exists to close: a caller that reads
+                # `coverage.unmeasured_metrics` would get a KeyError on
+                # exactly the state where the answer matters most. Same keys,
+                # every time.
+                return {
+                    "status": "ok",
+                    "session_date": None,
+                    "gaming_session_id": None,
+                    "players": [],
+                    "coverage": {
+                        "unmeasured_metrics": ["ci", "kpi", "sds", "tir"],
+                        "partially_synthetic_metrics": ["cp"],
+                        "source_rows": {
+                            "crossfire": 0,
+                            "crossfire_cache": 0,
+                            "trades": 0,
+                            "combat_positions": 0,
+                            "kill_outcomes": 0,
+                            "spawn_timing": 0,
+                        },
+                    },
+                    "meta": {"metrics": _COMPOSITE_METRIC_DESCRIPTIONS},
+                }
             session_date = str(row[0])
         scope_param = session_date
         # The legacy date path cannot separate two sessions sharing a date —
         # that is its known limitation — but it can at least apply the same
         # quality gate, so an invalid round never counts on either path.
-        pcs_from = ("player_comprehensive_stats p "
-                    "JOIN rounds r ON r.id = p.round_id")
-        pcs_cols = ("p.player_guid, MAX(p.player_name) as player_name, "
-                    "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
-                    "SUM(p.gibs) as gibs")
-        pcs_where = ("WHERE p.round_date = $1 AND p.round_number > 0 "
-                     "AND r.is_valid IS DISTINCT FROM FALSE "
-                     "AND r.is_bot_round IS DISTINCT FROM TRUE")
+        pcs_from = "player_comprehensive_stats p JOIN rounds r ON r.id = p.round_id"
+        pcs_cols = (
+            "p.player_guid, MAX(p.player_name) as player_name, "
+            "SUM(p.kills) as kills, SUM(p.deaths) as deaths, "
+            "SUM(p.gibs) as gibs"
+        )
+        pcs_where = (
+            "WHERE p.round_date = $1 AND p.round_number > 0 "
+            "AND r.is_valid IS DISTINCT FROM FALSE "
+            "AND r.is_bot_round IS DISTINCT FROM TRUE"
+        )
         pcs_group = "GROUP BY p.player_guid"
         pcs_alias = "p."
         ski_where = "WHERE session_date = $1::date"
-        round_set = ("round_id IN (SELECT id FROM rounds "
-                     "WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) = $1 "
-                     "  AND is_valid IS DISTINCT FROM FALSE "
-                     "  AND is_bot_round IS DISTINCT FROM TRUE)")
+        round_set = (
+            "round_id IN (SELECT id FROM rounds "
+            "WHERE SUBSTR(CAST(round_date AS TEXT), 1, 10) = $1 "
+            "  AND is_valid IS DISTINCT FROM FALSE "
+            "  AND is_bot_round IS DISTINCT FROM TRUE)"
+        )
 
     # Query per-player aggregates for this session from proximity + PCS. The
     # scope fragments above are code-controlled (no user input) and the scope
     # value always flows through the $1 bind parameter.
-    rows = await db.fetch_all(f"""
+    rows = await db.fetch_all(
+        f"""
         WITH session_pcs AS (
             SELECT {pcs_cols},
                 AVG(CASE WHEN {pcs_alias}time_played_seconds > 0
@@ -606,7 +731,9 @@ async def get_composite_stats(
         LEFT JOIN session_spawn sp ON sp.guid_c = pcs.player_guid
         WHERE pcs.kills > 0
         ORDER BY pcs.kills DESC
-    """, (scope_param,))
+    """,
+        (scope_param,),
+    )
 
     players = []
     for r in rows:
@@ -640,47 +767,198 @@ async def get_composite_stats(
 
         # CP: Combat Presence (0-100)
         focus_escape_rate = (focus_escapes / times_focused) if times_focused > 0 else 0.5
-        cp = round(min(100, (
-            survival_rate * 40 +
-            focus_escape_rate * 30 +
-            max(0, 1 - avg_time_dead) * 30
-        )), 1)
+        cp = round(min(100, (survival_rate * 40 + focus_escape_rate * 30 + max(0, 1 - avg_time_dead) * 30)), 1)
 
-        players.append({
-            "player_guid": guid,
-            "player_name": name,
-            "kills": kills,
-            "tir": tir,
-            "ci": ci,
-            "kpi": kpi,
-            "sds": sds,
-            "cp": cp,
-            "details": {
-                "crossfire_kills": crossfire_kills,
-                "trade_kills": trade_kills,
-                "clutch_kills": clutch_kills,
-                "gibbed_count": gibbed,
-                "total_outcomes": total_outcomes,
-                "avg_spawn_score": round(avg_spawn_score, 3),
-                "focus_escapes": focus_escapes,
-                "times_focused": times_focused,
-            },
-        })
+        players.append(
+            {
+                "player_guid": guid,
+                "player_name": name,
+                "kills": kills,
+                "tir": tir,
+                "ci": ci,
+                "kpi": kpi,
+                "sds": sds,
+                "cp": cp,
+                "details": {
+                    "crossfire_kills": crossfire_kills,
+                    "trade_kills": trade_kills,
+                    "clutch_kills": clutch_kills,
+                    "gibbed_count": gibbed,
+                    "total_outcomes": total_outcomes,
+                    "avg_spawn_score": round(avg_spawn_score, 3),
+                    "focus_escapes": focus_escapes,
+                    "times_focused": times_focused,
+                },
+            }
+        )
+
+    # ⛔ WITHOUT THIS BLOCK A METRIC NOBODY MEASURED IS INDISTINGUISHABLE FROM
+    # A METRIC THAT CAME OUT ZERO. Four of the five draw from the proximity
+    # tables, and 98 of 151 gaming sessions have no proximity rows at all —
+    # `shot_fired` has been off on the game server since 2026-08-11, and the
+    # capture only ever covered part of the history. Measured over a random
+    # 24-session sample of this database:
+    #
+    #   proximity absent (18 sessions):  ci 18/18 all-zero, kpi 18/18,
+    #                                    tir 17/18, sds <= 40.0 for 124/124
+    #                                    players (avg_spawn_score is 60 % of
+    #                                    the SDS weight and it is missing)
+    #   proximity present (5 sessions):  none of the five ever all-zero
+    #
+    # So the zeros are the shape of an unasked question, and the answer used
+    # to be `status: "ok"` either way. Same class as the outage that read as
+    # an empty database: absence and zero have the same shape on the wire, so
+    # the response has to name which one it is.
+    #
+    # ⚠️ The flag is derived from whether the SOURCE ROWS exist in scope, not
+    # from whether the scores came out zero. Reading it off the zeros would be
+    # circular — it would also flag a session that was fully measured and
+    # genuinely had no clutch kills, which is a real answer, not a missing one.
+    # ⚠️ Three corrections from review (Codex + CodeRabbit on #848), each an
+    # instance of one rule — count what the metric queries can USE:
+    #
+    # - The crossfire leg counts the RAW instrument
+    #   (proximity_crossfire_opportunity), not the KIS cache it feeds: a
+    #   cached is_crossfire computed against an empty crossfire context is
+    #   a value, not a measurement. ⚠️ Measured TWICE, because the first
+    #   number was wrong: UNGATED, cache>0 with raw=0 happens in 0
+    #   sessions — but this count runs THROUGH round_set, and gated it
+    #   happens in SIX. The verifier's independent measurement caught the
+    #   discrepancy; the first claim compared the raw table without the
+    #   gate the code applies. So this change flips tir to
+    #   honestly-unmeasured in 6 live sessions, plus the 5 where every
+    #   cache row is a bot row.
+    # - Every count carries the canonical-GUID predicate its metric CTE
+    #   carries (IS NOT NULL): a row the CTE filters out cannot make its
+    #   metric "measured". 0 nulls in today's data; the predicate mirrors
+    #   the CTEs, not the sample.
+    # - OMNIBOT canonical GUIDs are excluded the way session_pcs excludes
+    #   bot players. Through round_set alone 0 sessions flip today, but
+    #   the round flag has been insufficient before and the count must not
+    #   rely on it (8,358 OMNIBOT rows in kill_outcome alone).
+    # :758 (Codex on #848): the width-defensive _count below already survives
+    # a malformed row, but an EXCEPTION from this query — one source table
+    # missing on a dev database, a transient failure — would still take the
+    # whole composite down over its own annotation. Same contract, second
+    # half: a failed coverage query reads as counts unknown -> all metrics
+    # unmeasured (the cautious direction), and the players still ship.
+    try:
+        coverage_row = await db.fetch_one(
+            f"""
+            SELECT
+                (SELECT COUNT(*) FROM proximity_crossfire_opportunity
+                  WHERE {round_set}),
+                (SELECT COUNT(*) FROM storytelling_kill_impact
+                  {ski_where} AND killer_guid_canonical IS NOT NULL
+                    AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_lua_trade_kill
+                  WHERE {round_set} AND trader_guid_canonical IS NOT NULL
+                    AND trader_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_combat_position
+                  WHERE {round_set} AND event_type = 'kill'
+                    AND attacker_guid_canonical IS NOT NULL
+                    AND attacker_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_kill_outcome
+                  WHERE {round_set} AND killer_guid_canonical IS NOT NULL
+                    AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
+                (SELECT COUNT(*) FROM proximity_spawn_timing
+                  WHERE {round_set} AND killer_guid_canonical IS NOT NULL
+                    AND killer_guid_canonical NOT LIKE 'OMNIBOT%')
+        """,
+            (scope_param,),
+        )
+    except Exception:
+        logger.warning("composite coverage query failed; reporting unmeasured", exc_info=True)
+        coverage_row = None
+
+    # ⚠️ Read positionally and defensively, never by unpacking. This block is
+    # an ANNOTATION on the answer; it must never be able to take the answer
+    # down. Unpacking five names from the row raises ValueError on a row of
+    # any other width — which is exactly what happened the first time this
+    # shipped: `tests/unit/test_composite_validity_gate.py` uses a stub whose
+    # `fetch_one` answers every query with a 1-tuple, and a working endpoint
+    # turned into a 500 over a field nobody reads yet. A missing count reads
+    # as 0, which flags the metric as unmeasured — the cautious direction.
+    def _count(index: int) -> int:
+        try:
+            return int(coverage_row[index] or 0)
+        except (TypeError, IndexError, ValueError):
+            return 0
+
+    crossfire_rows, crossfire_cache_rows, trade_rows, combat_rows, outcome_rows, spawn_rows = (
+        _count(0),
+        _count(1),
+        _count(2),
+        _count(3),
+        _count(4),
+        _count(5),
+    )
+
+    # metric -> the source counts it needs. A metric is "measured" when at
+    # least one of its inputs produced rows for this scope; "unmeasured" when
+    # none did, and its number below is a floor rather than a measurement.
+    # ⛔ Crossfire is a TWO-STAGE pipeline and tir needs both stages plus
+    # trades (verifier on #848, round two): the raw instrument
+    # (crossfire_opportunity) says the capture ran; the KIS cache says the
+    # storytelling pipeline actually produced the rows the session_crossfire
+    # CTE reads. Counting only the raw side re-broke four sessions the
+    # source swap was meant to fix: 94/95/97/98 have raw rows and trades
+    # but ZERO cache rows — the pipeline never ran for them — so tir was
+    # floored by up to 50 points and labelled measured. Neither stage reads
+    # is_crossfire, so neither is circular. Measured: tir measured in
+    # 47/151 sessions with two sources, 43/151 with three — the difference
+    # is exactly those four.
+    metric_sources = {
+        "tir": (crossfire_rows, crossfire_cache_rows, trade_rows),
+        "ci": (combat_rows,),
+        "kpi": (outcome_rows,),
+        "sds": (spawn_rows,),
+    }
+
+    # ⛔ TIR needs BOTH of its sources; the single-source metrics need
+    # their one (verifier's finding on #848): tir = crossfire*50 +
+    # trade*50 is a SUM of two halves, not a choice between substitutes,
+    # so one present half with the other missing floors the score by up
+    # to 50 points while any() called it measured. Measured: 1 live
+    # session carries exactly one half. The cautious direction costs a
+    # false "unmeasured" only for a session where genuinely nobody
+    # traded — a floor reported as a floor.
+    def _is_unmeasured(metric: str, counts: tuple[int, ...]) -> bool:
+        if metric == "tir":
+            return not all(counts)
+        return not any(counts)
+
+    unmeasured = sorted(m for m, counts in metric_sources.items() if _is_unmeasured(m, counts))
 
     return {
         "status": "ok",
         "session_date": session_date,
         "gaming_session_id": gaming_session_id,
         "players": players,
-        "meta": {
-            "metrics": {
-                "tir": "Team Impact Rating — crossfire + trade coordination (0-100)",
-                "ci": "Clutch Index — low HP + outnumbered kill rate (0-100)",
-                "kpi": "Kill Permanence Index — gib rate (0-100%)",
-                "sds": "Spawn Denial Score — timing + denied playtime (0-100)",
-                "cp": "Combat Presence — survival + focus escape + alive time (0-100)",
+        "coverage": {
+            # Always present, always a list — an empty list means "everything
+            # in scope was measured", which is a different statement from the
+            # key being absent, and the UI must be able to tell them apart.
+            "unmeasured_metrics": unmeasured,
+            # ⚠️ A third state between measured and unmeasured (Codex on
+            # #848): CP's focus term is selected as literal zero for EVERY
+            # scope, so 15 of its 100 points are a constant, not a session
+            # measurement — but the other 85 ARE measured, so putting "cp"
+            # into unmeasured_metrics would hide a real answer. The list is
+            # static on purpose: the synthetic share is structural until
+            # focus_escapes gains a session-scoped source, at which point
+            # this line is the one to delete.
+            "partially_synthetic_metrics": ["cp"],
+            "source_rows": {
+                "crossfire": crossfire_rows,
+                "crossfire_cache": crossfire_cache_rows,
+                "trades": trade_rows,
+                "combat_positions": combat_rows,
+                "kill_outcomes": outcome_rows,
+                "spawn_timing": spawn_rows,
             },
         },
+        "meta": {"metrics": _COMPOSITE_METRIC_DESCRIPTIONS},
     }
 
 
@@ -704,8 +982,7 @@ _MOVER_METRICS = {
 # overlap so kills is weighted low. Weights are shown in the UI explainer for
 # transparency. Ratios are clamped so a tiny baseline can't blow up the index.
 _FORM_METRIC_KEYS = tuple(_MOVER_METRICS)
-_FORM_WEIGHTS = {"dpm": 0.25, "kd": 0.20, "obj": 0.15, "acc": 0.10,
-                 "kills": 0.05, "impact": 0.25}
+_FORM_WEIGHTS = {"dpm": 0.25, "kd": 0.20, "obj": 0.15, "acc": 0.10, "kills": 0.05, "impact": 0.25}
 _FORM_RATIO_CLAMP = (0.4, 2.5)
 _OVERALL_LABEL = "Overall form"
 
@@ -861,8 +1138,7 @@ def _per_player_metrics(rows, latest_sid: int) -> dict:
         for key, meta in _MOVER_METRICS.items():
             series = [p["sessions"][s][key] for s in sids if key in p["sessions"][s]]
             latest_val = p["sessions"].get(latest_sid, {}).get(key)
-            hist = [p["sessions"][s][key] for s in sids
-                    if s != latest_sid and key in p["sessions"][s]]
+            hist = [p["sessions"][s][key] for s in sids if s != latest_sid and key in p["sessions"][s]]
             avg = (sum(hist) / len(hist)) if hist else None
             metrics[key] = {
                 "latest": None if latest_val is None else round(latest_val, meta["digits"]),
@@ -871,9 +1147,11 @@ def _per_player_metrics(rows, latest_sid: int) -> dict:
                 # objectives) is a real baseline, not a missing one.
                 "baseline": None if avg is None else round(avg, meta["digits"]),
                 "baseline_raw": avg,
-                "delta_pct": (round((latest_val - avg) / avg * 100, 1)
-                              if (avg is not None and avg > 0 and latest_val is not None)
-                              else None),
+                "delta_pct": (
+                    round((latest_val - avg) / avg * 100, 1)
+                    if (avg is not None and avg > 0 and latest_val is not None)
+                    else None
+                ),
                 "series": [round(v, 2) for v in series],
             }
         out[guid] = {
@@ -892,15 +1170,13 @@ def _composite_form(player: dict) -> dict | None:
     when the player has no usable data at all; ``is_new=True`` when they played the
     latest session but have no prior baseline."""
     metrics = player["metrics"]
-    baselines = {k: m["baseline_raw"] for k, m in metrics.items()
-                 if m.get("baseline_raw") and m["baseline_raw"] > 0}
+    baselines = {k: m["baseline_raw"] for k, m in metrics.items() if m.get("baseline_raw") and m["baseline_raw"] > 0}
     has_latest = any(m.get("latest_raw") is not None for m in metrics.values())
     has_prior = any(s != player["latest_sid"] for s in player["sessions"])
     if not baselines:
         if has_latest and not has_prior:
             # Genuinely new: the latest session is their only session.
-            return {"latest": None, "baseline": 100, "delta_pct": None,
-                    "series": [], "breakdown": [], "is_new": True}
+            return {"latest": None, "baseline": 100, "delta_pct": None, "series": [], "breakdown": [], "is_new": True}
         # Prior sessions exist but every baseline is zero/missing — can't rank
         # vs self, and it is NOT a first night. No composite.
         return None
@@ -927,13 +1203,18 @@ def _composite_form(player: dict) -> dict | None:
 
     latest_idx = _blend(player["sessions"].get(player["latest_sid"], {}))
     if latest_idx is None:
-        return {"latest": None, "baseline": 100, "delta_pct": None,
-                "series": series, "breakdown": [], "is_new": False}
+        return {"latest": None, "baseline": 100, "delta_pct": None, "series": series, "breakdown": [], "is_new": False}
 
     breakdown = [
-        {"metric": k, "label": _MOVER_METRICS[k]["label"], "delta_pct": m["delta_pct"],
-         "latest": m["latest"], "baseline": m["baseline"]}
-        for k, m in metrics.items() if m.get("delta_pct") is not None
+        {
+            "metric": k,
+            "label": _MOVER_METRICS[k]["label"],
+            "delta_pct": m["delta_pct"],
+            "latest": m["latest"],
+            "baseline": m["baseline"],
+        }
+        for k, m in metrics.items()
+        if m.get("delta_pct") is not None
     ]
     return {
         "latest": round(latest_idx, 1),
@@ -968,8 +1249,14 @@ async def get_movers(
     top = max(1, min(top, 50 if full else 10))
     rows = await _form_rows(db, None, 11)
     if not rows:
-        return {"status": "ok", "session_id": None, "metric": metric,
-                "movers_up": [], "movers_down": [], "new_players": []}
+        return {
+            "status": "ok",
+            "session_id": None,
+            "metric": metric,
+            "movers_up": [],
+            "movers_down": [],
+            "new_players": [],
+        }
 
     latest_sid = max(int(r[2]) for r in rows)
     latest_date = await db.fetch_val(
@@ -984,9 +1271,12 @@ async def get_movers(
             comp = _composite_form(p)
             if comp is None:
                 continue
-            entry = {"guid": guid, "name": p["name"], **{
-                k: comp[k] for k in ("latest", "baseline", "delta_pct", "series", "is_new")},
-                "breakdown": comp["breakdown"]}
+            entry = {
+                "guid": guid,
+                "name": p["name"],
+                **{k: comp[k] for k in ("latest", "baseline", "delta_pct", "series", "is_new")},
+                "breakdown": comp["breakdown"],
+            }
         else:
             m = p["metrics"][metric]
             if m["latest_raw"] is None:
@@ -997,9 +1287,15 @@ async def get_movers(
                 # Prior sessions exist but none carried this metric — no baseline to
                 # rank against, and NOT a first night either. Skip rather than mislabel.
                 continue
-            entry = {"guid": guid, "name": p["name"], "latest": m["latest"],
-                     "baseline": m["baseline"], "delta_pct": m["delta_pct"],
-                     "series": m["series"], "is_new": m["baseline_raw"] is None}
+            entry = {
+                "guid": guid,
+                "name": p["name"],
+                "latest": m["latest"],
+                "baseline": m["baseline"],
+                "delta_pct": m["delta_pct"],
+                "series": m["series"],
+                "is_new": m["baseline_raw"] is None,
+            }
         if entry["delta_pct"] is None and not entry["is_new"]:
             continue
         movers.append(entry)
@@ -1021,7 +1317,8 @@ async def get_movers(
 
     ranked = sorted(
         (m for m in movers if m["delta_pct"] is not None),
-        key=lambda m: m["delta_pct"], reverse=True,
+        key=lambda m: m["delta_pct"],
+        reverse=True,
     )
     up = [m for m in ranked if m["delta_pct"] > 0]
     down = [m for m in ranked if m["delta_pct"] < 0]
@@ -1037,8 +1334,11 @@ async def get_movers(
         "session_date": str(latest_date) if latest_date else None,
         "metric": metric,
         "metric_label": _OVERALL_LABEL if metric == "overall" else _MOVER_METRICS[metric]["label"],
-        "baseline": ("own trailing ~10-session form index (100 = usual)"
-                     if metric == "overall" else f"own trailing ~10-session {metric}"),
+        "baseline": (
+            "own trailing ~10-session form index (100 = usual)"
+            if metric == "overall"
+            else f"own trailing ~10-session {metric}"
+        ),
         "baseline_desc": "last session vs this player's own recent-session average (rank-vs-self, not a global ranking)",
         "form_weights": _FORM_WEIGHTS,
         "movers_up": up,
@@ -1075,8 +1375,7 @@ async def get_player_form(
         return {"status": "error", "detail": f"Player '{identifier}' not found"}
     rows = await _form_rows(db, guid, 11)
     if not rows:
-        return {"status": "ok", "player_guid": guid, "session_id": None,
-                "metrics": {}, "composite": None}
+        return {"status": "ok", "player_guid": guid, "session_id": None, "metrics": {}, "composite": None}
 
     latest_sid = max(int(r[2]) for r in rows)
     latest_date = await db.fetch_val(
@@ -1086,16 +1385,18 @@ async def get_player_form(
     per_player = _per_player_metrics(rows, latest_sid)
     p = per_player.get(guid)
     if not p:
-        return {"status": "ok", "player_guid": guid, "session_id": latest_sid,
-                "metrics": {}, "composite": None}
+        return {"status": "ok", "player_guid": guid, "session_id": latest_sid, "metrics": {}, "composite": None}
 
     metrics_out = {}
     for key, meta in _MOVER_METRICS.items():
         m = p["metrics"][key]
         metrics_out[key] = {
-            "label": meta["label"], "unit": meta["unit"],
-            "latest": m["latest"], "baseline": m["baseline"],
-            "delta_pct": m["delta_pct"], "series": m["series"],
+            "label": meta["label"],
+            "unit": meta["unit"],
+            "latest": m["latest"],
+            "baseline": m["baseline"],
+            "delta_pct": m["delta_pct"],
+            "series": m["series"],
         }
     return {
         "status": "ok",

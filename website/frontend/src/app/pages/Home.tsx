@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { hasFailed } from '../lib/responseStatus';
 import { Link } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { apiGet } from '../lib/api';
@@ -322,8 +323,7 @@ function SeasonBlock() {
   // without the inference: when it reports a failure the count is suppressed
   // even if some days did come back. Absent until that lands, so this stays
   // a strictly stronger version of the heuristic, never a weaker one.
-  const calendarFailed = calendar.data?.status != null
-    && ['error', 'unavailable'].includes(calendar.data.status);
+  const calendarFailed = hasFailed(calendar, calendar.data);
   const activeDaysCount = calendar.data && !calendarFailed
     ? Object.keys(calendar.data.activity).length
     : 0;
@@ -723,12 +723,18 @@ function StandingFigures() {
   if (overview.isPending) return <div style={{ padding: 'var(--space-4) 0' }}><Pending label="figures" /></div>;
   if (!overview.isSuccess) return <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="figures" /></div>;
   const d = overview.data;
-  const live = (n: number) => (n === 0 ? '—' : n.toLocaleString('en-US'));
+  // `partial` (#830): some subqueries failed and THEIR figures are fallback
+  // zeros — the wire says which ones in failed_metrics, and only that field
+  // can tell a missing figure from a measured zero. The panel stays (the
+  // figures that answered are real); the missing ones say so by name.
+  const failed = new Set(d.status === 'partial' ? d.failed_metrics : []);
+  const live = (n: number, key: string) =>
+    failed.has(key) ? 'missing' : n === 0 ? '—' : n.toLocaleString('en-US');
   const cells = [
-    { k: 'rounds kept', v: live(d.rounds) },
-    { k: 'kills recorded', v: live(d.total_kills) },
-    { k: 'sessions', v: live(d.sessions) },
-    { k: 'players known', v: live(d.players_all_time) },
+    { k: 'rounds kept', v: live(d.rounds, 'rounds') },
+    { k: 'kills recorded', v: live(d.total_kills, 'total_kills') },
+    { k: 'sessions', v: live(d.sessions, 'sessions') },
+    { k: 'players known', v: live(d.players_all_time, 'players_all_time') },
   ];
   return (
     <>

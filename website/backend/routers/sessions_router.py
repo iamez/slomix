@@ -30,6 +30,8 @@ from website.backend.services.website_session_data_service import (
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
+
+
 class SessionSummary(BaseModel):
     """One session in the list.
 
@@ -62,6 +64,15 @@ class SessionSummary(BaseModel):
     team_1_score: int | None
     team_2_score: int | None
     winning_team: int | None
+    #: The five that #848 added to the handler after this model was frozen at
+    #: the sibling's 13+2+2 (verifier's dry run measured every one COALESCE'd
+    #: in the outer SELECT, so none is nullable; duration is bigint on the
+    #: live base, no Decimal trap):
+    total_deaths: int
+    duration_seconds: int
+    player_names: list[str]
+    start_time: str
+    end_time: str
     #: Rendered by the handler ("2 days ago", "Friday, August 28, 2026") —
     #: presentation the legacy pages already depend on, not raw data.
     time_ago: str
@@ -92,7 +103,6 @@ class SessionLeaderRow(BaseModel):
     dpm: int
     kills: int | None
     deaths: int | None
-
 
 
 logger = get_app_logger("api.sessions")
@@ -137,9 +147,7 @@ async def build_session_scoring(
     if len(team_rosters) < 2:
         return scoring_payload, warnings, hardcoded_teams
 
-    scoring_result = await scoring_service.calculate_session_scores_with_teams(
-        session_date, session_ids, team_rosters
-    )
+    scoring_result = await scoring_service.calculate_session_scores_with_teams(session_date, session_ids, team_rosters)
     if not scoring_result:
         scoring_payload = {
             "available": False,
@@ -171,14 +179,10 @@ async def build_session_scoring(
 
     if fallback_maps:
         warnings.append(
-            "Lua header winner missing: used time fallback for "
-            + ", ".join([m for m in fallback_maps if m])
+            "Lua header winner missing: used time fallback for " + ", ".join([m for m in fallback_maps if m])
         )
     if incomplete_maps:
-        warnings.append(
-            "Incomplete maps (R1 only / ambiguous): "
-            + ", ".join([m for m in incomplete_maps if m])
-        )
+        warnings.append("Incomplete maps (R1 only / ambiguous): " + ", ".join([m for m in incomplete_maps if m]))
 
     scoring_payload = {
         "available": True,
@@ -432,9 +436,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     if not latest_date:
         raise HTTPException(status_code=404, detail="No sessions found")
 
-    sessions, session_ids, session_ids_str, player_count = await service.fetch_session_data(
-        latest_date
-    )
+    sessions, session_ids, session_ids_str, player_count = await service.fetch_session_data(latest_date)
     if not sessions:
         # Every round of the newest gaming session can be invalid (bot/test
         # rounds are quarantined with is_valid = FALSE) — that is "no last
@@ -491,9 +493,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
                 """,
                 tuple(session_ids),
             )
-            raw_dead_map = {
-                row[0]: int(row[1] or 0) for row in raw_rows if row and row[0]
-            }
+            raw_dead_map = {row[0]: int(row[1] or 0) for row in raw_rows if row and row[0]}
         except Exception:
             logger.warning(
                 "Failed to fetch raw dead-time aggregates for session_ids=%s",
@@ -503,13 +503,10 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
             raw_dead_map = {}
 
         try:
-            player_rows = await stats_service.aggregate_all_player_stats(
-                session_ids, session_ids_str
-            )
+            player_rows = await stats_service.aggregate_all_player_stats(session_ids, session_ids_str)
         except Exception:
             logger.error(
-                "Failed to aggregate player stats for session_ids=%s — "
-                "session will appear empty to the user",
+                "Failed to aggregate player stats for session_ids=%s — session will appear empty to the user",
                 session_ids,
                 exc_info=True,
             )
@@ -531,9 +528,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
                 _,
                 _,
                 name_to_team,
-            ) = await service.build_team_mappings(
-                session_ids, session_ids_str, hardcoded_teams
-            )
+            ) = await service.build_team_mappings(session_ids, session_ids_str, hardcoded_teams)
 
         team_lookup = {
             team_1_name: [],
@@ -618,13 +613,9 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
             teams_payload.append({"name": team_name, "players": players_sorted})
 
         if total_kills != total_deaths:
-            stats_checks.append(
-                f"Kill/death mismatch: {total_kills} kills vs {total_deaths} deaths"
-            )
+            stats_checks.append(f"Kill/death mismatch: {total_kills} kills vs {total_deaths} deaths")
         if unassigned_players:
-            stats_checks.append(
-                f"Unassigned players: {', '.join(p['name'] for p in unassigned_players)}"
-            )
+            stats_checks.append(f"Unassigned players: {', '.join(p['name'] for p in unassigned_players)}")
 
     return {
         "date": latest_date,
@@ -642,8 +633,7 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/stats/session-leaderboard",
-            response_model=list[SessionLeaderRow])
+@router.get("/stats/session-leaderboard", response_model=list[SessionLeaderRow])
 async def get_session_leaderboard(
     limit: int = 5,
     session_id: int | None = None,
@@ -672,22 +662,16 @@ async def get_session_leaderboard(
         latest_date = await data_service.get_latest_session_date()
         if not latest_date:
             return []
-        sessions, session_ids, session_ids_str, _ = await data_service.fetch_session_data(
-            latest_date
-        )
+        sessions, session_ids, session_ids_str, _ = await data_service.fetch_session_data(latest_date)
         if not session_ids:
             return []
 
-    leaderboard = await stats_service.get_dpm_leaderboard(
-        session_ids, session_ids_str, limit
-    )
+    leaderboard = await stats_service.get_dpm_leaderboard(session_ids, session_ids_str, limit)
 
     # Format for frontend
     result = []
     for i, (name, dpm, kills, deaths) in enumerate(leaderboard, 1):
-        result.append(
-            {"rank": i, "name": name, "dpm": int(dpm), "kills": kills, "deaths": deaths}
-        )
+        result.append({"rank": i, "name": name, "dpm": int(dpm), "kills": kills, "deaths": deaths})
 
     return result
 
@@ -702,9 +686,7 @@ async def get_session_score(date: str, db: DatabaseAdapter = Depends(get_db)):
     service = SessionDataService(db, db_path)
     scoring_service = StopwatchScoringService(db)
 
-    sessions, session_ids, session_ids_str, player_count = await service.fetch_session_data_by_date(
-        date
-    )
+    sessions, session_ids, session_ids_str, player_count = await service.fetch_session_data_by_date(date)
     if not session_ids:
         raise HTTPException(status_code=404, detail="Session not found")
 
@@ -755,15 +737,78 @@ async def get_matches(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
     return await data_service.get_recent_matches(limit)
 
 
+# ⛔ `limit` AND `offset` HAD NO BOUNDS, AND BOTH WERE LIVE 500s. Measured on
+# dev before this change: `?limit=-5` -> 500, `?offset=-10` -> 500,
+# `?limit=1000000` -> 200. The values went straight into the query, Postgres
+# refused the negative ones, and the failure came back as a server fault — an
+# input error reported as ours, which sends whoever reads it to the database
+# instead of to the request. Same shape as `/api/predictions/recent`, and this
+# one is on the endpoint the NEW SPA lists sessions from.
+#
+# ⭐ The ceiling is generous rather than tight, and the reason is measured:
+# `SessionsList.tsx` opens with `limit=200` (PAGE) and raises it by 200 per
+# "show older", so a ceiling near today's data would turn that button into a
+# 422. Cost is not the constraint — limit=200, 500 and 1000 all return the
+# same 54,526 bytes in ~3 ms, because the query runs out of sessions (137)
+# long before it runs out of limit. 1000 removes the pathological request
+# without putting a cliff anywhere a user can reach.
+#
+# ⚠️ It IS still a cliff, just a distant one: at 1000 sessions the page's
+# growing limit hits the ceiling and answers 422. The durable fix is to page
+# with `offset` instead of growing `limit` — named here so it is a decision
+# rather than a surprise.
 @router.get("/sessions", response_model=list[SessionSummary])
 async def get_sessions_list(
-    limit: int = 20, offset: int = 0, db: DatabaseAdapter = Depends(get_db)
+    limit: int = Query(default=20, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    search: str = Query(default="", description="Filter by map name or player name."),
+    db: DatabaseAdapter = Depends(get_db),
 ):
     """
     Get list of all gaming sessions (like !sessions command).
     Returns sessions grouped by gaming_session_id to handle midnight-spanning sessions.
     """
-    query = """
+    # Same filter, same escaping and the same two subqueries as
+    # `/api/stats/sessions`: match on map name OR on a player who was there.
+    # `escape_like_pattern` neutralises the LIKE wildcards so a search for
+    # "100%" is a search and not a match-everything.
+    search_filter = ""
+    search_params: list = []
+    if search.strip():
+        safe_search = escape_like_pattern(search.strip())
+        search_filter = """
+            AND (
+                sr.gaming_session_id IN (
+                    SELECT r2.gaming_session_id FROM rounds r2
+                    WHERE r2.gaming_session_id IS NOT NULL
+                      AND r2.round_number IN (1, 2)
+                      AND r2.is_valid IS DISTINCT FROM FALSE
+                      AND r2.is_bot_round IS DISTINCT FROM TRUE
+                      AND (r2.round_status IN ('completed', 'substitution')
+                           OR r2.round_status IS NULL)
+                      AND LOWER(r2.map_name) LIKE LOWER($3)
+                )
+                OR sr.gaming_session_id IN (
+                    SELECT r3.gaming_session_id FROM rounds r3
+                    INNER JOIN player_comprehensive_stats p2 ON p2.round_id = r3.id
+                    WHERE r3.gaming_session_id IS NOT NULL
+                      AND r3.round_number IN (1, 2)
+                      AND r3.is_valid IS DISTINCT FROM FALSE
+                      AND r3.is_bot_round IS DISTINCT FROM TRUE
+                      AND (r3.round_status IN ('completed', 'substitution')
+                           OR r3.round_status IS NULL)
+                      AND LOWER(p2.player_name) LIKE LOWER($3)
+                )
+            )
+        """
+        search_params.append(f"%{safe_search}%")
+
+    # ⚠️ The duration expression is interpolated, not concatenated by hand:
+    # `round_duration_sql()` is a pure expression with no bind parameters
+    # (that is its documented contract), so the placeholder style of the
+    # adapter is irrelevant and nothing user-controlled reaches the SQL.
+    # nosec B608 — the only interpolation is that fixed expression.
+    query = f"""
         WITH session_rounds AS (
             SELECT
                 r.gaming_session_id,
@@ -775,11 +820,33 @@ async def get_sessions_list(
                 -- see lua TEAM_AXIS / parser). These aliases were previously inverted.
                 COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 2 THEN 1 END) as allies_wins,
                 COUNT(CASE WHEN r.round_number = 1 AND r.winner_team = 1 THEN 1 END) as axis_wins,
-                COUNT(CASE WHEN r.round_number = 1 AND (r.winner_team NOT IN (1, 2) OR r.winner_team IS NULL) THEN 1 END) as draws
+                COUNT(CASE WHEN r.round_number = 1 AND (r.winner_team NOT IN (1, 2) OR r.winner_team IS NULL) THEN 1 END) as draws,
+                -- ⛔ THE DURATION COMES FROM THE CANONICAL EXPRESSION, not from
+                -- lua_round_teams the way /stats/sessions builds it. That one
+                -- sums lrt.actual_duration_seconds with NO fallback, and the
+                -- webhook only covers part of the history: 877 of 2030 valid
+                -- R1/R2 rounds have a Lua measurement, so 84 of 151 sessions
+                -- come out with duration_seconds = 0 there — 56 % of them,
+                -- reported as a number rather than as "not measured".
+                -- round_duration_sql() falls back to the parsed actual_time
+                -- and covers 2030 of 2030.
+                SUM({round_duration_sql("r")}) as duration_seconds,
+                -- Clock times of the first and last round, same derivation as
+                -- /stats/sessions: order by date+time as text, then keep the
+                -- time half.
+                -- LPAD (Codex on #848): round_time is TEXT and MIN/MAX order the
+                -- concatenation lexically, so an unpadded pre-10:00 value like
+                -- '4918' would sort after '063000' and also fail the HH:MM
+                -- formatter's len>=6 check downstream. Measured today: every
+                -- round_time is exactly 6 chars, so this is a latent-shape guard,
+                -- not a behaviour change.
+                SUBSTRING(MIN(CAST(r.round_date AS TEXT) || LPAD(r.round_time, 6, '0')) FROM 11) as first_time,
+                SUBSTRING(MAX(CAST(r.round_date AS TEXT) || LPAD(r.round_time, 6, '0')) FROM 11) as last_time
             FROM rounds r
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -787,13 +854,20 @@ async def get_sessions_list(
             SELECT
                 r.gaming_session_id,
                 COUNT(DISTINCT p.player_guid) as player_count,
-                COALESCE(SUM(p.kills), 0) as total_kills
+                COALESCE(SUM(p.kills), 0) as total_kills,
+                COALESCE(SUM(p.deaths), 0) as total_deaths,
+                -- ARRAY_AGG, not STRING_AGG+split (Codex on #848): a player name
+                -- containing ', ' would be split into two phantom names on the way
+                -- out. 0 such names today — but names are user-controlled input,
+                -- so the type follows what a name CAN be, not what the sample has.
+                ARRAY_AGG(DISTINCT p.player_name ORDER BY p.player_name) as player_names
             FROM rounds r
             INNER JOIN player_comprehensive_stats p
                 ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -827,16 +901,26 @@ async def get_sessions_list(
             sb.team_2_name,
             sb.team_1_score,
             sb.team_2_score,
-            sb.winning_team
+            sb.winning_team,
+            -- ⚠️ APPENDED, never inserted. The row is unpacked BY POSITION
+            -- below (`row[10]`..`row[14]` are the BOX team fields), so a
+            -- column added in the middle silently renames five existing
+            -- ones. New columns go on the end.
+            COALESCE(sp.total_deaths, 0) as total_deaths,
+            COALESCE(sr.duration_seconds, 0) as duration_seconds,
+            COALESCE(sp.player_names, ARRAY[]::text[]) as player_names,
+            sr.first_time,
+            sr.last_time
         FROM session_rounds sr
         LEFT JOIN session_players sp ON sr.gaming_session_id = sp.gaming_session_id
         LEFT JOIN session_box sb ON sr.gaming_session_id = sb.gaming_session_id
+        WHERE 1 = 1{search_filter}
         ORDER BY sr.session_date DESC, sr.gaming_session_id DESC
         LIMIT $1 OFFSET $2
     """
 
     try:
-        rows = await db.fetch_all(query, (limit, offset))
+        rows = await db.fetch_all(query, (limit, offset, *search_params))
     except Exception as e:
         logger.error(f"Error fetching sessions list: {e}")
         raise HTTPException(status_code=500, detail="Database error")
@@ -885,6 +969,23 @@ async def get_sessions_list(
                 "team_1_score": row[12],
                 "team_2_score": row[13],
                 "winning_team": row[14],
+                # The five the sibling `/api/stats/sessions` had and this one
+                # did not. Same names, same shapes — `player_names` a list and
+                # the clock times "HH:MM" strings — so the two endpoints speak
+                # one vocabulary rather than two.
+                "total_deaths": row[15],
+                "duration_seconds": row[16],
+                "player_names": list(row[17] or []),
+                "start_time": (
+                    f"{str(row[18]).replace(':', '')[:2]}:{str(row[18]).replace(':', '')[2:4]}"
+                    if row[18] and len(str(row[18]).replace(":", "")) >= 6
+                    else ""
+                ),
+                "end_time": (
+                    f"{str(row[19]).replace(':', '')[:2]}:{str(row[19]).replace(':', '')[2:4]}"
+                    if row[19] and len(str(row[19]).replace(":", "")) >= 6
+                    else ""
+                ),
                 "time_ago": time_ago,
                 "formatted_date": dt.strftime("%A, %B %d, %Y"),
             }
@@ -903,9 +1004,7 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     stats_service = SessionStatsAggregator(db)
 
     # Get session data (supports multiple sessions on the same date)
-    sessions, session_ids, session_ids_str, player_count = (
-        await data_service.fetch_session_data_by_date(date)
-    )
+    sessions, session_ids, session_ids_str, player_count = await data_service.fetch_session_data_by_date(date)
 
     if not sessions:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -917,9 +1016,7 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     leaderboard = []
     if session_ids:
         try:
-            lb_data = await stats_service.get_dpm_leaderboard(
-                session_ids, session_ids_str, 10
-            )
+            lb_data = await stats_service.get_dpm_leaderboard(session_ids, session_ids_str, 10)
             for i, (name, dpm, kills, deaths) in enumerate(lb_data, 1):
                 kd = kills / deaths if deaths > 0 else kills
                 leaderboard.append(
@@ -959,9 +1056,7 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
                 team_1_players,
                 team_2_players,
                 _,
-            ) = await data_service.build_team_mappings(
-                session_ids, session_ids_str, None
-            )
+            ) = await data_service.build_team_mappings(session_ids, session_ids_str, None)
             teams_payload = [
                 {"name": team_1_name, "names": team_1_players, "guids": []},
                 {"name": team_2_name, "names": team_2_players, "guids": []},
@@ -1215,9 +1310,7 @@ async def get_session_graph_stats(
         round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
         # Use shorter map name format for timeline
         short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
-        dpm_timeline[agg_key].append(
-            {"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)}
-        )
+        dpm_timeline[agg_key].append({"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)})
 
     # Calculate derived metrics and build response
     players_data = []
@@ -1239,7 +1332,9 @@ async def get_session_graph_stats(
         time_dead_min = stats.get("time_dead_minutes", 0)
         time_played_min = max(0.01, time_minutes)
         # RCA-1: cap dead at played (buggy Lua time can exceed it) + clamp 0..100
-        survival_rate_computed = max(0.0, min(100.0, 100 - (min(time_dead_min, time_played_min) / time_played_min * 100)))
+        survival_rate_computed = max(
+            0.0, min(100.0, 100 - (min(time_dead_min, time_played_min) / time_played_min * 100))
+        )
         survival_rate = survival_rate_engine if survival_rate_engine is not None else survival_rate_computed
 
         # Time Denied (use Lua denied_playtime when available; normalize per minute)
@@ -1248,11 +1343,7 @@ async def get_session_graph_stats(
         time_dead_raw_seconds = stats.get("time_dead_minutes", 0) * 60
 
         # Simple average accuracy per round
-        avg_accuracy = (
-            stats["accuracy_sum"] / stats["accuracy_count"]
-            if stats["accuracy_count"] > 0
-            else 0
-        )
+        avg_accuracy = stats["accuracy_sum"] / stats["accuracy_count"] if stats["accuracy_count"] > 0 else 0
 
         # Playstyle classification (8 categories like Discord bot)
         playstyle = classify_playstyle(stats, dpm, kd, avg_accuracy, survival_rate)
@@ -1281,15 +1372,17 @@ async def get_session_graph_stats(
                     "self_kills": stats["self_kills"],
                 },
                 "advanced_metrics": {
-                    "frag_potential": round((stats["damage_given"] / max(1, stats["time_played"] - stats.get("time_dead_minutes", 0) * 60)) * 60, 1),
+                    "frag_potential": round(
+                        (stats["damage_given"] / max(1, stats["time_played"] - stats.get("time_dead_minutes", 0) * 60))
+                        * 60,
+                        1,
+                    ),
                     "damage_efficiency": round(damage_efficiency, 1),
                     "survival_rate": round(survival_rate, 1),
                     "time_denied": round(time_denied, 1),
                     "time_denied_raw_seconds": int(time_denied_raw or 0),
                     "time_dead_raw_seconds": int(time_dead_raw_seconds or 0),
-                    "useful_kills_per_round": round(
-                        stats["useful_kills"] / rounds_played, 2
-                    ),
+                    "useful_kills_per_round": round(stats["useful_kills"] / rounds_played, 2),
                     "deaths_per_round": round(stats["deaths"] / rounds_played, 2),
                     "rounds_played": rounds_played,
                 },
@@ -1312,9 +1405,7 @@ def _clamp_percentage(value: float | None) -> float | None:
     return round(max(0.0, min(100.0, float(value))), 1)
 
 
-def _score_relative_metric(
-    value: Any, values: list[Any], invert: bool = False, neutral: float = 50.0
-) -> float:
+def _score_relative_metric(value: Any, values: list[Any], invert: bool = False, neutral: float = 50.0) -> float:
     """Score a value relative to a set using percentile rank.
 
     Percentile rank is outlier-resistant: one extreme value cannot
@@ -1379,45 +1470,28 @@ def _apply_session_aggression_model(players_data: list[dict[str, Any]]) -> None:
         survival_rate = float(adv.get("survival_rate") or 0.0)
         dead_time_share = max(0.0, 100.0 - survival_rate)
 
-        frag_score = _score_relative_metric(
-            adv.get("frag_potential"), frag_values, neutral=50.0
-        )
-        denied_score = _score_relative_metric(
-            adv.get("time_denied"), denied_values, neutral=50.0
-        )
-        useful_score = _score_relative_metric(
-            adv.get("useful_kills_per_round"), useful_values, neutral=50.0
-        )
-        death_score = _score_relative_metric(
-            adv.get("deaths_per_round"), death_values, neutral=50.0
-        )
-        dead_share_score = _score_relative_metric(
-            dead_time_share, dead_share_values, neutral=50.0
-        )
-        efficiency_score = _score_relative_metric(
-            adv.get("damage_efficiency"), efficiency_values, neutral=50.0
-        )
-        survival_score = _score_relative_metric(
-            survival_rate, survival_values, neutral=50.0
-        )
+        frag_score = _score_relative_metric(adv.get("frag_potential"), frag_values, neutral=50.0)
+        denied_score = _score_relative_metric(adv.get("time_denied"), denied_values, neutral=50.0)
+        useful_score = _score_relative_metric(adv.get("useful_kills_per_round"), useful_values, neutral=50.0)
+        death_score = _score_relative_metric(adv.get("deaths_per_round"), death_values, neutral=50.0)
+        dead_share_score = _score_relative_metric(dead_time_share, dead_share_values, neutral=50.0)
+        efficiency_score = _score_relative_metric(adv.get("damage_efficiency"), efficiency_values, neutral=50.0)
+        survival_score = _score_relative_metric(survival_rate, survival_values, neutral=50.0)
 
-        pressure_score = (frag_score * 0.50) + (denied_score * 0.25) + (
-            useful_score * 0.25
-        )
+        pressure_score = (frag_score * 0.50) + (denied_score * 0.25) + (useful_score * 0.25)
         risk_load = (death_score * 0.60) + (dead_share_score * 0.40)
         productivity = (pressure_score * 0.65) + (efficiency_score * 0.35)
         empty_death_burden = max(0.0, risk_load - productivity)
 
-        aggression_score = _clamp_percentage(
-            (pressure_score * 0.80)
-            + (risk_load * 0.20)
-            - (empty_death_burden * 0.50)
-        ) or 0.0
-        discipline_score = _clamp_percentage(
-            (survival_score * 0.45)
-            + (efficiency_score * 0.35)
-            + ((100.0 - empty_death_burden) * 0.20)
-        ) or 0.0
+        aggression_score = (
+            _clamp_percentage((pressure_score * 0.80) + (risk_load * 0.20) - (empty_death_burden * 0.50)) or 0.0
+        )
+        discipline_score = (
+            _clamp_percentage(
+                (survival_score * 0.45) + (efficiency_score * 0.35) + ((100.0 - empty_death_burden) * 0.20)
+            )
+            or 0.0
+        )
 
         playstyle["aggression"] = aggression_score
         adv["aggression_score"] = aggression_score
@@ -1446,9 +1520,7 @@ def classify_playstyle(
     assists_pr = stats.get("kill_assists", 0) / rounds
     constructions_pr = stats.get("constructions", 0) / rounds
     obj_actions_pr = (
-        stats.get("objectives_stolen", 0)
-        + stats.get("dynamites_planted", 0)
-        + stats.get("dynamites_defused", 0)
+        stats.get("objectives_stolen", 0) + stats.get("dynamites_planted", 0) + stats.get("dynamites_defused", 0)
     ) / rounds
 
     # Calculate each playstyle dimension (0-100)
@@ -1457,11 +1529,14 @@ def classify_playstyle(
     # ET:Legacy support = medic (revives) + teamwork (assists) +
     # engineer/fieldops (constructions, objectives, dynamites).
     # Weighted: revives 40%, assists 30%, constructions+objectives 30%
-    support = min(100, (
-        min(100, revives_pr * 20) * 0.40        # medic: caps at 5 rev/round
-        + min(100, assists_pr * 15) * 0.30       # teamwork: caps at 6.7 assists/round
-        + min(100, (constructions_pr + obj_actions_pr) * 30) * 0.30  # engi/obj: caps at 3.3/round
-    ))
+    support = min(
+        100,
+        (
+            min(100, revives_pr * 20) * 0.40  # medic: caps at 5 rev/round
+            + min(100, assists_pr * 15) * 0.30  # teamwork: caps at 6.7 assists/round
+            + min(100, (constructions_pr + obj_actions_pr) * 30) * 0.30  # engi/obj: caps at 3.3/round
+        ),
+    )
     lethality = min(100, kd * 30)
 
     # Brutality = smart elimination power (industry-first composite):
@@ -1484,17 +1559,21 @@ def classify_playstyle(
     ) / rounds
     useless_ratio = (useless / total_kills) * 100
 
-    brutality = min(100, max(0, (
-        min(100, denied_pr * 2.5) * 0.35        # ~40s denied/round = 100 (one full spawn wave)
-        + min(100, gib_eff) * 0.25               # 100% gib rate = 100
-        + min(100, useful_ratio) * 0.20           # useful kill ratio
-        + min(100, multi_raw * 25) * 0.10         # ~4 multi events/round = 100
-        - min(100, useless_ratio) * 0.10          # penalty for wasted frags
-    )))
-
-    efficiency = min(
-        100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25
+    brutality = min(
+        100,
+        max(
+            0,
+            (
+                min(100, denied_pr * 2.5) * 0.35  # ~40s denied/round = 100 (one full spawn wave)
+                + min(100, gib_eff) * 0.25  # 100% gib rate = 100
+                + min(100, useful_ratio) * 0.20  # useful kill ratio
+                + min(100, multi_raw * 25) * 0.10  # ~4 multi events/round = 100
+                - min(100, useless_ratio) * 0.10  # penalty for wasted frags
+            ),
+        ),
     )
+
+    efficiency = min(100, (stats["damage_given"] / max(1, stats["damage_received"])) * 25)
 
     # Consistency = well-roundedness across dimensions.
     # Low deviation across axes → high consistency. Replaces the old
@@ -1549,6 +1628,7 @@ async def get_stats_sessions(
                     WHERE r2.gaming_session_id IS NOT NULL
                       AND r2.round_number IN (1, 2)
                       AND r2.is_valid IS DISTINCT FROM FALSE
+                      AND r2.is_bot_round IS DISTINCT FROM TRUE
                       AND (r2.round_status IN ('completed', 'substitution') OR r2.round_status IS NULL)
                       AND LOWER(r2.map_name) LIKE LOWER(${param_idx})
                 )
@@ -1558,6 +1638,7 @@ async def get_stats_sessions(
                     WHERE r3.gaming_session_id IS NOT NULL
                       AND r3.round_number IN (1, 2)
                       AND r3.is_valid IS DISTINCT FROM FALSE
+                      AND r3.is_bot_round IS DISTINCT FROM TRUE
                       AND (r3.round_status IN ('completed', 'substitution') OR r3.round_status IS NULL)
                       AND LOWER(p2.player_name) LIKE LOWER(${param_idx})
                 )
@@ -1580,8 +1661,8 @@ async def get_stats_sessions(
                 -- crossing midnight (21:56 → 00:23) otherwise renders as
                 -- "00:23 — 23:57". round_date::text (YYYY-MM-DD, 10 chars) ||
                 -- round_time sorts chronologically; the time is chars 11+.
-                SUBSTRING(MIN(r.round_date::text || r.round_time) FROM 11) as first_time,
-                SUBSTRING(MAX(r.round_date::text || r.round_time) FROM 11) as last_time,
+                SUBSTRING(MIN(r.round_date::text || LPAD(r.round_time, 6, '0')) FROM 11) as first_time,
+                SUBSTRING(MAX(r.round_date::text || LPAD(r.round_time, 6, '0')) FROM 11) as last_time,
                 COUNT(r.id) as round_count,
                 STRING_AGG(DISTINCT r.map_name, ', ' ORDER BY r.map_name) as maps_played,
                 -- winner_team 1 = Axis, 2 = Allies (TEAM_AXIS=1). Aliases were inverted.
@@ -1591,6 +1672,7 @@ async def get_stats_sessions(
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1605,30 +1687,50 @@ async def get_stats_sessions(
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
         session_duration AS (
+            -- ⛔ THIS USED TO SUM lua_round_teams.actual_duration_seconds AND
+            -- REPORT A PARTIAL SUM AS A TOTAL. The Lua webhook covers part of
+            -- the history — 877 of 2030 valid R1/R2 rounds — and a LEFT JOIN
+            -- contributes nothing for the rest, so a session with 16 rounds of
+            -- which 10 were measured returned the length of those 10. Measured
+            -- on dev: session 88 answered 5209 s against an actual 7260 s, and
+            -- 46 of 100 sessions answered 0 seconds outright. Zero is not
+            -- "unmeasured" on the wire, it is a duration, and the legacy
+            -- session card renders it as one.
+            --
+            -- round_duration_sql() is the project's canonical expression
+            -- (CLAUDE.md: take round duration from shared/round_time.py): the
+            -- Lua measurement where it exists, the parsed actual_time where it
+            -- does not. It covers 2030 of 2030.
             SELECT
                 r.gaming_session_id,
-                COALESCE(SUM(lrt.actual_duration_seconds), 0) as total_duration_seconds
+                COALESCE(SUM({round_duration_sql("r")}), 0) as total_duration_seconds
             FROM rounds r
-            LEFT JOIN lua_round_teams lrt ON lrt.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
         session_names AS (
             SELECT
                 r.gaming_session_id,
-                STRING_AGG(DISTINCT p.player_name, ', ' ORDER BY p.player_name) as player_names
+                -- ARRAY_AGG, not STRING_AGG+split (Codex on #848): a player name
+                -- containing ', ' would be split into two phantom names on the way
+                -- out. 0 such names today — but names are user-controlled input,
+                -- so the type follows what a name CAN be, not what the sample has.
+                ARRAY_AGG(DISTINCT p.player_name ORDER BY p.player_name) as player_names
             FROM rounds r
             INNER JOIN player_comprehensive_stats p ON p.round_id = r.id
             WHERE r.gaming_session_id IS NOT NULL
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND r.is_bot_round IS DISTINCT FROM TRUE
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1665,7 +1767,7 @@ async def get_stats_sessions(
             COALESCE(sp.total_kills, 0) as total_kills,
             COALESCE(sp.total_deaths, 0) as total_deaths,
             COALESCE(sd.total_duration_seconds, 0) as duration_seconds,
-            COALESCE(sn.player_names, '') as player_names,
+            COALESCE(sn.player_names, ARRAY[]::text[]) as player_names,
             sb.team_1_name,
             sb.team_2_name,
             sb.team_1_score,
@@ -1704,7 +1806,7 @@ async def get_stats_sessions(
         total_kills = row[10]
         total_deaths = row[11]
         duration_seconds = row[12]
-        player_names_str = row[13] if len(row) > 13 else ""
+        player_names_list = row[13] if len(row) > 13 else []
         team_1_name = row[14]
         team_2_name = row[15]
         team_1_score = row[16]
@@ -1744,33 +1846,35 @@ async def get_stats_sessions(
             time_ago = dt.strftime("%b %d, %Y")
 
         maps_played = [m.strip() for m in maps_str.split(",")] if maps_str else []
-        player_names = [n.strip() for n in player_names_str.split(",")] if player_names_str else []
+        player_names = list(player_names_list or [])
 
-        sessions.append({
-            "session_id": session_id,
-            "date": str(first_date),
-            "formatted_date": dt.strftime("%A, %B %d, %Y"),
-            "time_ago": time_ago,
-            "start_time": start_time_str,
-            "end_time": end_time_str,
-            "round_count": round_count,
-            "player_count": player_count,
-            "maps_played": maps_played,
-            "total_kills": total_kills,
-            "total_deaths": total_deaths,
-            "allies_wins": allies_wins,
-            "axis_wins": axis_wins,
-            # Team score from BOX scoring (session_results); None when the
-            # session predates team attribution — the UI must NOT fall back
-            # to the side tallies above, they are not a team score.
-            "team_1_name": team_1_name,
-            "team_2_name": team_2_name,
-            "team_1_score": team_1_score,
-            "team_2_score": team_2_score,
-            "winning_team": winning_team,
-            "duration_seconds": duration_seconds,
-            "player_names": player_names,
-        })
+        sessions.append(
+            {
+                "session_id": session_id,
+                "date": str(first_date),
+                "formatted_date": dt.strftime("%A, %B %d, %Y"),
+                "time_ago": time_ago,
+                "start_time": start_time_str,
+                "end_time": end_time_str,
+                "round_count": round_count,
+                "player_count": player_count,
+                "maps_played": maps_played,
+                "total_kills": total_kills,
+                "total_deaths": total_deaths,
+                "allies_wins": allies_wins,
+                "axis_wins": axis_wins,
+                # Team score from BOX scoring (session_results); None when the
+                # session predates team attribution — the UI must NOT fall back
+                # to the side tallies above, they are not a team score.
+                "team_1_name": team_1_name,
+                "team_2_name": team_2_name,
+                "team_1_score": team_1_score,
+                "team_2_score": team_2_score,
+                "winning_team": winning_team,
+                "duration_seconds": duration_seconds,
+                "player_names": player_names,
+            }
+        )
 
     return sessions
 
@@ -1801,7 +1905,7 @@ async def get_stats_session_detail(
         raise HTTPException(status_code=404, detail="Session not found")
 
     round_ids = [r[0] for r in round_rows]
-    placeholders = ", ".join(f"${i+1}" for i in range(len(round_ids)))
+    placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
 
     # 2. Get lua_round_teams data for scores and duration
     lua_query = f"""
@@ -1847,8 +1951,7 @@ async def get_stats_session_detail(
                     actual_time_seconds = int(parts[0]) * 60 + int(parts[1])
             except (ValueError, IndexError):
                 pass  # actual_time format not M:SS — use default 0
-        duration = (lua.get("duration_seconds") or rr[8]
-                    or actual_time_seconds)
+        duration = lua.get("duration_seconds") or rr[8] or actual_time_seconds
 
         round_obj = {
             "round_id": round_id,
@@ -1865,26 +1968,29 @@ async def get_stats_session_detail(
 
         # Group consecutive rounds on same map into a match
         # But R1 after R2 on same map = new match (replayed map)
-        is_new_match = (
-            current_map != map_name
-            or (round_number == 1 and current_rounds and current_rounds[-1]["round_number"] == 2)
+        is_new_match = current_map != map_name or (
+            round_number == 1 and current_rounds and current_rounds[-1]["round_number"] == 2
         )
         if not is_new_match:
             current_rounds.append(round_obj)
         else:
             if current_rounds:
-                matches.append({
-                    "map_name": current_map,
-                    "rounds": current_rounds,
-                })
+                matches.append(
+                    {
+                        "map_name": current_map,
+                        "rounds": current_rounds,
+                    }
+                )
             current_map = map_name
             current_rounds = [round_obj]
 
     if current_rounds:
-        matches.append({
-            "map_name": current_map,
-            "rounds": current_rounds,
-        })
+        matches.append(
+            {
+                "map_name": current_map,
+                "rounds": current_rounds,
+            }
+        )
 
     # 4. Get per-player stats aggregated across session
     player_query = f"""
@@ -1939,9 +2045,7 @@ async def get_stats_session_detail(
 
     # Use duration from matches (lua fallback to actual_time) for all rounds
     total_session_duration_seconds = sum(
-        round_obj.get("duration_seconds") or 0
-        for match in matches
-        for round_obj in match["rounds"]
+        round_obj.get("duration_seconds") or 0 for match in matches for round_obj in match["rounds"]
     )
 
     players = []
@@ -1976,7 +2080,16 @@ async def get_stats_session_detail(
         time_played_minutes = time_played_seconds / 60.0
 
         # Computed alive% (fallback — ignores limbo time, underestimates)
-        alive_pct_computed = round(max(0.0, min(100.0, 100.0 - (min(time_dead_minutes, time_played_minutes) / time_played_minutes * 100.0))), 1) if time_played_minutes > 0 else None
+        alive_pct_computed = (
+            round(
+                max(
+                    0.0, min(100.0, 100.0 - (min(time_dead_minutes, time_played_minutes) / time_played_minutes * 100.0))
+                ),
+                1,
+            )
+            if time_played_minutes > 0
+            else None
+        )
 
         # Engine alive% from TAB[8] (correct — excludes dead + limbo time)
         alive_pct_engine = round(tpp_weighted_sum / tpp_weight, 1) if tpp_weight > 0 else None
@@ -1985,41 +2098,51 @@ async def get_stats_session_detail(
         alive_pct = alive_pct_engine if alive_pct_engine is not None else alive_pct_computed
 
         # Drift detection between sources
-        alive_pct_diff = round(abs(alive_pct_engine - alive_pct_computed), 1) if (alive_pct_engine is not None and alive_pct_computed is not None) else None
-        alive_pct_drift = (alive_pct_diff is not None and alive_pct_diff > 2.0)
+        alive_pct_diff = (
+            round(abs(alive_pct_engine - alive_pct_computed), 1)
+            if (alive_pct_engine is not None and alive_pct_computed is not None)
+            else None
+        )
+        alive_pct_drift = alive_pct_diff is not None and alive_pct_diff > 2.0
 
-        played_pct = min(100.0, round((time_played_seconds / total_session_duration_seconds) * 100.0, 1)) if total_session_duration_seconds > 0 else None
+        played_pct = (
+            min(100.0, round((time_played_seconds / total_session_duration_seconds) * 100.0, 1))
+            if total_session_duration_seconds > 0
+            else None
+        )
 
-        players.append({
-            "player_guid": pr[0],
-            "player_name": pr[1],
-            "kills": kills,
-            "deaths": deaths,
-            "damage_given": damage_given,
-            "damage_received": damage_received,
-            "dpm": dpm,
-            "kd": kd,
-            "efficiency": efficiency,
-            "headshot_kills": headshot_kills,
-            "headshot_pct": hs_pct,
-            "gibs": gibs,
-            "self_kills": self_kills,
-            "useful_kills": useful_kills,
-            "full_selfkills": full_selfkills,
-            "revives_given": revives_given,
-            "times_revived": times_revived,
-            "kill_assists": kill_assists,
-            "accuracy": accuracy,
-            "time_played_seconds": time_played_seconds,
-            "time_dead_minutes": round(time_dead_minutes, 2),
-            "denied_playtime": denied_playtime,
-            "alive_pct": alive_pct,
-            "alive_pct_lua": alive_pct_engine,
-            "alive_pct_diff": alive_pct_diff,
-            "alive_pct_drift": alive_pct_drift,
-            "played_pct": played_pct,
-            "played_pct_lua": played_pct,  # same source (engine time), kept for frontend compat
-        })
+        players.append(
+            {
+                "player_guid": pr[0],
+                "player_name": pr[1],
+                "kills": kills,
+                "deaths": deaths,
+                "damage_given": damage_given,
+                "damage_received": damage_received,
+                "dpm": dpm,
+                "kd": kd,
+                "efficiency": efficiency,
+                "headshot_kills": headshot_kills,
+                "headshot_pct": hs_pct,
+                "gibs": gibs,
+                "self_kills": self_kills,
+                "useful_kills": useful_kills,
+                "full_selfkills": full_selfkills,
+                "revives_given": revives_given,
+                "times_revived": times_revived,
+                "kill_assists": kill_assists,
+                "accuracy": accuracy,
+                "time_played_seconds": time_played_seconds,
+                "time_dead_minutes": round(time_dead_minutes, 2),
+                "denied_playtime": denied_playtime,
+                "alive_pct": alive_pct,
+                "alive_pct_lua": alive_pct_engine,
+                "alive_pct_diff": alive_pct_diff,
+                "alive_pct_drift": alive_pct_drift,
+                "played_pct": played_pct,
+                "played_pct_lua": played_pct,  # same source (engine time), kept for frontend compat
+            }
+        )
 
     # 5. Scoring — reuse StopwatchScoringService for team-aware map scoring
     first_date = round_rows[0][4] if round_rows else None
@@ -2044,7 +2167,10 @@ async def get_stats_session_detail(
     if scoring_service is not None:
         try:
             team_matrix_payload = await SessionMatrixService(db, scoring_service).compute(
-                round_ids, matches, scoring_payload, hardcoded_teams,
+                round_ids,
+                matches,
+                scoring_payload,
+                hardcoded_teams,
             )
         except Exception as e:
             logger.warning(f"Team matrix unavailable for session {gaming_session_id}: {e}")
@@ -2062,8 +2188,6 @@ async def get_stats_session_detail(
     }
 
 
-
-
 @router.get("/stats/session/{gaming_session_id}/good-night")
 async def get_session_good_night(
     gaming_session_id: int,
@@ -2073,10 +2197,10 @@ async def get_session_good_night(
     Phase 1). One 0-100 score + friendship-safe reason chips; computed on
     read from existing tables, no schema."""
     from website.backend.services.good_night_service import GoodNightService
+
     result = await GoodNightService(db).compute(gaming_session_id)
     if result is None:
-        return {"status": "ok", "available": False,
-                "gaming_session_id": gaming_session_id}
+        return {"status": "ok", "available": False, "gaming_session_id": gaming_session_id}
     return {"status": "ok", "available": True, **result}
 
 
@@ -2142,31 +2266,35 @@ async def get_session_verdicts(
     for guid, cur in current.items():
         hist = history.get(guid, [])
         if len(hist) < 3:
-            players.append({
-                "guid": guid,
-                "name": cur["name"],
-                "dpm": round(cur["dpm"], 1),
-                "kills": cur["kills"],
-                "first_night": True,
-                "percentile": None,
-                "label": "New",
-                "sessions_in_baseline": len(hist),
-            })
+            players.append(
+                {
+                    "guid": guid,
+                    "name": cur["name"],
+                    "dpm": round(cur["dpm"], 1),
+                    "kills": cur["kills"],
+                    "first_night": True,
+                    "percentile": None,
+                    "label": "New",
+                    "sessions_in_baseline": len(hist),
+                }
+            )
             continue
         below = sum(1 for h in hist if h < cur["dpm"])
         pct = round(below / len(hist) * 100)
         avg = sum(hist) / len(hist)
-        players.append({
-            "guid": guid,
-            "name": cur["name"],
-            "dpm": round(cur["dpm"], 1),
-            "avg_dpm": round(avg, 1),
-            "kills": cur["kills"],
-            "first_night": False,
-            "percentile": pct,
-            "label": _label(pct),
-            "sessions_in_baseline": len(hist),
-        })
+        players.append(
+            {
+                "guid": guid,
+                "name": cur["name"],
+                "dpm": round(cur["dpm"], 1),
+                "avg_dpm": round(avg, 1),
+                "kills": cur["kills"],
+                "first_night": False,
+                "percentile": pct,
+                "label": _label(pct),
+                "sessions_in_baseline": len(hist),
+            }
+        )
     players.sort(key=lambda p: (p["percentile"] is None, -(p["percentile"] or 0)))
     return {
         "status": "ok",
@@ -2179,6 +2307,7 @@ async def get_session_verdicts(
 # ============================================================================
 # MVP voting (VISION_2026 S3) — peer recognition for a finished session.
 # ============================================================================
+
 
 async def _session_player_pool(db, gaming_session_id: int) -> list[dict]:
     """Players who actually played the session (valid rounds only)."""
@@ -2201,16 +2330,14 @@ async def _session_player_pool(db, gaming_session_id: int) -> list[dict]:
         (gaming_session_id,),
     )
     return [
-        {"guid": r[0], "name": r[1] or (r[0] or "")[:8], "kills": int(r[2] or 0),
-         "dpm": round(float(r[3] or 0), 1)}
+        {"guid": r[0], "name": r[1] or (r[0] or "")[:8], "kills": int(r[2] or 0), "dpm": round(float(r[3] or 0), 1)}
         for r in (rows or [])
     ]
 
 
 async def _mvp_tally(db, gaming_session_id: int) -> dict[str, int]:
     rows = await db.fetch_all(
-        "SELECT nominated_guid, COUNT(*) FROM session_mvp_votes "
-        "WHERE gaming_session_id = ? GROUP BY nominated_guid",
+        "SELECT nominated_guid, COUNT(*) FROM session_mvp_votes WHERE gaming_session_id = ? GROUP BY nominated_guid",
         (gaming_session_id,),
     )
     return {r[0]: int(r[1]) for r in (rows or [])}
@@ -2265,8 +2392,7 @@ async def get_session_mvp(
     if user and user.get("id") is not None:
         try:
             row = await db.fetch_one(
-                "SELECT nominated_guid FROM session_mvp_votes "
-                "WHERE gaming_session_id = ? AND voter_user_id = ?",
+                "SELECT nominated_guid FROM session_mvp_votes WHERE gaming_session_id = ? AND voter_user_id = ?",
                 (gaming_session_id, int(user["id"])),
             )
             my_vote = row[0] if row else None
@@ -2276,12 +2402,14 @@ async def get_session_mvp(
     candidates = []
     for p in pool:
         votes = tally.get(p["guid"], 0)
-        candidates.append({
-            **p,
-            "votes": votes,
-            "vote_pct": round(votes / total_votes * 100, 1) if total_votes else 0.0,
-            "kis_rank": kis_rank.get(p["guid"]),
-        })
+        candidates.append(
+            {
+                **p,
+                "votes": votes,
+                "vote_pct": round(votes / total_votes * 100, 1) if total_votes else 0.0,
+                "kis_rank": kis_rank.get(p["guid"]),
+            }
+        )
     candidates.sort(key=lambda c: (-c["votes"], -c["kills"]))
 
     # "Most underrated": got votes but ranks low on KIS (peers saw value the
@@ -2429,9 +2557,7 @@ def _lineup_players(raw) -> list[dict]:
     "/stats/session/{gaming_session_id}/lineups",
     response_model=SessionLineups,
 )
-async def get_session_lineups(
-    gaming_session_id: int, db: DatabaseAdapter = Depends(get_db)
-):
+async def get_session_lineups(gaming_session_id: int, db: DatabaseAdapter = Depends(get_db)):
     rows = await db.fetch_all(
         """
         SELECT r.id, r.map_name, r.round_number,
@@ -2501,30 +2627,29 @@ async def get_session_lineups(
                 joined = sorted(current[key] - membership_prev[key])
                 left = sorted(membership_prev[key] - current[key])
                 # A player who moved BETWEEN teams is a move, not a swap pair.
-                moved = {
-                    g for g in joined
-                    if g in membership_prev["a"] | membership_prev["b"]
-                }
+                moved = {g for g in joined if g in membership_prev["a"] | membership_prev["b"]}
                 swap_in = [g for g in joined if g not in moved]
-                swap_left = [
-                    g for g in left if g not in current["a"] | current["b"]
-                ]
+                swap_left = [g for g in left if g not in current["a"] | current["b"]]
                 swaps = []
                 if len(swap_in) == 1 and len(swap_left) == 1:
-                    swaps.append({
-                        "out": players_seen[swap_left[0]],
-                        "incoming": players_seen[swap_in[0]],
-                    })
+                    swaps.append(
+                        {
+                            "out": players_seen[swap_left[0]],
+                            "incoming": players_seen[swap_in[0]],
+                        }
+                    )
                 if joined or left:
-                    changes.append({
-                        "map_name": map_name,
-                        "round_number": round_number,
-                        "round_id": rid,
-                        "team": key,
-                        "joined": [players_seen[g] for g in joined],
-                        "left": [players_seen[g] for g in left],
-                        "swaps": swaps,
-                    })
+                    changes.append(
+                        {
+                            "map_name": map_name,
+                            "round_number": round_number,
+                            "round_id": rid,
+                            "team": key,
+                            "joined": [players_seen[g] for g in joined],
+                            "left": [players_seen[g] for g in left],
+                            "swaps": swaps,
+                        }
+                    )
         membership_prev = current
         for key in ("a", "b"):
             if not order[key]:
@@ -2549,8 +2674,7 @@ async def get_session_lineups(
     names = {"a": "Team A", "b": "Team B"}
     try:
         team_rows = await db.fetch_all(
-            "SELECT team_name, player_guids FROM session_teams "
-            "WHERE gaming_session_id = ?",
+            "SELECT team_name, player_guids FROM session_teams WHERE gaming_session_id = ?",
             (gaming_session_id,),
         )
         import json as _json
@@ -2681,7 +2805,9 @@ def _counts_toward_totals(status: str | None, is_valid, is_bot_round) -> bool:
         return False
     return status is None or status in COUNTING_ROUND_STATUSES
 
-_SESSION_ROUNDS_SQL = """
+
+_SESSION_ROUNDS_SQL = (
+    """
     -- ⛔ NOT created_at. That column is the INGESTION time: the importer
     -- supplies round_date and round_time and leaves created_at at its default,
     -- so for historical imports and reprocessed stats it says when the row was
@@ -2695,13 +2821,16 @@ _SESSION_ROUNDS_SQL = """
               regexp_replace(lpad(r.round_time, 6, '0'),
                              '^(..)(..)(..)$', '\\1:\\2:\\3'))::timestamp,
              r.created_at) AS played_at,
-           """ + round_duration_sql("r") + """ AS duration_seconds,
+           """
+    + round_duration_sql("r")
+    + """ AS duration_seconds,
            r.end_reason, r.round_status, r.match_id,
            r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
     FROM rounds r
     WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2)
     ORDER BY r.created_at
 """
+)
 
 _SESSION_PLAYERS_SQL = """
     SELECT p.round_id, p.player_guid, p.player_name, p.team,
@@ -2718,8 +2847,7 @@ _SESSION_PLAYERS_SQL = """
 """
 
 
-@router.get("/stats/session/{gaming_session_id}/rounds",
-            response_model=SessionRounds)
+@router.get("/stats/session/{gaming_session_id}/rounds", response_model=SessionRounds)
 async def get_session_rounds(
     gaming_session_id: int,
     db: DatabaseAdapter = Depends(get_db),
@@ -2732,25 +2860,42 @@ async def get_session_rounds(
     player_rows = await db.fetch_all(_SESSION_PLAYERS_SQL, (gaming_session_id,))
     by_round: dict[int, list[RoundPlayerRow]] = {}
     for row in player_rows:
-        by_round.setdefault(row[0], []).append(RoundPlayerRow(
-            player_guid=row[1], player_name=strip_et_colors(row[2] or ""),
-            team=row[3], time_played_seconds=row[4] or 0, gibs=row[5] or 0,
-            damage_received=row[6] or 0, damage_given=row[7] or 0,
-            kills=row[8] or 0, deaths=row[9] or 0, headshots=row[10] or 0,
-            headshot_kills=row[11] or 0, revives_given=row[12] or 0,
-            times_revived=row[13] or 0, xp=float(row[14] or 0),
-        ))
+        by_round.setdefault(row[0], []).append(
+            RoundPlayerRow(
+                player_guid=row[1],
+                player_name=strip_et_colors(row[2] or ""),
+                team=row[3],
+                time_played_seconds=row[4] or 0,
+                gibs=row[5] or 0,
+                damage_received=row[6] or 0,
+                damage_given=row[7] or 0,
+                kills=row[8] or 0,
+                deaths=row[9] or 0,
+                headshots=row[10] or 0,
+                headshot_kills=row[11] or 0,
+                revives_given=row[12] or 0,
+                times_revived=row[13] or 0,
+                xp=float(row[14] or 0),
+            )
+        )
 
     rounds: list[SessionRound] = []
     for row in round_rows:
         status = row[6]
-        rounds.append(SessionRound(
-            round_id=row[0], map_name=row[1], round_number=row[2],
-            played_at=str(row[3]), duration_seconds=row[4],
-            end_reason=row[5], round_status=status,
-            counts_toward_totals=_counts_toward_totals(status, row[8], row[9]),
-            match_id=row[7], players=by_round.get(row[0], []),
-        ))
+        rounds.append(
+            SessionRound(
+                round_id=row[0],
+                map_name=row[1],
+                round_number=row[2],
+                played_at=str(row[3]),
+                duration_seconds=row[4],
+                end_reason=row[5],
+                round_status=status,
+                counts_toward_totals=_counts_toward_totals(status, row[8], row[9]),
+                match_id=row[7],
+                players=by_round.get(row[0], []),
+            )
+        )
 
     return SessionRounds(
         gaming_session_id=gaming_session_id,

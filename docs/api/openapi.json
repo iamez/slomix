@@ -4812,6 +4812,14 @@
       "title": "Draws",
       "type": "integer"
      },
+     "duration_seconds": {
+      "title": "Duration Seconds",
+      "type": "integer"
+     },
+     "end_time": {
+      "title": "End Time",
+      "type": "string"
+     },
      "formatted_date": {
       "title": "Formatted Date",
       "type": "string"
@@ -4827,6 +4835,13 @@
       "title": "Maps Played",
       "type": "array"
      },
+     "player_names": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Player Names",
+      "type": "array"
+     },
      "players": {
       "title": "Players",
       "type": "integer"
@@ -4838,6 +4853,10 @@
      "session_id": {
       "title": "Session Id",
       "type": "integer"
+     },
+     "start_time": {
+      "title": "Start Time",
+      "type": "string"
      },
      "team_1_name": {
       "anyOf": [
@@ -4887,6 +4906,10 @@
       "title": "Time Ago",
       "type": "string"
      },
+     "total_deaths": {
+      "title": "Total Deaths",
+      "type": "integer"
+     },
      "total_kills": {
       "title": "Total Kills",
       "type": "integer"
@@ -4919,6 +4942,11 @@
      "team_1_score",
      "team_2_score",
      "winning_team",
+     "total_deaths",
+     "duration_seconds",
+     "player_names",
+     "start_time",
+     "end_time",
      "time_ago",
      "formatted_date"
     ],
@@ -10079,15 +10107,19 @@
   },
   "/api/predictions/recent": {
    "get": {
-    "description": "Get recent match predictions.",
+    "description": "Recent match predictions that have been published.",
     "operationId": "get_recent_predictions_api_predictions_recent_get",
     "parameters": [
      {
+      "description": "How many published predictions to return.",
       "in": "query",
       "name": "limit",
       "required": false,
       "schema": {
        "default": 5,
+       "description": "How many published predictions to return.",
+       "maximum": 200,
+       "minimum": 1,
        "title": "Limit",
        "type": "integer"
       }
@@ -18144,6 +18176,8 @@
       "required": false,
       "schema": {
        "default": 20,
+       "maximum": 1000,
+       "minimum": 1,
        "title": "Limit",
        "type": "integer"
       }
@@ -18154,8 +18188,21 @@
       "required": false,
       "schema": {
        "default": 0,
+       "minimum": 0,
        "title": "Offset",
        "type": "integer"
+      }
+     },
+     {
+      "description": "Filter by map name or player name.",
+      "in": "query",
+      "name": "search",
+      "required": false,
+      "schema": {
+       "default": "",
+       "description": "Filter by map name or player name.",
+       "title": "Search",
+       "type": "string"
       }
      }
     ],
@@ -19914,11 +19961,19 @@
     "operationId": "get_weapon_stats_api_stats_weapons_get",
     "parameters": [
      {
+      "description": "Time window: all time, last 7/30 days, or the current season.",
       "in": "query",
       "name": "period",
       "required": false,
       "schema": {
        "default": "all",
+       "description": "Time window: all time, last 7/30 days, or the current season.",
+       "enum": [
+        "all",
+        "7d",
+        "30d",
+        "season"
+       ],
        "title": "Period",
        "type": "string"
       }
@@ -19969,14 +20024,23 @@
   "/api/stats/weapons/by-player": {
    "get": {
     "description": "Return per-player weapon stats keyed by player GUID.\nUseful for comprehensive weapon mastery views.",
-    "operationId": "get_weapon_stats_by_player_api_stats_weapons_by_player_get",
+    "operationId": "get_weapon_stats_by_player_hyphen_alias",
     "parameters": [
      {
+      "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
       "in": "query",
       "name": "period",
       "required": false,
       "schema": {
        "default": "all",
+       "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
+       "enum": [
+        "all",
+        "7d",
+        "30d",
+        "season",
+        "session"
+       ],
        "title": "Period",
        "type": "string"
       }
@@ -20054,7 +20118,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/WeaponsByPlayer"
+        }
        }
       },
       "description": "Successful Response"
@@ -20082,11 +20148,20 @@
     "operationId": "get_weapon_stats_by_player_api_stats_weapons_by_player_get",
     "parameters": [
      {
+      "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
       "in": "query",
       "name": "period",
       "required": false,
       "schema": {
        "default": "all",
+       "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
+       "enum": [
+        "all",
+        "7d",
+        "30d",
+        "season",
+        "session"
+       ],
        "title": "Period",
        "type": "string"
       }
@@ -20194,11 +20269,19 @@
     "operationId": "get_weapon_hall_of_fame_api_stats_weapons_hall_of_fame_get",
     "parameters": [
      {
+      "description": "Time window: all time, last 7/30 days, or the current season.",
       "in": "query",
       "name": "period",
       "required": false,
       "schema": {
        "default": "all",
+       "description": "Time window: all time, last 7/30 days, or the current season.",
+       "enum": [
+        "all",
+        "7d",
+        "30d",
+        "season"
+       ],
        "title": "Period",
        "type": "string"
       }

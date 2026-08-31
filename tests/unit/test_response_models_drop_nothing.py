@@ -118,11 +118,7 @@ async def test_a_model_missing_a_field_is_actually_caught():
     dropped = "window_days"
     truncated = create_model(
         "Truncated",
-        **{
-            name: (field.annotation, ...)
-            for name, field in StatsOverview.model_fields.items()
-            if name != dropped
-        },
+        **{name: (field.annotation, ...) for name, field in StatsOverview.model_fields.items() if name != dropped},
     )
 
     modelled = truncated.model_validate(raw).model_dump()
@@ -275,8 +271,7 @@ _RECORDED = [
 ]
 
 
-@pytest.mark.parametrize(("fixture", "model"), _RECORDED,
-                         ids=[f for f, _ in _RECORDED])
+@pytest.mark.parametrize(("fixture", "model"), _RECORDED, ids=[f for f, _ in _RECORDED])
 def test_the_model_drops_nothing_from_a_recorded_response(fixture, model):
     raw = _json.loads((_FIXTURES / fixture).read_text())
     modelled = _json.loads(model.model_validate(raw).model_dump_json())
@@ -284,8 +279,7 @@ def test_the_model_drops_nothing_from_a_recorded_response(fixture, model):
     assert not lost, f"{fixture}: {model.__name__} dropped {lost}"
 
 
-@pytest.mark.parametrize(("fixture", "model"), _RECORDED,
-                         ids=[f for f, _ in _RECORDED])
+@pytest.mark.parametrize(("fixture", "model"), _RECORDED, ids=[f for f, _ in _RECORDED])
 def test_the_model_changes_no_value_either(fixture, model):
     """Dropping a field is the loud failure; changing one is the quiet one.
 
@@ -319,8 +313,7 @@ def test_the_hall_of_fame_keeps_a_fractional_value():
     dpm = raw["categories"]["most_dpm"]
     assert any(row["value"] % 1 for row in dpm), "fixture has no fractional dpm"
     modelled = HallOfFame.model_validate(raw).model_dump()
-    assert ([r["value"] for r in modelled["categories"]["most_dpm"]]
-            == [r["value"] for r in dpm])
+    assert [r["value"] for r in modelled["categories"]["most_dpm"]] == [r["value"] for r in dpm]
 
 
 def test_the_viz_fixture_still_carries_its_null_clock():
@@ -338,12 +331,10 @@ def test_the_viz_fixture_still_carries_its_null_clock():
 
 def test_the_awards_fixture_still_carries_an_unsortable_figure():
     raw = _json.loads((_FIXTURES / "api_rounds_round_id_awards.json").read_text())
-    nulls = [a for cat in raw["categories"].values()
-             for a in cat["awards"] if a["numeric"] is None]
+    nulls = [a for cat in raw["categories"].values() for a in cat["awards"] if a["numeric"] is None]
     assert nulls, "fixture no longer carries a null numeric"
     modelled = RoundAwards.model_validate(raw).model_dump()
-    still = [a for cat in modelled["categories"].values()
-             for a in cat["awards"] if a["numeric"] is None]
+    still = [a for cat in modelled["categories"].values() for a in cat["awards"] if a["numeric"] is None]
     assert len(still) == len(nulls)
     # …and the rendered string beside it survives: the two are one figure seen
     # two ways, and dropping either leaves the client worse off.
@@ -371,23 +362,31 @@ class TestVoiceActivityKeepsItsThreeStates:
 
     def _full(self, **over):
         base = {
-            "status": "ok", "reason": None, "updated_at": "2026-08-28 14:00:00",
-            "age_seconds": 12, "total_count": 2,
-            "members": [{"name": "one", "channel_name": "Gaming"},
-                        {"name": "two", "channel_name": "Gaming"}],
-            "channels": [{"id": None, "name": "Gaming",
-                          "members": [{"name": "one", "channel_name": "Gaming"}]}],
+            "status": "ok",
+            "reason": None,
+            "updated_at": "2026-08-28 14:00:00",
+            "age_seconds": 12,
+            "total_count": 2,
+            "members": [{"name": "one", "channel_name": "Gaming"}, {"name": "two", "channel_name": "Gaming"}],
+            "channels": [{"id": None, "name": "Gaming", "members": [{"name": "one", "channel_name": "Gaming"}]}],
         }
         base.update(over)
         return base
 
     @pytest.mark.parametrize("state", ["ok", "stale", "unavailable"])
     def test_every_state_survives_the_model(self, state):
-        payload = self._full(status=state) if state == "ok" else self._full(
-            status=state,
-            reason=None if state == "ok" else "the report could not be read",
-            **({"updated_at": None, "age_seconds": None, "total_count": 0,
-                "members": [], "channels": []} if state == "unavailable" else {}),
+        payload = (
+            self._full(status=state)
+            if state == "ok"
+            else self._full(
+                status=state,
+                reason=None if state == "ok" else "the report could not be read",
+                **(
+                    {"updated_at": None, "age_seconds": None, "total_count": 0, "members": [], "channels": []}
+                    if state == "unavailable"
+                    else {}
+                ),
+            )
         )
         modelled = _json.loads(VoiceActivity.model_validate(payload).model_dump_json())
         assert missing_keys(payload, modelled) == []
@@ -435,12 +434,19 @@ class TestNullsTheDataDoesNotShowYet:
 
     def test_an_award_with_no_resolvable_player_is_accepted(self):
         payload = {
-            "round_id": 1, "map_name": "supply", "round_number": 1,
+            "round_id": 1,
+            "map_name": "supply",
+            "round_number": 1,
             "round_date": "2026-08-26",
-            "categories": {"combat": {"name": "Combat", "emoji": "*", "awards": [
-                {"award": "Most damage", "player": "Unknown", "guid": None,
-                 "value": "4999", "numeric": 4999.0},
-            ]}},
+            "categories": {
+                "combat": {
+                    "name": "Combat",
+                    "emoji": "*",
+                    "awards": [
+                        {"award": "Most damage", "player": "Unknown", "guid": None, "value": "4999", "numeric": 4999.0},
+                    ],
+                }
+            },
         }
         modelled = _json.loads(RoundAwards.model_validate(payload).model_dump_json())
         assert missing_keys(payload, modelled) == []
@@ -448,8 +454,7 @@ class TestNullsTheDataDoesNotShowYet:
 
     def test_an_active_round_without_a_number_is_accepted(self):
         """`!session_start` inserts a placeholder with no round_number."""
-        payload = {"round_id": 1, "map_name": "supply", "round_number": None,
-                   "round_date": None, "categories": {}}
+        payload = {"round_id": 1, "map_name": "supply", "round_number": None, "round_date": None, "categories": {}}
         assert RoundAwards.model_validate(payload).round_number is None
 
     def test_a_round_with_no_winner_yet_is_accepted(self):
@@ -483,34 +488,50 @@ class TestNullsTheDataDoesNotShowYet:
         from pydantic import TypeAdapter
 
         annotation = RoundViz.model_fields["highlights"].annotation
-        assert _json.loads(
-            TypeAdapter(annotation).validate_python({}).model_dump_json()) == {}
+        assert _json.loads(TypeAdapter(annotation).validate_python({}).model_dump_json()) == {}
         wrong_way = TypeAdapter(VizHighlights | EmptyHighlights)
-        assert _json.loads(
-            wrong_way.validate_python({}).model_dump_json()) != {}, (
+        assert _json.loads(wrong_way.validate_python({}).model_dump_json()) != {}, (
             "VizHighlights no longer accepts {} — the ordering hazard this "
-            "test guards against is gone, and so is the reason for the union")
+            "test guards against is gone, and so is the reason for the union"
+        )
 
     def test_the_three_highlight_names_are_still_declared(self):
         """Optional must not mean forgettable: a renamed field still fails."""
-        assert set(VizHighlights.model_fields) == {
-            "most_damage", "most_kills", "mvp"}
+        assert set(VizHighlights.model_fields) == {"most_damage", "most_kills", "mvp"}
 
 
 def _viz_payload(**over):
     payload = {
-        "round_id": 1, "map_name": "supply", "round_date": "2026-08-26",
-        "round_number": 1, "round_label": "R1", "winner_team": 1,
-        "duration_seconds": 454, "player_count": 1,
-        "players": [{
-            "guid": "A" * 8, "name": "one", "kills": 8, "deaths": 3,
-            "damage_given": 1510, "damage_received": 1204,
-            "team_damage_given": 0, "team_damage_received": 0,
-            "time_played_seconds": 222, "time_dead_seconds": 30,
-            "revives_given": 1, "gibs": 3, "self_kills": 0,
-            "denied_playtime": 0, "kill_assists": 2, "xp": 55.0,
-            "efficiency": 60.0, "dpm": 408.1,
-        }],
+        "round_id": 1,
+        "map_name": "supply",
+        "round_date": "2026-08-26",
+        "round_number": 1,
+        "round_label": "R1",
+        "winner_team": 1,
+        "duration_seconds": 454,
+        "player_count": 1,
+        "players": [
+            {
+                "guid": "A" * 8,
+                "name": "one",
+                "kills": 8,
+                "deaths": 3,
+                "damage_given": 1510,
+                "damage_received": 1204,
+                "team_damage_given": 0,
+                "team_damage_received": 0,
+                "time_played_seconds": 222,
+                "time_dead_seconds": 30,
+                "revives_given": 1,
+                "gibs": 3,
+                "self_kills": 0,
+                "denied_playtime": 0,
+                "kill_assists": 2,
+                "xp": 55.0,
+                "efficiency": 60.0,
+                "dpm": 408.1,
+            }
+        ],
         "highlights": {
             "most_damage": {"name": "one", "damage_given": 1510},
             "most_kills": {"name": "one", "kills": 8},
@@ -526,7 +547,7 @@ def test_voice_normalises_an_explicit_null_name():
     with a null — and this validation runs after the handler's try block, so
     its malformed-row fallback could not catch the resulting error."""
     stored = {"name": None, "channel_name": None}
-    assert stored.get("name", "Unknown") is None       # the trap
+    assert stored.get("name", "Unknown") is None  # the trap
     assert (stored.get("name") or "Unknown") == "Unknown"  # the fix
 
 
@@ -550,23 +571,23 @@ class TestOptionalMeansAbsentNotEmpty:
         return {"dates": ["2026-08-26", "2026-08-27"], **fields}
 
     def test_the_full_payload_survives(self):
-        payload = self._payload(rounds=[3, 4], active_players=[6, 6],
-                                kills=[100, 120], map_distribution={"supply": 7})
-        modelled = _json.loads(
-            StatsTrends.model_validate(payload).model_dump_json(exclude_none=True))
+        payload = self._payload(rounds=[3, 4], active_players=[6, 6], kills=[100, 120], map_distribution={"supply": 7})
+        modelled = _json.loads(StatsTrends.model_validate(payload).model_dump_json(exclude_none=True))
         assert missing_keys(payload, modelled) == []
         assert modelled == payload
 
-    @pytest.mark.parametrize("subset", [
-        {"rounds": [3, 4]},
-        {"map_distribution": {"supply": 7}},
-        {"rounds": [3, 4], "kills": [100, 120]},
-        {},
-    ])
+    @pytest.mark.parametrize(
+        "subset",
+        [
+            {"rounds": [3, 4]},
+            {"map_distribution": {"supply": 7}},
+            {"rounds": [3, 4], "kills": [100, 120]},
+            {},
+        ],
+    )
     def test_a_narrowed_call_is_neither_rejected_nor_padded(self, subset):
         payload = self._payload(**subset)
-        modelled = _json.loads(
-            StatsTrends.model_validate(payload).model_dump_json(exclude_none=True))
+        modelled = _json.loads(StatsTrends.model_validate(payload).model_dump_json(exclude_none=True))
         assert modelled == payload, "a field the caller did not request appeared"
         assert set(modelled) == set(payload)
 
@@ -582,14 +603,26 @@ class TestRecentRoundsTypedFromTheSchema:
     def test_the_nullable_columns_are_accepted(self):
         """`map_name`, `round_date` and `round_number` all allow NULL, and the
         handler writes the date as None outright. No live row shows it."""
-        edge = {"id": 1, "map_name": None, "round_date": None,
-                "round_number": None, "round_label": "?", "player_count": 0}
+        edge = {
+            "id": 1,
+            "map_name": None,
+            "round_date": None,
+            "round_number": None,
+            "round_label": "?",
+            "player_count": 0,
+        }
         modelled = _json.loads(RecentRound.model_validate(edge).model_dump_json())
         assert modelled == edge
 
     def test_the_ordinary_row_is_unchanged(self):
-        row = {"id": 11365, "map_name": "supply", "round_date": "2026-08-27",
-               "round_number": 2, "round_label": "R2", "player_count": 6}
+        row = {
+            "id": 11365,
+            "map_name": "supply",
+            "round_date": "2026-08-27",
+            "round_number": 2,
+            "round_label": "R2",
+            "player_count": 6,
+        }
         assert _json.loads(RecentRound.model_validate(row).model_dump_json()) == row
 
 
@@ -609,24 +642,28 @@ class TestShapesNoResponseCanShow:
 
     def test_a_week_with_a_challenge_survives(self):
         payload = {
-            "status": "ok", "week_start_date": "2026-08-24",
-            "challenge": {"week_start_date": "2026-08-24", "title": "Most revives",
-                          "description": "Revive the most teammates",
-                          "created_at": "2026-08-24 10:00:00"},
+            "status": "ok",
+            "week_start_date": "2026-08-24",
+            "challenge": {
+                "week_start_date": "2026-08-24",
+                "title": "Most revives",
+                "description": "Revive the most teammates",
+                "created_at": "2026-08-24 10:00:00",
+            },
         }
-        modelled = _json.loads(
-            CurrentChallenge.model_validate(payload).model_dump_json())
+        modelled = _json.loads(CurrentChallenge.model_validate(payload).model_dump_json())
         assert missing_keys(payload, modelled) == []
         assert modelled == payload
 
     def test_a_challenge_with_the_nullable_columns_empty(self):
         """`description` and `created_at` are nullable, and `_serialize` writes
         `str(row[3]) if row[3] else None` for the timestamp."""
-        payload = {"status": "ok", "week_start_date": "2026-08-24",
-                   "challenge": {"week_start_date": "2026-08-24", "title": "T",
-                                 "description": None, "created_at": None}}
-        assert _json.loads(
-            CurrentChallenge.model_validate(payload).model_dump_json()) == payload
+        payload = {
+            "status": "ok",
+            "week_start_date": "2026-08-24",
+            "challenge": {"week_start_date": "2026-08-24", "title": "T", "description": None, "created_at": None},
+        }
+        assert _json.loads(CurrentChallenge.model_validate(payload).model_dump_json()) == payload
 
     def test_no_challenge_is_an_answer_not_a_failure(self):
         payload = {"status": "ok", "week_start_date": "2026-08-24", "challenge": None}
@@ -635,14 +672,29 @@ class TestShapesNoResponseCanShow:
         assert modelled.status == "ok", "an empty week must not read as an error"
 
     def test_engraved_awards_survive_including_the_nullable_ones(self):
-        payload = {"status": "ok", "season_id": "2026-Q3", "season_name": "Q3 2026",
-                   "awards": [
-                       {"award_key": "most_kills", "label": "Most Kills",
-                        "player_guid": "A" * 8, "player_name": "one",
-                        "value_text": "2306", "value_num": 2306.0},
-                       {"award_key": "x", "label": "X", "player_guid": "B" * 8,
-                        "player_name": None, "value_text": None, "value_num": None},
-                   ]}
+        payload = {
+            "status": "ok",
+            "season_id": "2026-Q3",
+            "season_name": "Q3 2026",
+            "awards": [
+                {
+                    "award_key": "most_kills",
+                    "label": "Most Kills",
+                    "player_guid": "A" * 8,
+                    "player_name": "one",
+                    "value_text": "2306",
+                    "value_num": 2306.0,
+                },
+                {
+                    "award_key": "x",
+                    "label": "X",
+                    "player_guid": "B" * 8,
+                    "player_name": None,
+                    "value_text": None,
+                    "value_num": None,
+                },
+            ],
+        }
         modelled = _json.loads(SeasonAwards.model_validate(payload).model_dump_json())
         assert missing_keys(payload, modelled) == []
         assert modelled == payload
@@ -650,10 +702,21 @@ class TestShapesNoResponseCanShow:
     def test_both_halves_of_a_figure_survive(self):
         """`value_text` displays and `value_num` ranks; they are one number seen
         two ways and a client needs both."""
-        payload = {"status": "ok", "season_id": "s", "season_name": "S",
-                   "awards": [{"award_key": "k", "label": "K", "player_guid": "G",
-                               "player_name": "p", "value_text": "1.8",
-                               "value_num": 1.7999999523162842}]}
+        payload = {
+            "status": "ok",
+            "season_id": "s",
+            "season_name": "S",
+            "awards": [
+                {
+                    "award_key": "k",
+                    "label": "K",
+                    "player_guid": "G",
+                    "player_name": "p",
+                    "value_text": "1.8",
+                    "value_num": 1.7999999523162842,
+                }
+            ],
+        }
         award = SeasonAwards.model_validate(payload).awards[0]
         assert award.value_text == "1.8"
         assert award.value_num == pytest.approx(1.8)
@@ -670,13 +733,26 @@ class TestTheMapEndpoints:
     """
 
     def _map_row(self, **over):
-        row = {"name": "supply", "total_rounds": 12, "matches_played": 6,
-               "allies_wins": 5, "axis_wins": 7, "allies_win_rate": 41.7,
-               "axis_win_rate": 58.3, "avg_duration": 480, "min_duration": 120,
-               "max_duration": 900, "last_played": "2026-08-27",
-               "total_kills": 700, "total_deaths": 700, "avg_dpm": 310.5,
-               "unique_players": 8, "grenade_kills": 20, "panzer_kills": 5,
-               "mortar_kills": 2}
+        row = {
+            "name": "supply",
+            "total_rounds": 12,
+            "matches_played": 6,
+            "allies_wins": 5,
+            "axis_wins": 7,
+            "allies_win_rate": 41.7,
+            "axis_win_rate": 58.3,
+            "avg_duration": 480,
+            "min_duration": 120,
+            "max_duration": 900,
+            "last_played": "2026-08-27",
+            "total_kills": 700,
+            "total_deaths": 700,
+            "avg_dpm": 310.5,
+            "unique_players": 8,
+            "grenade_kills": 20,
+            "panzer_kills": 5,
+            "mortar_kills": 2,
+        }
         row.update(over)
         return row
 
@@ -707,42 +783,53 @@ class TestAFailureThatStillAnswers200:
     """
 
     def test_the_unavailable_state_survives(self):
-        payload = {"status": "unavailable",
-                   "note": "the objective-records query failed", "records": []}
-        modelled = _json.loads(
-            MapObjectiveRecords.model_validate(payload).model_dump_json())
+        payload = {"status": "unavailable", "note": "the objective-records query failed", "records": []}
+        modelled = _json.loads(MapObjectiveRecords.model_validate(payload).model_dump_json())
         assert modelled == payload
 
     def test_no_data_and_unavailable_are_distinguishable(self):
         """The whole point: two empty lists that mean different things."""
         empty_measured = MapObjectiveRecords.model_validate(
-            {"status": "no_data", "note": "none recorded", "records": []})
+            {"status": "no_data", "note": "none recorded", "records": []}
+        )
         empty_unknown = MapObjectiveRecords.model_validate(
-            {"status": "unavailable", "note": "query failed", "records": []})
+            {"status": "unavailable", "note": "query failed", "records": []}
+        )
         assert empty_measured.records == empty_unknown.records == []
         assert empty_measured.status != empty_unknown.status, (
-            "the two empties collapsed into one — the defect this shape fixes")
+            "the two empties collapsed into one — the defect this shape fixes"
+        )
 
     def test_the_ok_state_reads_differently(self):
-        assert MapObjectiveRecords.model_validate(
-            {"status": "ok", "records": [], "note": None}).status == "ok"
+        assert MapObjectiveRecords.model_validate({"status": "ok", "records": [], "note": None}).status == "ok"
 
     def test_a_record_with_no_resolved_winner_is_accepted(self):
         """`rounds.winner_team`, `map_name` and `gaming_session_id` are all
         nullable; the group-by carries the nulls through."""
-        payload = {"status": "ok", "note": None, "records": [
-            {"map_name": None, "fastest_seconds": 100, "fastest_time": "1:40",
-             "played": "2026-08-01", "winner_team": None, "winner_side": "Draw",
-             "gaming_session_id": None}]}
-        modelled = _json.loads(
-            MapObjectiveRecords.model_validate(payload).model_dump_json())
+        payload = {
+            "status": "ok",
+            "note": None,
+            "records": [
+                {
+                    "map_name": None,
+                    "fastest_seconds": 100,
+                    "fastest_time": "1:40",
+                    "played": "2026-08-01",
+                    "winner_team": None,
+                    "winner_side": "Draw",
+                    "gaming_session_id": None,
+                }
+            ],
+        }
+        modelled = _json.loads(MapObjectiveRecords.model_validate(payload).model_dump_json())
         assert modelled == payload
 
     def test_status_is_not_an_enum(self):
         """A new state must not be filtered out by the schema before anyone
         sees it."""
-        assert MapObjectiveRecords.model_validate(
-            {"status": "degraded", "note": None, "records": []}).status == "degraded"
+        assert (
+            MapObjectiveRecords.model_validate({"status": "degraded", "note": None, "records": []}).status == "degraded"
+        )
 
 
 class TestActivityCalendarSaysWhichEmpty:
@@ -751,28 +838,25 @@ class TestActivityCalendarSaysWhichEmpty:
     identical on the wire."""
 
     def test_a_populated_calendar_survives(self):
-        payload = {"days": 30, "activity": {"2026-08-27": 12, "2026-08-26": 18},
-                   "status": "ok", "note": None}
-        modelled = _json.loads(
-            ActivityCalendar.model_validate(payload).model_dump_json())
+        payload = {"days": 30, "activity": {"2026-08-27": 12, "2026-08-26": 18}, "status": "ok", "note": None}
+        modelled = _json.loads(ActivityCalendar.model_validate(payload).model_dump_json())
         assert missing_keys(payload, modelled) == []
         assert modelled == payload
 
     def test_a_quiet_window_and_a_failed_query_differ(self):
         quiet = ActivityCalendar.model_validate(
-            {"days": 30, "activity": {}, "status": "no_data",
-             "note": "no rounds were played in this window"})
+            {"days": 30, "activity": {}, "status": "no_data", "note": "no rounds were played in this window"}
+        )
         broken = ActivityCalendar.model_validate(
-            {"days": 30, "activity": {}, "status": "unavailable",
-             "note": "the activity query failed"})
+            {"days": 30, "activity": {}, "status": "unavailable", "note": "the activity query failed"}
+        )
         assert quiet.activity == broken.activity == {}
         assert quiet.status != broken.status
 
     def test_the_window_size_survives_the_failure_path(self):
         """`days` is what the caller labels the chart with — losing it on the
         failure path would leave an unlabelled empty chart."""
-        broken = ActivityCalendar.model_validate(
-            {"days": 90, "activity": {}, "status": "unavailable", "note": "x"})
+        broken = ActivityCalendar.model_validate({"days": 90, "activity": {}, "status": "unavailable", "note": "x"})
         assert broken.days == 90
 
 
@@ -813,9 +897,9 @@ class TestSessionLeaderboard:
         callers to handle a case that cannot occur.
         """
         fields = SessionLeaderRow.model_fields
-        assert all(fields[k].is_required() for k in ("rank", "name", "dpm",
-                                                     "kills", "deaths")), \
+        assert all(fields[k].is_required() for k in ("rank", "name", "dpm", "kills", "deaths")), (
             "a key went optional — the client would have to check presence"
+        )
         assert fields["name"].annotation is str
         assert fields["dpm"].annotation is int
         assert type(None) in fields["kills"].annotation.__args__
@@ -826,6 +910,7 @@ class TestSessionLeaderboard:
         session, no rounds, no latest date. A wrapper object would have
         reshaped all three."""
         from pydantic import TypeAdapter
+
         assert TypeAdapter(list[SessionLeaderRow]).validate_python([]) == []
 
 
@@ -847,8 +932,8 @@ class TestTheHandlersActuallyEmitTheThreeStates:
 
         out = await get_map_objective_records(db=_Empty())
         assert out["status"] == "no_data", (
-            "an empty result still reads 'ok' — the page cannot tell it from "
-            "a measured set")
+            "an empty result still reads 'ok' — the page cannot tell it from a measured set"
+        )
         assert out["note"]
 
     @pytest.mark.asyncio
@@ -898,8 +983,14 @@ class TestWeaponEndpoints:
     """
 
     def test_a_weapon_aggregate_survives(self):
-        row = {"name": "Mp40", "weapon_key": "mp40", "kills": 16308,
-               "headshots": 19461, "hs_rate": 12.9, "accuracy": 42.6}
+        row = {
+            "name": "Mp40",
+            "weapon_key": "mp40",
+            "kills": 16308,
+            "headshots": 19461,
+            "hs_rate": 12.9,
+            "accuracy": 42.6,
+        }
         modelled = _json.loads(WeaponAggregate.model_validate(row).model_dump_json())
         assert missing_keys(row, modelled) == []
         assert modelled == row
@@ -907,29 +998,39 @@ class TestWeaponEndpoints:
     def test_the_rates_stay_fractional(self):
         """`hs_rate` and `accuracy` are percentages with one decimal; typing
         either `int` truncates silently, still with a 200."""
-        row = {"name": "K43", "weapon_key": "k43", "kills": 1, "headshots": 1,
-               "hs_rate": 12.9, "accuracy": 42.6}
+        row = {"name": "K43", "weapon_key": "k43", "kills": 1, "headshots": 1, "hs_rate": 12.9, "accuracy": 42.6}
         modelled = WeaponAggregate.model_validate(row)
         assert modelled.hs_rate == pytest.approx(12.9)
         assert modelled.accuracy == pytest.approx(42.6)
 
     def test_a_hall_of_fame_leader_survives(self):
-        payload = {"period": "all", "status": "ok", "note": None, "leaders": {
-            "mp40": {"weapon": "Mp40", "weapon_key": "mp40",
-                     "player_guid": "A" * 8, "player_name": "one",
-                     "kills": 900, "headshots": 300, "accuracy": 41.2}}}
-        modelled = _json.loads(
-            WeaponsHallOfFame.model_validate(payload).model_dump_json())
+        payload = {
+            "period": "all",
+            "status": "ok",
+            "note": None,
+            "leaders": {
+                "mp40": {
+                    "weapon": "Mp40",
+                    "weapon_key": "mp40",
+                    "player_guid": "A" * 8,
+                    "player_name": "one",
+                    "kills": 900,
+                    "headshots": 300,
+                    "accuracy": 41.2,
+                }
+            },
+        }
+        modelled = _json.loads(WeaponsHallOfFame.model_validate(payload).model_dump_json())
         assert missing_keys(payload, modelled) == []
         assert modelled == payload
 
     def test_its_two_empties_are_distinguishable(self):
         quiet = WeaponsHallOfFame.model_validate(
-            {"period": "month", "leaders": {}, "status": "no_data",
-             "note": "no weapon data for this period"})
+            {"period": "month", "leaders": {}, "status": "no_data", "note": "no weapon data for this period"}
+        )
         broken = WeaponsHallOfFame.model_validate(
-            {"period": "month", "leaders": {}, "status": "unavailable",
-             "note": "the hall-of-fame query failed"})
+            {"period": "month", "leaders": {}, "status": "unavailable", "note": "the hall-of-fame query failed"}
+        )
         assert quiet.leaders == broken.leaders == {}
         assert quiet.status != broken.status
 
@@ -1030,19 +1131,18 @@ class TestTheValidityGateOnRoundCounts:
 
     def _gate_present(self, source: str, query_marker: str) -> bool:
         from pathlib import Path
+
         text = Path(f"website/backend/routers/{source}").read_text()
         start = text.index(query_marker)
-        block = text[start:start + 1400]
+        block = text[start : start + 1400]
         where = block.split("WHERE", 1)[1] if "WHERE" in block else ""
         return "is_valid" in where and "is_bot_round" in where
 
     def test_the_activity_calendar_excludes_invalid_and_bot_rounds(self):
-        assert self._gate_present("records_overview.py",
-                                  "SELECT SUBSTR(CAST(round_date AS TEXT), 1, 10) as day")
+        assert self._gate_present("records_overview.py", "SELECT SUBSTR(CAST(round_date AS TEXT), 1, 10) as day")
 
     def test_the_round_picker_excludes_them_too(self):
-        assert self._gate_present("records_matches.py",
-                                  "SELECT r.id, r.map_name, r.round_date, r.round_number")
+        assert self._gate_present("records_matches.py", "SELECT r.id, r.map_name, r.round_date, r.round_number")
 
     def test_the_session_rounds_endpoint_deliberately_does_not(self):
         """⭐ THE ONE PLACE THAT MUST NOT FILTER, and the difference is the
@@ -1055,6 +1155,7 @@ class TestTheValidityGateOnRoundCounts:
         explanation.
         """
         from website.backend.routers.sessions_router import _counts_toward_totals
+
         assert _counts_toward_totals("completed", True, False) is True
         assert _counts_toward_totals("completed", False, False) is False
         assert _counts_toward_totals("completed", True, True) is False
@@ -1104,7 +1205,8 @@ def test_exclude_none_is_only_on_the_route_where_absence_is_the_meaning():
         f"exclude_none appeared on {sorted(users)} — it drops every None in the "
         f"model, so a field whose null carries meaning would vanish from the "
         f"payload. Adding a file here means asserting that NONE of its "
-        f"exclude_none model's fields uses null as a value.")
+        f"exclude_none model's fields uses null as a value."
+    )
 
     # `records_awards.py` earns it the same way trends does, and the claim is
     # checked rather than asserted in prose: on `StatsRecords` every field is
@@ -1119,17 +1221,19 @@ def test_exclude_none_is_only_on_the_route_where_absence_is_the_meaning():
             f"StatsRecords.{name} is {field.annotation!r}, not "
             f"list[RecordEntry] | None. exclude_none is on this route: a field "
             f"whose null means anything other than 'key absent' would be "
-            f"silently dropped from the response.")
+            f"silently dropped from the response."
+        )
         assert field.default is None, (
-            f"StatsRecords.{name} must default to None so an unset category is "
-            f"omitted rather than sent as null or []")
+            f"StatsRecords.{name} must default to None so an unset category is omitted rather than sent as null or []"
+        )
 
     # And the entries themselves carry no Nones at all, so exclude_none can
     # never reach inside a category and thin out a record.
     for name, field in RecordEntry.model_fields.items():
         assert type(None) not in getattr(field.annotation, "__args__", ()), (
             f"RecordEntry.{name} became nullable — under exclude_none that key "
-            f"would vanish from a record instead of reading null")
+            f"would vanish from a record instead of reading null"
+        )
 
 
 class TestSessionSummaryNullsHideBehindTheDefaultLimit:
@@ -1152,12 +1256,34 @@ class TestSessionSummaryNullsHideBehindTheDefaultLimit:
     """
 
     def _row(self, **over):
-        row = {"date": "2026-08-26", "session_id": 153, "rounds": 18, "maps": 6,
-               "players": 6, "total_kills": 887, "maps_played": ["supply"],
-               "allies_wins": 3, "axis_wins": 4, "draws": 1,
-               "team_1_name": "A", "team_2_name": "B", "team_1_score": 3,
-               "team_2_score": 2, "winning_team": 1,
-               "time_ago": "2 days ago", "formatted_date": "Wednesday, August 26, 2026"}
+        row = {
+            "date": "2026-08-26",
+            "session_id": 153,
+            "rounds": 18,
+            "maps": 6,
+            "players": 6,
+            "total_kills": 887,
+            "maps_played": ["supply"],
+            "allies_wins": 3,
+            "axis_wins": 4,
+            "draws": 1,
+            "team_1_name": "A",
+            "team_2_name": "B",
+            "team_1_score": 3,
+            "team_2_score": 2,
+            "winning_team": 1,
+            "time_ago": "2 days ago",
+            "formatted_date": "Wednesday, August 26, 2026",
+            # The five #848 added after this model froze at the sibling's
+            # shape — all COALESCE'd in the outer SELECT, none nullable.
+            # The comma inside the first name is deliberate: it pins the
+            # ARRAY_AGG contract (a joined-string wire would split it).
+            "total_deaths": 887,
+            "duration_seconds": 5226,
+            "player_names": ["kanii, jr", "bronze"],
+            "start_time": "20:15",
+            "end_time": "22:41",
+        }
         row.update(over)
         return row
 
@@ -1169,8 +1295,7 @@ class TestSessionSummaryNullsHideBehindTheDefaultLimit:
 
     def test_a_session_without_it_is_accepted(self):
         """The 84-of-137 case that the default limit never shows."""
-        row = self._row(team_1_name=None, team_2_name=None, team_1_score=None,
-                        team_2_score=None, winning_team=None)
+        row = self._row(team_1_name=None, team_2_name=None, team_1_score=None, team_2_score=None, winning_team=None)
         modelled = SessionSummary.model_validate(row)
         assert modelled.team_1_score is None
         assert modelled.winning_team is None
@@ -1184,8 +1309,7 @@ class TestSessionSummaryNullsHideBehindTheDefaultLimit:
         they cannot be null and typing them so would invite dead checks."""
         fields = SessionSummary.model_fields
         for name in ("rounds", "maps", "players", "total_kills", "draws"):
-            assert type(None) not in getattr(
-                fields[name].annotation, "__args__", (fields[name].annotation,))
+            assert type(None) not in getattr(fields[name].annotation, "__args__", (fields[name].annotation,))
 
 
 class TestTheTwoFilteredBoards:
@@ -1212,19 +1336,15 @@ class TestTheTwoFilteredBoards:
         rows = self._fixture("api_stats_leaderboard.json")
         assert len(rows) == 25, "fixture trimmed — it no longer covers a full page"
         for raw in rows:
-            modelled = _json.loads(
-                LeaderboardRow.model_validate(raw).model_dump_json())
-            assert not missing_keys(raw, modelled), (
-                f"LeaderboardRow dropped {missing_keys(raw, modelled)}")
+            modelled = _json.loads(LeaderboardRow.model_validate(raw).model_dump_json())
+            assert not missing_keys(raw, modelled), f"LeaderboardRow dropped {missing_keys(raw, modelled)}"
             assert raw == modelled, "LeaderboardRow altered a value"
 
     def test_all_nineteen_record_categories_survive(self):
         raw = self._fixture("api_stats_records.json")
         assert len(raw) == 19, "fixture no longer holds every category"
-        modelled = _json.loads(
-            StatsRecords.model_validate(raw).model_dump_json(exclude_none=True))
-        assert not missing_keys(raw, modelled), (
-            f"StatsRecords dropped {missing_keys(raw, modelled)}")
+        modelled = _json.loads(StatsRecords.model_validate(raw).model_dump_json(exclude_none=True))
+        assert not missing_keys(raw, modelled), f"StatsRecords dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, "StatsRecords altered a value"
 
     def test_a_counting_record_stays_an_int_and_accuracy_stays_a_float(self):
@@ -1247,11 +1367,11 @@ class TestTheTwoFilteredBoards:
         """
         raw = self._fixture("api_stats_records_map_with_no_records.json")
         assert raw == {}
-        modelled = _json.loads(
-            StatsRecords.model_validate(raw).model_dump_json(exclude_none=True))
+        modelled = _json.loads(StatsRecords.model_validate(raw).model_dump_json(exclude_none=True))
         assert modelled == {}, (
             f"an empty result grew keys: {modelled} — exclude_none is what "
-            f"keeps 'category absent' distinguishable from 'category failed'")
+            f"keeps 'category absent' distinguishable from 'category failed'"
+        )
 
     def test_the_records_route_still_carries_exclude_none(self):
         """The class above proves `{}` survives the MODEL. This proves the
@@ -1261,8 +1381,7 @@ class TestTheTwoFilteredBoards:
 
         from website.backend.routers import records_awards
 
-        route = next(r for r in records_awards.router.routes
-                     if isinstance(r, APIRoute) and r.path == "/stats/records")
+        route = next(r for r in records_awards.router.routes if isinstance(r, APIRoute) and r.path == "/stats/records")
         assert route.response_model is StatsRecords
         assert route.response_model_exclude_none is True
 
@@ -1282,8 +1401,7 @@ class TestTheEndpointsWithoutFilters:
 
     def _roundtrip(self, model, raw, **dump):
         modelled = _json.loads(model.model_validate(raw).model_dump_json(**dump))
-        assert not missing_keys(raw, modelled), (
-            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert not missing_keys(raw, modelled), f"{model.__name__} dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, f"{model.__name__} altered a value"
         return modelled
 
@@ -1305,8 +1423,7 @@ class TestTheEndpointsWithoutFilters:
         self._roundtrip(SeasonSummary, raw)
 
     def test_season_leaders_survive_both_states(self):
-        for name in ("api_seasons_current_leaders.json",
-                     "api_seasons_current_leaders_empty.json"):
+        for name in ("api_seasons_current_leaders.json", "api_seasons_current_leaders_empty.json"):
             self._roundtrip(SeasonLeadersResponse, self._f(name))
 
     def test_every_leader_key_is_present_even_when_every_value_is_null(self):
@@ -1324,8 +1441,8 @@ class TestTheEndpointsWithoutFilters:
         assert len(empty) == 13
         assert all(v is None for v in empty.values())
         assert all(v is not None for v in full.values()), (
-            "the populated fixture lost a leader — it no longer proves the "
-            "keys carry values in the other state")
+            "the populated fixture lost a leader — it no longer proves the keys carry values in the other state"
+        )
 
     def test_last_session_survives_the_rich_scoring_shape(self):
         self._roundtrip(LastSession, self._f("api_stats_last-session.json"))
@@ -1347,11 +1464,13 @@ class TestTheEndpointsWithoutFilters:
         assert raw["scoring"]["available"] is False
         modelled = self._roundtrip(LastSession, raw)
         assert set(modelled["scoring"]) == {"available", "reason"}, (
-            "the union leaked the other shape's fields onto the wire")
+            "the union leaked the other shape's fields onto the wire"
+        )
         assert raw["unassigned_players"], (
             "the fixture no longer carries unplaced players — it was the only "
             "recorded proof that unassigned_players and teams[].players share "
-            "a shape")
+            "a shape"
+        )
 
     def test_unassigned_players_and_team_players_are_one_shape(self):
         """The handler appends the SAME dict to either list. One model serves
@@ -1362,8 +1481,9 @@ class TestTheEndpointsWithoutFilters:
         team_player = rich["teams"][0]["players"][0]
         assert set(unassigned) == set(team_player)
         assert len(unassigned) == 25
-        assert {k: type(v).__name__ for k, v in unassigned.items()} == \
-               {k: type(v).__name__ for k, v in team_player.items()}
+        assert {k: type(v).__name__ for k, v in unassigned.items()} == {
+            k: type(v).__name__ for k, v in team_player.items()
+        }
 
     def test_the_three_lists_that_were_empty_in_every_sample(self):
         """`warnings`, `stats_checks` and `unassigned_players` are empty in all
@@ -1390,8 +1510,7 @@ class TestTheStatesNoUrlCanReach:
 
     def _roundtrip(self, model, raw):
         modelled = _json.loads(model.model_validate(raw).model_dump_json())
-        assert not missing_keys(raw, modelled), (
-            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert not missing_keys(raw, modelled), f"{model.__name__} dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, f"{model.__name__} altered a value"
         return modelled
 
@@ -1446,7 +1565,8 @@ class TestTheStatesNoUrlCanReach:
             chosen = adapter.validate_python(raw)
             assert type(chosen) is expected_model, (
                 f"{fixture} was matched by {type(chosen).__name__}, not "
-                f"{expected_model.__name__} — the union no longer discriminates")
+                f"{expected_model.__name__} — the union no longer discriminates"
+            )
             out = _json.loads(chosen.model_dump_json())
             assert len(out) == expected_keys, f"{fixture} came back {len(out)} keys"
             assert out == raw, f"{fixture} changed passing through the union"
@@ -1499,23 +1619,29 @@ class TestTheStatesNoUrlCanReach:
 
     # ---- /diagnostics/storytelling-completeness --------------------------
 
-    @pytest.mark.parametrize("fixture", [
-        "api_diagnostics_storytelling_completeness.json",
-        "api_diagnostics_storytelling_completeness_no_data.json",
-        "api_diagnostics_storytelling_completeness_degraded.json",
-    ])
+    @pytest.mark.parametrize(
+        "fixture",
+        [
+            "api_diagnostics_storytelling_completeness.json",
+            "api_diagnostics_storytelling_completeness_no_data.json",
+            "api_diagnostics_storytelling_completeness_degraded.json",
+        ],
+    )
     def test_all_three_status_values_survive(self, fixture):
         raw = self._f(fixture)
         assert len(raw) == 20
         self._roundtrip(StorytellingCompleteness, raw)
 
     def test_the_three_states_are_actually_three(self):
-        seen = {self._f(f)["status"] for f in (
-            "api_diagnostics_storytelling_completeness.json",
-            "api_diagnostics_storytelling_completeness_no_data.json",
-            "api_diagnostics_storytelling_completeness_degraded.json")}
-        assert seen == {"ok", "no_data", "degraded"}, (
-            f"the fixtures no longer cover all three states: {seen}")
+        seen = {
+            self._f(f)["status"]
+            for f in (
+                "api_diagnostics_storytelling_completeness.json",
+                "api_diagnostics_storytelling_completeness_no_data.json",
+                "api_diagnostics_storytelling_completeness_degraded.json",
+            )
+        }
+        assert seen == {"ok", "no_data", "degraded"}, f"the fixtures no longer cover all three states: {seen}"
 
     def test_gaming_session_id_is_null_when_scoped_by_date(self):
         """The field a date-scoped sample would have typed `int`."""
@@ -1533,8 +1659,7 @@ class TestTheStatesNoUrlCanReach:
         assert raw["warnings"], "the no_data fixture lost its warning"
         assert all(isinstance(w, dict) for w in raw["warnings"])
         assert set(raw["warnings"][0]) == {"level", "message"}
-        last_session = _json.loads(
-            (_FIXTURES / "api_stats_last-session.json").read_text())
+        last_session = _json.loads((_FIXTURES / "api_stats_last-session.json").read_text())
         assert all(isinstance(w, str) for w in last_session["warnings"])
 
     def test_the_ratios_stay_float_on_the_empty_path(self):
@@ -1544,8 +1669,7 @@ class TestTheStatesNoUrlCanReach:
         for field in ("completeness_ratio", "linkage_ratio", "correlation_ratio"):
             assert raw[field] == 0.0
             assert isinstance(raw[field], float), f"{field} arrived as an int"
-        empty_season = _json.loads(
-            (_FIXTURES / "api_seasons_current_summary_empty.json").read_text())
+        empty_season = _json.loads((_FIXTURES / "api_seasons_current_summary_empty.json").read_text())
         assert isinstance(empty_season["totals"]["avg_rounds_per_day"], int)
 
 
@@ -1566,18 +1690,19 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         return _json.loads((_FIXTURES / name).read_text())
 
     def _roundtrip(self, raw):
-        modelled = _json.loads(
-            AvailabilityOverview.model_validate(raw).model_dump_json(by_alias=True))
-        assert not missing_keys(raw, modelled), (
-            f"AvailabilityOverview dropped {missing_keys(raw, modelled)}")
+        modelled = _json.loads(AvailabilityOverview.model_validate(raw).model_dump_json(by_alias=True))
+        assert not missing_keys(raw, modelled), f"AvailabilityOverview dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, "AvailabilityOverview altered a value"
         return modelled
 
-    @pytest.mark.parametrize("fixture", [
-        "api_availability_anonymous.json",
-        "api_availability_viewer.json",
-        "api_availability_viewer_with_users.json",
-    ])
+    @pytest.mark.parametrize(
+        "fixture",
+        [
+            "api_availability_anonymous.json",
+            "api_availability_viewer.json",
+            "api_availability_viewer_with_users.json",
+        ],
+    )
     def test_every_viewer_state_survives(self, fixture):
         self._roundtrip(self._f(fixture))
 
@@ -1585,14 +1710,14 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         anon = self._f("api_availability_anonymous.json")
         viewer = self._f("api_availability_viewer.json")
         assert all("my_status" not in d for d in anon["days"]), (
-            "the anonymous fixture grew my_status — it no longer proves "
-            "absence is a state")
+            "the anonymous fixture grew my_status — it no longer proves absence is a state"
+        )
         nulls = [d for d in viewer["days"] if d.get("my_status") is None]
         values = [d for d in viewer["days"] if d.get("my_status")]
         assert all("my_status" in d for d in viewer["days"])
         assert len(nulls) == 50 and len(values) == 5, (
-            f"the viewer fixture no longer covers both: {len(nulls)} null, "
-            f"{len(values)} set")
+            f"the viewer fixture no longer covers both: {len(nulls)} null, {len(values)} set"
+        )
 
     def test_the_union_keeps_each_day_shape_exactly(self):
         """Each day payload comes back as its own shape, with every key.
@@ -1606,21 +1731,18 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         """
         from pydantic import TypeAdapter
 
-        adapter = TypeAdapter(
-            AvailabilityDayViewerWithUsers | AvailabilityDayViewer
-            | AvailabilityDayAnonymous)
+        adapter = TypeAdapter(AvailabilityDayViewerWithUsers | AvailabilityDayViewer | AvailabilityDayAnonymous)
         cases = [
             ("api_availability_anonymous.json", AvailabilityDayAnonymous, 3),
             ("api_availability_viewer.json", AvailabilityDayViewer, 4),
-            ("api_availability_viewer_with_users.json",
-             AvailabilityDayViewerWithUsers, 5),
+            ("api_availability_viewer_with_users.json", AvailabilityDayViewerWithUsers, 5),
         ]
         for fixture, expected_model, keys in cases:
             day = self._f(fixture)["days"][0]
             chosen = adapter.validate_python(day)
             assert type(chosen) is expected_model, (
-                f"{fixture} day matched {type(chosen).__name__}, not "
-                f"{expected_model.__name__}")
+                f"{fixture} day matched {type(chosen).__name__}, not {expected_model.__name__}"
+            )
             out = _json.loads(chosen.model_dump_json())
             assert len(out) == keys and out == day
 
@@ -1632,19 +1754,15 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         anon = self._f("api_availability_anonymous.json")
         assert all("users_by_status" not in d for d in anon["days"])
         with_users = self._f("api_availability_viewer_with_users.json")
-        populated = [d for d in with_users["days"]
-                     if any(v for v in d["users_by_status"].values())]
+        populated = [d for d in with_users["days"] if any(v for v in d["users_by_status"].values())]
         assert populated, "the fixture no longer carries a populated day"
-        assert set(populated[0]["users_by_status"]) == {
-            "LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"}
+        assert set(populated[0]["users_by_status"]) == {"LOOKING", "AVAILABLE", "MAYBE", "NOT_PLAYING"}
         # …and the users inside keep their shape. Without this the element
         # type could be widened to `Any` and nothing would notice.
-        someone = next(u for v in populated[0]["users_by_status"].values()
-                       for u in v)
+        someone = next(u for v in populated[0]["users_by_status"].values() for u in v)
         assert set(someone) == {"user_id", "display_name"}
         modelled = AvailabilityOverview.model_validate(with_users)
-        day = next(d for d in modelled.days
-                   if any(v for v in getattr(d, "users_by_status", {}).values()))
+        day = next(d for d in modelled.days if any(v for v in getattr(d, "users_by_status", {}).values()))
         entry = next(u for v in day.users_by_status.values() for u in v)
         assert isinstance(entry, AvailabilityUser)
         assert isinstance(entry.display_name, str)
@@ -1654,9 +1772,10 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         # browser as ...120. This test asserted `int` until CodeRabbit found
         # it on #830 — it was pinning the bug.
         assert isinstance(entry.user_id, str)
-        assert int(entry.user_id) > 2 ** 53, (
+        assert int(entry.user_id) > 2**53, (
             "the fixture's id no longer exceeds Number.MAX_SAFE_INTEGER, so "
-            "it can no longer demonstrate why this field is a string")
+            "it can no longer demonstrate why this field is a string"
+        )
 
     def test_what_the_day_union_actually_rests_on(self):
         """⭐ MEASURED, BECAUSE THE OBVIOUS EXPLANATIONS WERE BOTH WRONG.
@@ -1668,14 +1787,13 @@ class TestAvailabilityWhereAbsentAndNullBothMeanSomething:
         """
         from pydantic import TypeAdapter
 
-        reversed_order = TypeAdapter(
-            AvailabilityDayAnonymous | AvailabilityDayViewer
-            | AvailabilityDayViewerWithUsers)
+        reversed_order = TypeAdapter(AvailabilityDayAnonymous | AvailabilityDayViewer | AvailabilityDayViewerWithUsers)
         day = self._f("api_availability_viewer_with_users.json")["days"][0]
         chosen = reversed_order.validate_python(day)
         assert type(chosen) is AvailabilityDayViewerWithUsers, (
             "most-specific selection no longer holds: the union now depends on "
-            "declaration order, and the members must be reordered to match")
+            "declaration order, and the members must be reordered to match"
+        )
         assert _json.loads(chosen.model_dump_json()) == day
 
     def test_the_from_alias_survives_the_model(self):
@@ -1704,14 +1822,15 @@ def test_availability_viewer_authenticated_is_the_include_users_gate():
 
     src = Path("website/backend/routers/availability.py").read_text()
     tree = ast.parse(src)
-    fn = next(n for n in ast.walk(tree)
-              if isinstance(n, ast.AsyncFunctionDef)
-              and n.name == "get_availability_range")
+    fn = next(n for n in ast.walk(tree) if isinstance(n, ast.AsyncFunctionDef) and n.name == "get_availability_range")
 
-    gates = [ast.unparse(n) for n in ast.walk(fn)
-             if isinstance(n, ast.BoolOp) and isinstance(n.op, ast.And)
-             and any(isinstance(v, ast.Name) and v.id == "include_users"
-                     for v in n.values)]
+    gates = [
+        ast.unparse(n)
+        for n in ast.walk(fn)
+        if isinstance(n, ast.BoolOp)
+        and isinstance(n.op, ast.And)
+        and any(isinstance(v, ast.Name) and v.id == "include_users" for v in n.values)
+    ]
     # The gate is written TWICE — once to decide whether to run the roster
     # query, once to decide whether to attach the field to each day. Both must
     # say the same thing; a set comparison catches one of them drifting.
@@ -1719,16 +1838,21 @@ def test_availability_viewer_authenticated_is_the_include_users_gate():
     assert set(gates) == {"include_users and user_id is not None"}, (
         f"the include_users gate(s) changed to {sorted(set(gates))} — "
         f"`viewer.authenticated` may no longer tell a caller why the field "
-        f"is missing")
+        f"is missing"
+    )
 
-    viewer_values = [ast.unparse(v)
-                     for n in ast.walk(fn) if isinstance(n, ast.Dict)
-                     for k, v in zip(n.keys, n.values)
-                     if isinstance(k, ast.Constant) and k.value == "authenticated"]
+    viewer_values = [
+        ast.unparse(v)
+        for n in ast.walk(fn)
+        if isinstance(n, ast.Dict)
+        for k, v in zip(n.keys, n.values)
+        if isinstance(k, ast.Constant) and k.value == "authenticated"
+    ]
     assert viewer_values == ["user_id is not None"], (
         f"viewer.authenticated is now {viewer_values}, which no longer matches "
         f"the include_users gate — consumers lose the only way to distinguish "
-        f"'no users' from 'not allowed to ask'")
+        f"'no users' from 'not allowed to ask'"
+    )
 
 
 class TestUploadsWhereTheAnswerIsUnambiguous:
@@ -1748,16 +1872,18 @@ class TestUploadsWhereTheAnswerIsUnambiguous:
 
     def _roundtrip(self, model, raw):
         modelled = _json.loads(model.model_validate(raw).model_dump_json())
-        assert not missing_keys(raw, modelled), (
-            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert not missing_keys(raw, modelled), f"{model.__name__} dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, f"{model.__name__} altered a value"
         return modelled
 
-    @pytest.mark.parametrize("fixture", [
-        "api_uploads_list.json",
-        "api_uploads_list_empty.json",
-        "api_uploads_list_offset_past_end.json",
-    ])
+    @pytest.mark.parametrize(
+        "fixture",
+        [
+            "api_uploads_list.json",
+            "api_uploads_list_empty.json",
+            "api_uploads_list_offset_past_end.json",
+        ],
+    )
     def test_the_list_survives_every_recorded_state(self, fixture):
         self._roundtrip(UploadList, self._f(fixture))
 
@@ -1778,7 +1904,8 @@ class TestUploadsWhereTheAnswerIsUnambiguous:
     def test_an_offset_past_the_end_still_reports_the_real_total(self):
         past = self._f("api_uploads_list_offset_past_end.json")
         assert past["items"] == [] and past["total"] > 0, (
-            "the fixture no longer distinguishes 'past the end' from 'empty'")
+            "the fixture no longer distinguishes 'past the end' from 'empty'"
+        )
         self._roundtrip(UploadList, past)
 
     def test_detail_survives_and_can_delete_is_the_only_session_field(self):
@@ -1792,7 +1919,8 @@ class TestUploadsWhereTheAnswerIsUnambiguous:
         assert differing == {"can_delete"}, (
             f"the two sessions now differ on {sorted(differing)} — visibility "
             f"may have become auth-dependent, and an empty library would then "
-            f"have two meanings")
+            f"have two meanings"
+        )
         assert anon["can_delete"] is False and owner["can_delete"] is True
         self._roundtrip(UploadDetail, anon)
         self._roundtrip(UploadDetail, owner)
@@ -1839,24 +1967,22 @@ class TestProximityWhereTheScopeIsTheWholeStory:
 
     def _roundtrip(self, model, raw):
         modelled = _json.loads(model.model_validate(raw).model_dump_json())
-        assert not missing_keys(raw, modelled), (
-            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert not missing_keys(raw, modelled), f"{model.__name__} dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, f"{model.__name__} altered a value"
         return modelled
 
     def test_players_and_hit_regions_survive(self):
         self._roundtrip(ProximityPlayers, self._f("api_proximity_players.json"))
-        self._roundtrip(ProximityPlayers,
-                        self._f("api_proximity_players_empty.json"))
-        self._roundtrip(ProximityHitRegions,
-                        self._f("api_proximity_hit_regions.json"))
+        self._roundtrip(ProximityPlayers, self._f("api_proximity_players_empty.json"))
+        self._roundtrip(ProximityHitRegions, self._f("api_proximity_hit_regions.json"))
 
     def test_an_empty_scope_is_an_answer_not_an_error(self):
         empty = self._f("api_proximity_players_empty.json")
         assert empty["status"] == "ok" and empty["players"] == []
         assert empty["scope"]["session_date"] == "2020-01-01", (
             "the fixture no longer records WHICH scope came back empty — "
-            "which is the only thing separating it from a broken filter")
+            "which is the only thing separating it from a broken filter"
+        )
 
     def test_the_scope_echo_carries_nulls_as_meaning(self):
         """⭐ `scope` is how a caller checks the answer was filtered the way it
@@ -1898,15 +2024,15 @@ class TestProximityWhereTheScopeIsTheWholeStory:
 
         from website.backend.routers import proximity_positions
 
-        route = next(r for r in proximity_positions.router.routes
-                     if isinstance(r, APIRoute)
-                     and r.path == "/proximity/player-heatmap")
+        route = next(
+            r
+            for r in proximity_positions.router.routes
+            if isinstance(r, APIRoute) and r.path == "/proximity/player-heatmap"
+        )
         adapter = TypeAdapter(route.response_model)
-        for raw, expected, keys in ((plain, PlayerHeatmap, 10),
-                                    (dies, PlayerHeatmapKillsOnly, 11)):
+        for raw, expected, keys in ((plain, PlayerHeatmap, 10), (dies, PlayerHeatmapKillsOnly, 11)):
             chosen = adapter.validate_python(raw)
-            assert type(chosen) is expected, (
-                f"mode={raw['mode']} matched {type(chosen).__name__}")
+            assert type(chosen) is expected, f"mode={raw['mode']} matched {type(chosen).__name__}"
             out = _json.loads(chosen.model_dump_json())
             assert len(out) == keys and out == raw
 
@@ -1928,9 +2054,9 @@ class TestProximityWhereTheScopeIsTheWholeStory:
         assert rows, "the fixture lost its rows"
         assert all(r["total_hits"] >= 10 for r in rows), (
             "a row below the HAVING floor appeared — head_pct's int branch is "
-            "reachable after all and the type must widen to int | float")
-        modelled = ProximityHitRegions.model_validate(
-            self._f("api_proximity_hit_regions.json"))
+            "reachable after all and the type must widen to int | float"
+        )
+        modelled = ProximityHitRegions.model_validate(self._f("api_proximity_hit_regions.json"))
         assert all(isinstance(r.head_pct, float) for r in modelled.players)
 
 
@@ -1947,19 +2073,19 @@ def test_proximity_players_names_are_guaranteed_by_the_handler():
     from pathlib import Path
 
     src = Path("website/backend/routers/proximity_positions.py").read_text()
-    fn = next(n for n in ast.walk(ast.parse(src))
-              if isinstance(n, ast.AsyncFunctionDef)
-              and n.name == "get_proximity_players")
-    comprehensions = [ast.unparse(n) for n in ast.walk(fn)
-                      if isinstance(n, ast.ListComp)]
+    fn = next(
+        n for n in ast.walk(ast.parse(src)) if isinstance(n, ast.AsyncFunctionDef) and n.name == "get_proximity_players"
+    )
+    comprehensions = [ast.unparse(n) for n in ast.walk(fn) if isinstance(n, ast.ListComp)]
     assert comprehensions, "the players list is no longer built by a comprehension"
     built = comprehensions[0]
     assert "str(r[0])" in built and "str(r[1])" in built, (
         f"the guid/name coercion is gone from {built!r} — `name: str` is no "
-        f"longer guaranteed and the model must widen to `str | None`")
+        f"longer guaranteed and the model must widen to `str | None`"
+    )
     assert "if r and r[0] and r[1]" in built, (
-        f"the truthiness filter is gone from {built!r} — an empty or missing "
-        f"name can now reach the payload")
+        f"the truthiness filter is gone from {built!r} — an empty or missing name can now reach the payload"
+    )
 
 
 class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
@@ -1978,14 +2104,12 @@ class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
 
     def _roundtrip(self, model, raw):
         modelled = _json.loads(model.model_validate(raw).model_dump_json())
-        assert not missing_keys(raw, modelled), (
-            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert not missing_keys(raw, modelled), f"{model.__name__} dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, f"{model.__name__} altered a value"
         return modelled
 
     def test_the_formula_survives_intact(self):
-        self._roundtrip(ProxFormula,
-                        self._f("api_proximity_prox_scores_formula.json"))
+        self._roundtrip(ProxFormula, self._f("api_proximity_prox_scores_formula.json"))
 
     def test_a_new_metric_does_not_break_the_formula_endpoint(self):
         """The point of the open dicts, checked rather than asserted in prose.
@@ -1993,21 +2117,26 @@ class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
         formula change — on the endpoint whose job is to publish changes."""
         raw = self._f("api_proximity_prox_scores_formula.json")
         cat = next(iter(raw["categories"]))
-        raw["categories"][cat]["metrics"]["a_brand_new_metric"] = {
-            "label": "Invented", "weight": 0.25, "invert": True}
+        raw["categories"][cat]["metrics"]["a_brand_new_metric"] = {"label": "Invented", "weight": 0.25, "invert": True}
         raw["categories"]["prox_invented"] = {
-            "label": "Invented", "description": "did not exist yesterday",
-            "weight_in_overall": 0.0, "metrics": {}}
+            "label": "Invented",
+            "description": "did not exist yesterday",
+            "weight_in_overall": 0.0,
+            "metrics": {},
+        }
         raw["category_weights"]["prox_invented"] = 0.0
         modelled = ProxFormula.model_validate(raw)
         assert "a_brand_new_metric" in modelled.categories[cat].metrics
         assert "prox_invented" in modelled.categories
 
-    @pytest.mark.parametrize("fixture", [
-        "api_proximity_prox_scores.json",
-        "api_proximity_prox_scores_empty.json",
-        "api_proximity_prox_scores_limited.json",
-    ])
+    @pytest.mark.parametrize(
+        "fixture",
+        [
+            "api_proximity_prox_scores.json",
+            "api_proximity_prox_scores_empty.json",
+            "api_proximity_prox_scores_limited.json",
+        ],
+    )
     def test_scores_survive_every_recorded_state(self, fixture):
         self._roundtrip(ProxScores, self._f(fixture))
 
@@ -2025,9 +2154,7 @@ class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
             for metrics in player["breakdown"].values():
                 for entry in metrics.values():
                     (retired if "retired_in" in entry else live).append(entry)
-        assert live and retired, (
-            f"the fixture no longer covers both kinds: {len(live)} live, "
-            f"{len(retired)} retired")
+        assert live and retired, f"the fixture no longer covers both kinds: {len(live)} live, {len(retired)} retired"
         assert all(len(e) == 5 for e in live)
         assert all(len(e) == 6 for e in retired)
         out = self._roundtrip(ProxScores, raw)
@@ -2047,13 +2174,11 @@ class TestProxScoresWhereAWrongTypeMisstatesTheMetric:
         # constructed, which is the difference between pinning the contract
         # and pinning my own guess about it.
         raw = self._f("api_proximity_prox_scores_unmeasured.json")
-        nulls = [e for p in raw["players"] for m in p["breakdown"].values()
-                 for e in m.values() if e["raw"] is None]
+        nulls = [e for p in raw["players"] for m in p["breakdown"].values() for e in m.values() if e["raw"] is None]
         assert nulls, "the fixture lost its unmeasured metrics"
         assert all(e["contribution"] == 0 for e in nulls)
         out = self._roundtrip(ProxScores, raw)
-        still = [e for p in out["players"] for m in p["breakdown"].values()
-                 for e in m.values() if e["raw"] is None]
+        still = [e for p in out["players"] for m in p["breakdown"].values() for e in m.values() if e["raw"] is None]
         assert len(still) == len(nulls)
 
     def test_player_count_is_the_count_before_the_limit(self):
@@ -2106,11 +2231,12 @@ def test_no_router_hand_copies_the_round_duration_expression():
     for path in sorted(Path("website/backend/routers").glob("*.py")):
         text = path.read_text()
         for match in re.finditer(r"actual_time\s*~\s*'([^']+)'", text):
-            line = text[:match.start()].count("\n") + 1
+            line = text[: match.start()].count("\n") + 1
             offenders.append(f"{path.name}:{line} — {match.group(1)}")
     assert not offenders, (
         "a router spells out the actual_time clock pattern instead of calling "
-        "shared.round_time.round_duration_sql(): " + "; ".join(offenders))
+        "shared.round_time.round_duration_sql(): " + "; ".join(offenders)
+    )
 
 
 class TestTheLastTwoProximityBoards:
@@ -2133,8 +2259,7 @@ class TestTheLastTwoProximityBoards:
 
     def _roundtrip(self, model, raw):
         modelled = _json.loads(model.model_validate(raw).model_dump_json())
-        assert not missing_keys(raw, modelled), (
-            f"{model.__name__} dropped {missing_keys(raw, modelled)}")
+        assert not missing_keys(raw, modelled), f"{model.__name__} dropped {missing_keys(raw, modelled)}"
         assert raw == modelled, f"{model.__name__} altered a value"
         return modelled
 
@@ -2163,28 +2288,30 @@ class TestTheLastTwoProximityBoards:
 
     def test_the_pitch_histogram_has_one_more_edge_than_bins(self):
         """A consumer that zips edges with counts drops the last bin."""
-        for fixture in ("api_proximity_player_aim.json",
-                        "api_proximity_player_aim_empty.json"):
+        for fixture in ("api_proximity_player_aim.json", "api_proximity_player_aim_empty.json"):
             hist = self._f(fixture)["pitch_hist"]
             assert len(hist["edges"]) == len(hist["counts"]) + 1
 
-    @pytest.mark.parametrize(("fixture", "keys"), [
-        ("api_proximity_hotzones_ready.json", 10),
-        ("api_proximity_hotzones_no_map.json", 8),
-        ("api_proximity_hotzones_unknown_map.json", 10),
-    ])
+    @pytest.mark.parametrize(
+        ("fixture", "keys"),
+        [
+            ("api_proximity_hotzones_ready.json", 10),
+            ("api_proximity_hotzones_no_map.json", 8),
+            ("api_proximity_hotzones_unknown_map.json", 10),
+        ],
+    )
     def test_hotzones_survives_every_recorded_shape(self, fixture, keys):
         from fastapi.routing import APIRoute
         from pydantic import TypeAdapter
 
         from website.backend.routers import proximity_combat
 
-        route = next(r for r in proximity_combat.router.routes
-                     if isinstance(r, APIRoute) and r.path == "/proximity/hotzones")
+        route = next(
+            r for r in proximity_combat.router.routes if isinstance(r, APIRoute) and r.path == "/proximity/hotzones"
+        )
         raw = self._f(fixture)
         assert len(raw) == keys
-        out = _json.loads(
-            TypeAdapter(route.response_model).validate_python(raw).model_dump_json())
+        out = _json.loads(TypeAdapter(route.response_model).validate_python(raw).model_dump_json())
         assert out == raw
 
     def test_status_is_not_the_discriminator_between_the_two_shapes(self):
@@ -2233,8 +2360,10 @@ class TestAnOutageMustNotReadAsAnEmptyDatabase:
         class Broken:
             async def fetch_all(self, *a, **k):
                 raise RuntimeError("database is down")
+
             async def fetch_one(self, *a, **k):
                 raise RuntimeError("database is down")
+
             async def fetch_val(self, *a, **k):
                 raise RuntimeError("database is down")
 
@@ -2246,13 +2375,13 @@ class TestAnOutageMustNotReadAsAnEmptyDatabase:
     def test_a_dead_database_says_so_instead_of_reporting_zeros(self):
         with self._broken_client() as client:
             response = client.get("/api/stats/overview")
-        assert response.status_code == 200, (
-            "one failed aggregate must not take the homepage down")
+        assert response.status_code == 200, "one failed aggregate must not take the homepage down"
         body = response.json()
         assert body["rounds"] == 0 and body["total_kills"] == 0
         assert body["status"] == "partial", (
             "every query raised and the payload still called itself ok — the "
-            "zeros above are indistinguishable from a quiet fortnight")
+            "zeros above are indistinguishable from a quiet fortnight"
+        )
         assert body["failed_metrics"], "no metric was named as failed"
         assert body["note"] and "not zero" in body["note"]
 
@@ -2266,11 +2395,11 @@ class TestAnOutageMustNotReadAsAnEmptyDatabase:
         """
         from website.backend.routers.records_overview import StatsOverview
 
-        assert {"status", "note", "failed_metrics"} <= set(
-            StatsOverview.model_fields), (
+        assert {"status", "note", "failed_metrics"} <= set(StatsOverview.model_fields), (
             "the model stopped declaring the fields that say an outage "
             "happened; the handler still returns them and they will be "
-            "dropped from the response with a 200")
+            "dropped from the response with a 200"
+        )
 
 
 class TestOnePlayerTwoGuids:
@@ -2334,12 +2463,12 @@ def test_no_recorded_fixture_carries_a_real_discord_identity():
     for path in sorted(Path("tests/fixtures/api_responses").glob("*.json")):
         text = path.read_text()
         offenders.extend(
-            f"{path.name}: {m.group(1)} is an unquoted "
-            f"{len(m.group(2))}-digit number"
-            for m in re.finditer(r'"(user_id|uploader_discord_id)":\s*(\d{16,})', text))
-    assert not offenders, (
-        "a snowflake is on the wire as a JSON number, which a browser "
-        "truncates: " + "; ".join(offenders))
+            f"{path.name}: {m.group(1)} is an unquoted {len(m.group(2))}-digit number"
+            for m in re.finditer(r'"(user_id|uploader_discord_id)":\s*(\d{16,})', text)
+        )
+    assert not offenders, "a snowflake is on the wire as a JSON number, which a browser truncates: " + "; ".join(
+        offenders
+    )
 
 
 def test_last_session_accepts_the_two_nulls_no_fixture_carries():
@@ -2358,12 +2487,12 @@ def test_last_session_accepts_the_two_nulls_no_fixture_carries():
     paired branch applies — so the map row validates while its own debug row
     does not (Codex on #830).
     """
-    raw = _json.loads(
-        (_FIXTURES / "api_stats_last-session.json").read_text())
+    raw = _json.loads((_FIXTURES / "api_stats_last-session.json").read_text())
 
     assert all(m["map_name"] is not None for m in raw["matches"]), (
         "the fixture now carries a null map name — this constructed case is "
-        "no longer needed and this test should assert on the recording")
+        "no longer needed and this test should assert on the recording"
+    )
     raw["matches"][0]["map_name"] = None
     for entry in raw["scoring"]["debug"]:
         entry["r1_defender_side"] = None

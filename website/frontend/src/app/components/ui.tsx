@@ -1,3 +1,4 @@
+import { Fragment, isValidElement } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -200,10 +201,33 @@ export function Absent({ reason, block, style }: {
 }
 
 /** The runtime half of Absent's required-reason guarantee: booleans render
- *  as nothing, and a whitespace-only string is a reason in name only. */
+ *  as nothing, and a whitespace-only string is a reason in name only.
+ *
+ *  ⛔ It has to RECURSE. The first version returned true for everything that
+ *  was not null, a boolean, or a blank string, which quietly meant that
+ *  `reason={items.map(...)}` over an empty collection passed the guarantee and
+ *  rendered nothing — a reason-less absence, the exact thing this component
+ *  exists to end, arriving through the check meant to prevent it. An empty
+ *  array and an empty fragment are as silent as `null`; they just do not look
+ *  it. Codex on #845, after the null/boolean/blank cases were already handled:
+ *  a compound node is only as substantial as what it contains. */
 function hasSubstance(node: ReactNode): boolean {
   if (node == null || typeof node === 'boolean') return false;
   if (typeof node === 'string') return node.trim().length > 0;
+  if (typeof node === 'number' || typeof node === 'bigint') return true;
+  if (Array.isArray(node)) return node.some(hasSubstance);
+  if (isValidElement(node)) {
+    // A fragment renders exactly its children and nothing of its own, so an
+    // empty one is silence wearing element clothes. Any other element paints
+    // something we cannot see from here — assume it speaks.
+    return node.type === Fragment
+      ? hasSubstance((node.props as { children?: ReactNode }).children)
+      : true;
+  }
+  // ⚠️ A non-array iterable (a generator) is a ReactNode too, and we do NOT
+  // look inside it: reading a one-shot iterator to judge it would leave React
+  // an exhausted one and render the empty reason we are trying to forbid.
+  // Checking it would CAUSE the failure it detects, so it counts as substance.
   return true;
 }
 

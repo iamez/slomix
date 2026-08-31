@@ -267,4 +267,32 @@ describe('Home', () => {
     expect(rowLinks.length).toBe(orphan.length - 1);
     expect(panel.textContent).toContain('unknown map');
   });
+
+  it('marks a partial overview figure as missing, by name, without blanking the panel', async () => {
+    // #830 answers 200 + status:"partial" with fallback zeros when a
+    // subquery fails; only failed_metrics can tell a missing figure from a
+    // measured zero. Both directions pinned: the named figure says
+    // "missing", the unnamed ones keep their real numbers.
+    const partialOverview = {
+      ...(FIXTURES.get('/api/stats/overview') as Record<string, unknown>),
+      rounds: 0, total_kills: 110816, sessions: 151, players_all_time: 94,
+      status: 'partial', note: 'rounds subquery failed', failed_metrics: ['rounds'],
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      if (String(input).split('?')[0] === '/api/stats/overview') {
+        return Promise.resolve({
+          ok: true, status: 200, json: () => Promise.resolve(partialOverview),
+        } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderHome();
+    await waitFor(() => expect(screen.getByText('missing')).toBeInTheDocument());
+    expect(screen.getByText('110,816')).toBeInTheDocument();
+    expect(screen.getByText('151')).toBeInTheDocument();
+    // a measured zero elsewhere must NOT read as missing (that would be the
+    // circular flag this codebase keeps refusing)
+    expect(screen.getAllByText('missing').length).toBe(1);
+  });
+
 });
