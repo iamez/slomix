@@ -1144,6 +1144,71 @@ export interface PlayerRivalries {
   total_opponents: number;
 }
 
+/** One weapon in a head-to-head, as the killer used it on the other. */
+export interface HeadToHeadWeapon {
+  weapon: string;
+  kill_mod: number;
+  kills: number;
+}
+
+export interface HeadToHeadMap {
+  map: string;
+  p1_kills: number;
+  p2_kills: number;
+  total: number;
+}
+
+/** GET /api/rivalries/h2h/{guid1}/{guid2} — two named players, every duel
+ *  between them.
+ *
+ *  A UNION, and the unresolved branch is the interesting half: it answers
+ *  200 (not 404) and NAMES which side could not be resolved
+ *  (rivalries_router.py:113-131), which is the difference between "these two
+ *  never met" and "one of these ids was never tracked". It also omits
+ *  `per_map` entirely rather than sending an empty list, so a consumer that
+ *  reads the key without checking `resolved` gets `undefined`, not `[]`.
+ *
+ *  On the resolved branch nothing is null: `p1_name`/`p2_name` fall back to
+ *  the guid prefix (rivalries_service.py:163-165) and `_classify` always
+ *  returns a string — INSUFFICIENT_DATA below five meetings rather than
+ *  nothing. `map` is NOT NULL in `proximity_kill_outcome` (checked in
+ *  information_schema; 0 nulls in 47,385 rows). */
+export type HeadToHead =
+  | {
+    status: string;
+    resolved: false;
+    /** The ids that could not be resolved — one of them, or both. */
+    unresolved: string[];
+    guid1: string;
+    guid2: string;
+    p1_name: null;
+    p2_name: null;
+    p1_kills: number;
+    p2_kills: number;
+    total: number;
+    win_rate: number;
+    classification: null;
+    p1_weapons: [];
+    p2_weapons: [];
+  }
+  | {
+    status: string;
+    resolved: true;
+    guid1: string;
+    guid2: string;
+    p1_name: string;
+    p2_name: string;
+    p1_kills: number;
+    p2_kills: number;
+    total: number;
+    /** p1's share of the pair's kills. */
+    win_rate: number;
+    classification: string;
+    p1_weapons: HeadToHeadWeapon[];
+    p2_weapons: HeadToHeadWeapon[];
+    per_map: HeadToHeadMap[];
+  };
+
 /* ── ET Rating (v2.1) and SSR (v0.3) ──────────────────────────────────────
  * Two different formulas over the same players. Keeping them in one file is
  * deliberate: the page shows both, and the whole risk is a reader taking a
