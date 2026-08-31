@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import {
   useStoryBoxScore, useStoryEnabler, useStoryGravity,
@@ -280,11 +280,11 @@ function SessionMomentum({ gsid }: { gsid: number }) {
 
   if (data.status !== 'ok') {
     return (
-      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
-        {data.status === 'no_team_data'
+      <Absent
+        reason={data.status === 'no_team_data'
           ? `no persistent teams could be built for this session (${data.reason}) — the per-round charts above are unaffected`
           : 'this session has no momentum samples'}
-      </span>
+      />
     );
   }
 
@@ -315,9 +315,7 @@ function SessionMomentum({ gsid }: { gsid: number }) {
           <path d={paths.b} fill="none" stroke="var(--color-team-b)" strokeWidth="1.5" />
         </svg>
       ) : (
-        <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
-          too few samples to draw
-        </span>
+        <Absent reason="too few samples to draw" />
       )}
       <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
         <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-team-a)' }}>
@@ -353,10 +351,10 @@ function KillMatrix({ gsid }: { gsid: number }) {
   const data = q.data;
   if (!data.available) {
     return (
-      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
-        no per-kill telemetry for this session ({data.reason}) — the scoreboard
-        above still counts the kills, this view needs the pairing
-      </span>
+      <Absent
+        reason={<>no per-kill telemetry for this session ({data.reason}) — the scoreboard
+        above still counts the kills, this view needs the pairing</>}
+      />
     );
   }
 
@@ -418,9 +416,7 @@ function Movement({ gsid }: { gsid: number }) {
   const data = q.data;
   if (!data.available) {
     return (
-      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
-        the position tracker recorded no movement for this session ({data.reason})
-      </span>
+      <Absent reason={<>the position tracker recorded no movement for this session ({data.reason})</>} />
     );
   }
   return (
@@ -680,12 +676,10 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
   const { summary, kills } = q.data;
   if (kills.length === 0) {
     return (
-      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
-        {/* player_name is the EMPTY STRING in this branch — the handler only
-          * looks it up when there are kills — so the name comes from the row
-          * that was clicked, not from the response. */}
-        no scored kills for {name} in this session
-      </span>
+      /* player_name is the EMPTY STRING in this branch — the handler only
+        * looks it up when there are kills — so the name comes from the row
+        * that was clicked, not from the response. */
+      <Absent reason={<>no scored kills for {name} in this session</>} />
     );
   }
   const top = [...kills].sort((a, b) => b.total_impact - a.total_impact).slice(0, 10);
@@ -811,10 +805,10 @@ function DefenseBoard({ gsid }: { gsid: number }) {
     <Stack gap={2} style={{ minWidth: 260, flex: '1 1 260px' }}>
       <SectionHead label="costly deaths" />
       {players.length === 0 ? (
-        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-          nobody cleared both thresholds this session — an answer about the
-          session, not a missing measurement
-        </span>
+        <Absent
+          reason={<>nobody cleared both thresholds this session — an answer about the
+          session, not a missing measurement</>}
+        />
       ) : (
         <Stack gap={1} className="rows">
           {players.slice(0, 5).map((p) => (

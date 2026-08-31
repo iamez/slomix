@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import {
   useSessionDetail, useSessionGoodNight, useSessionMvp, useSessionRounds,
@@ -409,10 +409,10 @@ function LivesOfTheNight({ sessionId }: { sessionId: number }) {
     return (
       <Stack gap={3} parity="session.lives">
         <SectionHead label="lives of the night" />
-        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-          no life in this session cleared the minimum — a fact about the night,
-          not a missing measurement
-        </span>
+        <Absent
+          reason={<>no life in this session cleared the minimum — a fact about the night,
+          not a missing measurement</>}
+        />
       </Stack>
     );
   }
