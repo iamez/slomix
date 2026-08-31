@@ -10,7 +10,7 @@ import {
 } from '../lib/queries';
 import type { LastSession, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
-  ActLink, Lbl, Pending, SectionHead, StatusDot, Unavailable,
+  ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
   figure, lblStyle, rowStyle,
 } from '../components/ui';
 
@@ -268,7 +268,7 @@ function Insights() {
                 <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((n / mapMax) * 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
                 </span>
-                <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', color: 'var(--color-text-500)' }}>{n}</span>
+                <Meta style={{ textAlign: 'right' }}>{n}</Meta>
               </div>
             ))}
             {data && mapRows.length === 0 && (

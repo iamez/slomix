@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useLeaderboard } from '../lib/queries';
-import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Leaderboards (docs/design/12 row 3) — legacy leaderboard.js carried over:
@@ -85,9 +85,7 @@ export function Leaderboards() {
           {board.isPending && <div style={{ padding: 'var(--space-2) 0' }}><Pending label="leaderboard" /></div>}
           {board.isError && <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="leaderboard" /></div>}
           {data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: 'var(--space-2) 0' }}>
-              no data found for this period
-            </div>
+            <Absent block style={{ padding: 'var(--space-2) 0' }} reason="no data found for this period" />
           )}
           {data?.map((row) => (
             <Link
