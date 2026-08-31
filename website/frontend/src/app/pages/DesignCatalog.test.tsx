@@ -60,11 +60,21 @@ describe('DesignCatalog', () => {
     }
   });
 
-  it('renders the states a working page hides', () => {
+  it('renders the states a working page hides, and keeps them apart', () => {
     renderCatalog();
-    expect(screen.getByText('leaderboard…')).toBeInTheDocument();
-    expect(screen.getByText('weapon stats: unavailable')).toBeInTheDocument();
-    expect(screen.getByText('no map history recorded yet')).toBeInTheDocument();
+    const pending = screen.getByText('leaderboard…');
+    const failed = screen.getByText('weapon stats: unavailable');
+    // The third state came from a hand-written span until <Absent> existed —
+    // the workshop could not show the piece because it was not a piece.
+    const absent = screen.getByText('no map has been played twice in this window');
+    expect(pending).toBeInTheDocument();
+    expect(absent).toBeInTheDocument();
+    // A failure is the only one that wears the negative colour. If absence
+    // ever borrowed it, this page would stop teaching the distinction it
+    // exists to teach.
+    expect(failed.getAttribute('style')).toContain('--color-neg');
+    expect(absent.getAttribute('style')).toContain('--color-text-500');
+    expect(absent.getAttribute('style')).not.toContain('--color-neg');
   });
 
   it('shows the controls in both of their states at once', () => {

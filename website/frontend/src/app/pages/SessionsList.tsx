@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useSessionLineups, useSessions } from '../lib/queries';
 import type { LineupChange, LineupPlayer } from '../lib/types';
-import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Absent, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * The evenings (docs/design/12 rows 2 and 30) — one table, two routes:
@@ -67,9 +67,7 @@ function LineupStrip({ sessionId, open }: { sessionId: number; open: boolean }) 
       {lineups.isPending && <Pending label="lineups" />}
       {lineups.isError && <Unavailable what="lineups" />}
       {data && data.teams.length === 0 && (
-        <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-          no roster capture for this evening
-        </span>
+        <Absent reason="no roster capture for this evening" />
       )}
       {data && data.teams.length > 0 && (
         <>
@@ -145,9 +143,7 @@ export function SessionsList({ box }: { box: boolean }) {
           {sessions.isPending && <div style={{ padding: 'var(--space-2) 0' }}><Pending label="sessions" /></div>}
           {sessions.isError && <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="sessions" /></div>}
           {data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: 'var(--space-2) 0' }}>
-              no sessions recorded yet
-            </div>
+            <Absent block style={{ padding: 'var(--space-2) 0' }} reason="no sessions recorded yet" />
           )}
           {data?.map((row) => (
             <div key={row.session_id}>

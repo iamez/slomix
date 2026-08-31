@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { useAwards, useAwardsLeaderboard } from '../lib/queries';
 import type { AwardRow } from '../lib/types';
-import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Awards (docs/design/12 row 11) — legacy awards.js carried over: two tabs
@@ -67,9 +67,7 @@ function ByRound({ days, awardType }: { days: number | null; awardType: string |
       {awards.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="awards" /></div>}
       {awards.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="awards" /></div>}
       {data?.awards.length === 0 && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-3)' }}>
-          no awards found for this selection
-        </div>
+        <Absent block style={{ marginTop: 'var(--space-3)' }} reason="no awards found for this selection" />
       )}
       {[...groups.entries()].map(([key, rows]) => (
         <div key={key} style={{ marginTop: 'var(--space-4)', border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
@@ -136,9 +134,7 @@ function ByPlayer({ days, awardType }: { days: number | null; awardType: string 
         {board.isPending && <div style={{ padding: 'var(--space-2) 0' }}><Pending label="leaderboard" /></div>}
         {board.isError && <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="leaderboard" /></div>}
         {data?.leaderboard.length === 0 && (
-          <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', padding: 'var(--space-2) 0' }}>
-            no player awards found for this selection
-          </div>
+          <Absent block style={{ padding: 'var(--space-2) 0' }} reason="no player awards found for this selection" />
         )}
         {data?.leaderboard.map((row) => {
           const inner = (<>

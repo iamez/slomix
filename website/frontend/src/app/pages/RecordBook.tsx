@@ -5,7 +5,7 @@ import {
   useSeasonLeaders,
 } from '../lib/queries';
 import type { HallOfFameEntry, RecordEntry } from '../lib/types';
-import { Chip, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Record Book (docs/design/12 — absorbs the legacy records + hall-of-fame
@@ -164,9 +164,7 @@ function RecordsTab() {
       {/* An empty OBJECT is truthy — two headings over empty grids would
         * claim records that do not exist (Codex on #813). */}
       {data && Object.values(data).every((rows) => !rows?.length) && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-4)' }}>
-          no records for this selection yet
-        </div>
+        <Absent block style={{ marginTop: 'var(--space-4)' }} reason="no records for this selection yet" />
       )}
       {data && Object.values(data).some((rows) => rows?.length) && (
         <>
@@ -312,9 +310,7 @@ function HofTab() {
               : (
                 <div key={cat.key} style={{ border: '1px solid var(--color-rule-700)', background: 'var(--color-ink-800)', padding: 14 }}>
                   <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{cat.label}</Lbl>
-                  <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>
-                    no data {period === 'all_time' ? 'yet' : 'in this period'}
-                  </div>
+                  <Absent block style={{ marginTop: 'var(--space-2)' }} reason={<>no data {period === 'all_time' ? 'yet' : 'in this period'}</>} />
                 </div>
               );
           })}
@@ -371,7 +367,7 @@ function SeasonTab() {
             );
           })}
           {LEADER_LABELS.every(([key]) => lead[key] == null) && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no leaders yet</div>
+            <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no leaders yet" />
           )}
         </div>
       )}
@@ -389,9 +385,7 @@ function useSeasonAwardsEmptyNote() {
   const awards = useSeasonAwards();
   if (!awards.isSuccess || (awards.data?.awards.length ?? 0) > 0) return null;
   return (
-    <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginBottom: 'var(--space-4)' }}>
-      no engraved season awards yet
-    </div>
+    <Absent block style={{ marginBottom: 'var(--space-4)' }} reason="no engraved season awards yet" />
   );
 }
 

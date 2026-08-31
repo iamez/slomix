@@ -3,7 +3,7 @@ import { useRecentRounds, useRoundViz } from '../lib/queries';
 import type { RoundViz, VizPlayer } from '../lib/types';
 import { mapLabel } from '../lib/maps';
 import { ChartCanvas } from '../../components/Chart';
-import { Lbl, Pending, SectionHead, Unavailable, rowStyle } from '../components/ui';
+import { Absent, Lbl, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Retro-viz (docs/design/12 row 23) — legacy retro-viz.js carried over:
@@ -192,14 +192,14 @@ export function RetroViz() {
         {rounds.isPending && <Pending label="rounds" />}
         {rounds.isError && <Unavailable what="rounds" />}
         {rounds.isSuccess && selectable.length === 0 && (
-          <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no rounds available</span>
+          <Absent reason="no rounds available" />
         )}
       </div>
 
       {viz.isPending && roundId != null && <div style={{ marginTop: 'var(--space-4)' }}><Pending label="round data" /></div>}
       {viz.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="round data" /></div>}
       {v && players.length === 0 && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-4)' }}>no player data for this round</div>
+        <Absent block style={{ marginTop: 'var(--space-4)' }} reason="no player data for this round" />
       )}
       {v && players.length > 0 && (
         <div style={{ marginTop: 'var(--space-4)', display: 'grid', gap: 'var(--space-4)' }}>
