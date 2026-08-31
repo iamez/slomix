@@ -12297,8 +12297,8 @@ export interface operations {
     get_weapon_stats_by_player_hyphen_alias: {
         parameters: {
             query?: {
-                /** @description Time window: all time, last 7/30 days, or the current season. */
-                period?: "all" | "7d" | "30d" | "season";
+                /** @description Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope. */
+                period?: "all" | "7d" | "30d" | "season" | "session";
                 player_limit?: number;
                 weapon_limit?: number;
                 player_guid?: string | null;
@@ -12334,8 +12334,8 @@ export interface operations {
     get_weapon_stats_by_player_api_stats_weapons_by_player_get: {
         parameters: {
             query?: {
-                /** @description Time window: all time, last 7/30 days, or the current season. */
-                period?: "all" | "7d" | "30d" | "season";
+                /** @description Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope. */
+                period?: "all" | "7d" | "30d" | "season" | "session";
                 player_limit?: number;
                 weapon_limit?: number;
                 player_guid?: string | null;

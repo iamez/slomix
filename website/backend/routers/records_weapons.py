@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
@@ -81,6 +81,28 @@ def _looks_like_missing_mv(exc: Exception) -> bool:
 WeaponPeriod = Annotated[
     Literal["all", "7d", "30d", "season"],
     Query(description="Time window: all time, last 7/30 days, or the current season."),
+]
+
+# ⛔ THE FIFTH SPELLING, and only on /by-player//by_player (Codex P1 on #848).
+# The closed set above was measured against both frontends' period pickers —
+# and missed a caller that is not a picker: the OLD React session detail
+# (whose built bundle IS served) sends `period=session` alongside
+# `gaming_session_id`, and this handler itself ASSIGNS `period = "session"`
+# whenever a session scope is present and then RETURNS it in the body. So the
+# route both accepted and emitted a value its own declared set forbade: the
+# request 422'd, and had it not, the response would have carried an
+# undeclared value. "session" is a LABEL for a scope given by
+# gaming_session_id/session_date, not a time window — sent on its own it
+# used to fall through to all-time while echoing "session" back, so the
+# handler now refuses that corner instead of lying about it.
+WeaponPeriodWithSession = Annotated[
+    Literal["all", "7d", "30d", "season", "session"],
+    Query(
+        description=(
+            "Time window, or 'session' — valid only together with "
+            "gaming_session_id or session_date, which define the scope."
+        )
+    ),
 ]
 
 
@@ -337,7 +359,7 @@ async def get_weapon_hall_of_fame(period: WeaponPeriod = "all", db: DatabaseAdap
 @router.get("/stats/weapons/by_player", response_model=WeaponsByPlayer)
 @handle_router_errors("Database error")
 async def get_weapon_stats_by_player(
-    period: WeaponPeriod = "all",
+    period: WeaponPeriodWithSession = "all",
     player_limit: int = 25,
     weapon_limit: int = 5,
     player_guid: str | None = None,
@@ -349,6 +371,14 @@ async def get_weapon_stats_by_player(
     Return per-player weapon stats keyed by player GUID.
     Useful for comprehensive weapon mastery views.
     """
+    if period == "session" and gaming_session_id is None and not session_date:
+        # Without a scope there is no session to label: this exact shape used
+        # to fall through to the all-time branch and echo "session" back — an
+        # answer wearing the name of a scope nobody supplied.
+        raise HTTPException(
+            status_code=422,
+            detail="period=session needs gaming_session_id or session_date",
+        )
     # Exclude bots (OMNIBOT* guids / [BOT] names) — test artifacts must not hold
     # weapon records or appear in per-player weapon stats (audit 2026-08-13).
     where_clause = (

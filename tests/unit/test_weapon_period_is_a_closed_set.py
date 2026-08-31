@@ -27,6 +27,7 @@ the branch chain are the SAME fact written in two places, and a value added
 to one but not the other reopens exactly this bug — a new `elif period ==
 "90d"` would be dead code, a new Literal member would silently mean "all".
 """
+
 import ast
 import inspect
 import typing
@@ -78,17 +79,19 @@ def client_and_db():
 
 
 @pytest.mark.parametrize("route", WEAPON_ROUTES)
-@pytest.mark.parametrize("period", ["nonsense", "session", "week", "all_time", "", "7D"])
+@pytest.mark.parametrize("period", ["nonsense", "week", "all_time", "", "7D"])
 def test_a_period_the_handler_cannot_honour_is_refused(client_and_db, route, period):
     client, db = client_and_db
     response = client.get(f"{route}?period={period}")
     assert response.status_code == 422, (
         f"{route}?period={period} answered {response.status_code}; a window "
         f"the handler cannot apply must be refused, not silently widened to "
-        f"all time")
+        f"all time"
+    )
     assert db.calls == [], (
         f"{route}?period={period} reached the database — the value is being "
-        f"checked inside the handler, below the blanket `except`")
+        f"checked inside the handler, below the blanket `except`"
+    )
 
 
 @pytest.mark.parametrize("route", WEAPON_ROUTES)
@@ -118,11 +121,14 @@ def test_both_spellings_of_by_player_carry_the_same_contract():
         if getattr(route, "path", "").endswith(("by-player", "by_player"))
     }
     assert set(models) == {"/stats/weapons/by-player", "/stats/weapons/by_player"}, (
-        f"expected both spellings to be registered, found {sorted(models)}")
+        f"expected both spellings to be registered, found {sorted(models)}"
+    )
     assert models["/stats/weapons/by-player"] is models["/stats/weapons/by_player"], (
-        f"the two spellings of one handler carry different contracts: {models}")
+        f"the two spellings of one handler carry different contracts: {models}"
+    )
     assert models["/stats/weapons/by-player"] is not None, (
-        "both spellings are now untyped — the guard was removed, not shared")
+        "both spellings are now untyped — the guard was removed, not shared"
+    )
 
 
 def _literal_periods() -> set[str]:
@@ -167,7 +173,8 @@ def test_the_whitelist_and_the_branch_chain_are_the_same_set():
         f"  accepted but never branched on (answered as all-time): "
         f"{sorted(whitelist - {'all'} - branches)}\n"
         f"  branched on but rejected at the door (dead code): "
-        f"{sorted(branches - whitelist)}")
+        f"{sorted(branches - whitelist)}"
+    )
     assert "all" in whitelist, "the default stopped being an accepted value"
 
 
@@ -175,7 +182,59 @@ def test_the_checks_above_can_fail():
     """A control: the two readers must disagree when the sets differ."""
     whitelist = _literal_periods()
     assert whitelist - {"all"} != _branch_periods() | {"90d"}, (
-        "the comparison cannot distinguish an extra member — it is not a guard")
+        "the comparison cannot distinguish an extra member — it is not a guard"
+    )
     assert _branch_periods(), (
-        "the AST reader found no branches at all; it would agree with any "
-        "whitelist, including an empty one")
+        "the AST reader found no branches at all; it would agree with any whitelist, including an empty one"
+    )
+
+
+# --- the fifth spelling: "session", a label rather than a window ---------------
+#
+# ⛔ Found live by review (Codex P1 on #848): the closed set was measured
+# against both frontends' period PICKERS — and missed a caller that is not a
+# picker. The old React session detail (whose built bundle is served by
+# app.mount) sends period=session together with gaming_session_id, and the
+# handler itself ASSIGNS period = "session" whenever a session scope is
+# present, then returns it in the body. The Literal of four therefore 422'd a
+# request the same file was designed to answer. The lesson for the next
+# closed set: measure the pickers, then measure the handler's own
+# assignments — a value a handler writes into its response is part of the
+# contract whether or not any picker offers it.
+
+BY_PLAYER_ROUTES = ["/api/stats/weapons/by-player", "/api/stats/weapons/by_player"]
+
+
+@pytest.mark.parametrize("route", BY_PLAYER_ROUTES)
+def test_the_old_react_session_scope_request_is_served(client_and_db, route):
+    """The exact shape SessionDetail.tsx:1406 sends."""
+    client, db = client_and_db
+    response = client.get(
+        f"{route}?period=session&player_limit=1&weapon_limit=50&player_guid=ABCD1234&gaming_session_id=154"
+    )
+    assert response.status_code == 200, response.text
+    assert db.calls, "the handler never queried"
+    assert response.json()["period"] == "session", "the scope label the handler assigns must survive to the body"
+
+
+@pytest.mark.parametrize("route", BY_PLAYER_ROUTES)
+def test_session_without_a_scope_is_refused_not_silently_widened(client_and_db, route):
+    """'session' names a scope given by gaming_session_id/session_date. Sent
+    alone it used to fall through to the all-time branch and echo "session"
+    back — an answer wearing the name of a scope nobody supplied."""
+    client, db = client_and_db
+    response = client.get(f"{route}?period=session")
+    assert response.status_code == 422, f"{route}?period=session alone answered {response.status_code}"
+    assert "gaming_session_id or session_date" in response.text
+    assert db.calls == [], "the orphan-session check ran after a database read"
+
+
+@pytest.mark.parametrize("route", ["/api/stats/weapons", "/api/stats/weapons/hall-of-fame"])
+def test_the_other_weapon_routes_still_refuse_session(client_and_db, route):
+    """No caller sends it to them and their handlers never assign it — for
+    these two the fifth spelling would reopen exactly the silent-widening
+    this file exists to prevent."""
+    client, db = client_and_db
+    response = client.get(f"{route}?period=session")
+    assert response.status_code == 422
+    assert db.calls == []

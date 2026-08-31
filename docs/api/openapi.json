@@ -14182,18 +14182,19 @@
     "operationId": "get_weapon_stats_by_player_hyphen_alias",
     "parameters": [
      {
-      "description": "Time window: all time, last 7/30 days, or the current season.",
+      "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
       "in": "query",
       "name": "period",
       "required": false,
       "schema": {
        "default": "all",
-       "description": "Time window: all time, last 7/30 days, or the current season.",
+       "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
        "enum": [
         "all",
         "7d",
         "30d",
-        "season"
+        "season",
+        "session"
        ],
        "title": "Period",
        "type": "string"
@@ -14302,18 +14303,19 @@
     "operationId": "get_weapon_stats_by_player_api_stats_weapons_by_player_get",
     "parameters": [
      {
-      "description": "Time window: all time, last 7/30 days, or the current season.",
+      "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
       "in": "query",
       "name": "period",
       "required": false,
       "schema": {
        "default": "all",
-       "description": "Time window: all time, last 7/30 days, or the current season.",
+       "description": "Time window, or 'session' — valid only together with gaming_session_id or session_date, which define the scope.",
        "enum": [
         "all",
         "7d",
         "30d",
-        "season"
+        "season",
+        "session"
        ],
        "title": "Period",
        "type": "string"
