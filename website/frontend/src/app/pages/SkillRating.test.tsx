@@ -326,7 +326,7 @@ describe('SkillRating', () => {
     // No comparison exists: the sentence says what the correction IS and
     // claims no direction — the old code asserted "largest for thin
     // histories" here with nothing behind it.
-    expect(claim).toContain('weighs each rating by the history behind it');
+    expect(claim).toContain('rates each session against the opponents who actually played it');
     expect(claim).not.toContain('larger');
   });
 

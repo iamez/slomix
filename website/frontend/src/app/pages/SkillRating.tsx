@@ -214,7 +214,12 @@ function correctionClaim(players: AdjustedLifetimePlayer[]): string {
   // magnitude to sign.
   if (thin.length === 0 || deep.length === 0 || size(deep) === 0 || size(thin) === 0) {
     // No comparison exists — say what the correction IS, claim no direction.
-    return 'the correction weighs each rating by the history behind it';
+    // Neutral by review (Codex on #846): adjusted_lifetime() applies the
+    // same fixed damping to everyone and takes an UNWEIGHTED mean of
+    // per-session values — n_sessions is never a confidence weight, so
+    // the old sentence ('weighs each rating by the history behind it')
+    // invented a mechanism the algorithm does not have.
+    return 'the correction rates each session against the opponents who actually played it';
   }
   const ratio = size(thin) / size(deep);
   if (ratio >= 1.5) {
@@ -231,8 +236,12 @@ const THIN_SESSIONS = 5;
 /** The lifetime rating, and the same rating after the pool it was earned
  * against is taken into account.
  *
- * Both numbers are on one 0–1 scale, so unlike SSR above these two ARE
- * comparable — the difference between them is the whole panel. What the
+ * Both numbers use the SAME rating units, so unlike SSR above these two ARE
+ * comparable — the difference between them is the whole panel. (Not "a 0–1
+ * scale": skill_rating_service permits ratings up to 1.5, the published
+ * formula advertises exceptional values around 1.15, and the pool correction
+ * adds without clamping — today's pool happens to sit at 0.44–0.75, which is
+ * a fact about the sample, not the scale. Codex on #846.) What the
  * difference is not, is a ranking of who is best, and the measurement says
  * why: the correction averages 0.143 for players with fewer than five
  * sessions and 0.028 for players with twenty or more, five times larger
