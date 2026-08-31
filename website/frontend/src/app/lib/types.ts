@@ -57,6 +57,12 @@ export interface VoiceCurrent {
 
 /** GET /api/stats/overview — corpus: api_stats_overview.json */
 export interface StatsOverview {
+  /** "ok" when every query answered, "partial" when at least one did not —
+   *  the zeros below then mean MISSING, not measured. `failed_metrics` names
+   *  which ones (#830). */
+  status: string;
+  note: string | null;
+  failed_metrics: string[];
   rounds: number;
   players: number;
   sessions: number;

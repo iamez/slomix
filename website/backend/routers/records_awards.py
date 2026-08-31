@@ -148,6 +148,13 @@ class RecordEntry(BaseModel):
     """
 
     player: str
+    #: ⛔ NON-NULL BY THE QUERY, NOT BY THE COLUMN. All thirteen statistic
+    #: columns are nullable in the schema (0 NULLs today), and PostgreSQL puts
+    #: NULLs FIRST on a `DESC` sort — so an unmeasured row could have been
+    #: SELECTED AS THE RECORD and shown as the best, and this model would then
+    #: have answered 500 on it. Both are closed by `AND {col} IS NOT NULL` in
+    #: every category query: a record is a MEASURED value, which is what the
+    #: word means (Codex on #830).
     value: int | float
     map: str
     date: str
@@ -278,7 +285,7 @@ async def get_records(
                 map_name,
                 round_date
             FROM player_comprehensive_stats
-            {base_where} {extra_filter}
+            {base_where} {extra_filter} AND {col} IS NOT NULL
             ORDER BY {col} DESC
             LIMIT {limit_placeholder}
         """
@@ -324,7 +331,7 @@ async def get_records(
                 map_name,
                 round_date
             FROM player_match_stats
-            {match_where}
+            {match_where} AND {col} IS NOT NULL
             ORDER BY value DESC, round_date DESC, player_name ASC
             LIMIT {match_limit_placeholder}
         """
