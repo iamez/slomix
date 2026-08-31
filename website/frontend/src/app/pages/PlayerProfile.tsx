@@ -1,11 +1,12 @@
 import { Link, useParams } from 'react-router';
-import { usePlayerProfile } from '../lib/queries';
+import { usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer } from '../lib/queries';
 import type {
+  PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
-  ProfileOpponent, ProfileTeammate, ProfileWeaponRow,
+  ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
-import { Absent, figure, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * The player (docs/design/08 phase 3, docs/design/12 row 18). One endpoint
@@ -413,6 +414,146 @@ function Recent({ rows: raw, available }: { rows: ProfileMatchRow[] | undefined;
   );
 }
 
+/** ET Rating v2.1 components — the arithmetic behind the number Header
+ * already shows. The profile endpoint carries the rating; only
+ * /api/skill/player carries HOW it was assembled (raw, weight, percentile,
+ * contribution per component), so this panel quotes that endpoint and
+ * labels the rating it repeats as the same number, not a second opinion.
+ * "Not rated" arrives as {status:'error'} inside a 200 — a fact about the
+ * player (needs 5+ rounds), rendered as one, never as a failure. */
+function RatingComponents({ playerId }: { playerId: string }) {
+  const skill = useSkillPlayer(playerId);
+  return (
+    <div data-parity="profile.rating-components" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="rating, taken apart" />
+      {skill.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="rating" /></div>}
+      {skill.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="rating" /></div>}
+      {skill.data && (skill.data.status !== 'ok' ? (
+        <Absent block style={{ marginTop: 'var(--space-2)' }} reason={<>{skill.data.detail}</>} />
+      ) : (
+        <div style={{ marginTop: 'var(--space-2)' }}>
+          <Meta style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
+            et rating {skill.data.player.et_rating.toFixed(3)} · rank {skill.data.player.rank} of {skill.data.player.total_rated}
+            {' · '}{skill.data.player.games_rated} games rated
+            {skill.data.player.confidence != null && <> · confidence {skill.data.player.confidence.toFixed(2)}</>}
+          </Meta>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+              <thead>
+                <tr>
+                  {['component', 'raw', 'weight', 'percentile', 'contribution'].map((h) => (
+                    <th key={h} style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: h === 'component' ? 'left' : 'right', padding: 'var(--space-1) var(--space-2)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(skill.data.player.components).map(([name, c]: [string, SkillPlayerComponent]) => (
+                  <tr key={name} style={rowStyle}>
+                    <td style={{ padding: 'var(--space-1) var(--space-2)' }}>{name.replace(/_/g, ' ')}</td>
+                    <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{c.raw.toFixed(2)}</td>
+                    <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)', color: c.weight < 0 ? 'var(--color-neg)' : 'var(--color-text-400)' }}>{c.weight.toFixed(2)}</td>
+                    <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{pct(c.percentile * 100)}</td>
+                    <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)', color: c.contribution < 0 ? 'var(--color-neg)' : 'var(--color-pos)' }}>{c.contribution >= 0 ? '+' : ''}{c.contribution.toFixed(4)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Achievement milestones from /api/stats/player — the one block of that
+ * endpoint the profile endpoint does not carry (its aliases, identity_link
+ * and discord flag all duplicate profile.identity and are deliberately NOT
+ * rendered twice). Also quotes the single-round DPM extremes, which no
+ * other panel has. */
+function Achievements({ playerId }: { playerId: string }) {
+  const identity = usePlayerIdentity(playerId);
+  return (
+    <div data-parity="profile.achievements" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="milestones" />
+      {identity.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="milestones" /></div>}
+      {identity.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="milestones" /></div>}
+      {identity.data && (() => {
+        const a = identity.data.achievements;
+        return (
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            {a.unlocked.length === 0 ? (
+              <Absent block reason="no milestone reached yet — the first is 100 kills" />
+            ) : (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                {a.unlocked.map((b) => (
+                  <span key={`${b.type}:${b.threshold}`} className="m" style={{ fontSize: 'var(--fs-value)', border: '1px solid var(--color-rule-700)', padding: 'var(--space-1) var(--space-2)', color: 'var(--color-text-300)' }}>
+                    {b.emoji} {b.title}
+                  </span>
+                ))}
+              </div>
+            )}
+            {a.next.map((n) => (
+              <Meta key={`${n.type}:${n.threshold}`} style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+                next: {n.emoji} {n.title} — {figure(n.current)} of {figure(n.threshold)} ({n.progress.toFixed(0)}%)
+              </Meta>
+            ))}
+            <Meta style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+              {a.total_unlocked} of {a.total_possible} milestones
+              {identity.data.stats.highest_dpm != null && (
+                <> · single-round dpm {figure(identity.data.stats.highest_dpm)} high{identity.data.stats.lowest_dpm != null && <> / {figure(identity.data.stats.lowest_dpm)} low</>}</>
+              )}
+            </Meta>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+/** The support-and-punishment columns of the last rounds — headshot kills,
+ * gibs, revives given, damage received, accuracy — which the match list
+ * above (profile.recent) does not carry. Round identity columns repeat so
+ * the reader can line the two tables up; the OVERLAPPING numbers do not. */
+function RecentDetail({ playerId }: { playerId: string }) {
+  const rounds = usePlayerMatchRounds(playerId, 10);
+  return (
+    <div data-parity="profile.recent-detail" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="recent rounds · support & punishment" />
+      {rounds.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="rounds" /></div>}
+      {rounds.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="rounds" /></div>}
+      {rounds.data && (rounds.data.length === 0 ? (
+        <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no round on record for this player" />
+      ) : (
+        <div style={{ overflowX: 'auto', marginTop: 'var(--space-2)' }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                {['date', 'map', 'r', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc'].map((h, i) => (
+                  <th key={h} style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: i < 2 ? 'left' : 'right', padding: 'var(--space-1) var(--space-2)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rounds.data.map((r: PlayerMatchRound) => (
+                <tr key={r.round_id} style={rowStyle}>
+                  <td className="m" style={{ padding: 'var(--space-1) var(--space-2)', whiteSpace: 'nowrap' }}>{r.round_date.slice(0, 10)}</td>
+                  <td style={{ padding: 'var(--space-1) var(--space-2)' }}>{mapLabel(r.map_name)}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.round_number}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.headshot_kills)}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.gibs)}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.revives_given)}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(r.damage_received)}</td>
+                  <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{pct(r.accuracy)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function PlayerProfilePage() {
   const params = useParams();
   const playerId = params.id ?? '';
@@ -437,12 +578,15 @@ export function PlayerProfilePage() {
         <>
           <Header p={p} />
           <Lifetime p={p} />
+          <RatingComponents playerId={playerId} />
           <Streaks p={p} />
+          <Achievements playerId={playerId} />
           <Weapons rows={p.weapons.weapons} available={p.weapons.available} />
           <Body p={p} />
           <Relationships p={p} />
           <Maps rows={p.maps.maps} available={p.maps.available} />
           <Recent rows={p.recent_matches.matches} available={p.recent_matches.available} />
+          <RecentDetail playerId={playerId} />
           <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
             {p.sections.length} sections · generated {p.generated_at.slice(0, 19).replace('T', ' ')} utc
           </Lbl>

@@ -7,11 +7,12 @@ import {
   useActivityCalendar, useAvailabilityOverview, useChallengeCurrent,
   useLastSession, useLiveStatus, useOverview, useQuickLeaders,
   useRecentMatches, useSeasonCurrent, useSeasonLeaders, useSeasonSummary,
+  useLiveSession, useRecentPredictions,
   useSessions, useSkillMovers, useTonight, useTrends,
 } from '../lib/queries';
-import type { LastSession, SkillMoverRow, StatsTrends } from '../lib/types';
+import type { LastSession, RecentPrediction, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
-  ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
+  Absent, ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
   figure, lblStyle, rowStyle,
 } from '../components/ui';
 
@@ -526,10 +527,62 @@ function PulseRow() {
   );
 }
 
+function PredictionLine({ row }: { row: RecentPrediction }) {
+  const pct = (x: number) => `${Math.round(x * 100)}%`;
+  return (
+    <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)' }}>
+      <span className="m" style={{ fontSize: 'var(--fs-value)' }}>
+        {pct(row.team_a_probability)} · {pct(row.team_b_probability)}
+      </span>
+      <span style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', flex: 1 }}>{row.insight}</span>
+      <Meta>{row.format} · {row.confidence}</Meta>
+      {/* Verdict only once one EXISTS — is_correct is null until the match
+        * resolves, and null is "not settled", never "wrong". */}
+      {row.is_correct != null && (
+        <span className="m" style={{ fontSize: 'var(--fs-small)', color: row.is_correct ? 'var(--color-pos)' : 'var(--color-neg)' }}>
+          {row.is_correct ? 'hit' : 'miss'}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Legacy app.js read `match_type` / `correct` / `description` off this
+ *  endpoint — three fields it has never sent — so its panel rendered
+ *  `undefined` for every prediction ever shown. The field names here are
+ *  the wire's own; the legacy spellings are not carried. */
+function Predictions() {
+  const preds = useRecentPredictions(3);
+  return (
+    <div data-parity="home.predictions" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
+      <SectionHead label="match predictions" />
+      <div style={{ marginTop: 'var(--space-3)' }}>
+        {preds.isPending && <Pending label="predictions" />}
+        {preds.isError && <Unavailable what="predictions" />}
+        {preds.data && (preds.data.length === 0 ? (
+          <Absent reason="no prediction has been published yet — shadow-program rows stay internal until an operator publishes them (AUD-006)" />
+        ) : (
+          preds.data.map((row) => <PredictionLine key={row.id} row={row} />)
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function Tonight() {
   const tonight = useTonight();
   const availability = useAvailabilityOverview();
   const live = useLiveStatus();
+  // A THIRD liveness instrument, distinct from the two already here:
+  // useTonight answers "was there anything today", useLiveStatus asks the
+  // game server itself, and this one counts ROUNDS IMPORTED in the last 30
+  // minutes — so it can be true while the server query fails, and false
+  // while people are mid-round (import lags play). It only ever ADDS a
+  // line; its inactive shape is `{active: false}` with no other fields, so
+  // there is nothing truthful to render then, and its errors stay silent
+  // here because Tonight already reports liveness failures via the other
+  // two instruments — a third failure line for the same question is noise.
+  const liveSession = useLiveSession();
   const nextMarked = availability.data?.days.find((day) => day.total > 0);
   const activeNow = tonight.data?.active === true;
   return (
@@ -565,6 +618,13 @@ function Tonight() {
             {live.isPending ? <Pending label="voice" /> : <Unavailable what="voice" />}
           </div>
         )
+      )}
+      {liveSession.data?.active && (
+        <Meta style={{ display: 'block', marginTop: 'var(--space-2)' }}>
+          {liveSession.data.rounds_completed} round{liveSession.data.rounds_completed === 1 ? '' : 's'} imported in the last half hour
+          {' · '}{liveSession.data.current_map}
+          {' · '}{liveSession.data.current_players} player{liveSession.data.current_players === 1 ? '' : 's'}
+        </Meta>
       )}
       {availability.isPending && <div style={{ marginTop: 'var(--space-3)' }}><Pending label="availability" /></div>}
       {availability.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="availability" /></div>}
@@ -767,6 +827,7 @@ export function Home() {
         <QuickLeadersPanel />
       </div>
       <PulseRow />
+      <Predictions />
       <div className="landing-split" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
         <Tonight />
         <FindYourStats />

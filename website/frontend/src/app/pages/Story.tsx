@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, lblStyle } from '../components/ui';
 import { ApiError } from '../lib/api';
+import { isFailureStatus } from '../lib/responseStatus';
 import { stripEtColors } from '../lib/names';
 import {
+  useComposite,
   useStoryBoxScore, useStoryEnabler, useStoryGravity,
   useStoryKillImpact, useStoryKillMatrix, useStoryKisDetails, useStoryKisFormula,
   useStoryLurker, useStoryMoments, useStoryMomentum, useStoryMomentumSession,
@@ -13,7 +15,7 @@ import {
   useStoryWinContribution,
 } from '../lib/queries';
 import type {
-  FormulaTerm, StoryBoxScore, StoryMomentumRound, StoryRolePlayer, StoryScope,
+  CompositeStats, FormulaTerm, StoryBoxScore, StoryMomentumRound, StoryRolePlayer, StoryScope,
 } from '../lib/types';
 
 /**
@@ -1080,12 +1082,79 @@ function Roles({ gsid }: { gsid: number }) {
 }
 
 /** Everything below the scoreboard hangs off one resolved session. */
+/** The composite five with #848's coverage block RENDERED — the first
+ * consumer anywhere to do so. Legacy story.js called this endpoint and
+ * drew all five columns as scores, unmeasured or not; the whole point of
+ * the coverage work was that a session whose sources captured nothing must
+ * say "unmeasured", not show a zero that reads as a terrible performance.
+ * Measured corpus: session 154 has all five, 94 lacks tir/ci/kpi, 20 lacks
+ * everything but cp. */
+const COMPOSITE_KEYS = ['tir', 'ci', 'kpi', 'sds', 'cp'] as const;
+
+function CompositeFive({ data }: { data: CompositeStats }) {
+  if (isFailureStatus(data.status)) {
+    return <Unavailable what="composite" />;
+  }
+  if (data.players.length === 0) {
+    return <Absent reason="no player had proximity rows in this session, so none of the five can be computed" />;
+  }
+  const unmeasured = new Set(data.coverage.unmeasured_metrics);
+  const partial = new Set(data.coverage.partially_synthetic_metrics);
+  return (
+    <Stack gap={2}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ borderCollapse: 'collapse', width: '100%' }}>
+          <thead>
+            <tr>
+              <th style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: 'left', padding: 'var(--space-1) var(--space-2)' }}>player</th>
+              <th style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>kills</th>
+              {COMPOSITE_KEYS.map((k) => (
+                <th key={k} title={data.meta.metrics[k]} style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>
+                  {k}{partial.has(k) ? '*' : ''}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {data.players.map((pl) => (
+              <tr key={pl.player_guid} className="row">
+                <td style={{ padding: 'var(--space-1) var(--space-2)' }}>{stripEtColors(pl.player_name)}</td>
+                <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(pl.kills)}</td>
+                {COMPOSITE_KEYS.map((k) => (
+                  <td key={k} className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)', color: unmeasured.has(k) ? 'var(--color-text-500)' : undefined }}>
+                    {/* An unmeasured column shows NO number at all: its zero
+                      * is an initialization, not a score, and greying a lie
+                      * does not stop it being one. */}
+                    {unmeasured.has(k) ? '—' : pl[k].toFixed(1)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {unmeasured.size > 0 && (
+        <Meta>
+          {[...unmeasured].sort().join(', ')}: unmeasured for this session — the source instruments captured no rows, so these columns have no value rather than a zero
+        </Meta>
+      )}
+      {partial.size > 0 && (
+        <Meta>
+          * {[...partial].sort().join(', ')}: partially synthetic — one of its inputs is estimated, not captured
+        </Meta>
+      )}
+    </Stack>
+  );
+}
+
+
 function SessionStory({ gsid }: { gsid: number }) {
   const narrative = useStoryNarrative(gsid);
   const box = useStoryBoxScore(gsid);
   const momentum = useStoryMomentum(gsid);
   const synergy = useStorySynergy(gsid);
   const kis = useStoryKillImpact(gsid);
+  const composite = useComposite(gsid, null);
   const narratives = useStoryPlayerNarratives(gsid);
   // Which player's per-kill breakdown is open, if any. One at a time: the
   // detail response is per player, and two open rows would be two fetches
@@ -1233,6 +1302,13 @@ function SessionStory({ gsid }: { gsid: number }) {
             {synergy.data.defaulted_players_count} player(s) had no telemetry and were scored at the default — the composite is that much less measured
           </span>
         )}
+      </Stack>
+
+      <Stack gap={3} parity="story.composite">
+        <SectionHead label="composite five" aside={<span className="lbl">tir · ci · kpi · sds · cp — proximity instruments</span>} />
+        {composite.isPending && <Pending label="composite" />}
+        {composite.isError && <Unavailable what="composite" />}
+        {composite.data && <CompositeFive data={composite.data} />}
       </Stack>
 
       <Roles gsid={gsid} />

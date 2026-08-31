@@ -2035,3 +2035,241 @@ export interface SessionMvp {
   most_underrated_guid?: string | null;
   candidates: SessionMvpCandidate[];
 }
+
+// ---------------------------------------------------------------------------
+// The backwards-debt eight: paths legacy called that the app had not adopted.
+
+/** GET /api/stats/live-session — a UNION, not optional fields: the inactive
+ *  answer is `{active: false}` and nothing else (players_router.py, two
+ *  return statements). "Active" means rounds in the last 30 minutes — a
+ *  different question from /api/stats/tonight (voice or rounds today) and
+ *  from /api/live-status (game server reachable), so the page must label
+ *  which one it is quoting. */
+export type LiveSession =
+  | { active: false }
+  | {
+      active: true;
+      rounds_completed: number;
+      current_players: number;
+      /** "Unknown" when the detail lookup failed — a sentinel the handler
+       *  writes, not a map name. */
+      current_map: string;
+      /** "m:ss" of the last round, or null when the detail lookup failed. */
+      last_round_time: string | null;
+      last_update: string;
+    };
+
+/** GET /api/predictions/recent — a bare array; only rows explicitly
+ *  published (shadow program AUD-006) are ever returned, and the dev
+ *  database holds zero of those today, so the recorded fixture is `[]` and
+ *  the element shape is typed from the live schema, not a sample.
+ *  ⚠️ `confidence` is TEXT and `actual_winner` an INTEGER team number in
+ *  the schema — an invented "number score / team name" shape would have
+ *  survived every fixture round-trip. Legacy app.js read `match_type` /
+ *  `correct` / `description`, three fields this endpoint has never sent —
+ *  do not copy legacy's names. */
+export interface RecentPrediction {
+  id: number;
+  timestamp: string;
+  format: string;
+  team_a_probability: number;
+  team_b_probability: number;
+  confidence: string;
+  insight: string;
+  actual_winner: number | null;
+  is_correct: boolean | null;
+  accuracy: number | null;
+}
+
+/** GET /api/stats/session-leaderboard — response_model=list[SessionLeaderRow]
+ *  (sessions_router.py). kills/deaths are nullable in the model. */
+export interface SessionLeaderRow {
+  rank: number;
+  name: string;
+  dpm: number;
+  kills: number | null;
+  deaths: number | null;
+}
+
+/** GET /api/skill/player/{identifier} — the 200-with-status convention:
+ *  an unknown or under-rated player answers
+ *  `{status: "error", detail: "…need 5+ rounds…"}`, never a 404. */
+export interface SkillPlayerComponent {
+  raw: number;
+  weight: number;
+  percentile: number;
+  contribution: number;
+}
+
+export interface SkillPlayerOk {
+  status: 'ok';
+  player: {
+    player_guid: string;
+    display_name: string;
+    et_rating: number;
+    games_rated: number;
+    last_rated_at: string | null;
+    rank: number;
+    total_rated: number;
+    components: Record<string, SkillPlayerComponent>;
+    confidence: number | null;
+    tier: string | null;
+  };
+}
+
+export type SkillPlayer = SkillPlayerOk | { status: 'error'; detail: string };
+
+/** GET /api/skill/composite — per-session composite metrics with the
+ *  coverage block #848 added: `unmeasured_metrics` names what the sources
+ *  could not back for THIS session (measured corpus: [] on 154,
+ *  [ci,kpi,tir] on 94, all five on 20), and the page's whole job is to
+ *  show that honesty instead of rendering unmeasured zeros as scores. */
+export interface CompositePlayer {
+  player_guid: string;
+  player_name: string;
+  kills: number;
+  tir: number;
+  ci: number;
+  kpi: number;
+  sds: number;
+  cp: number;
+  details: {
+    crossfire_kills: number;
+    trade_kills: number;
+    clutch_kills: number;
+    gibbed_count: number;
+    total_outcomes: number;
+    avg_spawn_score: number;
+    focus_escapes: number;
+    times_focused: number;
+  };
+}
+
+export interface CompositeCoverage {
+  unmeasured_metrics: string[];
+  partially_synthetic_metrics: string[];
+  source_rows: {
+    crossfire: number;
+    crossfire_cache: number;
+    trades: number;
+    combat_positions: number;
+    kill_outcomes: number;
+    spawn_timing: number;
+  };
+}
+
+export interface CompositeStats {
+  status: string;
+  session_date: string | null;
+  gaming_session_id: number | null;
+  players: CompositePlayer[];
+  coverage: CompositeCoverage;
+  meta: { metrics: Record<string, string> };
+}
+
+/** GET /api/stats/player/{player_name} — the identity half the profile
+ *  endpoint does not carry: aliases, the Discord link, the sick-leave
+ *  identity link (migration 073, null for most), achievements. A missing
+ *  player is a real 404 here, not a status envelope. */
+export interface PlayerIdentity {
+  name: string;
+  guid: string;
+  stats: {
+    kills: number;
+    deaths: number;
+    damage: number;
+    games: number;
+    wins: number;
+    losses: number;
+    win_rate: number;
+    kd: number;
+    dpm: number;
+    total_xp: number;
+    playtime_hours: number;
+    last_seen: string | null;
+    favorite_weapon: string | null;
+    favorite_map: string | null;
+    highest_dpm: number | null;
+    lowest_dpm: number | null;
+  };
+  aliases: string[];
+  discord_linked: boolean;
+  /** Sick-leave attribution (migration 073) — a UNION by role, or null for
+   *  the unlinked majority: an ALT points at its primary, a PRIMARY lists
+   *  its alts. Typed from fetch_identity_links, not the sample (the sample
+   *  is null). */
+  identity_link: IdentityLink | null;
+  /** A DICT with progress, not a list — the first blind guess here typed it
+   *  as a name/description array and the live sample refuted both fields. */
+  achievements: {
+    unlocked: AchievementBadge[];
+    next: AchievementNext[];
+    total_unlocked: number;
+    total_possible: number;
+    progress: number;
+  };
+}
+
+export interface AchievementBadge {
+  type: string;
+  threshold: number;
+  emoji: string;
+  title: string;
+  color: string;
+}
+
+export interface AchievementNext {
+  type: string;
+  threshold: number;
+  emoji: string;
+  title: string;
+  current: number;
+  progress: number;
+}
+
+export type IdentityLink =
+  | {
+      role: 'alt';
+      link_type: string;
+      reason: string | null;
+      primary_guid: string;
+      primary_name: string;
+      active: boolean;
+      since: string | null;
+    }
+  | {
+      role: 'primary';
+      alts: {
+        alt_guid: string;
+        alt_name: string;
+        link_type: string;
+        reason: string | null;
+        active: boolean;
+        since: string | null;
+      }[];
+    };
+
+/** GET /api/player/{player_name}/matches — round-level rows richer than the
+ *  profile's recent_matches (gibs, damage_received, headshot_kills,
+ *  revives_given, round_status, gaming_session_id). */
+export interface PlayerMatchRound {
+  round_id: number;
+  round_date: string;
+  map_name: string;
+  round_number: number;
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  team: string | null;
+  xp: number;
+  accuracy: number;
+  dpm: number;
+  kd: number;
+  gibs: number;
+  damage_received: number;
+  headshot_kills: number;
+  revives_given: number;
+  round_status: string | null;
+  gaming_session_id: number | null;
+}

@@ -37,8 +37,6 @@
 /api/monitoring/status
 /api/planning
 /api/planning/today
-/api/player
-/api/predictions/recent
 /api/proximity/aim-lock
 /api/proximity/carrier-events
 /api/proximity/carrier-kills
@@ -102,13 +100,7 @@
 /api/proximity/weapon-accuracy
 /api/replay/round
 /api/server-activity/history
-/api/skill/composite
-/api/skill/player
-/api/stats/live-session
-/api/stats/player
-/api/stats/session-leaderboard
 /api/stats/sessions
-/api/stats/weapons/by-player
 /api/status
 /api/uploads
 /api/uploads/resumable
