@@ -1,0 +1,255 @@
+{
+ "status": "ok",
+ "available": true,
+ "formula_version": "s.effort-v0.2",
+ "players": [
+  {
+   "player_guid": "3C0354D3",
+   "name": "SQUUAZE",
+   "lifetime_rating": 0.7441,
+   "adjusted_lifetime": 0.7856,
+   "n_sessions": 11,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "2B5938F5",
+   "name": "bronzelow-",
+   "lifetime_rating": 0.7079,
+   "adjusted_lifetime": 0.7534,
+   "n_sessions": 59,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "D8423F90",
+   "name": "vid",
+   "lifetime_rating": 0.7481,
+   "adjusted_lifetime": 0.7328,
+   "n_sessions": 114,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "EDBB5DA9",
+   "name": "[TWK]CUJO",
+   "lifetime_rating": 0.7178,
+   "adjusted_lifetime": 0.7197,
+   "n_sessions": 113,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "A0B2063D",
+   "name": "i p k i s s",
+   "lifetime_rating": 0.5798,
+   "adjusted_lifetime": 0.7045,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "DB00AA45",
+   "name": "Cru3lzor.",
+   "lifetime_rating": 0.6408,
+   "adjusted_lifetime": 0.6466,
+   "n_sessions": 32,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "5D989160",
+   "name": "olz",
+   "lifetime_rating": 0.6451,
+   "adjusted_lifetime": 0.6462,
+   "n_sessions": 111,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "1C8F69CA",
+   "name": "//^?/M.Demonslayer",
+   "lifetime_rating": 0.5839,
+   "adjusted_lifetime": 0.6314,
+   "n_sessions": 2,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "043E32DD",
+   "name": "043E32DD",
+   "lifetime_rating": null,
+   "adjusted_lifetime": 0.6305,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "0A26D447",
+   "name": "-slo.carniee-",
+   "lifetime_rating": 0.5789,
+   "adjusted_lifetime": 0.6303,
+   "n_sessions": 71,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "42E142B3",
+   "name": "immoo{",
+   "lifetime_rating": 0.6009,
+   "adjusted_lifetime": 0.6239,
+   "n_sessions": 10,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "EF561EAA",
+   "name": "ownator",
+   "lifetime_rating": 0.6352,
+   "adjusted_lifetime": 0.6181,
+   "n_sessions": 4,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "1C747DF1",
+   "name": "s&o.lgz",
+   "lifetime_rating": 0.6224,
+   "adjusted_lifetime": 0.6026,
+   "n_sessions": 93,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "7B84BE88",
+   "name": "endekk",
+   "lifetime_rating": 0.5752,
+   "adjusted_lifetime": 0.5861,
+   "n_sessions": 67,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "31B54D18",
+   "name": "Peep",
+   "lifetime_rating": 0.5753,
+   "adjusted_lifetime": 0.5739,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "E587CA5F",
+   "name": "Zlatorog",
+   "lifetime_rating": 0.5667,
+   "adjusted_lifetime": 0.5459,
+   "n_sessions": 8,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "FDA127DF",
+   "name": ".wjs",
+   "lifetime_rating": 0.6017,
+   "adjusted_lifetime": 0.5397,
+   "n_sessions": 67,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "652EB4A6",
+   "name": "XI-WANG",
+   "lifetime_rating": 0.5649,
+   "adjusted_lifetime": 0.536,
+   "n_sessions": 52,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "1EDBF300",
+   "name": "low.kanii",
+   "lifetime_rating": 0.5726,
+   "adjusted_lifetime": 0.5247,
+   "n_sessions": 20,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "9CC78CFE",
+   "name": "v_kt_r",
+   "lifetime_rating": 0.4456,
+   "adjusted_lifetime": 0.4965,
+   "n_sessions": 40,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "9F2B3930",
+   "name": "[TWK]Imb3ciL",
+   "lifetime_rating": 0.6026,
+   "adjusted_lifetime": 0.4802,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "499915CE",
+   "name": "499915CE",
+   "lifetime_rating": null,
+   "adjusted_lifetime": 0.4788,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "3063A713",
+   "name": "'^/fnx",
+   "lifetime_rating": 0.5583,
+   "adjusted_lifetime": 0.4635,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "FB0EC840",
+   "name": "ownator",
+   "lifetime_rating": 0.6074,
+   "adjusted_lifetime": 0.4461,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "EDC010BC",
+   "name": "//^?/M.Gekku",
+   "lifetime_rating": 0.5529,
+   "adjusted_lifetime": 0.4262,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "4D5B6107",
+   "name": "//^?/M.rAzzdOG",
+   "lifetime_rating": 0.5345,
+   "adjusted_lifetime": 0.3634,
+   "n_sessions": 2,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "2EF36AE2",
+   "name": "konrad!",
+   "lifetime_rating": 0.5424,
+   "adjusted_lifetime": 0.3543,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "C74FB315",
+   "name": "Imbecil",
+   "lifetime_rating": 0.5466,
+   "adjusted_lifetime": 0.2846,
+   "n_sessions": 2,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "66BECC22",
+   "name": "66BECC22",
+   "lifetime_rating": null,
+   "adjusted_lifetime": 0.261,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "A2C6BEBA",
+   "name": "KaNii",
+   "lifetime_rating": 0.4398,
+   "adjusted_lifetime": 0.2241,
+   "n_sessions": 4,
+   "formula_version": "s.effort-v0.2"
+  },
+  {
+   "player_guid": "E3B39444",
+   "name": "Rakun",
+   "lifetime_rating": 0.4869,
+   "adjusted_lifetime": 0.1562,
+   "n_sessions": 1,
+   "formula_version": "s.effort-v0.2"
+  }
+ ]
+}

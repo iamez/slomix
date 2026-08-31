@@ -93,7 +93,6 @@
 /api/replay/round
 /api/rivalries/h2h
 /api/server-activity/history
-/api/skill/adjusted-lifetime
 /api/skill/composite
 /api/skill/player
 /api/stats/live-session
