@@ -544,8 +544,9 @@ function Term({ name, term }: { name: string; term: FormulaTerm }) {
       : term.range != null
         // The range alone is the OUTPUT of the calculation, not the
         // calculation: spawn_timing publishes `bonus` because the multiplier
-        // is 1 + bonus × denial (kis.py:551, `spawn_mult = 1.0 + best_score`
-        // with the 0–1 denial score the description defines) — the range
+        // is 1 + bonus × denial (kis.py `_score_kill`,
+        // `spawn_mult = 1.0 + SPAWN_TIMING_BONUS * best_score` over the 0–1
+        // denial score the description defines) — the range
         // 1.0–2.0 only holds while bonus is 1.0, so a panel without the
         // coefficient would silently keep the old range through a bonus
         // change (Codex on #842). ⚠️ This cascade assumes ONE head shape per

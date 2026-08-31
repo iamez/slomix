@@ -29,5 +29,9 @@
  * #842), which is why the SPA needs this at all.
  */
 export function stripEtColors(text: string): string {
-  return text.replace(/\^[0-9A-Za-z]/g, '');
+  // The mapTransforms copy this replaced was defensive (`String(value ?? '')`)
+  // and callers on this codebase routinely discover a field is `string | null`
+  // after the fact — so the defence stays at runtime while the type keeps the
+  // compile-time contract honest (verifier on #842).
+  return String(text ?? '').replace(/\^[0-9A-Za-z]/g, '');
 }

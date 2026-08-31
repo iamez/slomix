@@ -5,7 +5,8 @@
 "so range 1.0-2.0 based on score 0-1"). Two spellings of one fact drift the
 day someone tunes the bonus: the transparency endpoint would keep publishing
 the old range beside the new coefficient. The multiplier really is
-1 + bonus x denial (kis.py `spawn_mult = 1.0 + best_score`), so the range's
+1 + bonus x denial (kis.py `_score_kill`, since #842 wired as
+`spawn_mult = 1.0 + SPAWN_TIMING_BONUS * best_score`), so the range's
 upper end IS 1.0 + SPAWN_TIMING_BONUS and the endpoint must compute it.
 
 Seen failing before the fix: with the range still hardcoded, moving the

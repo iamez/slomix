@@ -262,9 +262,14 @@ async def _best_lives_payload(
     # "top {limit} of N" and a LIMITed query cannot say N. A separate COUNT
     # would be a second copy of this predicate — the drift risk this PR keeps
     # finding — so one query carries both, which is safe because the row set
-    # is a session's lives with >= _BEST_LIFE_MIN_KILLS kills (measured live
-    # 2026-08-31 on session 154, the recorded fixture: 51 rows; bounded by
-    # lives per player per round).
+    # is a session's lives with >= _BEST_LIFE_MIN_KILLS kills — measured
+    # 2026-08-31 across all 43 sessions with qualifying lives: median 51,
+    # max 91 rows (session 154, the recorded fixture, sits at the median).
+    # The scope resolver returns exactly ONE gaming session (an ambiguous
+    # date is a 409), so rows cannot span sessions. And the old LIMIT was
+    # cost-decorative anyway: it sat above an ORDER BY over a LATERAL that
+    # ran per candidate regardless, so dropping it changes rows transferred
+    # (5 -> <=91), not work done (verifier on #842).
     qualifying_total = len(rows or [])
     lives = _build_life_cards((rows or [])[:limit])
     return {
@@ -499,8 +504,9 @@ async def get_kis_formula():
             },
             "spawn_timing": {
                 # DERIVED, not written twice: the multiplier is
-                # 1 + bonus x denial (kis.py, spawn_mult = 1.0 + best_score
-                # over the 0-1 denial score), so the range's upper end IS
+                # 1 + bonus x denial (kis.py _score_kill,
+                # spawn_mult = 1.0 + SPAWN_TIMING_BONUS * best_score over the
+                # 0-1 denial score), so the range's upper end IS
                 # 1.0 + SPAWN_TIMING_BONUS. The hand-written "1.0 - 2.0"
                 # would have kept publishing itself through a bonus change
                 # (Codex on #842; test_kis_formula_spawn_range.py moves the
