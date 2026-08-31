@@ -499,39 +499,51 @@ async def get_composite_stats(
             # were never counted. GREATEST over the union makes that return
             # reachable only when every source is empty — at which point the
             # zeros are true by construction rather than by assertion.
-            row = await db.fetch_one(
-                """
-                -- Each MAX runs through the SAME gates as the coverage
-                -- counts (:508, Codex on #848): a source whose newest rows
-                -- live only in invalid or bot rounds must not pick the
-                -- default scope — the date path would then gate those rows
-                -- away and answer an empty session for the date that looks
-                -- freshest. Measured today: gated and ungated MAX agree
-                -- (2026-08-27), so this is shape, not behaviour.
-                SELECT GREATEST(
-                    (SELECT MAX(t.session_date) FROM proximity_kill_outcome t
-                      JOIN rounds r ON r.id = t.round_id
-                      WHERE r.is_valid IS DISTINCT FROM FALSE
-                        AND r.is_bot_round IS DISTINCT FROM TRUE),
-                    (SELECT MAX(t.session_date) FROM proximity_crossfire_opportunity t
-                      JOIN rounds r ON r.id = t.round_id
-                      WHERE r.is_valid IS DISTINCT FROM FALSE
-                        AND r.is_bot_round IS DISTINCT FROM TRUE),
-                    (SELECT MAX(t.session_date) FROM proximity_lua_trade_kill t
-                      JOIN rounds r ON r.id = t.round_id
-                      WHERE r.is_valid IS DISTINCT FROM FALSE
-                        AND r.is_bot_round IS DISTINCT FROM TRUE),
-                    (SELECT MAX(t.session_date) FROM proximity_combat_position t
-                      JOIN rounds r ON r.id = t.round_id
-                      WHERE r.is_valid IS DISTINCT FROM FALSE
-                        AND r.is_bot_round IS DISTINCT FROM TRUE),
-                    (SELECT MAX(t.session_date) FROM proximity_spawn_timing t
-                      JOIN rounds r ON r.id = t.round_id
-                      WHERE r.is_valid IS DISTINCT FROM FALSE
-                        AND r.is_bot_round IS DISTINCT FROM TRUE)
+            # :503 (Codex on #848), the same contract as the coverage
+            # guard: a missing or unavailable telemetry table must not
+            # turn the no-scope path into a 500 — an unanswerable
+            # default-scope question reads as "no scope", which the
+            # early return below already answers honestly.
+            try:
+                row = await db.fetch_one(
+                    """
+                    -- Each MAX runs through the SAME gates as the coverage
+                    -- counts (:508, Codex on #848): a source whose newest rows
+                    -- live only in invalid or bot rounds must not pick the
+                    -- default scope — the date path would then gate those rows
+                    -- away and answer an empty session for the date that looks
+                    -- freshest. Measured today: gated and ungated MAX agree
+                    -- (2026-08-27), so this is shape, not behaviour.
+                    SELECT GREATEST(
+                        (SELECT MAX(t.session_date) FROM proximity_kill_outcome t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_crossfire_opportunity t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_lua_trade_kill t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_combat_position t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE),
+                        (SELECT MAX(t.session_date) FROM proximity_spawn_timing t
+                          JOIN rounds r ON r.id = t.round_id
+                          WHERE r.is_valid IS DISTINCT FROM FALSE
+                            AND r.is_bot_round IS DISTINCT FROM TRUE)
+                    )
+                    """
                 )
-                """
-            )
+            except Exception:
+                logger.warning(
+                    "composite default-scope lookup failed; answering no-scope",
+                    exc_info=True,
+                )
+                row = None
             if not row or not row[0]:
                 # No proximity rows anywhere, so there is no default scope to
                 # pick. This used to return a SHORTER shape than the one

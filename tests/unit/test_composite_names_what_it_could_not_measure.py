@@ -411,3 +411,25 @@ def test_a_failing_coverage_query_does_not_take_the_answer_down():
     assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR, (
         "an unanswerable coverage question must read as unmeasured — the cautious direction — not as measured-clean"
     )
+
+
+class _ScopeLookupRaisesDb(_ScriptedDb):
+    """:503 — the default-scope GREATEST lookup raising (a telemetry table
+    missing on a dev database) must not 500 the no-scope path."""
+
+    async def fetch_one(self, query, params=None):
+        if "GREATEST" in query:
+            raise RuntimeError("relation does not exist")
+        return await super().fetch_one(query, params)
+
+
+def test_a_failing_default_scope_lookup_answers_no_scope_not_500():
+    db = _ScopeLookupRaisesDb([], source_counts=[0, 0, 0, 0, 0, 0])
+    response = _client(db).get("/api/skill/composite")
+    assert response.status_code == 200, f"the default-scope lookup failing returned {response.status_code}"
+    body = response.json()
+    # The honest answer an unanswerable scope question already had: the
+    # early return, with every metric unmeasured and the same shape as
+    # every other answer.
+    assert body["session_date"] is None
+    assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR
