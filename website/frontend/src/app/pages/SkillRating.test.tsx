@@ -193,6 +193,52 @@ describe('SkillRating', () => {
     expect(screen.getAllByText(`${delta > 0 ? '+' : ''}${delta.toFixed(3)}`).length).toBeGreaterThan(0);
   });
 
+  it('tells the two adjusted "ownator"s apart, the same way the main board does', async () => {
+    // The committed fixture itself proves the need: EF561EAA and FB0EC840
+    // both render as "ownator", with different ratings. Without the GUID tag
+    // the board contradicts itself (Codex on #846).
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(screen.getAllByText('ownator').length).toBeGreaterThan(1));
+    // The MAIN board already tags its own duplicates with the same GUIDs, so
+    // presence alone would pass without this fix — the adjusted board must
+    // ADD its tags on top of the main board's.
+    expect(screen.getAllByText('EF561EAA').length).toBeGreaterThan(1);
+    expect(screen.getAllByText('FB0EC840').length).toBeGreaterThan(1);
+  });
+
+  it('derives the thin-history claim from the rows instead of asserting a constant', async () => {
+    // ⛔ The first version of this test compared against the committed
+    // fixture — where the derived ratio happens to round to 5 — so the
+    // hard-coded "~5×" it was written to reject ALSO passed. A fixture
+    // cannot fail on a value it does not contain, so this one feeds the
+    // board a synthetic pool built for a different answer: thin deltas of
+    // 1.2 against deep deltas of 0.1 make the honest sentence "~12×", and
+    // the constant 5 has no way to produce it.
+    const synthetic = {
+      available: true,
+      formula_version: 's-effort-v1',
+      players: [
+        { player_guid: 'AAAA0001', name: 'thin-a', lifetime_rating: 1.0, adjusted_lifetime: 2.2, n_sessions: 2, formula_version: 's-effort-v1' },
+        { player_guid: 'AAAA0002', name: 'thin-b', lifetime_rating: 1.0, adjusted_lifetime: 2.2, n_sessions: 3, formula_version: 's-effort-v1' },
+        { player_guid: 'AAAA0003', name: 'deep-a', lifetime_rating: 1.0, adjusted_lifetime: 1.1, n_sessions: 30, formula_version: 's-effort-v1' },
+        { player_guid: 'AAAA0004', name: 'deep-b', lifetime_rating: 1.0, adjusted_lifetime: 0.9, n_sessions: 40, formula_version: 's-effort-v1' },
+      ],
+    };
+    renderPage((input) => {
+      const path = new URL(String(input), 'http://test.local').pathname;
+      if (path === '/api/skill/adjusted-lifetime') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(synthetic) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: /show adjusted/i })).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /show adjusted/i }));
+    await waitFor(() => expect(screen.getByText(/the correction is/)).toBeInTheDocument());
+    expect(screen.getByText(/the correction is/).textContent).toContain('~12×');
+  });
+
   it('says a player has no lifetime rating rather than crediting them a delta', async () => {
     // Measured on the recording: 3 of 31 players have lifetime_rating null —
     // they appear in the session history and not in the lifetime table, all

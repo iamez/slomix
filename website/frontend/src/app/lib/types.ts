@@ -1228,10 +1228,14 @@ export interface SsrBoard {
  *  the difference between them is the panel's whole point. */
 export interface AdjustedLifetimePlayer {
   player_guid: string;
-  /** Falls back to the GUID when the player has no lifetime row to take a
-   *  display name from — measured: the three such players are exactly the
-   *  three with a null rating below. */
-  name: string;
+  /** Two branches, and the first version of this type described only one
+   *  (Codex on #846). No lifetime row -> the service falls back to the GUID
+   *  (measured: the three such players are exactly the three with a null
+   *  rating below). A lifetime row whose display_name is NULL -> the null is
+   *  passed through UNCHANGED (s_effort_service.py:259). Today's sample has
+   *  0 nulls in 28 rows, but the column is nullable — the type follows the
+   *  schema, not the sample. */
+  name: string | null;
   /** NULL, and by CODE rather than by accident: the rows are built from
    *  `player_skill_history`, and this field is filled only when the player
    *  also appears in `player_skill_ratings` (s_effort_service.py:260 —

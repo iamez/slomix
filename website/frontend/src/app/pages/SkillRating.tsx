@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Chip, figure, Lbl, Pending, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, figure, Lbl, Meta, Pending, SectionHead, Unavailable } from '../components/ui';
 import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
-import type { RatedPlayer, SsrPlayer } from '../lib/types';
+import type { AdjustedLifetimePlayer, RatedPlayer, SsrPlayer } from '../lib/types';
 
 /**
  * ET Rating (docs/design/12 row 24).
@@ -195,6 +195,22 @@ function SsrRow({ player }: { player: SsrPlayer }) {
 /** Below this the correction does most of its work on the least evidence —
  * measured, not chosen: |correction| averages 0.143 under five sessions and
  * 0.028 at twenty or more. */
+/** The size of the correction for thin histories, measured from the rows the
+ *  board is actually showing. Buckets follow the sentence: under five
+ *  sessions against over twenty; players without a lifetime rating have no
+ *  delta to measure and are excluded. */
+function correctionClaim(players: AdjustedLifetimePlayer[]): string {
+  const rated = players.filter((p) => p.lifetime_rating != null);
+  const size = (xs: AdjustedLifetimePlayer[]) =>
+    xs.reduce((sum, p) => sum + Math.abs(p.adjusted_lifetime - (p.lifetime_rating as number)), 0) / xs.length;
+  const thin = rated.filter((p) => p.n_sessions < 5);
+  const deep = rated.filter((p) => p.n_sessions > 20);
+  if (thin.length === 0 || deep.length === 0 || size(deep) === 0) {
+    return 'the correction is largest for thin histories';
+  }
+  return `the correction is ~${Math.round(size(thin) / size(deep))}× larger below five sessions than above twenty`;
+}
+
 const THIN_SESSIONS = 5;
 
 /** The lifetime rating, and the same rating after the pool it was earned
@@ -239,18 +255,32 @@ function AdjustedLifetimeBoard() {
             <>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
                 {q.data.formula_version} · {figure(q.data.players.length)} players ·
-                {' '}the correction is ~5× larger below five sessions than above twenty
+                {/* ⛔ Derived from the rows on screen, not hard-coded (Codex on
+                  * #846): the "~5×" was measured against the committed fixture,
+                  * and the endpoint recomputes from THIS deployment's history —
+                  * a snapshot observation was being presented as a property of
+                  * every pool. When either bucket is empty the sentence drops
+                  * its number rather than inventing one. */}
+                {' '}{correctionClaim(q.data.players)}
               </Lbl>
               <Stack gap={1} className="rows">
                 {q.data.players.map((p) => {
                   const thin = p.n_sessions < THIN_SESSIONS;
                   const delta = p.lifetime_rating == null ? null : p.adjusted_lifetime - p.lifetime_rating;
+                  const shownName = p.name ?? p.player_guid.slice(0, 8);
+                  const dup = q.data.players.filter(
+                    (o) => (o.name ?? o.player_guid.slice(0, 8)) === shownName).length > 1;
                   return (
                     <Cluster key={p.player_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
                       <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
                         <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
-                          {p.name}
+                          {shownName}
                         </Link>
+                        {/* Same disambiguation as the main board (its fixture
+                          * proves the need: EF561EAA and FB0EC840 are both
+                          * "ownator"): identical names against different
+                          * ratings is a board contradicting itself. */}
+                        {dup && <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>{p.player_guid.slice(0, 8)}</span>}
                         {thin && (
                           <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
                             {p.n_sessions} session{p.n_sessions === 1 ? '' : 's'}
@@ -276,9 +306,7 @@ function AdjustedLifetimeBoard() {
                         >
                           {delta == null ? 'no lifetime yet' : `${delta > 0 ? '+' : ''}${delta.toFixed(3)}`}
                         </span>
-                        <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)', width: 40, textAlign: 'right' }}>
-                          {p.n_sessions}
-                        </span>
+                        <Meta style={{ width: 40, textAlign: 'right' }}>{p.n_sessions}</Meta>
                       </Cluster>
                     </Cluster>
                   );
