@@ -52,7 +52,7 @@ def _load_env_file(env: Path) -> None:
 def main() -> int:
     _load_env()
     secret = os.getenv("SESSION_SECRET")
-    if not secret or secret == "super-secret-key-change-me":
+    if not secret or secret == "super-secret-key-change-me":  # noqa: S105 — the known placeholder, not a credential (same check as main.py)
         print("SESSION_SECRET is not configured; cannot mint a session", file=sys.stderr)
         return 1
 
