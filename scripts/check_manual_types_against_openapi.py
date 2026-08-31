@@ -113,7 +113,75 @@ def _ts_is_nullable(ts_type: str) -> bool:
         elif depth == 0:
             top.append(ch)
     outer = "".join(top)
-    return "null" in outer or "undefined" in outer
+    return "null" in outer
+
+
+def _ts_accepts_undefined(ts_type: str) -> bool:
+    """⛔ `undefined` IS NOT `null`, AND TREATING THEM AS ONE HID A REAL GAP.
+
+    `field: string | undefined` REJECTS a null the API can send, yet the
+    single nullability test read it as proof the declaration accepts one, and
+    `_ts_matches` stripped `undefined` too — so every later check passed on a
+    declaration that would throw at runtime (Codex on #830). Optionality and
+    nullability are the same distinction this whole branch has been drawing
+    on the server side; the client side needs it too.
+    """
+    depth = 0
+    top = []
+    for ch in ts_type:
+        if ch in "{([<":
+            depth += 1
+        elif ch in "})]>":
+            depth -= 1
+        elif depth == 0:
+            top.append(ch)
+    return "undefined" in "".join(top)
+
+
+def _routes_stripping_none() -> set[str]:
+    """Schema names served by a route with `response_model_exclude_none=True`.
+
+    ⛔ FOR THOSE, COMPONENT NULLABILITY DOES NOT DESCRIBE THE WIRE. A field
+    typed `list[int] | None = None` appears nullable in the schema, but the
+    route strips every None before serialising — so the handler either sends a
+    list or omits the key, and the honest hand-written declaration is optional
+    and NON-null. Judging it by the component made this checker emit four
+    confident `API nullable, TS is not` findings against `StatsTrends`
+    declarations that were correct (Codex on #830).
+
+    Read from the route objects, never from the schema: `exclude_none` does not
+    appear in the OpenAPI document at all, which is exactly why this had to be
+    looked up somewhere else.
+    """
+    names: set[str] = set()
+    try:
+        import importlib
+
+        from fastapi.routing import APIRoute
+    except Exception:
+        return names
+    for path in sorted((ROOT / "website" / "backend" / "routers").glob("*.py")):
+        if path.stem == "__init__":
+            continue
+        try:
+            module = importlib.import_module(f"website.backend.routers.{path.stem}")
+        except Exception as exc:  # noqa: BLE001 - a router that will not import
+            # is not this script's problem to solve; it just cannot contribute
+            # a name. Reported rather than swallowed, because a silent skip
+            # here would quietly shrink the set and re-open the false findings
+            # this function exists to close.
+            print(f"  ~ could not import {path.stem}: {exc}")
+            continue
+        router_obj = getattr(module, "router", None)
+        if router_obj is None:
+            continue
+        for route in router_obj.routes:
+            if isinstance(route, APIRoute) and route.response_model_exclude_none:
+                model = route.response_model
+                name = getattr(model, "__name__", None)
+                if name:
+                    names.add(name)
+    return names
 
 
 def _top_level_union(ts_type: str) -> list[str]:
@@ -245,6 +313,8 @@ def main() -> int:
     types_path = args.types
     source = types_path.read_text()
 
+    strips_none = _routes_stripping_none()
+    collisions: list[str] = []
     compared = 0
     findings: list[tuple[str, str, str, str]] = []
     unreadable: list[tuple[str, str, str]] = []
@@ -268,8 +338,20 @@ def main() -> int:
             if re.search(rf"\b(type|interface)\s+{re.escape(name)}\b", source):
                 skipped.append(name)
             continue
-        compared += 1
         declared = _fields(body)
+        schema_props = set(schema.get("properties") or {})
+        # ⛔ SAME NAME IS NOT SAME THING. The hand-written `SeasonLeaders` is
+        # the ENDPOINT WRAPPER (`{start_date, end_date, leaders}`); the
+        # component of that name is the INNER object (thirteen metric names).
+        # Pairing them produced fourteen confident disagreements against a
+        # correct declaration — and made the frontend author write a defensive
+        # comment about this checker rather than about his code (Codex on
+        # #830). No overlap at all is the tell: a real counterpart always
+        # shares something.
+        if declared and schema_props and not (set(declared) & schema_props):
+            collisions.append(name)
+            continue
+        compared += 1
         required = set(schema.get("required", []))
         properties = schema.get("properties") or {}
 
@@ -290,6 +372,8 @@ def main() -> int:
                 continue
             ts_type, ts_optional = declared[field]
             ts_nullable = _ts_is_nullable(ts_type)
+            # `field: T | undefined` is optional in effect even without `?`.
+            ts_optional = ts_optional or _ts_accepts_undefined(ts_type)
             api_nullable = _is_nullable(field_schema)
             api_optional = field not in required
 
@@ -299,7 +383,7 @@ def main() -> int:
             # marking a required field optional, were both reported clean. A
             # checker that cannot fail proves nothing, so each rule below has a
             # counterpart.
-            if api_nullable and not ts_nullable:
+            if api_nullable and not ts_nullable and name not in strips_none:
                 findings.append((name, field, "API nullable, TS is not", ts_type))
             if ts_nullable and not (api_nullable or api_optional):
                 findings.append((name, field, "TS nullable, API never is", ts_type))
@@ -324,6 +408,11 @@ def main() -> int:
     stamp = datetime.fromtimestamp(types_path.stat().st_mtime, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
     print(f"types.ts: {types_path}  (last modified {stamp})")
     print(f"schemas compared: {compared}   disagreements: {len(findings)}")
+    if collisions:
+        print(f"  ~ NAME COLLISION ({len(collisions)}): a hand-written type shares "
+              f"its name with an unrelated component and was not compared")
+        for name in collisions:
+            print(f"      {name}")
     if skipped:
         print(f"  ~ NOT COMPARED ({len(skipped)}): no matching `interface` — a "
               f"`type X = …` alias is invisible to this parser")
@@ -370,7 +459,7 @@ def main() -> int:
     #     examined. Louder than 0, distinguishable from a real disagreement.
     if findings:
         return 1
-    return 2 if (skipped or unreadable) else 0
+    return 2 if (skipped or unreadable or collisions) else 0
 
 
 if __name__ == "__main__":
