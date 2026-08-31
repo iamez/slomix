@@ -1,0 +1,1595 @@
+{
+  "_comment": [
+    "Phase-5 inventory (docs/design/17, checklist item 7): the 91 paths of",
+    "the proximity/storytelling/replay family measured on 24. 8. 2026,",
+    "plus the spider-web /web path the snapshot missed (its dev process",
+    "predated #792). DISPOSITIONS ARE MACHINE-COMPUTED against the SPA",
+    "source by tests/unit/test_proximity_inventory.py, which recomputes",
+    "coverage on every run: a pending row the app now calls fails as",
+    "stale (flip it to covered), a covered row the app no longer calls",
+    "fails as a regression, and the dropped set must equal O9's decision",
+    "exactly (owner, 24. 8.: show kill-matrix, win-contribution/formula,",
+    "movement; drop dashboard and the three replay duplicates).",
+    "The pending count is phase 5's remaining surface, pinned in the",
+    "test - it only moves in review."
+  ],
+  "generated": "2026-08-31",
+  "source_snapshot": "slomix-archive/design_research_2026-08-24/proximity_inventory.json (91 poti, file:line dokazi)",
+  "lb_tabs": [
+    "power",
+    "spawn",
+    "crossfire",
+    "trades",
+    "reactions",
+    "survivors",
+    "movement",
+    "focus_fire",
+    "krogt",
+    "comp_skill"
+  ],
+  "rows": [
+    {
+      "path": "/api/proximity/aim-lock",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2074"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3449,
+        "file": "api_proximity_aim_lock.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/carrier-events",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2063"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 7805,
+        "file": "api_proximity_carrier_events.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/carrier-kills",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2064"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1159,
+        "file": "api_proximity_carrier_kills.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/carrier-returns",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2065"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3634,
+        "file": "api_proximity_carrier_returns.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/classes",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2044"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 825,
+        "file": "api_proximity_classes.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/cohesion",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2050"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 223093,
+        "file": "api_proximity_cohesion.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/combat-position-stats",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2073"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 956,
+        "file": "api_proximity_combat_position_stats.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/combat-positions/danger-zones",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:3664"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:319"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 400,
+        "bytes": 33,
+        "file": null
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/combat-positions/heatmap",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:3769"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:273"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 400,
+        "bytes": 33,
+        "file": null
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/combat-positions/kill-lines",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:3772"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:314"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 400,
+        "bytes": 33,
+        "file": null
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/clutch",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2842"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2629,
+        "file": "api_proximity_competitive_clutch.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/first-blood",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2834"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2811,
+        "file": "api_proximity_competitive_first_blood.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/man-advantage",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2841"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1505,
+        "file": "api_proximity_competitive_man_advantage.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/personal-bests",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2836"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 466,
+        "file": "api_proximity_competitive_personal_bests.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/player-card",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/player-profile.js:1094"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 196,
+        "file": "api_proximity_competitive_player_card.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/side-splits",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2843"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3815,
+        "file": "api_proximity_competitive_side_splits.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/stagger",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2833"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3855,
+        "file": "api_proximity_competitive_stagger.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/competitive/wave-cycles",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2839"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 802,
+        "file": "api_proximity_competitive_wave_cycles.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/construction-events",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2068"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 5565,
+        "file": "api_proximity_construction_events.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/crossfire-angles",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2051"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2432,
+        "file": "api_proximity_crossfire_angles.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/dashboard",
+      "family": "proximity",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 445245,
+        "file": "api_proximity_dashboard.json"
+      },
+      "disposition": "dropped",
+      "reason": "O9 (owner, 24. 8.): deliberately dropped — an early-era mega-aggregate; every part of it is served by the individual endpoints today"
+    },
+    {
+      "path": "/api/proximity/duos",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/session-detail.js:3364"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:225"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1344,
+        "file": "api_proximity_duos.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/engagements",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2040"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 975,
+        "file": "api_proximity_engagements.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/escort-credits",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2067"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2000,
+        "file": "api_proximity_escort_credits.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/event/{event_id}",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:1424"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "NEPREVERJENO (param brez vira)"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/events",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2046"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 97904,
+        "file": "api_proximity_events.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/focus-fire",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2070"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 5617,
+        "file": "api_proximity_focus_fire.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/hit-regions",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2056",
+        "website/js/proximity.js:3395"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:246",
+        "website/frontend/src/api/client.ts:259"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3424,
+        "file": "api_proximity_hit_regions.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/hit-regions/by-weapon",
+      "family": "proximity",
+      "class": "B",
+      "legacy_callers": [],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:249"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 53,
+        "file": "api_proximity_hit_regions_by_weapon.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/hit-regions/headshot-rates",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2057"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:263"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2501,
+        "file": "api_proximity_hit_regions_headshot_rates.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/hotzones",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2041"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2866,
+        "file": "api_proximity_hotzones.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/kill-outcomes",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2054"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:233"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 80282,
+        "file": "api_proximity_kill_outcomes.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/kill-outcomes/player-stats",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2055"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:236"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 7261,
+        "file": "api_proximity_kill_outcomes_player_stats.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/leaderboards",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:4454"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:356"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2253,
+        "file": "api_proximity_leaderboards.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/lua-trades",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2053"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3835,
+        "file": "api_proximity_lua_trades.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/movement-stats",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2058"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:336"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 8242,
+        "file": "api_proximity_movement_stats.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/movers",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2042",
+        "website/js/session-detail.js:3366"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:229"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2281,
+        "file": "api_proximity_movers.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/objective-focus",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2071"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 5630,
+        "file": "api_proximity_objective_focus.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/objective-pressure",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/session-detail.js:659"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 887,
+        "file": "api_proximity_objective_pressure.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/objective-runs",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2069"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 12315,
+        "file": "api_proximity_objective_runs.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/player-aim",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/player-profile.js:1546",
+        "website/js/proximity.js:4230"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:308"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 400,
+        "bytes": 33,
+        "file": null
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/player-heatmap",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:3983"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:291"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 400,
+        "bytes": 33,
+        "file": null
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/player-journey",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2584"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 241,
+        "file": "api_proximity_player_journey.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/player/{guid}/profile",
+      "family": "proximity",
+      "class": "B",
+      "legacy_callers": [],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:341"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 362,
+        "file": "api_proximity_player_guid_profile.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/player/{guid}/radar",
+      "family": "proximity",
+      "class": "B",
+      "legacy_callers": [],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:343"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 520,
+        "file": "api_proximity_player_guid_radar.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/players",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2535",
+        "website/js/proximity.js:438",
+        "website/js/proximity.js:4611"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:219"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2390,
+        "file": "api_proximity_players.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/prox-scores",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2059",
+        "website/js/proximity.js:4571"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:327"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 42054,
+        "file": "api_proximity_prox_scores.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/prox-scores/formula",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2060",
+        "website/js/proximity.js:4572"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:330"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 958,
+        "file": "api_proximity_prox_scores_formula.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/push-deaths/heatmap",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:3768"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 400,
+        "bytes": 33,
+        "file": null
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/pushes",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2052"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 875,
+        "file": "api_proximity_pushes.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/quality",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:1969",
+        "website/js/session-detail.js:814"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 5455,
+        "file": "api_proximity_quality.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/reactions",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2045"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2861,
+        "file": "api_proximity_reactions.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/revives",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2062"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2437,
+        "file": "api_proximity_revives.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/round/{round_id}/team-comparison",
+      "family": "proximity",
+      "class": "B",
+      "legacy_callers": [],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:351"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 534,
+        "file": "api_proximity_round_round_id_team_comparison.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/round/{round_id}/timeline",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/replay.js:505"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:347"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 147663,
+        "file": "api_proximity_round_round_id_timeline.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/round/{round_id}/tracks",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/replay.js:506"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:349"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2955991,
+        "file": "api_proximity_round_round_id_tracks.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/scopes",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:1909",
+        "website/js/smart-stats-diag.js:215"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 38924,
+        "file": "api_proximity_scopes.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/spawn-timing",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2049"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2604,
+        "file": "api_proximity_spawn_timing.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/summary",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:1968"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1880,
+        "file": "api_proximity_summary.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/support-summary",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2072"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3813,
+        "file": "api_proximity_support_summary.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/teamplay",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2043",
+        "website/js/session-detail.js:3365"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:227"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3575,
+        "file": "api_proximity_teamplay.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/trades/events",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2048",
+        "website/js/session-detail.js:3363"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:223"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 11952,
+        "file": "api_proximity_trades_events.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/trades/player-stats",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/session-detail.js:2360"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3647,
+        "file": "api_proximity_trades_player_stats.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/trades/summary",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2047",
+        "website/js/session-detail.js:3362"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:221"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 379,
+        "file": "api_proximity_trades_summary.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/v7-status",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2989"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1082,
+        "file": "api_proximity_v7_status.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/vehicle-progress",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2066"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 14062,
+        "file": "api_proximity_vehicle_progress.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/proximity/weapon-accuracy",
+      "family": "proximity",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2061"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:365"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2725,
+        "file": "api_proximity_weapon_accuracy.json"
+      },
+      "disposition": "pending"
+    },
+    {
+      "path": "/api/replay/round/{round_id}/paths",
+      "family": "replay",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 84,
+        "file": "api_replay_round_round_id_paths.json"
+      },
+      "disposition": "dropped",
+      "reason": "O9: dropped — same supersession"
+    },
+    {
+      "path": "/api/replay/round/{round_id}/positions",
+      "family": "replay",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 60,
+        "file": "api_replay_round_round_id_positions.json"
+      },
+      "disposition": "dropped",
+      "reason": "O9: dropped — superseded by /api/replay/round/{id}/web (spider-web layer 1)"
+    },
+    {
+      "path": "/api/replay/round/{round_id}/timeline",
+      "family": "replay",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 185499,
+        "file": "api_replay_round_round_id_timeline.json"
+      },
+      "disposition": "dropped",
+      "reason": "O9: dropped — duplicate of /api/proximity/round/{id}/timeline, which the frontend actually calls"
+    },
+    {
+      "path": "/api/storytelling/best-lives",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/session-detail.js:728"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1199,
+        "file": "api_storytelling_best_lives.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/best-lives"
+    },
+    {
+      "path": "/api/storytelling/box-score",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:379"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:547"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2079,
+        "file": "api_storytelling_box_score.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/box-score"
+    },
+    {
+      "path": "/api/storytelling/enabler",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2422",
+        "website/js/story.js:387"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:535"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1955,
+        "file": "api_storytelling_enabler.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/enabler"
+    },
+    {
+      "path": "/api/storytelling/formula",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:1956"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3247,
+        "file": "api_storytelling_formula.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/formula"
+    },
+    {
+      "path": "/api/storytelling/gravity",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2420",
+        "website/js/story.js:385"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:529"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2476,
+        "file": "api_storytelling_gravity.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/gravity"
+    },
+    {
+      "path": "/api/storytelling/kill-impact",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:280"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:510"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 3955,
+        "file": "api_storytelling_kill_impact.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/kill-impact"
+    },
+    {
+      "path": "/api/storytelling/kill-impact/details",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:2004"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 500,
+        "file": "api_storytelling_kill_impact_details.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/kill-impact/details"
+    },
+    {
+      "path": "/api/storytelling/kill-matrix",
+      "family": "storytelling",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 4456,
+        "file": "api_storytelling_kill_matrix.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/kill-matrix"
+    },
+    {
+      "path": "/api/storytelling/lurker-profile",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2423",
+        "website/js/story.js:388"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:538"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1978,
+        "file": "api_storytelling_lurker_profile.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/lurker-profile"
+    },
+    {
+      "path": "/api/storytelling/moments",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/session-detail.js:605",
+        "website/js/story.js:335"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:516"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2881,
+        "file": "api_storytelling_moments.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/moments"
+    },
+    {
+      "path": "/api/storytelling/momentum",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:331"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:520"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 14687,
+        "file": "api_storytelling_momentum.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/momentum"
+    },
+    {
+      "path": "/api/storytelling/momentum-session",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:766"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 16120,
+        "file": "api_storytelling_momentum_session.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/momentum-session"
+    },
+    {
+      "path": "/api/storytelling/movement",
+      "family": "storytelling",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 2236,
+        "file": "api_storytelling_movement.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/movement"
+    },
+    {
+      "path": "/api/storytelling/narrative",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:327"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:523"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1146,
+        "file": "api_storytelling_narrative.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/narrative"
+    },
+    {
+      "path": "/api/storytelling/player-narratives",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2424"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:526"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 4736,
+        "file": "api_storytelling_player_narratives.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/player-narratives"
+    },
+    {
+      "path": "/api/storytelling/scopes",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:147"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 7570,
+        "file": "api_storytelling_scopes.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/scopes"
+    },
+    {
+      "path": "/api/storytelling/space-created",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/proximity.js:2421",
+        "website/js/story.js:386"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:532"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1840,
+        "file": "api_storytelling_space_created.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/space-created"
+    },
+    {
+      "path": "/api/storytelling/synergy",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:339"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:541"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 773,
+        "file": "api_storytelling_synergy.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/synergy"
+    },
+    {
+      "path": "/api/storytelling/useless-defense-deaths",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:389"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1777,
+        "file": "api_storytelling_useless_defense_deaths.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/useless-defense-deaths"
+    },
+    {
+      "path": "/api/storytelling/win-contribution",
+      "family": "storytelling",
+      "class": "A",
+      "legacy_callers": [
+        "website/js/story.js:343"
+      ],
+      "react_callers": [
+        "website/frontend/src/api/client.ts:544"
+      ],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 22334,
+        "file": "api_storytelling_win_contribution.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/win-contribution"
+    },
+    {
+      "path": "/api/storytelling/win-contribution/formula",
+      "family": "storytelling",
+      "class": "C",
+      "legacy_callers": [],
+      "react_callers": [],
+      "evidence": {
+        "src": "korpus",
+        "status": 200,
+        "bytes": 1883,
+        "file": "api_storytelling_win_contribution_formula.json"
+      },
+      "disposition": "covered",
+      "covered_by_call": "/api/storytelling/win-contribution/formula"
+    },
+    {
+      "path": "/api/replay/round/{round_id}/web",
+      "family": "replay",
+      "class": "D",
+      "legacy_callers": [
+        "website/js/spider-web.js"
+      ],
+      "react_callers": [],
+      "evidence": {
+        "src": "živa spec :8056, 31. 8. — posnetek 24. 8. jo je zamudil, ker je dev proces predatiral #792"
+      },
+      "disposition": "pending"
+    }
+  ]
+}
