@@ -13,6 +13,7 @@ Seen failing before the fix: with the range still hardcoded, moving the
 constant left the published range at "1.0 - 2.0" and the first test below
 failed on "1.0 - 2.5" (Codex on #842, PR run 2026-08-31).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -48,6 +49,7 @@ def test_spawn_bonus_is_pinned_and_moving_it_is_a_formula_change():
     # identity and needed no FORMULA_VERSION bump; any other value is a
     # formula change and this test is the tripwire.
     from website.backend.services.storytelling.base import SPAWN_TIMING_BONUS
+
     assert SPAWN_TIMING_BONUS == 1.0, (
         "SPAWN_TIMING_BONUS moved: that is a FORMULA change, not a tuning "
         "knob. Required before relaxing this pin: bump FORMULA_VERSION in "
@@ -62,5 +64,36 @@ def test_router_and_scorer_read_the_same_binding():
     # the very attribute base defines, or the published range and the scored
     # multiplier can drift apart again while a grep still "agrees".
     from website.backend.services.storytelling import base, kis
+
     assert storytelling_router.SPAWN_TIMING_BONUS is base.SPAWN_TIMING_BONUS
     assert kis.SPAWN_TIMING_BONUS is base.SPAWN_TIMING_BONUS
+
+
+@pytest.mark.asyncio
+async def test_the_distance_group_declares_itself_not_applied():
+    """:725 (Codex on #842), the public half of #852: _score_kill pins
+    dist_mult at DISTANCE_NORMAL unconditionally — per-kill distance is not
+    implemented — so the published ×1.2/×0.9 factors cannot occur. A
+    transparency payload advertising them without saying so describes a
+    formula nobody runs."""
+    payload = await storytelling_router.get_kis_formula()
+    dm = payload["distance_multipliers"]
+    assert dm["applied"] is False
+    assert "not implemented" in dm["note"]
+    # the values stay published — the claim about them changed, not the record
+    assert dm["long_range"]["value"] == 1.2
+
+
+@pytest.mark.asyncio
+async def test_the_reinf_boundary_matches_the_scorer():
+    """:583 (Codex on #842): _graduated_reinf_mult's ≤25s tier is INCLUSIVE
+    (25s exactly scores ×1.30), so a description claiming ×1.40 "at ≥25s"
+    hands the reader two different factors for the same input. The tier rows
+    were right; the prose contradicted them."""
+    payload = await storytelling_router.get_kis_formula()
+    desc = payload["oksii_multipliers"]["reinforcement"]["description"]
+    assert ">25s" in desc
+    assert "≥25s" not in desc, (
+        "the description claims ×1.40 starts AT 25s while the scorer's ≤25 "
+        "tier is inclusive — two factors for one boundary input"
+    )

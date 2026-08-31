@@ -65,6 +65,8 @@
   }
  },
  "distance_multipliers": {
+  "applied": false,
+  "note": "not applied: per-kill distance data is not implemented, so every kill scores with the normal multiplier",
   "long_range": {
    "value": 1.2,
    "threshold": ">800u"
@@ -139,7 +141,7 @@
      "multiplier": 1.4
     }
    ],
-   "description": "Graduated UTRO-inspired tiers (2026-04-20). The longer the victim has to wait before respawning, the more time the kill removed from the enemy team — so the multiplier scales from 0.70 (≤2s, they were about to respawn) up to 1.40 (≥25s, full wave penalty). Replaces the previous binary 1.0/1.2 split."
+   "description": "Graduated UTRO-inspired tiers (2026-04-20). The longer the victim has to wait before respawning, the more time the kill removed from the enemy team — so the multiplier scales from 0.70 (≤2s, they were about to respawn) up to 1.40 (>25s, full wave penalty — the ≤25s tier above it is inclusive, matching _graduated_reinf_mult). Replaces the previous binary 1.0/1.2 split."
   }
  },
  "soft_cap": {

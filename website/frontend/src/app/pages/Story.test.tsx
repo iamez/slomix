@@ -567,6 +567,18 @@ describe('Story', () => {
     expect(screen.queryByText(/class ×1 · distance ×1/)).toBeNull();
   });
 
+  it('wears the distance group\'s inactivity out loud', async () => {
+    // The scorer pins dist_mult at normal — per-kill distance is not
+    // implemented (the public half of #852) — so the published ×1.2/×0.9
+    // factors cannot occur. The group must say so, not advertise them as
+    // part of the calculation (Codex on #842).
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/how is kis computed\?/)).toBeInTheDocument());
+    fireEvent.click(screen.getByText(/how is kis computed\?/));
+    await waitFor(() => expect(screen.getByText(/distance — not applied/)).toBeInTheDocument());
+    expect(screen.getByText(/per-kill distance data is not implemented/)).toBeInTheDocument();
+  });
+
   it('renders every published reinforcement tier, not a count of them', async () => {
     // The endpoint publishes seven (cutoff, multiplier) pairs; "7 tiers"
     // reduces five of them to hearsay, so a reader could not reproduce the

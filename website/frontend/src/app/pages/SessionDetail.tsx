@@ -427,9 +427,9 @@ function LivesOfTheNight({ sessionId }: { sessionId: number }) {
     <Stack gap={3} parity="session.lives">
       <SectionHead label="lives of the night" aside={<span className="lbl">most kills on a single life</span>} />
       <Cluster gap={5} align="start" style={{ flexWrap: 'wrap' }}>
-        {q.data.lives.map((l) => (
+        {q.data.lives.map((l, i) => (
           <Link
-            key={`${l.guid}:${l.map_name}:${l.round_number}:${l.life_seconds}`}
+            key={`${l.guid}:${l.map_name}:${l.round_number}:${l.life_seconds}:${l.kills}:${i}`}
             to={`/profile/${l.guid}`}
             style={{ textDecoration: 'none', color: 'inherit', minWidth: 150 }}
           >

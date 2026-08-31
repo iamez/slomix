@@ -300,4 +300,33 @@ describe('SessionDetail', () => {
       Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
     await waitFor(() => expect(screen.getByText(/the best lives: unavailable/)).toBeInTheDocument());
   });
+
+  it('gives two near-identical lives distinct keys', async () => {
+    // :432 (Codex on #842): same player, same map, same round, durations
+    // rounding to the same second — the composite key collapsed and React
+    // reused one card for both. The index joined the key; the guard is the
+    // absence of React's duplicate-key warning, which is the only observable
+    // the collision has.
+    const twin = (kills: number) => ({
+      guid: 'AAAA0001', name: 'twin', map_name: 'supply', round_number: 1,
+      life_seconds: 42, kills, gibs: 0, started_at: '20:00:00',
+    });
+    const errors: string[] = [];
+    const orig = console.error;
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(String(args[0]));
+      orig.apply(console, args as []);
+    });
+    try {
+      renderPage(withOverride('/api/storytelling/best-lives', () => json({
+        status: 'ok', available: true, total: 2, qualifying_total: 2, min_kills: 3,
+        lives: [twin(5), twin(4)],
+      })));
+      await waitFor(() => expect(screen.getAllByText('twin').length).toBeGreaterThan(0));
+      expect(errors.filter((e) => e.includes('same key')).length).toBe(0);
+    } finally {
+      vi.mocked(console.error).mockRestore();
+    }
+  });
+
 });

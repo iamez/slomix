@@ -112,9 +112,7 @@ async def resolve_story_scope(
         )
     if session_date is not None:
         session_date = str(_parse_date(session_date))
-    return await resolve_gaming_session_scope(
-        db, gaming_session_id=gaming_session_id, session_date=session_date
-    )
+    return await resolve_gaming_session_scope(db, gaming_session_id=gaming_session_id, session_date=session_date)
 
 
 @router.get("/storytelling/scopes")
@@ -168,21 +166,23 @@ def _build_life_cards(rows) -> list:
     short form the UI can link to (short_guid is a no-op on already-short ids).
     """
     lives = []
-    for r in (rows or []):
+    for r in rows or []:
         short = short_guid(r["guid"]) if r["guid"] else None
         name = strip_et_colors(r["name"] or (short or "")[:8])
         life_s = round((r["life_ms"] or 0) / 1000)
         kills = int(r["kills"])
-        lives.append({
-            "guid": short,
-            "name": name,
-            "kills": kills,
-            "life_seconds": life_s,
-            "map_name": r["map_name"],
-            "round_number": r["round_number"],
-            "narrative": f"{name} got {kills} kills in one life ({life_s}s) on "
-                         f"{(r['map_name'] or 'the map').replace('_', ' ')}",
-        })
+        lives.append(
+            {
+                "guid": short,
+                "name": name,
+                "kills": kills,
+                "life_seconds": life_s,
+                "map_name": r["map_name"],
+                "round_number": r["round_number"],
+                "narrative": f"{name} got {kills} kills in one life ({life_s}s) on "
+                f"{(r['map_name'] or 'the map').replace('_', ' ')}",
+            }
+        )
     return lives
 
 
@@ -205,9 +205,7 @@ async def get_best_lives(
     return await _best_lives_payload(scope, limit, db)
 
 
-async def _best_lives_payload(
-    scope: GamingSessionScope, limit: int, db: DatabaseAdapter
-) -> dict:
+async def _best_lives_payload(scope: GamingSessionScope, limit: int, db: DatabaseAdapter) -> dict:
     """Body of /storytelling/best-lives, extracted so it is testable — the
     route itself is rate-limited and @limiter.limit needs a real Request
     (same split this file already uses for _build_life_cards)."""
@@ -361,8 +359,9 @@ async def get_kill_impact_leaderboard(
         "players": leaderboard,
         "entries": leaderboard,
         "total": len(leaderboard),
-        "total_kills": (real_total_kills if real_total_kills is not None
-                        else sum(p.get("kills", 0) for p in leaderboard)),
+        "total_kills": (
+            real_total_kills if real_total_kills is not None else sum(p.get("kills", 0) for p in leaderboard)
+        ),
     }
 
 
@@ -385,7 +384,8 @@ async def get_kill_impact_details(
         await svc.compute_session_kis_for_gsid(scope.gaming_session_id)
     dates = [date.fromisoformat(d) for d in scope.dates]
     starts, maps, rnums = scope.round_key_arrays()
-    rows = await db.fetch_all(f"""
+    rows = await db.fetch_all(
+        f"""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
                victim_guid, victim_name,
                base_impact, carrier_multiplier, push_multiplier, crossfire_multiplier,
@@ -399,7 +399,9 @@ async def get_kill_impact_details(
         WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
           AND killer_guid = $5
         ORDER BY total_impact DESC
-    """, (dates, starts, maps, rnums, player_guid))
+    """,
+        (dates, starts, maps, rnums, player_guid),
+    )
 
     kills = [
         {
@@ -443,7 +445,7 @@ async def get_kill_impact_details(
         name_row = await db.fetch_one(
             f"SELECT MAX(killer_name) FROM storytelling_kill_impact "
             f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND killer_guid = $5",
-            (dates, starts, maps, rnums, player_guid)
+            (dates, starts, maps, rnums, player_guid),
         )
         player_name = strip_et_colors((name_row[0] if name_row else "") or short_guid(player_guid))
 
@@ -477,7 +479,7 @@ async def get_kis_formula():
         "version": FORMULA_VERSION,
         "name": "Kill Impact Score (KIS)",
         "description": "Contextual kill impact scoring for competitive ET:Legacy. "
-                       "Each kill starts at 1.0 base and is multiplied by context factors.",
+        "Each kill starts at 1.0 base and is multiplied by context factors.",
         "multipliers": {
             "carrier_kill": {
                 "value": CARRIER_KILL_MULTIPLIER,
@@ -492,11 +494,11 @@ async def get_kis_formula():
                 "status": "retired in kis-v5 (2026-07-25)",
                 "threshold": PUSH_QUALITY_THRESHOLD,
                 "description": "NO LONGER SCORED. Kills during a push predicted "
-                               "the round winner 50.9% of the time vs 50.8% for "
-                               "all other kills — indistinguishable from the ~50% "
-                               "baseline — and push_quality was inverse with kill "
-                               "activity. The is_during_push flag is still "
-                               "recorded for narrative use.",
+                "the round winner 50.9% of the time vs 50.8% for "
+                "all other kills — indistinguishable from the ~50% "
+                "baseline — and push_quality was inverse with kill "
+                "activity. The is_during_push flag is still "
+                "recorded for narrative use.",
             },
             "crossfire": {
                 "value": CROSSFIRE_MULTIPLIER,
@@ -521,11 +523,19 @@ async def get_kis_formula():
             "revived": {"value": OUTCOME_REVIVED, "description": "Kill undone by medic revive"},
             "tapped_out": {"value": OUTCOME_TAPPED, "description": "Normal death (tapped out)"},
         },
-        "class_weights": {
-            k: {"value": v, "description": f"Target was {k}"}
-            for k, v in CLASS_WEIGHTS.items()
-        },
+        "class_weights": {k: {"value": v, "description": f"Target was {k}"} for k, v in CLASS_WEIGHTS.items()},
         "distance_multipliers": {
+            # ⛔ NOT APPLIED, and the published formula must say so (Codex on
+            # #842, and the public half of issue #852): _score_kill pins
+            # dist_mult = DISTANCE_NORMAL unconditionally because per-kill
+            # distance data is not implemented — every stored kill gets ×1.0
+            # regardless of range. A transparency panel advertising ×1.2 and
+            # ×0.9 factors that cannot occur describes a formula nobody runs.
+            "applied": False,
+            "note": (
+                "not applied: per-kill distance data is not implemented, so "
+                "every kill scores with the normal multiplier"
+            ),
             "long_range": {"value": DISTANCE_LONG_RANGE, "threshold": ">800u"},
             "normal": {"value": DISTANCE_NORMAL, "threshold": "100-800u"},
             "melee": {"value": DISTANCE_MELEE, "threshold": "<100u"},
@@ -534,8 +544,8 @@ async def get_kis_formula():
             "objective_area": {
                 "value": OBJECTIVE_AREA_MULTIPLIER,
                 "description": "Victim died inside one of the map's objective "
-                               "zones (3D sphere check vs objective_zones.json) "
-                               "— kills at the objective matter more (KIS v4)",
+                "zones (3D sphere check vs objective_zones.json) "
+                "— kills at the objective matter more (KIS v4)",
             },
         },
         "oksii_multipliers": {
@@ -566,7 +576,9 @@ async def get_kis_formula():
                     "the victim has to wait before respawning, the more time "
                     "the kill removed from the enemy team — so the multiplier "
                     "scales from 0.70 (≤2s, they were about to respawn) up to "
-                    "1.40 (≥25s, full wave penalty). Replaces the previous "
+                    "1.40 (>25s, full wave penalty — the ≤25s tier above it "
+                    "is inclusive, matching _graduated_reinf_mult). "
+                    "Replaces the previous "
                     "binary 1.0/1.2 split."
                 ),
             },
@@ -632,8 +644,7 @@ async def get_pwc_formula():
         "revives": "Share of team revives given",
         "damage": "Share of team damage given",
         "crossfire": "Share of team crossfire kills",
-        "trade": "Share of team trade kills (avenging a teammate within "
-                 "the trade window)",
+        "trade": "Share of team trade kills (avenging a teammate within the trade window)",
         "survival": "Time alive vs team average, capped at 2.0x",
         "clutch": "Share of team clutch kills (below 30 HP or outnumbered)",
     }
@@ -648,10 +659,7 @@ async def get_pwc_formula():
             "a full weight while kills are split across the team. Session "
             "total_pwc is the sum over all valid rounds."
         ),
-        "weights": {
-            k: {"value": v, "description": descriptions[k]}
-            for k, v in weights.items()
-        },
+        "weights": {k: {"value": v, "description": descriptions[k]} for k, v in weights.items()},
         "zero_objective_rounds": {
             "description": (
                 "When NO player in the round scored any objective action, "
@@ -674,8 +682,7 @@ async def get_pwc_formula():
             # ceiling would move published MVPs and therefore requires a
             # pwc-v3 FORMULA_VERSION bump — out of scope for this
             # transparency-only change.
-            "eligibility": "won at least 1 round AND played >= max(2, "
-                           "floor(max rounds played in session / 2))",
+            "eligibility": "won at least 1 round AND played >= max(2, floor(max rounds played in session / 2))",
             "tiebreakers": ["total_pwc", "rounds_won"],
             "fallback": "if nobody qualifies, leaderboard #1 by total_pwc",
         },
@@ -855,14 +862,18 @@ async def get_useless_defense_deaths(
     request: Request,
     scope: GamingSessionScope = Depends(resolve_story_scope),
     min_killer_health: int = Query(
-        default=80, ge=1, le=200,
+        default=80,
+        ge=1,
+        le=200,
         description=(
             "Minimum killer HP at moment of kill (Lua gentity.health, no "
             "armor). Default 80 means the killer was barely scratched."
         ),
     ),
     min_reinf_seconds: int = Query(
-        default=25, ge=1, le=60,
+        default=25,
+        ge=1,
+        le=60,
         description="Minimum victim reinforcement wait time (seconds)",
     ),
     db: DatabaseAdapter = Depends(get_db),
@@ -940,9 +951,7 @@ async def get_box_score(
     if session_date is not None:
         session_date = str(_parse_date(session_date))
 
-    scope = await resolve_gaming_session_scope(
-        db, gaming_session_id=gaming_session_id, session_date=session_date
-    )
+    scope = await resolve_gaming_session_scope(db, gaming_session_id=gaming_session_id, session_date=session_date)
 
     from website.backend.services.box_scoring_service import BOXScoringService
 

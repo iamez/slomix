@@ -622,12 +622,27 @@ function Term({ name, term }: { name: string; term: FormulaTerm }) {
 }
 
 function TermGroup({ label, terms }: { label: string; terms: Record<string, FormulaTerm> }) {
-  const rows = Object.entries(terms);
+  // A group can declare itself NOT APPLIED (`applied: false` + `note`) —
+  // the distance multipliers are published values the scorer never uses
+  // (dist_mult is pinned at normal; per-kill distance is unimplemented, the
+  // public half of #852). A transparency panel must not advertise factors
+  // that cannot occur as if they were part of the calculation (Codex on
+  // #842); the group stays visible, wearing its inactivity out loud.
+  const { applied, note, ...termEntries } = terms as Record<string, FormulaTerm> & {
+    applied?: boolean;
+    note?: string;
+  };
+  const rows = Object.entries(termEntries);
   if (rows.length === 0) return null;
+  const inactive = applied === false;
   return (
     <Stack gap={1}>
-      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{label}</Lbl>
-      <Stack gap={1} className="rows">
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+        {label}
+        {inactive && ' — not applied'}
+      </Lbl>
+      {inactive && typeof note === 'string' && <Absent reason={note} />}
+      <Stack gap={1} className="rows" style={inactive ? { opacity: 0.55 } : undefined}>
         {rows.map(([name, term]) => <Term key={name} name={name} term={term} />)}
       </Stack>
     </Stack>
