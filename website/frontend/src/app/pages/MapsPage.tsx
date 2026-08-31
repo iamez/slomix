@@ -3,7 +3,7 @@ import { useMapSegments, useMapStats } from '../lib/queries';
 import { hasFailed } from '../lib/responseStatus';
 import type { MapStatsRow } from '../lib/types';
 import { mapImageFor, mapLabel } from '../lib/maps';
-import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Maps (docs/design/12 row 4) — legacy matches.js loadMapsView carried
@@ -76,7 +76,7 @@ function ObjectiveRecords() {
       {segments.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="records" /></div>}
       {failed && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="objective records" /></div>}
       {segments.isSuccess && !failed && rows.length === 0 && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no objective records yet</div>
+        <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no objective records yet" />
       )}
       {rows.length > 0 && (
         <div className="landing-split" style={{ gap: 'var(--space-5)', marginTop: 'var(--space-2)' }}>
@@ -130,7 +130,7 @@ export function MapsPage() {
             }
           />
           {sorted.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no map statistics yet</div>
+            <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no map statistics yet" />
           )}
           <div className="home-cols3" style={{ gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
             {sorted.map((m) => (

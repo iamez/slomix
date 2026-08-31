@@ -11,7 +11,7 @@ import {
 } from '../lib/queries';
 import type { LastSession, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
-  ActLink, Lbl, Pending, SectionHead, StatusDot, Unavailable,
+  ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
   figure, lblStyle, rowStyle,
 } from '../components/ui';
 
@@ -269,7 +269,7 @@ function Insights() {
                 <span style={{ height: 5, background: 'var(--color-rule-900)', display: 'block', position: 'relative' }}>
                   <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${((n / mapMax) * 100).toFixed(1)}%`, background: '#5c6f7d', display: 'block' }} />
                 </span>
-                <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', color: 'var(--color-text-500)' }}>{n}</span>
+                <Meta style={{ textAlign: 'right' }}>{n}</Meta>
               </div>
             ))}
             {data && mapRows.length === 0 && (
@@ -381,28 +381,46 @@ function LatestGames() {
         {matches.isPending && <Pending label="matches" />}
         {matches.isError && <Unavailable what="matches" />}
         {data?.length === 0 && <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no matches recorded yet</div>}
-        {data?.map((m) => (
-          <Link
-            key={m.id}
-            to={m.gaming_session_id != null ? `/session-detail/${m.gaming_session_id}` : `/session-detail/date/${m.date}`}
-            style={{ ...rowStyle, display: 'block', padding: 'var(--space-3) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}
-          >
-            <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
-              <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {m.team1_players.join(' · ')} vs {m.team2_players.join(' · ')}
+        {data?.map((m) => {
+          // Two ways in, and a round can carry neither: the session id is
+          // null when the round was never attributed to an evening, and
+          // round_date is nullable in the same table with nothing
+          // filtering it. Linking anyway spells the missing half into the
+          // URL — /session-detail/date/null — which is a 404 dressed as a
+          // working row. With both gone the row stays a row.
+          const to = m.gaming_session_id != null
+            ? `/session-detail/${m.gaming_session_id}`
+            : m.date != null
+              ? `/session-detail/date/${m.date}`
+              : null;
+          const rowBody = (
+            <>
+              <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
+                <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {m.team1_players.join(' · ')} vs {m.team2_players.join(' · ')}
+                </span>
+                <span className="m" style={{ fontSize: 'var(--fs-small)', flex: 'none', color: m.outcome === 'Fullhold' ? 'var(--color-pos)' : m.winner === m.team1_name ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>
+                  {m.winner.toLowerCase()} · {m.duration}
+                </span>
               </span>
-              <span className="m" style={{ fontSize: 'var(--fs-small)', flex: 'none', color: m.outcome === 'Fullhold' ? 'var(--color-pos)' : m.winner === m.team1_name ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>
-                {m.winner.toLowerCase()} · {m.duration}
+              <span className="m" style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>
+                {/* `?? 'unknown map'`: the column is nullable and no query
+                  * filters it, so a null renders as an empty gap otherwise —
+                  * the same silent hole /rounds/recent had (#830). */}
+                <span>{m.map_name ?? 'unknown map'}</span>
+                <span>R{m.round_number}</span>
+                <span>{m.format}</span>
+                <span style={{ marginLeft: 'auto' }}>{m.time_ago.toLowerCase()}</span>
               </span>
-            </span>
-            <span className="m" style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>
-              <span>{m.map_name}</span>
-              <span>R{m.round_number}</span>
-              <span>{m.format}</span>
-              <span style={{ marginLeft: 'auto' }}>{m.time_ago.toLowerCase()}</span>
-            </span>
-          </Link>
-        ))}
+            </>
+          );
+          const rowLook = { ...rowStyle, display: 'block', padding: 'var(--space-3) 0', textDecoration: 'none', color: 'var(--color-text-100)' };
+          return to === null ? (
+            <div key={m.id} style={rowLook} title="this round is not attributed to an evening">{rowBody}</div>
+          ) : (
+            <Link key={m.id} to={to} style={rowLook}>{rowBody}</Link>
+          );
+        })}
       </div>
     </div>
   );

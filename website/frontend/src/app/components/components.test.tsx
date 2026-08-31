@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 import { Cluster, Stack } from './layout';
-import { Chip, KpiTile, Lbl, SectionHead, StatusDot, Tabs, Unavailable, figure } from './ui';
+import { Absent, Chip, KpiTile, Lbl, Meta, SectionHead, StatusDot, Tabs, Unavailable, figure } from './ui';
 
 /**
  * The first tests the component layer has ever had. Until now every one of
@@ -157,5 +157,38 @@ describe('the small text components', () => {
   it('name what is unavailable instead of leaving a blank', () => {
     renderIn(<Unavailable what="weapon stats" />);
     expect(screen.getByText('weapon stats: unavailable')).toBeInTheDocument();
+  });
+});
+
+describe('Absent holds its identity against its callers', () => {
+  // Both guards below were seen failing against the pre-review component:
+  // with the caller's spread LAST, the hostile style repainted absence red,
+  // and with `reason: ReactNode`, `undefined` rendered an empty grey span —
+  // a reason-less absence, the exact thing the component exists to end.
+
+  it('keeps the grey even when a caller tries to repaint it', () => {
+    render(<Absent reason="no rounds in this window" style={{ color: 'red', fontSize: '30px' }} />);
+    const el = screen.getByText('no rounds in this window');
+    expect(el.style.color).toBe('var(--color-text-500)');
+    expect(el.style.fontSize).toBe('var(--fs-micro)');
+  });
+
+  it('still lets layout through — spacing is the caller\'s to vary', () => {
+    render(<Absent reason="no records yet" style={{ marginTop: '7px' }} />);
+    expect(screen.getByText('no records yet').style.marginTop).toBe('7px');
+  });
+
+  it('names the bug out loud when a page forwards an empty reason', () => {
+    // The type forbids null/undefined; the runtime half catches what the
+    // type system cannot — a forwarded empty string, or a boolean.
+    render(<Absent reason={'' as unknown as string} />);
+    expect(screen.getByText(/page gave no reason/)).toBeTruthy();
+    render(<Absent reason={false as unknown as string} />);
+    expect(screen.getAllByText(/page gave no reason/).length).toBe(2);
+  });
+
+  it('Meta keeps its grey the same way', () => {
+    render(<Meta style={{ color: 'red' }}>43 ms</Meta>);
+    expect(screen.getByText('43 ms').style.color).toBe('var(--color-text-500)');
   });
 });

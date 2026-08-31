@@ -222,3 +222,76 @@ def test_get_format_tag_zero_players(svc):
 def test_get_format_tag_odd_high_count_truncates(svc):
     """13 players → 6v6 (integer division 13//2 = 6)."""
     assert svc._get_format_tag(13) == "6v6"
+
+
+# ---------------------------------------------------------------------------
+# get_recent_matches — the serialized shape, not the SQL
+# ---------------------------------------------------------------------------
+
+
+class _OneRoundAdapter:
+    """Answer the rounds query with one row and every other query with none.
+
+    The service asks two different questions through the same `fetch_all`,
+    so dispatch on the text: anything selecting `FROM rounds` is the round
+    list, anything else is the per-round player list (empty here — this
+    test is about the date field, not the rosters).
+    """
+
+    def __init__(self, round_row):
+        self.round_row = round_row
+
+    async def fetch_all(self, query, params=None):
+        if "FROM rounds" in query:
+            return [self.round_row]
+        return []
+
+
+def _round_row(round_date):
+    """A row in the column order get_recent_matches reads by index."""
+    return [
+        1701,               # 0 id
+        "supply",           # 1 map_name
+        1,                  # 2 round_number
+        "8:12",             # 3 duration
+        2,                  # 4 winner_team
+        "Defended",         # 5 round_outcome
+        round_date,         # 6 round_date
+        None,               # 7 gaming_session_id — unattributed round
+        "20:15",            # 8 round_time
+        None,               # 9 match_id
+        None,               # 10 axis_score
+        None,               # 11 allies_score
+    ]
+
+
+@pytest.mark.asyncio
+async def test_recent_match_keeps_a_real_date_as_a_string(svc):
+    """The ordinary case, so the null case below can only fail for its own reason."""
+    svc.db_adapter = _OneRoundAdapter(_round_row(date(2026, 8, 27)))
+
+    match = (await svc.get_recent_matches(1))[0]
+
+    assert match["date"] == "2026-08-27"
+
+
+@pytest.mark.asyncio
+async def test_recent_match_with_no_date_says_null_not_the_string_none(svc):
+    """`rounds.round_date` is nullable and this query filters neither it nor
+    the session id, so a round can arrive with no way to name its evening.
+
+    `str(None)` would answer the string "None" — which is truthy, reads as a
+    present date, and sends the frontend to /session-detail/date/None: a 404
+    dressed as a working row. Codex found it on #841; the measurement that
+    made it worth fixing is that the column is nullable in the schema while
+    today's data has 0 nulls in 3,176 rounds, so this is the branch that has
+    not happened yet, not the one that cannot.
+    """
+    svc.db_adapter = _OneRoundAdapter(_round_row(None))
+
+    match = (await svc.get_recent_matches(1))[0]
+
+    assert match["date"] is None
+    assert match["date"] != "None"
+    # The neighbouring field already knew how to say it, and stays that way.
+    assert match["time_ago"] == "Unknown"

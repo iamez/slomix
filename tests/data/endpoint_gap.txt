@@ -30,7 +30,6 @@
 /api/bets/market
 /api/bets/market/current
 /api/bets/wallet
-/api/client-error
 /api/diagnostics
 /api/greatshot
 /api/greatshot/upload

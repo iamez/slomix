@@ -3,7 +3,7 @@ import { hasFailed } from '../lib/responseStatus';
 import { useWeapons, useWeaponsByPlayer, useWeaponsHof } from '../lib/queries';
 import type { WeaponPeriod } from '../lib/queries';
 import type { WeaponRow } from '../lib/types';
-import { Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * Weapons (docs/design/12 row 6) — legacy matches.js weapons view carried
@@ -70,7 +70,7 @@ function HallOfFameStrip({ period }: { period: WeaponPeriod }) {
       {hof.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="hall of fame" /></div>}
       {hofFailed && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="hall of fame" /></div>}
       {hof.isSuccess && !hofFailed && leaders.length === 0 && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no hall of fame data yet</div>
+        <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no hall of fame data yet" />
       )}
       <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
         {leaders.map((l) => (
@@ -102,7 +102,7 @@ function WeaponsGrid({ period, category }: { period: WeaponPeriod; category: str
       {weapons.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="weapons" /></div>}
       {weapons.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="weapons" /></div>}
       {data && rows.length === 0 && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no weapons in this category</div>
+        <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no weapons in this category" />
       )}
       <div style={{ marginTop: 'var(--space-2)' }}>
         {rows.map((w: WeaponRow) => {
@@ -133,7 +133,7 @@ function MasteryGrid({ period }: { period: WeaponPeriod }) {
       {byPlayer.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="mastery" /></div>}
       {byPlayer.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="mastery" /></div>}
       {byPlayer.isSuccess && players.length === 0 && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-2)' }}>no per-player weapon stats for this period</div>
+        <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no per-player weapon stats for this period" />
       )}
       <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
         {players.map((p) => (
