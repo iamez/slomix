@@ -52,6 +52,12 @@ export const FAILURE_STATUSES = ['error', 'unavailable'] as const;
 export const NOT_FAILURE_STATUSES = [
   'no_data',
   'stale',
+  // - `partial`   — SOME subqueries failed and their figures are fallback
+  //                 zeros (the #830 records overview): the data is incomplete,
+  //                 not unusable. The page must MARK the zeros as missing,
+  //                 never blank the panel — blanking would discard the
+  //                 figures that did answer.
+  'partial',
   'warning',
   'degraded',
   'unknown_to_this_pov',

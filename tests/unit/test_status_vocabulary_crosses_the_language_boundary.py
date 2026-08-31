@@ -45,6 +45,12 @@ NOT_A_RESULT_VERDICT = {
     "read_only",  # a surface's maturity
     "retired in kis-v5 (2026-07-25)",  # a formula's obituary
     "unsupported",  # SQLite dev fallback, never production
+    # A subsystem HEALTH grade (diagnostics_router:707: healthy/degraded/
+    # poor by percentage) — a verdict about the pipeline, not the request.
+    # Surfaced only when the widened reader learned to see conditional
+    # emissions; classified the day it was first seen.
+    "healthy",
+    "poor",
     "unknown",  # "not assessed", carried with available=False
 }
 
@@ -61,13 +67,30 @@ def _emitted_statuses() -> set[str]:
             if not isinstance(node, ast.Dict):
                 continue
             for key, value in zip(node.keys, node.values):
-                if (
-                    isinstance(key, ast.Constant)
-                    and key.value == "status"
-                    and isinstance(value, ast.Constant)
-                    and isinstance(value.value, str)
-                ):
-                    found.add(value.value)
+                if not (isinstance(key, ast.Constant) and key.value == "status"):
+                    continue
+
+                # ⛔ Not only bare literals: #830 ships
+                # `"status": "ok" if not failures else "partial"`, and a
+                # Constant-only reader was BLIND to the conditional — the
+                # guard passed while an unclassified status shipped.
+                # expression — but only along EMISSION shapes (a bare
+                # constant, either branch of a conditional, operands of
+                # `or`): a blind ast.walk also swept subscript keys like
+                # row["status"] and reported the word 'status' itself as
+                # an emitted value — a false positive measured on the
+                # first run of the widened reader.
+                def emitted_strings(node):
+                    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+                        yield node.value
+                    elif isinstance(node, ast.IfExp):
+                        yield from emitted_strings(node.body)
+                        yield from emitted_strings(node.orelse)
+                    elif isinstance(node, ast.BoolOp):
+                        for v in node.values:
+                            yield from emitted_strings(v)
+
+                found.update(emitted_strings(value))
     return found
 
 
@@ -81,7 +104,12 @@ def _frontend_list(name: str) -> set[str]:
     source = FRONTEND_MODULE.read_text()
     match = re.search(rf"export const {name} = \[(.*?)\]", source, re.S)
     assert match, f"{name} is no longer an array literal in {FRONTEND_MODULE.name}"
-    return set(re.findall(r"'([^']+)'", match.group(1)))
+    # ⛔ Comments OUT before reading literals: an apostrophe inside an inline
+    # comment ("#830's") poisoned the naive quote-pair reader and mangled
+    # every entry after it — the guard silently unclassified values that WERE
+    # classified. Prose must never reach a literal reader.
+    body = re.sub(r"//[^\n]*", "", match.group(1))
+    return set(re.findall(r"'([^']+)'", body))
 
 
 def test_the_frontend_lists_parse():
@@ -120,7 +148,12 @@ def test_every_emitted_status_belongs_to_a_class():
 def test_the_reader_sees_the_values_this_file_is_about():
     """A control on the AST side, for the same reason as the one above."""
     emitted = _emitted_statuses()
-    assert {"error", "unavailable", "ok"} <= emitted, (
+    # ⛔ "partial" is emitted only through a CONDITIONAL ("ok" if ... else
+    # "partial", records_overview) — it pins the reader's WIDTH: a reader
+    # narrowed back to bare literals stops seeing it, the unclassified set
+    # goes empty, and the classification test passes vacuously. That exact
+    # mutation survived until this line existed.
+    assert {"error", "unavailable", "ok", "partial"} <= emitted, (
         f"the AST reader missed statuses that are certainly emitted: {sorted({'error', 'unavailable', 'ok'} - emitted)}"
     )
     assert "definitely-not-a-real-status" not in emitted, "the reader invents values"
