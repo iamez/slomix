@@ -782,6 +782,13 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
         {top.map((k) => {
           const mults = [
             ['carrier', k.carrier_multiplier],
+            // push is retired in kis-v5 (fixed at 1.0, so the ≠1 filter hides
+            // it on every v5 row) — but the CACHE is not versioned, and a
+            // pre-v5 row keeps the non-neutral push it was scored with.
+            // Omitting the column made exactly those rows unexplainable: the
+            // listed factors could not multiply out to the stored total
+            // (Codex on #842). The stored value is the honest one to print.
+            ['push', k.push_multiplier],
             ['crossfire', k.crossfire_multiplier],
             ['spawn', k.spawn_multiplier],
             ['outcome', k.outcome_multiplier],
@@ -828,6 +835,23 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
         <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
           the ten highest-scoring of {figure(kills.length)} — the summary above counts all of them
         </Lbl>
+      )}
+      {/* A contract gap this page cannot close: storytelling_kill_impact has
+        * no formula_version column (schema_postgresql.sql:4190ff), the
+        * details SELECT (storytelling_router.py:358-370) neither returns nor
+        * filters one, and public requests never recompute — so a session
+        * scored under an earlier formula keeps its stored totals, and the
+        * two annotations read from /storytelling/formula (the objective-area
+        * value, the soft-cap threshold) describe the CURRENT formula, not
+        * necessarily the one that scored the row. The per-kill multipliers
+        * above are the stored record and carry no such caveat (Codex on
+        * #842). */}
+      {formula.data && (
+        <Meta>
+          multipliers are the stored per-kill record; the objective-area value and
+          the soft-cap threshold are read from the current formula ({formula.data.version}) —
+          stored rows do not say which version scored them
+        </Meta>
       )}
     </Stack>
   );
@@ -890,6 +914,11 @@ function DefenseBoard({ gsid }: { gsid: number }) {
   if (q.isPending) return <Pending label="defensive deaths" />;
   if (q.isError) return <Unavailable what="defensive deaths" />;
   const { players, thresholds } = q.data;
+  // Same rule as movement and the kill matrix (Codex on #842, third time on
+  // this page): the endpoint returns EVERY player who cleared both
+  // thresholds, so an unstated top-five makes the sixth read as a player
+  // with no costly deaths — on this metric a flattering lie.
+  const shown = players.slice(0, 5);
   return (
     <Stack gap={2} style={{ minWidth: 260, flex: '1 1 260px' }}>
       <SectionHead label="costly deaths" />
@@ -908,7 +937,7 @@ function DefenseBoard({ gsid }: { gsid: number }) {
         />
       ) : (
         <Stack gap={1} className="rows">
-          {players.slice(0, 5).map((p) => (
+          {shown.map((p) => (
             <Cluster key={p.guid_short} gap={2} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0' }}>
               <span style={{ fontSize: 'var(--fs-small)', minWidth: 0 }}>{p.name}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
@@ -920,6 +949,9 @@ function DefenseBoard({ gsid }: { gsid: number }) {
             </Cluster>
           ))}
         </Stack>
+      )}
+      {players.length > shown.length && (
+        <Meta>showing the top {shown.length} of {players.length} players who cleared both thresholds</Meta>
       )}
       {/* ≥ on BOTH bounds: the backend predicate is killer_health >=
         * min_killer_health (advanced_metrics.py, `ski.killer_health >= $3`),

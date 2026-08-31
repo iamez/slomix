@@ -707,6 +707,75 @@ describe('Story', () => {
     expect(screen.queryByText(/not a missing measurement/)).toBeNull();
   });
 
+  it('states the costly-deaths cutoff when more than five players cleared it', async () => {
+    // The recording has exactly 5 qualifying players — at the slice, not
+    // over it — so first prove the line is not printed unconditionally…
+    const players = (uselessDefense as { players: { guid_short: string; name: string }[] }).players;
+    expect(players.length).toBeLessThanOrEqual(5);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/free\s+objective time, no trade/)).toBeInTheDocument());
+    expect(screen.queryByText(/who cleared both thresholds$/)).toBeNull();
+
+    // …then a 7-player night (substitutes) forces it: the endpoint returns
+    // EVERY qualifying player, and an unstated top five makes the sixth read
+    // as a player with no costly deaths (Codex on #842).
+    const seven = Array.from({ length: 7 }, (_, i) => ({
+      ...players[0], guid_short: `SYNTH${i}`, name: `defender${i}`,
+    }));
+    renderPage(withOverride('/storytelling/useless-defense-deaths', jsonOnce({ ...uselessDefense, players: seven })));
+    await waitFor(() => expect(
+      screen.getByText(/showing the top 5 of 7 players who cleared both thresholds/),
+    ).toBeInTheDocument());
+  });
+
+  it('renders a stored non-neutral push factor instead of omitting the column', async () => {
+    // push is retired in kis-v5 (fixed at 1.0 — the fixture proves the ≠1
+    // filter hides it on every current row), but the cache is NOT versioned:
+    // a pre-v5 row keeps the push it was scored with, and a renderer without
+    // the column made exactly those rows unexplainable (Codex on #842). The
+    // fixture cannot fail on a value it does not contain, so the pre-v5 row
+    // is forced.
+    const kills = (kisDetails as { kills: { push_multiplier: number }[] }).kills;
+    expect(kills.every((k) => k.push_multiplier === 1)).toBe(true);
+    const withPush = {
+      ...kisDetails,
+      kills: [{ ...kills[0], push_multiplier: 1.2 }, ...kills.slice(1)],
+    };
+    renderPage(withOverride('/storytelling/kill-impact/details', jsonOnce(withPush)));
+    const target = (kis as { players: { name: string; guid: string }[] }).players
+      .find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    const row = () => screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name));
+    await waitFor(() => expect(row()).toBeDefined());
+    fireEvent.click(row()!);
+    await waitFor(() => expect(screen.getAllByText(/push ×1\.2/).length).toBeGreaterThan(0));
+  });
+
+  it('says the annotations come from the current formula, which stored rows cannot name', async () => {
+    // storytelling_kill_impact has no formula_version column and the details
+    // SELECT returns none — a backend contract gap (Codex on #842): the
+    // frontend cannot bind a stored row to the formula that scored it, so
+    // the breakdown must say which parts are the stored record and which are
+    // read from today's formula. The version is quoted from the formula
+    // payload, not hardcoded.
+    renderPage();
+    const target = (kis as { players: { name: string; guid: string }[] }).players
+      .find((p) => p.guid === (kisDetails as { player_guid: string }).player_guid)!;
+    const row = () => screen.getAllByRole('button', { expanded: false })
+      .find((b) => b.textContent?.includes(target.name));
+    await waitFor(() => expect(row()).toBeDefined());
+    fireEvent.click(row()!);
+    const version = (kisFormula as { version: string }).version;
+    await waitFor(() => expect(
+      screen.getAllByText((_, el) => (el?.textContent ?? '')
+        .includes(`read from the current formula (${version})`)).length,
+    ).toBeGreaterThan(0));
+    expect(
+      screen.getAllByText((_, el) => (el?.textContent ?? '')
+        .includes('stored rows do not say which version scored them')).length,
+    ).toBeGreaterThan(0);
+  });
+
   it('renders the published MVP selection rules, not just the description', async () => {
     // eligibility, ordered tiebreakers and the fallback decide who CAN win
     // and how ties resolve; without them the disclosure cannot reproduce the
