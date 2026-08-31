@@ -843,7 +843,12 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         logger.error(f"Error fetching player stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    if not row or not row[0]:  # No kills usually means no stats found
+    # "Not found" is COUNT(round_id) == 0, never SUM(kills) == 0: a support
+    # player or newcomer with counted rounds and zero kills exists, and the
+    # milestones panel must show their zero progress rather than a 404
+    # (Codex on #855). The aggregate always returns one row; games is the
+    # existence signal.
+    if not row or not row[4]:
         raise HTTPException(status_code=404, detail="Player not found")
 
     (kills, deaths, damage, time, games, xp, wins, last_seen) = row
@@ -927,8 +932,10 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         dpm_query = dpm_query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
     try:
         dpm_row = await db.fetch_one(dpm_query, (identifier,))
-        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] else None
-        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] else None
+        # `is not None`, not truthiness: a genuine 0-dpm record is a value,
+        # and SQL NULL is the only "no qualifying round" (Codex on #855).
+        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] is not None else None
+        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] is not None else None
     except Exception as e:
         logger.error(f"Error fetching DPM records for {player_name}: {e}")
         highest_dpm = None

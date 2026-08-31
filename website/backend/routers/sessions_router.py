@@ -650,6 +650,11 @@ async def get_session_leaderboard(
             SELECT id FROM rounds
             WHERE gaming_session_id = $1
               AND round_number IN (1, 2)
+              -- The same gates as every other session summary (Codex on
+              -- #855, round two): an invalid or bot round can change the
+              -- top-three ordering the aggregator computes from these ids.
+              AND is_valid IS DISTINCT FROM FALSE
+              AND is_bot_round IS DISTINCT FROM TRUE
               AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
             """,
             (session_id,),
