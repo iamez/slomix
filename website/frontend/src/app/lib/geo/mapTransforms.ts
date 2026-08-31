@@ -11,6 +11,16 @@
  *    at runtime, never a hand-written table.
  */
 
+import { stripEtColors } from '../names';
+
+/** Re-exported ON PURPOSE, not for convenience: this module used to define
+ *  its own stripEtColors with `\^.` under a comment claiming legacy parity,
+ *  and a behavioral test cannot catch that copy coming back if nothing
+ *  imports it — so names.test.ts asserts FUNCTION IDENTITY through this
+ *  re-export (`fromGeo === stripEtColors`), which fails the moment anyone
+ *  redefines a local one here. */
+export { stripEtColors };
+
 export interface MapTransformEntry {
   map_name: string;
   image: string;
@@ -26,12 +36,12 @@ export interface MapTransformConfig {
 export const MAP_TRANSFORM_CONFIG_URL = '/assets/maps/proximity/map_transforms.json';
 export const OBJECTIVE_ZONES_CONFIG_URL = '/assets/maps/proximity/objective_zones.json';
 
-/** ET colour codes (^7 etc.) — same strip as legacy stripEtColors. */
-export function stripEtColors(value: string): string {
-  return String(value ?? '').replace(/\^./g, '');
-}
-
 export function normalizeMapKey(mapName: string | null | undefined): string {
+  // The strip comes from lib/names — this module used to hand-roll `\^.`
+  // under a comment claiming it was "the same strip as legacy stripEtColors",
+  // and it was not: the canonical class everywhere else (backend
+  // et_constants.py, six legacy JS files) is `\^[0-9a-zA-Z]`. Importing the
+  // one copy retires both the drift and the lying comment (Codex on #842).
   return stripEtColors(mapName ?? '').trim().toLowerCase();
 }
 

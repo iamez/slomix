@@ -33,6 +33,7 @@ from .base import (
     REINF_MULT_TIERS,
     SOLO_CLUTCH_MULTIPLIER,
     SOLO_CLUTCH_THRESHOLD,
+    SPAWN_TIMING_BONUS,
     SPAWN_TIMING_WINDOW_MS,
     _compute_locks,
     _to_date,
@@ -548,7 +549,18 @@ class _KisMixin:
                         first_match_reinf = st_data[4]
                     elif len(st_data) >= 4:
                         first_match_reinf = st_data[3]
-            spawn_mult = 1.0 + best_score
+            # 1 + bonus × denial — the SAME constant /storytelling/formula
+            # publishes and (since #842) derives its range from. Before this
+            # line the scorer hardcoded `1.0 + best_score` and never read the
+            # constant, so moving it would have moved the published range
+            # while every score stayed put (Codex on #842). No
+            # FORMULA_VERSION bump: at SPAWN_TIMING_BONUS == 1.0 this is the
+            # arithmetic identity (×1.0 is exact in IEEE 754), so no stored
+            # or future score changes — the header rule bites the day the
+            # constant actually moves, and THAT day is a formula change with
+            # a bump, a recompute, and an owner decision (no stat weighting
+            # without one).
+            spawn_mult = 1.0 + SPAWN_TIMING_BONUS * best_score
             if first_match_reinf is not None:
                 victim_reinf_stored = float(first_match_reinf)
                 reinf_mult = _graduated_reinf_mult(first_match_reinf)

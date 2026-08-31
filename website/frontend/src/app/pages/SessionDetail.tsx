@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import {
   useSessionDetail, useSessionGoodNight, useSessionMvp, useSessionRounds,
-  useSessionVerdicts, useSessions,
+  useSessionVerdicts, useSessions, useStoryBestLives,
 } from '../lib/queries';
 import type {
   SessionDetail as SessionDetailData, SessionGoodNight, SessionPlayerTotals,
@@ -390,6 +390,79 @@ function RoundList({ rounds, counted, total }: { rounds: SessionRound[]; counted
   );
 }
 
+/** The best single life of the night — the most kills a player landed without
+ * dying once.
+ *
+ * It belongs on this page because the scoreboard cannot hold it: a session
+ * total flattens the six-kill run people actually remember. The legacy page
+ * drew the same cards from the same endpoint (`session-detail.js:717`), but
+ * treated any failure as a non-event and simply omitted the panel — which
+ * makes "the request failed" and "nobody had a standout life" look identical.
+ * This one says which. It sits with the scoreboard rather than with the
+ * models because it is a count of kills inside one life, not a rating.
+ */
+function LivesOfTheNight({ sessionId }: { sessionId: number }) {
+  const q = useStoryBestLives(sessionId);
+  if (q.isPending) return <Pending label="lives" />;
+  if (q.isError) return <Unavailable what="the best lives" />;
+  if (q.data.lives.length === 0) {
+    return (
+      <Stack gap={3} parity="session.lives">
+        <SectionHead label="lives of the night" />
+        {/* NOT "not a missing measurement": a session with no player_track
+          * rows (untracked or partially tracked night) returns the SAME
+          * `lives: []` as a fully tracked one where nobody hit the minimum —
+          * the payload carries no coverage field to tell them apart, a
+          * backend contract gap (Codex on #842). So the wording claims only
+          * what the wire can back. */}
+        <Absent
+          reason={<>no tracked life in this session cleared the minimum — though the
+          endpoint cannot say how much of the night was tracked at all</>}
+        />
+      </Stack>
+    );
+  }
+  const { lives, qualifying_total: qualifying, min_kills: minKills } = q.data;
+  return (
+    <Stack gap={3} parity="session.lives">
+      <SectionHead label="lives of the night" aside={<span className="lbl">most kills on a single life</span>} />
+      <Cluster gap={5} align="start" style={{ flexWrap: 'wrap' }}>
+        {q.data.lives.map((l, i) => (
+          <Link
+            key={`${l.guid}:${l.map_name}:${l.round_number}:${l.life_seconds}:${l.kills}:${i}`}
+            to={`/profile/${l.guid}`}
+            style={{ textDecoration: 'none', color: 'inherit', minWidth: 150 }}
+          >
+            <Stack gap={1}>
+              <Cluster gap={2} align="baseline">
+                <span className="m" style={{ fontSize: 'var(--fs-kpi)', color: 'var(--color-accent)' }}>{l.kills}</span>
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>kills · one life</Lbl>
+              </Cluster>
+              <span style={{ fontSize: 'var(--fs-row)' }}>{l.name}</span>
+              <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                {l.map_name} R{l.round_number} · {l.life_seconds}s alive
+              </span>
+            </Stack>
+          </Link>
+        ))}
+      </Cluster>
+      {/* Same rule as the story page's three cutoffs (Codex on #842, fourth
+        * of the family): the endpoint counts every qualifying life and this
+        * panel shows the requested top-N, so the sixth-best rampage must not
+        * read as "nothing else happened". Both numbers and the threshold are
+        * quoted from the payload. Guarded on presence, not truthiness:
+        * responses recorded before the fields existed simply omit them, and
+        * an absent key is not 0 — the line disappears on an older backend
+        * rather than lying or crashing. */}
+      {qualifying != null && minKills != null && qualifying > lives.length && (
+        <Meta>
+          showing the top {lives.length} of {figure(qualifying)} lives with ≥{minKills} kills
+        </Meta>
+      )}
+    </Stack>
+  );
+}
+
 function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: number }) {
   const night = useSessionGoodNight(sessionId);
   const verdicts = useSessionVerdicts(sessionId);
@@ -397,6 +470,7 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
     <Stack gap={7} style={{ paddingTop: 'var(--space-5)' }}>
       <Scoreboard scoring={detail.scoring} />
       <TeamTotals matrix={detail.team_matrix} />
+      <LivesOfTheNight sessionId={sessionId} />
       {night.isPending && <Pending label="night score" />}
       {night.isError && <Unavailable what="night score" />}
       {night.data && <GoodNight data={night.data} />}

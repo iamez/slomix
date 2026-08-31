@@ -1533,6 +1533,311 @@ export interface StoryPlayerNarratives {
 }
 
 // ---------------------------------------------------------------------------
+// The eight storytelling endpoints the story page never read. Typed from the
+// handlers and services (storytelling_router.py, services/storytelling/*.py),
+// not from one recording — three of them answer a DIFFERENT SHAPE when the
+// session has no data, and a type read off the healthy sample would describe
+// a payload the page then crashes on.
+// ---------------------------------------------------------------------------
+
+/** One life in GET /api/storytelling/best-lives — the most kills a player
+ *  landed without dying once. Legacy drew these as the "lives of the night"
+ *  cards on session detail (`session-detail.js:_loadLifeCards`).
+ *
+ *  Everything here is non-null on purpose, not by omission: the builder writes
+ *  `short_guid(r["guid"]) if r["guid"] else None`, but `player_track`
+ *  declares `player_guid`, `player_name`, `map_name` and `round_number` NOT
+ *  NULL (checked in information_schema, 0 nulls in 71,752 rows), and
+ *  `short_guid` returns "?" rather than None for an empty input. The null
+ *  branch is unreachable through this query — a fact about the schema, not
+ *  about today's rows. */
+export interface StoryBestLife {
+  guid: string;
+  name: string;
+  kills: number;
+  life_seconds: number;
+  map_name: string;
+  round_number: number;
+  narrative: string;
+}
+
+export interface StoryBestLives {
+  status: string;
+  lives: StoryBestLife[];
+  /** ⚠️ Historically len(lives) AFTER the endpoint's limit — a field named
+   *  total that is not a total. Kept as-is on the wire for compatibility;
+   *  use qualifying_total for "of N". */
+  total: number;
+  /** Every life that cleared min_kills, counted BEFORE the limit — what the
+   *  cutoff line needs (Codex on #842). Optional because responses recorded
+   *  before 2026-08-31 do not carry it: an absent key is not 0, and the UI
+   *  must render nothing rather than crash on an older backend. */
+  qualifying_total?: number;
+  /** The kills threshold the endpoint enforced, published so the caption can
+   *  quote it instead of hardcoding the 3. Same vintage as qualifying_total. */
+  min_kills?: number;
+}
+
+/** One published term of a formula. The two formula endpoints hand-build
+ *  their dicts term by term, and the keys genuinely differ between terms:
+ *  `spawn_timing` publishes a `range` and a `bonus` and no `value`,
+ *  `long_range` publishes a `value` and a `threshold` and no `description`,
+ *  the retired `push` term publishes a `status`. So every field here is
+ *  optional because the server really omits them, and the renderer shows
+ *  what is present rather than assuming a shape. */
+export interface FormulaTerm {
+  value?: number;
+  range?: string;
+  bonus?: number;
+  /** A number where the cut-off is numeric (push: 0.9), a string where the
+   *  server publishes the human form ("<30 HP", ">800u", "1v3+"). */
+  threshold?: number | string;
+  status?: string;
+  description?: string;
+  /** The soft-cap term publishes a compression factor beside its threshold:
+   *  above the threshold the total is 5.0 + (raw - 5.0) x compression, which
+   *  is why a high score is NOT the product of the multipliers. */
+  compression?: number;
+  /** The reinforcement term nests its own graduated tiers. */
+  tiers?: FormulaReinfTier[];
+  /** The `alive` term nests two sub-terms instead of carrying a value. */
+  solo_clutch?: FormulaTerm;
+  outnumbered?: FormulaTerm;
+}
+
+export interface FormulaReinfTier {
+  /** null on the last tier — it is the open-ended one (">= 25s"). */
+  max_reinf_seconds: number | null;
+  inclusive: boolean;
+  multiplier: number;
+}
+
+/** GET /api/storytelling/formula — how a kill's impact is computed. Published
+ *  because a score nobody can check is a claim, not a measurement (#769). */
+export interface StoryKisFormula {
+  status: string;
+  version: string;
+  name: string;
+  description: string;
+  multipliers: Record<string, FormulaTerm>;
+  outcome_multipliers: Record<string, FormulaTerm>;
+  class_weights: Record<string, FormulaTerm>;
+  distance_multipliers: Record<string, FormulaTerm>;
+  objective_multipliers: Record<string, FormulaTerm>;
+  oksii_multipliers: Record<string, FormulaTerm>;
+  soft_cap: FormulaTerm;
+  formula: string;
+  /** What the score does and does not measure, in the server's own words. */
+  validity: Record<string, string>;
+}
+
+/** GET /api/storytelling/win-contribution/formula — the PWC weights, plus
+ *  the two things the number is most often misread as. */
+export interface StoryPwcFormula {
+  status: string;
+  version: string;
+  name: string;
+  description: string;
+  weights: Record<string, FormulaTerm>;
+  zero_objective_rounds: FormulaTerm;
+  /** Says in the payload that the MVP is picked by `waa_bayes` and not by
+   *  the leaderboard's `total_pwc` — the distinction the board itself makes.
+   *  The server also publishes the selection rules themselves: who may win
+   *  (`eligibility`), how equal `waa_bayes` scores are resolved (ordered
+   *  `tiebreakers`), and what happens when nobody qualifies (`fallback`).
+   *  Optional like every FormulaTerm field, because the formula endpoints
+   *  hand-build their dicts and omission is how they spell "not published". */
+  mvp: FormulaTerm & {
+    metric?: string;
+    eligibility?: string;
+    tiebreakers?: string[];
+    fallback?: string;
+  };
+}
+
+/** One kill inside GET /api/storytelling/kill-impact/details — every
+ *  multiplier that produced its score, so a total can be checked.
+ *
+ *  Nullability read off `storytelling_kill_impact` and the SELECT that reads
+ *  it (storytelling_router.py:358-372), not off the sample:
+ *
+ *  - the multipliers below are non-null because the handler calls `float()`
+ *    on them: a NULL there would raise, so there is no response in which
+ *    they arrive as null — a 500 is not a shape to type;
+ *  - `health_multiplier`, `alive_multiplier`, `reinf_multiplier` and
+ *    `killer_health` are nullable columns (added by a later migration) that
+ *    the SELECT COALESCEs, so they too cannot be null here;
+ *  - the four `is_*` flags, `kill_outcome_id`, `round_start_unix` and
+ *    `kill_time_ms` are nullable columns passed straight through. Measured
+ *    2026-08-30: 0 nulls in 45,964 rows — the branch that has not happened
+ *    rather than the one that cannot. */
+export interface StoryKisKill {
+  kill_outcome_id: number | null;
+  round_number: number;
+  round_start_unix: number | null;
+  map_name: string;
+  victim_guid: string;
+  victim_name: string;
+  base_impact: number;
+  carrier_multiplier: number;
+  push_multiplier: number;
+  crossfire_multiplier: number;
+  spawn_multiplier: number;
+  outcome_multiplier: number;
+  class_multiplier: number;
+  distance_multiplier: number;
+  health_multiplier: number;
+  alive_multiplier: number;
+  reinf_multiplier: number;
+  total_impact: number;
+  is_carrier_kill: boolean | null;
+  is_during_push: boolean | null;
+  is_crossfire: boolean | null;
+  is_objective_area: boolean | null;
+  kill_time_ms: number | null;
+  killer_health: number;
+}
+
+export interface StoryKisDetails {
+  status: string;
+  player_guid: string;
+  /** The EMPTY STRING when the player has no kills in this scope — the
+   *  handler only looks the name up if `kills` is non-empty
+   *  (storytelling_router.py:410-419). Not null, so `??` will not catch it. */
+  player_name: string;
+  summary: {
+    total_kis: number;
+    kills: number;
+    avg_impact: number;
+    carrier_kills: number;
+    push_kills: number;
+    crossfire_kills: number;
+  };
+  kills: StoryKisKill[];
+}
+
+/** GET /api/storytelling/kill-matrix — who killed whom. A UNION, because the
+ *  no-data branch returns a different object: `available: false` carries a
+ *  `reason` and omits `total_kills` entirely (kill_matrix.py:87-94). */
+export type StoryKillMatrix =
+  | {
+    status: string;
+    available: false;
+    reason: string;
+    players: [];
+    cells: [];
+  }
+  | {
+    status: string;
+    available: true;
+    players: StoryKillMatrixPlayer[];
+    cells: StoryKillMatrixCell[];
+    total_kills: number;
+  };
+
+export interface StoryKillMatrixPlayer {
+  guid_short: string;
+  name: string;
+  kills: number;
+  deaths: number;
+}
+
+export interface StoryKillMatrixCell {
+  killer: string;
+  victim: string;
+  kills: number;
+  gibs: number;
+  revived: number;
+}
+
+/** GET /api/storytelling/movement — distance and speed per player, in raw ET
+ *  engine units (the server refuses to invent a metre conversion). Same union
+ *  shape as the matrix: the empty branch omits `unit` (movement.py:78-95). */
+export type StoryMovement =
+  | { status: string; available: false; reason: string; players: [] }
+  | { status: string; available: true; unit: string; players: StoryMovementPlayer[] };
+
+export interface StoryMovementPlayer {
+  guid_short: string;
+  name: string;
+  lives: number;
+  total_distance: number;
+  /** null when the player has no alive time at all — the per-minute rate has
+   *  no denominator then, and 0 would read as "stood still" (movement.py:67). */
+  distance_per_min: number | null;
+  avg_speed: number;
+  peak_speed: number;
+  /** null for the same reason as distance_per_min (movement.py:70-73). */
+  sprint_pct: number | null;
+  post_spawn_distance: number;
+  alive_ms: number;
+}
+
+/** GET /api/storytelling/useless-defense-deaths — defensive deaths that gave
+ *  the attackers free objective time. One shape; `players` is empty when
+ *  nobody cleared the thresholds, which is a real answer, not a failure. */
+export interface StoryUselessDefensePlayer {
+  guid: string;
+  guid_short: string;
+  name: string;
+  useless_deaths: number;
+  total_defense_deaths: number;
+  /** useless / total, 0 when total is 0 — a ratio the server rounds to 3dp. */
+  rate: number;
+}
+
+export interface StoryUselessDefense {
+  status: string;
+  metric: string;
+  /** Carries the thresholds in prose; the numbers are in `thresholds`. */
+  description: string;
+  thresholds: { min_reinf_seconds: number; min_killer_health: number };
+  players: StoryUselessDefensePlayer[];
+}
+
+/** GET /api/storytelling/momentum-session — the whole evening as one curve,
+ *  by persistent team rather than by round.
+ *
+ *  THREE shapes, discriminated by `status` (momentum.py:275-331): `no_data`
+ *  has neither teams nor a reason, `no_team_data` has a reason but still no
+ *  teams, and only `ok` carries teams, boundaries and meta. The legacy page
+ *  reads `reason || status` for exactly this. */
+export type StoryMomentumSession =
+  | { status: 'no_data'; session_date: string; points: [] }
+  | { status: 'no_team_data'; session_date: string; reason: string; points: [] }
+  | {
+    status: 'ok';
+    session_date: string;
+    teams: { team_a: StoryMomentumTeam; team_b: StoryMomentumTeam };
+    points: StoryMomentumSessionPoint[];
+    round_boundaries: StoryMomentumBoundary[];
+    meta: {
+      rounds: number;
+      /** Rounds whose players could not be mapped to either team — they are
+       *  in the curve's time span but not in its two lines. */
+      unmapped_rounds: number;
+      defaulted_players_count: number;
+    };
+  };
+
+export interface StoryMomentumTeam {
+  label: string;
+  players: string[];
+}
+
+export interface StoryMomentumSessionPoint {
+  t_ms: number;
+  team_a: number;
+  team_b: number;
+}
+
+export interface StoryMomentumBoundary {
+  x_ms: number;
+  map_name: string;
+  round_number: number;
+}
+
+// ---------------------------------------------------------------------------
 // Phase 4 — session detail. Corpus: api_stats_session_*.json, recorded
 // 2026-08-29 against gaming session 154 (12 rounds, 6 maps, 6 players).
 //

@@ -17,6 +17,7 @@ import sessions from './__fixtures__/api_sessions_list.json';
 import mvp151 from './__fixtures__/api_session_151_mvp.json';
 import verdicts151 from './__fixtures__/api_session_151_verdicts.json';
 import goodNight151 from './__fixtures__/api_session_151_good_night.json';
+import bestLives from './__fixtures__/api_storytelling_best_lives.json';
 
 /** Session 154, recorded 2026-08-29: 12 rounds, 6 maps, 6 players, 5–7. */
 const BODIES: [string, unknown][] = [
@@ -25,6 +26,7 @@ const BODIES: [string, unknown][] = [
   ['/mvp', mvp],
   ['/verdicts', verdicts],
   ['/good-night', goodNight],
+  ['/storytelling/best-lives', bestLives],
   ['/api/sessions', sessions],
 ];
 
@@ -228,4 +230,103 @@ describe('SessionDetail', () => {
     // …and the rest of the session still renders.
     expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument();
   });
+
+  it('shows the biggest single life, which the session totals flatten away', async () => {
+    const { container } = renderPage();
+    const lives = (bestLives as { lives: { name: string; kills: number; map_name: string; life_seconds: number }[] }).lives;
+    await waitFor(() => expect(container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    const panel = container.querySelector('[data-parity="session.lives"]')!;
+    // Every card, not just the best one: the strip is the point, and a page
+    // that renders only lives[0] looks identical for a five-card night.
+    expect(panel.querySelectorAll('a').length).toBe(lives.length);
+    const first = lives[0];
+    expect(panel.textContent).toContain(String(first.kills));
+    expect(panel.textContent).toContain(first.map_name);
+    expect(panel.textContent).toContain(`${first.life_seconds}s alive`);
+  });
+
+  it('states the lives cutoff from the payload, and stays silent on older wire shapes', async () => {
+    // The endpoint's `total` is len(lives) AFTER the limit — a total that is
+    // not a total — so the disclosure reads qualifying_total, counted before
+    // the cut (Codex on #842, fourth cutoff of the family). The recorded
+    // session really had 51 qualifying lives behind its top five, measured
+    // live 2026-08-31; all three numbers come from the fixture.
+    const f = bestLives as { lives: unknown[]; qualifying_total: number; min_kills: number };
+    expect(f.qualifying_total).toBeGreaterThan(f.lives.length);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(
+      new RegExp(`showing the top ${f.lives.length} of ${f.qualifying_total} lives with ≥${f.min_kills} kills`),
+    )).toBeInTheDocument());
+
+    // A response recorded before the fields existed omits them — an absent
+    // key is not 0, and the line must vanish rather than crash or claim
+    // "of undefined". Scoped to THIS render's container: the first tree
+    // above is still mounted and carries the line, so a screen-wide
+    // queryByText would look at the wrong page and could never fail.
+    const { qualifying_total: _qt, min_kills: _mk, ...old } = bestLives as Record<string, unknown>;
+    const second = renderPage(withOverride('/storytelling/best-lives', () => json(old)));
+    await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    expect(second.container.textContent).toContain('s alive');
+    expect(second.container.textContent).not.toContain('showing the top');
+
+    // And when everything qualifying is already on screen there is no cutoff
+    // to disclose.
+    const third = renderPage(withOverride('/storytelling/best-lives', () =>
+      json({ ...(bestLives as object), qualifying_total: f.lives.length })));
+    await waitFor(() => expect(third.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    expect(third.container.textContent).toContain('s alive');
+    expect(third.container.textContent).not.toContain('showing the top');
+
+    // The threshold is QUOTED, not hardcoded — the fixture's 3 equals the
+    // backend constant, so only a moved value can tell the two apart (a
+    // fixture cannot fail on a value it does not contain).
+    const fourth = renderPage(withOverride('/storytelling/best-lives', () =>
+      json({ ...(bestLives as object), min_kills: 4 })));
+    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'));
+  });
+
+  it('tells an empty night apart from a failed request', async () => {
+    // The legacy panel did neither — it returned early on both, so "nobody
+    // had a standout life" and "the endpoint is down" looked the same.
+    renderPage(withOverride('/storytelling/best-lives', () => json({ status: 'ok', lives: [], total: 0 })));
+    // The wording must not claim telemetry was present: lives:[] is also what
+    // an untracked night returns, and the wire carries no coverage field to
+    // tell the two apart (Codex on #842 — a backend contract gap).
+    await waitFor(() => expect(screen.getByText(/no tracked life in this session cleared the minimum/)).toBeInTheDocument());
+    expect(screen.getByText(/cannot say how much of the night was tracked/)).toBeInTheDocument();
+    expect(screen.queryByText(/the best lives: unavailable/)).toBeNull();
+
+    renderPage(withOverride('/storytelling/best-lives', () =>
+      Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
+    await waitFor(() => expect(screen.getByText(/the best lives: unavailable/)).toBeInTheDocument());
+  });
+
+  it('gives two near-identical lives distinct keys', async () => {
+    // :432 (Codex on #842): same player, same map, same round, durations
+    // rounding to the same second — the composite key collapsed and React
+    // reused one card for both. The index joined the key; the guard is the
+    // absence of React's duplicate-key warning, which is the only observable
+    // the collision has.
+    const twin = (kills: number) => ({
+      guid: 'AAAA0001', name: 'twin', map_name: 'supply', round_number: 1,
+      life_seconds: 42, kills, gibs: 0, started_at: '20:00:00',
+    });
+    const errors: string[] = [];
+    const orig = console.error;
+    vi.spyOn(console, 'error').mockImplementation((...args: unknown[]) => {
+      errors.push(String(args[0]));
+      orig.apply(console, args as []);
+    });
+    try {
+      renderPage(withOverride('/api/storytelling/best-lives', () => json({
+        status: 'ok', available: true, total: 2, qualifying_total: 2, min_kills: 3,
+        lives: [twin(5), twin(4)],
+      })));
+      await waitFor(() => expect(screen.getAllByText('twin').length).toBeGreaterThan(0));
+      expect(errors.filter((e) => e.includes('same key')).length).toBe(0);
+    } finally {
+      vi.mocked(console.error).mockRestore();
+    }
+  });
+
 });
