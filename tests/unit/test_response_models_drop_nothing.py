@@ -2340,3 +2340,36 @@ def test_no_recorded_fixture_carries_a_real_discord_identity():
     assert not offenders, (
         "a snowflake is on the wire as a JSON number, which a browser "
         "truncates: " + "; ".join(offenders))
+
+
+def test_last_session_accepts_the_two_nulls_no_fixture_carries():
+    """⛔ THE TYPES WERE WIDENED; NOTHING PROVED THEY HAD TO BE.
+
+    `SessionMatchRow.map_name` and `ScoringDebugRow.r1_defender_side` were
+    changed to nullable after review, and every recorded session happens to
+    have both populated — so the widening was unfalsifiable: narrowing them
+    back would not fail a single test. A fixture cannot fail on a value it
+    does not contain, which is the lesson this branch keeps relearning, so
+    the cases are constructed here.
+
+    Both are reachable: `rounds.map_name` is nullable and neither query
+    filters on it, and the R1-only / roster-change scoring branches set the
+    defender from `r1.get('defender_team')` WITHOUT the normalisation the
+    paired branch applies — so the map row validates while its own debug row
+    does not (Codex on #830).
+    """
+    raw = _json.loads(
+        (_FIXTURES / "api_stats_last-session.json").read_text())
+
+    assert all(m["map_name"] is not None for m in raw["matches"]), (
+        "the fixture now carries a null map name — this constructed case is "
+        "no longer needed and this test should assert on the recording")
+    raw["matches"][0]["map_name"] = None
+    for entry in raw["scoring"]["debug"]:
+        entry["r1_defender_side"] = None
+
+    modelled = LastSession.model_validate(raw)
+    assert modelled.matches[0].map_name is None
+    assert all(d.r1_defender_side is None for d in modelled.scoring.debug)
+    # …and the payload still round-trips unchanged, nulls included.
+    assert _json.loads(modelled.model_dump_json()) == raw
