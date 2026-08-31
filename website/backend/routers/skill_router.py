@@ -527,6 +527,7 @@ async def get_composite_stats(
                         "unmeasured_metrics": ["ci", "kpi", "sds", "tir"],
                         "source_rows": {
                             "crossfire": 0,
+                            "crossfire_cache": 0,
                             "trades": 0,
                             "combat_positions": 0,
                             "kill_outcomes": 0,
@@ -755,6 +756,9 @@ async def get_composite_stats(
         SELECT
             (SELECT COUNT(*) FROM proximity_crossfire_opportunity
               WHERE {round_set}),
+            (SELECT COUNT(*) FROM storytelling_kill_impact
+              {ski_where} AND killer_guid_canonical IS NOT NULL
+                AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
             (SELECT COUNT(*) FROM proximity_lua_trade_kill
               WHERE {round_set} AND trader_guid_canonical IS NOT NULL
                 AND trader_guid_canonical NOT LIKE 'OMNIBOT%'),
@@ -786,19 +790,31 @@ async def get_composite_stats(
         except (TypeError, IndexError, ValueError):
             return 0
 
-    crossfire_rows, trade_rows, combat_rows, outcome_rows, spawn_rows = (
+    crossfire_rows, crossfire_cache_rows, trade_rows, combat_rows, outcome_rows, spawn_rows = (
         _count(0),
         _count(1),
         _count(2),
         _count(3),
         _count(4),
+        _count(5),
     )
 
     # metric -> the source counts it needs. A metric is "measured" when at
     # least one of its inputs produced rows for this scope; "unmeasured" when
     # none did, and its number below is a floor rather than a measurement.
+    # ⛔ Crossfire is a TWO-STAGE pipeline and tir needs both stages plus
+    # trades (verifier on #848, round two): the raw instrument
+    # (crossfire_opportunity) says the capture ran; the KIS cache says the
+    # storytelling pipeline actually produced the rows the session_crossfire
+    # CTE reads. Counting only the raw side re-broke four sessions the
+    # source swap was meant to fix: 94/95/97/98 have raw rows and trades
+    # but ZERO cache rows — the pipeline never ran for them — so tir was
+    # floored by up to 50 points and labelled measured. Neither stage reads
+    # is_crossfire, so neither is circular. Measured: tir measured in
+    # 47/151 sessions with two sources, 43/151 with three — the difference
+    # is exactly those four.
     metric_sources = {
-        "tir": (crossfire_rows, trade_rows),
+        "tir": (crossfire_rows, crossfire_cache_rows, trade_rows),
         "ci": (combat_rows,),
         "kpi": (outcome_rows,),
         "sds": (spawn_rows,),
@@ -831,6 +847,7 @@ async def get_composite_stats(
             "unmeasured_metrics": unmeasured,
             "source_rows": {
                 "crossfire": crossfire_rows,
+                "crossfire_cache": crossfire_cache_rows,
                 "trades": trade_rows,
                 "combat_positions": combat_rows,
                 "kill_outcomes": outcome_rows,
