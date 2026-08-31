@@ -51,10 +51,24 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# ⛔ RUN AS DOCUMENTED, THIS SCRIPT COULD NOT IMPORT THE APP. Python puts
+# `scripts/` on sys.path, not the repository root, so every
+# `website.backend.routers.*` import in `_routes_stripping_none()` raised
+# ModuleNotFoundError, the exclude_none set came back EMPTY, and the four
+# false `StatsTrends` findings that helper exists to suppress came straight
+# back — 10 disagreements instead of 6.
+#
+# ⚠️ I had verified that helper only with `PYTHONPATH=<repo>` set, which is
+# not how the module documents itself. A fix confirmed by an invocation
+# nobody uses is not confirmed (Codex on #830).
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 SPEC = ROOT / "docs" / "api" / "openapi.json"
 TYPES = ROOT / "website" / "frontend" / "src" / "app" / "lib" / "types.ts"
 
@@ -390,8 +404,14 @@ def main() -> int:
                 continue
             ts_type, ts_optional = declared[field]
             ts_nullable = _ts_is_nullable(ts_type)
-            # `field: T | undefined` is optional in effect even without `?`.
-            ts_optional = ts_optional or _ts_accepts_undefined(ts_type)
+            # ⛔ AND `T | undefined` IS NOT OPTIONAL EITHER — my previous
+            # commit said it was, and TypeScript disagrees:
+            #   const a: { f: string | undefined } = {}
+            #   → TS2741: Property 'f' is missing but required
+            # Only the `?` marker lets a property be absent. The three states
+            # are distinct all the way down: ABSENT (`?`), NULL (`| null`) and
+            # PRESENT-BUT-UNDEFINED (`| undefined`), and I collapsed the first
+            # into the third one commit after separating the second from it.
             api_nullable = _is_nullable(field_schema)
             api_optional = field not in required
 
@@ -412,7 +432,13 @@ def main() -> int:
             # for exactly the optional-versus-nullable drift its own docstring
             # claims to detect (Codex on #830). Optionality needs `?`.
             if api_optional and not ts_optional:
-                findings.append((name, field, "API optional, TS is required", ts_type))
+                # Name the near-miss specifically: `T | undefined` looks like
+                # it covers an absent key and does not, so "TS is required" on
+                # its own reads as a puzzle rather than an instruction.
+                why = ("API optional, TS is `| undefined` which is still required"
+                       if _ts_accepts_undefined(ts_type)
+                       else "API optional, TS is required")
+                findings.append((name, field, why, ts_type))
             if ts_optional and not api_optional:
                 findings.append((name, field, "TS optional, API always sends it", ts_type))
 
