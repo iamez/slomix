@@ -92,7 +92,6 @@
 /api/proximity/weapon-accuracy
 /api/replay/round
 /api/server-activity/history
-/api/skill/adjusted-lifetime
 /api/skill/composite
 /api/skill/player
 /api/stats/live-session
