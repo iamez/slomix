@@ -1,0 +1,23 @@
+{
+  "status": "ok",
+  "version": "3.0",
+  "formula_version": "prox-web-v3.0",
+  "quality": {
+    "ranking_available": false,
+    "successful_sources": 10,
+    "total_sources": 10,
+    "failed_sources": [],
+    "metric_weight_coverage": 0.0,
+    "below_coverage_dropped": 0
+  },
+  "range_days": 30,
+  "scope": {
+    "scoped": true,
+    "session_date": "2020-01-01",
+    "map_name": null,
+    "round_number": null,
+    "round_start_unix": null
+  },
+  "player_count": 0,
+  "players": []
+}

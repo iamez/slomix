@@ -1,0 +1,18 @@
+{
+  "status": "ok",
+  "map_name": "te_escape2",
+  "mode": "kills_from",
+  "grid_size": 512,
+  "player_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+  "player_name": "#EDBB5DA9",
+  "hotzones": [],
+  "total": 0,
+  "sampled": false,
+  "scope": {
+    "session_date": "2020-01-01",
+    "map_name": "te_escape2",
+    "round_number": null,
+    "round_start_unix": null,
+    "player_guid": "EDBB5DA97C9F52151865C5F223F9B951"
+  }
+}

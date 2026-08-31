@@ -31,6 +31,7 @@ from website.backend.routers.records_awards import (
     AwardsPage,
     HallOfFame,
 )
+from website.backend.routers.records_matches import RoundAwards, RoundViz
 from website.backend.routers.records_seasons import CurrentSeason
 from website.backend.routers.records_weapons import WeaponsByPlayer
 
@@ -42,6 +43,8 @@ CASES = [
     ("api_hall-of-fame.json", HallOfFame),
     ("api_seasons_current.json", CurrentSeason),
     ("api_stats_weapons_by_player.json", WeaponsByPlayer),
+    ("api_rounds_round_id_viz.json", RoundViz),
+    ("api_rounds_round_id_awards.json", RoundAwards),
 ]
 
 

@@ -9,9 +9,10 @@ from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from shared.config import load_config
+from shared.round_time import round_duration_sql
 from shared.services.session_stats_aggregator import SessionStatsAggregator
 from shared.services.stopwatch_scoring_service import StopwatchScoringService
 from shared.utils import escape_like_pattern
@@ -29,6 +30,71 @@ from website.backend.services.website_session_data_service import (
 from website.backend.utils.et_constants import strip_et_colors
 
 router = APIRouter()
+class SessionSummary(BaseModel):
+    """One session in the list.
+
+    ⛔ THE COLUMN'S NULLABILITY IS NOT THE FIELD'S. `session_results.
+    team_1_score` and `winning_team` are NOT NULL in the schema — and null in
+    84 of 137 responses, because the query LEFT JOINs the BOX table and a
+    session without team attribution has no row to join. Reading
+    `information_schema` alone would have typed all five team fields
+    non-null and answered 500 on the majority of sessions.
+
+    So the rule needs a third step after "schema, then handler": what the JOIN
+    does to it. A LEFT JOIN manufactures nulls from columns that forbid them.
+    """
+
+    date: str
+    session_id: int
+    rounds: int
+    maps: int
+    players: int
+    total_kills: int
+    #: Split from a comma-joined string; empty when the column was null.
+    maps_played: list[str]
+    #: Map wins by SIDE — sides swap every map, so these are not team totals.
+    allies_wins: int
+    axis_wins: int
+    draws: int
+    #: All five are null together when the session has no BOX attribution.
+    team_1_name: str | None
+    team_2_name: str | None
+    team_1_score: int | None
+    team_2_score: int | None
+    winning_team: int | None
+    #: Rendered by the handler ("2 days ago", "Friday, August 28, 2026") —
+    #: presentation the legacy pages already depend on, not raw data.
+    time_ago: str
+    formatted_date: str
+
+
+class SessionLeaderRow(BaseModel):
+    """One row of the session DPM leaderboard.
+
+    ⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.
+
+      name    `MAX(player_name)` over a NOT NULL column — never null.
+      dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.
+      kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every
+      deaths  summed value is NULL, and the handler passes the result through
+              with no guard. Zero such rows exist today; the column and the
+              aggregate both say it is reachable, and "zero rows today" is not
+              a type — a stricter model would answer 500 the first time it
+              happened rather than dropping a field.
+
+    Requested by the session-detail workstream ahead of phase 4, so that page
+    can be written against a schema instead of against a sample.
+    """
+
+    #: 1-based position, assigned by the handler after ordering by dpm.
+    rank: int
+    name: str
+    dpm: int
+    kills: int | None
+    deaths: int | None
+
+
+
 logger = get_app_logger("api.sessions")
 
 
@@ -128,7 +194,233 @@ async def build_session_scoring(
     return scoring_payload, warnings, hardcoded_teams
 
 
-@router.get("/stats/last-session")
+class SessionPlayerRow(BaseModel):
+    """One player's totals for the session.
+
+    ⭐ THIS ONE CLASS SERVES TWO FIELDS. `teams[].players[]` and
+    `unassigned_players[]` are literally the same `player_payload` dict — the
+    handler appends it to the team roster when the name resolves and to the
+    unassigned list when it does not. Verified on a live response rather than
+    inferred: both carry the same 25 keys with the same types, symmetric
+    difference empty.
+
+    `kd` is the only float; every other figure is `int(x or 0)` in the handler.
+    """
+
+    guid: str
+    name: str
+    kills: int
+    deaths: int
+    kd: float
+    dpm: int
+    damage_given: int
+    damage_received: int
+    gibs: int
+    headshot_kills: int
+    revives_given: int
+    times_revived: int
+    useful_kills: int
+    kill_assists: int
+    self_kills: int
+    full_selfkills: int
+    double_kills: int
+    triple_kills: int
+    quad_kills: int
+    multi_kills: int
+    mega_kills: int
+    time_played_seconds: int
+    time_dead_seconds: int
+    time_dead_seconds_raw: int
+    denied_playtime: int
+
+
+class SessionTeam(BaseModel):
+    name: str
+    players: list[SessionPlayerRow]
+
+
+class SessionMatchRow(BaseModel):
+    """One round of the session, as the match list carries it."""
+
+    id: int
+    #: `rounds.map_name` is nullable and neither query filters on
+    #: it — Codex on #830, second pass.
+    map_name: str | None
+    round_number: int
+    #: `rounds.round_date` is nullable; an undated round in an otherwise
+    #: dated session reaches this field unchanged.
+    date: str | None
+    #: NULL when neither `actual_duration_seconds` nor `actual_time`
+    #: resolves — Codex on #830.
+    duration: str | None
+    winner: str
+    #: `rounds.round_outcome` is nullable and passed through raw. 26 rows
+    #: carry NULL today; none fell in the eight sampled sessions, which is
+    #: exactly why sampling did not find this.
+    outcome: str | None
+
+
+class _ScoringMapCommon(BaseModel):
+    """The fifteen fields every scoring map carries, whatever branch made it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Nullable for the same reason as `SessionMatchRow.map_name`: the
+    #: scoring service copies the round's map name through unchanged.
+    map: str | None
+    emoji: str
+    description: str
+    winner: str
+    #: `int | None` — measured null on 8 of 48 rows across eight sessions.
+    winner_side: int | None
+    counted: bool
+    scoring_source: str
+    r1_defender_side: int | None
+    #: None on the `incomplete` and `ambiguous` branches — Codex on #830.
+    team_a_r1_side: int | None
+    team_a_r2_side: int | None
+    team_a_points: int
+    team_b_points: int
+    team_a_time: str
+    team_b_time: str
+
+
+class ScoringMapAmbiguous(_ScoringMapCommon):
+    """A map whose roster changed mid-session: FIFTEEN keys, no bookkeeping.
+
+    ⛔ THE SERVICE PRODUCES THREE SHAPES HERE AND I MODELLED ONE. Reading
+    `calculate_session_scores_with_teams` for its `map_results.append` calls:
+    18 keys (with `note`), 17 (without), and this 15-key branch, which omits
+    `match_id`, `round_start_unix` AND `map_play_seq` because side attribution
+    is genuinely unknown. Eight sampled sessions produced only the 17-key
+    shape, so the model required three fields this branch never sends.
+
+    ⚠️ AND `int | None` WITHOUT A DEFAULT IS STILL REQUIRED IN PYDANTIC V2 —
+    nullable is not optional. Widening those three to `| None` would not have
+    fixed it; only their ABSENCE from this member does (Codex on #830).
+    """
+
+    note: str
+
+
+class ScoringMapRow(_ScoringMapCommon):
+    """A normally paired map: seventeen keys."""
+
+    match_id: str | None
+    #: ⚠️ `rounds.round_start_unix` is nullable AND 2,185 of 3,176 rows are
+    #: NULL right now — the most recent of them on 2026-08-27, the newest
+    #: session day there is. The service writes `r1.get('round_start_unix')`
+    #: with no filter. Eight sampled sessions passed only because their
+    #: paired maps happened to have it.
+    round_start_unix: int | None
+    map_play_seq: int | None
+
+
+class ScoringMapWithNote(ScoringMapRow):
+    """…and eighteen when the branch attaches an explanation.
+
+    A separate member rather than `note: str | None = None` on the row above,
+    because a default would put `"note": null` on every one of the 48 sampled
+    maps that does not carry one.
+    """
+
+    note: str
+
+
+class ScoringDebugRow(BaseModel):
+    """Per-map scoring trace. `note` was null on all 48 sampled rows."""
+
+    map: str | None
+    counted: bool
+    scoring_source: str
+    winner_side: int | None
+    #: The R1-only and roster-change branches set this from
+    #: `r1.get('defender_team')` WITHOUT the normalisation the paired branch
+    #: applies, so a nullable column value arrives raw here even though
+    #: `_ScoringMapCommon` already accepts it — Codex on #830.
+    r1_defender_side: int | None
+    team_a_r1_side: int | None
+    team_a_r2_side: int | None
+    note: str | None
+
+
+class ScoringUnavailable(BaseModel):
+    """Scoring could not be built: `{"available": false, "reason": "…"}`.
+
+    ⛔ THE SHAPE SAMPLING NEVER SHOWS. All EIGHT sessions in the corpus —
+    every session day there is — returned the other one, so a model built from
+    measurement alone makes `maps` and `team_a_name` required and answers 500
+    the first time a session takes an early return. There are FOUR of them in
+    `build_session_scoring`: no session ids, fewer than two hardcoded teams,
+    fewer than two rosters, no scoring result. Forcing the second confirms the
+    shape: HTTP 200, two keys, and `unassigned_players` fills with the six
+    players that could not be placed on a team.
+
+    ⭐ A corpus that agrees with itself is not a contract. It is one branch
+    that happened to win eight times.
+    """
+
+    available: bool
+    reason: str
+
+
+class ScoringAvailable(BaseModel):
+    """Scoring was built: the eight-key shape with both teams and the maps."""
+
+    available: bool
+    maps: list[ScoringMapWithNote | ScoringMapRow | ScoringMapAmbiguous]
+    debug: list[ScoringDebugRow]
+    team_a_name: str
+    team_b_name: str
+    team_a_score: int
+    team_b_score: int
+    total_maps: int
+
+
+class LastSession(BaseModel):
+    """The most recent gaming session, as `/stats/last-session` returns it.
+
+    ⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all
+    eight sampled sessions, so none of their element shapes came from the
+    sample. `warnings` and `stats_checks` are f-strings built in the handler;
+    `unassigned_players` carries `SessionPlayerRow`, which was then confirmed
+    by forcing the branch that fills it. An empty list tells you a field's
+    name and nothing about its contents.
+
+    `map_counts` is keyed by map name, so it is a dict, not a model.
+
+    ⛔ `response_model` FILTERS: a field the handler returns and this model
+    omits is dropped silently with a 200.
+    """
+
+    date: str
+    player_count: int
+    rounds: int
+    #: ⚠️ `rounds.map_name` is nullable and `fetch_session_data()` does not
+    #: exclude unresolved rounds, so an unnamed map reaches both this list and
+    #: the KEYS of `map_counts` below. Measured: pydantic rejects `None` in a
+    #: `list[str]` and rejects a `None` key in a `dict[str, int]` outright, so
+    #: either one turns the whole last-session payload into a 500 (Codex on
+    #: #830). Zero such rounds exist today; the column allows them.
+    #:
+    #: ⚠️ ONE MEASURED DIFFERENCE, ACCEPTED KNOWINGLY: a None KEY serialises as
+    #: `"None"` through the model and as `"null"` through the bare
+    #: jsonable_encoder. The state is unreachable today, and a cosmetic key
+    #: spelling is a better outcome than a 500 — but it is a difference, so it
+    #: is written down rather than left for someone to find.
+    maps: list[str | None]
+    map_counts: dict[str | None, int]
+    matches: list[SessionMatchRow]
+    scoring: ScoringAvailable | ScoringUnavailable
+    warnings: list[str]
+    teams: list[SessionTeam]
+    unassigned_players: list[SessionPlayerRow]
+    stats_checks: list[str]
+    #: Null when the rounds carry no gaming session id.
+    gaming_session_id: int | None
+
+
+@router.get("/stats/last-session", response_model=LastSession)
 async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     """Get the latest session data (similar to !last_session)"""
     config = load_config()
@@ -350,7 +642,8 @@ async def get_last_session(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/stats/session-leaderboard")
+@router.get("/stats/session-leaderboard",
+            response_model=list[SessionLeaderRow])
 async def get_session_leaderboard(
     limit: int = 5,
     session_id: int | None = None,
@@ -462,7 +755,7 @@ async def get_matches(limit: int = 5, db: DatabaseAdapter = Depends(get_db)):
     return await data_service.get_recent_matches(limit)
 
 
-@router.get("/sessions")
+@router.get("/sessions", response_model=list[SessionSummary])
 async def get_sessions_list(
     limit: int = 20, offset: int = 0, db: DatabaseAdapter = Depends(get_db)
 ):
@@ -2402,10 +2695,7 @@ _SESSION_ROUNDS_SQL = """
               regexp_replace(lpad(r.round_time, 6, '0'),
                              '^(..)(..)(..)$', '\\1:\\2:\\3'))::timestamp,
              r.created_at) AS played_at,
-           COALESCE(NULLIF(r.actual_duration_seconds, 0),
-             CASE WHEN r.actual_time ~ '^[0-9]+:[0-9]{2}$'
-                  THEN split_part(r.actual_time, ':', 1)::int * 60
-                     + split_part(r.actual_time, ':', 2)::int END) AS duration_seconds,
+           """ + round_duration_sql("r") + """ AS duration_seconds,
            r.end_reason, r.round_status, r.match_id,
            r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
     FROM rounds r

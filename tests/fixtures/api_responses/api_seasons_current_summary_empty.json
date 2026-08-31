@@ -1,0 +1,18 @@
+{
+  "season_id": "2030-Q1",
+  "start_date": "2030-01-01",
+  "end_date": "2030-03-31",
+  "totals": {
+    "rounds": 0,
+    "players": 0,
+    "sessions": 0,
+    "maps": 0,
+    "kills": 0,
+    "active_days": 0,
+    "avg_rounds_per_day": 0
+  },
+  "top_map": {
+    "name": null,
+    "plays": 0
+  }
+}

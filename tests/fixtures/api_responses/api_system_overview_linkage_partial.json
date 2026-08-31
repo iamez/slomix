@@ -1,0 +1,69 @@
+{
+  "generated_at": "2026-08-29T11:10:56.859031+00:00",
+  "overall": "ok",
+  "stages": [
+    {
+      "key": "game_server",
+      "label": "Game server",
+      "state": "ok",
+      "summary": "0/16 players on supply",
+      "detail": {
+        "online": true,
+        "map": "supply",
+        "player_count": 0,
+        "max_players": 16,
+        "ping_ms": 4
+      }
+    },
+    {
+      "key": "capture",
+      "label": "Lua capture",
+      "state": "ok",
+      "summary": "webhook captures are landing and linked",
+      "detail": {
+        "last_capture_at": "2026-08-27 20:18:56.374165+00:00",
+        "age_seconds": 139920.47998,
+        "unlinked_last_48h": 0
+      }
+    },
+    {
+      "key": "parser",
+      "label": "Parser",
+      "state": "ok",
+      "summary": "40 rounds parsed in the last 7 days",
+      "detail": {
+        "last_round_at": "2026-08-27T20:15:34+00:00",
+        "age_seconds": 140122.857065,
+        "rounds_last_7d": 40
+      }
+    },
+    {
+      "key": "derived",
+      "label": "Smart Stats",
+      "state": "ok",
+      "summary": "session 154 fully analysed",
+      "detail": {
+        "gaming_session_id": 154,
+        "rounds": 12,
+        "kill_impact_rows": 743,
+        "proximity_kills": 743
+      }
+    },
+    {
+      "key": "api",
+      "label": "Website API",
+      "state": "ok",
+      "summary": "serving and connected to the database",
+      "detail": {}
+    }
+  ],
+  "linkage": {
+    "available": true,
+    "status": "error",
+    "metrics": {
+      "total_lua_rows": 5
+    },
+    "breach_count": 0,
+    "breaches": []
+  }
+}

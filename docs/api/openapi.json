@@ -1,6 +1,372 @@
 {
  "components": {
   "schemas": {
+   "ActivityCalendar": {
+    "description": "Rounds played per day over the lookback window.\n\n⛔ THREE STATES, NOT TWO, AND THE CLIENT MUST NOT DERIVE THEM FROM LENGTH.\nUntil now both branches returned `{days, activity}`, so an empty calendar\nand a failed query were identical on the wire — the page could only guess\nfrom `Object.keys(activity).length === 0`, which reads a measurement and a\nmissing measurement the same way.\n\n  ok           the query ran; `activity` is what was measured, empty or not\n  no_data      the query ran and the window genuinely holds no rounds\n  unavailable  the query failed; `activity` is empty because we do not know\n\n`status` is a plain string, not an enum, so a state added later is not\nfiltered out by the schema before anyone sees it.",
+    "properties": {
+     "activity": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Activity",
+      "type": "object"
+     },
+     "days": {
+      "title": "Days",
+      "type": "integer"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "days",
+     "activity",
+     "status"
+    ],
+    "title": "ActivityCalendar",
+    "type": "object"
+   },
+   "AimCell": {
+    "description": "One grid cell of the aim map, with the direction fired from it.\n\n⚠️ NOT the same element as `HeatmapCell` or the hotzones endpoint's cell,\ndespite all three being `{x, y, count, …}`: this one adds a 16-bucket\n`rose` and the circular mean. Three near-identical shapes across one\nfamily is exactly where a shared renderer picks the wrong one.",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "mean_yaw": {
+      "title": "Mean Yaw",
+      "type": "number"
+     },
+     "r": {
+      "title": "R",
+      "type": "number"
+     },
+     "rose": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Rose",
+      "type": "array"
+     },
+     "x": {
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "count",
+     "rose",
+     "mean_yaw",
+     "r"
+    ],
+    "title": "AimCell",
+    "type": "object"
+   },
+   "AimCircularStats": {
+    "description": "Circular statistics over the shot directions.\n\n⭐ EVERY FIELD IS NON-NULL EVEN WITH NO SHOTS, and the empty values are\nchosen rather than zeroed: measured on a scope with 0 shots, this answers\n`circular_std_deg: 180.0` and `rayleigh_p: 1.0` — maximum spread and no\nevidence of a preferred direction, which is the honest reading of nothing.\nA model that made them nullable would invite a consumer to render \"—\" and\nlose that.",
+    "properties": {
+     "circular_std_deg": {
+      "title": "Circular Std Deg",
+      "type": "number"
+     },
+     "mean_yaw_deg": {
+      "title": "Mean Yaw Deg",
+      "type": "number"
+     },
+     "n": {
+      "title": "N",
+      "type": "integer"
+     },
+     "pitch_mean_deg": {
+      "title": "Pitch Mean Deg",
+      "type": "number"
+     },
+     "pitch_std_deg": {
+      "title": "Pitch Std Deg",
+      "type": "number"
+     },
+     "rayleigh_p": {
+      "title": "Rayleigh P",
+      "type": "number"
+     },
+     "resultant_length": {
+      "title": "Resultant Length",
+      "type": "number"
+     }
+    },
+    "required": [
+     "n",
+     "mean_yaw_deg",
+     "resultant_length",
+     "circular_std_deg",
+     "rayleigh_p",
+     "pitch_mean_deg",
+     "pitch_std_deg"
+    ],
+    "title": "AimCircularStats",
+    "type": "object"
+   },
+   "AvailabilityDayAnonymous": {
+    "additionalProperties": false,
+    "description": "A day as an anonymous caller sees it: three keys, no viewer detail.",
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "date",
+     "counts",
+     "total"
+    ],
+    "title": "AvailabilityDayAnonymous",
+    "type": "object"
+   },
+   "AvailabilityDayViewer": {
+    "additionalProperties": false,
+    "description": "A day as a LOGGED-IN caller sees it — `my_status` appears.\n\n⛔ ABSENT AND NULL MEAN DIFFERENT THINGS HERE AND BOTH ARE LOAD-BEARING:\n  - key ABSENT  -> nobody is logged in, so the question was never asked\n  - value NULL  -> you are logged in and set nothing for that day\nMeasured on one range: 5 days carry a status, 50 are null, and every day\nof the anonymous response omits the key entirely.\n\n⭐ Which is why this is a UNION of day shapes and not one model with\n`my_status: str | None = None`. That single model has no way to express\nthe difference: without `exclude_none` the anonymous response GAINS\n`\"my_status\": null` (and the two states collapse into one), and with it\nthe logged-in null DISAPPEARS (and they collapse the other way). Both\ncollapses are wrong, in opposite directions.",
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "my_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "My Status"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "date",
+     "counts",
+     "total",
+     "my_status"
+    ],
+    "title": "AvailabilityDayViewer",
+    "type": "object"
+   },
+   "AvailabilityDayViewerWithUsers": {
+    "additionalProperties": false,
+    "description": "…and with `?include_users=true`, who was on each status that day.\n\n⚠️ `include_users=true` IS SILENTLY IGNORED FOR AN ANONYMOUS CALLER. The\nhandler gates it on `include_users and user_id is not None`, so the API\naccepts the parameter, answers 200, and simply omits the field. Measured:\nanonymous with and without the flag are byte-identical.\n\n⭐ THE CALLER CAN STILL TELL, AND NO NEW FIELD IS NEEDED: `viewer.\nauthenticated` IS `user_id is not None` — the same expression that gates\nthis field. So `authenticated: false` means \"the flag could not be\nhonoured\", and `authenticated: true` with the field absent would mean the\nflag was not sent. The distinction was always derivable; what was missing\nwas anyone saying so. That equivalence is the contract, so it is pinned in\n`tests/unit/test_response_models_drop_nothing.py` — if the gate and\n`viewer.authenticated` ever stop agreeing, the guarantee breaks loudly\ninstead of leaving consumers with a flag that quietly does nothing.",
+    "properties": {
+     "counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "object"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "my_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "My Status"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     },
+     "users_by_status": {
+      "additionalProperties": {
+       "items": {
+        "$ref": "#/components/schemas/AvailabilityUser"
+       },
+       "type": "array"
+      },
+      "title": "Users By Status",
+      "type": "object"
+     }
+    },
+    "required": [
+     "date",
+     "counts",
+     "total",
+     "my_status",
+     "users_by_status"
+    ],
+    "title": "AvailabilityDayViewerWithUsers",
+    "type": "object"
+   },
+   "AvailabilityOverview": {
+    "description": "Date-range availability aggregates, plus whatever the viewer may see.\n\n⚠️ WHAT ACTUALLY DISCRIMINATES THE DAY UNION IS PYDANTIC, NOT THIS CODE.\nAn earlier version of this docstring claimed the ordering and\n`extra=\"forbid\"` were load-bearing — that a five-key day would otherwise\nvalidate as the three-key anonymous shape and lose its extra fields. Both\nhalves are false, and mutation says so: reversing the order changes\nnothing, dropping `forbid` from all three members changes nothing, and\ndropping BOTH changes nothing. Pydantic's smart union picks the most\nspecific member that validates, whatever order it is written in.\n\n`extra=\"forbid\"` stays as belt-and-braces — it makes the contract explicit\ninstead of dependent on a union heuristic — but it is not the mechanism,\nand a comment that misnames the mechanism is worse than no comment.\n`tests/unit/test_response_models_drop_nothing.py` pins the real behaviour\nrather than repeating this prose.",
+    "properties": {
+     "days": {
+      "items": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/AvailabilityDayViewerWithUsers"
+        },
+        {
+         "$ref": "#/components/schemas/AvailabilityDayViewer"
+        },
+        {
+         "$ref": "#/components/schemas/AvailabilityDayAnonymous"
+        }
+       ]
+      },
+      "title": "Days",
+      "type": "array"
+     },
+     "from": {
+      "title": "From",
+      "type": "string"
+     },
+     "session_ready": {
+      "$ref": "#/components/schemas/AvailabilitySessionReady"
+     },
+     "statuses": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Statuses",
+      "type": "array"
+     },
+     "to": {
+      "title": "To",
+      "type": "string"
+     },
+     "viewer": {
+      "$ref": "#/components/schemas/AvailabilityViewer"
+     }
+    },
+    "required": [
+     "from",
+     "to",
+     "statuses",
+     "days",
+     "viewer",
+     "session_ready"
+    ],
+    "title": "AvailabilityOverview",
+    "type": "object"
+   },
+   "AvailabilitySessionReady": {
+    "description": "Whether today has enough LOOKING players to call a session.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "event_key": {
+      "title": "Event Key",
+      "type": "string"
+     },
+     "looking_count": {
+      "title": "Looking Count",
+      "type": "integer"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "threshold": {
+      "title": "Threshold",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "date",
+     "ready",
+     "looking_count",
+     "threshold",
+     "event_key"
+    ],
+    "title": "AvailabilitySessionReady",
+    "type": "object"
+   },
+   "AvailabilityUser": {
+    "properties": {
+     "display_name": {
+      "title": "Display Name",
+      "type": "string"
+     },
+     "user_id": {
+      "title": "User Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "user_id",
+     "display_name"
+    ],
+    "title": "AvailabilityUser",
+    "type": "object"
+   },
+   "AvailabilityViewer": {
+    "properties": {
+     "authenticated": {
+      "title": "Authenticated",
+      "type": "boolean"
+     },
+     "linked_discord": {
+      "title": "Linked Discord",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "authenticated",
+     "linked_discord"
+    ],
+    "title": "AvailabilityViewer",
+    "type": "object"
+   },
    "AwardLeaderRow": {
     "description": "One row of the awards leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live\nresponse, not the first row: `guid` is null on some of them, and a model\nthat read only row 0 would have typed it `str` and dropped the nulls.\n\n⛔ `response_model` FILTERS. A field the handler returns and a model omits\ndisappears from the payload, silently, with a 200 — which is why\n`tests/unit/test_response_models_drop_nothing.py` compares handler output\nagainst the serialised model instead of trusting these classes.",
     "properties": {
@@ -354,6 +720,35 @@
     "title": "ClientErrorReport",
     "type": "object"
    },
+   "CurrentChallenge": {
+    "properties": {
+     "challenge": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/WeeklyChallenge"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "week_start_date": {
+      "title": "Week Start Date",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "week_start_date",
+     "challenge"
+    ],
+    "title": "CurrentChallenge",
+    "type": "object"
+   },
    "CurrentSeason": {
     "description": "The current season and the one after it.\n\n⚠️ MEASURED, NOT DESIGNED — read off a live response and cross-checked\nagainst the handler, which has a single return with eight literal keys.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
     "properties": {
@@ -440,6 +835,13 @@
      "label"
     ],
     "title": "DpmLeaderRow",
+    "type": "object"
+   },
+   "EmptyHighlights": {
+    "additionalProperties": false,
+    "description": "`highlights: {}` — the round produced no player rows at all.\n\n⛔ ITS OWN MODEL, BECAUSE OPTIONAL FIELDS SERIALISE AS NULLS. Making the\nthree entries optional on `VizHighlights` stopped the 500, but FastAPI\nthen sent `{\"most_damage\": null, \"most_kills\": null, \"mvp\": null}` where\nthe handler had written `{}` — a payload change on the very state the\noptionality was added for (Codex on #830).\n\n⚠️ AND HERE THE UNION ORDER IS LOAD-BEARING, unlike the day's other\nunions. `VizHighlights` has three optional fields, so it accepts `{}` too;\nwritten first it wins and re-introduces the three nulls. `EmptyHighlights`\nmust come first, and `extra=\"forbid\"` keeps it from swallowing a populated\npayload. Measured both orders before choosing.",
+    "properties": {},
+    "title": "EmptyHighlights",
     "type": "object"
    },
    "HTTPValidationError": {
@@ -529,6 +931,516 @@
      "unit"
     ],
     "title": "HallOfFameRow",
+    "type": "object"
+   },
+   "HeatmapCell": {
+    "description": "One grid cell. Coordinates are grid indices, not world units.",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "x": {
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "count"
+    ],
+    "title": "HeatmapCell",
+    "type": "object"
+   },
+   "HitRegionRow": {
+    "description": "One player's hit distribution across the four body regions.\n\n⭐ `head_pct` is `float`, NOT `int | float`, and the reason is worth\nseparating from the similar-looking cases elsewhere on this branch. The\nhandler writes `round(head * 100.0 / total, 1) if total > 0 else 0` — an\nint on the else branch — but the query carries `HAVING COUNT(*) >= 10`\nand `total_hits` IS that COUNT, so `total` cannot be 0. This is a\nSTRUCTURAL guarantee from the query in the same function, not a claim\nabout today's data. Compare `LeaderboardRow.kills`, where the only\nguarantee was \"no null rows exist right now\" and the type had to widen.\n\n`name` is `MAX(attacker_name)` passed through raw, with no\n`IS NOT NULL` guard (unlike `/proximity/players`, which has one), so it\nis nullable.",
+    "properties": {
+     "arms": {
+      "title": "Arms",
+      "type": "integer"
+     },
+     "body": {
+      "title": "Body",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "head": {
+      "title": "Head",
+      "type": "integer"
+     },
+     "head_pct": {
+      "title": "Head Pct",
+      "type": "number"
+     },
+     "legs": {
+      "title": "Legs",
+      "type": "integer"
+     },
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "total_damage": {
+      "title": "Total Damage",
+      "type": "integer"
+     },
+     "total_hits": {
+      "title": "Total Hits",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "head",
+     "arms",
+     "body",
+     "legs",
+     "head_pct",
+     "total_hits",
+     "total_damage"
+    ],
+    "title": "HitRegionRow",
+    "type": "object"
+   },
+   "HitRegionScope": {
+    "additionalProperties": false,
+    "description": "The scope echo for `/proximity/hit-regions`, which has ONE MORE FIELD.\n\n⛔ THE FAILURE THIS MODULE'S TEST FILE IS NAMED AFTER, IN MY OWN CODE. That\nhandler writes `scope[\"weapon_id\"] = int(weapon_id)` when the filter is\nused, `ProximityScope` does not declare it, and `response_model` therefore\nDROPS it — the client gets results narrowed to one weapon while the echoed\nscope no longer says which (Codex on #830). The scope object exists to let\na caller check what the answer was filtered to; silently removing a filter\nfrom it is the worst field to lose.\n\nA separate member rather than an optional field on `ProximityScope`,\nbecause the key is absent when no weapon filter was sent and an optional\nfield would put `\"weapon_id\": null` on every other response.",
+    "properties": {
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player Guid"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     },
+     "weapon_id": {
+      "title": "Weapon Id",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "session_date",
+     "map_name",
+     "round_number",
+     "round_start_unix",
+     "player_guid",
+     "weapon_id"
+    ],
+    "title": "HitRegionScope",
+    "type": "object"
+   },
+   "HotzoneCell": {
+    "description": "One grid cell of the combat heatmap.\n\n⚠️ A THIRD `{x, y, count, …}` SHAPE IN THIS FAMILY, and all three differ:\n`HeatmapCell` (player-heatmap) has three fields, `AimCell` adds `rose`,\n`mean_yaw` and `r`, and this one splits the count into kills and deaths.\nA shared renderer that assumes one of them silently misreads the others.",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "x": {
+      "title": "X",
+      "type": "integer"
+     },
+     "y": {
+      "title": "Y",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "x",
+     "y",
+     "count",
+     "kills",
+     "deaths"
+    ],
+    "title": "HotzoneCell",
+    "type": "object"
+   },
+   "HotzonesReady": {
+    "additionalProperties": false,
+    "description": "…and TEN keys once a map was selected, whether or not it had rows.\n\n⚠️ `status` is NOT the discriminator between these two shapes: a scope\nnaming a map that has no engagements answers ten keys with\n`status: \"prototype\"`, while an empty scope answers eight with the same\nstatus. Measured on `?map_name=ni_take_mape` versus\n`?session_date=2020-01-01`.",
+    "properties": {
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HotzoneCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Message"
+     },
+     "range_days": {
+      "title": "Range Days",
+      "type": "integer"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "source": {
+      "title": "Source",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "ready",
+     "message",
+     "range_days",
+     "generated_at",
+     "scope",
+     "map_name",
+     "hotzones",
+     "grid_size",
+     "source"
+    ],
+    "title": "HotzonesReady",
+    "type": "object"
+   },
+   "HotzonesUnready": {
+    "additionalProperties": false,
+    "description": "The EIGHT-key answer: no map could be selected for this scope.\n\n⛔ `status` is \"prototype\" here — the stub meta the handler starts from —\nand \"error\" when the query raised, but BOTH carry the same eight keys. So\nthe status, not the shape, is what tells a caller which happened, and a\nconsumer that branches on key presence cannot tell a scope with no data\nfrom a database failure.\n\n`message` carries the stub's own sentence in both cases, so it is a string\nhere while the ready shape sets it to null. That inversion is measured,\nnot designed: \"Proximity pipeline not connected.\" on the unready branch,\n`null` on the working one.",
+    "properties": {
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HotzoneCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "message": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Message"
+     },
+     "range_days": {
+      "title": "Range Days",
+      "type": "integer"
+     },
+     "ready": {
+      "title": "Ready",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "ready",
+     "message",
+     "range_days",
+     "generated_at",
+     "scope",
+     "map_name",
+     "hotzones"
+    ],
+    "title": "HotzonesUnready",
+    "type": "object"
+   },
+   "LastSession": {
+    "description": "The most recent gaming session, as `/stats/last-session` returns it.\n\n⚠️ `warnings`, `stats_checks` and `unassigned_players` were EMPTY in all\neight sampled sessions, so none of their element shapes came from the\nsample. `warnings` and `stats_checks` are f-strings built in the handler;\n`unassigned_players` carries `SessionPlayerRow`, which was then confirmed\nby forcing the branch that fills it. An empty list tells you a field's\nname and nothing about its contents.\n\n`map_counts` is keyed by map name, so it is a dict, not a model.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "gaming_session_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gaming Session Id"
+     },
+     "map_counts": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Map Counts",
+      "type": "object"
+     },
+     "maps": {
+      "items": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ]
+      },
+      "title": "Maps",
+      "type": "array"
+     },
+     "matches": {
+      "items": {
+       "$ref": "#/components/schemas/SessionMatchRow"
+      },
+      "title": "Matches",
+      "type": "array"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "scoring": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ScoringAvailable"
+       },
+       {
+        "$ref": "#/components/schemas/ScoringUnavailable"
+       }
+      ],
+      "title": "Scoring"
+     },
+     "stats_checks": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Stats Checks",
+      "type": "array"
+     },
+     "teams": {
+      "items": {
+       "$ref": "#/components/schemas/SessionTeam"
+      },
+      "title": "Teams",
+      "type": "array"
+     },
+     "unassigned_players": {
+      "items": {
+       "$ref": "#/components/schemas/SessionPlayerRow"
+      },
+      "title": "Unassigned Players",
+      "type": "array"
+     },
+     "warnings": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+     }
+    },
+    "required": [
+     "date",
+     "player_count",
+     "rounds",
+     "maps",
+     "map_counts",
+     "matches",
+     "scoring",
+     "warnings",
+     "teams",
+     "unassigned_players",
+     "stats_checks",
+     "gaming_session_id"
+    ],
+    "title": "LastSession",
+    "type": "object"
+   },
+   "LeaderboardRow": {
+    "description": "One row of the generic stat leaderboard, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED: 635 rows over all 9 valid `stat` values × all 4\ndistinct `period` branches (`7d`, `30d`, `season`, and the else-branch\nall-time). Zero nulls in every field.\n\n⚠️ `kills` and `deaths` are `int | None`, AND THIS IS A CORRECTION. They\nwere typed `int` on the argument that `SUM(x)` is null only for an\nall-null group, that there is no null `kills` row in the table, and that\nwidening \"buys nothing but a null check on every consumer\". Comparing this\nfile against the frontend's hand-written types showed the flaw: exactly\nthe same evidence — column nullable, zero nulls observed — had produced\n`RecentRound.map_name: str | None` two endpoints away. The rule cannot be\n\"it depends on how I felt\".\n\n⛔ The tiebreak is which mistake is recoverable. A `| None` the data never\nexercises costs one `?? 0` on the consumer. An `int` the data eventually\ncontradicts is a 500 on a page that was rendering, and no test can catch\nit — only the table can. A response_model is a promise about what the\nserver MAY send, and with a nullable column passed through raw (unlike\n`value` and `kd` three lines away, which the handler coalesces) the server\nmay send null.\n\n`value` is `float` and not `int | float`: the handler's `else 0` branch\n(an int) needs a NULL `SUM`, unreachable for the same reason.",
+    "properties": {
+     "deaths": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deaths"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "kd": {
+      "title": "Kd",
+      "type": "number"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "rank",
+     "guid",
+     "name",
+     "value",
+     "rounds",
+     "kills",
+     "deaths",
+     "kd"
+    ],
+    "title": "LeaderboardRow",
     "type": "object"
    },
    "LineupChange": {
@@ -631,6 +1543,92 @@
     "title": "LinkPlayerRequest",
     "type": "object"
    },
+   "LinkageAvailable": {
+    "description": "The linkage assessment came back.\n\n⚠️ `metrics` IS AN OPEN DICT ON PURPOSE. The assessor starts it empty and\nfills it per query, so a failed subquery yields PARTIAL metrics with the\nstatus set to \"error\" — verified in\n`bot/services/round_linkage_anomaly_service.py`, not assumed from the\nrouter's comment. A fixed model with the eleven keys the healthy path\nreturns would answer 500 exactly when the system is already degraded.\n\n`status` carries the assessor's own verdict and is read with `.get()`, so\nit is nullable here. It is load-bearing: an empty `breaches` list proves\nnothing when the status is \"error\", and without this field the frontend's\npartial-assessment guard cannot fire (Codex on #809).",
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     },
+     "breach_count": {
+      "title": "Breach Count",
+      "type": "integer"
+     },
+     "breaches": {
+      "items": {
+       "$ref": "#/components/schemas/LinkageBreach"
+      },
+      "title": "Breaches",
+      "type": "array"
+     },
+     "metrics": {
+      "additionalProperties": true,
+      "title": "Metrics",
+      "type": "object"
+     },
+     "status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Status"
+     }
+    },
+    "required": [
+     "available",
+     "status",
+     "metrics",
+     "breach_count",
+     "breaches"
+    ],
+    "title": "LinkageAvailable",
+    "type": "object"
+   },
+   "LinkageBreach": {
+    "description": "One threshold the linkage assessor found breached. Every field comes\nfrom a `.get()` on a dict this router did not build, so all three are\nnullable — none was null in the live sample (there were no breaches at\nall, which is the same thing as no evidence).",
+    "properties": {
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Metric"
+     },
+     "threshold": {
+      "title": "Threshold"
+     },
+     "value": {
+      "title": "Value"
+     }
+    },
+    "required": [
+     "metric"
+    ],
+    "title": "LinkageBreach",
+    "type": "object"
+   },
+   "LinkageUnavailable": {
+    "description": "The assessment raised or came back as something other than a dict:\n`{\"available\": false}`, a SINGLE key.\n\n⛔ Not `LinkageAvailable` with optional fields — that would put\n`\"metrics\": null` and `\"breach_count\": null` on the wire for a payload the\nhandler deliberately keeps to one key.",
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "available"
+    ],
+    "title": "LinkageUnavailable",
+    "type": "object"
+   },
    "LiveEventBatch": {
     "properties": {
      "events": {
@@ -681,6 +1679,236 @@
     "title": "LiveEventIn",
     "type": "object"
    },
+   "LongestSession": {
+    "description": "The season's biggest gaming session.\n\n⛔ TYPED FROM THE CODE, NOT FROM THE RUNNING SERVER — and that distinction\ndecided the type. The dev server answers `\"longest_session\": null`, which\nreads like a broken query, and typing from it would have pinned this field\nto null forever. It is not broken: the same request through the code in the\ntree answers `{\"rounds\": 23, \"date\": \"2026-07-18\"}`. The server has been up\nsince 2026-08-28 06:57 and the fix landed at 13:08 the same day, so the\nprocess is running a handler six hours older than the file.\n⚠️ A live endpoint is evidence about a DEPLOYED BUILD, not about the code\nyou are typing. Check the service start time against the file's git log\nbefore trusting a sample.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rounds",
+     "date"
+    ],
+    "title": "LongestSession",
+    "type": "object"
+   },
+   "MapObjectiveRecord": {
+    "description": "The fastest completion recorded for one map.",
+    "properties": {
+     "fastest_seconds": {
+      "title": "Fastest Seconds",
+      "type": "integer"
+     },
+     "fastest_time": {
+      "title": "Fastest Time",
+      "type": "string"
+     },
+     "gaming_session_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gaming Session Id"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "played": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Played"
+     },
+     "winner_side": {
+      "title": "Winner Side",
+      "type": "string"
+     },
+     "winner_team": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Team"
+     }
+    },
+    "required": [
+     "map_name",
+     "fastest_seconds",
+     "fastest_time",
+     "played",
+     "winner_team",
+     "winner_side",
+     "gaming_session_id"
+    ],
+    "title": "MapObjectiveRecord",
+    "type": "object"
+   },
+   "MapObjectiveRecords": {
+    "description": "⛔ THREE STATES, NOT TWO, AND NONE OF THEM DERIVED FROM LENGTH.\n\nThe handler catches its own exception and answers 200. Before this it said\n`status: \"error\"` on failure and `\"ok\"` otherwise, which left the page\nderiving \"no records\" from `records.length === 0` — and that reads a\nmeasured emptiness and an unmeasured one the same way.\n\n  ok           the query ran and returned records\n  no_data      the query ran and there are none\n  unavailable  the query failed; the empty list means we do not know\n\nA plain string, not an enum: a state added later must not be filtered out\nby the schema before anyone sees it.",
+    "properties": {
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "records": {
+      "items": {
+       "$ref": "#/components/schemas/MapObjectiveRecord"
+      },
+      "title": "Records",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "records"
+    ],
+    "title": "MapObjectiveRecords",
+    "type": "object"
+   },
+   "MapStats": {
+    "description": "One map's aggregate line.\n\n⚠️ THIS ENDPOINT USED TO SWALLOW ITS EXCEPTION AND RETURN `[]`, which made\na failed query indistinguishable from a database with no maps. Three\nsibling endpoints solved that with an explicit `status` field; this one\nreturns a bare ARRAY read by four callers, so a wrapper would reshape the\npayload for all of them.\n\n⭐ The third option was the right one, and it came from the workstream that\nrenders this: the ambiguity was never a missing `status`, it was the\n`except` turning a failure into a valid answer. Removing it restores `[]`\nto meaning exactly one thing, with HTTP carrying the other — no new\nchannel, no reshaped payload, and no field the OpenAPI generator cannot\nsee.\n\n⚠️ TYPED FROM THE HANDLER, NOT THE SAMPLE. Every numeric field here passes\nthrough a `x or 0` / `int(x) if x else 0` guard, so they are genuinely\nnon-null — the handler already decided that. `last_played` is the one that\ndoes NOT: `row[8]` goes through untouched and `rounds.round_date` is a\nnullable column, so it is typed nullable even though no live row shows it.",
+    "properties": {
+     "allies_win_rate": {
+      "title": "Allies Win Rate",
+      "type": "number"
+     },
+     "allies_wins": {
+      "title": "Allies Wins",
+      "type": "integer"
+     },
+     "avg_dpm": {
+      "title": "Avg Dpm",
+      "type": "number"
+     },
+     "avg_duration": {
+      "title": "Avg Duration",
+      "type": "integer"
+     },
+     "axis_win_rate": {
+      "title": "Axis Win Rate",
+      "type": "number"
+     },
+     "axis_wins": {
+      "title": "Axis Wins",
+      "type": "integer"
+     },
+     "grenade_kills": {
+      "title": "Grenade Kills",
+      "type": "integer"
+     },
+     "last_played": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Played"
+     },
+     "matches_played": {
+      "title": "Matches Played",
+      "type": "integer"
+     },
+     "max_duration": {
+      "title": "Max Duration",
+      "type": "integer"
+     },
+     "min_duration": {
+      "title": "Min Duration",
+      "type": "integer"
+     },
+     "mortar_kills": {
+      "title": "Mortar Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "panzer_kills": {
+      "title": "Panzer Kills",
+      "type": "integer"
+     },
+     "total_deaths": {
+      "title": "Total Deaths",
+      "type": "integer"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "total_rounds": {
+      "title": "Total Rounds",
+      "type": "integer"
+     },
+     "unique_players": {
+      "title": "Unique Players",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "total_rounds",
+     "matches_played",
+     "allies_wins",
+     "axis_wins",
+     "allies_win_rate",
+     "axis_win_rate",
+     "avg_duration",
+     "min_duration",
+     "max_duration",
+     "last_played",
+     "total_kills",
+     "total_deaths",
+     "avg_dpm",
+     "unique_players",
+     "grenade_kills",
+     "panzer_kills",
+     "mortar_kills"
+    ],
+    "title": "MapStats",
+    "type": "object"
+   },
    "MostActivePlayer": {
     "description": "Null when the window produced no rows at all, never a zero-round player.",
     "properties": {
@@ -698,6 +1926,240 @@
      "rounds"
     ],
     "title": "MostActivePlayer",
+    "type": "object"
+   },
+   "PitchHistogram": {
+    "description": "⚠️ `edges` has ONE MORE ENTRY THAN `counts` — 7 edges, 6 bins. A\nconsumer that zips them silently drops the last bin.",
+    "properties": {
+     "counts": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Counts",
+      "type": "array"
+     },
+     "edges": {
+      "items": {
+       "type": "integer"
+      },
+      "title": "Edges",
+      "type": "array"
+     }
+    },
+    "required": [
+     "edges",
+     "counts"
+    ],
+    "title": "PitchHistogram",
+    "type": "object"
+   },
+   "PlayerAim": {
+    "description": "Where a player aims on one map, and how tightly.\n\nAn out-of-range scope answers 200 with `total: 0`, an empty `hotzones`\nlist and `narrative: [\"0 shots tracked\"]` — an answer, not an error.\n`map_name` and `player_guid` are both REQUIRED parameters and each\nanswers 400 when missing, so neither can be null in the payload.",
+    "properties": {
+     "circular": {
+      "$ref": "#/components/schemas/AimCircularStats"
+     },
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/AimCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "narrative": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Narrative",
+      "type": "array"
+     },
+     "pitch_hist": {
+      "$ref": "#/components/schemas/PitchHistogram"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "sampled": {
+      "title": "Sampled",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     },
+     "yaw_bucket_width_deg": {
+      "title": "Yaw Bucket Width Deg",
+      "type": "number"
+     },
+     "yaw_buckets": {
+      "title": "Yaw Buckets",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "status",
+     "map_name",
+     "player_guid",
+     "player_name",
+     "grid_size",
+     "total",
+     "sampled",
+     "scope",
+     "hotzones",
+     "yaw_buckets",
+     "yaw_bucket_width_deg",
+     "pitch_hist",
+     "circular",
+     "narrative"
+    ],
+    "title": "PlayerAim",
+    "type": "object"
+   },
+   "PlayerHeatmap": {
+    "description": "Per-player combat heatmap for one map, in one of five modes.\n\n⚠️ EVERY PARAMETER THAT MATTERS IS REQUIRED AND REJECTED LOUDLY, which is\nthe opposite of the pattern found elsewhere on this branch: `map_name`,\n`mode` and `player_guid` each answer 400 when missing, an unknown `mode`\nanswers 400 with the list of valid ones, and `weapon_id` combined with\n`mode=presence` answers 400 rather than silently dropping the filter. That\nlast one is the behaviour every ignored parameter should have had.\n\nAn unknown `player_guid` or an out-of-range scope answers 200 with\n`hotzones: []` and `total: 0` — an empty result, not an error, and\n`player_name` falls back to `#` plus the first eight characters of the\nguid, so it is never null.",
+    "properties": {
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HeatmapCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "sampled": {
+      "title": "Sampled",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "status",
+     "map_name",
+     "mode",
+     "grid_size",
+     "player_guid",
+     "player_name",
+     "hotzones",
+     "total",
+     "sampled",
+     "scope"
+    ],
+    "title": "PlayerHeatmap",
+    "type": "object"
+   },
+   "PlayerHeatmapKillsOnly": {
+    "description": "`mode=player_dies` only — it carries one EXTRA key.\n\n⛔ Measured across all five modes: `kills_from`, `victims_die`,\n`presence` and `aim` return ten keys; `player_dies` returns ELEVEN. World\nand suicide deaths are not tracked, so that mode reports\n`coverage: \"kills_only\"` to say the map is deaths-by-enemy, not all\ndeaths. A single model with `coverage: str | None = None` would put\n`\"coverage\": null` on the other four modes, which reads as \"coverage\nunknown\" — the opposite of the truth, since for them the question does\nnot arise. Hence a union, and `exclude_none` is NOT an option here\nbecause `scope` uses null as a value throughout.",
+    "properties": {
+     "coverage": {
+      "title": "Coverage",
+      "type": "string"
+     },
+     "grid_size": {
+      "title": "Grid Size",
+      "type": "integer"
+     },
+     "hotzones": {
+      "items": {
+       "$ref": "#/components/schemas/HeatmapCell"
+      },
+      "title": "Hotzones",
+      "type": "array"
+     },
+     "map_name": {
+      "title": "Map Name",
+      "type": "string"
+     },
+     "mode": {
+      "title": "Mode",
+      "type": "string"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "sampled": {
+      "title": "Sampled",
+      "type": "boolean"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "status",
+     "map_name",
+     "mode",
+     "grid_size",
+     "player_guid",
+     "player_name",
+     "hotzones",
+     "total",
+     "sampled",
+     "scope",
+     "coverage"
+    ],
+    "title": "PlayerHeatmapKillsOnly",
     "type": "object"
    },
    "PlayerWeapons": {
@@ -729,6 +2191,669 @@
      "weapons"
     ],
     "title": "PlayerWeapons",
+    "type": "object"
+   },
+   "ProxFormula": {
+    "description": "The scoring formula itself: weights, categories, metrics.\n\n⛔ THIS IS THE ONE ENDPOINT IN THE FAMILY WHERE A WRONG TYPE MISSTATES THE\nMETRIC RATHER THAN EMPTYING A PANEL. Everything here is an explanation of\nwhat a score MEANS, so a dropped category or a coerced weight does not\nlook broken — it looks like a different formula.\n\n`{\"status\": \"ok\", **get_formula_config()}` — the body is the service's own\nconfig, spread into the response, so the shape follows the formula and not\nthis file.",
+    "properties": {
+     "categories": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/ProxFormulaCategory"
+      },
+      "title": "Categories",
+      "type": "object"
+     },
+     "category_weights": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Category Weights",
+      "type": "object"
+     },
+     "min_engagements": {
+      "title": "Min Engagements",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "version",
+     "min_engagements",
+     "category_weights",
+     "categories"
+    ],
+    "title": "ProxFormula",
+    "type": "object"
+   },
+   "ProxFormulaCategory": {
+    "description": "One scoring category, with the metrics that make it up.\n\n⭐ `metrics` IS AN OPEN DICT ON PURPOSE, and so is `categories` above it.\nThis endpoint exists so the page can CITE the formula instead of keeping\nits own copy of the weights. If the schema pinned the metric names, it\nwould become a second copy — and the day a metric is added or retired, the\nendpoint that publishes the formula would answer 500 or quietly drop it,\nwhich is the failure mode the endpoint was built to prevent.",
+    "properties": {
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "metrics": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/ProxFormulaMetric"
+      },
+      "title": "Metrics",
+      "type": "object"
+     },
+     "weight_in_overall": {
+      "title": "Weight In Overall",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "description",
+     "weight_in_overall",
+     "metrics"
+    ],
+    "title": "ProxFormulaCategory",
+    "type": "object"
+   },
+   "ProxFormulaMetric": {
+    "description": "One metric inside a category of the published formula.",
+    "properties": {
+     "invert": {
+      "title": "Invert",
+      "type": "boolean"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "weight": {
+      "title": "Weight",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "weight",
+     "invert"
+    ],
+    "title": "ProxFormulaMetric",
+    "type": "object"
+   },
+   "ProxMetricBreakdown": {
+    "description": "How one metric contributed to one player's category score.\n\n⚠️ `raw` and `percentile` are nullable — a player with no measurement for\nthat metric still appears in the breakdown, with the contribution zeroed,\nrather than vanishing from it.\n\n⛔ A LIVE METRIC HAS FIVE KEYS; A RETIRED ONE HAS SIX. `retired_in` is\npresent on 364 of 504 sampled entries — a metric kept in the breakdown for\ncontinuity but no longer carrying weight names the version that retired\nit. Absent means \"still live\"; a null would read as \"retirement unknown\",\nwhich is a different claim.\n\n⚠️ THE FIRST VERSION OF THIS MODEL GOT IT WRONG IN EXACTLY THE WAY THIS\nDOCSTRING WARNS ABOUT. `retired_in: str | None = None` put\n`\"retired_in\": null` on every live metric — 140 of them — and the\nbefore/after comparison caught it. `exclude_none` is not the fix either:\n`raw` and `percentile` use null as a VALUE (a player with no measurement\nstill appears, with the contribution zeroed) and would have been stripped\nalong with it. Hence a union, the same shape as `coverage` on\n`/proximity/player-heatmap`.",
+    "properties": {
+     "contribution": {
+      "title": "Contribution",
+      "type": "number"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "percentile": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Percentile"
+     },
+     "raw": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw"
+     },
+     "weight": {
+      "title": "Weight",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "raw",
+     "percentile",
+     "weight",
+     "contribution"
+    ],
+    "title": "ProxMetricBreakdown",
+    "type": "object"
+   },
+   "ProxMetricBreakdownRetired": {
+    "description": "A metric still shown but no longer weighted — it names its retirement.",
+    "properties": {
+     "contribution": {
+      "title": "Contribution",
+      "type": "number"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "percentile": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Percentile"
+     },
+     "raw": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Raw"
+     },
+     "retired_in": {
+      "title": "Retired In",
+      "type": "string"
+     },
+     "weight": {
+      "title": "Weight",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "raw",
+     "percentile",
+     "weight",
+     "contribution",
+     "retired_in"
+    ],
+    "title": "ProxMetricBreakdownRetired",
+    "type": "object"
+   },
+   "ProxPlayerScore": {
+    "description": "One player's proximity score, with the arithmetic that produced it.",
+    "properties": {
+     "breakdown": {
+      "additionalProperties": {
+       "additionalProperties": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/ProxMetricBreakdownRetired"
+         },
+         {
+          "$ref": "#/components/schemas/ProxMetricBreakdown"
+         }
+        ]
+       },
+       "type": "object"
+      },
+      "title": "Breakdown",
+      "type": "object"
+     },
+     "engagements": {
+      "title": "Engagements",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "metric_weight_coverage": {
+      "title": "Metric Weight Coverage",
+      "type": "number"
+     },
+     "metrics_scored": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Metrics Scored",
+      "type": "object"
+     },
+     "missing_metrics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Missing Metrics",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "prox_combat": {
+      "title": "Prox Combat",
+      "type": "number"
+     },
+     "prox_gamesense": {
+      "title": "Prox Gamesense",
+      "type": "number"
+     },
+     "prox_overall": {
+      "title": "Prox Overall",
+      "type": "number"
+     },
+     "prox_radar": {
+      "items": {
+       "$ref": "#/components/schemas/ProxRadarPoint"
+      },
+      "title": "Prox Radar",
+      "type": "array"
+     },
+     "prox_team": {
+      "title": "Prox Team",
+      "type": "number"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     },
+     "tracks": {
+      "title": "Tracks",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "rank",
+     "engagements",
+     "tracks",
+     "prox_combat",
+     "prox_team",
+     "prox_gamesense",
+     "prox_overall",
+     "prox_radar",
+     "breakdown",
+     "metrics_scored",
+     "metric_weight_coverage",
+     "missing_metrics"
+    ],
+    "title": "ProxPlayerScore",
+    "type": "object"
+   },
+   "ProxRadarPoint": {
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "value"
+    ],
+    "title": "ProxRadarPoint",
+    "type": "object"
+   },
+   "ProxScores": {
+    "description": "Proximity scores for the current scope.\n\n⚠️ `player_count` is the count BEFORE `limit`, like `total` on\n`/api/uploads`: `?limit=1` answers one player with `player_count: 14`.\nA consumer that reads it as \"how many rows are below\" gets 14 and renders\none.",
+    "properties": {
+     "formula_version": {
+      "title": "Formula Version",
+      "type": "string"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/ProxPlayerScore"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "quality": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ProxScoresQualityDegraded"
+       },
+       {
+        "$ref": "#/components/schemas/ProxScoresQuality"
+       }
+      ],
+      "title": "Quality"
+     },
+     "range_days": {
+      "title": "Range Days",
+      "type": "integer"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProxScoresScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "version": {
+      "title": "Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "version",
+     "formula_version",
+     "quality",
+     "range_days",
+     "scope",
+     "player_count",
+     "players"
+    ],
+    "title": "ProxScores",
+    "type": "object"
+   },
+   "ProxScoresQuality": {
+    "description": "Whether the ranking can be trusted, carried with every response.\n\n⭐ `ranking_available` is the field that separates \"nobody scored\" from\n\"we could not score\": an empty `players` list with\n`ranking_available: false` is the second. Always present so the contract\ndoes not depend on the dataset (Codex on #512).\n\n`failed_sources` is empty in every sampled response; its element type is\nthe service's `s[\"source\"]`, a string.",
+    "properties": {
+     "below_coverage_dropped": {
+      "title": "Below Coverage Dropped",
+      "type": "integer"
+     },
+     "failed_sources": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Sources",
+      "type": "array"
+     },
+     "metric_weight_coverage": {
+      "title": "Metric Weight Coverage",
+      "type": "number"
+     },
+     "ranking_available": {
+      "title": "Ranking Available",
+      "type": "boolean"
+     },
+     "successful_sources": {
+      "title": "Successful Sources",
+      "type": "integer"
+     },
+     "total_sources": {
+      "title": "Total Sources",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "ranking_available",
+     "successful_sources",
+     "total_sources",
+     "failed_sources",
+     "metric_weight_coverage",
+     "below_coverage_dropped"
+    ],
+    "title": "ProxScoresQuality",
+    "type": "object"
+   },
+   "ProxScoresQualityDegraded": {
+    "additionalProperties": false,
+    "description": "⛔ P1: THE SHAPE THAT ONLY EXISTS WHEN SOMETHING IS ALREADY BROKEN.\n\n`prox_scoring._degraded()` returns a deliberate 200 with\n`status: \"degraded\"` and a quality object of FIVE keys — `_ok()` adds\n`below_coverage_dropped`, `_degraded()` does not. Requiring that field\nmade FastAPI reject the degraded payload with a 500, hiding exactly the\nfailure metadata and empty ranking the caller is meant to receive (Codex\non #830).\n\n⭐ SECOND TIME THIS SHAPE OF BUG APPEARED IN ONE DAY, and I found the\nfirst one myself: `linkage.metrics` on `/system/overview` is partial when\na subquery fails, and pinning the healthy key set would 500 precisely when\nthe page is needed most. Finding it there did not stop me writing it here.\n\nModelled as a union member rather than fixed in the service, so the wire is\nunchanged and nothing about the degraded payload moves; the absence is\nalso what the frontend's hand-written type already expects\n(`below_coverage_dropped?: number`).",
+    "properties": {
+     "failed_sources": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Sources",
+      "type": "array"
+     },
+     "metric_weight_coverage": {
+      "title": "Metric Weight Coverage",
+      "type": "number"
+     },
+     "ranking_available": {
+      "title": "Ranking Available",
+      "type": "boolean"
+     },
+     "successful_sources": {
+      "title": "Successful Sources",
+      "type": "integer"
+     },
+     "total_sources": {
+      "title": "Total Sources",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "ranking_available",
+     "successful_sources",
+     "total_sources",
+     "failed_sources",
+     "metric_weight_coverage"
+    ],
+    "title": "ProxScoresQualityDegraded",
+    "type": "object"
+   },
+   "ProxScoresScope": {
+    "description": "⚠️ NOT the same shape as `ProximityScope` in proximity_positions.py.\n\nThis one carries `scoped` and has NO `player_guid`; that one carries\n`player_guid` and no `scoped`. Two endpoints in the same family echo their\nscope differently, so a shared helper that reads one shape off the other\nfinds a missing key rather than a null.",
+    "properties": {
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "scoped": {
+      "title": "Scoped",
+      "type": "boolean"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     }
+    },
+    "required": [
+     "scoped",
+     "session_date",
+     "map_name",
+     "round_number",
+     "round_start_unix"
+    ],
+    "title": "ProxScoresScope",
+    "type": "object"
+   },
+   "ProximityHitRegions": {
+    "properties": {
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/HitRegionRow"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "scope": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/HitRegionScope"
+       },
+       {
+        "$ref": "#/components/schemas/ProximityScope"
+       }
+      ],
+      "title": "Scope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "scope",
+     "players"
+    ],
+    "title": "ProximityHitRegions",
+    "type": "object"
+   },
+   "ProximityPlayerRef": {
+    "description": "A player in the scope, for the page's picker.",
+    "properties": {
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "guid",
+     "name"
+    ],
+    "title": "ProximityPlayerRef",
+    "type": "object"
+   },
+   "ProximityPlayers": {
+    "description": "Who appears in the current scope — the backbone of the proximity page.\n\n`guid` and `name` are `str(...)` in the handler and the row is skipped\nunless both are truthy, so neither can be null here. That is a HANDLER\nguarantee, not a schema one.",
+    "properties": {
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/ProximityPlayerRef"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "scope": {
+      "$ref": "#/components/schemas/ProximityScope"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "scope",
+     "players"
+    ],
+    "title": "ProximityPlayers",
+    "type": "object"
+   },
+   "ProximityScope": {
+    "description": "What the answer was actually scoped to, echoed back.\n\n⭐ THIS OBJECT IS THE REASON THE SCOPE BUG WAS INVISIBLE. Every field is\nnullable, and a null means \"not filtered on\" — so a panel that ignores a\nparameter still echoes the scope it was ASKED for, and the number beside\nit looks like it belongs to that scope. `/proximity/revives` shipped a\n30-day aggregate under a one-round label for exactly this reason (fixed in\n`cc8085ef`, 1,873 revives where the round had 90). Typing it does not fix\nthat class; only comparing counts across scopes does.",
+    "properties": {
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player Guid"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "session_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Session Date"
+     }
+    },
+    "required": [
+     "session_date",
+     "map_name",
+     "round_number",
+     "round_start_unix",
+     "player_guid"
+    ],
+    "title": "ProximityScope",
     "type": "object"
    },
    "QuickLeaders": {
@@ -767,6 +2892,102 @@
      "errors"
     ],
     "title": "QuickLeaders",
+    "type": "object"
+   },
+   "RecentRound": {
+    "description": "One entry in the round picker.\n\n⛔ TYPED FROM THE SCHEMA AND THE HANDLER, NOT FROM A SAMPLE. Every live\nresponse has these fields populated, and three of them are nullable\nanyway: `rounds.map_name`, `round_date` and `round_number` all allow NULL,\nand the handler writes `str(row[2]) if row[2] else None` for the date\noutright. Sampling shows the branches that fired; the schema shows the\nones that can.",
+    "properties": {
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "round_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Date"
+     },
+     "round_label": {
+      "title": "Round Label",
+      "type": "string"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     }
+    },
+    "required": [
+     "id",
+     "map_name",
+     "round_date",
+     "round_number",
+     "round_label",
+     "player_count"
+    ],
+    "title": "RecentRound",
+    "type": "object"
+   },
+   "RecordEntry": {
+    "description": "One record holder in one category, as this endpoint returns it.\n\n⚠️ MEASURED, NOT DESIGNED. `value` is `int` for the counting categories and\n`float` for `accuracy`, `xp` and `match_xp` — the union keeps each on the\nwire exactly as the query produced it. Widening it to a bare `float` would\nrewrite `\"value\": 5994` as `\"value\": 5994.0` for every counting category:\na silent wire change on a page nobody would think to re-check.\n\n`map` and `date` are `str` and NOT nullable, even though\n`information_schema` reports all three columns of the `player_match_stats`\nVIEW as `is_nullable = YES`. That report is about aggregates, not about\ndata: the view produces them as `max(map_name)` / `min(round_date)` over\ncolumns that are `NOT NULL` in `player_comprehensive_stats`, and an\naggregate over a non-empty group cannot be null. Measured: 0 nulls in\n6,863 view rows.\n\n⛔ This is the MIRROR of the `LEFT JOIN` trap in `SessionSummary`. There a\n`NOT NULL` column arrives null because there was no row to join; here a\n\"nullable\" column can never be null because the aggregate has one. The\nschema is wrong in BOTH cases, in opposite directions — which is why the\nrule is `schema -> handler -> what the query does to it`, and never the\nschema alone.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "number"
+       }
+      ],
+      "title": "Value"
+     }
+    },
+    "required": [
+     "player",
+     "value",
+     "map",
+     "date"
+    ],
+    "title": "RecordEntry",
     "type": "object"
    },
    "RenderRequest": {
@@ -831,6 +3052,138 @@
      "size"
     ],
     "title": "ResumableInit",
+    "type": "object"
+   },
+   "RoundAwardCategory": {
+    "properties": {
+     "awards": {
+      "items": {
+       "$ref": "#/components/schemas/RoundAwardEntry"
+      },
+      "title": "Awards",
+      "type": "array"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "emoji",
+     "awards"
+    ],
+    "title": "RoundAwardCategory",
+    "type": "object"
+   },
+   "RoundAwardEntry": {
+    "description": "One award within a category.\n\n`value` is a PRE-FORMATTED string and `numeric` its sortable counterpart;\nthey are two views of one figure and both must survive — dropping\n`numeric` would leave the client unable to rank, dropping `value` would\nleave it re-implementing the handler's formatting.",
+    "properties": {
+     "award": {
+      "title": "Award",
+      "type": "string"
+     },
+     "guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Guid"
+     },
+     "numeric": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Numeric"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     }
+    },
+    "required": [
+     "award",
+     "player",
+     "guid",
+     "value",
+     "numeric"
+    ],
+    "title": "RoundAwardEntry",
+    "type": "object"
+   },
+   "RoundAwards": {
+    "description": "⚠️ `categories` stays a mapping on purpose.\n\nSeven categories exist today (combat, deaths, objectives, skills,\nteamwork, timing, weapons) and the handler builds them from a table it can\nextend. Naming them here would make this model the gate on which\ncategories may exist: adding one without editing this class would drop it\nfrom the response with a 200.",
+    "properties": {
+     "categories": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/RoundAwardCategory"
+      },
+      "title": "Categories",
+      "type": "object"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Date"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     }
+    },
+    "required": [
+     "round_id",
+     "map_name",
+     "round_number",
+     "round_date",
+     "categories"
+    ],
+    "title": "RoundAwards",
     "type": "object"
    },
    "RoundPlayerRow": {
@@ -912,6 +3265,1161 @@
     "title": "RoundPlayerRow",
     "type": "object"
    },
+   "RoundViz": {
+    "description": "⛔ `response_model` FILTERS: a field the handler returns and this model\nomits vanishes from the payload, silently, with a 200. The guard is\n`tests/unit/test_response_models_drop_nothing.py` plus the ASGI check in\n`tests/integration/test_response_models_survive_fastapi.py` — pydantic\nround-tripping alone does not prove what the client receives.",
+    "properties": {
+     "duration_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration Seconds"
+     },
+     "highlights": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/EmptyHighlights"
+       },
+       {
+        "$ref": "#/components/schemas/VizHighlights"
+       }
+      ],
+      "title": "Highlights"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/VizPlayerRow"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "round_date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Date"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_label": {
+      "title": "Round Label",
+      "type": "string"
+     },
+     "round_number": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Number"
+     },
+     "winner_team": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Team"
+     }
+    },
+    "required": [
+     "round_id",
+     "map_name",
+     "round_date",
+     "round_number",
+     "round_label",
+     "winner_team",
+     "duration_seconds",
+     "player_count",
+     "players",
+     "highlights"
+    ],
+    "title": "RoundViz",
+    "type": "object"
+   },
+   "ScoringAvailable": {
+    "description": "Scoring was built: the eight-key shape with both teams and the maps.",
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     },
+     "debug": {
+      "items": {
+       "$ref": "#/components/schemas/ScoringDebugRow"
+      },
+      "title": "Debug",
+      "type": "array"
+     },
+     "maps": {
+      "items": {
+       "anyOf": [
+        {
+         "$ref": "#/components/schemas/ScoringMapWithNote"
+        },
+        {
+         "$ref": "#/components/schemas/ScoringMapRow"
+        },
+        {
+         "$ref": "#/components/schemas/ScoringMapAmbiguous"
+        }
+       ]
+      },
+      "title": "Maps",
+      "type": "array"
+     },
+     "team_a_name": {
+      "title": "Team A Name",
+      "type": "string"
+     },
+     "team_a_score": {
+      "title": "Team A Score",
+      "type": "integer"
+     },
+     "team_b_name": {
+      "title": "Team B Name",
+      "type": "string"
+     },
+     "team_b_score": {
+      "title": "Team B Score",
+      "type": "integer"
+     },
+     "total_maps": {
+      "title": "Total Maps",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "available",
+     "maps",
+     "debug",
+     "team_a_name",
+     "team_b_name",
+     "team_a_score",
+     "team_b_score",
+     "total_maps"
+    ],
+    "title": "ScoringAvailable",
+    "type": "object"
+   },
+   "ScoringDebugRow": {
+    "description": "Per-map scoring trace. `note` was null on all 48 sampled rows.",
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "r1_defender_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
+     },
+     "scoring_source": {
+      "title": "Scoring Source",
+      "type": "string"
+     },
+     "team_a_r1_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
+     },
+     "team_a_r2_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
+     },
+     "winner_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Side"
+     }
+    },
+    "required": [
+     "map",
+     "counted",
+     "scoring_source",
+     "winner_side",
+     "r1_defender_side",
+     "team_a_r1_side",
+     "team_a_r2_side",
+     "note"
+    ],
+    "title": "ScoringDebugRow",
+    "type": "object"
+   },
+   "ScoringMapAmbiguous": {
+    "additionalProperties": false,
+    "description": "A map whose roster changed mid-session: FIFTEEN keys, no bookkeeping.\n\n⛔ THE SERVICE PRODUCES THREE SHAPES HERE AND I MODELLED ONE. Reading\n`calculate_session_scores_with_teams` for its `map_results.append` calls:\n18 keys (with `note`), 17 (without), and this 15-key branch, which omits\n`match_id`, `round_start_unix` AND `map_play_seq` because side attribution\nis genuinely unknown. Eight sampled sessions produced only the 17-key\nshape, so the model required three fields this branch never sends.\n\n⚠️ AND `int | None` WITHOUT A DEFAULT IS STILL REQUIRED IN PYDANTIC V2 —\nnullable is not optional. Widening those three to `| None` would not have\nfixed it; only their ABSENCE from this member does (Codex on #830).",
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "r1_defender_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
+     },
+     "scoring_source": {
+      "title": "Scoring Source",
+      "type": "string"
+     },
+     "team_a_points": {
+      "title": "Team A Points",
+      "type": "integer"
+     },
+     "team_a_r1_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
+     },
+     "team_a_r2_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
+     },
+     "team_a_time": {
+      "title": "Team A Time",
+      "type": "string"
+     },
+     "team_b_points": {
+      "title": "Team B Points",
+      "type": "integer"
+     },
+     "team_b_time": {
+      "title": "Team B Time",
+      "type": "string"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     },
+     "winner_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Side"
+     }
+    },
+    "required": [
+     "map",
+     "emoji",
+     "description",
+     "winner",
+     "winner_side",
+     "counted",
+     "scoring_source",
+     "r1_defender_side",
+     "team_a_r1_side",
+     "team_a_r2_side",
+     "team_a_points",
+     "team_b_points",
+     "team_a_time",
+     "team_b_time",
+     "note"
+    ],
+    "title": "ScoringMapAmbiguous",
+    "type": "object"
+   },
+   "ScoringMapRow": {
+    "additionalProperties": false,
+    "description": "A normally paired map: seventeen keys.",
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
+     },
+     "map_play_seq": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Play Seq"
+     },
+     "match_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Id"
+     },
+     "r1_defender_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "scoring_source": {
+      "title": "Scoring Source",
+      "type": "string"
+     },
+     "team_a_points": {
+      "title": "Team A Points",
+      "type": "integer"
+     },
+     "team_a_r1_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
+     },
+     "team_a_r2_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
+     },
+     "team_a_time": {
+      "title": "Team A Time",
+      "type": "string"
+     },
+     "team_b_points": {
+      "title": "Team B Points",
+      "type": "integer"
+     },
+     "team_b_time": {
+      "title": "Team B Time",
+      "type": "string"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     },
+     "winner_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Side"
+     }
+    },
+    "required": [
+     "map",
+     "emoji",
+     "description",
+     "winner",
+     "winner_side",
+     "counted",
+     "scoring_source",
+     "r1_defender_side",
+     "team_a_r1_side",
+     "team_a_r2_side",
+     "team_a_points",
+     "team_b_points",
+     "team_a_time",
+     "team_b_time",
+     "match_id",
+     "round_start_unix",
+     "map_play_seq"
+    ],
+    "title": "ScoringMapRow",
+    "type": "object"
+   },
+   "ScoringMapWithNote": {
+    "additionalProperties": false,
+    "description": "…and eighteen when the branch attaches an explanation.\n\nA separate member rather than `note: str | None = None` on the row above,\nbecause a default would put `\"note\": null` on every one of the 48 sampled\nmaps that does not carry one.",
+    "properties": {
+     "counted": {
+      "title": "Counted",
+      "type": "boolean"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "emoji": {
+      "title": "Emoji",
+      "type": "string"
+     },
+     "map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
+     },
+     "map_play_seq": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Play Seq"
+     },
+     "match_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Id"
+     },
+     "note": {
+      "title": "Note",
+      "type": "string"
+     },
+     "r1_defender_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "R1 Defender Side"
+     },
+     "round_start_unix": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Round Start Unix"
+     },
+     "scoring_source": {
+      "title": "Scoring Source",
+      "type": "string"
+     },
+     "team_a_points": {
+      "title": "Team A Points",
+      "type": "integer"
+     },
+     "team_a_r1_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R1 Side"
+     },
+     "team_a_r2_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team A R2 Side"
+     },
+     "team_a_time": {
+      "title": "Team A Time",
+      "type": "string"
+     },
+     "team_b_points": {
+      "title": "Team B Points",
+      "type": "integer"
+     },
+     "team_b_time": {
+      "title": "Team B Time",
+      "type": "string"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     },
+     "winner_side": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner Side"
+     }
+    },
+    "required": [
+     "map",
+     "emoji",
+     "description",
+     "winner",
+     "winner_side",
+     "counted",
+     "scoring_source",
+     "r1_defender_side",
+     "team_a_r1_side",
+     "team_a_r2_side",
+     "team_a_points",
+     "team_b_points",
+     "team_a_time",
+     "team_b_time",
+     "match_id",
+     "round_start_unix",
+     "map_play_seq",
+     "note"
+    ],
+    "title": "ScoringMapWithNote",
+    "type": "object"
+   },
+   "ScoringUnavailable": {
+    "description": "Scoring could not be built: `{\"available\": false, \"reason\": \"…\"}`.\n\n⛔ THE SHAPE SAMPLING NEVER SHOWS. All EIGHT sessions in the corpus —\nevery session day there is — returned the other one, so a model built from\nmeasurement alone makes `maps` and `team_a_name` required and answers 500\nthe first time a session takes an early return. There are FOUR of them in\n`build_session_scoring`: no session ids, fewer than two hardcoded teams,\nfewer than two rosters, no scoring result. Forcing the second confirms the\nshape: HTTP 200, two keys, and `unassigned_players` fills with the six\nplayers that could not be placed on a team.\n\n⭐ A corpus that agrees with itself is not a contract. It is one branch\nthat happened to win eight times.",
+    "properties": {
+     "available": {
+      "title": "Available",
+      "type": "boolean"
+     },
+     "reason": {
+      "title": "Reason",
+      "type": "string"
+     }
+    },
+    "required": [
+     "available",
+     "reason"
+    ],
+    "title": "ScoringUnavailable",
+    "type": "object"
+   },
+   "SeasonAward": {
+    "description": "One engraved award for a season.\n\n⛔ TYPED FROM `_serialize` AND THE SCHEMA. Every live call returned\n`awards: []` — none are engraved yet — so the element shape is not\nobservable at all from a response. `player_name`, `value_text` and\n`value_num` are nullable columns; `label` is derived by the serializer and\nalways present.",
+    "properties": {
+     "award_key": {
+      "title": "Award Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Player Name"
+     },
+     "value_num": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Num"
+     },
+     "value_text": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Text"
+     }
+    },
+    "required": [
+     "award_key",
+     "label",
+     "player_guid",
+     "player_name",
+     "value_text",
+     "value_num"
+    ],
+    "title": "SeasonAward",
+    "type": "object"
+   },
+   "SeasonAwards": {
+    "properties": {
+     "awards": {
+      "items": {
+       "$ref": "#/components/schemas/SeasonAward"
+      },
+      "title": "Awards",
+      "type": "array"
+     },
+     "season_id": {
+      "title": "Season Id",
+      "type": "string"
+     },
+     "season_name": {
+      "title": "Season Name",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "season_id",
+     "season_name",
+     "awards"
+    ],
+    "title": "SeasonAwards",
+    "type": "object"
+   },
+   "SeasonLeader": {
+    "description": "One category leader: who, and with what figure.\n\n`value` is `int | float` because `leader_payload` is called with a\nper-category cast: `float` for `dpm` and `time_dead`, `int` for the other\nten. A bare `float` would rewrite every counter as `x.0`.",
+    "properties": {
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "number"
+       }
+      ],
+      "title": "Value"
+     }
+    },
+    "required": [
+     "player",
+     "value"
+    ],
+    "title": "SeasonLeader",
+    "type": "object"
+   },
+   "SeasonLeaders": {
+    "description": "The thirteen category leaders, plus the biggest session.\n\n⭐ EVERY KEY IS ALWAYS PRESENT AND EVERY VALUE MAY BE NULL — the exact\nopposite of `StatsRecords` in this same release, where the keys disappear\ninstead. Both endpoints answer \"nothing to report\" and they answer it in\nincompatible ways, so a consumer cannot carry one habit across: here you\ncheck the VALUE, there you check PRESENCE. Measured: pointed at a season\nwith no rounds, all fourteen keys are present and all fourteen are null.\n\n⛔ Consequently this route must NOT take `response_model_exclude_none`.\nDropping the nulls would turn \"no leader for this category\" into \"we did\nnot mention it\" and destroy the distinction the handler is drawing.",
+    "properties": {
+     "damage_given": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "damage_received": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "deaths": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "dpm": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "gibs": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "longest_session": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/LongestSession"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "objectives": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "revives": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "team_damage": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "time_alive": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "time_dead": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "xp": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SeasonLeader"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "required": [
+     "damage_given",
+     "damage_received",
+     "team_damage",
+     "revives",
+     "deaths",
+     "gibs",
+     "objectives",
+     "xp",
+     "kills",
+     "dpm",
+     "time_alive",
+     "time_dead",
+     "longest_session"
+    ],
+    "title": "SeasonLeaders",
+    "type": "object"
+   },
+   "SeasonLeadersResponse": {
+    "description": "⚠️ `start_date` / `end_date` are `str(datetime)` here —\n\"2026-07-01 00:00:00\" — while `/seasons/current/summary` sends\n\"2026-07-01\" for the same two names. Do not assume the pair matches.",
+    "properties": {
+     "end_date": {
+      "title": "End Date",
+      "type": "string"
+     },
+     "leaders": {
+      "$ref": "#/components/schemas/SeasonLeaders"
+     },
+     "start_date": {
+      "title": "Start Date",
+      "type": "string"
+     }
+    },
+    "required": [
+     "start_date",
+     "end_date",
+     "leaders"
+    ],
+    "title": "SeasonLeadersResponse",
+    "type": "object"
+   },
+   "SeasonSummary": {
+    "description": "Totals and activity for the current season.\n\n⚠️ `start_date` / `end_date` are `YYYY-MM-DD` HERE, but the sibling\n`/seasons/current/leaders` sends `str(datetime)` — \"2026-07-01 00:00:00\".\nSame two field names, same router, two formats. Neither is wrong; assuming\nthey match is.\n\n⛔ `response_model` FILTERS: a field the handler returns and this model\nomits is dropped silently with a 200.",
+    "properties": {
+     "end_date": {
+      "title": "End Date",
+      "type": "string"
+     },
+     "season_id": {
+      "title": "Season Id",
+      "type": "string"
+     },
+     "start_date": {
+      "title": "Start Date",
+      "type": "string"
+     },
+     "top_map": {
+      "$ref": "#/components/schemas/SeasonTopMap"
+     },
+     "totals": {
+      "$ref": "#/components/schemas/SeasonTotals"
+     }
+    },
+    "required": [
+     "season_id",
+     "start_date",
+     "end_date",
+     "totals",
+     "top_map"
+    ],
+    "title": "SeasonSummary",
+    "type": "object"
+   },
+   "SeasonTopMap": {
+    "description": "The most-played map of the season.\n\n⛔ `name` IS NULLABLE and the live response never shows it: the handler\nwrites `top_map_row[0] if top_map_row else None`, so an empty season sends\n`{\"name\": null, \"plays\": 0}`. This endpoint takes NO parameters, so that\nbranch cannot be reached by varying a query string — it was measured by\npointing SeasonManager at a season with no rounds (2030-Q1). An endpoint\nwithout filters still has states; they just live in the data.",
+    "properties": {
+     "name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Name"
+     },
+     "plays": {
+      "title": "Plays",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "name",
+     "plays"
+    ],
+    "title": "SeasonTopMap",
+    "type": "object"
+   },
+   "SeasonTotals": {
+    "description": "Season counters. Every one is coalesced with `or 0` in the handler, so\nnone of them is nullable — a season with nothing in it reports zeros, not\nnulls.\n\n⚠️ `avg_rounds_per_day` is `int | float`, and the union is not laziness:\n`round(rounds / days, 1)` is a float, but the guard `if active_days else 0`\nyields an INT — and that branch is not hypothetical, it is the state of\nevery season on its first day. Measured both ways against a live database:\nthe current season answers `13.1`, a season pointed at 2030 answers `0`.\nTyping it `float` would rewrite that `0` as `0.0`.",
+    "properties": {
+     "active_days": {
+      "title": "Active Days",
+      "type": "integer"
+     },
+     "avg_rounds_per_day": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "number"
+       }
+      ],
+      "title": "Avg Rounds Per Day"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "maps": {
+      "title": "Maps",
+      "type": "integer"
+     },
+     "players": {
+      "title": "Players",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "sessions": {
+      "title": "Sessions",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rounds",
+     "players",
+     "sessions",
+     "maps",
+     "kills",
+     "active_days",
+     "avg_rounds_per_day"
+    ],
+    "title": "SeasonTotals",
+    "type": "object"
+   },
+   "SessionLeaderRow": {
+    "description": "One row of the session DPM leaderboard.\n\n⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.\n\n  name    `MAX(player_name)` over a NOT NULL column — never null.\n  dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.\n  kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every\n  deaths  summed value is NULL, and the handler passes the result through\n          with no guard. Zero such rows exist today; the column and the\n          aggregate both say it is reachable, and \"zero rows today\" is not\n          a type — a stricter model would answer 500 the first time it\n          happened rather than dropping a field.\n\nRequested by the session-detail workstream ahead of phase 4, so that page\ncan be written against a schema instead of against a sample.",
+    "properties": {
+     "deaths": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Deaths"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "integer"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "rank": {
+      "title": "Rank",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rank",
+     "name",
+     "dpm",
+     "kills",
+     "deaths"
+    ],
+    "title": "SessionLeaderRow",
+    "type": "object"
+   },
    "SessionLineups": {
     "properties": {
      "changes": {
@@ -944,6 +4452,212 @@
      "rounds_without_roster"
     ],
     "title": "SessionLineups",
+    "type": "object"
+   },
+   "SessionMatchRow": {
+    "description": "One round of the session, as the match list carries it.",
+    "properties": {
+     "date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Date"
+     },
+     "duration": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration"
+     },
+     "id": {
+      "title": "Id",
+      "type": "integer"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "outcome": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Outcome"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "map_name",
+     "round_number",
+     "date",
+     "duration",
+     "winner",
+     "outcome"
+    ],
+    "title": "SessionMatchRow",
+    "type": "object"
+   },
+   "SessionPlayerRow": {
+    "description": "One player's totals for the session.\n\n⭐ THIS ONE CLASS SERVES TWO FIELDS. `teams[].players[]` and\n`unassigned_players[]` are literally the same `player_payload` dict — the\nhandler appends it to the team roster when the name resolves and to the\nunassigned list when it does not. Verified on a live response rather than\ninferred: both carry the same 25 keys with the same types, symmetric\ndifference empty.\n\n`kd` is the only float; every other figure is `int(x or 0)` in the handler.",
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "damage_received": {
+      "title": "Damage Received",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "denied_playtime": {
+      "title": "Denied Playtime",
+      "type": "integer"
+     },
+     "double_kills": {
+      "title": "Double Kills",
+      "type": "integer"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "integer"
+     },
+     "full_selfkills": {
+      "title": "Full Selfkills",
+      "type": "integer"
+     },
+     "gibs": {
+      "title": "Gibs",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "headshot_kills": {
+      "title": "Headshot Kills",
+      "type": "integer"
+     },
+     "kd": {
+      "title": "Kd",
+      "type": "number"
+     },
+     "kill_assists": {
+      "title": "Kill Assists",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "mega_kills": {
+      "title": "Mega Kills",
+      "type": "integer"
+     },
+     "multi_kills": {
+      "title": "Multi Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "quad_kills": {
+      "title": "Quad Kills",
+      "type": "integer"
+     },
+     "revives_given": {
+      "title": "Revives Given",
+      "type": "integer"
+     },
+     "self_kills": {
+      "title": "Self Kills",
+      "type": "integer"
+     },
+     "time_dead_seconds": {
+      "title": "Time Dead Seconds",
+      "type": "integer"
+     },
+     "time_dead_seconds_raw": {
+      "title": "Time Dead Seconds Raw",
+      "type": "integer"
+     },
+     "time_played_seconds": {
+      "title": "Time Played Seconds",
+      "type": "integer"
+     },
+     "times_revived": {
+      "title": "Times Revived",
+      "type": "integer"
+     },
+     "triple_kills": {
+      "title": "Triple Kills",
+      "type": "integer"
+     },
+     "useful_kills": {
+      "title": "Useful Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "kills",
+     "deaths",
+     "kd",
+     "dpm",
+     "damage_given",
+     "damage_received",
+     "gibs",
+     "headshot_kills",
+     "revives_given",
+     "times_revived",
+     "useful_kills",
+     "kill_assists",
+     "self_kills",
+     "full_selfkills",
+     "double_kills",
+     "triple_kills",
+     "quad_kills",
+     "multi_kills",
+     "mega_kills",
+     "time_played_seconds",
+     "time_dead_seconds",
+     "time_dead_seconds_raw",
+     "denied_playtime"
+    ],
+    "title": "SessionPlayerRow",
     "type": "object"
    },
    "SessionRound": {
@@ -1079,9 +4793,169 @@
     "title": "SessionRounds",
     "type": "object"
    },
-   "StatsOverview": {
-    "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⚠️ The counts are NOT plain measurements. `_safe_val` substitutes 0 per\nmetric when its aggregate raises, and the endpoint still answers 200 — so\na zero here means \"none, or the query failed\", and no schema can tell them\napart. Naming that is the honest thing a type can do about it; fixing it\nmeans giving `_safe_val` a per-metric error flag, which is a separate\nchange.",
+   "SessionSummary": {
+    "description": "One session in the list.\n\n⛔ THE COLUMN'S NULLABILITY IS NOT THE FIELD'S. `session_results.\nteam_1_score` and `winning_team` are NOT NULL in the schema — and null in\n84 of 137 responses, because the query LEFT JOINs the BOX table and a\nsession without team attribution has no row to join. Reading\n`information_schema` alone would have typed all five team fields\nnon-null and answered 500 on the majority of sessions.\n\nSo the rule needs a third step after \"schema, then handler\": what the JOIN\ndoes to it. A LEFT JOIN manufactures nulls from columns that forbid them.",
     "properties": {
+     "allies_wins": {
+      "title": "Allies Wins",
+      "type": "integer"
+     },
+     "axis_wins": {
+      "title": "Axis Wins",
+      "type": "integer"
+     },
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "draws": {
+      "title": "Draws",
+      "type": "integer"
+     },
+     "formatted_date": {
+      "title": "Formatted Date",
+      "type": "string"
+     },
+     "maps": {
+      "title": "Maps",
+      "type": "integer"
+     },
+     "maps_played": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Maps Played",
+      "type": "array"
+     },
+     "players": {
+      "title": "Players",
+      "type": "integer"
+     },
+     "rounds": {
+      "title": "Rounds",
+      "type": "integer"
+     },
+     "session_id": {
+      "title": "Session Id",
+      "type": "integer"
+     },
+     "team_1_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 1 Name"
+     },
+     "team_1_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 1 Score"
+     },
+     "team_2_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 2 Name"
+     },
+     "team_2_score": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team 2 Score"
+     },
+     "time_ago": {
+      "title": "Time Ago",
+      "type": "string"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "winning_team": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winning Team"
+     }
+    },
+    "required": [
+     "date",
+     "session_id",
+     "rounds",
+     "maps",
+     "players",
+     "total_kills",
+     "maps_played",
+     "allies_wins",
+     "axis_wins",
+     "draws",
+     "team_1_name",
+     "team_2_name",
+     "team_1_score",
+     "team_2_score",
+     "winning_team",
+     "time_ago",
+     "formatted_date"
+    ],
+    "title": "SessionSummary",
+    "type": "object"
+   },
+   "SessionTeam": {
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/SessionPlayerRow"
+      },
+      "title": "Players",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name",
+     "players"
+    ],
+    "title": "SessionTeam",
+    "type": "object"
+   },
+   "StatsOverview": {
+    "description": "The homepage figures, as this endpoint actually returns them.\n\n⚠️ MEASURED, NOT DESIGNED. Every field and every nullability here was read\noff a live response and cross-checked against the handler; the hand-written\nclient type in `website/frontend/src/app/lib/types.ts` was derived the same\nway from a recorded fixture, and the two now check each other.\n\n⛔ `response_model` FILTERS. A field the handler returns and this model\nomits is dropped from the response — silently, with a 200. That is why\n`tests/unit/test_response_models_drop_nothing.py` compares the handler's\nown keys against the serialised model rather than trusting this class to\nbe complete.\n\n⭐ THE ZEROS NOW SAY WHICH KIND THEY ARE, and this class used to end by\nnaming that as an unfixed limit: \"a zero here means 'none, or the query\nfailed', and no schema can tell them apart… fixing it means giving\n`_safe_val` a per-metric error flag, which is a separate change.\" This is\nthat change. `status`, `note` and `failed_metrics` carry it, the same\ncontract `activity-calendar` already answers one endpoint over.\n\n⛔ HOW THE GAP WAS FOUND, because reading would not have: every GET\nendpoint was run against a database adapter that raises on every query.\nEleven answered 200 with a payload indistinguishable from an empty\ndatabase — this one among them, reporting `rounds: 0, players: 0,\ntotal_kills: 0` as the site's headline figures during an outage.\n\n⚠️ AND THE FIRST ATTEMPT AT THIS FIX WAS SWALLOWED BY THIS VERY MODEL.\nThe handler returned the three new keys and the response did not carry\nthem, because `response_model` drops what the model does not declare —\nsilently, with a 200. The paragraph above warns about exactly that, and it\nstill took a measurement to notice.",
+    "properties": {
+     "failed_metrics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Metrics",
+      "type": "array"
+     },
      "most_active_14d": {
       "anyOf": [
        {
@@ -1101,6 +4975,17 @@
         "type": "null"
        }
       ]
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
      },
      "players": {
       "title": "Players",
@@ -1152,6 +5037,10 @@
       "title": "Sessions 14D",
       "type": "integer"
      },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
      "total_kills": {
       "title": "Total Kills",
       "type": "integer"
@@ -1169,6 +5058,9 @@
      }
     },
     "required": [
+     "status",
+     "note",
+     "failed_metrics",
      "rounds",
      "players",
      "sessions",
@@ -1185,6 +5077,594 @@
      "window_days"
     ],
     "title": "StatsOverview",
+    "type": "object"
+   },
+   "StatsRecords": {
+    "description": "All-time records, keyed by category. EVERY FIELD IS OPTIONAL ON PURPOSE.\n\n⛔ DO NOT make any category required. The handler omits a category's key\nentirely when its query succeeded with no rows (`if rows:` below), so a\nrequired field is a 500 on exactly the view that is hardest to notice: a\nfiltered one. Measured, not theorised — `?map_name=goldrush` (a real ET map\nthis server has never recorded) answers `{}` with HTTP 200, and every one\nof the 19 categories is absent. All 18 maps that DO have data return all 19.\n\n⚠️ ABSENCE AND `[]` MEAN DIFFERENT THINGS HERE, and the meanings are the\nreverse of the intuitive reading:\n  - key ABSENT  -> the query ran and found nothing (no records for this map)\n  - key PRESENT as `[]` -> the query RAISED and was swallowed per-category\n`response_model_exclude_none=True` on the route preserves both states\nexactly: an absent category stays absent, a failed one stays `[]`. A reader\ncannot be expected to guess this, which is why it is written down here.",
+    "properties": {
+     "accuracy": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Accuracy"
+     },
+     "damage": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Damage"
+     },
+     "dyna_defused": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dyna Defused"
+     },
+     "dyna_planted": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Dyna Planted"
+     },
+     "gibs": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gibs"
+     },
+     "headshots": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Headshots"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "match_damage": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Damage"
+     },
+     "match_gibs": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Gibs"
+     },
+     "match_headshots": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Headshots"
+     },
+     "match_kills": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Kills"
+     },
+     "match_revives": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Revives"
+     },
+     "match_xp": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Match Xp"
+     },
+     "obj_returned": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Obj Returned"
+     },
+     "obj_stolen": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Obj Stolen"
+     },
+     "revived": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Revived"
+     },
+     "revives": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Revives"
+     },
+     "useful_kills": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Useful Kills"
+     },
+     "xp": {
+      "anyOf": [
+       {
+        "items": {
+         "$ref": "#/components/schemas/RecordEntry"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Xp"
+     }
+    },
+    "title": "StatsRecords",
+    "type": "object"
+   },
+   "StatsTrends": {
+    "description": "Daily series for the trends chart.\n\n⛔ THE OPTIONAL FIELDS ARE ABSENT, NOT EMPTY, AND THAT IS THE CONTRACT.\nThe handler builds `result` one key at a time from the `metrics` query\nparameter, so `?metrics=rounds` returns `{dates, rounds}` and nothing else.\nTyping them required would have made this model reject every narrowed call\nwith a 500 — and typing them as empty lists would have been worse still,\nbecause a client cannot tell \"you did not ask for kills\" from \"there were\nno kills\".\n\n⚠️ THIS PARAGRAPH USED TO SAY `exclude_none` IS NOT SET. It is — line 53 —\nand I wrote both. A comment that contradicts the decorator three lines away\nis worse than no comment: the next reader trusts it and reasons from it.\n\nMEASURED, so the client knows which check to write:\n\n    ?metrics=rounds  ->  {\"dates\": [...], \"rounds\": [...]}\n                         `kills` is ABSENT. Not null — the key is gone.\n\nSo a consumer checks PRESENCE (`'kills' in data`), never value. Reading an\nabsent key as nullable is what crashed `session-detail` next door:\n`total_votes === 0` is false for `undefined`, so the drawing branch ran.\n\n⛔ `exclude_none` is safe HERE and would not be everywhere: it drops any\nfield whose value is None, so a model where null carries meaning — an\nunresolved award guid, a round with no clock — must not use it. Those\nmodels return their nulls, and none of this route's fields uses null as a\nvalue; the handler either builds the series or omits the key.",
+    "properties": {
+     "active_players": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Active Players"
+     },
+     "dates": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Dates",
+      "type": "array"
+     },
+     "kills": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kills"
+     },
+     "map_distribution": {
+      "anyOf": [
+       {
+        "additionalProperties": {
+         "type": "integer"
+        },
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Distribution"
+     },
+     "rounds": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "integer"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rounds"
+     }
+    },
+    "required": [
+     "dates"
+    ],
+    "title": "StatsTrends",
+    "type": "object"
+   },
+   "StorytellingCompleteness": {
+    "description": "Smart Stats coverage for one date or one gaming session.\n\nMeasured across the states that matter rather than one happy call — all\nTHREE values of `status` were exercised (`ok`, `no_data`, `degraded`),\nboth scopes, and both refusals:\n\n    ?session_date=2026-08-27       200  ok         scope=date\n    ?session_date=2020-01-01       200  no_data    scope=date, 1 warning\n    ?gaming_session_id=153         200  ok         scope=gaming_session\n    ?gaming_session_id=137         200  degraded   scope=gaming_session\n    (neither parameter)            422  one of the two is required\n    ?session_date=ni-datum         400  must be YYYY-MM-DD\n\nThe key set is 20 in every 200, so nothing here is optional — but\n`gaming_session_id` IS null on all three date-scoped answers, which is the\nfield a date-scoped sample would have typed `int`.\n\n⭐ All three ratios are `float` and stay float on the empty path, because\nthe guard is `else 0.0`. That is worth stating next to\n`SeasonTotals.avg_rounds_per_day`, whose guard is `else 0` and which is\ntherefore `int | float`. Same shape of code, one character apart, two\ndifferent contracts.",
+    "properties": {
+     "completeness_ratio": {
+      "title": "Completeness Ratio",
+      "type": "number"
+     },
+     "correlation_ratio": {
+      "title": "Correlation Ratio",
+      "type": "number"
+     },
+     "distinct_rounds_in_kills": {
+      "title": "Distinct Rounds In Kills",
+      "type": "integer"
+     },
+     "gaming_session_id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gaming Session Id"
+     },
+     "kills_total": {
+      "title": "Kills Total",
+      "type": "integer"
+     },
+     "kills_with_round": {
+      "title": "Kills With Round",
+      "type": "integer"
+     },
+     "kis_computed": {
+      "title": "Kis Computed",
+      "type": "boolean"
+     },
+     "kis_rows": {
+      "title": "Kis Rows",
+      "type": "integer"
+     },
+     "kis_total_impact_sum": {
+      "title": "Kis Total Impact Sum",
+      "type": "number"
+     },
+     "known_issues": {
+      "items": {
+       "$ref": "#/components/schemas/StorytellingKnownIssue"
+      },
+      "title": "Known Issues",
+      "type": "array"
+     },
+     "linkage_ratio": {
+      "title": "Linkage Ratio",
+      "type": "number"
+     },
+     "rounds_correlated": {
+      "title": "Rounds Correlated",
+      "type": "integer"
+     },
+     "rounds_total": {
+      "title": "Rounds Total",
+      "type": "integer"
+     },
+     "scope": {
+      "title": "Scope",
+      "type": "string"
+     },
+     "session_date": {
+      "title": "Session Date",
+      "type": "string"
+     },
+     "session_dates": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Session Dates",
+      "type": "array"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "unlinked_kills": {
+      "title": "Unlinked Kills",
+      "type": "integer"
+     },
+     "warnings": {
+      "items": {
+       "$ref": "#/components/schemas/StorytellingWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
+     },
+     "wrong_round_kills": {
+      "title": "Wrong Round Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "session_date",
+     "session_dates",
+     "gaming_session_id",
+     "scope",
+     "status",
+     "kills_total",
+     "kills_with_round",
+     "unlinked_kills",
+     "wrong_round_kills",
+     "distinct_rounds_in_kills",
+     "kis_rows",
+     "kis_computed",
+     "rounds_total",
+     "rounds_correlated",
+     "completeness_ratio",
+     "linkage_ratio",
+     "correlation_ratio",
+     "kis_total_impact_sum",
+     "warnings",
+     "known_issues"
+    ],
+    "title": "StorytellingCompleteness",
+    "type": "object"
+   },
+   "StorytellingKnownIssue": {
+    "description": "A standing caveat about the data, returned with every answer so a ratio\nis never read without the reasons it might be off.",
+    "properties": {
+     "detail": {
+      "title": "Detail",
+      "type": "string"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "title",
+     "detail"
+    ],
+    "title": "StorytellingKnownIssue",
+    "type": "object"
+   },
+   "StorytellingWarning": {
+    "description": "⚠️ A WARNING HERE IS AN OBJECT, not a string.\n\n`/stats/last-session` also has a `warnings` field and it is `list[str]`.\nSame name, same site, different element type — which is exactly the kind of\nthing a shared frontend helper gets wrong once and then everywhere.",
+    "properties": {
+     "level": {
+      "title": "Level",
+      "type": "string"
+     },
+     "message": {
+      "title": "Message",
+      "type": "string"
+     }
+    },
+    "required": [
+     "level",
+     "message"
+    ],
+    "title": "StorytellingWarning",
+    "type": "object"
+   },
+   "SystemOverview": {
+    "description": "End-to-end state of the pipeline.\n\nEvery section degrades on its own — a failing source sets that stage to\n`state: \"unknown\"` rather than taking the page down — so the states worth\ntyping for are the DEGRADED ones, and none of them is reachable by varying\na URL. This endpoint takes no parameters at all.",
+    "properties": {
+     "generated_at": {
+      "title": "Generated At",
+      "type": "string"
+     },
+     "linkage": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/LinkageAvailable"
+       },
+       {
+        "$ref": "#/components/schemas/LinkageUnavailable"
+       }
+      ],
+      "title": "Linkage"
+     },
+     "overall": {
+      "title": "Overall",
+      "type": "string"
+     },
+     "stages": {
+      "items": {
+       "$ref": "#/components/schemas/SystemStage"
+      },
+      "title": "Stages",
+      "type": "array"
+     }
+    },
+    "required": [
+     "generated_at",
+     "overall",
+     "stages",
+     "linkage"
+    ],
+    "title": "SystemOverview",
+    "type": "object"
+   },
+   "SystemStage": {
+    "description": "One link in the capture -> parse -> derive chain.\n\n`detail` is `**detail` in `_stage()` — every caller passes different\nkeyword arguments, so it is an open dict BY CONSTRUCTION. Typing it as a\nmodel would drop whichever keys that particular stage happened to add.",
+    "properties": {
+     "detail": {
+      "additionalProperties": true,
+      "title": "Detail",
+      "type": "object"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "summary": {
+      "title": "Summary",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "label",
+     "state",
+     "summary",
+     "detail"
+    ],
+    "title": "SystemStage",
     "type": "object"
    },
    "TeamLineup": {
@@ -1211,6 +5691,756 @@
      "players"
     ],
     "title": "TeamLineup",
+    "type": "object"
+   },
+   "TonightCurrent": {
+    "description": "The map being played right now.\n\n`beat_seconds` is the R1 duration R2's attack has to beat, and it is\npopulated ONLY while `r2_pending` is true. All four sampled nights had\nalready finished their R2, so every sample showed null — the int branch is\ntyped from `cur_by_round.get(1, {}).get(\"duration\")`, not from a reading.",
+    "properties": {
+     "beat_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Beat Seconds"
+     },
+     "map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
+     },
+     "r2_pending": {
+      "title": "R2 Pending",
+      "type": "boolean"
+     },
+     "round": {
+      "title": "Round",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map",
+     "round",
+     "status",
+     "r2_pending",
+     "beat_seconds"
+    ],
+    "title": "TonightCurrent",
+    "type": "object"
+   },
+   "TonightHoldPoint": {
+    "properties": {
+     "p": {
+      "title": "P",
+      "type": "number"
+     },
+     "t": {
+      "title": "T",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "t",
+     "p"
+    ],
+    "title": "TonightHoldPoint",
+    "type": "object"
+   },
+   "TonightHoldProbability": {
+    "description": "⭐ `map` IS NON-NULL HERE WHILE `TonightMap.map` AND `current_map` ARE\nNOT, and the asymmetry is structural rather than an oversight. The handler\ncomputes the curve as `_hold_prob_curve(db, current_map) if current_map\nelse []`, and then emits this object only `if hold` — so a null map name\nyields an empty curve, an empty curve yields `hold_probability: None`, and\nthis object never exists with a null map. Same kind of guarantee as\n`head_pct` under its `HAVING` floor: a fact about the code, not about\ntoday's rows.",
+    "properties": {
+     "curve": {
+      "items": {
+       "$ref": "#/components/schemas/TonightHoldPoint"
+      },
+      "title": "Curve",
+      "type": "array"
+     },
+     "map": {
+      "title": "Map",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map",
+     "curve"
+    ],
+    "title": "TonightHoldProbability",
+    "type": "object"
+   },
+   "TonightIdle": {
+    "description": "No live session — the NINE-key shape, with `{}` and `[]` where the live\nshape carries structure.\n\n⛔ SAMPLING THIS ENDPOINT TODAY RETURNS THIS SHAPE AND ONLY THIS SHAPE, and\nthat is the reverse of the trap on `/stats/last-session`. The query is\n`WHERE captured_at::date = CURRENT_DATE`, the last capture was two days\nago, so the live response is the EMPTY one and the twelve-key shape is the\nunreachable branch. Measured by rewriting CURRENT_DATE to five days that do\nhave captures: 2026-08-27/26/23/20 answer twelve keys, and 2026-08-21\nanswers nine — that is the SECOND idle return, where rows exist but every\none was a bot round the identity filter dropped.\n\n⚠️ `teams` and `score` are `{}` here and structured objects there, so the\ntwo shapes are a union, not one model with optional fields. `current`,\n`director` and `hold_probability` are literally None on this branch.",
+    "properties": {
+     "active": {
+      "title": "Active",
+      "type": "boolean"
+     },
+     "current": {
+      "title": "Current",
+      "type": "null"
+     },
+     "director": {
+      "title": "Director",
+      "type": "null"
+     },
+     "hold_probability": {
+      "title": "Hold Probability",
+      "type": "null"
+     },
+     "maps": {
+      "items": {},
+      "title": "Maps",
+      "type": "array"
+     },
+     "momentum": {
+      "items": {},
+      "title": "Momentum",
+      "type": "array"
+     },
+     "score": {
+      "additionalProperties": true,
+      "title": "Score",
+      "type": "object"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "teams": {
+      "additionalProperties": true,
+      "title": "Teams",
+      "type": "object"
+     }
+    },
+    "required": [
+     "status",
+     "active",
+     "teams",
+     "maps",
+     "momentum",
+     "score",
+     "current",
+     "director",
+     "hold_probability"
+    ],
+    "title": "TonightIdle",
+    "type": "object"
+   },
+   "TonightLive": {
+    "description": "A night with rounds in it — the TWELVE-key shape.",
+    "properties": {
+     "active": {
+      "title": "Active",
+      "type": "boolean"
+     },
+     "age_seconds": {
+      "title": "Age Seconds",
+      "type": "integer"
+     },
+     "current": {
+      "$ref": "#/components/schemas/TonightCurrent"
+     },
+     "current_map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Current Map"
+     },
+     "director": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Director"
+     },
+     "hold_probability": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/TonightHoldProbability"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "last_update_unix": {
+      "title": "Last Update Unix",
+      "type": "integer"
+     },
+     "maps": {
+      "items": {
+       "$ref": "#/components/schemas/TonightMap"
+      },
+      "title": "Maps",
+      "type": "array"
+     },
+     "momentum": {
+      "items": {
+       "$ref": "#/components/schemas/TonightMomentum"
+      },
+      "title": "Momentum",
+      "type": "array"
+     },
+     "score": {
+      "$ref": "#/components/schemas/TonightScore"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "teams": {
+      "$ref": "#/components/schemas/TonightTeams"
+     }
+    },
+    "required": [
+     "status",
+     "active",
+     "current_map",
+     "last_update_unix",
+     "age_seconds",
+     "teams",
+     "score",
+     "maps",
+     "momentum",
+     "current",
+     "director",
+     "hold_probability"
+    ],
+    "title": "TonightLive",
+    "type": "object"
+   },
+   "TonightMap": {
+    "properties": {
+     "a_points": {
+      "title": "A Points",
+      "type": "integer"
+     },
+     "b_points": {
+      "title": "B Points",
+      "type": "integer"
+     },
+     "map": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map"
+     },
+     "map_number": {
+      "title": "Map Number",
+      "type": "integer"
+     },
+     "rounds": {
+      "items": {
+       "$ref": "#/components/schemas/TonightRound"
+      },
+      "title": "Rounds",
+      "type": "array"
+     },
+     "winner": {
+      "title": "Winner",
+      "type": "string"
+     }
+    },
+    "required": [
+     "map",
+     "map_number",
+     "rounds",
+     "winner",
+     "a_points",
+     "b_points"
+    ],
+    "title": "TonightMap",
+    "type": "object"
+   },
+   "TonightMomentum": {
+    "properties": {
+     "a": {
+      "title": "A",
+      "type": "number"
+     },
+     "b": {
+      "title": "B",
+      "type": "number"
+     }
+    },
+    "required": [
+     "a",
+     "b"
+    ],
+    "title": "TonightMomentum",
+    "type": "object"
+   },
+   "TonightRound": {
+    "properties": {
+     "a_on_axis": {
+      "title": "A On Axis",
+      "type": "boolean"
+     },
+     "allies_score": {
+      "title": "Allies Score",
+      "type": "integer"
+     },
+     "axis_score": {
+      "title": "Axis Score",
+      "type": "integer"
+     },
+     "duration": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Duration"
+     },
+     "is_fullhold": {
+      "title": "Is Fullhold",
+      "type": "boolean"
+     },
+     "round": {
+      "title": "Round",
+      "type": "integer"
+     },
+     "winner": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Winner"
+     }
+    },
+    "required": [
+     "round",
+     "winner",
+     "axis_score",
+     "allies_score",
+     "duration",
+     "a_on_axis",
+     "is_fullhold"
+    ],
+    "title": "TonightRound",
+    "type": "object"
+   },
+   "TonightScore": {
+    "properties": {
+     "a_maps": {
+      "title": "A Maps",
+      "type": "integer"
+     },
+     "a_rounds": {
+      "title": "A Rounds",
+      "type": "integer"
+     },
+     "b_maps": {
+      "title": "B Maps",
+      "type": "integer"
+     },
+     "b_rounds": {
+      "title": "B Rounds",
+      "type": "integer"
+     },
+     "maps_completed": {
+      "title": "Maps Completed",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "a_maps",
+     "b_maps",
+     "a_rounds",
+     "b_rounds",
+     "maps_completed"
+    ],
+    "title": "TonightScore",
+    "type": "object"
+   },
+   "TonightTeam": {
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "roster": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Roster",
+      "type": "array"
+     }
+    },
+    "required": [
+     "name",
+     "roster"
+    ],
+    "title": "TonightTeam",
+    "type": "object"
+   },
+   "TonightTeams": {
+    "properties": {
+     "a": {
+      "$ref": "#/components/schemas/TonightTeam"
+     },
+     "b": {
+      "$ref": "#/components/schemas/TonightTeam"
+     }
+    },
+    "required": [
+     "a",
+     "b"
+    ],
+    "title": "TonightTeams",
+    "type": "object"
+   },
+   "UploadDetail": {
+    "description": "One upload, in full.\n\n⚠️ `description` here is the WHOLE text; the list sends\n`description_preview`, capped at 160 characters. Two names, two lengths —\na shared renderer that reads `description` off a list item finds nothing.\n\n`can_delete` is the only field on this endpoint that depends on the\nsession: it is `_may_delete(request, uploader_discord_id)`, the same rule\nthe DELETE endpoint enforces, so the button a user sees and the answer\nthey get cannot drift apart. Measured: identical payload for anonymous and\nowner except this one boolean.",
+    "properties": {
+     "can_delete": {
+      "title": "Can Delete",
+      "type": "boolean"
+     },
+     "category": {
+      "title": "Category",
+      "type": "string"
+     },
+     "content_hash": {
+      "title": "Content Hash",
+      "type": "string"
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "download_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Download Count"
+     },
+     "download_url": {
+      "title": "Download Url",
+      "type": "string"
+     },
+     "expires_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expires At"
+     },
+     "extension": {
+      "title": "Extension",
+      "type": "string"
+     },
+     "file_size_bytes": {
+      "title": "File Size Bytes",
+      "type": "integer"
+     },
+     "filename": {
+      "title": "Filename",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "is_playable": {
+      "title": "Is Playable",
+      "type": "boolean"
+     },
+     "mime_type": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mime Type"
+     },
+     "poster_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Poster Url"
+     },
+     "share_url": {
+      "title": "Share Url",
+      "type": "string"
+     },
+     "tags": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "uploader_discord_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uploader Discord Id"
+     },
+     "uploader_name": {
+      "title": "Uploader Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "description",
+     "filename",
+     "category",
+     "extension",
+     "file_size_bytes",
+     "mime_type",
+     "uploader_name",
+     "uploader_discord_id",
+     "download_count",
+     "content_hash",
+     "created_at",
+     "expires_at",
+     "can_delete",
+     "tags",
+     "share_url",
+     "download_url",
+     "is_playable",
+     "poster_url"
+    ],
+    "title": "UploadDetail",
+    "type": "object"
+   },
+   "UploadList": {
+    "description": "A page of the library.\n\n⭐ VISIBILITY IS NOT AUTH-DEPENDENT, and that is worth stating because the\nopposite is the reasonable guess. The only gate on this query is `_LIVE`\n(`status = 'active'` and not expired) — no user condition anywhere — so an\nanonymous caller and the uploader receive byte-identical lists. \"No files\"\ntherefore means one thing here, unlike `/api/availability`, where an empty\nanswer has two readings.\n\n`total` is the count BEFORE limit/offset, so `offset=999` correctly returns\n`items: []` with `total: 2` rather than pretending the library is empty.",
+    "properties": {
+     "items": {
+      "items": {
+       "$ref": "#/components/schemas/UploadListItem"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "limit": {
+      "title": "Limit",
+      "type": "integer"
+     },
+     "offset": {
+      "title": "Offset",
+      "type": "integer"
+     },
+     "sort": {
+      "title": "Sort",
+      "type": "string"
+     },
+     "total": {
+      "title": "Total",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "items",
+     "total",
+     "limit",
+     "offset",
+     "sort"
+    ],
+    "title": "UploadList",
+    "type": "object"
+   },
+   "UploadListItem": {
+    "description": "One card in the upload library.\n\n⚠️ THREE FIELDS ARE NULL IN EVERY LIVE ROW and they are NULLABLE, NOT\nOPTIONAL — the keys are always present. `description_preview` is\n`LEFT(COALESCE(description,''),160) or None`, so an upload with no\ndescription sends null rather than `\"\"`; `expires_at` is null when the\nuploader kept the file forever, which is the default; `poster_url` is null\nfor anything that never had a thumbnail captured. A model that made any of\nthem a required non-null field would answer 500 on the FIRST item.\n\n⭐ `poster_url` is the only one of the three where the corpus shows both\nstates (2 of 7 sampled rows carry a URL), so the other two are typed from\nthe handler's own `if … else None`, not from a reading.",
+    "properties": {
+     "category": {
+      "title": "Category",
+      "type": "string"
+     },
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "description_preview": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description Preview"
+     },
+     "download_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Download Count"
+     },
+     "expires_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Expires At"
+     },
+     "extension": {
+      "title": "Extension",
+      "type": "string"
+     },
+     "file_size_bytes": {
+      "title": "File Size Bytes",
+      "type": "integer"
+     },
+     "filename": {
+      "title": "Filename",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "poster_url": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Poster Url"
+     },
+     "share_url": {
+      "title": "Share Url",
+      "type": "string"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "uploader_discord_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Uploader Discord Id"
+     },
+     "uploader_name": {
+      "title": "Uploader Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "title",
+     "filename",
+     "category",
+     "extension",
+     "file_size_bytes",
+     "uploader_name",
+     "uploader_discord_id",
+     "download_count",
+     "created_at",
+     "description_preview",
+     "expires_at",
+     "share_url",
+     "poster_url"
+    ],
+    "title": "UploadListItem",
     "type": "object"
    },
    "ValidationError": {
@@ -1251,6 +6481,402 @@
      "type"
     ],
     "title": "ValidationError",
+    "type": "object"
+   },
+   "VizHighlights": {
+    "description": "⚠️ EMPTY WHEN THE ROUND HAS NO PLAYER ROWS.\n\nPresent on all 80 rounds I sampled, which is why the first version required\nall three — but the handler leaves `highlights` as `{}` when `players` is\nempty (ingestion incomplete, or a round that never recorded stats).\nRequiring them turned that valid empty payload into a 500.\n\nOptional here means \"the round produced none\", not \"the field may be\nforgotten\": the three names stay declared, so a handler that renames one\nstill fails the drop-nothing test.",
+    "properties": {
+     "most_damage": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VizTopDamage"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "most_kills": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VizTopKills"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "mvp": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/VizMvp"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     }
+    },
+    "title": "VizHighlights",
+    "type": "object"
+   },
+   "VizMvp": {
+    "properties": {
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "dpm"
+    ],
+    "title": "VizMvp",
+    "type": "object"
+   },
+   "VizPlayerRow": {
+    "description": "One player's row in a round's visualisation payload.\n\n⚠️ MEASURED, NOT DESIGNED — types are the union over 14 rounds including\nedge cases (the four oldest in the database, and four with fewer than four\nplayers). `dpm`, `efficiency` and `xp` are fractional; typing any of them\n`int` would truncate silently, still with a 200.",
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "damage_received": {
+      "title": "Damage Received",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "denied_playtime": {
+      "title": "Denied Playtime",
+      "type": "integer"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "efficiency": {
+      "title": "Efficiency",
+      "type": "number"
+     },
+     "gibs": {
+      "title": "Gibs",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "kill_assists": {
+      "title": "Kill Assists",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "revives_given": {
+      "title": "Revives Given",
+      "type": "integer"
+     },
+     "self_kills": {
+      "title": "Self Kills",
+      "type": "integer"
+     },
+     "team_damage_given": {
+      "title": "Team Damage Given",
+      "type": "integer"
+     },
+     "team_damage_received": {
+      "title": "Team Damage Received",
+      "type": "integer"
+     },
+     "time_dead_seconds": {
+      "title": "Time Dead Seconds",
+      "type": "integer"
+     },
+     "time_played_seconds": {
+      "title": "Time Played Seconds",
+      "type": "integer"
+     },
+     "xp": {
+      "title": "Xp",
+      "type": "number"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "kills",
+     "deaths",
+     "damage_given",
+     "damage_received",
+     "team_damage_given",
+     "team_damage_received",
+     "time_played_seconds",
+     "time_dead_seconds",
+     "revives_given",
+     "gibs",
+     "self_kills",
+     "denied_playtime",
+     "kill_assists",
+     "xp",
+     "efficiency",
+     "dpm"
+    ],
+    "title": "VizPlayerRow",
+    "type": "object"
+   },
+   "VizTopDamage": {
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "damage_given"
+    ],
+    "title": "VizTopDamage",
+    "type": "object"
+   },
+   "VizTopKills": {
+    "properties": {
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "kills"
+    ],
+    "title": "VizTopKills",
+    "type": "object"
+   },
+   "VoiceActivity": {
+    "description": "⛔ THREE STATES, AND THE WHOLE POINT IS THAT THEY DIFFER.\n\n`ok` means we read the report and it is current — INCLUDING when nobody is\nin voice. `stale` means we read it and it is too old to be called current.\n`unavailable` means we could not read it at all. Before #808 all three\nrendered as `total_count: 0`, so \"voice is quiet\" and \"we cannot see voice\"\nlooked identical to a client (Codex on #806, via Fable).\n\nA response model has to preserve that distinction rather than flatten it:\n`reason` is present in every branch and null in the healthy one, so its\nABSENCE never has to be interpreted.",
+    "properties": {
+     "age_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Age Seconds"
+     },
+     "channels": {
+      "items": {
+       "$ref": "#/components/schemas/VoiceChannel"
+      },
+      "title": "Channels",
+      "type": "array"
+     },
+     "members": {
+      "items": {
+       "$ref": "#/components/schemas/VoiceMember"
+      },
+      "title": "Members",
+      "type": "array"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "total_count": {
+      "title": "Total Count",
+      "type": "integer"
+     },
+     "updated_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Updated At"
+     }
+    },
+    "required": [
+     "status",
+     "reason",
+     "updated_at",
+     "age_seconds",
+     "total_count",
+     "members",
+     "channels"
+    ],
+    "title": "VoiceActivity",
+    "type": "object"
+   },
+   "VoiceChannel": {
+    "properties": {
+     "id": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Id"
+     },
+     "members": {
+      "items": {
+       "$ref": "#/components/schemas/VoiceMember"
+      },
+      "title": "Members",
+      "type": "array"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "members"
+    ],
+    "title": "VoiceChannel",
+    "type": "object"
+   },
+   "VoiceMember": {
+    "description": "One person in voice, as this endpoint is willing to say it.\n\nDeliberately narrow: the stored row carries more per member, and this\nendpoint publishes a NAME and the channel it was heard in. Widening it is\na decision about what the site discloses, not a schema detail.",
+    "properties": {
+     "channel_name": {
+      "title": "Channel Name",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "channel_name"
+    ],
+    "title": "VoiceMember",
+    "type": "object"
+   },
+   "WeaponAggregate": {
+    "description": "One weapon's line in the overall table.\n\n⚠️ Named apart from `WeaponRow` (the per-player row in the same file) on\npurpose: they share five field names and differ in two, and a single class\ncovering both would have to widen every field that only one of them has.\n\nAll six are guarded at the source — `int(...)` casts and a `hs_rate` whose\nbranch has `else 0.0` — so none is nullable. `weapon_comprehensive_stats`\ndeclares `weapon_name` NOT NULL, and the handler derives `name` and\n`weapon_key` from it.",
+    "properties": {
+     "accuracy": {
+      "title": "Accuracy",
+      "type": "number"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "hs_rate": {
+      "title": "Hs Rate",
+      "type": "number"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "weapon_key": {
+      "title": "Weapon Key",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "weapon_key",
+     "kills",
+     "headshots",
+     "hs_rate",
+     "accuracy"
+    ],
+    "title": "WeaponAggregate",
+    "type": "object"
+   },
+   "WeaponLeader": {
+    "description": "The top player for one weapon.\n\n`player_guid` and `player_name` are NOT NULL columns, so they stay\nrequired — widening them would invite callers to handle a case the schema\nforbids.",
+    "properties": {
+     "accuracy": {
+      "title": "Accuracy",
+      "type": "number"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "player_guid": {
+      "title": "Player Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "weapon": {
+      "title": "Weapon",
+      "type": "string"
+     },
+     "weapon_key": {
+      "title": "Weapon Key",
+      "type": "string"
+     }
+    },
+    "required": [
+     "weapon",
+     "weapon_key",
+     "player_guid",
+     "player_name",
+     "kills",
+     "headshots",
+     "accuracy"
+    ],
+    "title": "WeaponLeader",
     "type": "object"
    },
    "WeaponRow": {
@@ -1331,6 +6957,87 @@
      "players"
     ],
     "title": "WeaponsByPlayer",
+    "type": "object"
+   },
+   "WeaponsHallOfFame": {
+    "description": "⛔ THREE STATES: the handler swallows its own exception and answers 200.\n\nBefore this, a failed query and a period with no weapon data both returned\n`{\"period\": p, \"leaders\": {}}` — so a client reading `Object.keys(leaders)`\ncould not tell a measured emptiness from an unmeasured one. Same shape as\n`/records/maps/segments` and `/stats/activity-calendar`, agreed with the\nworkstream that renders them.",
+    "properties": {
+     "leaders": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/WeaponLeader"
+      },
+      "title": "Leaders",
+      "type": "object"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "period": {
+      "title": "Period",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "period",
+     "leaders",
+     "status"
+    ],
+    "title": "WeaponsHallOfFame",
+    "type": "object"
+   },
+   "WeeklyChallenge": {
+    "description": "The challenge posted for one ISO week.\n\n⛔ TYPED FROM `_serialize` AND THE SCHEMA, NOT FROM A RESPONSE. Every live\ncall I made returned `challenge: null` — no challenge is set this week — so\nsampling could show only that the field is nullable and nothing about what\nit holds when it is not. `weekly_challenges.description` and `created_at`\nare nullable columns, and the serializer writes\n`str(row[3]) if row[3] else None` for the timestamp outright.",
+    "properties": {
+     "created_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Created At"
+     },
+     "description": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Description"
+     },
+     "title": {
+      "title": "Title",
+      "type": "string"
+     },
+     "week_start_date": {
+      "title": "Week Start Date",
+      "type": "string"
+     }
+    },
+    "required": [
+     "week_start_date",
+     "title",
+     "description",
+     "created_at"
+    ],
+    "title": "WeeklyChallenge",
     "type": "object"
    },
    "XpLeaderRow": {
@@ -1435,7 +7142,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/AvailabilityOverview"
+        }
        }
       },
       "description": "Successful Response"
@@ -2385,7 +8094,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/CurrentChallenge"
+        }
        }
       },
       "description": "Successful Response"
@@ -2672,7 +8383,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StorytellingCompleteness"
+        }
        }
       },
       "description": "Successful Response"
@@ -3950,7 +9663,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "type": "string"
+         },
+         "title": "Response Search Player Api Player Search Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -7456,7 +13175,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProximityHitRegions"
+        }
        }
       },
       "description": "Successful Response"
@@ -7810,7 +13531,17 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/HotzonesReady"
+          },
+          {
+           "$ref": "#/components/schemas/HotzonesUnready"
+          }
+         ],
+         "title": "Response Get Proximity Hotzones Api Proximity Hotzones Get"
+        }
        }
       },
       "description": "Successful Response"
@@ -9017,7 +14748,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/PlayerAim"
+        }
        }
       },
       "description": "Successful Response"
@@ -9181,7 +14914,17 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/PlayerHeatmapKillsOnly"
+          },
+          {
+           "$ref": "#/components/schemas/PlayerHeatmap"
+          }
+         ],
+         "title": "Response Get Proximity Player Heatmap Api Proximity Player Heatmap Get"
+        }
        }
       },
       "description": "Successful Response"
@@ -9495,7 +15238,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProximityPlayers"
+        }
        }
       },
       "description": "Successful Response"
@@ -9627,7 +15372,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProxScores"
+        }
        }
       },
       "description": "Successful Response"
@@ -9657,7 +15404,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProxFormula"
+        }
        }
       },
       "description": "Successful Response"
@@ -11484,7 +17233,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/MapObjectiveRecords"
+        }
        }
       },
       "description": "Successful Response"
@@ -11937,7 +17688,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/RecentRound"
+         },
+         "title": "Response Get Recent Rounds Api Rounds Recent Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -11978,7 +17735,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/RoundAwards"
+        }
        }
       },
       "description": "Successful Response"
@@ -12069,7 +17828,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/RoundViz"
+        }
        }
       },
       "description": "Successful Response"
@@ -12251,7 +18012,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/SeasonLeadersResponse"
+        }
        }
       },
       "description": "Successful Response"
@@ -12271,7 +18034,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/SeasonSummary"
+        }
        }
       },
       "description": "Successful Response"
@@ -12302,7 +18067,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/SeasonAwards"
+        }
        }
       },
       "description": "Successful Response"
@@ -12396,7 +18163,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/SessionSummary"
+         },
+         "title": "Response Get Sessions List Api Sessions Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -12974,7 +18747,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ActivityCalendar"
+        }
        }
       },
       "description": "Successful Response"
@@ -13095,7 +18870,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/LastSession"
+        }
        }
       },
       "description": "Successful Response"
@@ -13132,11 +18909,13 @@
       }
      },
      {
+      "description": "Accepted and ignored — the handler applies no HAVING clause. Kept only so that existing callers do not change behaviour; do not build on it.",
       "in": "query",
       "name": "min_games",
       "required": false,
       "schema": {
        "default": 3,
+       "description": "Accepted and ignored — the handler applies no HAVING clause. Kept only so that existing callers do not change behaviour; do not build on it.",
        "title": "Min Games",
        "type": "integer"
       }
@@ -13156,7 +18935,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/LeaderboardRow"
+         },
+         "title": "Response Get Leaderboard Api Stats Leaderboard Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -13206,7 +18991,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/MapStats"
+         },
+         "title": "Response Get Maps Api Stats Maps Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -13539,7 +19330,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StatsRecords"
+        }
        }
       },
       "description": "Successful Response"
@@ -13597,7 +19390,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/SessionLeaderRow"
+         },
+         "title": "Response Get Session Leaderboard Api Stats Session Leaderboard Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -14033,7 +19832,17 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "anyOf": [
+          {
+           "$ref": "#/components/schemas/TonightLive"
+          },
+          {
+           "$ref": "#/components/schemas/TonightIdle"
+          }
+         ],
+         "title": "Response Get Tonight Api Stats Tonight Get"
+        }
        }
       },
       "description": "Successful Response"
@@ -14075,7 +19884,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/StatsTrends"
+        }
        }
       },
       "description": "Successful Response"
@@ -14127,7 +19938,13 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/WeaponAggregate"
+         },
+         "title": "Response Get Weapon Stats Api Stats Weapons Get",
+         "type": "array"
+        }
        }
       },
       "description": "Successful Response"
@@ -14391,7 +20208,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/WeaponsHallOfFame"
+        }
        }
       },
       "description": "Successful Response"
@@ -15823,7 +21642,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/SystemOverview"
+        }
        }
       },
       "description": "Successful Response"
@@ -15946,7 +21767,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/UploadList"
+        }
        }
       },
       "description": "Successful Response"
@@ -16336,7 +22159,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/UploadDetail"
+        }
        }
       },
       "description": "Successful Response"
@@ -16474,7 +22299,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/VoiceActivity"
+        }
        }
       },
       "description": "Successful Response"

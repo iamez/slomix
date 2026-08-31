@@ -1,0 +1,1098 @@
+{
+  "status": "ok",
+  "version": "3.0",
+  "formula_version": "prox-web-v3.0",
+  "quality": {
+    "ranking_available": true,
+    "successful_sources": 10,
+    "total_sources": 10,
+    "failed_sources": [],
+    "metric_weight_coverage": 1.0,
+    "below_coverage_dropped": 0
+  },
+  "range_days": 30,
+  "scope": {
+    "scoped": true,
+    "session_date": "2026-08-27",
+    "map_name": null,
+    "round_number": null,
+    "round_start_unix": null
+  },
+  "player_count": 6,
+  "players": [
+    {
+      "guid": "3C0354D32C5BAFC775198C8A9EAD8087",
+      "name": "^qIt's squAziii",
+      "engagements": 336,
+      "tracks": 143,
+      "prox_combat": 100.0,
+      "prox_team": 80.0,
+      "prox_gamesense": 88.58,
+      "prox_overall": 90.14,
+      "prox_radar": [
+        {
+          "label": "Combat",
+          "value": 100.0
+        },
+        {
+          "label": "Team",
+          "value": 80.0
+        },
+        {
+          "label": "Game Sense",
+          "value": 88.58
+        }
+      ],
+      "breakdown": {
+        "prox_combat": {
+          "escape_rate": {
+            "raw": 0.512,
+            "percentile": 1.0,
+            "weight": 1.0,
+            "contribution": 100.0,
+            "label": "Escape Rate"
+          },
+          "headshot_pct": {
+            "raw": 0.163,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Headshot %",
+            "retired_in": "prox-web-v3.0"
+          },
+          "return_fire_ms": {
+            "raw": 586.929,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Return Fire Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "kpr": {
+            "raw": 0.125,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Kill Permanence",
+            "retired_in": "prox-web-v3.0"
+          },
+          "peak_speed": {
+            "raw": 827.0,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Peak Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "dodge_ms": {
+            "raw": 1262.996,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Dodge Speed",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_team": {
+          "spawn_score": {
+            "raw": 0.417,
+            "percentile": 0.8,
+            "weight": 0.571,
+            "contribution": 45.68,
+            "label": "Spawn Timing"
+          },
+          "revive_rate_as_victim": {
+            "raw": 0.231,
+            "percentile": 0.8,
+            "weight": 0.429,
+            "contribution": 34.32,
+            "label": "Revive Magnet"
+          },
+          "crossfire_rate": {
+            "raw": 0.266,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Crossfire Rate",
+            "retired_in": "prox-web-v3.0"
+          },
+          "support_reaction_ms": {
+            "raw": 1711.42,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Support Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "trades_per_session": {
+            "raw": 17.0,
+            "percentile": 0.5,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Trade Kills",
+            "retired_in": "prox-web-v3.0"
+          },
+          "focus_survival": {
+            "raw": 0.222,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Focus Survival",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_gamesense": {
+          "distance_per_life": {
+            "raw": 6037.308,
+            "percentile": 1.0,
+            "weight": 0.429,
+            "contribution": 42.9,
+            "label": "Distance/Life"
+          },
+          "denied_time": {
+            "raw": 7754.348,
+            "percentile": 0.8,
+            "weight": 0.571,
+            "contribution": 45.68,
+            "label": "Denied Enemy Time"
+          },
+          "sprint_discipline": {
+            "raw": 19.482,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Sprint Usage",
+            "retired_in": "prox-web-v3.0"
+          },
+          "post_spawn_rush": {
+            "raw": 956.762,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Post-Spawn Rush",
+            "retired_in": "prox-web-v3.0"
+          },
+          "stance_variety": {
+            "raw": 0.491,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Stance Variety",
+            "retired_in": "prox-web-v3.0"
+          },
+          "timed_kills": {
+            "raw": 161.0,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Timed Kills",
+            "retired_in": "prox-web-v3.0"
+          }
+        }
+      },
+      "metrics_scored": {
+        "prox_combat": 1,
+        "prox_team": 2,
+        "prox_gamesense": 2
+      },
+      "metric_weight_coverage": 1.0,
+      "missing_metrics": [],
+      "rank": 1
+    },
+    {
+      "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "name": "^6[^2T^6W^2K^6]^2C^6UJ^2O",
+      "engagements": 341,
+      "tracks": 152,
+      "prox_combat": 80.0,
+      "prox_team": 51.42,
+      "prox_gamesense": 45.74,
+      "prox_overall": 61.43,
+      "prox_radar": [
+        {
+          "label": "Combat",
+          "value": 80.0
+        },
+        {
+          "label": "Team",
+          "value": 51.42
+        },
+        {
+          "label": "Game Sense",
+          "value": 45.74
+        }
+      ],
+      "breakdown": {
+        "prox_combat": {
+          "escape_rate": {
+            "raw": 0.496,
+            "percentile": 0.8,
+            "weight": 1.0,
+            "contribution": 80.0,
+            "label": "Escape Rate"
+          },
+          "headshot_pct": {
+            "raw": 0.133,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Headshot %",
+            "retired_in": "prox-web-v3.0"
+          },
+          "return_fire_ms": {
+            "raw": 693.715,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Return Fire Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "kpr": {
+            "raw": 0.0,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Kill Permanence",
+            "retired_in": "prox-web-v3.0"
+          },
+          "peak_speed": {
+            "raw": 715.6,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Peak Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "dodge_ms": {
+            "raw": 1259.583,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Dodge Speed",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_team": {
+          "spawn_score": {
+            "raw": 0.39,
+            "percentile": 0.6,
+            "weight": 0.571,
+            "contribution": 34.26,
+            "label": "Spawn Timing"
+          },
+          "revive_rate_as_victim": {
+            "raw": 0.19,
+            "percentile": 0.4,
+            "weight": 0.429,
+            "contribution": 17.16,
+            "label": "Revive Magnet"
+          },
+          "crossfire_rate": {
+            "raw": 0.258,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Crossfire Rate",
+            "retired_in": "prox-web-v3.0"
+          },
+          "support_reaction_ms": {
+            "raw": 1715.0,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Support Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "trades_per_session": {
+            "raw": 26.0,
+            "percentile": 0.9,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Trade Kills",
+            "retired_in": "prox-web-v3.0"
+          },
+          "focus_survival": {
+            "raw": 0.183,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Focus Survival",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_gamesense": {
+          "distance_per_life": {
+            "raw": 5932.498,
+            "percentile": 0.8,
+            "weight": 0.429,
+            "contribution": 34.32,
+            "label": "Distance/Life"
+          },
+          "denied_time": {
+            "raw": 7106.555,
+            "percentile": 0.2,
+            "weight": 0.571,
+            "contribution": 11.42,
+            "label": "Denied Enemy Time"
+          },
+          "sprint_discipline": {
+            "raw": 22.235,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Sprint Usage",
+            "retired_in": "prox-web-v3.0"
+          },
+          "post_spawn_rush": {
+            "raw": 898.522,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Post-Spawn Rush",
+            "retired_in": "prox-web-v3.0"
+          },
+          "stance_variety": {
+            "raw": 0.286,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Stance Variety",
+            "retired_in": "prox-web-v3.0"
+          },
+          "timed_kills": {
+            "raw": 164.0,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Timed Kills",
+            "retired_in": "prox-web-v3.0"
+          }
+        }
+      },
+      "metrics_scored": {
+        "prox_combat": 1,
+        "prox_team": 2,
+        "prox_gamesense": 2
+      },
+      "metric_weight_coverage": 1.0,
+      "missing_metrics": [],
+      "rank": 2
+    },
+    {
+      "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+      "name": "^c.^7lgz",
+      "engagements": 347,
+      "tracks": 174,
+      "prox_combat": 0.0,
+      "prox_team": 100.0,
+      "prox_gamesense": 57.1,
+      "prox_overall": 49.27,
+      "prox_radar": [
+        {
+          "label": "Combat",
+          "value": 0.0
+        },
+        {
+          "label": "Team",
+          "value": 100.0
+        },
+        {
+          "label": "Game Sense",
+          "value": 57.1
+        }
+      ],
+      "breakdown": {
+        "prox_combat": {
+          "escape_rate": {
+            "raw": 0.406,
+            "percentile": 0.0,
+            "weight": 1.0,
+            "contribution": 0.0,
+            "label": "Escape Rate"
+          },
+          "headshot_pct": {
+            "raw": 0.123,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Headshot %",
+            "retired_in": "prox-web-v3.0"
+          },
+          "return_fire_ms": {
+            "raw": 740.164,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Return Fire Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "kpr": {
+            "raw": 0.08,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Kill Permanence",
+            "retired_in": "prox-web-v3.0"
+          },
+          "peak_speed": {
+            "raw": 703.2,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Peak Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "dodge_ms": {
+            "raw": 1349.13,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Dodge Speed",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_team": {
+          "spawn_score": {
+            "raw": 0.428,
+            "percentile": 1.0,
+            "weight": 0.571,
+            "contribution": 57.1,
+            "label": "Spawn Timing"
+          },
+          "revive_rate_as_victim": {
+            "raw": 0.241,
+            "percentile": 1.0,
+            "weight": 0.429,
+            "contribution": 42.9,
+            "label": "Revive Magnet"
+          },
+          "crossfire_rate": {
+            "raw": 0.4,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Crossfire Rate",
+            "retired_in": "prox-web-v3.0"
+          },
+          "support_reaction_ms": {
+            "raw": 1853.606,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Support Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "trades_per_session": {
+            "raw": 16.0,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Trade Kills",
+            "retired_in": "prox-web-v3.0"
+          },
+          "focus_survival": {
+            "raw": 0.203,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Focus Survival",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_gamesense": {
+          "distance_per_life": {
+            "raw": 4428.518,
+            "percentile": 0.0,
+            "weight": 0.429,
+            "contribution": 0.0,
+            "label": "Distance/Life"
+          },
+          "denied_time": {
+            "raw": 8500.901,
+            "percentile": 1.0,
+            "weight": 0.571,
+            "contribution": 57.1,
+            "label": "Denied Enemy Time"
+          },
+          "sprint_discipline": {
+            "raw": 27.577,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Sprint Usage",
+            "retired_in": "prox-web-v3.0"
+          },
+          "post_spawn_rush": {
+            "raw": 932.99,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Post-Spawn Rush",
+            "retired_in": "prox-web-v3.0"
+          },
+          "stance_variety": {
+            "raw": 0.372,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Stance Variety",
+            "retired_in": "prox-web-v3.0"
+          },
+          "timed_kills": {
+            "raw": 111.0,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Timed Kills",
+            "retired_in": "prox-web-v3.0"
+          }
+        }
+      },
+      "metrics_scored": {
+        "prox_combat": 1,
+        "prox_team": 2,
+        "prox_gamesense": 2
+      },
+      "metric_weight_coverage": 1.0,
+      "missing_metrics": [],
+      "rank": 3
+    },
+    {
+      "guid": "2B5938F5C5EA384863A3B2862DC61778",
+      "name": "bronze",
+      "engagements": 331,
+      "tracks": 163,
+      "prox_combat": 60.0,
+      "prox_team": 22.84,
+      "prox_gamesense": 60.0,
+      "prox_overall": 46.99,
+      "prox_radar": [
+        {
+          "label": "Combat",
+          "value": 60.0
+        },
+        {
+          "label": "Team",
+          "value": 22.84
+        },
+        {
+          "label": "Game Sense",
+          "value": 60.0
+        }
+      ],
+      "breakdown": {
+        "prox_combat": {
+          "escape_rate": {
+            "raw": 0.48,
+            "percentile": 0.6,
+            "weight": 1.0,
+            "contribution": 60.0,
+            "label": "Escape Rate"
+          },
+          "headshot_pct": {
+            "raw": 0.129,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Headshot %",
+            "retired_in": "prox-web-v3.0"
+          },
+          "return_fire_ms": {
+            "raw": 746.133,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Return Fire Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "kpr": {
+            "raw": 0.0,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Kill Permanence",
+            "retired_in": "prox-web-v3.0"
+          },
+          "peak_speed": {
+            "raw": 679.9,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Peak Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "dodge_ms": {
+            "raw": 1278.937,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Dodge Speed",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_team": {
+          "spawn_score": {
+            "raw": 0.385,
+            "percentile": 0.4,
+            "weight": 0.571,
+            "contribution": 22.84,
+            "label": "Spawn Timing"
+          },
+          "revive_rate_as_victim": {
+            "raw": 0.153,
+            "percentile": 0.0,
+            "weight": 0.429,
+            "contribution": 0.0,
+            "label": "Revive Magnet"
+          },
+          "crossfire_rate": {
+            "raw": 0.276,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Crossfire Rate",
+            "retired_in": "prox-web-v3.0"
+          },
+          "support_reaction_ms": {
+            "raw": 1663.608,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Support Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "trades_per_session": {
+            "raw": 26.0,
+            "percentile": 0.9,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Trade Kills",
+            "retired_in": "prox-web-v3.0"
+          },
+          "focus_survival": {
+            "raw": 0.213,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Focus Survival",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_gamesense": {
+          "distance_per_life": {
+            "raw": 5638.953,
+            "percentile": 0.6,
+            "weight": 0.429,
+            "contribution": 25.74,
+            "label": "Distance/Life"
+          },
+          "denied_time": {
+            "raw": 7722.857,
+            "percentile": 0.6,
+            "weight": 0.571,
+            "contribution": 34.26,
+            "label": "Denied Enemy Time"
+          },
+          "sprint_discipline": {
+            "raw": 25.396,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Sprint Usage",
+            "retired_in": "prox-web-v3.0"
+          },
+          "post_spawn_rush": {
+            "raw": 1030.211,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Post-Spawn Rush",
+            "retired_in": "prox-web-v3.0"
+          },
+          "stance_variety": {
+            "raw": 0.407,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Stance Variety",
+            "retired_in": "prox-web-v3.0"
+          },
+          "timed_kills": {
+            "raw": 140.0,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Timed Kills",
+            "retired_in": "prox-web-v3.0"
+          }
+        }
+      },
+      "metrics_scored": {
+        "prox_combat": 1,
+        "prox_team": 2,
+        "prox_gamesense": 2
+      },
+      "metric_weight_coverage": 1.0,
+      "missing_metrics": [],
+      "rank": 4
+    },
+    {
+      "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "name": "^7kan^6i^7i",
+      "engagements": 314,
+      "tracks": 146,
+      "prox_combat": 40.0,
+      "prox_team": 25.74,
+      "prox_gamesense": 17.16,
+      "prox_overall": 29.3,
+      "prox_radar": [
+        {
+          "label": "Combat",
+          "value": 40.0
+        },
+        {
+          "label": "Team",
+          "value": 25.74
+        },
+        {
+          "label": "Game Sense",
+          "value": 17.16
+        }
+      ],
+      "breakdown": {
+        "prox_combat": {
+          "escape_rate": {
+            "raw": 0.465,
+            "percentile": 0.4,
+            "weight": 1.0,
+            "contribution": 40.0,
+            "label": "Escape Rate"
+          },
+          "headshot_pct": {
+            "raw": 0.105,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Headshot %",
+            "retired_in": "prox-web-v3.0"
+          },
+          "return_fire_ms": {
+            "raw": 600.568,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Return Fire Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "kpr": {
+            "raw": 0.0,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Kill Permanence",
+            "retired_in": "prox-web-v3.0"
+          },
+          "peak_speed": {
+            "raw": 824.5,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Peak Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "dodge_ms": {
+            "raw": 1426.027,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Dodge Speed",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_team": {
+          "spawn_score": {
+            "raw": 0.342,
+            "percentile": 0.0,
+            "weight": 0.571,
+            "contribution": 0.0,
+            "label": "Spawn Timing"
+          },
+          "revive_rate_as_victim": {
+            "raw": 0.217,
+            "percentile": 0.6,
+            "weight": 0.429,
+            "contribution": 25.74,
+            "label": "Revive Magnet"
+          },
+          "crossfire_rate": {
+            "raw": 0.286,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Crossfire Rate",
+            "retired_in": "prox-web-v3.0"
+          },
+          "support_reaction_ms": {
+            "raw": 1452.358,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Support Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "trades_per_session": {
+            "raw": 15.0,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Trade Kills",
+            "retired_in": "prox-web-v3.0"
+          },
+          "focus_survival": {
+            "raw": 0.279,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Focus Survival",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_gamesense": {
+          "distance_per_life": {
+            "raw": 5597.217,
+            "percentile": 0.4,
+            "weight": 0.429,
+            "contribution": 17.16,
+            "label": "Distance/Life"
+          },
+          "denied_time": {
+            "raw": 6756.731,
+            "percentile": 0.0,
+            "weight": 0.571,
+            "contribution": 0.0,
+            "label": "Denied Enemy Time"
+          },
+          "sprint_discipline": {
+            "raw": 22.591,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Sprint Usage",
+            "retired_in": "prox-web-v3.0"
+          },
+          "post_spawn_rush": {
+            "raw": 810.894,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Post-Spawn Rush",
+            "retired_in": "prox-web-v3.0"
+          },
+          "stance_variety": {
+            "raw": 0.588,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Stance Variety",
+            "retired_in": "prox-web-v3.0"
+          },
+          "timed_kills": {
+            "raw": 78.0,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Timed Kills",
+            "retired_in": "prox-web-v3.0"
+          }
+        }
+      },
+      "metrics_scored": {
+        "prox_combat": 1,
+        "prox_team": 2,
+        "prox_gamesense": 2
+      },
+      "metric_weight_coverage": 1.0,
+      "missing_metrics": [],
+      "rank": 5
+    },
+    {
+      "guid": "9F2B3930797D7D142795B1B6EE194722",
+      "name": "^6[^2T^6W^2K^6]^2I^6mb3ci^2L",
+      "engagements": 327,
+      "tracks": 169,
+      "prox_combat": 20.0,
+      "prox_team": 20.0,
+      "prox_gamesense": 31.42,
+      "prox_overall": 22.86,
+      "prox_radar": [
+        {
+          "label": "Combat",
+          "value": 20.0
+        },
+        {
+          "label": "Team",
+          "value": 20.0
+        },
+        {
+          "label": "Game Sense",
+          "value": 31.42
+        }
+      ],
+      "breakdown": {
+        "prox_combat": {
+          "escape_rate": {
+            "raw": 0.422,
+            "percentile": 0.2,
+            "weight": 1.0,
+            "contribution": 20.0,
+            "label": "Escape Rate"
+          },
+          "headshot_pct": {
+            "raw": 0.134,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Headshot %",
+            "retired_in": "prox-web-v3.0"
+          },
+          "return_fire_ms": {
+            "raw": 890.506,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Return Fire Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "kpr": {
+            "raw": 0.182,
+            "percentile": 1.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Kill Permanence",
+            "retired_in": "prox-web-v3.0"
+          },
+          "peak_speed": {
+            "raw": 812.9,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Peak Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "dodge_ms": {
+            "raw": 1352.733,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Dodge Speed",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_team": {
+          "spawn_score": {
+            "raw": 0.371,
+            "percentile": 0.2,
+            "weight": 0.571,
+            "contribution": 11.42,
+            "label": "Spawn Timing"
+          },
+          "revive_rate_as_victim": {
+            "raw": 0.181,
+            "percentile": 0.2,
+            "weight": 0.429,
+            "contribution": 8.58,
+            "label": "Revive Magnet"
+          },
+          "crossfire_rate": {
+            "raw": 0.319,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Crossfire Rate",
+            "retired_in": "prox-web-v3.0"
+          },
+          "support_reaction_ms": {
+            "raw": 1864.183,
+            "percentile": 0.0,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Support Speed",
+            "retired_in": "prox-web-v3.0"
+          },
+          "trades_per_session": {
+            "raw": 17.0,
+            "percentile": 0.5,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Trade Kills",
+            "retired_in": "prox-web-v3.0"
+          },
+          "focus_survival": {
+            "raw": 0.227,
+            "percentile": 0.8,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Focus Survival",
+            "retired_in": "prox-web-v3.0"
+          }
+        },
+        "prox_gamesense": {
+          "distance_per_life": {
+            "raw": 5498.097,
+            "percentile": 0.2,
+            "weight": 0.429,
+            "contribution": 8.58,
+            "label": "Distance/Life"
+          },
+          "denied_time": {
+            "raw": 7620.787,
+            "percentile": 0.4,
+            "weight": 0.571,
+            "contribution": 22.84,
+            "label": "Denied Enemy Time"
+          },
+          "sprint_discipline": {
+            "raw": 22.456,
+            "percentile": 0.4,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Sprint Usage",
+            "retired_in": "prox-web-v3.0"
+          },
+          "post_spawn_rush": {
+            "raw": 869.123,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Post-Spawn Rush",
+            "retired_in": "prox-web-v3.0"
+          },
+          "stance_variety": {
+            "raw": 0.431,
+            "percentile": 0.6,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Stance Variety",
+            "retired_in": "prox-web-v3.0"
+          },
+          "timed_kills": {
+            "raw": 89.0,
+            "percentile": 0.2,
+            "weight": 0.0,
+            "contribution": 0.0,
+            "label": "Timed Kills",
+            "retired_in": "prox-web-v3.0"
+          }
+        }
+      },
+      "metrics_scored": {
+        "prox_combat": 1,
+        "prox_team": 2,
+        "prox_gamesense": 2
+      },
+      "metric_weight_coverage": 1.0,
+      "missing_metrics": [],
+      "rank": 6
+    }
+  ]
+}

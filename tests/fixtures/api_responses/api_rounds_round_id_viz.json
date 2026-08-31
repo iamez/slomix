@@ -1,0 +1,106 @@
+{
+ "duration_seconds": null,
+ "highlights": {
+  "most_damage": {
+   "damage_given": 2325,
+   "name": "player2"
+  },
+  "most_kills": {
+   "kills": 13,
+   "name": "player1"
+  },
+  "mvp": {
+   "dpm": 318.4931640625,
+   "name": "player2"
+  }
+ },
+ "map_name": "etl_sp_delivery",
+ "player_count": 6,
+ "players": [
+  {
+   "damage_given": 1676,
+   "damage_received": 1675,
+   "deaths": 7,
+   "denied_playtime": 49,
+   "dpm": 229.5890350341797,
+   "efficiency": 65.0,
+   "gibs": 2,
+   "guid": "00000000000000000000000000000000",
+   "kill_assists": 0,
+   "kills": 13,
+   "name": "player1",
+   "revives_given": 0,
+   "self_kills": 3,
+   "team_damage_given": 0,
+   "team_damage_received": 36,
+   "time_dead_seconds": 77,
+   "time_played_seconds": 438,
+   "xp": 11.0
+  },
+  {
+   "damage_given": 2325,
+   "damage_received": 1576,
+   "deaths": 9,
+   "denied_playtime": 4459,
+   "dpm": 318.4931640625,
+   "efficiency": 57.14285659790039,
+   "gibs": 6,
+   "guid": "00000001000000000000000000000000",
+   "kill_assists": 0,
+   "kills": 12,
+   "name": "player2",
+   "revives_given": 0,
+   "self_kills": 2,
+   "team_damage_given": 18,
+   "team_damage_received": 36,
+   "time_dead_seconds": 56,
+   "time_played_seconds": 438,
+   "xp": 0.0
+  },
+  {
+   "damage_given": 1850,
+   "damage_received": 2056,
+   "deaths": 10,
+   "denied_playtime": 1,
+   "dpm": 253.42465209960938,
+   "efficiency": 50.0,
+   "gibs": 4,
+   "guid": "00000002000000000000000000000000",
+   "kill_assists": 0,
+   "kills": 10,
+   "name": "player3",
+   "revives_given": 0,
+   "self_kills": 2,
+   "team_damage_given": 36,
+   "team_damage_received": 0,
+   "time_dead_seconds": 95,
+   "time_played_seconds": 438,
+   "xp": 0.0
+  },
+  {
+   "damage_given": 1643,
+   "damage_received": 1862,
+   "deaths": 9,
+   "denied_playtime": 0,
+   "dpm": 225.06849670410156,
+   "efficiency": 47.05882263183594,
+   "gibs": 2,
+   "guid": "00000003000000000000000000000000",
+   "kill_assists": 0,
+   "kills": 8,
+   "name": "player4",
+   "revives_given": 0,
+   "self_kills": 2,
+   "team_damage_given": 0,
+   "team_damage_received": 0,
+   "time_dead_seconds": 103,
+   "time_played_seconds": 438,
+   "xp": 0.0
+  }
+ ],
+ "round_date": "2025-04-03",
+ "round_id": 9128,
+ "round_label": "R2",
+ "round_number": 2,
+ "winner_team": 2
+}

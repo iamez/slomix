@@ -1,0 +1,18 @@
+{
+  "status": "prototype",
+  "ready": false,
+  "message": "Proximity pipeline not connected.",
+  "range_days": 30,
+  "generated_at": "2026-08-29T21:03:14.430161Z",
+  "scope": {
+    "session_date": null,
+    "map_name": "ni_take_mape",
+    "round_number": null,
+    "round_start_unix": null,
+    "player_guid": null
+  },
+  "source": "combat_engagement",
+  "map_name": "ni_take_mape",
+  "grid_size": 512,
+  "hotzones": []
+}

@@ -1,0 +1,11 @@
+{
+  "status": "ok",
+  "scope": {
+    "session_date": "2020-01-01",
+    "map_name": null,
+    "round_number": null,
+    "round_start_unix": null,
+    "player_guid": null
+  },
+  "players": []
+}

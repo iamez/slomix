@@ -65,7 +65,64 @@ async def get_current_season():
     }
 
 
-@router.get("/seasons/current/summary")
+class SeasonTotals(BaseModel):
+    """Season counters. Every one is coalesced with `or 0` in the handler, so
+    none of them is nullable — a season with nothing in it reports zeros, not
+    nulls.
+
+    ⚠️ `avg_rounds_per_day` is `int | float`, and the union is not laziness:
+    `round(rounds / days, 1)` is a float, but the guard `if active_days else 0`
+    yields an INT — and that branch is not hypothetical, it is the state of
+    every season on its first day. Measured both ways against a live database:
+    the current season answers `13.1`, a season pointed at 2030 answers `0`.
+    Typing it `float` would rewrite that `0` as `0.0`.
+    """
+
+    rounds: int
+    players: int
+    sessions: int
+    maps: int
+    kills: int
+    active_days: int
+    avg_rounds_per_day: int | float
+
+
+class SeasonTopMap(BaseModel):
+    """The most-played map of the season.
+
+    ⛔ `name` IS NULLABLE and the live response never shows it: the handler
+    writes `top_map_row[0] if top_map_row else None`, so an empty season sends
+    `{"name": null, "plays": 0}`. This endpoint takes NO parameters, so that
+    branch cannot be reached by varying a query string — it was measured by
+    pointing SeasonManager at a season with no rounds (2030-Q1). An endpoint
+    without filters still has states; they just live in the data.
+    """
+
+    name: str | None
+    plays: int
+
+
+class SeasonSummary(BaseModel):
+    """Totals and activity for the current season.
+
+    ⚠️ `start_date` / `end_date` are `YYYY-MM-DD` HERE, but the sibling
+    `/seasons/current/leaders` sends `str(datetime)` — "2026-07-01 00:00:00".
+    Same two field names, same router, two formats. Neither is wrong; assuming
+    they match is.
+
+    ⛔ `response_model` FILTERS: a field the handler returns and this model
+    omits is dropped silently with a 200.
+    """
+
+    #: `YYYY-QN`, e.g. "2026-Q3".
+    season_id: str
+    start_date: str
+    end_date: str
+    totals: SeasonTotals
+    top_map: SeasonTopMap
+
+
+@router.get("/seasons/current/summary", response_model=SeasonSummary)
 async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
     """
     Summary stats for the current season (totals + activity).
@@ -262,7 +319,79 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/seasons/current/leaders")
+class SeasonLeader(BaseModel):
+    """One category leader: who, and with what figure.
+
+    `value` is `int | float` because `leader_payload` is called with a
+    per-category cast: `float` for `dpm` and `time_dead`, `int` for the other
+    ten. A bare `float` would rewrite every counter as `x.0`.
+    """
+
+    player: str
+    value: int | float
+
+
+class LongestSession(BaseModel):
+    """The season's biggest gaming session.
+
+    ⛔ TYPED FROM THE CODE, NOT FROM THE RUNNING SERVER — and that distinction
+    decided the type. The dev server answers `"longest_session": null`, which
+    reads like a broken query, and typing from it would have pinned this field
+    to null forever. It is not broken: the same request through the code in the
+    tree answers `{"rounds": 23, "date": "2026-07-18"}`. The server has been up
+    since 2026-08-28 06:57 and the fix landed at 13:08 the same day, so the
+    process is running a handler six hours older than the file.
+    ⚠️ A live endpoint is evidence about a DEPLOYED BUILD, not about the code
+    you are typing. Check the service start time against the file's git log
+    before trusting a sample.
+    """
+
+    rounds: int
+    #: `MIN(round_date)` of the session, `YYYY-MM-DD`.
+    date: str
+
+
+class SeasonLeaders(BaseModel):
+    """The thirteen category leaders, plus the biggest session.
+
+    ⭐ EVERY KEY IS ALWAYS PRESENT AND EVERY VALUE MAY BE NULL — the exact
+    opposite of `StatsRecords` in this same release, where the keys disappear
+    instead. Both endpoints answer "nothing to report" and they answer it in
+    incompatible ways, so a consumer cannot carry one habit across: here you
+    check the VALUE, there you check PRESENCE. Measured: pointed at a season
+    with no rounds, all fourteen keys are present and all fourteen are null.
+
+    ⛔ Consequently this route must NOT take `response_model_exclude_none`.
+    Dropping the nulls would turn "no leader for this category" into "we did
+    not mention it" and destroy the distinction the handler is drawing.
+    """
+
+    damage_given: SeasonLeader | None
+    damage_received: SeasonLeader | None
+    team_damage: SeasonLeader | None
+    revives: SeasonLeader | None
+    deaths: SeasonLeader | None
+    gibs: SeasonLeader | None
+    objectives: SeasonLeader | None
+    xp: SeasonLeader | None
+    kills: SeasonLeader | None
+    dpm: SeasonLeader | None
+    time_alive: SeasonLeader | None
+    time_dead: SeasonLeader | None
+    longest_session: LongestSession | None
+
+
+class SeasonLeadersResponse(BaseModel):
+    """⚠️ `start_date` / `end_date` are `str(datetime)` here —
+    "2026-07-01 00:00:00" — while `/seasons/current/summary` sends
+    "2026-07-01" for the same two names. Do not assume the pair matches."""
+
+    start_date: str
+    end_date: str
+    leaders: SeasonLeaders
+
+
+@router.get("/seasons/current/leaders", response_model=SeasonLeadersResponse)
 async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     """
     Get season leaders for various categories.
