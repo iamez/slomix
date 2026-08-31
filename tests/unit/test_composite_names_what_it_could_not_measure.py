@@ -28,6 +28,7 @@ came out zero. Reading it off the zeros would be circular, and it would also
 flag a fully measured session that genuinely had no clutch kills — which is a
 real answer, not a missing one.
 """
+
 import warnings
 
 import pytest
@@ -43,26 +44,40 @@ from website.backend.routers import skill_router  # noqa: E402
 # Every proximity-derived input is non-zero, so the SCORES are non-zero too —
 # which is what lets the tests below separate "measured" from "came out zero".
 RICH_PLAYER = (
-    "AAAA1111", "player", 100,   # guid, name, kills
-    30, 20,                      # crossfire_kills, trade_kills
-    10, 50,                      # gibbed, total_outcomes
-    12, 40,                      # clutch_kills, total_combat_kills
-    0.7,                         # avg_spawn_score
-    60, 600,                     # denied_playtime, time_played_seconds
-    0.55,                        # survival_rate
-    0, 0,                        # focus_escapes, times_focused (always 0)
-    0.3,                         # avg_time_dead_pct
+    "AAAA1111",
+    "player",
+    100,  # guid, name, kills
+    30,
+    20,  # crossfire_kills, trade_kills
+    10,
+    50,  # gibbed, total_outcomes
+    12,
+    40,  # clutch_kills, total_combat_kills
+    0.7,  # avg_spawn_score
+    60,
+    600,  # denied_playtime, time_played_seconds
+    0.55,  # survival_rate
+    0,
+    0,  # focus_escapes, times_focused (always 0)
+    0.3,  # avg_time_dead_pct
 )
 # The same player with every proximity input at zero: real kills, no coverage.
 POOR_PLAYER = (
-    "AAAA1111", "player", 100,
-    0, 0,
-    0, 0,
-    0, 0,
+    "AAAA1111",
+    "player",
+    100,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
     0.0,
-    60, 600,
+    60,
+    600,
     0.55,
-    0, 0,
+    0,
+    0,
     0.3,
 )
 
@@ -83,7 +98,7 @@ class _ScriptedDb:
     async def fetch_one(self, query, params=None):
         if "MAX(session_date)" in query:
             return (self.latest_date,)
-        if "storytelling_kill_impact" in query:
+        if "proximity_crossfire_opportunity" in query and "COUNT" in query:
             return tuple(self.source_counts)
         return None
 
@@ -99,8 +114,8 @@ def test_a_scope_with_no_proximity_rows_names_all_four_metrics():
     db = _ScriptedDb([POOR_PLAYER], source_counts=[0, 0, 0, 0, 0])
     body = _client(db).get("/api/skill/composite?gaming_session_id=98").json()
     assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR, (
-        "a session with no proximity coverage still claims to have measured "
-        f"everything: {body['coverage']}")
+        f"a session with no proximity coverage still claims to have measured everything: {body['coverage']}"
+    )
     assert body["players"], "the players themselves must still be returned"
 
 
@@ -108,8 +123,8 @@ def test_a_fully_covered_scope_names_nothing():
     db = _ScriptedDb([RICH_PLAYER], source_counts=[1152, 163, 1182, 1182, 1182])
     body = _client(db).get("/api/skill/composite?gaming_session_id=137").json()
     assert body["coverage"]["unmeasured_metrics"] == [], (
-        "a fully covered session is being reported as degraded — the flag "
-        "would become noise and get ignored")
+        "a fully covered session is being reported as degraded — the flag would become noise and get ignored"
+    )
 
 
 def test_zero_scores_with_sources_present_are_reported_as_measured():
@@ -124,10 +139,12 @@ def test_zero_scores_with_sources_present_are_reported_as_measured():
     body = _client(db).get("/api/skill/composite?gaming_session_id=137").json()
     player = body["players"][0]
     assert (player["tir"], player["ci"], player["kpi"]) == (0.0, 0.0, 0.0), (
-        "the fixture stopped producing the zeros this test is about")
+        "the fixture stopped producing the zeros this test is about"
+    )
     assert body["coverage"]["unmeasured_metrics"] == [], (
         "genuine zeros were reported as unmeasured — the flag is being read "
-        f"off the scores instead of the sources: {body['coverage']}")
+        f"off the scores instead of the sources: {body['coverage']}"
+    )
 
 
 def test_a_metric_that_is_not_zero_is_still_flagged_when_its_source_is_empty():
@@ -141,15 +158,14 @@ def test_a_metric_that_is_not_zero_is_still_flagged_when_its_source_is_empty():
     db = _ScriptedDb([POOR_PLAYER], source_counts=[0, 0, 0, 0, 0])
     body = _client(db).get("/api/skill/composite?gaming_session_id=98").json()
     assert body["players"][0]["sds"] > 0.0, "fixture no longer exercises the case"
-    assert "sds" in body["coverage"]["unmeasured_metrics"], (
-        "a non-zero but half-measured metric passed as measured")
+    assert "sds" in body["coverage"]["unmeasured_metrics"], "a non-zero but half-measured metric passed as measured"
 
 
 @pytest.mark.parametrize(
     ("counts", "expected"),
     [
-        ([1, 0, 0, 0, 0], ["ci", "kpi", "sds"]),        # crossfire alone measures tir
-        ([0, 1, 0, 0, 0], ["ci", "kpi", "sds"]),        # trades alone also measures tir
+        ([1, 0, 0, 0, 0], ["ci", "kpi", "sds"]),  # crossfire alone measures tir
+        ([0, 1, 0, 0, 0], ["ci", "kpi", "sds"]),  # trades alone also measures tir
         ([0, 0, 1, 0, 0], ["kpi", "sds", "tir"]),
         ([0, 0, 0, 1, 0], ["ci", "sds", "tir"]),
         ([0, 0, 0, 0, 1], ["ci", "kpi", "tir"]),
@@ -161,8 +177,7 @@ def test_each_source_lifts_exactly_the_metrics_it_feeds(counts, expected):
     metric was measured."""
     db = _ScriptedDb([POOR_PLAYER], source_counts=counts)
     body = _client(db).get("/api/skill/composite?gaming_session_id=1").json()
-    assert body["coverage"]["unmeasured_metrics"] == expected, (
-        f"source counts {counts} mapped to the wrong metrics")
+    assert body["coverage"]["unmeasured_metrics"] == expected, f"source counts {counts} mapped to the wrong metrics"
 
 
 def test_the_no_scope_answer_has_the_same_keys_as_every_other_answer():
@@ -181,12 +196,13 @@ def test_the_no_scope_answer_has_the_same_keys_as_every_other_answer():
     assert short["session_date"] is None, "fixture no longer takes the short path"
     assert set(short) == set(full), (
         f"the two answers differ in shape: only in short {set(short) - set(full)}, "
-        f"only in full {set(full) - set(short)}")
+        f"only in full {set(full) - set(short)}"
+    )
     assert set(short["coverage"]) == set(full["coverage"])
     assert set(short["coverage"]["source_rows"]) == set(full["coverage"]["source_rows"])
     assert short["meta"]["metrics"] == full["meta"]["metrics"], (
-        "the two paths carry different metric descriptions — one dict, two "
-        "copies, and they will drift")
+        "the two paths carry different metric descriptions — one dict, two copies, and they will drift"
+    )
     assert short["coverage"]["unmeasured_metrics"] == ALL_FOUR
 
 
@@ -199,19 +215,25 @@ def test_cp_description_does_not_claim_a_measurement_that_is_a_constant():
     per-session question. The number stays; the claim about it does not.
     """
     cp = skill_router._COMPOSITE_METRIC_DESCRIPTIONS["cp"]
-    assert "fixed 15 points" in cp, (
-        f"CP is advertised without saying part of it is a constant: {cp!r}")
+    assert "fixed 15 points" in cp, f"CP is advertised without saying part of it is a constant: {cp!r}"
 
 
 def test_the_checks_above_can_fail():
     """A control: the two fixtures must actually differ."""
-    rich = _client(_ScriptedDb([RICH_PLAYER], [9, 9, 9, 9, 9])).get(
-        "/api/skill/composite?gaming_session_id=1").json()["players"][0]
-    poor = _client(_ScriptedDb([POOR_PLAYER], [0, 0, 0, 0, 0])).get(
-        "/api/skill/composite?gaming_session_id=1").json()["players"][0]
+    rich = (
+        _client(_ScriptedDb([RICH_PLAYER], [9, 9, 9, 9, 9]))
+        .get("/api/skill/composite?gaming_session_id=1")
+        .json()["players"][0]
+    )
+    poor = (
+        _client(_ScriptedDb([POOR_PLAYER], [0, 0, 0, 0, 0]))
+        .get("/api/skill/composite?gaming_session_id=1")
+        .json()["players"][0]
+    )
     assert (rich["tir"], rich["ci"], rich["kpi"]) != (poor["tir"], poor["ci"], poor["kpi"]), (
         "both fixtures produce the same scores — the tests above would pass "
-        "against a handler that ignores its inputs entirely")
+        "against a handler that ignores its inputs entirely"
+    )
 
 
 class _ShortRowDb(_ScriptedDb):
@@ -224,7 +246,7 @@ class _ShortRowDb(_ScriptedDb):
     """
 
     async def fetch_one(self, query, params=None):
-        if "storytelling_kill_impact" in query:
+        if "proximity_crossfire_opportunity" in query and "COUNT" in query:
             return ("2026-08-11",)
         return await super().fetch_one(query, params)
 
@@ -235,9 +257,95 @@ def test_a_malformed_coverage_row_does_not_take_the_answer_down():
     response = _client(db).get("/api/skill/composite?gaming_session_id=1")
     assert response.status_code == 200, (
         f"a coverage row of the wrong width returned {response.status_code}; "
-        "the players are still there and must still be served")
+        "the players are still there and must still be served"
+    )
     body = response.json()
     assert body["players"], "the answer itself was lost"
     assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR, (
         "a coverage row that could not be read must report unmeasured — the "
-        "cautious direction — not silently claim everything was measured")
+        "cautious direction — not silently claim everything was measured"
+    )
+
+
+class _QueryLog(_ScriptedDb):
+    """Records every statement so the tests below can read what was BUILT."""
+
+    def __init__(self, *a, **kw):
+        super().__init__(*a, **kw)
+        self.queries: list[str] = []
+
+    async def fetch_one(self, query, params=None):
+        self.queries.append(" ".join(query.split()))
+        return await super().fetch_one(query, params)
+
+    async def fetch_all(self, query, params=None):
+        self.queries.append(" ".join(query.split()))
+        return await super().fetch_all(query, params)
+
+
+def _coverage_query(db: _QueryLog) -> str:
+    hits = [q for q in db.queries if "proximity_crossfire_opportunity" in q and "COUNT" in q]
+    assert hits, f"no coverage query was built; statements: {[q[:60] for q in db.queries]}"
+    return hits[0]
+
+
+def test_the_counts_mirror_the_predicates_the_metric_cte_apply():
+    """⛔ THE RULE THE REVIEW NAMED THREE TIMES: count what the metric queries
+    can USE. A row the CTEs filter out (null canonical GUID, OMNIBOT bot)
+    must not make its metric "measured" — measured live before the fix:
+    session 99's crossfire count was 1,388 rows, every one a bot, and tir
+    reported as measured for a session session_pcs had emptied.
+
+    Read off the QUERY THE HANDLER BUILT, not the source file: a comment
+    naming the predicate would satisfy a source grep.
+    """
+    db = _QueryLog([POOR_PLAYER], source_counts=[0, 0, 0, 0, 0])
+    _client(db).get("/api/skill/composite?gaming_session_id=99")
+    q = _coverage_query(db)
+    assert "storytelling_kill_impact" not in q, (
+        "the crossfire leg is back on the KIS cache — a cached is_crossfire "
+        "computed against an empty context is a value, not a measurement, "
+        "and the cache bypasses the round gate"
+    )
+    # ⚠️ COUNTED, not merely present: killer_guid_canonical guards TWO
+    # subqueries (kill_outcome and spawn_timing), and a substring check
+    # passes while one of the two loses its predicate — that exact mutation
+    # survived the first version of this test.
+    for column, expected in (
+        ("trader_guid_canonical", 1),
+        ("attacker_guid_canonical", 1),
+        ("killer_guid_canonical", 2),
+    ):
+        assert q.count(f"{column} IS NOT NULL") == expected, (
+            f"{column}: expected {expected} IS NOT NULL predicates, found {q.count(f'{column} IS NOT NULL')}"
+        )
+        found_omnibot = q.count(f"{column} NOT LIKE 'OMNIBOT%'")
+        assert found_omnibot == expected, f"{column}: expected {expected} OMNIBOT exclusions, found {found_omnibot}"
+
+
+def test_the_fallback_scope_asks_every_source_not_one():
+    """⛔ The early return may claim five zeros only when all five sources are
+    empty. With a single-table MAX, kill_outcome going quiet while another
+    instrument still writes returned "nothing anywhere" — zeros asserted,
+    never counted."""
+    db = _QueryLog([], source_counts=[0, 0, 0, 0, 0], latest_date=None)
+    _client(db).get("/api/skill/composite")
+    fallback = [q for q in db.queries if "MAX(session_date)" in q]
+    assert fallback, "no fallback-scope query was built"
+    for table in (
+        "proximity_kill_outcome",
+        "proximity_crossfire_opportunity",
+        "proximity_lua_trade_kill",
+        "proximity_combat_position",
+        "proximity_spawn_timing",
+    ):
+        assert table in fallback[0], f"the fallback scope no longer asks {table}"
+    assert "GREATEST" in fallback[0]
+
+
+def test_the_query_readers_can_fail():
+    """Controls: a reader that finds no statement agrees with anything."""
+    db = _QueryLog([POOR_PLAYER], source_counts=[1, 1, 1, 1, 1])
+    _client(db).get("/api/skill/composite?gaming_session_id=1")
+    assert _coverage_query(db) != "", "empty query accepted"
+    assert not any("no_such_table" in q for q in db.queries)

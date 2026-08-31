@@ -492,7 +492,24 @@ async def get_composite_stats(
         )
     else:
         if not session_date:
-            row = await db.fetch_one("SELECT MAX(session_date) FROM proximity_kill_outcome")
+            # ⛔ The fallback scope reads ALL five coverage sources, not one
+            # (Codex on #848): with proximity_kill_outcome empty but any other
+            # instrument still writing, a single-table MAX said "nothing
+            # anywhere" and the early return below hard-coded five zeros that
+            # were never counted. GREATEST over the union makes that return
+            # reachable only when every source is empty — at which point the
+            # zeros are true by construction rather than by assertion.
+            row = await db.fetch_one(
+                """
+                SELECT GREATEST(
+                    (SELECT MAX(session_date) FROM proximity_kill_outcome),
+                    (SELECT MAX(session_date) FROM proximity_crossfire_opportunity),
+                    (SELECT MAX(session_date) FROM proximity_lua_trade_kill),
+                    (SELECT MAX(session_date) FROM proximity_combat_position),
+                    (SELECT MAX(session_date) FROM proximity_spawn_timing)
+                )
+                """
+            )
             if not row or not row[0]:
                 # No proximity rows anywhere, so there is no default scope to
                 # pick. This used to return a SHORTER shape than the one
@@ -711,15 +728,43 @@ async def get_composite_stats(
     # from whether the scores came out zero. Reading it off the zeros would be
     # circular — it would also flag a session that was fully measured and
     # genuinely had no clutch kills, which is a real answer, not a missing one.
+    # ⚠️ Three corrections from review (Codex + CodeRabbit on #848), each an
+    # instance of one rule — count what the metric queries can USE:
+    #
+    # - The crossfire leg counts the RAW instrument
+    #   (proximity_crossfire_opportunity), not the KIS cache it feeds: a
+    #   cached is_crossfire computed against an empty crossfire context is
+    #   a value, not a measurement. Measured: cache>0 with raw=0 in 0
+    #   sessions today, so nothing flips on that axis — but the cache also
+    #   BYPASSES the round gate, and in 5 live sessions ALL of its rows
+    #   are bot rows, so counting it reported tir as measured for sessions
+    #   session_pcs had emptied.
+    # - Every count carries the canonical-GUID predicate its metric CTE
+    #   carries (IS NOT NULL): a row the CTE filters out cannot make its
+    #   metric "measured". 0 nulls in today's data; the predicate mirrors
+    #   the CTEs, not the sample.
+    # - OMNIBOT canonical GUIDs are excluded the way session_pcs excludes
+    #   bot players. Through round_set alone 0 sessions flip today, but
+    #   the round flag has been insufficient before and the count must not
+    #   rely on it (8,358 OMNIBOT rows in kill_outcome alone).
     coverage_row = await db.fetch_one(
         f"""
         SELECT
-            (SELECT COUNT(*) FROM storytelling_kill_impact {ski_where}),
-            (SELECT COUNT(*) FROM proximity_lua_trade_kill WHERE {round_set}),
+            (SELECT COUNT(*) FROM proximity_crossfire_opportunity
+              WHERE {round_set}),
+            (SELECT COUNT(*) FROM proximity_lua_trade_kill
+              WHERE {round_set} AND trader_guid_canonical IS NOT NULL
+                AND trader_guid_canonical NOT LIKE 'OMNIBOT%'),
             (SELECT COUNT(*) FROM proximity_combat_position
-              WHERE {round_set} AND event_type = 'kill'),
-            (SELECT COUNT(*) FROM proximity_kill_outcome WHERE {round_set}),
-            (SELECT COUNT(*) FROM proximity_spawn_timing WHERE {round_set})
+              WHERE {round_set} AND event_type = 'kill'
+                AND attacker_guid_canonical IS NOT NULL
+                AND attacker_guid_canonical NOT LIKE 'OMNIBOT%'),
+            (SELECT COUNT(*) FROM proximity_kill_outcome
+              WHERE {round_set} AND killer_guid_canonical IS NOT NULL
+                AND killer_guid_canonical NOT LIKE 'OMNIBOT%'),
+            (SELECT COUNT(*) FROM proximity_spawn_timing
+              WHERE {round_set} AND killer_guid_canonical IS NOT NULL
+                AND killer_guid_canonical NOT LIKE 'OMNIBOT%')
     """,
         (scope_param,),
     )
