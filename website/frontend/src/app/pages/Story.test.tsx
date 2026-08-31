@@ -772,7 +772,7 @@ describe('Story', () => {
     ).toBeGreaterThan(0));
     expect(
       screen.getAllByText((_, el) => (el?.textContent ?? '')
-        .includes('stored rows do not say which version scored them')).length,
+        .includes('the response does not say which version scored each row')).length,
     ).toBeGreaterThan(0);
   });
 

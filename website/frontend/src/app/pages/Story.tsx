@@ -836,10 +836,14 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
           the ten highest-scoring of {figure(kills.length)} — the summary above counts all of them
         </Lbl>
       )}
-      {/* A contract gap this page cannot close: storytelling_kill_impact has
-        * no formula_version column (schema_postgresql.sql:4190ff), the
-        * details SELECT (storytelling_router.py:358-370) neither returns nor
-        * filters one, and public requests never recompute — so a session
+      {/* A WIRE gap this page cannot close (the backend can, cheaply):
+        * storytelling_kill_impact has
+        * ⚠️ Corrected against the LIVE database, because the first draft of
+        * this comment trusted the schema dump and was wrong: the table DOES
+        * have a formula_version column, with 1,812 kis-v2 rows alongside
+        * 44,152 kis-v5 — the details SELECT
+        * (storytelling_router.py:358-370) simply does not return it, and
+        * public requests never recompute — so a session
         * scored under an earlier formula keeps its stored totals, and the
         * two annotations read from /storytelling/formula (the objective-area
         * value, the soft-cap threshold) describe the CURRENT formula, not
@@ -850,7 +854,8 @@ function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: st
         <Meta>
           multipliers are the stored per-kill record; the objective-area value and
           the soft-cap threshold are read from the current formula ({formula.data.version}) —
-          stored rows do not say which version scored them
+          the response does not say which version scored each row (the stored
+          rows do — the endpoint does not return that column yet)
         </Meta>
       )}
     </Stack>
