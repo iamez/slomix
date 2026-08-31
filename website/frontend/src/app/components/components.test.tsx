@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
@@ -185,6 +186,43 @@ describe('Absent holds its identity against its callers', () => {
     expect(screen.getByText(/page gave no reason/)).toBeTruthy();
     render(<Absent reason={false as unknown as string} />);
     expect(screen.getAllByText(/page gave no reason/).length).toBe(2);
+  });
+
+  it.each([
+    ['an empty collection — items.map(...) with nothing in it', [] as NonNullable<ReactNode>],
+    ['an empty fragment', (<></>) as NonNullable<ReactNode>],
+    ['a collection of blank strings', ['', '  '] as NonNullable<ReactNode>],
+    ['a nested empty collection', [[], [null, false]] as NonNullable<ReactNode>],
+    ['a fragment wrapping an empty collection', (<>{[]}</>) as NonNullable<ReactNode>],
+  ])('names the bug for a compound reason that renders nothing: %s', (_label, reason) => {
+    // ⛔ These all TYPE-CHECK as ReactNode and all render silence. Before the
+    // recursive fix they passed the guarantee, so `Absent` produced exactly the
+    // reason-less absence it exists to forbid — through the check meant to stop
+    // it. An empty array is not null, and that is the whole trap.
+    render(<Absent reason={reason} />);
+    expect(screen.getByText(/page gave no reason/)).toBeTruthy();
+  });
+
+  it.each([
+    ['the shape PlayerProfile actually passes', (<>no {'kills'} recorded yet</>) as NonNullable<ReactNode>],
+    ['a collection with one real member', ['', 'no data in this period'] as NonNullable<ReactNode>],
+    ['a number, which renders visibly', (0) as NonNullable<ReactNode>],
+    ['an element of its own, opaque from here', (<span>rated below the floor</span>) as NonNullable<ReactNode>],
+  ])('CONTROL — a reason with substance is still shown, not overridden: %s', (_label, reason) => {
+    // Without these the fix could pass by calling EVERY compound node empty,
+    // which would replace three working call sites with a bug notice.
+    render(<Absent reason={reason} />);
+    expect(screen.queryByText(/page gave no reason/)).toBeNull();
+  });
+
+  it('does not consume a one-shot iterator to judge it', () => {
+    // ⚠️ Deliberate: reading a generator here would hand React an exhausted
+    // one and render the empty reason we are forbidding — the check would
+    // CAUSE the failure it detects. So a generator counts as substance, and
+    // this test pins that it still arrives with its contents intact.
+    function* reason() { yield 'no rounds recorded'; }
+    render(<Absent reason={reason() as unknown as NonNullable<ReactNode>} />);
+    expect(screen.getByText('no rounds recorded')).toBeTruthy();
   });
 
   it('Meta keeps its grey the same way', () => {
