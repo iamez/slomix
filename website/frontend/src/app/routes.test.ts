@@ -134,3 +134,64 @@ describe('routes and the shell agree on what is a stats page', () => {
     expect(statsPrefixesFromShell().length).toBeGreaterThan(5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// `PAGES`, `phase` and the e2e stub threshold are three halves of one fact.
+// ---------------------------------------------------------------------------
+
+describe('the shell, the phases and the sweep agree on what is built', () => {
+  const appDir = dirname(fileURLToPath(import.meta.url));
+
+  /** Route keys the shell maps to a real component. Read from source because
+   *  `main.tsx` cannot be imported: it calls `createRoot` and `applyHashShim`
+   *  at module scope, so importing it would mount the app inside vitest. */
+  function wiredKeys(): string[] {
+    const source = readFileSync(join(appDir, 'main.tsx'), 'utf8');
+    const start = source.indexOf('const PAGES');
+    const end = source.indexOf('const router');
+    expect(start, 'PAGES moved or was renamed').toBeGreaterThan(-1);
+    expect(end, 'const router moved — the PAGES slice is unbounded')
+      .toBeGreaterThan(start);
+    return [...source.slice(start, end).matchAll(/^\s*'?([a-z0-9-]+)'?\s*:/gm)]
+      .map((m) => m[1]);
+  }
+
+  /** The stub threshold the dev sweep enforces. */
+  function sweepThreshold(): number {
+    const source = readFileSync(join(appDir, '..', '..', 'e2e', 'app-routes.spec.ts'), 'utf8');
+    const hit = source.match(/const BUILT_THROUGH_PHASE = (\d+)/);
+    expect(hit, 'BUILT_THROUGH_PHASE moved or was renamed').not.toBeNull();
+    return Number((hit as RegExpMatchArray)[1]);
+  }
+
+  it('a route is wired exactly when its phase is built', () => {
+    const wired = new Set(wiredKeys());
+    const built = Math.max(...APP_ROUTES.filter((r) => wired.has(r.key)).map((r) => r.phase));
+    const wrong = APP_ROUTES
+      .filter((r) => wired.has(r.key) !== (r.phase <= built))
+      .map((r) => `${r.key} (phase ${r.phase}, ${wired.has(r.key) ? 'wired' : 'stub'})`);
+    expect(wrong, 'a page can exist, have green tests and still render the '
+      + 'phase stub in a browser — nothing else in this repo notices')
+      .toEqual([]);
+  });
+
+  it('the dev sweep requires every built phase to have stopped stubbing', () => {
+    // ⛔ THE FAILURE THIS EXISTS FOR. `BUILT_THROUGH_PHASE` is raised by hand,
+    // and it was left at 3 while phase 4 shipped — so `session-detail` and
+    // `session-detail-date`, the two newest pages, were the only routes exempt
+    // from the one check that proves a stub is gone. A constant that must be
+    // raised by hand is a constant that will stay too low; this is what makes
+    // it self-checking instead.
+    const wired = new Set(wiredKeys());
+    const built = Math.max(...APP_ROUTES.filter((r) => wired.has(r.key)).map((r) => r.phase));
+    expect(sweepThreshold(), `phase ${built} is wired in the shell but the dev `
+      + `sweep still allows stubs up to phase ${sweepThreshold()} — raise `
+      + 'BUILT_THROUGH_PHASE in e2e/app-routes.spec.ts').toBe(built);
+  });
+
+  it('the checks can fail', () => {
+    // Without these, a regex that matched nothing would read as "all agree".
+    expect(wiredKeys().length).toBeGreaterThan(20);
+    expect(sweepThreshold()).toBeGreaterThan(0);
+  });
+});

@@ -212,12 +212,20 @@ export interface BuildInfo {
 /** One R1/R2 row of the last session — corpus: api_stats_last_session.json */
 export interface LastSessionMatch {
   id: number;
-  map_name: string;
+  /** NULLABLE, and not because today's data says so — it does not. The
+   *  brother widened these on #830 after Codex traced the path:
+   *  `get_session_matches_by_round_ids()` selects `rounds.map_name` and
+   *  `round_date` with no filter on either, and both columns are nullable.
+   *  Measured on the live payload: 0 of 12 matches carry a null, so this is
+   *  the branch that has not happened yet rather than the one that cannot.
+   *  A `| null` the data never triggers costs one `??`; a non-null type the
+   *  data contradicts is a broken render on a page that was working. */
+  map_name: string | null;
   round_number: number;
   duration: string;
   winner: string;
   outcome: string;
-  date: string;
+  date: string | null;
 }
 
 /** Per-player line inside last-session teams — only the fields home sums. */
@@ -293,12 +301,20 @@ export interface StatsTrends {
  * axis/allies score fields are null in the recording — read as nullable. */
 export interface MatchRow {
   id: number;
-  map_name: string;
+  /** Nullable for the same reason as LastSessionMatch, and by the same rule
+   *  rather than a different mood: `get_recent_matches` selects
+   *  `r.map_name` and `r.round_date` under `WHERE r.round_number IN (1, 2)`
+   *  and filters neither, and both columns are nullable. Measured
+   *  2026-08-30: 0 nulls in 3,176 rounds and 0 in 100 sampled matches — a
+   *  branch that has not happened, not one that cannot. (Contrast
+   *  `round_start_unix`, nullable in the SAME table with 2,185 nulls, of
+   *  which the newest is from 2026-08-27: that one is live.) */
+  map_name: string | null;
   round_number: number;
   duration: string;
   winner: string;
   outcome: string;
-  date: string;
+  date: string | null;
   time_ago: string;
   /** null when the round could not be attributed to a session — the link
    * then falls back to the date route (Codex on #811, wave 2). */
