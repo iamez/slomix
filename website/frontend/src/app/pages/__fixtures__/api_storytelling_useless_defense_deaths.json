@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "session_date": "2026-08-27",
+ "metric": "useless_defense_deaths",
+ "description": "Defenders who died with their next spawn far away (>= 25s) and the killer barely scratched (>= 80 HP). Hands the attackers free time on the objective without trading damage.",
+ "thresholds": {
+  "min_reinf_seconds": 25,
+  "min_killer_health": 80
+ },
+ "players": [
+  {
+   "guid": "9F2B3930797D7D142795B1B6EE194722",
+   "guid_short": "9F2B3930",
+   "name": "[TWK]Imb3ciL",
+   "useless_deaths": 5,
+   "total_defense_deaths": 51,
+   "rate": 0.098
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "guid_short": "1C747DF1",
+   "name": ".lgz",
+   "useless_deaths": 4,
+   "total_defense_deaths": 65,
+   "rate": 0.062
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "guid_short": "EDBB5DA9",
+   "name": "[TWK]CUJO",
+   "useless_deaths": 2,
+   "total_defense_deaths": 45,
+   "rate": 0.044
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "guid_short": "2B5938F5",
+   "name": "bronze",
+   "useless_deaths": 2,
+   "total_defense_deaths": 40,
+   "rate": 0.05
+  },
+  {
+   "guid": "3C0354D32C5BAFC775198C8A9EAD8087",
+   "guid_short": "3C0354D3",
+   "name": "It's squAziii",
+   "useless_deaths": 1,
+   "total_defense_deaths": 41,
+   "rate": 0.024
+  }
+ ],
+ "scope": {
+  "kind": "gaming_session",
+  "version": "gaming-session-v1",
+  "gaming_session_id": 154,
+  "dates": [
+   "2026-08-27"
+  ],
+  "accepted_round_count": 12,
+  "distinct_map_names": [
+   "etl_adlernest",
+   "etl_sp_delivery",
+   "supply",
+   "te_escape2"
+  ],
+  "last_round_unix": 1787861734
+ }
+}

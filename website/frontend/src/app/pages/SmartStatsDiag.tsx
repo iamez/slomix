@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSessions, useStorytellingCompleteness, type DiagScope } from '../lib/queries';
 import type { StorytellingCompleteness } from '../lib/types';
-import { Lbl, Pending, SectionHead, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Absent, Lbl, lblStyle, Pending, rowStyle, SectionHead, StatusDot, Unavailable } from '../components/ui';
 
 /**
  * Smart Stats diagnostics (docs/design/12 row 29) — legacy
@@ -119,9 +119,7 @@ export function SmartStatsDiag() {
         * default scope the diag query stays disabled, and disabled reads
         * as isPending forever (Codex on #809). */}
       {sessionsEmpty && pickedDate === null && (
-        <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-5)' }}>
-          no sessions recorded yet — pick a date to query one directly
-        </div>
+        <Absent block style={{ marginTop: 'var(--space-5)' }} reason="no sessions recorded yet — pick a date to query one directly" />
       )}
       {((diag.isPending && scope !== null) || (sessionDate === null && sessions.isPending)) && (
         <div style={{ marginTop: 'var(--space-5)' }}><Pending label="diagnostics" /></div>

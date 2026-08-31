@@ -91,9 +91,7 @@
 /api/proximity/vehicle-progress
 /api/proximity/weapon-accuracy
 /api/replay/round
-/api/rivalries/h2h
 /api/server-activity/history
-/api/skill/adjusted-lifetime
 /api/skill/composite
 /api/skill/player
 /api/stats/live-session
@@ -102,14 +100,6 @@
 /api/stats/sessions
 /api/stats/weapons/by-player
 /api/status
-/api/storytelling/best-lives
-/api/storytelling/formula
-/api/storytelling/kill-impact/details
-/api/storytelling/kill-matrix
-/api/storytelling/momentum-session
-/api/storytelling/movement
-/api/storytelling/useless-defense-deaths
-/api/storytelling/win-contribution/formula
 /api/uploads
 /api/uploads/resumable
 /api/uploads/tags/popular

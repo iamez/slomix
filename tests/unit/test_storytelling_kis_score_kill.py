@@ -392,3 +392,41 @@ def test_spawn_timing_other_player_does_not_affect_score(svc):
         victim_classes={}, combat_positions={},
     )
     assert result["reinf_multiplier"] == 1.0  # default — no spawn_timing applied
+
+
+# ---------------------------------------------------------------------------
+# Spawn bonus coefficient: published AND wired
+# ---------------------------------------------------------------------------
+
+
+def test_spawn_bonus_constant_is_wired_into_the_multiplier(svc, monkeypatch):
+    """/storytelling/formula publishes SPAWN_TIMING_BONUS and (since #842)
+    derives the range from it — but the scorer computed `1.0 + best_score`
+    without ever reading the constant, so moving it would move the published
+    range while every score stayed put (Codex on #842). The multiplier must
+    be 1 + bonus x denial with the SAME constant the endpoint publishes."""
+    from website.backend.services.storytelling import kis as kis_mod
+    monkeypatch.setattr(kis_mod, "SPAWN_TIMING_BONUS", 1.5)
+    kt = 10_000
+    result = svc._score_kill(
+        kill=_kill(kill_time=kt),
+        carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
+        spawn_timings={(1_700_000_000, "supply", 1): [("K", kt, 0.4, 2.0)]},
+        victim_classes={}, combat_positions={},
+    )
+    assert result["spawn_multiplier"] == pytest.approx(1.0 + 1.5 * 0.4)
+
+
+def test_spawn_bonus_at_1_is_the_identity_no_score_moves(svc):
+    """The wiring itself must not change a single score while the constant is
+    1.0: multiplying by 1.0 is exact in IEEE 754, so 1.0 + 1.0*s == 1.0 + s
+    for every float s — the reason this lands WITHOUT a FORMULA_VERSION bump
+    (kis.py header rule applies the day the constant actually moves)."""
+    kt = 10_000
+    result = svc._score_kill(
+        kill=_kill(kill_time=kt),
+        carrier_kills={}, carrier_returns={}, pushes={}, crossfires={},
+        spawn_timings={(1_700_000_000, "supply", 1): [("K", kt, 0.4, 2.0)]},
+        victim_classes={}, combat_positions={},
+    )
+    assert result["spawn_multiplier"] == 1.4

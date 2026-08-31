@@ -22,6 +22,7 @@ sum (volume bias) — with harder pool as a PLUS:
     adj(p) = AVG_s[ sess_rating(p,s) + (avg_pool_adj_LOO(s,p) - POOL_NEUTRAL) ]
 seeded with current et_rating, iterated to convergence (<=5 rounds).
 """
+
 from __future__ import annotations
 
 import datetime as _dt
@@ -61,10 +62,12 @@ def pool_strength_A(all_ratings: list[float], own_rating: float) -> float | None
     return mean(others) if others else None
 
 
-def adjusted_lifetime(sessions_by_player: dict[str, list[tuple[str, float]]],
-                      seed: dict[str, float],
-                      participants_by_session: dict[str, list[str]],
-                      iterations: int = SRS_ITERATIONS) -> dict[str, float]:
+def adjusted_lifetime(
+    sessions_by_player: dict[str, list[tuple[str, float]]],
+    seed: dict[str, float],
+    participants_by_session: dict[str, list[str]],
+    iterations: int = SRS_ITERATIONS,
+) -> dict[str, float]:
     """Owner-corrected SRS: adj(p) = AVG_s[sess_rating + (pool_adj_LOO - NEUTRAL)].
 
     sessions_by_player: player -> [(session_key, session_rating), ...]
@@ -77,8 +80,7 @@ def adjusted_lifetime(sessions_by_player: dict[str, list[tuple[str, float]]],
         for p, sess in sessions_by_player.items():
             vals = []
             for skey, srating in sess:
-                others = [adj.get(q, POOL_NEUTRAL)
-                          for q in participants_by_session.get(skey, []) if q != p]
+                others = [adj.get(q, POOL_NEUTRAL) for q in participants_by_session.get(skey, []) if q != p]
                 if not others:
                     continue
                 vals.append(srating + (mean(others) - POOL_NEUTRAL))
@@ -126,12 +128,12 @@ class SEffortService:
             compute_population_percentiles,
             compute_session_ratings,
         )
+
         session_date = _norm_date(session_date)
         roster = await self._roster(session_date)
         if not roster:
             return None
-        life_rows = await self.db.fetch_all(
-            "SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
+        life_rows = await self.db.fetch_all("SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
         # UPPER is only the MATCH KEY — the ORIGINAL guid (as stored in
         # player_skill_ratings) is what downstream lookups receive, so a
         # lower/mixed-case guid still resolves (codex, PR #455).
@@ -150,20 +152,22 @@ class SEffortService:
             pool = pool_strength_A(all_lifetimes, life[g][1])
             eff = s_effort(float(sess), pool) if pool else None
             perf = s_performance(eff, life[g][1]) if eff is not None else None
-            out.append({
-                "player_guid": life[g][2], "name": life[g][0],
-                "session_rating": round(float(sess), 4),
-                "lifetime_rating": round(life[g][1], 4),
-                "pool_strength": round(pool, 4) if pool else None,
-                "s_effort": round(eff, 4) if eff is not None else None,
-                "s_performance": round(perf, 4) if perf is not None else None,
-                "rounds": (sr or {}).get("rounds"),
-                "formula_version": FORMULA_VERSION,
-            })
+            out.append(
+                {
+                    "player_guid": life[g][2],
+                    "name": life[g][0],
+                    "session_rating": round(float(sess), 4),
+                    "lifetime_rating": round(life[g][1], 4),
+                    "pool_strength": round(pool, 4) if pool else None,
+                    "s_effort": round(eff, 4) if eff is not None else None,
+                    "s_performance": round(perf, 4) if perf is not None else None,
+                    "rounds": (sr or {}).get("rounds"),
+                    "formula_version": FORMULA_VERSION,
+                }
+            )
         return out or None
 
-    async def persist_session(self, session_date: str,
-                              rows: list[dict] | None = None) -> int:
+    async def persist_session(self, session_date: str, rows: list[dict] | None = None) -> int:
         """Idempotent persist into player_skill_history scope='session'.
 
         Accepts precomputed rows (endpoint passes them — no double compute).
@@ -195,8 +199,7 @@ class SEffortService:
             except Exception:  # noqa: BLE001 - SQLite fallback has no advisory locks
                 logger.debug("advisory lock unavailable (non-PG adapter)")
             await self.db.execute(
-                "DELETE FROM player_skill_history "
-                "WHERE scope = 'session' AND session_date = ?",
+                "DELETE FROM player_skill_history WHERE scope = 'session' AND session_date = ?",
                 (d,),
             )
             for r in rows:
@@ -212,55 +215,75 @@ class SEffortService:
 
     async def _insert_row(self, session_date, r: dict) -> None:
         await self.db.execute(
-                "INSERT INTO player_skill_history "
-                "(player_guid, scope, session_date, et_rating, rounds_in_scope, components) "
-                "VALUES (?, 'session', ?, ?, ?, ?)",
-                (r["player_guid"], session_date, r["session_rating"],
-                 r.get("rounds") or 0,
-                 json.dumps({
-                     "s_effort": r["s_effort"],
-                     "s_performance": r["s_performance"],
-                     "pool_strength": r["pool_strength"],
-                     "lifetime_rating": r["lifetime_rating"],
-                     "formula_version": FORMULA_VERSION,
-                 })),
-            )
+            "INSERT INTO player_skill_history "
+            "(player_guid, scope, session_date, et_rating, rounds_in_scope, components) "
+            "VALUES (?, 'session', ?, ?, ?, ?)",
+            (
+                r["player_guid"],
+                session_date,
+                r["session_rating"],
+                r.get("rounds") or 0,
+                json.dumps(
+                    {
+                        "s_effort": r["s_effort"],
+                        "s_performance": r["s_performance"],
+                        "pool_strength": r["pool_strength"],
+                        "lifetime_rating": r["lifetime_rating"],
+                        "formula_version": FORMULA_VERSION,
+                    }
+                ),
+            ),
+        )
 
     async def compute_adjusted_lifetime(self) -> list[dict]:
         """SRS adjusted lifetime from PERSISTED scope='session' rows."""
         hist_all = await self.db.fetch_all(
             "SELECT player_guid, session_date, et_rating, components "
             "FROM player_skill_history "
-            "WHERE scope = 'session' AND session_date IS NOT NULL")
+            "WHERE scope = 'session' AND session_date IS NOT NULL"
+        )
         # only rows written by the CURRENT formula — the version guarantee
         # must hold on read, not just on write (Copilot, PR #455)
         hist = []
-        for r in (hist_all or []):
+        for r in hist_all or []:
             try:
                 comp = json.loads(r[3]) if isinstance(r[3], str) else (r[3] or {})
             except (TypeError, ValueError):
                 comp = {}
             if comp.get("formula_version") == FORMULA_VERSION:
                 hist.append(r)
-        life_rows = await self.db.fetch_all(
-            "SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
+        life_rows = await self.db.fetch_all("SELECT player_guid, display_name, et_rating FROM player_skill_ratings")
         life = {r[0].upper(): (r[1], float(r[2]), r[0]) for r in (life_rows or [])}
         sess_by_p: dict[str, list] = {}
         parts: dict[str, list] = {}
-        for r in (hist or []):
+        # ⛔ Keep the ORIGINAL casing beside the uppercased join key (Codex on
+        # #846): resolve_player_guid() looks profiles up with an exact,
+        # case-sensitive player_guid = $1, and rated players already emit
+        # their stored casing via life[p][2] for exactly that reason — but a
+        # history-only player used to emit the UPPERCASED key, so their
+        # profile link 404'd. Measured today: 0 history GUIDs differ from
+        # their uppercase form, so this is schema-truth (the column is free
+        # text), not a live repair.
+        original_guid: dict[str, str] = {}
+        for r in hist or []:
             p, skey = r[0].upper(), str(r[1])
+            original_guid.setdefault(p, r[0])
             sess_by_p.setdefault(p, []).append((skey, float(r[2])))
             parts.setdefault(skey, []).append(p)
         if not sess_by_p:
             return []
         seed = {p: life.get(p, (None, POOL_NEUTRAL))[1] for p in sess_by_p}
         adj = adjusted_lifetime(sess_by_p, seed, parts)
-        out = [{"player_guid": life[p][2] if p in life else p,
+        out = [
+            {
+                "player_guid": life[p][2] if p in life else original_guid[p],
                 "name": life.get(p, (p, 0))[0],
                 "lifetime_rating": round(life[p][1], 4) if p in life else None,
                 "adjusted_lifetime": round(v, 4),
                 "n_sessions": len(sess_by_p[p]),
-                "formula_version": FORMULA_VERSION}
-               for p, v in adj.items()]
+                "formula_version": FORMULA_VERSION,
+            }
+            for p, v in adj.items()
+        ]
         out.sort(key=lambda x: -(x["adjusted_lifetime"] or 0))
         return out

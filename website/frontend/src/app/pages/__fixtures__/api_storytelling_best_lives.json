@@ -1,0 +1,70 @@
+{
+ "status": "ok",
+ "session_date": "2026-08-27",
+ "scope": {
+  "kind": "gaming_session",
+  "version": "gaming-session-v1",
+  "gaming_session_id": 154,
+  "dates": [
+   "2026-08-27"
+  ],
+  "accepted_round_count": 12,
+  "distinct_map_names": [
+   "etl_adlernest",
+   "etl_sp_delivery",
+   "supply",
+   "te_escape2"
+  ],
+  "last_round_unix": 1787861734
+ },
+ "lives": [
+  {
+   "guid": "3C0354D3",
+   "name": "It's squAziii",
+   "kills": 6,
+   "life_seconds": 59,
+   "map_name": "etl_adlernest",
+   "round_number": 1,
+   "narrative": "It's squAziii got 6 kills in one life (59s) on etl adlernest"
+  },
+  {
+   "guid": "EDBB5DA9",
+   "name": "[TWK]CUJO",
+   "kills": 5,
+   "life_seconds": 45,
+   "map_name": "te_escape2",
+   "round_number": 1,
+   "narrative": "[TWK]CUJO got 5 kills in one life (45s) on te escape2"
+  },
+  {
+   "guid": "2B5938F5",
+   "name": "bronze",
+   "kills": 5,
+   "life_seconds": 58,
+   "map_name": "etl_sp_delivery",
+   "round_number": 1,
+   "narrative": "bronze got 5 kills in one life (58s) on etl sp delivery"
+  },
+  {
+   "guid": "EDBB5DA9",
+   "name": "[TWK]CUJO",
+   "kills": 5,
+   "life_seconds": 59,
+   "map_name": "te_escape2",
+   "round_number": 1,
+   "narrative": "[TWK]CUJO got 5 kills in one life (59s) on te escape2"
+  },
+  {
+   "guid": "3C0354D3",
+   "name": "It's squAziii",
+   "kills": 5,
+   "life_seconds": 75,
+   "map_name": "supply",
+   "round_number": 1,
+   "narrative": "It's squAziii got 5 kills in one life (75s) on supply"
+  }
+ ],
+ "total": 5,
+ "qualifying_total": 51,
+ "min_kills": 3
+}

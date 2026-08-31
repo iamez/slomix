@@ -1,9 +1,7 @@
 import { useLayoutEffect, useRef, useState } from 'react';
 import { Cluster, Stack, space } from '../components/layout';
 import type { Space } from '../components/layout';
-import {
-  ActLink, Chip, KpiTile, Lbl, Pending, SectionHead, StatusDot, Tabs, Unavailable, figure, rowStyle,
-} from '../components/ui';
+import { Absent, ActLink, Chip, figure, KpiTile, Lbl, Pending, rowStyle, SectionHead, StatusDot, Tabs, Unavailable } from '../components/ui';
 
 /**
  * The catalogue (docs/design/11, plan step A3). Every component the app owns,
@@ -218,14 +216,22 @@ export function DesignCatalog() {
         </Cluster>
       </Bench>
 
-      <Bench name="states" note="the three that a real page shows only when something is wrong">
+      <Bench name="states" note="three answers, and only one of them is a fault">
         <Stack gap={2} divided>
           <div style={{ padding: 'var(--space-2) 0' }}><Pending label="leaderboard" /></div>
           <div style={{ padding: 'var(--space-2) 0' }}><Unavailable what="weapon stats" /></div>
-          <div className="m" style={{ padding: 'var(--space-2) 0', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-            no map history recorded yet
+          {/* Until Absent existed this line was hand-written here too — the
+            * page built to show every piece in every state could not show
+            * this one, because it was not a piece. */}
+          <div style={{ padding: 'var(--space-2) 0' }}>
+            <Absent block reason="no map has been played twice in this window" />
           </div>
         </Stack>
+        <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+          pending = a request is out · unavailable = one failed · absent = it
+          answered, and the answer is nothing. The reason is required, so the
+          three can never collapse into one grey line again.
+        </Lbl>
       </Bench>
 
       <Bench name="rows" note="a hairline and a hover — never a card">

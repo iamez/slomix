@@ -1,0 +1,193 @@
+{
+ "status": "ok",
+ "resolved": true,
+ "guid1": "5D9891600C7948FF85709360E669D5A4",
+ "guid2": "D8423F90F045D9D3E2C0550811C5A899",
+ "p1_name": ".olz",
+ "p2_name": "vid",
+ "p1_kills": 872,
+ "p2_kills": 1096,
+ "total": 1968,
+ "win_rate": 0.443,
+ "classification": "RIVAL",
+ "p1_weapons": [
+  {
+   "weapon": "MP40",
+   "kill_mod": 8,
+   "kills": 454
+  },
+  {
+   "weapon": "Thompson",
+   "kill_mod": 9,
+   "kills": 293
+  },
+  {
+   "weapon": "Grenade",
+   "kill_mod": 16,
+   "kills": 66
+  },
+  {
+   "weapon": "Grenade",
+   "kill_mod": 18,
+   "kills": 23
+  },
+  {
+   "weapon": "Luger",
+   "kill_mod": 6,
+   "kills": 17
+  },
+  {
+   "weapon": "Colt",
+   "kill_mod": 7,
+   "kills": 9
+  },
+  {
+   "weapon": "Airstrike",
+   "kill_mod": 23,
+   "kills": 3
+  },
+  {
+   "weapon": "Knife",
+   "kill_mod": 3,
+   "kills": 2
+  },
+  {
+   "weapon": "MOD_1",
+   "kill_mod": 1,
+   "kills": 2
+  },
+  {
+   "weapon": "MOD_65",
+   "kill_mod": 65,
+   "kills": 1
+  },
+  {
+   "weapon": "Artillery",
+   "kill_mod": 26,
+   "kills": 1
+  },
+  {
+   "weapon": "Garand",
+   "kill_mod": 11,
+   "kills": 1
+  }
+ ],
+ "p2_weapons": [
+  {
+   "weapon": "MP40",
+   "kill_mod": 8,
+   "kills": 528
+  },
+  {
+   "weapon": "Thompson",
+   "kill_mod": 9,
+   "kills": 439
+  },
+  {
+   "weapon": "Grenade",
+   "kill_mod": 16,
+   "kills": 48
+  },
+  {
+   "weapon": "Luger",
+   "kill_mod": 6,
+   "kills": 31
+  },
+  {
+   "weapon": "Grenade",
+   "kill_mod": 18,
+   "kills": 21
+  },
+  {
+   "weapon": "Colt",
+   "kill_mod": 7,
+   "kills": 14
+  },
+  {
+   "weapon": "Airstrike",
+   "kill_mod": 23,
+   "kills": 5
+  },
+  {
+   "weapon": "Sten",
+   "kill_mod": 10,
+   "kills": 5
+  },
+  {
+   "weapon": "Artillery",
+   "kill_mod": 26,
+   "kills": 2
+  },
+  {
+   "weapon": "Dynamite",
+   "kill_mod": 22,
+   "kills": 1
+  },
+  {
+   "weapon": "Garand Scope",
+   "kill_mod": 46,
+   "kills": 1
+  },
+  {
+   "weapon": "Knife",
+   "kill_mod": 3,
+   "kills": 1
+  }
+ ],
+ "per_map": [
+  {
+   "map": "te_escape2",
+   "p1_kills": 267,
+   "p2_kills": 302,
+   "total": 569
+  },
+  {
+   "map": "supply",
+   "p1_kills": 171,
+   "p2_kills": 223,
+   "total": 394
+  },
+  {
+   "map": "etl_sp_delivery",
+   "p1_kills": 115,
+   "p2_kills": 145,
+   "total": 260
+  },
+  {
+   "map": "etl_adlernest",
+   "p1_kills": 93,
+   "p2_kills": 156,
+   "total": 249
+  },
+  {
+   "map": "sw_goldrush_te",
+   "p1_kills": 97,
+   "p2_kills": 151,
+   "total": 248
+  },
+  {
+   "map": "et_brewdog",
+   "p1_kills": 57,
+   "p2_kills": 65,
+   "total": 122
+  },
+  {
+   "map": "etl_frostbite",
+   "p1_kills": 48,
+   "p2_kills": 37,
+   "total": 85
+  },
+  {
+   "map": "erdenberg_t2",
+   "p1_kills": 20,
+   "p2_kills": 15,
+   "total": 35
+  },
+  {
+   "map": "braundorf_b4",
+   "p1_kills": 4,
+   "p2_kills": 2,
+   "total": 6
+  }
+ ]
+}

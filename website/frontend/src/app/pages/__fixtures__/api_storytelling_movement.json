@@ -1,0 +1,95 @@
+{
+ "status": "ok",
+ "available": true,
+ "unit": "et_units",
+ "players": [
+  {
+   "guid_short": "9F2B3930",
+   "name": "[TWK]Imb3ciL",
+   "lives": 169,
+   "total_distance": 929178,
+   "distance_per_min": 14087.3,
+   "avg_speed": 251.1,
+   "peak_speed": 812.9,
+   "sprint_pct": 20.4,
+   "post_spawn_distance": 869.1,
+   "alive_ms": 3957525
+  },
+  {
+   "guid_short": "2B5938F5",
+   "name": "bronze",
+   "lives": 163,
+   "total_distance": 919150,
+   "distance_per_min": 13699.1,
+   "avg_speed": 249.8,
+   "peak_speed": 679.9,
+   "sprint_pct": 22.5,
+   "post_spawn_distance": 1030.2,
+   "alive_ms": 4025725
+  },
+  {
+   "guid_short": "EDBB5DA9",
+   "name": "[TWK]CUJO",
+   "lives": 152,
+   "total_distance": 901739,
+   "distance_per_min": 14023.4,
+   "avg_speed": 258.5,
+   "peak_speed": 715.6,
+   "sprint_pct": 19.7,
+   "post_spawn_distance": 898.5,
+   "alive_ms": 3858150
+  },
+  {
+   "guid_short": "3C0354D3",
+   "name": "It's squAziii",
+   "lives": 143,
+   "total_distance": 863335,
+   "distance_per_min": 12756.9,
+   "avg_speed": 242.6,
+   "peak_speed": 827.0,
+   "sprint_pct": 17.6,
+   "post_spawn_distance": 956.8,
+   "alive_ms": 4060550
+  },
+  {
+   "guid_short": "1EDBF300",
+   "name": "kanii",
+   "lives": 146,
+   "total_distance": 817194,
+   "distance_per_min": 13163.5,
+   "avg_speed": 251.6,
+   "peak_speed": 824.5,
+   "sprint_pct": 20.0,
+   "post_spawn_distance": 810.9,
+   "alive_ms": 3724825
+  },
+  {
+   "guid_short": "1C747DF1",
+   "name": ".lgz",
+   "lives": 174,
+   "total_distance": 770562,
+   "distance_per_min": 13209.4,
+   "avg_speed": 261.5,
+   "peak_speed": 703.2,
+   "sprint_pct": 23.1,
+   "post_spawn_distance": 933.0,
+   "alive_ms": 3500050
+  }
+ ],
+ "scope": {
+  "kind": "gaming_session",
+  "version": "gaming-session-v1",
+  "gaming_session_id": 154,
+  "dates": [
+   "2026-08-27"
+  ],
+  "accepted_round_count": 12,
+  "distinct_map_names": [
+   "etl_adlernest",
+   "etl_sp_delivery",
+   "supply",
+   "te_escape2"
+  ],
+  "last_round_unix": 1787861734
+ }
+}
