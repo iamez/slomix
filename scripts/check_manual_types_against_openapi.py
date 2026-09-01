@@ -317,6 +317,13 @@ def main() -> int:
              "frontend author is editing — every finding below is about "
              "the file named in the header, and a stale file produces "
              "confident findings about problems that were already fixed.")
+    parser.add_argument(
+        "--json", action="store_true",
+        help="emit the findings as JSON instead of prose. ⛔ This exists so a "
+             "TEST can consume them: for as long as the only output was a "
+             "paragraph, the only way to guard against drift was to grep "
+             "sentences, and a guard that reads prose agrees with the comment "
+             "that explains the code rather than the code.")
     args = parser.parse_args()
 
     if not SPEC.exists():
@@ -448,6 +455,23 @@ def main() -> int:
             elif expected and not _ts_matches(expected, ts_type):
                 findings.append(
                     (name, field, f"API says {expected}", ts_type))
+
+    if args.json:
+        # The machine-readable half of the same result. `compared` travels with
+        # it on purpose: zero comparisons and zero disagreements have the same
+        # shape, and a reader that cannot tell them apart is the failure this
+        # script has now made three times.
+        print(json.dumps({
+            "types_path": str(types_path),
+            "compared": compared,
+            "findings": [{"schema": n, "field": f, "why": w, "ts_type": t}
+                         for n, f, w, t in findings],
+            "projections": [f"{n}.{f}" for n, f in projections],
+            "collisions": sorted(collisions),
+            "not_compared": sorted(skipped),
+            "unreadable": [f"{n}.{f}" for n, f, _ in unreadable],
+        }, indent=1, sort_keys=True))
+        return 0 if compared and not findings else (2 if not compared else 1)
 
     stamp = datetime.fromtimestamp(types_path.stat().st_mtime, tz=timezone.utc).astimezone().strftime("%Y-%m-%d %H:%M")
     print(f"types.ts: {types_path}  (last modified {stamp})")

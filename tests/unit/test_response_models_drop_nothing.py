@@ -2,7 +2,7 @@
 
 FastAPI does not merely DOCUMENT a response model — it FILTERS the response
 through it. A field the handler returns and the model omits disappears from
-the payload, silently, with a 200. Adding schemas to 272 endpoints without
+the payload, silently, with a 200. Adding schemas to 263 endpoints without
 this test would be a slow, quiet way to delete data from every client.
 
 So each model is checked against what its handler actually produced: call the
