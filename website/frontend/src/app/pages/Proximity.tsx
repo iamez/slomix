@@ -21,6 +21,7 @@ import { useProximityLeaderboard, useProxScopes, useSsr } from '../lib/queries';
 import { ProximityInstruments } from './ProximityInstruments';
 import { ProximityCompetitive } from './ProximityCompetitive';
 import { ProximityObjectiveIntel } from './ProximityObjectiveIntel';
+import { ProximityRoundCanvases } from './ProximityRoundCanvases';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
@@ -170,6 +171,20 @@ export function Proximity() {
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const windowPicked = pickedDate === 'window';
   const scopeDate = windowPicked ? null : (pickedDate ?? dates[0] ?? null);
+  // Slice 5: the scope grows map and round chips from the SAME hierarchy
+  // /proximity/scopes already carries — the canvases' endpoints demand
+  // them (a 422 is the wire asking for scope, unreachable via the picker).
+  const [pickedMap, setPickedMap] = useState<string | null>(null);
+  // The round identity is the PAIR (round_number, round_start_unix): the
+  // scopes fixture holds three distinct te_escape2 r1s on one date, and a
+  // bare number silently merges them (Codex on #867, P1).
+  const [pickedRound, setPickedRound] = useState<{ n: number; rsu: number | null } | null>(null);
+  const scopeSession = scopes.data?.sessions.find((x) => x.session_date === scopeDate);
+  const maps = (scopeSession?.maps ?? []).map((m) => m.map_name);
+  const scopeMap = pickedMap != null && maps.includes(pickedMap) ? pickedMap : null;
+  const rounds = (scopeSession?.maps ?? []).find((m) => m.map_name === scopeMap)?.rounds ?? [];
+  const scopeRound = pickedRound != null && rounds.some((r) => r.round_number === pickedRound.n && (r.round_start_unix ?? null) === pickedRound.rsu)
+    ? pickedRound : null;
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>proximity · positional telemetry</Lbl>
@@ -250,6 +265,35 @@ export function Proximity() {
             <ProximityInstruments sessionDate={scopeDate} />
             <ProximityCompetitive sessionDate={scopeDate} />
             <ProximityObjectiveIntel sessionDate={scopeDate} />
+            <Stack gap={3} parity="proximity.round-scope" style={{ marginTop: 'var(--space-8)' }}>
+              <SectionHead
+                label="round canvases"
+                aside={
+                  <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
+                    {maps.map((m) => (
+                      <button key={m} type="button" onClick={() => { setPickedMap(m); setPickedRound(null); }} aria-pressed={scopeMap === m}
+                        style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: scopeMap === m ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>
+                        {m}
+                      </button>
+                    ))}
+                    {scopeMap != null && rounds.map((r) => {
+                      const rsu = r.round_start_unix ?? null;
+                      const selected = scopeRound != null && scopeRound.n === r.round_number && scopeRound.rsu === rsu;
+                      // The start time disambiguates repeats of the same
+                      // map+number on one date.
+                      const when = rsu != null ? new Date(rsu * 1000).toISOString().slice(11, 16) : null;
+                      return (
+                        <button key={`${r.round_number}:${rsu ?? 'x'}`} type="button" onClick={() => setPickedRound({ n: r.round_number, rsu })} aria-pressed={selected}
+                          style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: selected ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>
+                          r{r.round_number}{when ? ` ${when}` : ''}
+                        </button>
+                      );
+                    })}
+                  </Cluster>
+                }
+              />
+              <ProximityRoundCanvases sessionDate={scopeDate} mapName={scopeMap} roundNumber={scopeRound?.n ?? null} roundStartUnix={scopeRound?.rsu ?? null} />
+            </Stack>
           </>
         )}
       </Stack>

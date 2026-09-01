@@ -42,7 +42,7 @@ INVENTORY = REPO / "docs" / "parity" / "proximity_inventory.json"
 # spider-web /web path — the other three replay rows are dropped, and
 # every storytelling row is covered). Every page PR that adopts paths
 # lowers it together with the flipped dispositions.
-PENDING_BUDGET = 37
+PENDING_BUDGET = 33
 
 O9_DROPPED = {
     "/api/proximity/dashboard",

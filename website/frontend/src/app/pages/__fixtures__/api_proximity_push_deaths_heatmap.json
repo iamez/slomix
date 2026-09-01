@@ -1,0 +1,98 @@
+{
+ "status": "ok",
+ "map_name": "etl_adlernest",
+ "grid_size": 512,
+ "perspective": "pushes",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": "etl_adlernest",
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "push_deaths": 15,
+ "carrier_deaths": 1,
+ "unique_deaths": 16,
+ "hotzones": [
+  {
+   "x": 0,
+   "y": -5,
+   "count": 1
+  },
+  {
+   "x": -1,
+   "y": -4,
+   "count": 1
+  },
+  {
+   "x": 1,
+   "y": -3,
+   "count": 1
+  },
+  {
+   "x": -1,
+   "y": -3,
+   "count": 1
+  },
+  {
+   "x": -1,
+   "y": -5,
+   "count": 1
+  },
+  {
+   "x": -1,
+   "y": 0,
+   "count": 1
+  },
+  {
+   "x": -2,
+   "y": -3,
+   "count": 1
+  },
+  {
+   "x": 0,
+   "y": -3,
+   "count": 1
+  },
+  {
+   "x": 0,
+   "y": -4,
+   "count": 1
+  },
+  {
+   "x": 2,
+   "y": -2,
+   "count": 1
+  },
+  {
+   "x": 2,
+   "y": -4,
+   "count": 1
+  },
+  {
+   "x": 1,
+   "y": -4,
+   "count": 1
+  },
+  {
+   "x": -4,
+   "y": -3,
+   "count": 1
+  },
+  {
+   "x": -3,
+   "y": 0,
+   "count": 1
+  },
+  {
+   "x": 1,
+   "y": -5,
+   "count": 1
+  },
+  {
+   "x": -1,
+   "y": 2,
+   "count": 1
+  }
+ ]
+}

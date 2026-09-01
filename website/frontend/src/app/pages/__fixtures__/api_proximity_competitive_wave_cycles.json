@@ -1,0 +1,188 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": "etl_adlernest",
+  "round_number": 1,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "clock_protocol": "reinforcement-clock-v1",
+ "clock_validation": {
+  "ALLIES": {
+   "status": "validated",
+   "interval_ms": 20000,
+   "offset_ms": 6000,
+   "timing_observations": 8,
+   "landing_clusters": 6,
+   "spawn_callbacks": 12,
+   "post_revive_spawn_callbacks": 2,
+   "passing_landing_clusters": 6,
+   "pass_ratio": 1.0
+  },
+  "AXIS": {
+   "status": "validated",
+   "interval_ms": 30000,
+   "offset_ms": 6000,
+   "timing_observations": 14,
+   "landing_clusters": 5,
+   "spawn_callbacks": 14,
+   "post_revive_spawn_callbacks": 2,
+   "passing_landing_clusters": 5,
+   "pass_ratio": 1.0
+  }
+ },
+ "excluded_unlinked_kills": 0,
+ "excluded_ineligible_linked_kills": 0,
+ "round_len_ms": 154950,
+ "clocks": {
+  "ALLIES": {
+   "offset_ms": 6000,
+   "interval_ms": 20000
+  },
+  "AXIS": {
+   "offset_ms": 6000,
+   "interval_ms": 30000
+  }
+ },
+ "summary": {
+  "cycles": 12,
+  "axis_won": 2,
+  "allies_won": 7,
+  "contested": 3
+ },
+ "cycles": [
+  {
+   "start_ms": 0,
+   "end_ms": 14000,
+   "wave": null,
+   "kills_axis": 1,
+   "kills_allies": 1,
+   "denied_axis_s": 1.8,
+   "denied_allies_s": 10.2,
+   "first_blood": "AXIS",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 14000,
+   "end_ms": 24000,
+   "wave": "ALLIES",
+   "kills_axis": 1,
+   "kills_allies": 1,
+   "denied_axis_s": 16.2,
+   "denied_allies_s": 4.0,
+   "first_blood": "AXIS",
+   "winner": "AXIS"
+  },
+  {
+   "start_ms": 24000,
+   "end_ms": 34000,
+   "wave": "AXIS",
+   "kills_axis": 1,
+   "kills_allies": 1,
+   "denied_axis_s": 6.0,
+   "denied_allies_s": 20.8,
+   "first_blood": "AXIS",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 34000,
+   "end_ms": 54000,
+   "wave": "ALLIES",
+   "kills_axis": 0,
+   "kills_allies": 3,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 26.9,
+   "first_blood": "ALLIES",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 54000,
+   "end_ms": 74000,
+   "wave": "AXIS",
+   "kills_axis": 0,
+   "kills_allies": 2,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 40.4,
+   "first_blood": "ALLIES",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 74000,
+   "end_ms": 84000,
+   "wave": "ALLIES",
+   "kills_axis": 0,
+   "kills_allies": 1,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 4.3,
+   "first_blood": "ALLIES",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 84000,
+   "end_ms": 94000,
+   "wave": "AXIS",
+   "kills_axis": 0,
+   "kills_allies": 0,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 0.0,
+   "first_blood": null,
+   "winner": null
+  },
+  {
+   "start_ms": 94000,
+   "end_ms": 114000,
+   "wave": "ALLIES",
+   "kills_axis": 4,
+   "kills_allies": 1,
+   "denied_axis_s": 49.7,
+   "denied_allies_s": 2.0,
+   "first_blood": "AXIS",
+   "winner": "AXIS"
+  },
+  {
+   "start_ms": 114000,
+   "end_ms": 134000,
+   "wave": "AXIS",
+   "kills_axis": 1,
+   "kills_allies": 3,
+   "denied_axis_s": 4.9,
+   "denied_allies_s": 44.3,
+   "first_blood": "ALLIES",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 134000,
+   "end_ms": 144000,
+   "wave": "ALLIES",
+   "kills_axis": 0,
+   "kills_allies": 0,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 0.0,
+   "first_blood": null,
+   "winner": null
+  },
+  {
+   "start_ms": 144000,
+   "end_ms": 154000,
+   "wave": "AXIS",
+   "kills_axis": 0,
+   "kills_allies": 1,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 25.0,
+   "first_blood": "ALLIES",
+   "winner": "ALLIES"
+  },
+  {
+   "start_ms": 154000,
+   "end_ms": 154950,
+   "wave": "ALLIES",
+   "kills_axis": 0,
+   "kills_allies": 0,
+   "denied_axis_s": 0.0,
+   "denied_allies_s": 0.0,
+   "first_blood": null,
+   "winner": null
+  }
+ ]
+}
