@@ -90,5 +90,13 @@ frame(1200)
 last = writes[#writes]
 assert(last:find("self=%-1 "), "FAIL(4): aborted frame must report self=-1: " .. last)
 
+-- 5) map_restart keeps the lua VM alive; et_InitGame must reset the
+--    cadence so the INIT proof fires on restarts too (review on #876).
+et_InitGame(0, 0, 1)
+frame(25)
+assert(writes[#writes]:find("FH init "), "FAIL(5): no INIT line after map_restart: " .. writes[#writes])
+frame(25)  -- and the very next frame must NOT log a bogus gap
+assert(writes[#writes]:find("FH init "), "FAIL(5b): spurious line right after restart: " .. writes[#writes])
+
 print(string.format("HARNESS OK (%d lines): %s", #writes,
     table.concat(writes, ""):gsub("\n", " | ")))

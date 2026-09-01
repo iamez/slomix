@@ -3928,8 +3928,71 @@ end
 
 -- ===== ENGINE CALLBACKS =====
 
+-- ===== FRAME-HEALTH WATCHER (v6.12) =====
+-- Runs at the TOP of every frame, reporting on the PREVIOUS one (see the
+-- config comment for why the pairing lives there). prev_wall/prev_self
+-- update before any of the frame body runs, so an error aborting the body
+-- cannot corrupt the cadence series -- it only leaves self at the -1
+-- sentinel, which is itself the signal. Open/write/close per line: at
+-- most 1/s, and a crash never loses buffered lines.
+local frame_health_state = {
+    prev_wall = nil, prev_self = -1, last_write = -math.huge, writes = 0,
+}
+
+local function frameHealthReport(wall_now)
+    local fh = config.frame_health
+    if not fh or not fh.enabled then return end
+    local st = frame_health_state
+    local prev_start = st.prev_wall
+    local prev_self = st.prev_self
+    st.prev_wall = wall_now
+    st.prev_self = -1  -- sentinel until this frame's body completes
+    if prev_start == nil then
+        -- First frame after a map load: write one INIT line unconditionally.
+        -- An empty log is ambiguous by construction (no stalls and a broken
+        -- writer look identical); this line is the positive proof that the
+        -- write path works, and it exercises open/format/write immediately.
+        local fd0, open_len0 = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
+        if fd0 and fd0 ~= -1 and fd0 ~= 0 and open_len0 ~= -1 then
+            local init_line = string.format("FH init wall=%d version=%s\n", wall_now, version)
+            et.trap_FS_Write(init_line, string.len(init_line), fd0)
+            et.trap_FS_FCloseFile(fd0)
+        else
+            et.G_Print("[PROX] frame_health: cannot open log for append (fd=" ..
+                tostring(fd0) .. ", len=" .. tostring(open_len0) .. ")\n")
+        end
+        return
+    end
+    local gap = wall_now - prev_start
+    if gap < (fh.gap_threshold_ms or 100) then return end
+    if wall_now - st.last_write < (fh.min_write_interval_ms or 1000) then return end
+    if st.writes >= (fh.max_lines_per_state or 300) then return end
+    st.last_write = wall_now
+    st.writes = st.writes + 1
+    local players = 0
+    for i = 0, get_max_clients() - 1 do
+        if isPlayerActive(i) then players = players + 1 end
+    end
+    local gs = math.floor(tonumber(et.trap_Cvar_Get("gamestate")) or -1)
+    -- endstats append idiom: the SECOND return signals an open failure
+    local fd, open_len = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
+    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d\n",
+        wall_now, gap, prev_self, gs, players)
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+
 function et_InitGame(levelTime, randomSeed, restart)
     et.RegisterModname(modname .. " " .. version)
+
+    -- A map_restart keeps the lua VM alive, so without this reset the INIT
+    -- proof line would skip restarts and the per-state write cap would
+    -- carry over (review on #876). The wall clock is engine-global and
+    -- never resets, so dropping prev_wall only suppresses one frame's gap.
+    frame_health_state.prev_wall = nil
+    frame_health_state.prev_self = -1
+    frame_health_state.writes = 0
 
     if not config.output_dir or config.output_dir == "" then
         config.output_dir = "proximity/"
@@ -4372,61 +4435,6 @@ local function runTraceProbe()
             .. "solid brush entities (a door, a mover) and probe again.\n")
     end
     return true
-end
-
--- ===== FRAME-HEALTH WATCHER (v6.12) =====
--- Runs at the TOP of every frame, reporting on the PREVIOUS one (see the
--- config comment for why the pairing lives there). prev_wall/prev_self
--- update before any of the frame body runs, so an error aborting the body
--- cannot corrupt the cadence series -- it only leaves self at the -1
--- sentinel, which is itself the signal. Open/write/close per line: at
--- most 1/s, and a crash never loses buffered lines.
-local frame_health_state = {
-    prev_wall = nil, prev_self = -1, last_write = -math.huge, writes = 0,
-}
-
-local function frameHealthReport(wall_now)
-    local fh = config.frame_health
-    if not fh or not fh.enabled then return end
-    local st = frame_health_state
-    local prev_start = st.prev_wall
-    local prev_self = st.prev_self
-    st.prev_wall = wall_now
-    st.prev_self = -1  -- sentinel until this frame's body completes
-    if prev_start == nil then
-        -- First frame after a map load: write one INIT line unconditionally.
-        -- An empty log is ambiguous by construction (no stalls and a broken
-        -- writer look identical); this line is the positive proof that the
-        -- write path works, and it exercises open/format/write immediately.
-        local fd0, open_len0 = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
-        if fd0 and fd0 ~= -1 and fd0 ~= 0 and open_len0 ~= -1 then
-            local init_line = string.format("FH init wall=%d version=%s\n", wall_now, version)
-            et.trap_FS_Write(init_line, string.len(init_line), fd0)
-            et.trap_FS_FCloseFile(fd0)
-        else
-            et.G_Print("[PROX] frame_health: cannot open log for append (fd=" ..
-                tostring(fd0) .. ", len=" .. tostring(open_len0) .. ")\n")
-        end
-        return
-    end
-    local gap = wall_now - prev_start
-    if gap < (fh.gap_threshold_ms or 100) then return end
-    if wall_now - st.last_write < (fh.min_write_interval_ms or 1000) then return end
-    if st.writes >= (fh.max_lines_per_state or 300) then return end
-    st.last_write = wall_now
-    st.writes = st.writes + 1
-    local players = 0
-    for i = 0, get_max_clients() - 1 do
-        if isPlayerActive(i) then players = players + 1 end
-    end
-    local gs = math.floor(tonumber(et.trap_Cvar_Get("gamestate")) or -1)
-    -- endstats append idiom: the SECOND return signals an open failure
-    local fd, open_len = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
-    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
-    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d\n",
-        wall_now, gap, prev_self, gs, players)
-    et.trap_FS_Write(line, string.len(line), fd)
-    et.trap_FS_FCloseFile(fd)
 end
 
 function et_RunFrame(levelTime)
