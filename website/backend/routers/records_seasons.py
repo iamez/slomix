@@ -550,7 +550,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
           AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT)
           AND gaming_session_id IS NOT NULL
           AND is_valid IS NOT FALSE
-          AND COALESCE(round_status, '') <> 'orphan_r2'
+          AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)
           AND NOT COALESCE(is_bot_round, FALSE)
         GROUP BY gaming_session_id
         ORDER BY round_count DESC

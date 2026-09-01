@@ -24,14 +24,19 @@ from website.backend.routers.api_helpers import valid_human_rows_gate  # noqa: E
 ROUTERS = REPO / "website" / "backend" / "routers"
 FILES = ["records_seasons.py", "records_awards.py", "api_helpers.py"]
 
-WEAK = "round_status = 'orphan_r2'"
+# BOTH weak spellings — Copilot on #865 found the second one alive in
+# session_query (`COALESCE(round_status, '') <> 'orphan_r2'`) precisely
+# because the first version of this test only knew the first spelling:
+# a guard that names one spelling of a semantics invites the others.
+WEAK_SPELLINGS = ("round_status = 'orphan_r2'", "<> 'orphan_r2'")
 CANON = "round_status NOT IN ('completed', 'substitution')"
+CANON_POSITIVE = "(round_status IN ('completed', 'substitution') OR round_status IS NULL)"
 
 
-def test_the_weak_spelling_is_extinct():
-    hits = {f: (ROUTERS / f).read_text(encoding="utf-8").count(WEAK) for f in FILES}
+def test_the_weak_spellings_are_extinct():
+    hits = {f: sum((ROUTERS / f).read_text(encoding="utf-8").count(w) for w in WEAK_SPELLINGS) for f in FILES}
     assert hits == {f: 0 for f in FILES}, (
-        f"the orphan-only gate is back: {hits} — it admits cancelled rounds "
+        f"an orphan-only gate is back: {hits} — it admits cancelled rounds "
         "into public numbers (measured -6,614 kills all-time)"
     )
 
@@ -39,8 +44,14 @@ def test_the_weak_spelling_is_extinct():
 def test_the_canonical_spelling_is_everywhere_it_was():
     # 18 inline sites in seasons, 1 in awards, 1 in the helper — pinned so a
     # new copy-paste of a query without the gate moves this number in review.
-    hits = {f: (ROUTERS / f).read_text(encoding="utf-8").count(CANON) for f in FILES}
+    text = {f: (ROUTERS / f).read_text(encoding="utf-8") for f in FILES}
+    hits = {f: text[f].count(CANON) for f in FILES}
+    positive = {f: text[f].count(CANON_POSITIVE) for f in FILES}
     assert hits == {"records_seasons.py": 18, "records_awards.py": 1, "api_helpers.py": 1}, hits
+    # Two positive gates in seasons: the pre-existing round_status_clause
+    # builder (:150) and session_query — the second spelling Copilot found,
+    # now canonical too.
+    assert positive == {"records_seasons.py": 2, "records_awards.py": 0, "api_helpers.py": 0}, positive
 
 
 def test_the_builder_emits_the_full_trio():
