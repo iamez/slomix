@@ -14,5 +14,8 @@
   "top_map": {
     "name": null,
     "plays": 0
-  }
+  },
+  "status": "ok",
+  "note": null,
+  "failed_metrics": []
 }
