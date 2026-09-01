@@ -87,6 +87,9 @@ import type {
   ProxCohesion,
   ProxCombatPositions,
   ProxCrossfireAngles,
+  ProxEngagements,
+  ProxEventDetail,
+  ProxEvents,
   ProxFocusFire,
   ProximityLeaderboard,
   ProxLuaTrades,
@@ -1182,6 +1185,53 @@ export function useWaveCycles(sessionDate: string | null, mapName: string | null
           ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
         },
       }) as Promise<WaveCycles>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Phase 5, slice 6 — the engagement record.
+
+export function useProxEvents(sessionDate: string | null, mapName: string | null, roundNumber: number | null, roundStartUnix: number | null) {
+  return useQuery({
+    queryKey: ['prox-events', sessionDate, mapName, roundNumber, roundStartUnix],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/events', {
+        query: {
+          session_date: sessionDate!,
+          ...(mapName != null ? { map_name: mapName } : {}),
+          ...(roundNumber != null ? { round_number: roundNumber } : {}),
+          ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
+          limit: 25,
+        },
+      }) as Promise<ProxEvents>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** One engagement's full record — fetched only when a row is opened. */
+export function useProxEventDetail(eventId: number | null) {
+  return useQuery({
+    queryKey: ['prox-event-detail', eventId],
+    enabled: eventId != null,
+    queryFn: () =>
+      apiGet('/api/proximity/event/{event_id}', {
+        pathParams: { event_id: eventId! },
+      }) as Promise<ProxEventDetail>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxEngagements(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-engagements', sessionDate],
+    // Fail-closed like every instrument: no scope, no query — an unscoped
+    // call here is the unbounded 30-day window.
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/engagements', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxEngagements>,
     staleTime: 5 * 60 * 1000,
   });
 }

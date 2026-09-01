@@ -42,9 +42,6 @@
 /api/proximity/combat-positions/kill-lines
 /api/proximity/competitive/player-card
 /api/proximity/duos
-/api/proximity/engagements
-/api/proximity/event
-/api/proximity/events
 /api/proximity/hit-regions
 /api/proximity/hit-regions/headshot-rates
 /api/proximity/hotzones

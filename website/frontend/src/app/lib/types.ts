@@ -2960,3 +2960,118 @@ export interface WaveCycles {
     first_blood: string | null; winner: string | null;
   }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 6 — the engagement record: the events list, the per-event
+// drill-down, and the dispersion buckets (07 §B.2's last A-class panels).
+// Shapes read from proximity_events.py / proximity_combat.py, not guessed.
+
+export interface ProxEventRow {
+  id: number;
+  date: string;
+  round: number;
+  map: string;
+  target_name: string | null;
+  target: string | null;
+  attacker_name: string | null;
+  target_team: string | null;
+  attacker_team: string | null;
+  outcome: string | null;
+  reaction_ms: number | null;
+  duration_ms: number | null;
+  distance: number | null;
+  distance_traveled: number | null;
+  attackers: number | null;
+  crossfire: boolean;
+  round_id: number | null;
+  round_date: string | null;
+  round_time: string | null;
+}
+
+export interface ProxEvents {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope & { range_days?: number };
+  limit: number;
+  events: ProxEventRow[];
+}
+
+export interface ProxEventAttacker {
+  guid: string | null;
+  name: string | null;
+  team: string | null;
+  hits: number;
+  damage: number;
+  got_kill?: boolean;
+  first_hit_ms?: number | null;
+  last_hit_ms?: number | null;
+  weapons: Record<string, number>;
+}
+
+export interface ProxStrafeMetrics {
+  duration_ms: number;
+  total_distance: number;
+  avg_speed: number;
+  turn_count: number;
+  turn_rate: number;
+  /** Turn events over the sliced track ({time, angle_deg, x, y}); empty
+   *  when the track had under 3 usable points. */
+  events: { time: number; angle_deg: number; x: number; y: number }[];
+}
+
+/**
+ * ⚠️ The drill-down has TWO forms, a union, not optional fields
+ * (one-session-corpus lesson). The handler parses `attackers` and computes
+ * `strafe`/paths ONLY when start/end times are valid ("long form"); an
+ * engagement with zero times ("short form") leaves `attackers` as the RAW
+ * DB string and OMITS the strafe-branch keys entirely. `position_path` is
+ * a JSON STRING inside the JSON when recorded, and `[]` when the column is
+ * empty (`row or []` in the handler) — never null.
+ */
+export interface ProxEventDetail {
+  id: number;
+  session_date: string;
+  round_number: number;
+  round_start_unix: number | null;
+  round_end_unix: number | null;
+  map_name: string;
+  target_guid: string | null;
+  target_name: string | null;
+  target_team: string | null;
+  outcome: string | null;
+  total_damage: number | null;
+  start_time_ms: number | null;
+  end_time_ms: number | null;
+  duration_ms: number | null;
+  num_attackers: number | null;
+  is_crossfire: boolean;
+  position_path: string | unknown[];
+  attackers: string | ProxEventAttacker[];
+  start_x: number | null;
+  start_y: number | null;
+  end_x: number | null;
+  end_y: number | null;
+  distance_traveled: number | null;
+  round_id: number | null;
+  round_date: string | null;
+  round_time: string | null;
+  // Long form only — ABSENT (not null) when times are invalid:
+  attacker_guid?: string | null;
+  attacker_name?: string | null;
+  target_path?: unknown[];
+  attacker_path?: unknown[];
+  strafe?: { target: ProxStrafeMetrics; attacker: ProxStrafeMetrics } | null;
+}
+
+export interface ProxEngagements {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope & { range_days?: number };
+  buckets: { date: string; engagements: number; crossfires: number }[];
+}

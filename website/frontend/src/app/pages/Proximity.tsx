@@ -22,6 +22,7 @@ import { ProximityInstruments } from './ProximityInstruments';
 import { ProximityCompetitive } from './ProximityCompetitive';
 import { ProximityObjectiveIntel } from './ProximityObjectiveIntel';
 import { ProximityRoundCanvases } from './ProximityRoundCanvases';
+import { ProximityEvents } from './ProximityEvents';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
@@ -293,6 +294,7 @@ export function Proximity() {
                 }
               />
               <ProximityRoundCanvases sessionDate={scopeDate} mapName={scopeMap} roundNumber={scopeRound?.n ?? null} roundStartUnix={scopeRound?.rsu ?? null} />
+              <ProximityEvents sessionDate={scopeDate} mapName={scopeMap} roundNumber={scopeRound?.n ?? null} roundStartUnix={scopeRound?.rsu ?? null} />
             </Stack>
           </>
         )}

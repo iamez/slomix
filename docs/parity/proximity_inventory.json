@@ -415,9 +415,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 975,
-        "file": "api_proximity_engagements.json"
+        "file": "api_proximity_engagements.json",
+        "covered_by": "ProximityEvents.tsx (faza 5, rezina 6)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/escort-credits",
@@ -445,9 +446,10 @@
       ],
       "react_callers": [],
       "evidence": {
-        "src": "NEPREVERJENO (param brez vira)"
+        "src": "NEPREVERJENO (param brez vira)",
+        "covered_by": "ProximityEvents.tsx (faza 5, rezina 6)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/events",
@@ -461,9 +463,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 97904,
-        "file": "api_proximity_events.json"
+        "file": "api_proximity_events.json",
+        "covered_by": "ProximityEvents.tsx (faza 5, rezina 6)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/focus-fire",
