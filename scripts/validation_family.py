@@ -73,6 +73,7 @@ import statistics
 import sys
 from collections import defaultdict
 from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import Callable
 
 import asyncpg
@@ -142,10 +143,33 @@ WITH candidate_pairs AS (
          r2.winner_team AS map_winner_side, r2.defender_team AS r2_defender
   FROM matched m JOIN rounds r2 ON r2.id = m.r2id
   WHERE r2.winner_team IN (1, 2) AND r2.defender_team IN (1, 2)
+), tracked_rounds AS (
+  -- ⚠️ TWO BRANCHES, NOT ONE `ON a OR b`. `replay_service` writes this as a
+  -- single join with an OR, which is right when resolving ONE round by id;
+  -- run over the whole table no index applies. Split, both halves are equality
+  -- joins. Proven to be the same set rather than assumed: 971 rounds either
+  -- way, and EXCEPT in both directions returns nothing.
+  SELECT DISTINCT round_id AS id FROM player_track WHERE round_id IS NOT NULL
+  UNION
+  SELECT r.id
+  FROM player_track pt
+  JOIN rounds r
+    ON pt.session_date = r.round_date::date
+   AND pt.round_number = r.round_number
+   AND pt.map_name = r.map_name
+  WHERE pt.round_id IS NULL
+    AND NOT EXISTS (SELECT 1 FROM rounds r2
+                    WHERE r2.id <> r.id
+                      AND r2.round_date::date = r.round_date::date
+                      AND r2.round_number = r.round_number
+                      AND r2.map_name = r.map_name)
 ), pair_margin AS (
-  SELECT r1id AS rid, margin, 1 AS half, map_winner_side, r2_defender FROM map_result
+  -- `pair` is the MAP's identity, carried onto both halves: the agreement gate
+  -- votes once per map, and without it the only key available was the round id,
+  -- which differs between the halves of the same map.
+  SELECT r1id AS rid, r2id AS pair, margin, 1 AS half, map_winner_side, r2_defender FROM map_result
   UNION ALL
-  SELECT r2id AS rid, margin, 2 AS half, map_winner_side, r2_defender FROM map_result
+  SELECT r2id AS rid, r2id AS pair, margin, 2 AS half, map_winner_side, r2_defender FROM map_result
 )
 SELECT pcs.round_id                      AS rid,
        r.gaming_session_id               AS block,
@@ -186,6 +210,7 @@ SELECT pcs.round_id                      AS rid,
        pcs.damage_given                  AS dg,
        pcs.damage_received               AS dr,
        pcs.time_played_seconds           AS secs,
+       pm.pair                           AS pair,
        pm.margin                         AS margin,
        pm.half                           AS half,
        pm.map_winner_side                AS map_winner_side,
@@ -210,8 +235,19 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- different hat. Measured: 3209 of 3209 rounds are six digits today, so this
   -- excludes nothing — it stops `lpad` from turning malformed text into a
   -- plausible time (`049180` reads as 05:32:20).
-  AND (r.round_time ~ '^[0-9]{1,6}$'
-       OR r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$')
+  -- ⛔ RANGES, NOT JUST DIGIT LAYOUT. A shape-valid but impossible clock does
+  -- NOT abort — it normalises, silently: measured against Postgres, `250000`
+  -- becomes 2026-06-12 01:00:00 (the NEXT DAY), `006000` becomes 01:00:00 and
+  -- `129999` becomes 13:40:39. On a chronological split that is a round moved
+  -- across a day boundary with nothing to show for it, which is the same shape
+  -- as the leading-zero bug and quieter than the abort that was reported.
+  -- `round_date` is unconstrained TEXT too, and a malformed one DOES abort the
+  -- whole query. Both columns are checked here so an unreadable row leaves the
+  -- universe instead of reordering it. Codex on #858.
+  AND r.round_date ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+  AND ((r.round_time ~ '^[0-9]{1,6}$'
+        AND lpad(r.round_time, 6, '0') ~ '^([01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]$')
+       OR r.round_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$')
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
@@ -226,8 +262,33 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- A bound parameter rather than string concatenation: the query text is one
   -- constant, which is both what the SQL-injection scanners want to see and
   -- what stops a future filter from being pasted in by hand.
-  AND (NOT $1::boolean
-       OR EXISTS (SELECT 1 FROM player_track t WHERE t.round_id = r.id))
+  -- ⛔ THE CANONICAL TRACK LINK, not the foreign key alone. 1,981 `player_track`
+  -- rows still carry `round_id IS NULL`, and `replay_service._TRACK_ROUND_JOIN`
+  -- resolves those by the date/round/map key WHEN THAT KEY IDENTIFIES EXACTLY
+  -- ONE ROUND — the inner NOT EXISTS is what refuses an ambiguous match rather
+  -- than guessing. Using the FK alone made `--spatial` analyse a SMALLER Layer 4
+  -- universe than the repository considers linked. Measured: +4 rounds and
+  -- +1 BLOCK, so the confirmation cohort moves with it. Codex on #818.
+  -- ⚠️ Resolved in a CTE (`tracked_rounds`) with the two link kinds SPLIT into
+  -- separate branches rather than one `ON a OR b`: both halves are then equality
+  -- joins, so the FK case is an index scan and the fallback only visits the
+  -- 1,981 rows that still carry `round_id IS NULL`. Measured cold, on a fresh
+  -- connection each time: 0.13s by FK alone against 0.17s canonically.
+  AND (NOT $1::boolean OR r.id IN (SELECT id FROM tracked_rounds))
+  AND r.gaming_session_id IS NOT NULL
+  AND pcs.round_number IN (1, 2)
+  AND pcs.team IN (1, 2)
+  AND pcs.time_played_seconds > 0
+  -- Bot identity is the UNION of an OMNIBOT guid and a [BOT] name: the
+  -- bot-round backfill only invalidated bot-MAJORITY rounds, so a mixed round
+  -- can still be valid and carry a [BOT] player with an ordinary guid. One
+  -- predicate would let that player into the median split.
+  AND pcs.player_guid NOT LIKE 'OMNIBOT%'
+  AND COALESCE(pcs.player_name, '') NOT LIKE '[BOT]%'
+  -- $1 restricts to rounds carrying position tracks (the Layer 4 universe).
+  -- A bound parameter rather than string concatenation: the query text is one
+  -- constant, which is both what the SQL-injection scanners want to see and
+  -- what stops a future filter from being pasted in by hand.
 """
 
 
@@ -300,6 +361,14 @@ class Family:
     filters: str
     outcome: str = "win"          # §8.3: the outcome definition is frozen too
     frozen_cutoff: str | None = None   # absolute; set once, never recomputed
+    # ⛔ THE CUTOFF IS A LOWER BOUND, AND A LOWER BOUND IS NOT A HOLDOUT.
+    # `chronological_split()` puts every block at or after `frozen_cutoff` into
+    # confirmation, so as new matches arrive the confirmation set GROWS while
+    # the same manifest digest keeps passing — optional stopping with a
+    # compliance stamp on it. This pins WHICH blocks the holdout was, and it
+    # rides inside the manifest hash so the gate already written for the digest
+    # refuses a changed cohort too. Codex on #858.
+    frozen_cohort: str | None = None
     split_fraction: float = DISCOVERY_FRACTION
     resamples: int = RESAMPLES
     seed: int = SEED
@@ -330,6 +399,7 @@ class Family:
             "filters": self.filters,
             "outcome": self.outcome,
             "frozen_cutoff": self.frozen_cutoff,
+            "frozen_cohort": self.frozen_cohort,
             "split_fraction": self.split_fraction,
             "resamples": self.resamples,
             "seed": self.seed,
@@ -398,7 +468,16 @@ def margin_agreement(rows_by_round: dict) -> tuple[int, int]:
             if (p.get("margin") is None or p.get("map_winner_side") not in (1, 2)
                     or p.get("r2_defender") not in (1, 2) or p["margin"] == 0):
                 continue
-            key = (p["rid"], p["half"])
+            # ⛔ THE PAIR, NOT THE HALF. `pair_margin` copies one map's margin,
+            # winner and defender onto BOTH halves, and the halves have
+            # different round ids — so keying on `rid` let a fully loaded map
+            # cast two identical votes while a pair with eligible rows in only
+            # one half cast one. The percentage was weighted by per-half row
+            # availability, and it is compared against MARGIN_AGREEMENT_FLOOR to
+            # decide whether the `seconds` outcome is believable at all. The
+            # docstring above already said "one vote per matched pair"; the code
+            # did not. Codex on #818.
+            key = p.get("pair", p["rid"])
             if key in seen:
                 continue
             seen.add(key)
@@ -436,6 +515,17 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
         # a half-measured round would compare two different populations
         outs = [outcome(p) for _, p in vals]
         if any(o is None for o in outs):
+            continue
+        # ⛔ NO COMPARISON EXISTS IN A ROUND WHERE EVERYONE SHARES AN OUTCOME.
+        # §8.1's whole claim is that the comparison never leaves the round; when
+        # filtering or an incomplete import leaves every eligible row on the
+        # same side, `hi_mean - lo_mean` is 0.0 and that zero was appended as a
+        # MEASUREMENT — dragging the point estimate and every bootstrap
+        # replicate toward the null. `within_round_point_biserial` already
+        # skipped these, so the two estimators disagreed about what counts as
+        # measured, which shows up later as one of them being "less powerful".
+        # Codex on #818.
+        if len(set(outs)) < 2:
             continue
         # ⛔ NOBODY AT THE MEDIAN VALUE IS ASSIGNED A SIDE.
         # Kills and deaths are small integers, so the median value is routinely
@@ -593,6 +683,26 @@ def block_bootstrap(blocks: dict, metric: Callable, draws: list[list],
 
 
 # --- §8.3: chronological split, whole blocks ----------------------------------
+def _as_instant(value) -> datetime:
+    """A timestamp as a `datetime`, from either a value or its text.
+
+    ⚠️ Raises on anything it cannot read. A cutoff that cannot be parsed is a
+    typo, and guessing at it would silently move the boundary of a holdout —
+    the one number in this protocol that must never move by accident.
+    """
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise ValueError(
+            f"cutoff is not a timestamp: {value!r} — the frozen boundary has to "
+            f"be an instant, not a string that happens to sort"
+        ) from exc
+    return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+
+
 def chronological_split(block_times: dict, fraction: float,
                         frozen_cutoff: str | None = None):
     """Earliest blocks discover; the latest stay untouched.
@@ -614,8 +724,16 @@ def chronological_split(block_times: dict, fraction: float,
     """
     ordered = sorted(block_times, key=lambda b: (block_times[b], str(b)))
     if frozen_cutoff:
-        disc = [b for b in ordered if str(block_times[b]) < frozen_cutoff]
-        conf = [b for b in ordered if str(block_times[b]) >= frozen_cutoff]
+        # ⛔ AN INSTANT, NOT A STRING. This compared text, so the FORMAT decided
+        # the split: `2026-07-13T21:35:13` sorts ABOVE every database value from
+        # that day, because the database stringifies with a space (0x20) and `T`
+        # is 0x54 — every block on the cutoff date landed in discovery whatever
+        # its time, and an "absolute" frozen boundary was settled by a
+        # separator. Equivalent representations of one instant must produce one
+        # split. Codex on #818.
+        cut_at = _as_instant(frozen_cutoff)
+        disc = [b for b in ordered if _as_instant(block_times[b]) < cut_at]
+        conf = [b for b in ordered if _as_instant(block_times[b]) >= cut_at]
         return set(disc), set(conf), ordered, len(disc)
     cut = int(len(ordered) * fraction)
     return set(ordered[:cut]), set(ordered[cut:]), ordered, cut
@@ -994,7 +1112,22 @@ def manifest_gate(expected: str | None, computed: str,
     return None
 
 
-def preregister(family: Family, proposed_cutoff: str) -> dict:
+def cohort_digest(blocks) -> str:
+    """Which blocks the holdout WAS, as one short string.
+
+    Sorted so the digest does not depend on iteration order, and the COUNT is
+    included so that a set of the same size with different members and a set of
+    different size are both distinguishable. Truncated to 16 hex characters for
+    a manifest a person has to copy by hand — the artifact is protection against
+    drift, not against an adversary.
+    """
+    ids = sorted(str(b) for b in blocks)
+    blob = f"{len(ids)}:" + "|".join(ids)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def preregister(family: Family, proposed_cutoff: str,
+                confirmation_blocks=()) -> dict:
     """The artifact §8.5 requires, produced BEFORE the holdout is opened.
 
     ⛔ The no-cutoff branch was right to stop — a holdout that has been looked
@@ -1009,7 +1142,8 @@ def preregister(family: Family, proposed_cutoff: str) -> dict:
     point is that the rerun recomputes the SAME hash from `--cutoff <proposed>`.
     A digest that does not match the rerun commits to nothing.
     """
-    frozen = replace(family, frozen_cutoff=proposed_cutoff)
+    frozen = replace(family, frozen_cutoff=proposed_cutoff,
+                     frozen_cohort=cohort_digest(confirmation_blocks))
     return {"manifest": frozen.frozen(), "manifest_sha256": frozen.manifest_hash()}
 
 
@@ -1135,6 +1269,12 @@ async def main() -> int:
     ap.add_argument("--seed", type=int, default=SEED,
                     help="published seed; changing it changes the manifest hash")
     ap.add_argument(
+        "--cohort", metavar="DIGEST",
+        help="the confirmation-cohort digest printed by the preregistration "
+             "run. ⛔ REQUIRED with --cutoff: the cutoff is a LOWER BOUND, so "
+             "without this the holdout silently grows as new matches arrive and "
+             "the same manifest keeps passing.")
+    ap.add_argument(
         "--expect-manifest", metavar="SHA256",
         help="the sha256 printed by the preregistration run. ⛔ REQUIRED with "
              "--cutoff: without it the freeze is a promise, because nothing "
@@ -1163,6 +1303,7 @@ async def main() -> int:
         seed=args.seed,
         outcome=args.outcome,
         frozen_cutoff=args.cutoff,
+        frozen_cohort=args.cohort,
     )
 
     disc_b, conf_b, ordered, cut = chronological_split(
@@ -1173,7 +1314,7 @@ async def main() -> int:
         # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
         # verdicts on it; re-running later with the printed flag cannot make
         # that holdout untouched again. The proposal is the whole output.
-        pre = preregister(family, cutoff)
+        pre = preregister(family, cutoff, conf_b)
         print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
               f"   Confirmation data stays unopened until the boundary is fixed,\n"
               f"   because a holdout that has been looked at is not a holdout:\n\n"
@@ -1184,7 +1325,10 @@ async def main() -> int:
         # and the confirmation is not confirming what was registered.
         print(f"preregistered manifest sha256 : {pre['manifest_sha256']}")
         print(f"     rerun with: --cutoff '{cutoff}' "
+              f"--cohort {pre['manifest']['frozen_cohort']} "
               f"--expect-manifest {pre['manifest_sha256']}")
+        print(f"     confirmation cohort: {len(conf_b)} blocks, "
+              f"digest {pre['manifest']['frozen_cohort']}")
         print("frozen family manifest (record this BEFORE re-running):")
         for line in json.dumps(pre["manifest"], indent=2,
                                sort_keys=True).splitlines():
@@ -1232,6 +1376,29 @@ async def main() -> int:
     # visible only to an operator comparing two hex strings by eye. Refused
     # BEFORE `analyse()`, because after it the holdout has been opened.
     # Codex on #818.
+    # ⛔ THE COHORT BEFORE THE DIGEST, because it produces the better message.
+    # A grown holdout also moves the manifest hash (the cohort rides inside it),
+    # so the gate below would refuse anyway — but it would say "something moved",
+    # and the reader would go looking for an edited formula instead of the four
+    # new sessions that arrived since Tuesday.
+    actual_cohort = cohort_digest(conf_b)
+    if not args.cohort:
+        print(f"⛔ NO REGISTERED COHORT. `--cutoff` is a LOWER bound, so without "
+              f"this the holdout\n   grows as matches arrive and the same "
+              f"manifest keeps passing — optional stopping\n   with a compliance "
+              f"stamp on it. This run's confirmation half is {len(conf_b)} "
+              f"blocks:\n\n     --cohort {actual_cohort}\n")
+        return 7
+    if args.cohort.strip().lower() != actual_cohort:
+        print(f"⛔ COHORT CHANGED — refusing to open the confirmation half.\n"
+              f"   registered : {args.cohort.strip().lower()}\n"
+              f"   this run   : {actual_cohort}  ({len(conf_b)} blocks)\n\n"
+              f"   The holdout is not the one that was registered. If matches "
+              f"arrived since, that is\n   a NEW experiment and needs a new "
+              f"preregistration — analysing this one would be\n   optional "
+              f"stopping.\n")
+        return 8
+
     computed = family.manifest_hash()
     gate = manifest_gate(args.expect_manifest, computed, cutoff)
     if gate:
