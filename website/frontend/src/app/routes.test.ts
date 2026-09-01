@@ -156,42 +156,38 @@ describe('the shell, the phases and the sweep agree on what is built', () => {
       .map((m) => m[1]);
   }
 
-  /** The stub threshold the dev sweep enforces. */
-  function sweepThreshold(): number {
-    const source = readFileSync(join(appDir, '..', '..', 'e2e', 'app-routes.spec.ts'), 'utf8');
-    const hit = source.match(/const BUILT_THROUGH_PHASE = (\d+)/);
-    expect(hit, 'BUILT_THROUGH_PHASE moved or was renamed').not.toBeNull();
-    return Number((hit as RegExpMatchArray)[1]);
-  }
-
-  it('a route is wired exactly when its phase is built', () => {
+  it('a route is wired exactly when the registry says it is built', () => {
+    // The old invariant derived "built" from the PHASE number, which held
+    // while phases landed whole — and broke the day phase 5 landed its
+    // first page (six routes, six PRs, one wired). The unit of "built" is
+    // the ROUTE, and the registry row says it; this test holds the flag
+    // and PAGES in lockstep, in both directions, so a page that exists
+    // with green tests but still stubs in the browser is caught by the
+    // flag it forgot to set — the same failure the phase version existed
+    // for.
     const wired = new Set(wiredKeys());
-    const built = Math.max(...APP_ROUTES.filter((r) => wired.has(r.key)).map((r) => r.phase));
     const wrong = APP_ROUTES
-      .filter((r) => wired.has(r.key) !== (r.phase <= built))
-      .map((r) => `${r.key} (phase ${r.phase}, ${wired.has(r.key) ? 'wired' : 'stub'})`);
+      .filter((r) => wired.has(r.key) !== (r.built === true))
+      .map((r) => `${r.key} (${wired.has(r.key) ? 'wired but not marked built' : 'marked built but stubbing'})`);
     expect(wrong, 'a page can exist, have green tests and still render the '
       + 'phase stub in a browser — nothing else in this repo notices')
       .toEqual([]);
   });
 
-  it('the dev sweep requires every built phase to have stopped stubbing', () => {
-    // ⛔ THE FAILURE THIS EXISTS FOR. `BUILT_THROUGH_PHASE` is raised by hand,
-    // and it was left at 3 while phase 4 shipped — so `session-detail` and
-    // `session-detail-date`, the two newest pages, were the only routes exempt
-    // from the one check that proves a stub is gone. A constant that must be
-    // raised by hand is a constant that will stay too low; this is what makes
-    // it self-checking instead.
-    const wired = new Set(wiredKeys());
-    const built = Math.max(...APP_ROUTES.filter((r) => wired.has(r.key)).map((r) => r.phase));
-    expect(sweepThreshold(), `phase ${built} is wired in the shell but the dev `
-      + `sweep still allows stubs up to phase ${sweepThreshold()} — raise `
-      + 'BUILT_THROUGH_PHASE in e2e/app-routes.spec.ts').toBe(built);
+  it('the dev sweep reads the built flag, not a hand-raised constant', () => {
+    // ⛔ THE FAILURE THE OLD CONSTANT HAD. `BUILT_THROUGH_PHASE` was raised
+    // by hand and was left at 3 while phase 4 shipped, so the two newest
+    // pages were exempt from the one check that proves a stub is gone. The
+    // sweep now derives the expectation per route from the same registry
+    // row the shell routes with; this test pins that it stays that way.
+    const source = readFileSync(join(appDir, '..', '..', 'e2e', 'app-routes.spec.ts'), 'utf8');
+    expect(source, 'the sweep grew a hand threshold again').not.toMatch(/BUILT_THROUGH_PHASE/);
+    expect(source.includes('route.built'), 'the sweep no longer reads route.built').toBe(true);
   });
 
   it('the checks can fail', () => {
     // Without these, a regex that matched nothing would read as "all agree".
     expect(wiredKeys().length).toBeGreaterThan(20);
-    expect(sweepThreshold()).toBeGreaterThan(0);
+    expect(APP_ROUTES.filter((r) => r.built === true).length).toBeGreaterThan(20);
   });
 });

@@ -24,6 +24,12 @@ export interface AppRoute {
   nav: NavSection;
   /** Build phase from docs/design/08; shell renders a stub until then. */
   phase: number;
+  /** True once the shell maps this route to a real page. Phases land page
+   *  by page (phase 5 is six routes and six PRs), so the unit of "built"
+   *  is the ROUTE — the phase number stays as planning provenance, but
+   *  nothing derives whether a route is built from it anymore. routes.test.ts holds
+   *  this flag, PAGES and the dev sweep in lockstep. */
+  built?: boolean;
   /** Why this row exists, when that is not obvious from the row. */
   note?: string;
 }
