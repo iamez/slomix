@@ -2743,7 +2743,9 @@ export interface CarrierReturns {
     original_carrier_guid: string; return_delay_ms: number; map_name: string;
     return_time: number;
   }[];
-  summary: { total_returns?: number; avg_delay_ms?: number };
+  /** avg_delay_ms arrives as NULL (not absent) on an empty scope —
+   *  measured on 2026-09-01 and 2026-05-01. */
+  summary: { total_returns?: number; avg_delay_ms?: number | null };
 }
 
 export interface VehicleProgress {
