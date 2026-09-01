@@ -467,3 +467,57 @@ def test_power_composite_is_four_axes_without_mechanical():
     assert "axes_defaulted" in src
     assert "killer_guid IS DISTINCT FROM target_guid" in src
     assert "SUM(sum_angle) / NULLIF(SUM(cnt), 0)" in src
+
+
+# ---------------------------------------------------------------------------
+# #873: the drill-down's track lookup picks the life NEAREST the engagement
+# ---------------------------------------------------------------------------
+
+@pytest.mark.asyncio
+async def test_event_detail_track_lookup_targets_the_engagement_life():
+    """player_track holds one row per LIFE. The rsu-scoped lookup used to
+    take `ORDER BY spawn_time_ms ASC LIMIT 1` — always the player's FIRST
+    life — so any engagement in a later life sliced an empty window:
+    0/60 sampled events carried a derived path (measured 2026-09-01,
+    11/30 after the fix). This pins the query the handler actually SENDS:
+    nearest-to-start ordering, with the engagement start as a parameter."""
+    import datetime
+
+    from website.backend.routers import proximity_events
+
+    class _EventDB(_CaptureDB):
+        async def fetch_val(self, query, params=None):
+            self._note(query, params)
+            return True  # round_id column exists
+
+        async def fetch_one(self, query, params=None):
+            self._note(query, params)
+            if "FROM combat_engagement" in query:
+                # the long form: valid times, a real guid, rsu > 0
+                return (
+                    7, datetime.date(2026, 8, 23), 2, 1755980000, 1755980300,
+                    "supply", "AABBCCDD00112233445566778899AABB", "tgt", "AXIS",
+                    "killed", 143, 100000, 102875, 2875, 1, False,
+                    "[]", "[]", 0.0, 0.0, 0.0, 0.0, 12.0,
+                    11312, "2026-08-23", "215233",
+                )
+            return None  # no track found — fine, the QUERY is the subject
+
+    db = _EventDB()
+    app = FastAPI()
+    app.include_router(proximity_events.router, prefix="/api")
+    app.dependency_overrides[get_db] = lambda: db
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://t") as client:
+        resp = await client.get("/api/proximity/event/7")
+
+    assert resp.status_code == 200
+    track_queries = [(q, p) for q, p in db.queries if "FROM player_track" in q]
+    assert track_queries, "the drill-down never looked a track up"
+    for q, p in track_queries:
+        assert "round_start_unix = $4" in q, "expected the rsu-scoped branch"
+        assert "ORDER BY ABS(spawn_time_ms - $6)" in q, (
+            "the lookup must target the engagement's life, not the first one"
+        )
+        # and the sixth parameter really is the engagement start
+        assert p[5] == 100000

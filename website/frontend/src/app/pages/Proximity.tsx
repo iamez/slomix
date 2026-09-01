@@ -272,7 +272,7 @@ export function Proximity() {
                 aside={
                   <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
                     {maps.map((m) => (
-                      <button key={m} type="button" onClick={() => { setPickedMap(m); setPickedRound(null); }} aria-pressed={scopeMap === m}
+                      <button key={m} type="button" onClick={() => { setPickedMap(scopeMap === m ? null : m); setPickedRound(null); }} aria-pressed={scopeMap === m}
                         style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: scopeMap === m ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>
                         {m}
                       </button>
@@ -284,7 +284,7 @@ export function Proximity() {
                       // map+number on one date.
                       const when = rsu != null ? new Date(rsu * 1000).toISOString().slice(11, 16) : null;
                       return (
-                        <button key={`${r.round_number}:${rsu ?? 'x'}`} type="button" onClick={() => setPickedRound({ n: r.round_number, rsu })} aria-pressed={selected}
+                        <button key={`${r.round_number}:${rsu ?? 'x'}`} type="button" onClick={() => setPickedRound(selected ? null : { n: r.round_number, rsu })} aria-pressed={selected}
                           style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: selected ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>
                           r{r.round_number}{when ? ` ${when}` : ''}
                         </button>

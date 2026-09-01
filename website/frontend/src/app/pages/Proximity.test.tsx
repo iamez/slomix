@@ -274,10 +274,15 @@ describe('Proximity', () => {
     vi.stubGlobal('fetch', fetchSpy);
     renderPage();
     await waitFor(() => expect(screen.getByText(/139 crossfires/)).toBeInTheDocument());
-    // Long form (297937, first 'carniee' row): attackers parsed, path drawn.
+    // Long form (recorded from event 297920, served for the first
+    // 'carniee' row's id): attackers parsed, BOTH tracks drawn (16-point
+    // target, 15-point attacker), strafe compared.
     fireEvent.click(screen.getAllByRole('button', { name: /carniee · supply r2/ })[0]);
-    await waitFor(() => expect(screen.getByText(/kanii · 2 hits · 36 dmg/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/\.lgz · 3 hits · 107 dmg/)).toBeInTheDocument());
+    expect(screen.getByText(/carniee · 2 hits · 36 dmg/)).toBeInTheDocument();
     expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
+    expect(screen.getByText('solid — target · dashed — attacker')).toBeInTheDocument();
+    expect(screen.getByText(/movement — target 283 u\/s · 3 turns/)).toBeInTheDocument();
     // Short form (served for the 'vid' row's id; recorded from event
     // 306062): attackers is the RAW DB string WITH a real record inside —
     // the panel must parse it (.lgz · 1 hits · 166 dmg), not blank it,
@@ -286,7 +291,7 @@ describe('Proximity', () => {
     await waitFor(() => expect(screen.getByText(/\.lgz · 1 hits · 166 dmg/)).toBeInTheDocument());
     expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
     // One at a time: the long form's attacker row is gone.
-    expect(screen.queryByText(/kanii · 2 hits · 36 dmg/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/3 hits · 107 dmg/)).not.toBeInTheDocument();
     // Exactly the two clicked ids were fetched, nothing else.
     const detailCalls = fetchSpy.mock.calls.map((c) => String(c[0]))
       .filter((u) => u.includes('/api/proximity/event/'));

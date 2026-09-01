@@ -20,6 +20,17 @@ import { ProxPanel, ProxRow } from './proximityShared';
 
 const NO_ROWS = 'no rows in this scope — proximity capture only covers sessions where the tracker ran';
 
+/** round_time in its two live spellings ('215233' and '21:52:33') — strip
+ *  the colons FIRST, then pad ('4918' means 0:49:18), the order the
+ *  round_time RCA fixed four times the other way around. */
+function fmtRoundTime(raw: string | null): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length < 3 || digits.length > 6) return null;
+  const s = digits.padStart(6, '0');
+  return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
+}
+
 type PathPoint = { x: number; y: number; event: string | null };
 
 /** The doubly-serialised path: a JSON string when recorded, `[]` when the
@@ -86,7 +97,11 @@ function EventDetail({ eventId }: { eventId: number }) {
   const path = parsePath(
     Array.isArray(d.target_path) && d.target_path.length > 0 ? d.target_path : d.position_path,
   );
+  const attackerPath = parsePath(Array.isArray(d.attacker_path) ? d.attacker_path : []);
   const attackers = parseAttackers(d.attackers);
+  const strafe = d.strafe ?? null;
+  const strafeMoved = strafe != null
+    && (strafe.target.total_distance > 0 || strafe.attacker.total_distance > 0);
   return (
     <Stack gap={2} style={{ padding: 'var(--space-2) 0 var(--space-3) var(--space-5)' }}>
       <Meta>
@@ -101,9 +116,20 @@ function EventDetail({ eventId }: { eventId: number }) {
           {' · '}{figure(a.hits)} hits · {figure(a.damage)} dmg
         </Meta>
       ))}
+      {strafeMoved && strafe != null && (
+        <Meta>
+          movement — target {figure(Math.round(strafe.target.avg_speed))} u/s
+          {' · '}{figure(strafe.target.turn_count)} turns; attacker{' '}
+          {figure(Math.round(strafe.attacker.avg_speed))} u/s
+          {' · '}{figure(strafe.attacker.turn_count)} turns
+        </Meta>
+      )}
       {path.length >= 2 ? (
         (() => {
-          const xs = path.map((p) => p.x); const ys = path.map((p) => p.y);
+          // Both tracks share ONE normalisation — separate bounds would
+          // make the target and attacker incomparable on the same canvas.
+          const all = attackerPath.length >= 2 ? [...path, ...attackerPath] : path;
+          const xs = all.map((p) => p.x); const ys = all.map((p) => p.y);
           const minX = Math.min(...xs); const spanX = Math.max(...xs) - minX;
           const minY = Math.min(...ys); const spanY = Math.max(...ys) - minY;
           const w = 320; const h = 160;
@@ -111,15 +137,23 @@ function EventDetail({ eventId }: { eventId: number }) {
           const ny = (y: number) => (spanY === 0 ? 0.5 : (y - minY) / spanY);
           const px = (x: number) => nx(x) * (w - 16) + 8;
           const py = (y: number) => h - (ny(y) * (h - 16) + 8);
-          const dd = path.map((p, i) => `${i === 0 ? 'M' : 'L'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
+          const dFor = (pts: PathPoint[]) => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
           return (
-            <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', maxWidth: w, border: '1px solid var(--color-rule-900)' }} role="img" aria-label="engagement path">
-              <path d={dd} fill="none" stroke="var(--color-accent)" strokeWidth="1.2" />
-              {path.map((p, i) => (
-                <circle key={i} cx={px(p.x)} cy={py(p.y)} r="3"
-                  fill={p.event === 'escape' ? 'var(--color-pos)' : p.event === 'hit' ? 'var(--color-neg)' : 'var(--color-text-400)'} />
-              ))}
-            </svg>
+            <>
+              <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', maxWidth: w, border: '1px solid var(--color-rule-900)' }} role="img" aria-label="engagement path">
+                <path d={dFor(path)} fill="none" stroke="var(--color-accent)" strokeWidth="1.2" />
+                {attackerPath.length >= 2 && (
+                  <path d={dFor(attackerPath)} fill="none" stroke="var(--color-text-400)" strokeWidth="1" strokeDasharray="4 3" />
+                )}
+                {path.map((p, i) => (
+                  <circle key={i} cx={px(p.x)} cy={py(p.y)} r="3"
+                    fill={p.event === 'escape' ? 'var(--color-pos)' : p.event === 'hit' ? 'var(--color-neg)' : 'var(--color-text-400)'} />
+                ))}
+              </svg>
+              {attackerPath.length >= 2 && (
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>solid — target · dashed — attacker</Lbl>
+              )}
+            </>
           );
         })()
       ) : (
@@ -153,7 +187,7 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
       </div>
 
       <div data-parity="proximity.events">
-        <ProxPanel label="engagements" aside="newest first · click a row for its record" q={events} empty={NO_ROWS} isEmpty={(d) => d.events.length === 0}>
+        <ProxPanel label="engagements" aside="by round, latest in-round moments first · click a row for its record" q={events} empty={NO_ROWS} isEmpty={(d) => d.events.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
               {d.events.map((e) => (
@@ -165,7 +199,7 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
                     style={{ all: 'unset', cursor: 'pointer', display: 'block', width: '100%' }}
                   >
                     <ProxRow
-                      name={`${e.target_name ? stripEtColors(e.target_name) : 'unknown'} · ${mapLabel(e.map)} r${e.round}`}
+                      name={`${e.target_name ? stripEtColors(e.target_name) : 'unknown'} · ${mapLabel(e.map)} r${e.round}${fmtRoundTime(e.round_time) != null ? ` · ${fmtRoundTime(e.round_time)}` : ''}`}
                       mid={`${e.outcome ?? '—'}${e.crossfire ? ' · crossfire' : ''}${e.attackers != null && e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}`}
                       val={e.duration_ms != null ? `${figure(Math.round(e.duration_ms / 100) / 10)} s` : '—'}
                     />
