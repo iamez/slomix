@@ -19,6 +19,7 @@ import { stripEtColors } from '../lib/names';
 import { isFailureStatus } from '../lib/responseStatus';
 import { useProximityLeaderboard, useProxScopes, useSsr } from '../lib/queries';
 import { ProximityInstruments } from './ProximityInstruments';
+import { ProximityCompetitive } from './ProximityCompetitive';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
@@ -232,7 +233,10 @@ export function Proximity() {
           * window chip. A pending lookup waits; a failed one says so; an
           * empty one names what it means. */}
         {windowPicked ? (
-          <ProximityInstruments sessionDate={null} />
+          <>
+            <ProximityInstruments sessionDate={null} />
+            <ProximityCompetitive sessionDate={null} />
+          </>
         ) : scopes.isPending ? (
           <Pending label="scope" />
         ) : scopes.isError ? (
@@ -240,13 +244,16 @@ export function Proximity() {
         ) : scopeDate == null ? (
           <Absent reason="the tracker has not captured any session in this window — there is no date to scope the instruments to" />
         ) : (
-          <ProximityInstruments sessionDate={scopeDate} />
+          <>
+            <ProximityInstruments sessionDate={scopeDate} />
+            <ProximityCompetitive sessionDate={scopeDate} />
+          </>
         )}
       </Stack>
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
-        slices one and two of the proximity page — the competitive section,
-        carrier and objective intel, journeys and canvases are pinned as
-        pending in docs/parity/proximity_inventory.json
+        slices one to three of the proximity page — carrier and objective
+        intel, journeys, canvases and the round-scoped wave ledger are
+        pinned as pending in docs/parity/proximity_inventory.json
       </Lbl>
     </div>
   );

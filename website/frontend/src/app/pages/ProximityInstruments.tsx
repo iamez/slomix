@@ -14,7 +14,7 @@
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
-import { isFailureStatus } from '../lib/responseStatus';
+import { ProxPanel, ProxRow } from './proximityShared';
 import {
   useProxAimLock, useProxClasses, useProxCohesion, useProxCombatPositions,
   useProxCrossfireAngles, useProxFocusFire, useProxLuaTrades, useProxPushes,
@@ -23,48 +23,6 @@ import {
 } from '../lib/queries';
 import { mapLabel } from '../lib/maps';
 import type { ProxCohesion } from '../lib/types';
-
-type Query<T> = { isPending: boolean; isError: boolean; data: T | undefined };
-
-/** The shared frame: names the panel, renders the three non-answers, and
- * hands a SUCCESSFUL body to the child. `empty` names what a truthful
- * emptiness means for THIS instrument — the tracker not running is the
- * usual reason, but each panel says its own. */
-function Instrument<T extends { status?: string }>({ label, aside, q, empty, isEmpty, children }: {
-  label: string;
-  aside?: string;
-  q: Query<T>;
-  empty: string;
-  isEmpty: (data: T) => boolean;
-  children: (data: T) => React.ReactNode;
-}) {
-  return (
-    <Stack gap={2}>
-      <SectionHead label={label} aside={aside ? <span className="lbl">{aside}</span> : undefined} />
-      {q.isPending && <Pending label={label} />}
-      {q.isError && <Unavailable what={label} />}
-      {q.data && (isFailureStatus(q.data.status) ? (
-        <Unavailable what={label} />
-      ) : isEmpty(q.data) ? (
-        <Absent reason={empty} />
-      ) : (
-        children(q.data)
-      ))}
-    </Stack>
-  );
-}
-
-function Row({ name, mid, val }: { name: string; mid?: string; val: string }) {
-  return (
-    <Cluster gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0' }}>
-      <span style={{ fontSize: 'var(--fs-row)' }}>{name}</span>
-      <Cluster gap={3} align="baseline">
-        {mid != null && <Meta>{mid}</Meta>}
-        <span className="m" style={{ fontSize: 'var(--fs-small)', minWidth: 72, textAlign: 'right' }}>{val}</span>
-      </Cluster>
-    </Cluster>
-  );
-}
 
 /** The data-completeness band: which source tables actually captured this
  * scope. Required sources that are not ready are the headline; optional
@@ -174,7 +132,7 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
 
       <div className="home-cols3" style={{ gap: 'var(--space-6)' }}>
         <div data-parity="proximity.spawn-timing">
-          <Instrument label="spawn timing" aside="denial of respawn windows" q={spawn} empty={noTracker} isEmpty={(d) => d.total_events === 0}>
+          <ProxPanel label="spawn timing" aside="denial of respawn windows" q={spawn} empty={noTracker} isEmpty={(d) => d.total_events === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.total_events)} timed kills</Meta>
@@ -182,41 +140,41 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                   * hold real events and no qualifier (Codex on #861 r2). */}
                 {d.leaders.length === 0 && <Meta>nobody reached the three-kill board threshold here</Meta>}
                 {d.leaders.slice(0, 5).map((l) => (
-                  <Row key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.kills)} kills · denial ${figure(l.avg_denial_ms)} ms`} val={l.avg_score.toFixed(3)} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.kills)} kills · denial ${figure(l.avg_denial_ms)} ms`} val={l.avg_score.toFixed(3)} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.aim-lock">
-          <Instrument label="aim lock" aside="sustained on-target tracking" q={aim} empty={noTracker} isEmpty={(d) => d.total_events === 0}>
+          <ProxPanel label="aim lock" aside="sustained on-target tracking" q={aim} empty={noTracker} isEmpty={(d) => d.total_events === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.total_events)} locks</Meta>
                 {d.leaders.length === 0 && <Meta>nobody reached the three-lock board threshold here</Meta>}
                 {d.leaders.slice(0, 5).map((l) => (
-                  <Row key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}°`} val={`${figure(l.avg_lock_ms)} ms`} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}°`} val={`${figure(l.avg_lock_ms)} ms`} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.lua-trades">
-          <Instrument label="trade kills" aside="lua-detected avenges" q={trades} empty={noTracker} isEmpty={(d) => d.leaders.length === 0}>
+          <ProxPanel label="trade kills" aside="lua-detected avenges" q={trades} empty={noTracker} isEmpty={(d) => d.leaders.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.leaders.slice(0, 5).map((l) => (
-                  <Row key={l.guid} name={stripEtColors(l.name)} mid={`fastest ${figure(l.fastest_ms)} ms`} val={`${figure(l.trades)} · ${figure(l.avg_reaction_ms)} ms`} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`fastest ${figure(l.fastest_ms)} ms`} val={`${figure(l.trades)} · ${figure(l.avg_reaction_ms)} ms`} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.revives">
-          <Instrument label="revives" aside="medics under pressure" q={revives} empty={noTracker} isEmpty={(d) => d.summary.total_revives === 0}>
+          <ProxPanel label="revives" aside="medics under pressure" q={revives} empty={noTracker} isEmpty={(d) => d.summary.total_revives === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.summary.total_revives)} revives · {d.summary.under_fire_pct.toFixed(1)}% under fire</Meta>
@@ -226,45 +184,45 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 {d.leaders.length === 0 ? (
                   <Meta>no medic reached the two-revive board threshold here</Meta>
                 ) : d.leaders.slice(0, 5).map((l) => (
-                  <Row key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire`} val={figure(l.revives)} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire`} val={figure(l.revives)} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.focus-fire">
-          <Instrument label="focus fire" aside="who the room shoots at" q={focus} empty={noTracker} isEmpty={(d) => d.targets.length === 0}>
+          <ProxPanel label="focus fire" aside="who the room shoots at" q={focus} empty={noTracker} isEmpty={(d) => d.targets.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.summary.total_events)} events · avg {d.summary.avg_attackers.toFixed(1)} attackers</Meta>
                 {d.targets.slice(0, 5).map((t) => (
-                  <Row key={t.guid} name={stripEtColors(t.name)} mid={`${figure(t.total_damage_taken)} dmg taken`} val={`${figure(t.times_focused)}×`} />
+                  <ProxRow key={t.guid} name={stripEtColors(t.name)} mid={`${figure(t.total_damage_taken)} dmg taken`} val={`${figure(t.times_focused)}×`} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.combat-positions">
-          <Instrument label="kill distances" aside="from the position tracker" q={positions} empty={noTracker} isEmpty={(d) => !d.summary.total_kills}>
+          <ProxPanel label="kill distances" aside="from the position tracker" q={positions} empty={noTracker} isEmpty={(d) => !d.summary.total_kills}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>
                   {figure(d.summary.total_kills ?? 0)} kills · median {figure(d.summary.median_kill_distance ?? 0)} u
                 </Meta>
                 {d.by_class.map((c) => (
-                  <Row key={c.class} name={c.class.toLowerCase()} mid={`${figure(c.kills)} kills`} val={`${figure(c.avg_distance)} u`} />
+                  <ProxRow key={c.class} name={c.class.toLowerCase()} mid={`${figure(c.kills)} kills`} val={`${figure(c.avg_distance)} u`} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
       </div>
 
       <div className="landing-split" style={{ gap: 'var(--space-6)' }}>
         <div data-parity="proximity.cohesion">
-          <Instrument label="team cohesion" aside="dispersion over the evening" q={cohesion} empty={noTracker} isEmpty={(d) => d.team_summary.length === 0}>
+          <ProxPanel label="team cohesion" aside="dispersion over the evening" q={cohesion} empty={noTracker} isEmpty={(d) => d.team_summary.length === 0}>
             {(d) => (
               <Stack gap={2}>
                 <Cluster gap={4} style={{ flexWrap: 'wrap' }}>
@@ -276,36 +234,36 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 </Cluster>
                 <CohesionSparkline data={d} />
                 {d.buddy_pairs.slice(0, 4).map((b) => (
-                  <Row key={b.guids} name={b.guids} mid={`${figure(b.times_paired)}× paired`} val={`${figure(b.avg_distance)} u`} />
+                  <ProxRow key={b.guids} name={b.guids} mid={`${figure(b.times_paired)}× paired`} val={`${figure(b.avg_distance)} u`} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.pushes">
-          <Instrument label="team pushes" aside="coordinated advances" q={pushes} empty={noTracker} isEmpty={(d) => d.team_summary.length === 0}>
+          <ProxPanel label="team pushes" aside="coordinated advances" q={pushes} empty={noTracker} isEmpty={(d) => d.team_summary.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.team_summary.map((t) => (
-                  <Row key={t.team} name={t.team.toLowerCase()} mid={`${figure(t.objective_pushes)} at objectives · quality ${t.avg_quality.toFixed(2)}`} val={figure(t.pushes)} />
+                  <ProxRow key={t.team} name={t.team.toLowerCase()} mid={`${figure(t.objective_pushes)} at objectives · quality ${t.avg_quality.toFixed(2)}`} val={figure(t.pushes)} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
       </div>
 
       <div className="landing-split" style={{ gap: 'var(--space-6)' }}>
         <div data-parity="proximity.crossfire-angles">
-          <Instrument label="crossfire angles" aside="two shooters, one target" q={angles} empty={noTracker} isEmpty={(d) => d.total_opportunities === 0}>
+          <ProxPanel label="crossfire angles" aside="two shooters, one target" q={angles} empty={noTracker} isEmpty={(d) => d.total_opportunities === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>
                   {figure(d.executed)} of {figure(d.total_opportunities)} executed ({d.utilization_rate_pct.toFixed(1)}%) · avg {d.avg_angle.toFixed(0)}°
                 </Meta>
                 {d.top_duos.slice(0, 5).map((duo) => (
-                  <Row
+                  <ProxRow
                     key={`${duo.teammate1_guid}:${duo.teammate2_guid}`}
                     name={`${duo.name ? stripEtColors(duo.name) : duo.teammate1_guid.slice(0, 8)} + ${duo.partner_name ? stripEtColors(duo.partner_name) : duo.teammate2_guid.slice(0, 8)}`}
                     mid={`avg ${duo.avg_angle.toFixed(0)}°`}
@@ -314,30 +272,30 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.support-summary">
-          <Instrument label="support uptime" aside="time spent near teammates" q={support} empty={noTracker} isEmpty={(d) => !d.summary.total_rounds}>
+          <ProxPanel label="support uptime" aside="time spent near teammates" q={support} empty={noTracker} isEmpty={(d) => !d.summary.total_rounds}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.summary.total_rounds ?? 0)} rounds · avg {(d.summary.avg_uptime_pct ?? 0).toFixed(1)}%</Meta>
                 {d.by_map.slice(0, 5).map((m) => (
-                  <Row key={m.map_name} name={mapLabel(m.map_name)} mid={`${figure(m.rounds)} rd`} val={`${m.avg_uptime_pct.toFixed(1)}%`} />
+                  <ProxRow key={m.map_name} name={mapLabel(m.map_name)} mid={`${figure(m.rounds)} rd`} val={`${m.avg_uptime_pct.toFixed(1)}%`} />
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
       </div>
 
       <div className="landing-split" style={{ gap: 'var(--space-6)' }}>
         <div data-parity="proximity.classes">
-          <Instrument label="classes" aside="movement by role" q={classes} empty={noTracker} isEmpty={(d) => d.classes.length === 0}>
+          <ProxPanel label="classes" aside="movement by role" q={classes} empty={noTracker} isEmpty={(d) => d.classes.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.classes.map((c) => (
-                  <Row
+                  <ProxRow
                     key={c.player_class}
                     name={c.player_class.toLowerCase()}
                     mid={`${figure(c.tracks)} tracks · sprint ${c.avg_sprint_pct == null ? '—' : `${c.avg_sprint_pct.toFixed(0)}%`}`}
@@ -346,18 +304,18 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
 
         <div data-parity="proximity.reactions">
-          <Instrument label="reactions" aside="return fire · dodge · support" q={reactions} empty={noTracker} isEmpty={(d) => d.class_summary.length === 0}>
+          <ProxPanel label="reactions" aside="return fire · dodge · support" q={reactions} empty={noTracker} isEmpty={(d) => d.class_summary.length === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.return_fire.slice(0, 3).map((r) => (
-                  <Row key={`rf:${r.guid}`} name={stripEtColors(r.name)} mid={`return fire · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
+                  <ProxRow key={`rf:${r.guid}`} name={stripEtColors(r.name)} mid={`return fire · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
                 ))}
                 {d.class_summary.map((c) => (
-                  <Row
+                  <ProxRow
                     key={c.player_class}
                     name={c.player_class.toLowerCase()}
                     mid={`${figure(c.events)} events`}
@@ -368,7 +326,7 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 ))}
               </Stack>
             )}
-          </Instrument>
+          </ProxPanel>
         </div>
       </div>
     </Stack>

@@ -1,0 +1,100 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "clock_protocol": "reinforcement-clock-v1",
+ "rounds": 21,
+ "skipped_rounds_no_clock": 0,
+ "description": "Clutch = last player alive of their wave group vs 2+ enemies with >=5s to the friendly wave. Won = a kill + survive to the wave, or trade up (kills >= enemies-1).",
+ "players": [
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "situations": 34,
+   "wins": 14,
+   "win_pct": 41.2,
+   "best": {
+    "enemies": 3,
+    "kills": 2,
+    "survived": true
+   }
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": ".olz",
+   "situations": 35,
+   "wins": 12,
+   "win_pct": 34.3,
+   "best": {
+    "enemies": 3,
+    "kills": 1,
+    "survived": true
+   }
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "vid",
+   "situations": 36,
+   "wins": 10,
+   "win_pct": 27.8,
+   "best": {
+    "enemies": 3,
+    "kills": 1,
+    "survived": true
+   }
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru3lzor.",
+   "situations": 27,
+   "wins": 7,
+   "win_pct": 25.9,
+   "best": {
+    "enemies": 3,
+    "kills": 2,
+    "survived": true
+   }
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "SuperBoyy",
+   "situations": 10,
+   "wins": 5,
+   "win_pct": 50.0,
+   "best": {
+    "enemies": 3,
+    "kills": 1,
+    "survived": true
+   }
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "KaNii.[D]",
+   "situations": 15,
+   "wins": 5,
+   "win_pct": 33.3,
+   "best": {
+    "enemies": 3,
+    "kills": 2,
+    "survived": false
+   }
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": ".lgz",
+   "situations": 22,
+   "wins": 5,
+   "win_pct": 22.7,
+   "best": {
+    "enemies": 3,
+    "kills": 2,
+    "survived": false
+   }
+  }
+ ]
+}

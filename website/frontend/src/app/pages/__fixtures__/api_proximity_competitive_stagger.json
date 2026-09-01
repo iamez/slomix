@@ -1,0 +1,84 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "threshold": 0.8,
+ "description": "Stagger kill = victim loses >=80% of their spawn wave. denied_s = total enemy respawn time removed by this player's kills.",
+ "players": [
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "team": "AXIS",
+   "kills": 222,
+   "stagger_kills": 33,
+   "stagger_rate": 14.9,
+   "denied_s": 2422.7,
+   "avg_score": 0.445
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "vid",
+   "team": "AXIS",
+   "kills": 208,
+   "stagger_kills": 29,
+   "stagger_rate": 13.9,
+   "denied_s": 2253.2,
+   "avg_score": 0.451
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": ".olz",
+   "team": "AXIS",
+   "kills": 131,
+   "stagger_kills": 17,
+   "stagger_rate": 13.0,
+   "denied_s": 1318.1,
+   "avg_score": 0.404
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "kanii",
+   "team": "AXIS",
+   "kills": 101,
+   "stagger_kills": 15,
+   "stagger_rate": 14.9,
+   "denied_s": 1030.5,
+   "avg_score": 0.414
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": ".lgz",
+   "team": "AXIS",
+   "kills": 160,
+   "stagger_kills": 13,
+   "stagger_rate": 8.1,
+   "denied_s": 1570.8,
+   "avg_score": 0.401
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "SuperBoyy",
+   "team": "AXIS",
+   "kills": 91,
+   "stagger_kills": 12,
+   "stagger_rate": 13.2,
+   "denied_s": 1024.9,
+   "avg_score": 0.455
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru3lzor.",
+   "team": "AXIS",
+   "kills": 91,
+   "stagger_kills": 12,
+   "stagger_rate": 13.2,
+   "denied_s": 914.5,
+   "avg_score": 0.424
+  }
+ ]
+}

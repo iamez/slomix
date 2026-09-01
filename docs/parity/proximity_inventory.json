@@ -212,7 +212,8 @@
         "bytes": 2629,
         "file": "api_proximity_competitive_clutch.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/clutch"
     },
     {
       "path": "/api/proximity/competitive/first-blood",
@@ -228,7 +229,8 @@
         "bytes": 2811,
         "file": "api_proximity_competitive_first_blood.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/first-blood"
     },
     {
       "path": "/api/proximity/competitive/man-advantage",
@@ -244,7 +246,8 @@
         "bytes": 1505,
         "file": "api_proximity_competitive_man_advantage.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/man-advantage"
     },
     {
       "path": "/api/proximity/competitive/personal-bests",
@@ -260,7 +263,8 @@
         "bytes": 466,
         "file": "api_proximity_competitive_personal_bests.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/personal-bests"
     },
     {
       "path": "/api/proximity/competitive/player-card",
@@ -292,7 +296,8 @@
         "bytes": 3815,
         "file": "api_proximity_competitive_side_splits.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/side-splits"
     },
     {
       "path": "/api/proximity/competitive/stagger",
@@ -308,7 +313,8 @@
         "bytes": 3855,
         "file": "api_proximity_competitive_stagger.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/stagger"
     },
     {
       "path": "/api/proximity/competitive/wave-cycles",
@@ -1132,7 +1138,8 @@
         "bytes": 1082,
         "file": "api_proximity_v7_status.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/v7-status"
     },
     {
       "path": "/api/proximity/vehicle-progress",

@@ -2605,3 +2605,98 @@ export interface ProxReactions {
     support_samples: number; avg_support_reaction_ms: number | null;
   }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 3 — the competitive section (07 §B.2). Every panel quotes
+// the wire's own `description` — the formula text lives server-side and the
+// page repeats it, never paraphrases. wave-cycles is NOT here: it requires
+// map_name + round_number and belongs to the round-scope slice.
+
+export interface CompStagger {
+  status: string;
+  scope: ProxScope;
+  threshold: number;
+  description: string;
+  players: {
+    guid: string; name: string; team: string; kills: number;
+    stagger_kills: number; stagger_rate: number; denied_s: number; avg_score: number;
+  }[];
+}
+
+export interface CompFirstBlood {
+  status: string;
+  scope: ProxScope;
+  rounds: number;
+  decided_rounds: number;
+  converted: number;
+  conversion_pct: number;
+  description: string;
+  players: { guid: string; name: string; first_picks: number; first_deaths: number; fp_converted: number }[];
+}
+
+export interface CompPersonalBests {
+  status: string;
+  session_date: string;
+  description: string;
+  cards: {
+    guid: string; name: string; metric: string; label: string;
+    value: number; prev_best: number | null; prev_best_date: string | null;
+    sessions_played: number;
+  }[];
+  scope_note: string;
+}
+
+export interface CompManAdvantage {
+  status: string;
+  scope: ProxScope;
+  rounds: number;
+  description: string;
+  /** Keyed by team name; by_size keyed by "1" | "2" | "3+". */
+  teams: Record<string, {
+    windows: number;
+    converted: number;
+    by_size: Record<string, { windows: number; converted: number }>;
+    conversion_pct: number;
+  }>;
+  total_windows: number;
+  top_converters: { guid: string; name: string; conversions: number }[];
+}
+
+export interface CompClutch {
+  status: string;
+  scope: ProxScope;
+  clock_protocol: string;
+  rounds: number;
+  skipped_rounds_no_clock: number;
+  description: string;
+  players: {
+    guid: string; name: string; situations: number; wins: number; win_pct: number;
+    best: { enemies: number; kills: number; survived: boolean } | null;
+  }[];
+}
+
+export interface CompSideSplits {
+  status: string;
+  scope: ProxScope;
+  description: string;
+  /** Either side can be NULL — a player who only played one half of the
+   *  evening has no row for the other (caught live on the single-round
+   *  2026-09-01 scope: the recorded 08-31 fixture had both sides for
+   *  everyone, so the fixture could not refute the non-null guess). */
+  players: {
+    guid: string; name: string;
+    attack: { kills: number; stagger_kills: number; denied_s: number; minutes: number; kpm: number } | null;
+    defense: { kills: number; stagger_kills: number; denied_s: number; minutes: number; kpm: number } | null;
+  }[];
+}
+
+export interface V7Status {
+  status: string;
+  lua_version_draft: string;
+  deployed: boolean;
+  doc: string;
+  capabilities: {
+    key: string; title: string; what: string; api: string;
+    rows: number; rounds: number; live: boolean;
+  }[];
+}
