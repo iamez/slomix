@@ -81,6 +81,7 @@ import type {
   CompPersonalBests,
   CompSideSplits,
   CompStagger,
+  PlayerJourney,
   ProxAimLock,
   ProxClasses,
   ProxCohesion,
@@ -98,10 +99,13 @@ import type {
   EscortCredits,
   ObjectiveFocus,
   ObjectiveRuns,
+  ProxPlayers,
   ProxSpawnTiming,
   ProxSupportSummary,
+  PushHeatmap,
   V7Status,
   VehicleProgress,
+  WaveCycles,
   RecentPrediction,
   SessionLeaderRow,
   SkillPlayer,
@@ -1109,3 +1113,59 @@ export const useEscortCredits = (d: string | null) => useIntel<EscortCredits>('/
 export const useConstructionEvents = (d: string | null) => useIntel<ConstructionEvents>('/api/proximity/construction-events', d);
 export const useObjectiveRuns = (d: string | null) => useIntel<ObjectiveRuns>('/api/proximity/objective-runs', d);
 export const useObjectiveFocus = (d: string | null) => useIntel<ObjectiveFocus>('/api/proximity/objective-focus', d);
+
+
+// Phase 5, slice 5 — the round scope and its canvases. Every hook here is
+// gated on the scope pieces its endpoint REQUIRES (the 422 is the wire
+// demanding a scope, and the picker makes it unreachable).
+
+/** The backbone, and the reason the scope discipline exists: measured
+ *  12.7 s unbounded against 232 ms with a date. `enabled` gates on the
+ *  date — the unbounded form is unreachable from this app. */
+export function useProxPlayers(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-players', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/players', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxPlayers>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePlayerJourney(sessionDate: string | null, mapName: string | null, roundNumber: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['prox-journey', sessionDate, mapName, roundNumber, playerGuid],
+    enabled: sessionDate != null && mapName != null && roundNumber != null && !!playerGuid,
+    queryFn: () =>
+      apiGet('/api/proximity/player-journey', {
+        query: { session_date: sessionDate!, map_name: mapName!, round_number: roundNumber!, player_guid: playerGuid! },
+      }) as Promise<PlayerJourney>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function usePushHeatmap(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-heatmap', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/push-deaths/heatmap', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<PushHeatmap>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useWaveCycles(sessionDate: string | null, mapName: string | null, roundNumber: number | null) {
+  return useQuery({
+    queryKey: ['prox-wave', sessionDate, mapName, roundNumber],
+    enabled: sessionDate != null && mapName != null && roundNumber != null,
+    queryFn: () =>
+      apiGet('/api/proximity/competitive/wave-cycles', {
+        query: { session_date: sessionDate!, map_name: mapName!, round_number: roundNumber! },
+      }) as Promise<WaveCycles>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
