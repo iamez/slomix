@@ -29,12 +29,17 @@ import { ProxPanel, ProxRow } from './proximityShared';
 
 /** The five clock states, each its own tone — FAILED is not a weaker
  * UNVALIDATED: landings exist and they REFUTE the clock (17 §4). */
+// Keyed to the statuses the backend ACTUALLY emits
+// (reinforcement_clock.py) — the first table guessed friendlier names and
+// rendered a REFUTED clock in the neutral fallback (Codex on #867 r2).
+// validation_failed is not a weaker unvalidated: landings exist and they
+// refute the clock (17 §4).
 const CLOCK_TONE: Record<string, string> = {
   validated: 'var(--color-pos)',
-  unvalidated: 'var(--color-text-400)',
-  failed: 'var(--color-neg)',
+  internally_consistent_unvalidated: 'var(--color-text-400)',
+  validation_failed: 'var(--color-neg)',
   inconsistent: 'var(--color-accent-warm)',
-  unavailable: 'var(--color-text-500)',
+  insufficient: 'var(--color-text-500)',
 };
 
 function ClockBadge({ team, v }: { team: string; v: WaveClockValidation }) {
@@ -119,9 +124,15 @@ function Heatmap({ sessionDate, mapName }: { sessionDate: string; mapName: strin
           const ys = d.hotzones.map((h) => h.y);
           const minX = Math.min(...xs); const maxX = Math.max(...xs);
           const minY = Math.min(...ys); const maxY = Math.max(...ys);
-          const spanX = Math.max(1, maxX - minX); const spanY = Math.max(1, maxY - minY);
+          // A zero-width axis maps to the CENTER, not the border: with one
+          // hotzone (or all sharing a coordinate) span=1 left the numerator
+          // at zero and drew the sole observation in a corner of a canvas
+          // that is otherwise purely relative (Codex on #867 r2).
+          const spanX = maxX - minX; const spanY = maxY - minY;
           const maxC = Math.max(1, ...d.hotzones.map((h) => h.count));
           const w = 420; const h = 300;
+          const nx = (x: number) => (spanX === 0 ? 0.5 : (x - minX) / spanX);
+          const ny = (y: number) => (spanY === 0 ? 0.5 : (y - minY) / spanY);
           return (
             <Stack gap={2}>
               <Meta>{figure(d.push_deaths)} push deaths · {figure(d.carrier_deaths)} carrier deaths · grid {d.grid_size} u</Meta>
@@ -129,8 +140,8 @@ function Heatmap({ sessionDate, mapName }: { sessionDate: string; mapName: strin
                 {d.hotzones.map((z, i) => (
                   <circle
                     key={i}
-                    cx={((z.x - minX) / spanX) * (w - 20) + 10}
-                    cy={h - (((z.y - minY) / spanY) * (h - 20) + 10)}
+                    cx={nx(z.x) * (w - 20) + 10}
+                    cy={h - (ny(z.y) * (h - 20) + 10)}
                     r={3 + (z.count / maxC) * 9}
                     fill="var(--color-neg)"
                     opacity={0.25 + (z.count / maxC) * 0.55}
@@ -187,7 +198,11 @@ function LifePath({ life, extent }: { life: JourneyLife; extent: { minX: number;
 }
 
 function Journey({ sessionDate, mapName, roundNumber, roundStartUnix }: { sessionDate: string; mapName: string; roundNumber: number; roundStartUnix: number | null }) {
-  const roster = useProxPlayers(sessionDate);
+  // Round-scoped roster: the date-only list includes players with no track
+  // in THIS round (substitutions, partial evenings), and the first of them
+  // as the default rendered "no tracks" while valid journeys existed one
+  // chip over (Codex on #867 r2).
+  const roster = useProxPlayers(sessionDate, mapName, roundNumber, roundStartUnix);
   const [picked, setPicked] = useState<string | null>(null);
   // Re-validated against the CURRENT roster: a guid kept from another
   // scope would beat the new roster's first player and render "no tracks"

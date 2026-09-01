@@ -1122,13 +1122,18 @@ export const useObjectiveFocus = (d: string | null) => useIntel<ObjectiveFocus>(
 /** The backbone, and the reason the scope discipline exists: measured
  *  12.7 s unbounded against 232 ms with a date. `enabled` gates on the
  *  date — the unbounded form is unreachable from this app. */
-export function useProxPlayers(sessionDate: string | null) {
+export function useProxPlayers(sessionDate: string | null, mapName?: string | null, roundNumber?: number | null, roundStartUnix?: number | null) {
   return useQuery({
-    queryKey: ['prox-players', sessionDate],
+    queryKey: ['prox-players', sessionDate, mapName ?? null, roundNumber ?? null, roundStartUnix ?? null],
     enabled: sessionDate != null,
     queryFn: () =>
       apiGet('/api/proximity/players', {
-        query: { session_date: sessionDate! },
+        query: {
+          session_date: sessionDate!,
+          ...(mapName != null ? { map_name: mapName } : {}),
+          ...(roundNumber != null ? { round_number: roundNumber } : {}),
+          ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
+        },
       }) as Promise<ProxPlayers>,
     staleTime: 5 * 60 * 1000,
   });
