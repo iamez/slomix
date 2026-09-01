@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -39,9 +39,14 @@ import proxPlayers from './__fixtures__/api_proximity_players.json';
 import journey from './__fixtures__/api_proximity_player_journey.json';
 import heatmap from './__fixtures__/api_proximity_push_deaths_heatmap.json';
 import waveCycles from './__fixtures__/api_proximity_competitive_wave_cycles.json';
+import proxEvents from './__fixtures__/api_proximity_events.json';
+import eventLong from './__fixtures__/api_proximity_event_event_id.json';
+import eventShort from './__fixtures__/api_proximity_event_short.json';
+import engagements from './__fixtures__/api_proximity_engagements.json';
 import type {
   CarrierEvents, CarrierKills, CarrierReturns, ConstructionEvents,
-  EscortCredits, ObjectiveFocus, ObjectiveRuns, VehicleProgress,
+  EscortCredits, ObjectiveFocus, ObjectiveRuns, ProxEngagements,
+  ProxEventDetail, ProxEvents, VehicleProgress,
 } from '../lib/types';
 
 // `satisfies` holds each RECORDED fixture against its wire type — the same
@@ -56,6 +61,13 @@ const escortCreditsChecked = escortCredits satisfies EscortCredits;
 const constructionEventsChecked = constructionEvents satisfies ConstructionEvents;
 const objectiveRunsChecked = objectiveRuns satisfies ObjectiveRuns;
 const objectiveFocusChecked = objectiveFocus satisfies ObjectiveFocus;
+const proxEventsChecked = proxEvents satisfies ProxEvents;
+// The drill-down's TWO recorded forms — the long one (valid times: attackers
+// parsed, strafe present) and the short one (zero times: attackers still the
+// raw DB string, the strafe-branch keys ABSENT). Both must satisfy the union.
+const eventLongChecked = eventLong satisfies ProxEventDetail;
+const eventShortChecked = eventShort satisfies ProxEventDetail;
+const engagementsChecked = engagements satisfies ProxEngagements;
 
 const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/scopes', scopes],
@@ -91,6 +103,10 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/player-journey', journey],
   ['/api/proximity/push-deaths/heatmap', heatmap],
   ['/api/proximity/competitive/wave-cycles', waveCycles],
+  ['/api/proximity/events', proxEventsChecked],
+  ['/api/proximity/engagements', engagementsChecked],
+  ['/api/proximity/event/297937', eventLongChecked],
+  ['/api/proximity/event/297936', eventShortChecked],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the
@@ -238,6 +254,48 @@ describe('Proximity', () => {
     expect(canvasCalls).toEqual([]);
     // And the section says what to do instead of showing nothing.
     expect(screen.getByText(/pick a map above/)).toBeInTheDocument();
+  });
+
+  it('renders the engagement record from the recorded wire: dispersion buckets and the events list', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
+    renderPage();
+    // The dispersion bucket really recorded: 1,581 engagements / 139 crossfires.
+    await waitFor(() => expect(screen.getByText(/139 crossfires/)).toBeInTheDocument());
+    // Colour codes stripped the ET way: '^7c^3a^7rniee' → 'carniee'.
+    expect(screen.getAllByText(/carniee · supply r2/).length).toBeGreaterThan(0);
+    // No drill-down was fetched before any row was clicked.
+    const detailCalls = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls
+      .map((c) => String(c[0])).filter((u) => u.includes('/api/proximity/event/'));
+    expect(detailCalls).toEqual([]);
+  });
+
+  it('opens one drill-down at a time and survives BOTH recorded forms', { timeout: 20000 }, async () => {
+    const fetchSpy = vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]])));
+    vi.stubGlobal('fetch', fetchSpy);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/139 crossfires/)).toBeInTheDocument());
+    // Long form (recorded from event 297920, served for the first
+    // 'carniee' row's id): attackers parsed, BOTH tracks drawn (16-point
+    // target, 15-point attacker), strafe compared.
+    fireEvent.click(screen.getAllByRole('button', { name: /carniee · supply r2/ })[0]);
+    await waitFor(() => expect(screen.getByText(/\.lgz · 3 hits · 107 dmg/)).toBeInTheDocument());
+    expect(screen.getByText(/carniee · 2 hits · 36 dmg/)).toBeInTheDocument();
+    expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
+    expect(screen.getByText('solid — target · dashed — attacker')).toBeInTheDocument();
+    expect(screen.getByText(/movement — target 283 u\/s · 3 turns/)).toBeInTheDocument();
+    // Short form (served for the 'vid' row's id; recorded from event
+    // 306062): attackers is the RAW DB string WITH a real record inside —
+    // the panel must parse it (.lgz · 1 hits · 166 dmg), not blank it,
+    // and the 3-point path still draws.
+    fireEvent.click(screen.getAllByRole('button', { name: /vid · supply r2/ })[0]);
+    await waitFor(() => expect(screen.getByText(/\.lgz · 1 hits · 166 dmg/)).toBeInTheDocument());
+    expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
+    // One at a time: the long form's attacker row is gone.
+    expect(screen.queryByText(/3 hits · 107 dmg/)).not.toBeInTheDocument();
+    // Exactly the two clicked ids were fetched, nothing else.
+    const detailCalls = fetchSpy.mock.calls.map((c) => String(c[0]))
+      .filter((u) => u.includes('/api/proximity/event/'));
+    expect(detailCalls).toEqual(['/api/proximity/event/297937', '/api/proximity/event/297936']);
   });
 
   it('treats a 200 with status:error as a failure, not as data', async () => {

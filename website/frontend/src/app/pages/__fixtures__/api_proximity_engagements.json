@@ -1,0 +1,21 @@
+{
+    "status": "ok",
+    "ready": true,
+    "message": null,
+    "range_days": 30,
+    "generated_at": "2026-09-01T18:51:43.147626Z",
+    "scope": {
+        "session_date": "2026-08-23",
+        "map_name": null,
+        "round_number": null,
+        "round_start_unix": null,
+        "player_guid": null
+    },
+    "buckets": [
+        {
+            "date": "2026-08-23",
+            "engagements": 1581,
+            "crossfires": 139
+        }
+    ]
+}

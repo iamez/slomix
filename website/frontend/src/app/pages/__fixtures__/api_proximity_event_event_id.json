@@ -1,0 +1,470 @@
+{
+ "id": 297920,
+ "session_date": "2026-08-23",
+ "round_number": 2,
+ "round_start_unix": 1787514030,
+ "round_end_unix": 1787514750,
+ "map_name": "supply",
+ "target_guid": "9F2B3930797D7D142795B1B6EE194722",
+ "target_name": "JaKaZc",
+ "target_team": "ALLIES",
+ "outcome": "killed",
+ "total_damage": 143,
+ "start_time_ms": 666725,
+ "end_time_ms": 669600,
+ "duration_ms": 2875,
+ "num_attackers": 2,
+ "is_crossfire": false,
+ "position_path": "[{\"x\": 1384.9, \"y\": 1755.4, \"z\": 196.2, \"time\": 666725, \"event\": \"start\"}, {\"x\": 1384.9, \"y\": 1755.4, \"z\": 196.2, \"time\": 666725, \"event\": \"hit\"}, {\"x\": 1434.9, \"y\": 1750.1, \"z\": 211.4, \"time\": 666925, \"event\": \"sample\"}, {\"x\": 1483.8, \"y\": 1729.3, \"z\": 218.4, \"time\": 667125, \"event\": \"sample\"}, {\"x\": 1519.2, \"y\": 1689.7, \"z\": 214.7, \"time\": 667325, \"event\": \"sample\"}, {\"x\": 1549.1, \"y\": 1648.1, \"z\": 213.9, \"time\": 667525, \"event\": \"sample\"}, {\"x\": 1560.3, \"y\": 1596.3, \"z\": 216.1, \"time\": 667725, \"event\": \"sample\"}, {\"x\": 1573.6, \"y\": 1546.5, \"z\": 216.1, \"time\": 667925, \"event\": \"sample\"}, {\"x\": 1594.3, \"y\": 1500.5, \"z\": 216.1, \"time\": 668125, \"event\": \"sample\"}, {\"x\": 1646.3, \"y\": 1468.2, \"z\": 222.6, \"time\": 668325, \"event\": \"sample\"}, {\"x\": 1725.0, \"y\": 1459.5, \"z\": 258.3, \"time\": 668525, \"event\": \"sample\"}, {\"x\": 1810.2, \"y\": 1458.5, \"z\": 262.9, \"time\": 668725, \"event\": \"sample\"}, {\"x\": 1896.6, \"y\": 1456.8, \"z\": 237.5, \"time\": 668925, \"event\": \"sample\"}, {\"x\": 1971.4, \"y\": 1452.2, \"z\": 216.1, \"time\": 669125, \"event\": \"sample\"}, {\"x\": 1987.7, \"y\": 1444.8, \"z\": 216.1, \"time\": 669325, \"event\": \"sample\"}, {\"x\": 1971.4, \"y\": 1431.0, \"z\": 216.1, \"time\": 669425, \"event\": \"hit\"}, {\"x\": 1967.4, \"y\": 1431.0, \"z\": 216.1, \"time\": 669450, \"event\": \"hit\"}, {\"x\": 1966.7, \"y\": 1435.7, \"z\": 216.1, \"time\": 669525, \"event\": \"sample\"}, {\"x\": 1972.0, \"y\": 1443.0, \"z\": 216.1, \"time\": 669575, \"event\": \"hit\"}, {\"x\": 1974.8, \"y\": 1451.5, \"z\": 216.1, \"time\": 669600, \"event\": \"hit\"}, {\"x\": 1974.8, \"y\": 1451.5, \"z\": 216.1, \"time\": 669600, \"event\": \"death\"}]",
+ "attackers": [
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "hits": 3,
+   "name": "^c.^7lgz",
+   "team": "AXIS",
+   "damage": 107,
+   "weapons": {
+    "3": 3
+   },
+   "got_kill": true,
+   "last_hit_ms": 669600,
+   "first_hit_ms": 666725
+  },
+  {
+   "guid": "EF561EAA92BE11A8E562A904A262C4C6",
+   "hits": 2,
+   "name": "^7c^3a^7rniee",
+   "team": "AXIS",
+   "damage": 36,
+   "weapons": {
+    "8": 2
+   },
+   "got_kill": false,
+   "last_hit_ms": 669575,
+   "first_hit_ms": 669425
+  }
+ ],
+ "start_x": 1384.9000244140625,
+ "start_y": 1755.4000244140625,
+ "end_x": 1974.800048828125,
+ "end_y": 1451.5,
+ "distance_traveled": 696.2999877929688,
+ "round_id": 11312,
+ "round_date": "2026-08-23",
+ "round_time": "215233",
+ "attacker_guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+ "attacker_name": "^c.^7lgz",
+ "target_path": [
+  {
+   "x": 1402.5,
+   "y": 1756.0,
+   "z": 200.8,
+   "time": 666800,
+   "event": "sample",
+   "speed": 309.4,
+   "health": 117,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1454.8,
+   "y": 1742.4,
+   "z": 217.6,
+   "time": 667000,
+   "event": "sample",
+   "speed": 268.8,
+   "health": 117,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1497.4,
+   "y": 1714.6,
+   "z": 215.2,
+   "time": 667200,
+   "event": "sample",
+   "speed": 257.0,
+   "health": 117,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1531.5,
+   "y": 1676.3,
+   "z": 214.6,
+   "time": 667400,
+   "event": "sample",
+   "speed": 256.2,
+   "health": 117,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1554.2,
+   "y": 1628.9,
+   "z": 216.1,
+   "time": 667600,
+   "event": "sample",
+   "speed": 260.9,
+   "health": 117,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1564.1,
+   "y": 1578.5,
+   "z": 216.1,
+   "time": 667800,
+   "event": "sample",
+   "speed": 257.9,
+   "health": 120,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1580.4,
+   "y": 1529.5,
+   "z": 216.1,
+   "time": 668000,
+   "event": "sample",
+   "speed": 258.0,
+   "health": 120,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1607.8,
+   "y": 1484.3,
+   "z": 216.1,
+   "time": 668200,
+   "event": "sample",
+   "speed": 291.4,
+   "health": 120,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1675.6,
+   "y": 1463.8,
+   "z": 240.1,
+   "time": 668400,
+   "event": "sample",
+   "speed": 382.5,
+   "health": 120,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1754.8,
+   "y": 1458.7,
+   "z": 263.3,
+   "time": 668600,
+   "event": "sample",
+   "speed": 428.7,
+   "health": 120,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1840.7,
+   "y": 1458.3,
+   "z": 257.3,
+   "time": 668800,
+   "event": "sample",
+   "speed": 429.7,
+   "health": 121,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1929.5,
+   "y": 1454.6,
+   "z": 220.3,
+   "time": 669000,
+   "event": "sample",
+   "speed": 439.0,
+   "health": 121,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1989.8,
+   "y": 1453.0,
+   "z": 216.1,
+   "time": 669200,
+   "event": "sample",
+   "speed": 141.7,
+   "health": 121,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1975.2,
+   "y": 1434.2,
+   "z": 216.1,
+   "time": 669400,
+   "event": "sample",
+   "speed": 190.5,
+   "health": 121,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1973.2,
+   "y": 1446.7,
+   "z": 216.1,
+   "time": 669600,
+   "event": "sample",
+   "speed": 227.2,
+   "health": 45,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  },
+  {
+   "x": 1974.8,
+   "y": 1451.5,
+   "z": 216.1,
+   "time": 669600,
+   "event": "killed",
+   "speed": 0.0,
+   "health": 0,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 8
+  }
+ ],
+ "attacker_path": [
+  {
+   "x": 609.2,
+   "y": 370.1,
+   "z": 126.1,
+   "time": 666800,
+   "event": "sample",
+   "speed": 247.1,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 646.9,
+   "y": 395.7,
+   "z": 141.9,
+   "time": 667000,
+   "event": "sample",
+   "speed": 169.0,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 666.3,
+   "y": 402.8,
+   "z": 152.1,
+   "time": 667200,
+   "event": "sample",
+   "speed": 131.3,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 695.0,
+   "y": 447.3,
+   "z": 152.1,
+   "time": 667400,
+   "event": "sample",
+   "speed": 369.2,
+   "health": 140,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 717.2,
+   "y": 516.4,
+   "z": 152.1,
+   "time": 667600,
+   "event": "sample",
+   "speed": 356.8,
+   "health": 140,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 738.7,
+   "y": 574.6,
+   "z": 152.1,
+   "time": 667800,
+   "event": "sample",
+   "speed": 266.5,
+   "health": 140,
+   "sprint": 1,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 764.0,
+   "y": 619.8,
+   "z": 152.1,
+   "time": 668000,
+   "event": "sample",
+   "speed": 285.6,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 808.9,
+   "y": 649.3,
+   "z": 152.1,
+   "time": 668200,
+   "event": "sample",
+   "speed": 267.1,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 851.7,
+   "y": 684.4,
+   "z": 140.6,
+   "time": 668400,
+   "event": "sample",
+   "speed": 312.3,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 890.6,
+   "y": 726.4,
+   "z": 134.1,
+   "time": 668600,
+   "event": "sample",
+   "speed": 260.6,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 932.1,
+   "y": 757.0,
+   "z": 134.6,
+   "time": 668800,
+   "event": "sample",
+   "speed": 254.1,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 984.2,
+   "y": 770.3,
+   "z": 132.6,
+   "time": 669000,
+   "event": "sample",
+   "speed": 265.7,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 1033.1,
+   "y": 788.5,
+   "z": 124.7,
+   "time": 669200,
+   "event": "sample",
+   "speed": 256.6,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 1069.7,
+   "y": 827.7,
+   "z": 130.4,
+   "time": 669400,
+   "event": "sample",
+   "speed": 259.4,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  },
+  {
+   "x": 1116.2,
+   "y": 849.6,
+   "z": 137.6,
+   "time": 669600,
+   "event": "sample",
+   "speed": 276.6,
+   "health": 140,
+   "sprint": 0,
+   "stance": 0,
+   "weapon": 3
+  }
+ ],
+ "strafe": {
+  "target": {
+   "duration_ms": 2800,
+   "total_distance": 791.4,
+   "avg_speed": 282.65,
+   "turn_count": 3,
+   "turn_rate": 1.07,
+   "events": [
+    {
+     "time": 668400,
+     "angle_deg": 42.0,
+     "x": 1675.6,
+     "y": 1463.8
+    },
+    {
+     "time": 669400,
+     "angle_deg": -126.3,
+     "x": 1975.2,
+     "y": 1434.2
+    },
+    {
+     "time": 669600,
+     "angle_deg": -133.1,
+     "x": 1973.2,
+     "y": 1446.7
+    }
+   ]
+  },
+  "attacker": {
+   "duration_ms": 2800,
+   "total_distance": 734.5,
+   "avg_speed": 262.31,
+   "turn_count": 0,
+   "turn_rate": 0.0,
+   "events": []
+  }
+ }
+}
