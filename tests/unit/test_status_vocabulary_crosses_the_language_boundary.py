@@ -12,7 +12,7 @@ renders the outage as an empty section.
 So the check lives here, in the language that can read both sides.
 
 ⚠️ The classification matters as much as the list. Measured across
-`website/backend/routers/`, `status` takes 17 distinct values at the API
+`website/backend/routers/`, `status` takes 22 distinct values at the API
 boundary, and most are not verdicts about whether the request worked:
 `queued`/`uploaded` are an upload lifecycle, `LOOKING`/`AVAILABLE`/`MAYBE` are
 RSVP answers, `prototype`/`retired…` are a formula's maturity. A blanket
@@ -157,3 +157,21 @@ def test_the_reader_sees_the_values_this_file_is_about():
         f"the AST reader missed statuses that are certainly emitted: {sorted({'error', 'unavailable', 'ok'} - emitted)}"
     )
     assert "definitely-not-a-real-status" not in emitted, "the reader invents values"
+
+
+def test_the_numbers_this_files_prose_claims_are_still_true():
+    """⛔ A COUNT WRITTEN IN A DOCSTRING GOES STALE IN SILENCE.
+
+    Both numbers above were wrong when this was written — the module said 30 and
+    the test said 17, and the measured vocabulary was 22. Nothing checked them,
+    so they described a repository that no longer existed while reading like
+    fact. Asserting the count is what makes the prose a claim instead of a
+    decoration; when it fails, correct the sentence in the same commit that
+    moved the number.
+    """
+    measured = len(_emitted_statuses())
+    assert measured == 22, (
+        f"the emitted status vocabulary is now {measured} values, not 22 — "
+        f"update the count in this module's docstring and in the test above, "
+        f"and check that every new spelling is classified on the TypeScript "
+        f"side")
