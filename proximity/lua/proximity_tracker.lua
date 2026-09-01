@@ -58,7 +58,7 @@ local modname = "proximity_tracker"
 -- the capture is off and when it is on with nothing to report. Consumers were
 -- resolving that ambiguity by assuming, which turns missing telemetry into a
 -- claim about the match.
-local version = "6.11"
+local version = "6.12"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -66,6 +66,20 @@ local config = {
     debug = false,
     output_dir = "proximity/",
     output_delay_ms = 0,
+
+    -- v6.12: frame-health watcher (spec docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07
+    -- section perf; first implemented 2026-09-01 for the lag investigation).
+    -- Logs a line whenever the wall-clock gap between two consecutive
+    -- et_RunFrame calls exceeds the threshold. gap_ms counts EVERYTHING
+    -- between frames (engine, every lua module, host scheduling); self_ms
+    -- counts only this tracker's own frame work -- a large gap with a small
+    -- self is therefore evidence the stall is NOT this tracker.
+    frame_health = {
+        enabled = true,
+        gap_threshold_ms = 100,       -- 4x the 25 ms budget at sv_fps 40
+        min_write_interval_ms = 1000, -- at most one line per second
+        file = "proximity/frame_health.log",
+    },
     max_string_length = 256,
     log_in_intermission = false,
     output_guard = true,
@@ -4352,8 +4366,39 @@ local function runTraceProbe()
     return true
 end
 
+-- ===== FRAME-HEALTH WATCHER (v6.12) =====
+-- prev_wall updates every frame; a line is written only when the gap
+-- exceeded the threshold AND the last write is old enough. Open/write/close
+-- per line: at most 1/s, and a crash never loses buffered lines.
+local frame_health_state = { prev_wall = nil, last_write = -math.huge }
+
+local function frameHealthCheck(wall_now, self_ms, gamestate)
+    local fh = config.frame_health
+    if not fh or not fh.enabled then return end
+    local prev = frame_health_state.prev_wall
+    frame_health_state.prev_wall = wall_now
+    if prev == nil then return end
+    local gap = wall_now - prev
+    if gap < (fh.gap_threshold_ms or 100) then return end
+    if wall_now - frame_health_state.last_write < (fh.min_write_interval_ms or 1000) then return end
+    frame_health_state.last_write = wall_now
+    local players = 0
+    local maxc = get_max_clients()
+    for i = 0, maxc - 1 do
+        local team = safe_gentity_get(i, "sess.sessionTeam")
+        if team == 1 or team == 2 then players = players + 1 end
+    end
+    local fd = et.trap_FS_FOpenFile(fh.file, et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 then return end
+    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d\n",
+        wall_now, gap, self_ms, gamestate or -1, players)
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+
 function et_RunFrame(levelTime)
     if not config.enabled then return end
+    local fh_wall = et.trap_Milliseconds()
     frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
@@ -4512,6 +4557,8 @@ function et_RunFrame(levelTime)
         tracker.output_pending = false
         outputData()
     end
+
+    frameHealthCheck(fh_wall, et.trap_Milliseconds() - fh_wall, gamestate)
 end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
