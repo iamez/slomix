@@ -54,8 +54,13 @@ def _routes() -> list[tuple[str, str, str, str, bool]]:
                 path = (dec.args[0].value
                         if dec.args and isinstance(dec.args[0], ast.Constant)
                         else "?")
+                # ⛔ THE KEYWORD EXISTING IS NOT A MODEL. `response_model=None`
+                # is explicitly NO validation and NO filtering — the same wire
+                # behaviour as omitting it — but counting the keyword classified
+                # such a route as typed, kept it out of the gap file, and let it
+                # pass all three assertions below. Codex on #860.
                 out.append((f.name, node.name, dec.func.attr.upper(), path,
-                            any(k.arg == "response_model" for k in dec.keywords)))
+                            _declares_a_model(dec)))
     return out
 
 
@@ -67,6 +72,15 @@ def _key(mod: str, method: str, path: str) -> str:
     from the file disagreed by exactly those two lines, in both directions at
     once. A key must survive a round trip through a text file."""
     return f"{mod}::{method} {path or '(router root)'}"
+
+
+def _declares_a_model(dec: ast.Call) -> bool:
+    """True only when `response_model=` names something other than `None`."""
+    for kw in dec.keywords:
+        if kw.arg != "response_model":
+            continue
+        return not (isinstance(kw.value, ast.Constant) and kw.value.value is None)
+    return False
 
 
 def _untyped_keys() -> set[str]:
@@ -86,6 +100,18 @@ def _untyped_keys() -> set[str]:
 def _recorded() -> set[str]:
     return {ln.split("#")[0].strip() for ln in GAP_FILE.read_text(encoding="utf-8").splitlines()
             if ln.strip() and not ln.lstrip().startswith("#")}
+
+
+def test_an_explicit_none_model_counts_as_untyped():
+    """CONTROL for the classifier itself, on a synthetic decorator: the live
+    routers may not contain this form today, and a rule nothing exercises is a
+    rule nobody has checked."""
+    yes = ast.parse("@r.get('/x', response_model=Thing)\nasync def h(): ...").body[0]
+    no = ast.parse("@r.get('/x', response_model=None)\nasync def h(): ...").body[0]
+    bare = ast.parse("@r.get('/x')\nasync def h(): ...").body[0]
+    assert _declares_a_model(yes.decorator_list[0]) is True
+    assert _declares_a_model(no.decorator_list[0]) is False
+    assert _declares_a_model(bare.decorator_list[0]) is False
 
 
 def test_the_extractor_sees_both_kinds():

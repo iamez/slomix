@@ -184,7 +184,13 @@ def _routes_stripping_none() -> set[str]:
             # a name. Reported rather than swallowed, because a silent skip
             # here would quietly shrink the set and re-open the false findings
             # this function exists to close.
-            print(f"  ~ could not import {path.stem}: {exc}")
+            # ⛔ STDERR, NOT STDOUT. `--json` exists so a TEST can consume
+            # this tool, and a diagnostic printed to stdout puts a warning line
+            # in front of the JSON — so `json.loads` fails in exactly the
+            # partial-import case the tool already knows how to handle. The
+            # machine-readable channel has to stay machine-readable.
+            # Codex on #860.
+            print(f"  ~ could not import {path.stem}: {exc}", file=sys.stderr)
             continue
         router_obj = getattr(module, "router", None)
         if router_obj is None:
