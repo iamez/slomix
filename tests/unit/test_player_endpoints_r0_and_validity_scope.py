@@ -239,7 +239,7 @@ def test_session_rounds_order_by_play_time_not_ingest():
 
     sql = sessions_router._SESSION_ROUNDS_SQL
     assert "ORDER BY r.created_at" not in sql, "ordering regressed to ingestion time"
-    assert "ORDER BY 4, r.id" in sql
+    assert "ORDER BY played_at, r.id" in sql
     assert "regexp_replace(r.round_time" in sql and "lpad(regexp_replace" in sql, (
         "the dual-form time expression lost its colon-first half"
     )

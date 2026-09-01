@@ -2875,7 +2875,9 @@ _SESSION_ROUNDS_SQL = (
     -- measured today, 14 rounds across 2 sessions sat in the wrong order,
     -- and session_date derives from the first (misordered) row. r.id breaks
     -- ties deterministically.
-    ORDER BY 4, r.id
+    -- The ALIAS, not a position: 'ORDER BY 4' silently reorders if a
+    -- column lands before played_at in the SELECT (Copilot on #871).
+    ORDER BY played_at, r.id
 """
 )
 
