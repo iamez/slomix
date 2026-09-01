@@ -4393,7 +4393,22 @@ local function frameHealthReport(wall_now)
     local prev_self = st.prev_self
     st.prev_wall = wall_now
     st.prev_self = -1  -- sentinel until this frame's body completes
-    if prev_start == nil then return end
+    if prev_start == nil then
+        -- First frame after a map load: write one INIT line unconditionally.
+        -- An empty log is ambiguous by construction (no stalls and a broken
+        -- writer look identical); this line is the positive proof that the
+        -- write path works, and it exercises open/format/write immediately.
+        local fd0, open_len0 = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
+        if fd0 and fd0 ~= -1 and fd0 ~= 0 and open_len0 ~= -1 then
+            local init_line = string.format("FH init wall=%d version=%s\n", wall_now, version)
+            et.trap_FS_Write(init_line, string.len(init_line), fd0)
+            et.trap_FS_FCloseFile(fd0)
+        else
+            et.G_Print("[PROX] frame_health: cannot open log for append (fd=" ..
+                tostring(fd0) .. ", len=" .. tostring(open_len0) .. ")\n")
+        end
+        return
+    end
     local gap = wall_now - prev_start
     if gap < (fh.gap_threshold_ms or 100) then return end
     if wall_now - st.last_write < (fh.min_write_interval_ms or 1000) then return end
@@ -4417,7 +4432,13 @@ end
 function et_RunFrame(levelTime)
     if not config.enabled then return end
     local fh_wall = et.trap_Milliseconds()
-    pcall(frameHealthReport, fh_wall)
+    -- A swallowed error here would make a broken watcher look like a calm
+    -- server -- print the first one, then stay quiet.
+    local fh_ok, fh_err = pcall(frameHealthReport, fh_wall)
+    if not fh_ok and not frame_health_state.error_printed then
+        frame_health_state.error_printed = true
+        et.G_Print("[PROX] frame_health error: " .. tostring(fh_err) .. "\n")
+    end
     frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1

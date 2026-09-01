@@ -49,7 +49,14 @@ local function frame(advance)
     pcall(et_RunFrame, now_ms)
 end
 
--- 1) normal frames (25 ms apart) -> nothing is written
+-- 0) the very first frame writes the INIT line -- the positive proof that
+--    the write path works (an empty log is otherwise ambiguous).
+frame(25)
+assert(#writes == 1, "FAIL(0): no INIT line on first frame")
+assert(writes[1]:find("FH init "), "FAIL(0): not an init line: " .. writes[1])
+table.remove(writes, 1)
+
+-- 1) normal frames (25 ms apart) -> nothing further is written
 for _ = 1, 10 do frame(25) end
 assert(#writes == 0, "FAIL(1): wrote during normal frames")
 
