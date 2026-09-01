@@ -2869,10 +2869,21 @@ export interface JourneyLife {
   sprint_pct: number | null;
   death_type: string | null;
   path: JourneyPathPoint[];
-  /** Coordinates can be MISSING on linked kill records — measured live
-   *  (ten NaN circles per render before the finite filter). */
-  kills: { t: number; x: number | null; y: number | null; victim: string | null }[];
-  death: { t: number; x: number | null; y: number | null; killer: string | null } | null;
+  /** NO coordinates on the wire — kill and death records carry `time` and
+   *  names/outcomes only (the first type GUESSED x/y and every marker was
+   *  silently skipped by its own finite filter; both reviewers read the
+   *  fixture and said so). Marker positions are DERIVED from the nearest
+   *  path point by timestamp. */
+  kills: {
+    time: number; victim_name: string | null; outcome: string | null;
+    denied_ms: number | null; spawn_timing_score: number | null;
+    time_to_next_spawn: number | null;
+  }[];
+  death: {
+    time: number; killer_name: string | null; outcome: string | null;
+    reviver_name: string | null; gibber_name: string | null;
+    victim_wait_ms: number | null;
+  } | null;
   proximity_series: {
     t: number; nearest_teammate: number | null; nearest_enemy: number | null;
     teammates_500u: number; enemies_500u: number;

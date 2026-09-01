@@ -1134,13 +1134,21 @@ export function useProxPlayers(sessionDate: string | null) {
   });
 }
 
-export function usePlayerJourney(sessionDate: string | null, mapName: string | null, roundNumber: number | null, playerGuid: string | null) {
+/** round_start_unix travels with the selection: the same map is played
+ *  more than once on one date (the recorded scopes fixture holds three
+ *  distinct te_escape2 r1s), and date+map+number alone would silently
+ *  merge them (Codex on #867, P1). */
+export function usePlayerJourney(sessionDate: string | null, mapName: string | null, roundNumber: number | null, roundStartUnix: number | null, playerGuid: string | null) {
   return useQuery({
-    queryKey: ['prox-journey', sessionDate, mapName, roundNumber, playerGuid],
+    queryKey: ['prox-journey', sessionDate, mapName, roundNumber, roundStartUnix, playerGuid],
     enabled: sessionDate != null && mapName != null && roundNumber != null && !!playerGuid,
     queryFn: () =>
       apiGet('/api/proximity/player-journey', {
-        query: { session_date: sessionDate!, map_name: mapName!, round_number: roundNumber!, player_guid: playerGuid! },
+        query: {
+          session_date: sessionDate!, map_name: mapName!, round_number: roundNumber!,
+          ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
+          player_guid: playerGuid!,
+        },
       }) as Promise<PlayerJourney>,
     staleTime: 5 * 60 * 1000,
   });
@@ -1158,13 +1166,16 @@ export function usePushHeatmap(sessionDate: string | null, mapName: string | nul
   });
 }
 
-export function useWaveCycles(sessionDate: string | null, mapName: string | null, roundNumber: number | null) {
+export function useWaveCycles(sessionDate: string | null, mapName: string | null, roundNumber: number | null, roundStartUnix: number | null) {
   return useQuery({
-    queryKey: ['prox-wave', sessionDate, mapName, roundNumber],
+    queryKey: ['prox-wave', sessionDate, mapName, roundNumber, roundStartUnix],
     enabled: sessionDate != null && mapName != null && roundNumber != null,
     queryFn: () =>
       apiGet('/api/proximity/competitive/wave-cycles', {
-        query: { session_date: sessionDate!, map_name: mapName!, round_number: roundNumber! },
+        query: {
+          session_date: sessionDate!, map_name: mapName!, round_number: roundNumber!,
+          ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
+        },
       }) as Promise<WaveCycles>,
     staleTime: 5 * 60 * 1000,
   });
