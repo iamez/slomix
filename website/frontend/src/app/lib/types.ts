@@ -2284,9 +2284,13 @@ export interface PlayerMatchRound {
 
 /** GET /api/proximity/leaderboards — one endpoint, nine categories (the
  *  tenth tab, comp_skill, is /api/skill/ssr: all-time and group-relative,
- *  it ignores range and scope by owner decision A4). Entries are a
- *  DISCRIMINATED family by request category — each branch of the handler
- *  returns its own fixed extras (typed from the handler, not the sample).
+ *  it ignores range and scope by owner decision A4). Each handler branch
+ *  returns its own fixed extras (typed from the handler, not the sample);
+ *  the wire carries no discriminant on the ENTRY, so `entries` is honestly
+ *  base + Partial extras — the response-level `category` field is what a
+ *  caller narrows on, and the per-category interfaces below name what each
+ *  branch actually sends (Copilot on #856: the first comment here claimed
+ *  a discriminated union the type never was).
  *  An unknown category answers {status:'error'} inside a 200, the house
  *  convention. Legacy read `partner_name` off crossfire entries — a field
  *  only the teamplay duo boards have ever sent — so its crossfire board
