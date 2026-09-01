@@ -41,6 +41,7 @@ from validation_family import (  # noqa: E402 - path set above
     detectable_effect,
     holm,
     instrument_check,
+    manifest_gate,
     margin_agreement,
     max_t_intervals,
     outcome_seconds,
@@ -759,7 +760,27 @@ class TestTheSplitRunsOnMatchTime:
 
     def test_the_ordering_column_is_the_matchs_own_clock(self):
         sql = _sql_without_comments(ROWS_SQL)
-        assert "(r.round_date || ' ' || r.round_time)::timestamp AS at" in sql
+        assert ("(r.round_date || ' ' || lpad(r.round_time, 6, '0'))::timestamp "
+                "AS at") in sql
+        # ⛔ ZERO-FILLED, not raw. `round_time` can lose its leading zeros for a
+        # round just after midnight, and measured against Postgres both failure
+        # modes are real: `'2026-06-11 4918'` parses SILENTLY as
+        # `2026-06-13 01:18:00` (two days off, across the split), while `918`
+        # and `12345` raise and abort the query.
+        assert "|| r.round_time)" not in sql, "the raw value is being cast again"
+
+    def test_a_round_time_that_cannot_be_read_is_excluded_not_guessed(self):
+        assert "r.round_time ~ '^[0-9]{1,6}$'" in _sql_without_comments(ROWS_SQL)
+
+    def test_the_pairing_cte_carries_the_same_round_gate(self):
+        """⛔ Gating only the outer SELECT removes a cancelled round's PLAYER
+        rows while the pairing CTE still lets it pair — its duration, winner and
+        defender then ride onto the retained half, and the mutual-choice logic
+        lets it DISPLACE a valid pairing."""
+        sql = _sql_without_comments(ROWS_SQL)
+        for alias in ("r1", "r2"):
+            assert (f"({alias}.round_status IN ('completed', 'substitution') "
+                    f"OR {alias}.round_status IS NULL)") in sql, alias
 
     def test_ingestion_time_no_longer_labels_a_row_as_its_time(self):
         assert "r.created_at                      AS at" not in ROWS_SQL
@@ -855,3 +876,67 @@ class TestBothEstimatorsAreInTheFrozenFamily:
             "both members produced the same point estimate — the declared "
             "estimator is being ignored, which is the whole defect")
         assert out["boot"]["ms"] != out["boot"]["pb"]
+
+
+class TestTheRerunHasToCheckTheFreeze:
+    """⛔ A DIGEST THAT NOBODY COMPARES IS A DIGEST THAT BINDS NOTHING.
+
+    The preregistration prints a manifest sha256 before the holdout opens. The
+    confirmation run used to print its OWN freshly computed digest and nothing
+    else — so a formula, a filter, the seed, the resample count or a line of
+    this module could move between the two, and the verdicts would be published
+    under a freeze nobody registered. The mismatch was visible only to an
+    operator comparing two hex strings by eye. Codex on #818.
+    """
+
+    H = "a" * 64
+
+    def test_a_matching_digest_lets_the_run_proceed(self):
+        assert manifest_gate(self.H, self.H, "2026-07-15 21:22:15") is None
+
+    def test_whitespace_and_case_are_not_a_mismatch(self):
+        # CONTROL: a digest copied out of terminal output must not be refused
+        # for being upper-case or having a trailing newline.
+        assert manifest_gate(f"  {self.H.upper()}\n", self.H, "x") is None
+
+    def test_a_different_digest_refuses_before_the_holdout_opens(self):
+        gate = manifest_gate("b" * 64, self.H, "x")
+        assert gate is not None
+        code, msg = gate
+        assert code == 6
+        assert "MISMATCH" in msg
+        assert self.H in msg and "b" * 64 in msg, "the message must show BOTH"
+
+    def test_no_digest_at_all_is_also_a_refusal(self):
+        """⛔ Not a warning. An unregistered freeze and a broken one are the
+        same amount of evidence, and continuing would open the holdout to find
+        out."""
+        for empty in (None, "", "   "):
+            gate = manifest_gate(empty, self.H, "2026-07-15 21:22:15")
+            assert gate is not None, empty
+            assert gate[0] == 5
+            assert "--expect-manifest" in gate[1]
+            assert self.H in gate[1], "the message must print the digest to use"
+
+
+class TestTheInstrumentSaysWHICHWayItIsBroken:
+    def _note(self, capsys, results):
+        family = Family(name="t", filters="f", candidates=[
+            Candidate("null", "d", "higher_is_better", _metric)])
+        instrument_check(family, results)
+        return capsys.readouterr().out
+
+    def test_an_absent_control_does_not_report_shipped_noise(self, capsys):
+        """⚠️ The instrument IS broken when the control is missing — but not
+        because noise shipped. Printing the wrong reason sends the reader
+        looking for a verdict that is not in the table at all."""
+        out = self._note(capsys, [_row("real", "SHIPS", 0.2, 0.4), _kpr_ok()])
+        assert "ABSENT" in out
+        assert "NOISE SHIPPED" not in out
+
+    def test_shipped_noise_still_says_so(self, capsys):
+        # CONTROL: the new branch must not swallow the original one.
+        out = self._note(capsys, [_row("real", "SHIPS", 0.2, 0.4), _kpr_ok(),
+                                  _row("null", "SHIPS", 0.2, 0.4)])
+        assert "NOISE SHIPPED" in out
+        assert "ABSENT" not in out

@@ -108,7 +108,18 @@ WITH candidate_pairs AS (
    AND r1.round_number = 1 AND r2.round_number = 2
    AND r2.created_at > r1.created_at
    AND r2.created_at < r1.created_at + interval '45 minutes'
+  -- ⛔ THE SAME GATE HAS TO HOLD HERE, NOT ONLY IN THE OUTER FILTER. Gating
+  -- only the outer SELECT removes a cancelled round's PLAYER rows while this
+  -- CTE still lets it pair: its duration, winner and defender are then carried
+  -- onto the retained half through `pair_margin`, and under `--outcome seconds`
+  -- the bootstrap consumes them. Worse, the mutual-choice logic lets an
+  -- excluded round DISPLACE a valid pairing, so a real match loses its margin
+  -- to one that did not count. Codex on #818.
   WHERE r1.is_valid AND r2.is_valid
+    AND (r1.round_status IN ('completed', 'substitution')
+         OR r1.round_status IS NULL)
+    AND (r2.round_status IN ('completed', 'substitution')
+         OR r2.round_status IS NULL)
     AND r1.actual_duration_seconds IS NOT NULL
     AND r2.actual_duration_seconds IS NOT NULL
 ), r1_choice AS (
@@ -149,7 +160,17 @@ SELECT pcs.round_id                      AS rid,
        -- apart (median 125), so they are different clocks, and mixing them would
        -- scramble the ordering exactly at the split boundary. One clock, full
        -- coverage. Codex on #818.
-       (r.round_date || ' ' || r.round_time)::timestamp  AS at,
+       -- ⛔ ZERO-FILLED, AND THE SHAPE CHECKED IN THE WHERE. `round_time` can
+       -- lose its leading zeros for a round just after midnight — the repo
+       -- documents `4918` as the stored form of `00:49:18`
+       -- (test_capture_lookup_zero_fills_a_short_round_time). Measured against
+       -- Postgres, both failure modes are real and one is worse than the
+       -- report: `'2026-06-11 4918'` does NOT raise, it parses as
+       -- `2026-06-13 01:18:00` — two days off, which would move the round
+       -- across the chronological split with nothing to show for it. `918` and
+       -- `12345` do raise, aborting the whole query. `lpad(...,6,'0')` reads all
+       -- of them correctly. Codex on #818.
+       (r.round_date || ' ' || lpad(r.round_time, 6, '0'))::timestamp  AS at,
        pcs.player_guid                   AS guid,
        pcs.team                          AS team,
        r.winner_team                     AS winner,
@@ -178,6 +199,12 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- test pins it against the original. Codex on #818.
   AND (r.round_status IN ('completed', 'substitution')
        OR r.round_status IS NULL)
+  -- A round whose match time cannot be READ has no place on a chronological
+  -- axis, and guessing one would be the ingestion-time problem wearing a
+  -- different hat. Measured: 3209 of 3209 rounds are six digits today, so this
+  -- excludes nothing — it stops `lpad` from turning malformed text into a
+  -- plausible time (`049180` reads as 05:32:20).
+  AND r.round_time ~ '^[0-9]{1,6}$'
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
@@ -920,6 +947,46 @@ def report(family: Family, disc: dict, conf: dict,
     return results
 
 
+def manifest_gate(expected: str | None, computed: str,
+                  cutoff: str) -> tuple[int, str] | None:
+    """Refuse the confirmation half unless the freeze was registered and matches.
+
+    Returns `(exit_code, message)` to refuse, or None to proceed.
+
+    ⛔ THE ARTIFACT ONLY BINDS IF THE RERUN CHECKS IT. Until this existed, the
+    confirmation run simply PRINTED its own freshly computed digest: a formula,
+    a filter, the seed, the resample count or a line of this module could change
+    between the proposal and the rerun, and verdicts would be published under a
+    manifest nobody registered — the mismatch visible only to an operator
+    comparing two hex strings by eye. Codex on #818.
+
+    A separate function so a test can drive it; the check itself lives in
+    `main()` immediately BEFORE `analyse()`, because after that the holdout has
+    been opened and refusing is too late.
+    """
+    # ⚠️ Normalised BEFORE the emptiness test. `--expect-manifest "   "` is not
+    # a digest, and letting it fall through to the mismatch branch would report
+    # "something moved" when in fact nothing was ever registered — two different
+    # situations, two different things for the reader to do.
+    expected = (expected or "").strip().lower()
+    if not expected:
+        return (5, f"⛔ NO PREREGISTERED MANIFEST. This run would analyse the "
+                   f"confirmation half without\n   checking that it matches what "
+                   f"was registered. Re-run with:\n\n"
+                   f"     --cutoff '{cutoff}' --expect-manifest {computed}\n\n"
+                   f"   and check that digest against the preregistration output "
+                   f"before you do.\n")
+    if expected != computed:
+        return (6, f"⛔ MANIFEST MISMATCH — refusing to open the confirmation "
+                   f"half.\n   registered : {expected}\n"
+                   f"   this run   : {computed}\n\n"
+                   f"   Something moved between the preregistration and now: a "
+                   f"formula, a filter, the\n   seed, the resample count, the "
+                   f"cutoff, or this module's own source. The verdicts\n   below "
+                   f"would have been published under a freeze nobody agreed to.\n")
+    return None
+
+
 def preregister(family: Family, proposed_cutoff: str) -> dict:
     """The artifact §8.5 requires, produced BEFORE the holdout is opened.
 
@@ -997,7 +1064,14 @@ def instrument_check(family: Family, results: list[dict]) -> bool:
     measured_ids = {r["id"] for r in measured}
     for cid in controls or ["null"]:
         nullr = by_id.get(cid, {}).get("verdict", "MISSING")
-        if nullr != "FAILS":
+        if nullr == "MISSING":
+            # ⚠️ Distinct from the line below on purpose. The instrument IS
+            # broken, but not because noise shipped — the control was never in
+            # the results at all, and printing the wrong reason sends the reader
+            # looking for a verdict that does not exist.
+            broken = True
+            null_note = "ABSENT — the structural control never ran"
+        elif nullr != "FAILS":
             broken = True
             null_note = "NOISE SHIPPED — BROKEN"
         elif cid not in measured_ids:
@@ -1053,6 +1127,11 @@ async def main() -> int:
                     help="win = §8.6 reference; seconds = stopwatch margin")
     ap.add_argument("--seed", type=int, default=SEED,
                     help="published seed; changing it changes the manifest hash")
+    ap.add_argument(
+        "--expect-manifest", metavar="SHA256",
+        help="the sha256 printed by the preregistration run. ⛔ REQUIRED with "
+             "--cutoff: without it the freeze is a promise, because nothing "
+             "compares what is about to be analysed against what was registered.")
     args = ap.parse_args()
 
     if args.resamples < MIN_USABLE_REPLICATES:
@@ -1097,6 +1176,8 @@ async def main() -> int:
         # flag above; if it prints a different one, something moved in between
         # and the confirmation is not confirming what was registered.
         print(f"preregistered manifest sha256 : {pre['manifest_sha256']}")
+        print(f"     rerun with: --cutoff '{cutoff}' "
+              f"--expect-manifest {pre['manifest_sha256']}")
         print("frozen family manifest (record this BEFORE re-running):")
         for line in json.dumps(pre["manifest"], indent=2,
                                sort_keys=True).splitlines():
@@ -1135,6 +1216,20 @@ async def main() -> int:
                 f"   of 2,007 eligible rounds. Making it available is capture-side\n"
                 f"   work, not analysis work.\n")
             return 3
+
+    # ⛔ THE ARTIFACT ONLY BINDS IF THE RERUN CHECKS IT. Until this comparison
+    # existed the confirmation run simply PRINTED its own freshly computed
+    # digest: a formula, a filter, the seed, the resample count or a line of
+    # this module could change between the proposal and the rerun, and verdicts
+    # would be published under a manifest nobody registered — the mismatch
+    # visible only to an operator comparing two hex strings by eye. Refused
+    # BEFORE `analyse()`, because after it the holdout has been opened.
+    # Codex on #818.
+    computed = family.manifest_hash()
+    gate = manifest_gate(args.expect_manifest, computed, cutoff)
+    if gate:
+        print(gate[1])
+        return gate[0]
 
     disc = analyse(blocks, disc_b, family)
     conf = analyse(blocks, conf_b, family)
