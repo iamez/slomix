@@ -27,6 +27,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from validation_family import (  # noqa: E402 - path set above
+    ROWS_SQL,
     Candidate,
     Family,
     _Rng,
@@ -687,3 +688,86 @@ class TestThePreregistrationIsAnArtifactNotAPromise:
         a = preregister(self._family(), "2026-08-26 21:00:00")
         b = preregister(self._family(), "2026-08-27 21:00:00")
         assert a["manifest_sha256"] != b["manifest_sha256"]
+
+
+def _sql_without_comments(sql: str) -> str:
+    """SQL with `--` comments removed and whitespace flattened.
+
+    ⛔ Load-bearing. A guard that greps the raw source finds the clause in the
+    COMMENT that explains it and passes while the query says something else
+    entirely — the failure mode that let a test agree with its own docstring
+    twice before. The comments above the gate name the canonical module by
+    name, so this is not hypothetical here.
+    """
+    lines = [ln.split("--")[0] for ln in sql.splitlines()]
+    return " ".join(" ".join(lines).split())
+
+
+class TestThePopulationIsTheCanonicalOne:
+    """⛔ `is_valid` IS NOT THE ROUND GATE.
+
+    The repository's canonical gate also excludes rounds whose `round_status`
+    says they did not count. Without it, cancelled and orphan_r2 rounds enter
+    the eligible universe with `is_valid` still true, and from there the
+    chronological split, every point estimate and every bootstrap replicate.
+
+    Measured on this corpus when the gate was added: 148 of 2041 rounds (7.3%)
+    left the full universe — but only 1 of 867 left the SPATIAL one, and no
+    block changed places. So this corrects the population without overturning
+    the Layer 4 numbers, which is worth stating in both directions.
+
+    Codex on #818.
+    """
+
+    def test_the_round_gate_is_the_canonical_one(self):
+        from website.backend.services.session_scope import _ROUND_GATE_SQL
+        clause = _ROUND_GATE_SQL.split("AND ", 2)[2]          # the round_status half
+        assert "round_status" in clause                        # the split found it
+        want = " ".join(clause.replace("round_status", "r.round_status").split())
+        assert want in _sql_without_comments(ROWS_SQL)
+
+    def test_the_guard_would_notice_a_drifted_copy(self):
+        # CONTROL. Without this, `want in sql` could pass on any substring and
+        # the test would agree with anything.
+        drifted = "(r.round_status IN ('completed') OR r.round_status IS NULL)"
+        assert drifted not in _sql_without_comments(ROWS_SQL)
+
+    def test_a_comment_alone_would_not_satisfy_it(self):
+        # CONTROL for the stripper itself: the phrase inside a comment must not
+        # count as the query saying it.
+        assert "cancelled" in ROWS_SQL                          # it is in a comment
+        assert "cancelled" not in _sql_without_comments(ROWS_SQL)
+
+
+class TestTheSplitRunsOnMatchTime:
+    """⛔ `created_at` IS WHEN THE ROW WAS WRITTEN, NOT WHEN THE MATCH HAPPENED.
+
+    It defaults to CURRENT_TIMESTAMP and one importer writes `datetime.now()`,
+    so a historical import or a repair lands among the NEWEST confirmation
+    blocks and the holdout stops being chronological in the data-generating
+    process. Codex on #818.
+    """
+
+    def test_the_ordering_column_is_the_matchs_own_clock(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "(r.round_date || ' ' || r.round_time)::timestamp AS at" in sql
+
+    def test_ingestion_time_no_longer_labels_a_row_as_its_time(self):
+        assert "r.created_at                      AS at" not in ROWS_SQL
+
+    def test_the_pairing_window_is_deliberately_left_on_ingestion_time(self):
+        """⚠️ SCOPE, RECORDED SO IT IS NOT MISTAKEN FOR AN OVERSIGHT.
+
+        The R1/R2 pairing window still uses `created_at`. Switching it too is a
+        separate, larger decision: measured, 761 pairs have gaps that differ by
+        more than a minute between the two clocks, so it would change WHICH
+        rounds pair — a different question from which blocks are newest.
+        """
+        assert "r2.created_at - r1.created_at AS gap" in ROWS_SQL
+
+    def test_the_two_clocks_are_not_mixed(self):
+        # ⛔ round_start_unix and round_date/round_time run 61-136 minutes apart
+        # (median 125). COALESCEing them would scramble the ordering exactly at
+        # the split boundary, which is the one place it must not be scrambled.
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "round_start_unix" not in sql

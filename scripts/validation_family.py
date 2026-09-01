@@ -138,7 +138,18 @@ WITH candidate_pairs AS (
 )
 SELECT pcs.round_id                      AS rid,
        r.gaming_session_id               AS block,
-       r.created_at                      AS at,
+       -- ⛔ MATCH TIME, NOT INGESTION TIME. `created_at` defaults to
+       -- CURRENT_TIMESTAMP and one importer writes datetime.now(), so a
+       -- historical import lands among the NEWEST confirmation blocks and the
+       -- "chronological" holdout stops being chronological in the
+       -- data-generating process. `round_date`+`round_time` is the match's own
+       -- clock from the stats file: 1893/1893 eligible rounds carry it, all in
+       -- HHMMSS, which Postgres reads as ISO-8601 basic time.
+       -- ⛔ NOT COALESCEd with round_start_unix: the two are 61-136 minutes
+       -- apart (median 125), so they are different clocks, and mixing them would
+       -- scramble the ordering exactly at the split boundary. One clock, full
+       -- coverage. Codex on #818.
+       (r.round_date || ' ' || r.round_time)::timestamp  AS at,
        pcs.player_guid                   AS guid,
        pcs.team                          AS team,
        r.winner_team                     AS winner,
@@ -157,6 +168,16 @@ JOIN rounds r ON r.id = pcs.round_id
 LEFT JOIN pair_margin pm ON pm.rid = r.id
 WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   AND r.winner_team IN (1, 2)
+  -- ⛔ THE CANONICAL ROUND GATE (`session_scope._ROUND_GATE_SQL`). `is_valid`
+  -- alone admits cancelled, warmup and orphan_r2 rounds, which then affect the
+  -- eligible universe, the chronological split, every point estimate and every
+  -- bootstrap replicate. Measured on this corpus: 148 of 2041 rounds (7.3%) —
+  -- 147 cancelled, the rest orphan_r2 — were entering with is_valid still true.
+  -- Copied rather than imported: session_scope pulls in FastAPI and the database
+  -- adapter and this harness has to run standalone. The copy cannot drift — a
+  -- test pins it against the original. Codex on #818.
+  AND (r.round_status IN ('completed', 'substitution')
+       OR r.round_status IS NULL)
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
