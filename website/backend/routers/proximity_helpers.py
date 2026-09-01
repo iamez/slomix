@@ -337,7 +337,66 @@ def _build_proximity_where_clause(
     return "WHERE " + " AND ".join(clauses), params, scope
 
 
-async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name: str) -> bool:
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_identifier(name: str) -> str:
+    """A table name that may be interpolated into `PRAGMA table_info(...)`.
+
+    SQLite does not accept a bound parameter where a table name goes, so this
+    one place has to interpolate. Every caller passes a literal from this
+    repository, and the pattern refuses anything that is not a bare identifier,
+    so the string that reaches SQL cannot come from a request.
+    """
+    if not _IDENTIFIER.match(name or ""):
+        raise ValueError(f"not a table identifier: {name!r}")
+    return name
+
+
+def _is_sqlite(db: object) -> bool:
+    """Duck-typed rather than imported: `SQLiteAdapter` is the only adapter that
+    carries a `db_path`, and importing it here would tie the proximity routers
+    to the local development module."""
+    return hasattr(db, "db_path")
+
+
+async def _table_column_exists(
+    db: DatabaseAdapter, table_name: str, column_name: str
+) -> bool | None:
+    """Is the column deployed? True / False / **None when we could not tell.**
+
+    ⛔ THREE STATES, NOT TWO. This returned `False` on any exception, and every
+    caller read `False` as "the telemetry table is not deployed yet" and
+    answered `{"status": "ok", ...empty}`. So with the database DOWN, eleven
+    endpoints told the client the answer was GOOD and empty — byte-identical to
+    a deployed-but-unpopulated table, and worse than silence: `responseStatus.ts`
+    classifies `ok` as success, so the page actively renders "nothing happened"
+    over an outage.
+
+    `None` is the third state. Callers must handle it explicitly; `not None` is
+    `True`, so a caller that forgets still takes the not-deployed branch rather
+    than crashing — but the branch is now reachable only by deciding to take it.
+    """
+    # ⛔ THE CATALOGUE QUERY IS NOT PORTABLE, AND ITS FAILURE IS NOT AN OUTAGE.
+    # `information_schema` does not exist in SQLite, so on the supported local
+    # SQLite configuration this raised on EVERY probe — and once an exception
+    # started meaning "the database did not answer", all eleven handlers would
+    # have reported an outage against a perfectly healthy dev database. An
+    # unsupported catalogue is a fact about the DIALECT, not about the server.
+    if _is_sqlite(db):
+        # ⚠️ Validated BEFORE the try. A table name that is not an identifier is
+        # a programming error in this repository, not a database outage, and
+        # letting the except below catch it would file the two under the same
+        # answer — the exact conflation this whole change is about.
+        table = _safe_identifier(table_name)
+        try:
+            rows = await db.fetch_all(f"PRAGMA table_info({table})")  # nosec B608 - identifier validated above
+            names = {str(r[1]).lower() for r in (rows or [])}
+            return column_name.lower() in names
+        except Exception as e:
+            logger.warning("_table_column_exists PRAGMA failed for %s.%s: %s",
+                           table_name, column_name, e)
+            return None
     try:
         return bool(
             await db.fetch_val(
@@ -354,7 +413,32 @@ async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name
         )
     except Exception as e:
         logger.warning("_table_column_exists check failed for %s.%s: %s", table_name, column_name, e)
-        return False
+        return None
+
+
+def _probe_unavailable(table_name: str, column_name: str, **payload: Any) -> dict[str, Any]:
+    """The answer when the deployment probe itself could not run.
+
+    ⚠️ `unavailable` on purpose, not a new word: it is already in
+    `FAILURE_STATUSES` in `website/frontend/src/app/lib/responseStatus.ts`, so
+    every page that already distinguishes a failure from an empty answer renders
+    this correctly with no new branch. A third spelling would need classifying
+    on both sides of the language boundary to say something the vocabulary can
+    already say.
+
+    The data keys are kept and left empty so the shape does not change — only
+    the claim about it does.
+    """
+    # ⚠️ `**payload` FIRST. Spread last, a caller passing `status=` or `reason=`
+    # would overwrite the two fields this helper exists to guarantee — a
+    # function whose whole job is to say "unavailable" quietly saying something
+    # else. The data keys are the caller's; these two are not.
+    return {
+        **payload,
+        "status": "unavailable",
+        "reason": (f"could not check whether {table_name}.{column_name} is "
+                   f"deployed — the database did not answer"),
+    }
 
 
 def _iter_attackers(attackers_raw: Any) -> list[dict[str, Any]]:
