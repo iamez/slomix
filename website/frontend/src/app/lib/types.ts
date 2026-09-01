@@ -605,7 +605,9 @@ export interface SeasonAwards {
 export interface AwardRow {
   award: string;
   player: string;
-  guid: string;
+  /** Null when the winning legacy row carries no guid — the page already
+   *  guarded the link; only this type lied (one null 500d the endpoint). */
+  guid: string | null;
   value: string;
   date: string;
   map: string;

@@ -629,6 +629,13 @@ def valid_human_rows_gate(alias: str = "pcs") -> str:
     ' AND ...' so it appends to an existing WHERE. Same joint gate as
     /stats/records; introduced when the Hall of Fame and season leaders were
     found serving bot rows (Steber B gate matrix, 2026-08-17)."""
+    # The round half is the CANONICAL trio (+ bot rounds), not the
+    # orphan-only spelling it used to be: the weak form admitted every
+    # non-orphan uncounted status (cancelled among them) and the public
+    # all-time kill count carried 6,614 kills (5.6%) from rounds every
+    # session surface excludes — measured twice, by two sessions, on
+    # 2026-09-01. NOT EXISTS keeps rows whose round is unlinked, matching
+    # IS DISTINCT FROM semantics elsewhere.
     a = f"{alias}." if alias else ""
     return (
         f" AND {a}player_name NOT LIKE '[BOT]%'"
@@ -636,5 +643,7 @@ def valid_human_rows_gate(alias: str = "pcs") -> str:
         f" AND NOT EXISTS (SELECT 1 FROM rounds _vr"
         f"                 WHERE _vr.id = {a}round_id"
         f"                   AND (_vr.is_valid IS FALSE"
-        f"                        OR _vr.round_status = 'orphan_r2'))"
+        f"                        OR _vr.is_bot_round IS TRUE"
+        f"                        OR (_vr.round_status IS NOT NULL"
+        f"                            AND _vr.round_status NOT IN ('completed', 'substitution'))))"
     )
