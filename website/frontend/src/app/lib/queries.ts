@@ -72,7 +72,28 @@ import type {
   LiveSession,
   PlayerIdentity,
   PlayerMatchRound,
+  CompClutch,
+  CompFirstBlood,
+  CompManAdvantage,
+  CompPersonalBests,
+  CompSideSplits,
+  CompStagger,
+  ProxAimLock,
+  ProxClasses,
+  ProxCohesion,
+  ProxCombatPositions,
+  ProxCrossfireAngles,
+  ProxFocusFire,
   ProximityLeaderboard,
+  ProxLuaTrades,
+  ProxPushes,
+  ProxQuality,
+  ProxReactions,
+  ProxScopes,
+  ProxRevives,
+  ProxSpawnTiming,
+  ProxSupportSummary,
+  V7Status,
   RecentPrediction,
   SessionLeaderRow,
   SkillPlayer,
@@ -943,6 +964,107 @@ export function useProximityLeaderboard(category: string, rangeDays: number) {
       apiGet('/api/proximity/leaderboards', {
         query: { category, range_days: rangeDays, limit: 10 },
       }) as Promise<ProximityLeaderboard>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 2 — the instruments. One generic hook, thirteen paths:
+// every one takes the same optional session_date scope (the endpoint falls
+// back to a 30-day window without it — measured up to 1.9 s cold, which is
+// why the page defaults to a DATE and offers the window as an explicit
+// choice, never as the first paint).
+
+function useProxInstrument<T>(path: ProxInstrumentPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-instrument', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+type ProxInstrumentPath =
+  | '/api/proximity/quality'
+  | '/api/proximity/spawn-timing'
+  | '/api/proximity/aim-lock'
+  | '/api/proximity/cohesion'
+  | '/api/proximity/crossfire-angles'
+  | '/api/proximity/pushes'
+  | '/api/proximity/lua-trades'
+  | '/api/proximity/revives'
+  | '/api/proximity/focus-fire'
+  | '/api/proximity/support-summary'
+  | '/api/proximity/combat-position-stats'
+  | '/api/proximity/classes'
+  | '/api/proximity/reactions';
+
+export const useProxQuality = (d: string | null) => useProxInstrument<ProxQuality>('/api/proximity/quality', d);
+export const useProxSpawnTiming = (d: string | null) => useProxInstrument<ProxSpawnTiming>('/api/proximity/spawn-timing', d);
+export const useProxAimLock = (d: string | null) => useProxInstrument<ProxAimLock>('/api/proximity/aim-lock', d);
+export const useProxCohesion = (d: string | null) => useProxInstrument<ProxCohesion>('/api/proximity/cohesion', d);
+export const useProxCrossfireAngles = (d: string | null) => useProxInstrument<ProxCrossfireAngles>('/api/proximity/crossfire-angles', d);
+export const useProxPushes = (d: string | null) => useProxInstrument<ProxPushes>('/api/proximity/pushes', d);
+export const useProxLuaTrades = (d: string | null) => useProxInstrument<ProxLuaTrades>('/api/proximity/lua-trades', d);
+export const useProxRevives = (d: string | null) => useProxInstrument<ProxRevives>('/api/proximity/revives', d);
+export const useProxFocusFire = (d: string | null) => useProxInstrument<ProxFocusFire>('/api/proximity/focus-fire', d);
+export const useProxSupportSummary = (d: string | null) => useProxInstrument<ProxSupportSummary>('/api/proximity/support-summary', d);
+export const useProxCombatPositions = (d: string | null) => useProxInstrument<ProxCombatPositions>('/api/proximity/combat-position-stats', d);
+export const useProxClasses = (d: string | null) => useProxInstrument<ProxClasses>('/api/proximity/classes', d);
+export const useProxReactions = (d: string | null) => useProxInstrument<ProxReactions>('/api/proximity/reactions', d);
+
+
+/** The dates where the proximity tracker actually captured data — the
+ *  instrument chips' only honest source (the sessions list names parsed
+ *  evenings, and an evening can exist with no telemetry). */
+export function useProxScopes() {
+  return useQuery({
+    queryKey: ['prox-scopes'],
+    queryFn: () => apiGet('/api/proximity/scopes') as Promise<ProxScopes>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5, slice 3 — the competitive section (same scope contract as the
+// instruments: a date or the explicit window, never an implicit unscoped
+// first paint).
+
+type CompPath =
+  | '/api/proximity/competitive/stagger'
+  | '/api/proximity/competitive/first-blood'
+  | '/api/proximity/competitive/personal-bests'
+  | '/api/proximity/competitive/man-advantage'
+  | '/api/proximity/competitive/clutch'
+  | '/api/proximity/competitive/side-splits';
+
+function useCompetitive<T>(path: CompPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-competitive', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export const useCompStagger = (d: string | null) => useCompetitive<CompStagger>('/api/proximity/competitive/stagger', d);
+export const useCompFirstBlood = (d: string | null) => useCompetitive<CompFirstBlood>('/api/proximity/competitive/first-blood', d);
+export const useCompPersonalBests = (d: string | null) => useCompetitive<CompPersonalBests>('/api/proximity/competitive/personal-bests', d);
+export const useCompManAdvantage = (d: string | null) => useCompetitive<CompManAdvantage>('/api/proximity/competitive/man-advantage', d);
+export const useCompClutch = (d: string | null) => useCompetitive<CompClutch>('/api/proximity/competitive/clutch', d);
+export const useCompSideSplits = (d: string | null) => useCompetitive<CompSideSplits>('/api/proximity/competitive/side-splits', d);
+
+/** The v7 capture roadmap — which Lua capabilities are live and how many
+ *  rows each has produced. Global, no scope. */
+export function useV7Status() {
+  return useQuery({
+    queryKey: ['prox-v7-status'],
+    queryFn: () => apiGet('/api/proximity/v7-status') as Promise<V7Status>,
     staleTime: 5 * 60 * 1000,
   });
 }

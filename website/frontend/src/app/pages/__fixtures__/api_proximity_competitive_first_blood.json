@@ -1,0 +1,66 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "rounds": 21,
+ "decided_rounds": 21,
+ "converted": 13,
+ "conversion_pct": 61.9,
+ "description": "How often the side drawing first blood goes on to win the round (decided rounds only; draws/filler excluded).",
+ "players": [
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "vid",
+   "first_picks": 7,
+   "first_deaths": 5,
+   "fp_converted": 5
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "first_picks": 6,
+   "first_deaths": 2,
+   "fp_converted": 4
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": ".lgz",
+   "first_picks": 4,
+   "first_deaths": 7,
+   "fp_converted": 1
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": ".olz",
+   "first_picks": 2,
+   "first_deaths": 5,
+   "fp_converted": 2
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru3lzor.",
+   "first_picks": 1,
+   "first_deaths": 0,
+   "fp_converted": 0
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "SuperBoyy",
+   "first_picks": 1,
+   "first_deaths": 1,
+   "fp_converted": 1
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "KaNii.[D]",
+   "first_picks": 0,
+   "first_deaths": 1,
+   "fp_converted": 0
+  }
+ ]
+}
