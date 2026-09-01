@@ -1222,15 +1222,20 @@ export function useProxEventDetail(eventId: number | null) {
   });
 }
 
-export function useProxEngagements(sessionDate: string | null) {
+export function useProxEngagements(sessionDate: string | null, mapName: string | null, roundNumber: number | null, roundStartUnix: number | null) {
   return useQuery({
-    queryKey: ['prox-engagements', sessionDate],
+    queryKey: ['prox-engagements', sessionDate, mapName, roundNumber, roundStartUnix],
     // Fail-closed like every instrument: no scope, no query — an unscoped
     // call here is the unbounded 30-day window.
     enabled: sessionDate != null,
     queryFn: () =>
       apiGet('/api/proximity/engagements', {
-        query: { session_date: sessionDate! },
+        query: {
+          session_date: sessionDate!,
+          ...(mapName != null ? { map_name: mapName } : {}),
+          ...(roundNumber != null ? { round_number: roundNumber } : {}),
+          ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
+        },
       }) as Promise<ProxEngagements>,
     staleTime: 5 * 60 * 1000,
   });

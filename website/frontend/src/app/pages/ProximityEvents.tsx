@@ -15,15 +15,17 @@ import { stripEtColors } from '../lib/names';
 import {
   useProxEngagements, useProxEventDetail, useProxEvents,
 } from '../lib/queries';
+import type { ProxEventAttacker } from '../lib/types';
 import { ProxPanel, ProxRow } from './proximityShared';
 
 const NO_ROWS = 'no rows in this scope — proximity capture only covers sessions where the tracker ran';
 
-type PathPoint = { x: number; y: number; time: number; event: string | null };
+type PathPoint = { x: number; y: number; event: string | null };
 
 /** The doubly-serialised path: a JSON string when recorded, `[]` when the
  *  column was empty. Parsed behind a guard — a malformed string is an
- *  absent path, never a crash. */
+ *  absent path, never a crash. The output claims exactly what was
+ *  checked: finite x/y, event normalised to string-or-null. */
 function parsePath(raw: string | unknown[]): PathPoint[] {
   let arr: unknown;
   if (Array.isArray(raw)) {
@@ -36,9 +38,41 @@ function parsePath(raw: string | unknown[]): PathPoint[] {
     }
   }
   if (!Array.isArray(arr)) return [];
-  return arr.filter((p): p is PathPoint => {
-    const q = p as PathPoint | null;
-    return q != null && Number.isFinite(q.x) && Number.isFinite(q.y);
+  return arr.flatMap((p) => {
+    const q = p as { x?: unknown; y?: unknown; event?: unknown } | null;
+    if (q == null || typeof q.x !== 'number' || !Number.isFinite(q.x)
+      || typeof q.y !== 'number' || !Number.isFinite(q.y)) return [];
+    return [{ x: q.x, y: q.y, event: typeof q.event === 'string' ? q.event : null }];
+  });
+}
+
+/** The short form (zero-length times) skips the handler's parse branch and
+ *  ships `attackers` as the raw DB string — with real attacker records
+ *  inside (recorded: event 306062). Parse it the way position_path is
+ *  parsed, normalising only the fields this panel draws. */
+function parseAttackers(raw: string | ProxEventAttacker[]): ProxEventAttacker[] {
+  let arr: unknown;
+  if (Array.isArray(raw)) {
+    arr = raw;
+  } else {
+    try {
+      arr = JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr.flatMap((a) => {
+    const o = a as Partial<ProxEventAttacker> | null;
+    if (o == null || typeof o !== 'object') return [];
+    return [{
+      guid: typeof o.guid === 'string' ? o.guid : null,
+      name: typeof o.name === 'string' ? o.name : null,
+      team: typeof o.team === 'string' ? o.team : null,
+      hits: typeof o.hits === 'number' ? o.hits : 0,
+      damage: typeof o.damage === 'number' ? o.damage : 0,
+      weapons: o.weapons != null && typeof o.weapons === 'object' ? o.weapons : {},
+    }];
   });
 }
 
@@ -47,9 +81,12 @@ function EventDetail({ eventId }: { eventId: number }) {
   if (q.isPending) return <Pending label="engagement" />;
   if (q.isError || !q.data) return <Unavailable what="engagement" />;
   const d = q.data;
-  const path = parsePath(d.position_path);
-  // The short form (zero times) carries attackers as the raw DB string.
-  const attackers = Array.isArray(d.attackers) ? d.attackers : [];
+  // The legacy drill-down's precedence: the track-derived target_path when
+  // the backend computed a nonempty one, else the stored position_path.
+  const path = parsePath(
+    Array.isArray(d.target_path) && d.target_path.length > 0 ? d.target_path : d.position_path,
+  );
+  const attackers = parseAttackers(d.attackers);
   return (
     <Stack gap={2} style={{ padding: 'var(--space-2) 0 var(--space-3) var(--space-5)' }}>
       <Meta>
@@ -99,7 +136,7 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
   roundStartUnix: number | null;
 }) {
   const events = useProxEvents(sessionDate, mapName, roundNumber, roundStartUnix);
-  const engagements = useProxEngagements(sessionDate);
+  const engagements = useProxEngagements(sessionDate, mapName, roundNumber, roundStartUnix);
   const [openId, setOpenId] = useState<number | null>(null);
   return (
     <Stack gap={6} style={{ marginTop: 'var(--space-6)' }}>

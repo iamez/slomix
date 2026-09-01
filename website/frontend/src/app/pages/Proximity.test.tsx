@@ -278,10 +278,13 @@ describe('Proximity', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /carniee · supply r2/ })[0]);
     await waitFor(() => expect(screen.getByText(/kanii · 2 hits · 36 dmg/)).toBeInTheDocument());
     expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
-    // Short form (297936, the 'vid' row): attackers is the RAW DB string —
-    // the panel must not crash, and its 2-point path still draws.
+    // Short form (served for the 'vid' row's id; recorded from event
+    // 306062): attackers is the RAW DB string WITH a real record inside —
+    // the panel must parse it (.lgz · 1 hits · 166 dmg), not blank it,
+    // and the 3-point path still draws.
     fireEvent.click(screen.getAllByRole('button', { name: /vid · supply r2/ })[0]);
-    await waitFor(() => expect(screen.getByLabelText('engagement path')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/\.lgz · 1 hits · 166 dmg/)).toBeInTheDocument());
+    expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
     // One at a time: the long form's attacker row is gone.
     expect(screen.queryByText(/kanii · 2 hits · 36 dmg/)).not.toBeInTheDocument();
     // Exactly the two clicked ids were fetched, nothing else.
