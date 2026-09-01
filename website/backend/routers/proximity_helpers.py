@@ -432,7 +432,22 @@ def _compute_scoped_duos(
     engagement_rows: list[Any],
     limit: int,
     guid_name_map: dict[str, str] | None = None,
+    player_guid: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Crossfire pairs from scoped engagements, optionally about ONE player.
+
+    ⛔ `player_guid` used to be declared by `/proximity/duos` and read by
+    nothing: the caller asked about one player and was handed the whole board
+    with a 200. That is the shape of the `/proximity/revives` defect, where the
+    same silence showed 1,873 revives for a round that had 90.
+
+    Filtered in GUID space, not name space: the pairing itself works on display
+    names because that is what the board shows, but "was this player in this
+    engagement" is a question about identity, and two players can share a name.
+    The engagement is dropped first, and then any pair inside it that does not
+    include the requested player — the limit applies AFTER both, or asking about
+    one player would return the top pairs of everyone else, truncated.
+    """
     pair_stats: dict[tuple[str, str], dict[str, float]] = {}
 
     for row in engagement_rows:
@@ -469,11 +484,19 @@ def _compute_scoped_duos(
         if len(names) < 2 and len(participant_guids) >= 2:
             names = [_resolve_name_for_guid(guid, guid_name_map, guid_to_name) for guid in participant_guids]
 
+        wanted = (player_guid or "").strip()
+        if wanted and wanted not in participant_guids and wanted not in guid_to_name:
+            continue
+        wanted_name = (_resolve_name_for_guid(wanted, guid_name_map, guid_to_name)
+                       if wanted else "")
+
         unique_names = sorted({name for name in names if name})
         if len(unique_names) < 2:
             continue
 
         for p1, p2 in combinations(unique_names, 2):
+            if wanted_name and wanted_name not in (p1, p2):
+                continue
             key = (p1, p2)
             if key not in pair_stats:
                 pair_stats[key] = {

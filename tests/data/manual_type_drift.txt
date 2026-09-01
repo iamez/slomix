@@ -1,0 +1,19 @@
+# Known disagreements between the hand-written SPA types
+# (website/frontend/src/app/lib/types.ts) and the generated OpenAPI schema,
+# as reported by scripts/check_manual_types_against_openapi.py --json.
+#
+# RECOMPUTED by tests/unit/test_manual_types_do_not_drift_further.py. This file
+# is the record; the test fails in BOTH directions, so a fixed line has to be
+# deleted in the commit that fixes it.
+#
+# Seeded 2026-09-01 from origin/main: 6 disagreements over 36 schemas compared.
+# All six are the same two shapes — a field the API can send as null that TS
+# declares non-null, and a field the API always sends that TS marks optional.
+# Left as a baseline rather than fixed here because types.ts is being edited by
+# the parallel new-site work; clearing them belongs in that file's next commit.
+ActivityCalendar.note: API nullable, TS is not
+ActivityCalendar.status: TS optional, API always sends it
+RoundViz.map_name: API nullable, TS is not
+RoundViz.round_number: API nullable, TS is not
+WeaponsHallOfFame.note: API nullable, TS is not
+WeaponsHallOfFame.status: TS optional, API always sends it

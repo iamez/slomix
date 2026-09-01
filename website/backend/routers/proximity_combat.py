@@ -288,7 +288,9 @@ async def get_proximity_duos(
             "LIMIT 5000",
             query_params,
         )
-        duos = _compute_scoped_duos(rows, safe_limit, guid_name_map=guid_name_map)
+        duos = _compute_scoped_duos(rows, safe_limit,
+                                    guid_name_map=guid_name_map,
+                                    player_guid=player_guid)
         payload.update(
             {
                 "status": "ok" if duos else "prototype",
