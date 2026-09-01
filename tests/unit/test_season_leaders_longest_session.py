@@ -12,6 +12,7 @@ asyncpg raised UndefinedColumnError on every call, and the caller's
 Found by reading the log after a restart, not by a test — because no test asked
 whether the value was ever non-null.
 """
+
 from __future__ import annotations
 
 import re
@@ -19,8 +20,7 @@ from pathlib import Path
 
 import pytest
 
-ROUTER = (Path(__file__).resolve().parents[2]
-          / "website" / "backend" / "routers" / "records_seasons.py")
+ROUTER = Path(__file__).resolve().parents[2] / "website" / "backend" / "routers" / "records_seasons.py"
 
 #: Columns that live on `player_comprehensive_stats` and NOT on `rounds`.
 PLAYER_ONLY_COLUMNS = ("player_name", "player_guid")
@@ -43,15 +43,16 @@ def test_it_does_not_filter_on_columns_rounds_does_not_have(column):
     assert not re.search(rf"\b{column}\b(?!s)", query), (
         f"`{column}` is a player_comprehensive_stats column and this query "
         f"reads FROM rounds — asyncpg raises, the caller swallows it, and the "
-        f"endpoint answers 200 with a null field")
+        f"endpoint answers 200 with a null field"
+    )
 
 
 def test_it_does_not_correlate_on_a_table_it_never_selects():
     query = _session_query()
     if "player_comprehensive_stats." in query:
         assert re.search(r"(FROM|JOIN)\s+player_comprehensive_stats", query), (
-            "the query correlates on player_comprehensive_stats without "
-            "selecting from it")
+            "the query correlates on player_comprehensive_stats without selecting from it"
+        )
 
 
 def test_the_validity_guard_is_still_present():
@@ -63,12 +64,16 @@ def test_the_validity_guard_is_still_present():
     """
     query = _session_query()
     assert "is_valid" in query, "validity guard lost"
-    assert "orphan_r2" in query, "orphan guard lost"
+    # 2026-09-01: the orphan-only spelling became the canonical status gate,
+    # which excludes orphan_r2 as one member of the uncounted family — pin
+    # the clause that does the excluding now.
+    assert "round_status IN ('completed', 'substitution') OR round_status IS NULL" in query, (
+        "uncounted-status guard lost"
+    )
     assert "is_bot_round" in query, "bot rounds are no longer excluded"
 
 
 def test_the_session_is_grouped_and_bounded():
     query = _session_query()
     assert "GROUP BY gaming_session_id" in query
-    assert "gaming_session_id IS NOT NULL" in query, (
-        "NULL sessions would group into one phantom row")
+    assert "gaming_session_id IS NOT NULL" in query, "NULL sessions would group into one phantom row"

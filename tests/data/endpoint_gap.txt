@@ -37,18 +37,13 @@
 /api/monitoring/status
 /api/planning
 /api/planning/today
-/api/proximity/carrier-events
-/api/proximity/carrier-kills
-/api/proximity/carrier-returns
 /api/proximity/combat-positions/danger-zones
 /api/proximity/combat-positions/heatmap
 /api/proximity/combat-positions/kill-lines
 /api/proximity/competitive/player-card
 /api/proximity/competitive/wave-cycles
-/api/proximity/construction-events
 /api/proximity/duos
 /api/proximity/engagements
-/api/proximity/escort-credits
 /api/proximity/event
 /api/proximity/events
 /api/proximity/hit-regions
@@ -58,9 +53,7 @@
 /api/proximity/kill-outcomes/player-stats
 /api/proximity/movement-stats
 /api/proximity/movers
-/api/proximity/objective-focus
 /api/proximity/objective-pressure
-/api/proximity/objective-runs
 /api/proximity/player-aim
 /api/proximity/player-heatmap
 /api/proximity/player-journey
@@ -74,7 +67,6 @@
 /api/proximity/trades/events
 /api/proximity/trades/player-stats
 /api/proximity/trades/summary
-/api/proximity/vehicle-progress
 /api/proximity/weapon-accuracy
 /api/replay/round
 /api/server-activity/history

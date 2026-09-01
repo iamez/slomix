@@ -1,0 +1,64 @@
+{
+ "status": "ok",
+ "scope": {
+  "range_days": 30,
+  "session_date": "2026-08-31",
+  "map_name": null
+ },
+ "returners": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7K^4a^7Nii^4.^7[D]",
+   "returns": 2,
+   "avg_delay_ms": 25388
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "returns": 1,
+   "avg_delay_ms": 29800
+  }
+ ],
+ "events": [
+  {
+   "returner_name": "^7K^4a^7Nii^4.^7[D]",
+   "returner_team": "AXIS",
+   "flag_team": "redflag",
+   "original_carrier_guid": "DB00AA454019890392D8DBFF5704C999",
+   "return_delay_ms": 29775,
+   "map_name": "etl_sp_delivery",
+   "drop_x": 1013,
+   "drop_y": 2441,
+   "drop_z": 88,
+   "return_time": 463775
+  },
+  {
+   "returner_name": "^6S^2uper^6B^2oyy",
+   "returner_team": "AXIS",
+   "flag_team": "redflag",
+   "original_carrier_guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "return_delay_ms": 29800,
+   "map_name": "et_brewdog",
+   "drop_x": -2136,
+   "drop_y": 359,
+   "drop_z": 56,
+   "return_time": 416600
+  },
+  {
+   "returner_name": "^7K^4a^7Nii^4.^7[D]",
+   "returner_team": "AXIS",
+   "flag_team": "redflag",
+   "original_carrier_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "return_delay_ms": 21000,
+   "map_name": "et_brewdog",
+   "drop_x": -2464,
+   "drop_y": -880,
+   "drop_z": 352,
+   "return_time": 182000
+  }
+ ],
+ "summary": {
+  "total_returns": 3,
+  "avg_delay_ms": 26858
+ }
+}

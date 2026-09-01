@@ -66,7 +66,12 @@ class AwardRow(BaseModel):
 
     award: str
     player: str
-    guid: str
+    #: Null when the winning row carries no guid — legacy rows with
+    #: player_guid IS NULL pass the identity gate on purpose, and one of
+    #: them holding an award made the whole page a 500 (ResponseValidation
+    #: on awards[3].guid, measured on dev 2026-09-01; the leaderboard row
+    #: above learned this same lesson earlier and this model had not).
+    guid: str | None
     value: str
     date: str
     map: str
@@ -247,10 +252,13 @@ async def get_records(
     # flagged is_valid = FALSE by the importer); the [BOT]/OMNIBOT identity
     # filter is defence in depth for any historical round that predates the
     # validity flag. (Owner saw [BOT]vid holding the kills record.)
-    # round_status = 'orphan_r2' marks R2 rows whose R1 was never available:
-    # they hold raw CUMULATIVE (R1+R2) values, so any per-round record built
-    # on them is roughly doubled (the 2026-01-09 erdenberg "damage record"
-    # was exactly this).
+    # The round gate is the canonical trio: invalid rounds, bot rounds, and
+    # every status outside completed/substitution/NULL. The orphan-R2 case
+    # this comment used to single out (raw CUMULATIVE R1+R2 values doubling
+    # per-round records — the 2026-01-09 erdenberg "damage record") is one
+    # member of that family; the orphan-only spelling admitted the others
+    # and carried 6,614 uncounted-round kills into the public all-time
+    # numbers (measured 2026-09-01).
     base_where = (
         "WHERE round_number IN (1, 2) AND time_played_seconds > 0 "
         "AND player_name NOT LIKE '[BOT]%' "
@@ -258,7 +266,9 @@ async def get_records(
         "AND NOT EXISTS (SELECT 1 FROM rounds r "
         "                WHERE r.id = player_comprehensive_stats.round_id "
         "                  AND (r.is_valid IS FALSE "
-        "                       OR r.round_status = 'orphan_r2'))"
+        "                       OR r.is_bot_round IS TRUE "
+        "                       OR (r.round_status IS NOT NULL "
+        "                           AND r.round_status NOT IN ('completed', 'substitution'))))"
     )
     if map_name:
         base_where += " AND map_name = $1"

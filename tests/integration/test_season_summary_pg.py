@@ -50,7 +50,12 @@ _DDL = """
         map_name TEXT,
         gaming_session_id INTEGER,
         round_status TEXT DEFAULT 'completed',
-        is_valid BOOLEAN NOT NULL DEFAULT TRUE
+        is_valid BOOLEAN NOT NULL DEFAULT TRUE,
+        -- Nullable like production (legacy rows predate the flag); the
+        -- canonical gate references it, and a schema without the column
+        -- made every pcs query raise — which this test's zero-collapse
+        -- assertions caught in CI on #865, exactly as designed.
+        is_bot_round BOOLEAN
     );
     CREATE TABLE player_comprehensive_stats (
         id SERIAL PRIMARY KEY,

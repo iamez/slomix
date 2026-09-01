@@ -21,7 +21,11 @@ def test_records_gate_excludes_orphan_r2_rounds():
     # Assert the SQL fragment itself, not just the word: the explanatory
     # comment above base_where also says "orphan_r2", so a plain substring
     # check would keep passing after the actual gate clause was deleted.
-    assert "OR r.round_status = 'orphan_r2'" in src, (
+    # The spelling changed on 2026-09-01: the orphan-only clause became the
+    # canonical trio (invalid / bot round / any status outside completed-
+    # substitution-NULL), which excludes orphan_r2 as one member of the
+    # family instead of naming it. Pin the clause that DOES the excluding.
+    assert "r.round_status NOT IN ('completed', 'substitution')" in src, (
         "records base_where lost the orphan_r2 exclusion — cumulative R2 rows "
         "would re-enter the record book"
     )
