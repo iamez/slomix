@@ -2369,3 +2369,199 @@ export interface ProximityLeaderboard {
     LbTradesEntry & LbReactionsEntry & LbSurvivorsEntry & LbMovementEntry &
     LbFocusFireEntry & LbKrogtEntry>)[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 2 — the instruments (13 single-endpoint panels, 07 §B.2).
+// All typed from the handlers' live answers on 2026-08-31 scope; every one
+// speaks the 200-with-status convention except /quality, which has its own
+// three-status header (overall/selected_scope/global_maintenance).
+
+export interface ProxScope {
+  session_date: string | null;
+  map_name: string | null;
+  round_number: number | null;
+  round_start_unix: number | null;
+  player_guid: string | null;
+}
+
+/** /proximity/quality — the data-completeness band (design 12 row 12). */
+export interface ProxQualitySignal {
+  table: string;
+  row_count: number;
+  /** The linkage columns are null for cache tables (storytelling_kill_impact). */
+  linked_rows: number | null;
+  linked_round_count: number | null;
+  exact_link_ratio: number | null;
+  latest_created_at: string | null;
+  ready: boolean;
+  status: string;
+  required: boolean;
+}
+
+export interface ProxQuality {
+  overall_status: string;
+  selected_scope_status: string;
+  global_maintenance_status: string;
+  scope: ProxScope & { range_days?: number };
+  signals: Record<string, ProxQualitySignal>;
+  round_correlation: {
+    status: string;
+    ready: boolean;
+    correlation_count: number;
+    complete_count: number;
+    avg_completeness_pct: number;
+  };
+  linkage: { scope: string; status: string; breach_count: number };
+  warnings: string[];
+  generated_at: string;
+}
+
+export interface ProxSpawnTiming {
+  status: string;
+  scope: ProxScope;
+  total_events: number;
+  leaders: { guid: string; name: string; avg_score: number; kills: number; avg_denial_ms: number }[];
+  team_averages: { team: string; avg_score: number; total_kills: number }[];
+}
+
+export interface ProxAimLock {
+  status: string;
+  scope: ProxScope;
+  total_events: number;
+  leaders: {
+    guid: string; name: string; locks: number; avg_lock_ms: number;
+    total_lock_ms: number; avg_err_deg: number; avg_dist: number; targets: number;
+  }[];
+}
+
+export interface ProxCohesion {
+  status: string;
+  scope: ProxScope;
+  team_summary: {
+    team: string; avg_dispersion: number; avg_max_spread: number;
+    avg_stragglers: number; avg_alive: number; samples: number;
+  }[];
+  /** Measured 1,880 points for one evening — rendered as a thinned
+   *  sparkline, never a table. */
+  timeline: { time: number; team: string; dispersion: number; round_start_unix: number; round_time: number }[];
+  buddy_pairs: { guids: string; times_paired: number; avg_distance: number }[];
+}
+
+export interface ProxCrossfireAngles {
+  status: string;
+  scope: ProxScope;
+  total_opportunities: number;
+  executed: number;
+  utilization_rate_pct: number;
+  avg_angle: number;
+  avg_damage: number;
+  angle_buckets: { bucket: string; count: number; executed: number }[];
+  /** THE place partner_name actually lives — the field legacy tried to
+   *  read off the leaderboards endpoint, which never sent it. */
+  top_duos: {
+    teammate1_guid: string; teammate2_guid: string; name: string;
+    partner_name: string; executions: number; avg_angle: number;
+  }[];
+}
+
+export interface ProxPushes {
+  status: string;
+  scope: ProxScope;
+  team_summary: {
+    team: string; pushes: number; avg_quality: number; avg_alignment: number;
+    avg_speed: number; avg_participants: number; objective_pushes: number;
+  }[];
+  quality_distribution: { tier: string; team: string; count: number }[];
+}
+
+export interface ProxLuaTrades {
+  status: string;
+  scope: ProxScope;
+  leaders: { guid: string; name: string; trades: number; avg_reaction_ms: number; fastest_ms: number }[];
+  recent_trades: { victim: string; killer: string; trader: string; delta_ms: number; map: string; date: string }[];
+  speed_distribution: { tier: string; count: number }[];
+}
+
+export interface ProxRevives {
+  status: string;
+  summary: { total_revives: number; avg_enemy_distance: number; under_fire_pct: number };
+  leaders: { guid: string; name: string; revives: number; under_fire_count: number; avg_enemy_dist: number }[];
+}
+
+export interface ProxFocusFire {
+  status: string;
+  summary: {
+    total_events: number; avg_score: number; avg_attackers: number;
+    avg_damage: number; avg_duration_ms: number;
+  };
+  targets: {
+    guid: string; name: string; times_focused: number; avg_score: number;
+    total_damage_taken: number; avg_attackers: number;
+  }[];
+  recent: {
+    target_name: string; attacker_count: number; total_damage: number;
+    duration: number; focus_score: number; map_name: string; session_date: string;
+  }[];
+}
+
+export interface ProxSupportSummary {
+  status: string;
+  summary: { total_rounds: number; avg_uptime_pct: number; max_uptime_pct: number; avg_coverage_pct: number };
+  by_map: {
+    map_name: string; rounds: number; avg_uptime_pct: number; max_uptime_pct: number;
+    total_support_samples: number; total_samples: number;
+  }[];
+  rounds: {
+    map_name: string; round_number: number; support_uptime_pct: number;
+    support_samples: number; total_samples: number; session_date: string;
+  }[];
+}
+
+export interface ProxCombatPositions {
+  status: string;
+  summary: {
+    total_kills: number; avg_kill_distance: number; median_kill_distance: number;
+    unique_attackers: number; maps_tracked: number;
+  };
+  by_class: { class: string; kills: number; avg_distance: number }[];
+  by_map: { map_name: string; kills: number; avg_distance: number }[];
+}
+
+export interface ProxClasses {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  scope: ProxScope;
+  classes: {
+    player_class: string; tracks: number; players: number; avg_duration_ms: number;
+    avg_distance: number; avg_sprint_pct: number; avg_spawn_reaction_ms: number;
+  }[];
+}
+
+export interface ProxReactionRow {
+  guid: string;
+  name: string;
+  player_class: string;
+  reaction_ms: number;
+  samples: number;
+}
+
+export interface ProxReactions {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  scope: ProxScope;
+  limit: number;
+  return_fire: ProxReactionRow[];
+  dodge: ProxReactionRow[];
+  support: ProxReactionRow[];
+  class_summary: {
+    player_class: string; events: number; return_samples: number; avg_return_fire_ms: number;
+    dodge_samples: number; avg_dodge_reaction_ms: number;
+    support_samples: number; avg_support_reaction_ms: number;
+  }[];
+}

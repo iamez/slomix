@@ -17,7 +17,8 @@ import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import { isFailureStatus } from '../lib/responseStatus';
-import { useProximityLeaderboard, useSsr } from '../lib/queries';
+import { useProximityLeaderboard, useSessions, useSsr } from '../lib/queries';
+import { ProximityInstruments } from './ProximityInstruments';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
@@ -153,6 +154,13 @@ function CompSkillBoard() {
 export function Proximity() {
   const [tab, setTab] = useState<LbCategory | 'comp_skill'>('power');
   const [rangeDays, setRangeDays] = useState<number>(30);
+  // Scope for the instruments: a session DATE, defaulting to the newest
+  // session. The 30-day window exists as an explicit chip, never as the
+  // first paint — unscoped instrument queries measured up to 1.9 s cold.
+  const sessions = useSessions(30);
+  const dates = [...new Set((sessions.data ?? []).map((s) => s.date))].slice(0, 6);
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const scopeDate = pickedDate === 'window' ? null : (pickedDate ?? dates[0] ?? null);
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>proximity · positional telemetry</Lbl>
@@ -186,9 +194,46 @@ export function Proximity() {
         />
         {tab === 'comp_skill' ? <CompSkillBoard /> : <Board category={tab} rangeDays={rangeDays} />}
       </Stack>
+      <Stack gap={3} parity="proximity.scope" style={{ marginTop: 'var(--space-8)' }}>
+        <SectionHead
+          label="instruments"
+          aside={
+            <Cluster gap={2} align="baseline" style={{ flexWrap: 'wrap' }}>
+              {dates.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setPickedDate(d)}
+                  aria-pressed={scopeDate === d}
+                  style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: scopeDate === d ? 'var(--color-text-100)' : 'var(--color-text-400)' }}
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPickedDate('window')}
+                aria-pressed={scopeDate == null}
+                style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', textTransform: 'uppercase', color: scopeDate == null ? 'var(--color-text-100)' : 'var(--color-text-400)' }}
+              >
+                30d window
+              </button>
+            </Cluster>
+          }
+        />
+        {/* The chips come from the sessions list; until it answers, the
+          * instruments run UNSCOPED only if the visitor explicitly asked
+          * for the window — otherwise they wait for the date. */}
+        {sessions.isPending && pickedDate !== 'window' ? (
+          <Pending label="scope" />
+        ) : (
+          <ProximityInstruments sessionDate={scopeDate} />
+        )}
+      </Stack>
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
-        first slice of the proximity page — roster, engagements, maps and the
-        other legacy panels are pinned as pending in docs/parity/proximity_inventory.json
+        slices one and two of the proximity page — the competitive section,
+        carrier and objective intel, journeys and canvases are pinned as
+        pending in docs/parity/proximity_inventory.json
       </Lbl>
     </div>
   );

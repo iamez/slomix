@@ -278,35 +278,29 @@
       "spa_route": "proximity",
       "panels": {
         "Aim Lock v7": {
-          "status": "phase-5",
-          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+          "parity": "proximity.aim-lock"
         },
         "Crossfire Opportunities": {
-          "status": "phase-5",
-          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+          "parity": "proximity.crossfire-angles"
         },
         "Spawn Timing Efficiency": {
-          "status": "phase-5",
-          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+          "parity": "proximity.spawn-timing"
         },
         "Team Cohesion": {
-          "status": "phase-5",
-          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+          "parity": "proximity.cohesion"
         },
         "Team Pushes": {
-          "status": "phase-5",
-          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+          "parity": "proximity.pushes"
         },
         "Trade Kills (Lua-detected)": {
-          "status": "phase-5",
-          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+          "parity": "proximity.lua-trades"
         },
         "table-0": {
           "status": "phase-5",
           "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
         }
       },
-      "note": "first slice built 31. 8. (the ten-tab leaderboard section, parity proximity.leaderboards/lb-tabs); the six legacy panels plus the table-0 key captured by the inventory freeze — seven entries — are later slices"
+      "note": "slices one and two built (leaderboards 31. 8., instruments 1. 9.); table-0 (the roster table) is a later slice, pinned as pending in proximity_inventory.json"
     },
     "proximity-player": {
       "status": "phase-5",

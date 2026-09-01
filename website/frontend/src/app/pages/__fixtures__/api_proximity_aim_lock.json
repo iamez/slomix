@@ -1,0 +1,83 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "total_events": 1982,
+ "leaders": [
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "locks": 414,
+   "avg_lock_ms": 798,
+   "total_lock_ms": 330400,
+   "avg_err_deg": 2.61,
+   "avg_dist": 1016,
+   "targets": 4
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "locks": 376,
+   "avg_lock_ms": 857,
+   "total_lock_ms": 322400,
+   "avg_err_deg": 2.76,
+   "avg_dist": 971,
+   "targets": 4
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "locks": 323,
+   "avg_lock_ms": 753,
+   "total_lock_ms": 243200,
+   "avg_err_deg": 3.28,
+   "avg_dist": 980,
+   "targets": 3
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "locks": 289,
+   "avg_lock_ms": 804,
+   "total_lock_ms": 232400,
+   "avg_err_deg": 3.14,
+   "avg_dist": 1060,
+   "targets": 3
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "locks": 196,
+   "avg_lock_ms": 824,
+   "total_lock_ms": 161600,
+   "avg_err_deg": 2.89,
+   "avg_dist": 1138,
+   "targets": 3
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "locks": 204,
+   "avg_lock_ms": 741,
+   "total_lock_ms": 151200,
+   "avg_err_deg": 3.39,
+   "avg_dist": 943,
+   "targets": 4
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "locks": 180,
+   "avg_lock_ms": 753,
+   "total_lock_ms": 135600,
+   "avg_err_deg": 2.8,
+   "avg_dist": 1038,
+   "targets": 3
+  }
+ ]
+}
