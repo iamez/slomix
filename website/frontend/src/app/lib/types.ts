@@ -2553,9 +2553,11 @@ export interface ProxSupportSummary {
 
 export interface ProxCombatPositions {
   status: string;
+  /** Deliberately `{}` when the table/column has not been migrated — the
+   *  same sparse species as support-summary (Codex on #861, round two). */
   summary: {
-    total_kills: number; avg_kill_distance: number; median_kill_distance: number;
-    unique_attackers: number; maps_tracked: number;
+    total_kills?: number; avg_kill_distance?: number; median_kill_distance?: number;
+    unique_attackers?: number; maps_tracked?: number;
   };
   by_class: { class: string; kills: number; avg_distance: number }[];
   by_map: { map_name: string; kills: number; avg_distance: number }[];
@@ -2568,9 +2570,11 @@ export interface ProxClasses {
   range_days: number;
   generated_at: string;
   scope: ProxScope;
+  /** The movement averages are nullable — a class whose tracked rows carry
+   *  no sprint_percentage gets avg_sprint_pct: null (Codex on #861 r2). */
   classes: {
-    player_class: string; tracks: number; players: number; avg_duration_ms: number;
-    avg_distance: number; avg_sprint_pct: number; avg_spawn_reaction_ms: number;
+    player_class: string; tracks: number; players: number; avg_duration_ms: number | null;
+    avg_distance: number | null; avg_sprint_pct: number | null; avg_spawn_reaction_ms: number | null;
   }[];
 }
 

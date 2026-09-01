@@ -174,10 +174,13 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
 
       <div className="home-cols3" style={{ gap: 'var(--space-6)' }}>
         <div data-parity="proximity.spawn-timing">
-          <Instrument label="spawn timing" aside="denial of respawn windows" q={spawn} empty={noTracker} isEmpty={(d) => d.leaders.length === 0}>
+          <Instrument label="spawn timing" aside="denial of respawn windows" q={spawn} empty={noTracker} isEmpty={(d) => d.total_events === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.total_events)} timed kills</Meta>
+                {/* The board wants 3+ kills per player — a narrow scope can
+                  * hold real events and no qualifier (Codex on #861 r2). */}
+                {d.leaders.length === 0 && <Meta>nobody reached the three-kill board threshold here</Meta>}
                 {d.leaders.slice(0, 5).map((l) => (
                   <Row key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.kills)} kills · denial ${figure(l.avg_denial_ms)} ms`} val={l.avg_score.toFixed(3)} />
                 ))}
@@ -187,10 +190,11 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
         </div>
 
         <div data-parity="proximity.aim-lock">
-          <Instrument label="aim lock" aside="sustained on-target tracking" q={aim} empty={noTracker} isEmpty={(d) => d.leaders.length === 0}>
+          <Instrument label="aim lock" aside="sustained on-target tracking" q={aim} empty={noTracker} isEmpty={(d) => d.total_events === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.total_events)} locks</Meta>
+                {d.leaders.length === 0 && <Meta>nobody reached the three-lock board threshold here</Meta>}
                 {d.leaders.slice(0, 5).map((l) => (
                   <Row key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}°`} val={`${figure(l.avg_lock_ms)} ms`} />
                 ))}
@@ -243,11 +247,11 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
         </div>
 
         <div data-parity="proximity.combat-positions">
-          <Instrument label="kill distances" aside="from the position tracker" q={positions} empty={noTracker} isEmpty={(d) => d.summary.total_kills === 0}>
+          <Instrument label="kill distances" aside="from the position tracker" q={positions} empty={noTracker} isEmpty={(d) => !d.summary.total_kills}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>
-                  {figure(d.summary.total_kills)} kills · median {figure(d.summary.median_kill_distance)} u
+                  {figure(d.summary.total_kills ?? 0)} kills · median {figure(d.summary.median_kill_distance ?? 0)} u
                 </Meta>
                 {d.by_class.map((c) => (
                   <Row key={c.class} name={c.class.toLowerCase()} mid={`${figure(c.kills)} kills`} val={`${figure(c.avg_distance)} u`} />
@@ -333,7 +337,12 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.classes.map((c) => (
-                  <Row key={c.player_class} name={c.player_class.toLowerCase()} mid={`${figure(c.tracks)} tracks · sprint ${c.avg_sprint_pct.toFixed(0)}%`} val={`${figure(Math.round(c.avg_distance))} u`} />
+                  <Row
+                    key={c.player_class}
+                    name={c.player_class.toLowerCase()}
+                    mid={`${figure(c.tracks)} tracks · sprint ${c.avg_sprint_pct == null ? '—' : `${c.avg_sprint_pct.toFixed(0)}%`}`}
+                    val={c.avg_distance == null ? '—' : `${figure(Math.round(c.avg_distance))} u`}
+                  />
                 ))}
               </Stack>
             )}
