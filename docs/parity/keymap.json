@@ -1,0 +1,341 @@
+{
+  "_comment": [
+    "H2 translation table (plan 2c): inventory.json froze the LEGACY DOM on",
+    "2026-08-27 with human route names and panel titles; the SPA marks its",
+    "panels with parity=\"route.slug\" keys. The two vocabularies have no",
+    "intersection by construction, so this file IS the intersection: every",
+    "inventory route, panel title, tab and table key maps either to the SPA",
+    "parity key that carries it, or to a named status with a note.",
+    "Statuses: phase-5/phase-6 (route not built yet, per docs/design/08),",
+    "retired (deliberately dropped, note says why), unmapped (DEBT - built",
+    "route, missing piece). tests/unit/test_parity_keymap.py enforces the",
+    "shape, the existence of every referenced parity key in the SPA source,",
+    "and pins the unmapped count so debt cannot grow silently.",
+    "'Built' means the NEW app tree (website/frontend/src/app) and nothing else: the OLD React tree (website/frontend/src/pages) does register proximity/greatshot/uploads/availability modules, but it is the tree being replaced and counting it as coverage is the exact miscount the endpoint ratchet made before #838. In src/app these routes exist only as phase-gated placeholders (routes.data.json), which is what phase-5/phase-6 says."
+  ],
+  "routes": {
+    "home": {
+      "spa_route": "home",
+      "panels": {
+        "Active Players per Day": {
+          "parity": "home.insights"
+        },
+        "Rounds per Day": {
+          "parity": "home.insights"
+        },
+        "Map Distribution": {
+          "status": "unmapped",
+          "note": "no SPA equivalent yet - the maps page shows per-map records, not the home page's share-of-rounds chart"
+        }
+      }
+    },
+    "sessions": {
+      "spa_route": "sessions",
+      "panels": {}
+    },
+    "sessions2": {
+      "spa_route": "sessions2",
+      "panels": {}
+    },
+    "session-detail (date, multi-session)": {
+      "spa_route": "session-detail",
+      "panels": {
+        "Summary": {
+          "parity": "session.tabs"
+        },
+        "Player Stats": {
+          "parity": "session.players"
+        },
+        "Teamplay": {
+          "parity": "session.teams"
+        },
+        "Charts": {
+          "status": "unmapped",
+          "note": "the legacy charts tab was not carried; the SPA grew a rounds tab instead, but no decision retiring the charts is on record"
+        }
+      }
+    },
+    "leaderboards": {
+      "spa_route": "leaderboards",
+      "panels": {
+        "leaderboard-table": {
+          "parity": "leaderboards.table"
+        }
+      }
+    },
+    "form": {
+      "spa_route": "form",
+      "panels": {}
+    },
+    "maps": {
+      "spa_route": "maps",
+      "panels": {}
+    },
+    "weapons": {
+      "spa_route": "weapons",
+      "panels": {
+        "Airstrike": {
+          "parity": "weapons.grid"
+        },
+        "Artillery": {
+          "parity": "weapons.grid"
+        },
+        "Bazooka": {
+          "parity": "weapons.grid"
+        },
+        "Browning": {
+          "parity": "weapons.grid"
+        },
+        "Carbine": {
+          "parity": "weapons.grid"
+        },
+        "Colt": {
+          "parity": "weapons.grid"
+        },
+        "Dynamite": {
+          "parity": "weapons.grid"
+        },
+        "Fg42": {
+          "parity": "weapons.grid"
+        },
+        "Garand": {
+          "parity": "weapons.grid"
+        },
+        "Grenade": {
+          "parity": "weapons.grid"
+        },
+        "Grenadelauncher": {
+          "parity": "weapons.grid"
+        },
+        "K43": {
+          "parity": "weapons.grid"
+        },
+        "Kar98": {
+          "parity": "weapons.grid"
+        },
+        "Knife": {
+          "parity": "weapons.grid"
+        },
+        "Knife Kbar": {
+          "parity": "weapons.grid"
+        },
+        "Landmine": {
+          "parity": "weapons.grid"
+        },
+        "Luger": {
+          "parity": "weapons.grid"
+        },
+        "Mg42": {
+          "parity": "weapons.grid"
+        },
+        "Mp34": {
+          "parity": "weapons.grid"
+        },
+        "Mp40": {
+          "parity": "weapons.grid"
+        },
+        "Panzerfaust": {
+          "parity": "weapons.grid"
+        },
+        "Satchel": {
+          "parity": "weapons.grid"
+        },
+        "Sten": {
+          "parity": "weapons.grid"
+        },
+        "Thompson": {
+          "parity": "weapons.grid"
+        }
+      }
+    },
+    "records (alias)": {
+      "spa_route": "record-book",
+      "panels": {}
+    },
+    "record-book": {
+      "spa_route": "record-book",
+      "panels": {}
+    },
+    "hall-of-fame": {
+      "spa_route": "record-book",
+      "panels": {
+        "Longest Streak": {
+          "parity": "record-book.hof"
+        },
+        "Most Active": {
+          "parity": "record-book.hof"
+        },
+        "Most Assists": {
+          "parity": "record-book.hof"
+        },
+        "Most DPM": {
+          "parity": "record-book.hof"
+        },
+        "Most Damage": {
+          "parity": "record-book.hof"
+        },
+        "Most Deaths": {
+          "parity": "record-book.hof"
+        },
+        "Most Full Selfkills": {
+          "parity": "record-book.hof"
+        },
+        "Most Kills": {
+          "parity": "record-book.hof"
+        },
+        "Most Revives": {
+          "parity": "record-book.hof"
+        },
+        "Most Selfkills": {
+          "parity": "record-book.hof"
+        },
+        "Most Wins": {
+          "parity": "record-book.hof"
+        },
+        "Most XP": {
+          "parity": "record-book.hof"
+        }
+      }
+    },
+    "awards": {
+      "spa_route": "awards",
+      "panels": {}
+    },
+    "profile (owner)": {
+      "spa_route": "profile",
+      "panels": {
+        "table-0": {
+          "parity": "profile.maps"
+        }
+      },
+      "note": "table-0 is the aggregate map table (Map / Rounds / Win% / K/D / DPM) — profile.maps renders all five since #855 round four; profile.recent is a per-round list and could not satisfy that contract"
+    },
+    "profile (other)": {
+      "spa_route": "profile",
+      "panels": {
+        "table-0": {
+          "parity": "profile.maps"
+        }
+      },
+      "note": "table-0 is the aggregate map table (Map / Rounds / Win% / K/D / DPM) — profile.maps renders all five since #855 round four; profile.recent is a per-round list and could not satisfy that contract"
+    },
+    "skill-rating": {
+      "spa_route": "skill-rating",
+      "panels": {}
+    },
+    "rivalries": {
+      "spa_route": "rivalries",
+      "panels": {
+        "table-0": {
+          "parity": "rivalries.leaderboard"
+        }
+      }
+    },
+    "story": {
+      "spa_route": "story",
+      "panels": {}
+    },
+    "tonight": {
+      "spa_route": "home",
+      "panels": {},
+      "note": "legacy standalone page; the SPA carries it as the home.tonight block"
+    },
+    "retro-viz": {
+      "spa_route": "retro-viz",
+      "panels": {
+        "Match Summary": {
+          "parity": "retro-viz.summary"
+        },
+        "Damage Breakdown": {
+          "parity": "retro-viz.damage"
+        },
+        "Support Performance": {
+          "parity": "retro-viz.support"
+        },
+        "Time Distribution": {
+          "parity": "retro-viz.time"
+        },
+        "Top Fraggers": {
+          "parity": "retro-viz.fraggers"
+        },
+        "Combat Overview": {
+          "parity": "retro-viz.radar"
+        },
+        "table-0": {
+          "parity": "retro-viz.fraggers"
+        }
+      }
+    },
+    "smart-stats-diag": {
+      "spa_route": "smart-stats-diag",
+      "panels": {}
+    },
+    "replay": {
+      "status": "phase-5",
+      "note": "docs/design/08 phase 5"
+    },
+    "proximity": {
+      "spa_route": "proximity",
+      "panels": {
+        "Aim Lock v7": {
+          "parity": "proximity.aim-lock"
+        },
+        "Crossfire Opportunities": {
+          "parity": "proximity.crossfire-angles"
+        },
+        "Spawn Timing Efficiency": {
+          "parity": "proximity.spawn-timing"
+        },
+        "Team Cohesion": {
+          "parity": "proximity.cohesion"
+        },
+        "Team Pushes": {
+          "parity": "proximity.pushes"
+        },
+        "Trade Kills (Lua-detected)": {
+          "parity": "proximity.lua-trades"
+        },
+        "table-0": {
+          "status": "phase-5",
+          "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
+        }
+      },
+      "note": "slices one and two built (leaderboards 31. 8., instruments 1. 9.); table-0 (the roster table) is a later slice, pinned as pending in proximity_inventory.json"
+    },
+    "proximity-player": {
+      "status": "phase-5",
+      "note": "docs/design/08 phase 5"
+    },
+    "proximity-replay": {
+      "status": "phase-5",
+      "note": "docs/design/08 phase 5"
+    },
+    "proximity-teams": {
+      "status": "phase-5",
+      "note": "docs/design/08 phase 5"
+    },
+    "greatshot": {
+      "status": "phase-6",
+      "note": "docs/design/08 phase 6"
+    },
+    "uploads": {
+      "status": "phase-6",
+      "note": "docs/design/08 phase 6"
+    },
+    "availability": {
+      "status": "phase-6",
+      "note": "docs/design/08 phase 6"
+    },
+    "admin": {
+      "spa_route": "admin",
+      "panels": {
+        "Slomix": {
+          "parity": "admin.hero"
+        },
+        "What Slomix does": {
+          "parity": "admin.what-it-does"
+        }
+      }
+    }
+  }
+}

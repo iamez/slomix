@@ -1,0 +1,76 @@
+{
+ "name": "Zlatorog",
+ "guid": "E587CA5F",
+ "stats": {
+  "kills": 454,
+  "deaths": 521,
+  "damage": 95511,
+  "games": 54,
+  "wins": 23,
+  "losses": 31,
+  "win_rate": 42.6,
+  "kd": 0.87,
+  "dpm": 228,
+  "total_xp": 2459,
+  "playtime_hours": 7.0,
+  "last_seen": "2026-02-11",
+  "favorite_weapon": "Thompson",
+  "favorite_map": "etl_adlernest",
+  "highest_dpm": 403,
+  "lowest_dpm": 0
+ },
+ "aliases": [
+  "4/head Jaka.V",
+  "ciril",
+  "fl0w3r",
+  "Jack S."
+ ],
+ "discord_linked": true,
+ "identity_link": null,
+ "achievements": {
+  "unlocked": [
+   {
+    "type": "kills",
+    "threshold": 100,
+    "emoji": "\ud83c\udfaf",
+    "title": "First Blood Century",
+    "color": "#95A5A6"
+   },
+   {
+    "type": "games",
+    "threshold": 10,
+    "emoji": "\ud83c\udfae",
+    "title": "Getting Started",
+    "color": "#95A5A6"
+   },
+   {
+    "type": "games",
+    "threshold": 50,
+    "emoji": "\ud83c\udfaf",
+    "title": "Regular Player",
+    "color": "#3498DB"
+   }
+  ],
+  "next": [
+   {
+    "type": "kills",
+    "threshold": 500,
+    "emoji": "\ud83d\udca5",
+    "title": "Killing Machine",
+    "current": 454,
+    "progress": 90.8
+   },
+   {
+    "type": "games",
+    "threshold": 100,
+    "emoji": "\ud83c\udfc6",
+    "title": "Dedicated Gamer",
+    "current": 54,
+    "progress": 54.0
+   }
+  ],
+  "total_unlocked": 3,
+  "total_possible": 16,
+  "progress": 18.8
+ }
+}

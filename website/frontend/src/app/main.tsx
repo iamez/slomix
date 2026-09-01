@@ -25,6 +25,7 @@ import { DesignCatalog } from './pages/DesignCatalog';
 import { Rivalries } from './pages/Rivalries';
 import { SessionDetail } from './pages/SessionDetail';
 import { Story } from './pages/Story';
+import { Proximity } from './pages/Proximity';
 import { SkillRating } from './pages/SkillRating';
 import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
@@ -96,6 +97,7 @@ const PAGES: Record<string, React.ReactElement> = {
   // and renders cleanly, so "the sweep is green" says nothing about whether
   // the right component is behind the route.
   'story-date': <Story />,
+  proximity: <Proximity />,
   'session-detail': <SessionDetail />,
   'session-detail-date': <SessionDetail />,
 };

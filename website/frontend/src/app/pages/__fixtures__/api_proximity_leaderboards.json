@@ -1,0 +1,165 @@
+{
+ "status": "ok",
+ "category": "power",
+ "formula_version": "power-v2",
+ "attribution": {
+  "total_rows": 27530,
+  "linked_valid": 25647,
+  "linked_invalid_excluded": 871,
+  "unlinked_accepted": 1012,
+  "attributable_coverage": 0.962,
+  "mode": "compatibility"
+ },
+ "entries": [
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "value": 55.4,
+   "axes": {
+    "aggression": 48.4,
+    "awareness": 56.7,
+    "teamplay": 73.6,
+    "timing": 42.9
+   },
+   "unscored": {
+    "mechanical": 77.2
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "value": 55.2,
+   "axes": {
+    "aggression": 47.5,
+    "awareness": 56.5,
+    "teamplay": 72.9,
+    "timing": 44.2
+   },
+   "unscored": {
+    "mechanical": 79.8
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^e.^7lgz",
+   "value": 53.8,
+   "axes": {
+    "aggression": 50.4,
+    "awareness": 49.2,
+    "teamplay": 73.2,
+    "timing": 42.6
+   },
+   "unscored": {
+    "mechanical": 76.2
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "value": 53.4,
+   "axes": {
+    "aggression": 44.4,
+    "awareness": 54.0,
+    "teamplay": 71.8,
+    "timing": 43.3
+   },
+   "unscored": {
+    "mechanical": 78.2
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "value": 52.5,
+   "axes": {
+    "aggression": 47.8,
+    "awareness": 57.4,
+    "teamplay": 61.4,
+    "timing": 43.2
+   },
+   "unscored": {
+    "mechanical": 77.1
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "7B84BE88766731A4C985941B8814933C",
+   "name": "^7endekk",
+   "value": 50.5,
+   "axes": {
+    "aggression": 48.2,
+    "awareness": 50.9,
+    "teamplay": 57.1,
+    "timing": 45.9
+   },
+   "unscored": {
+    "mechanical": 77.9
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "value": 48.9,
+   "axes": {
+    "aggression": 49.1,
+    "awareness": 55.6,
+    "teamplay": 49.3,
+    "timing": 41.6
+   },
+   "unscored": {
+    "mechanical": 81.8
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "EF561EAA92BE11A8E562A904A262C4C6",
+   "name": "ownator",
+   "value": 48.6,
+   "axes": {
+    "aggression": 51.6,
+    "awareness": 51.0,
+    "teamplay": 50.0,
+    "timing": 41.9
+   },
+   "unscored": {
+    "mechanical": 76.2
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "652EB4A6311DBD8BD18E14CE9840EB1E",
+   "name": "^3qmr",
+   "value": 48.0,
+   "axes": {
+    "aggression": 48.6,
+    "awareness": 53.8,
+    "teamplay": 46.8,
+    "timing": 42.9
+   },
+   "unscored": {
+    "mechanical": 74.8
+   },
+   "axes_defaulted": []
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7low^8.^7kanii^7",
+   "value": 46.2,
+   "axes": {
+    "aggression": 47.4,
+    "awareness": 51.1,
+    "teamplay": 45.7,
+    "timing": 40.4
+   },
+   "unscored": {
+    "mechanical": 76.1
+   },
+   "axes_defaulted": []
+  }
+ ]
+}

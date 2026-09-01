@@ -1,0 +1,44 @@
+{
+ "status": "ok",
+ "lua_version_draft": "6.10",
+ "deployed": true,
+ "doc": "docs/LUA_V7_CAPTURE_RESEARCH_2026-06.md",
+ "capabilities": [
+  {
+   "key": "aim_lock",
+   "title": "Aim Lock",
+   "what": "Crosshair-on-enemy windows \u2014 who tracks targets, for how long, at what range. Closes the loop between shot data and real targets.",
+   "api": "et.trap_Trace + ps.viewangles (runtime-proven)",
+   "rows": 42354,
+   "rounds": 408,
+   "live": true
+  },
+  {
+   "key": "spawn_select",
+   "title": "Spawn Selection",
+   "what": "Which spawn point each player picked, every life \u2014 spawn discipline and rotation reads become measurable.",
+   "api": "sess.spawnObjectiveIndex + pers.lastSpawnTime",
+   "rows": 219,
+   "rounds": 6,
+   "live": true
+  },
+  {
+   "key": "skill_snapshot",
+   "title": "Skill Context",
+   "what": "The in-game XP skill array per player per round \u2014 correlate behavior with class skill levels.",
+   "api": "sess.skill (SK_* 0-6)",
+   "rows": 24,
+   "rounds": 4,
+   "live": true
+  },
+  {
+   "key": "comm_events",
+   "title": "Comms",
+   "what": "Voice-macro usage frequency (vsay 'Medic!' etc.) \u2014 a communication proxy. No chat text captured.",
+   "api": "et_ClientCommand + trap_Argv",
+   "rows": 96,
+   "rounds": 3,
+   "live": true
+  }
+ ]
+}

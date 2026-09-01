@@ -505,11 +505,13 @@ export interface ActivityCalendar {
   activity: Record<string, number>;
   /** Three states, and the page must not collapse them: `ok` (measured),
    *  `no_data` (measured and empty) and `unavailable` (the query failed and
-   *  the endpoint still answered 200). Optional because the field arrives
-   *  with #830 — until then it is absent and the emptiness heuristic below
-   *  is all there is. `note` carries the reason when the state is not ok. */
-  status?: string;
-  note?: string;
+   *  the endpoint still answered 200). REQUIRED since #830 landed — the
+   *  "optional until it arrives" hedge outlived the arrival, which is
+   *  exactly the drift check_manual_types_against_openapi exists to catch
+   *  (its first run with a caller, #860, named these six). `note` carries
+   *  the reason and is null when the state is ok. */
+  status: string;
+  note?: string | null;
 }
 
 /* ---------- phase 2, batch 2: leaderboards · record-book · awards ---------- */
@@ -603,7 +605,9 @@ export interface SeasonAwards {
 export interface AwardRow {
   award: string;
   player: string;
-  guid: string;
+  /** Null when the winning legacy row carries no guid — the page already
+   *  guarded the link; only this type lied (one null 500d the endpoint). */
+  guid: string | null;
   value: string;
   date: string;
   map: string;
@@ -715,12 +719,12 @@ export interface WeaponRow {
  * api_stats_weapons_hall_of_fame.json (object keyed by weapon_key). */
 export interface WeaponsHallOfFame {
   period: string;
-  /** Same three states as the activity calendar (#830): `ok`, `no_data`,
-   *  `unavailable`. Absent until that lands; present afterwards, and then
-   *  it — not the emptiness of `leaders` — decides whether this is an
-   *  outage rather than a quiet season. */
-  status?: string;
-  note?: string;
+  /** Same three states as the activity calendar: `ok`, `no_data`,
+   *  `unavailable` — it, not the emptiness of `leaders`, decides whether
+   *  this is an outage rather than a quiet season. Required since #830
+   *  landed (same drift, same first-run catch). */
+  status: string;
+  note?: string | null;
   leaders: Record<string, {
     weapon: string;
     weapon_key: string;
@@ -796,13 +800,15 @@ export interface VizPlayer {
  * families disagree on the number, so it never leaves this page. */
 export interface RoundViz {
   round_id: number;
-  map_name: string;
+  /** Nullable in the spec — the round row's map_name column allows it
+   *  (same class as the two names #841 fixed). */
+  map_name: string | null;
   /** Nullable in the handler — `str(row[2]) if row[2] else None`, the same
    *  expression as /rounds/recent. Neither of us has ever seen a null here;
    *  the branch exists, so the type says so and the page prints "unknown"
    *  rather than a blank cell (#830). */
   round_date: string | null;
-  round_number: number;
+  round_number: number | null;
   round_label: string;
   winner_team: number | null;
   /** null for historical rounds without a measured duration — unknown,
@@ -2034,4 +2040,785 @@ export interface SessionMvp {
   my_vote?: string | null;
   most_underrated_guid?: string | null;
   candidates: SessionMvpCandidate[];
+}
+
+// ---------------------------------------------------------------------------
+// The backwards-debt eight: paths legacy called that the app had not adopted.
+
+/** GET /api/stats/live-session — a UNION, not optional fields: the inactive
+ *  answer is `{active: false}` and nothing else (players_router.py, two
+ *  return statements). "Active" means rounds in the last 30 minutes — a
+ *  different question from /api/stats/tonight (voice or rounds today) and
+ *  from /api/live-status (game server reachable), so the page must label
+ *  which one it is quoting. */
+export type LiveSession =
+  | { active: false }
+  | {
+      active: true;
+      rounds_completed: number;
+      current_players: number;
+      /** "Unknown" when the detail lookup failed — a sentinel the handler
+       *  writes, not a map name. */
+      current_map: string;
+      /** "m:ss" of the last round, or null when the detail lookup failed. */
+      last_round_time: string | null;
+      last_update: string;
+    };
+
+/** GET /api/predictions/recent — a bare array; only rows explicitly
+ *  published (shadow program AUD-006) are ever returned, and the dev
+ *  database holds zero of those today, so the recorded fixture is `[]` and
+ *  the element shape is typed from the live schema, not a sample.
+ *  ⚠️ `confidence` is TEXT and `actual_winner` an INTEGER team number in
+ *  the schema — an invented "number score / team name" shape would have
+ *  survived every fixture round-trip. Legacy app.js read `match_type` /
+ *  `correct` / `description`, three fields this endpoint has never sent —
+ *  do not copy legacy's names. */
+export interface RecentPrediction {
+  id: number;
+  timestamp: string;
+  format: string;
+  team_a_probability: number;
+  team_b_probability: number;
+  confidence: string;
+  insight: string;
+  actual_winner: number | null;
+  is_correct: boolean | null;
+  accuracy: number | null;
+}
+
+/** GET /api/stats/session-leaderboard — response_model=list[SessionLeaderRow]
+ *  (sessions_router.py). kills/deaths are nullable in the model. */
+export interface SessionLeaderRow {
+  rank: number;
+  name: string;
+  dpm: number;
+  kills: number | null;
+  deaths: number | null;
+}
+
+/** GET /api/skill/player/{identifier} — the 200-with-status convention:
+ *  an unknown or under-rated player answers
+ *  `{status: "error", detail: "…need 5+ rounds…"}`, never a 404. */
+export interface SkillPlayerComponent {
+  raw: number;
+  weight: number;
+  percentile: number;
+  contribution: number;
+}
+
+export interface SkillPlayerOk {
+  status: 'ok';
+  player: {
+    player_guid: string;
+    display_name: string;
+    et_rating: number;
+    games_rated: number;
+    last_rated_at: string | null;
+    rank: number;
+    total_rated: number;
+    components: Record<string, SkillPlayerComponent>;
+    confidence: number | null;
+    tier: string | null;
+  };
+}
+
+export type SkillPlayer = SkillPlayerOk | { status: 'error'; detail: string };
+
+/** GET /api/skill/composite — per-session composite metrics with the
+ *  coverage block #848 added: `unmeasured_metrics` names what the sources
+ *  could not back for THIS session (measured corpus: [] on 154,
+ *  [ci,kpi,tir] on 94, all five on 20), and the page's whole job is to
+ *  show that honesty instead of rendering unmeasured zeros as scores. */
+export interface CompositePlayer {
+  player_guid: string;
+  player_name: string;
+  kills: number;
+  tir: number;
+  ci: number;
+  kpi: number;
+  sds: number;
+  cp: number;
+  details: {
+    crossfire_kills: number;
+    trade_kills: number;
+    clutch_kills: number;
+    gibbed_count: number;
+    total_outcomes: number;
+    avg_spawn_score: number;
+    focus_escapes: number;
+    times_focused: number;
+  };
+}
+
+export interface CompositeCoverage {
+  unmeasured_metrics: string[];
+  partially_synthetic_metrics: string[];
+  source_rows: {
+    crossfire: number;
+    crossfire_cache: number;
+    trades: number;
+    combat_positions: number;
+    kill_outcomes: number;
+    spawn_timing: number;
+  };
+}
+
+export interface CompositeStats {
+  status: string;
+  session_date: string | null;
+  gaming_session_id: number | null;
+  players: CompositePlayer[];
+  coverage: CompositeCoverage;
+  meta: { metrics: Record<string, string> };
+}
+
+/** GET /api/stats/player/{player_name} — the identity half the profile
+ *  endpoint does not carry: aliases, the Discord link, the sick-leave
+ *  identity link (migration 073, null for most), achievements. A missing
+ *  player is a real 404 here, not a status envelope. */
+export interface PlayerIdentity {
+  name: string;
+  guid: string;
+  stats: {
+    kills: number;
+    deaths: number;
+    damage: number;
+    games: number;
+    wins: number;
+    losses: number;
+    win_rate: number;
+    kd: number;
+    dpm: number;
+    total_xp: number;
+    playtime_hours: number;
+    last_seen: string | null;
+    favorite_weapon: string | null;
+    favorite_map: string | null;
+    highest_dpm: number | null;
+    lowest_dpm: number | null;
+  };
+  aliases: string[];
+  discord_linked: boolean;
+  /** Sick-leave attribution (migration 073) — a UNION by role, or null for
+   *  the unlinked majority: an ALT points at its primary, a PRIMARY lists
+   *  its alts. Typed from fetch_identity_links, not the sample (the sample
+   *  is null). */
+  identity_link: IdentityLink | null;
+  /** A DICT with progress, not a list — the first blind guess here typed it
+   *  as a name/description array and the live sample refuted both fields. */
+  achievements: {
+    unlocked: AchievementBadge[];
+    next: AchievementNext[];
+    total_unlocked: number;
+    total_possible: number;
+    progress: number;
+  };
+}
+
+export interface AchievementBadge {
+  type: string;
+  threshold: number;
+  emoji: string;
+  title: string;
+  color: string;
+}
+
+export interface AchievementNext {
+  type: string;
+  threshold: number;
+  emoji: string;
+  title: string;
+  current: number;
+  progress: number;
+}
+
+export type IdentityLink =
+  | {
+      role: 'alt';
+      link_type: string;
+      reason: string | null;
+      primary_guid: string;
+      primary_name: string;
+      active: boolean;
+      since: string | null;
+    }
+  | {
+      role: 'primary';
+      alts: {
+        alt_guid: string;
+        alt_name: string;
+        link_type: string;
+        reason: string | null;
+        active: boolean;
+        since: string | null;
+      }[];
+    };
+
+/** GET /api/player/{player_name}/matches — round-level rows richer than the
+ *  profile's recent_matches (gibs, damage_received, headshot_kills,
+ *  revives_given, round_status, gaming_session_id). */
+export interface PlayerMatchRound {
+  round_id: number;
+  round_date: string;
+  map_name: string;
+  round_number: number;
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  /** Numeric team id (pcs.team is INTEGER; the fixture carries 1/2) — the
+   *  first version typed it as a string from memory, not measurement. */
+  team: number | null;
+  xp: number;
+  accuracy: number;
+  dpm: number;
+  kd: number;
+  gibs: number;
+  damage_received: number;
+  headshot_kills: number;
+  revives_given: number;
+  round_status: string | null;
+  gaming_session_id: number | null;
+  /** FALSE with a completed status is a real state — the uncounted mark
+   *  needs BOTH signals (Codex on #855, round six). */
+  is_valid: boolean | null;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — proximity. First slice: the ten-tab leaderboard section.
+
+/** GET /api/proximity/leaderboards — one endpoint, nine categories (the
+ *  tenth tab, comp_skill, is /api/skill/ssr: all-time and group-relative,
+ *  it ignores range and scope by owner decision A4). Each handler branch
+ *  returns its own fixed extras (typed from the handler, not the sample);
+ *  the wire carries no discriminant on the ENTRY, so `entries` is honestly
+ *  base + Partial extras — the response-level `category` field is what a
+ *  caller narrows on, and the per-category interfaces below name what each
+ *  branch actually sends (Copilot on #856: the first comment here claimed
+ *  a discriminated union the type never was).
+ *  An unknown category answers {status:'error'} inside a 200, the house
+ *  convention. Legacy read `partner_name` off crossfire entries — a field
+ *  only the teamplay duo boards have ever sent — so its crossfire board
+ *  rendered "name + ?" forever; not carried. */
+export interface LbEntryBase {
+  guid: string;
+  name: string;
+  value: number;
+}
+
+export interface LbPowerEntry extends LbEntryBase {
+  axes: { aggression: number; awareness: number; teamplay: number; timing: number };
+  components?: Record<string, number>;
+}
+
+export interface LbSpawnEntry extends LbEntryBase {
+  timed_kills: number;
+  avg_denial_ms: number;
+}
+
+export interface LbCrossfireEntry extends LbEntryBase {
+  avg_angle: number;
+}
+
+export interface LbTradesEntry extends LbEntryBase {
+  avg_reaction_ms: number;
+}
+
+export interface LbReactionsEntry extends LbEntryBase {
+  samples: number;
+}
+
+export interface LbSurvivorsEntry extends LbEntryBase {
+  total_engagements: number;
+  avg_duration_ms: number;
+}
+
+export interface LbMovementEntry extends LbEntryBase {
+  sprint_pct: number;
+  total_distance: number;
+  tracks: number;
+}
+
+export interface LbFocusFireEntry extends LbEntryBase {
+  times_focused: number;
+  avg_attackers: number;
+  avg_damage: number;
+}
+
+export interface LbKrogtEntry extends LbEntryBase {
+  lives: number;
+}
+
+export type LbCategory =
+  | 'power' | 'spawn' | 'crossfire' | 'trades' | 'reactions'
+  | 'survivors' | 'movement' | 'focus_fire' | 'krogt';
+
+export interface ProximityLeaderboard {
+  status: string;
+  category: string;
+  /** power only — quoted, never restated. */
+  formula_version?: string;
+  /** power only: how many source rows were linkable — the board's own
+   *  honesty block. */
+  attribution?: {
+    total_rows: number;
+    linked_valid: number;
+    linked_invalid_excluded?: number;
+    unlinked_accepted?: number;
+    attributable_coverage?: number;
+    /** "compatibility" on the recorded fixture — a LABEL, not a count; the
+     *  loose numeric index this block first had would have typed it away. */
+    mode?: string;
+  };
+  entries: (LbEntryBase & Partial<LbPowerEntry & LbSpawnEntry & LbCrossfireEntry &
+    LbTradesEntry & LbReactionsEntry & LbSurvivorsEntry & LbMovementEntry &
+    LbFocusFireEntry & LbKrogtEntry>)[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 2 — the instruments (13 single-endpoint panels, 07 §B.2).
+// All typed from the handlers' live answers on 2026-08-31 scope; every one
+// speaks the 200-with-status convention except /quality, which has its own
+// three-status header (overall/selected_scope/global_maintenance).
+
+export interface ProxScope {
+  session_date: string | null;
+  map_name: string | null;
+  round_number: number | null;
+  round_start_unix: number | null;
+  player_guid: string | null;
+}
+
+/** /proximity/quality — the data-completeness band (design 12 row 12). */
+export interface ProxQualitySignal {
+  table: string;
+  row_count: number;
+  /** The linkage columns are null for cache tables (storytelling_kill_impact). */
+  linked_rows: number | null;
+  linked_round_count: number | null;
+  exact_link_ratio: number | null;
+  latest_created_at: string | null;
+  ready: boolean;
+  status: string;
+  required: boolean;
+}
+
+export interface ProxQuality {
+  overall_status: string;
+  selected_scope_status: string;
+  global_maintenance_status: string;
+  scope: ProxScope & { range_days?: number };
+  signals: Record<string, ProxQualitySignal>;
+  /** The HTTP-200 error shape (SQLite mode, any quality-check exception)
+   *  carries only status+ready here — every count is OPTIONAL, and the
+   *  first version crashed the whole route on `.toFixed()` of a missing
+   *  number (Codex on #861, P1). */
+  round_correlation: {
+    status: string;
+    ready: boolean;
+    correlation_count?: number;
+    complete_count?: number;
+    avg_completeness_pct?: number;
+  };
+  linkage?: { scope: string; status: string; breach_count: number };
+  /** RECORDS, not strings — joining them rendered "[object Object]" in the
+   *  truth strip precisely when a warning existed (Codex on #861). */
+  warnings: { code: string; level: string; message: string }[];
+  generated_at?: string;
+}
+
+/** GET /api/proximity/scopes — the dates where the TRACKER captured data,
+ *  which is the only honest source for the instrument chips: the sessions
+ *  list names parsed evenings, and an evening can exist with no telemetry
+ *  (Codex on #861, P1 — the recorded corpus had exactly that skew). */
+export interface ProxScopes {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  sessions: {
+    session_date: string;
+    engagements: number;
+    map_count: number;
+    round_count: number;
+  }[];
+}
+
+export interface ProxSpawnTiming {
+  status: string;
+  scope: ProxScope;
+  total_events: number;
+  leaders: { guid: string; name: string; avg_score: number; kills: number; avg_denial_ms: number }[];
+  team_averages: { team: string; avg_score: number; total_kills: number }[];
+}
+
+export interface ProxAimLock {
+  status: string;
+  scope: ProxScope;
+  total_events: number;
+  leaders: {
+    guid: string; name: string; locks: number; avg_lock_ms: number;
+    total_lock_ms: number; avg_err_deg: number; avg_dist: number; targets: number;
+  }[];
+}
+
+export interface ProxCohesion {
+  status: string;
+  scope: ProxScope;
+  team_summary: {
+    team: string; avg_dispersion: number; avg_max_spread: number;
+    avg_stragglers: number; avg_alive: number; samples: number;
+  }[];
+  /** Measured 1,880 points for one evening — rendered as a thinned
+   *  sparkline, never a table. */
+  timeline: { time: number; team: string; dispersion: number; round_start_unix: number; round_time: number }[];
+  buddy_pairs: { guids: string; times_paired: number; avg_distance: number }[];
+}
+
+export interface ProxCrossfireAngles {
+  status: string;
+  scope: ProxScope;
+  total_opportunities: number;
+  executed: number;
+  utilization_rate_pct: number;
+  avg_angle: number;
+  avg_damage: number;
+  angle_buckets: { bucket: string; count: number; executed: number }[];
+  /** THE place partner_name actually lives — the field legacy tried to
+   *  read off the leaderboards endpoint, which never sent it. */
+  top_duos: {
+    teammate1_guid: string; teammate2_guid: string;
+    /** null when the scoped player_track lookup cannot resolve the guid —
+     *  render the eight-char guid, never a blank " + " row. */
+    name: string | null;
+    partner_name: string | null; executions: number; avg_angle: number;
+  }[];
+}
+
+export interface ProxPushes {
+  status: string;
+  scope: ProxScope;
+  team_summary: {
+    team: string; pushes: number; avg_quality: number; avg_alignment: number;
+    avg_speed: number; avg_participants: number; objective_pushes: number;
+  }[];
+  quality_distribution: { tier: string; team: string; count: number }[];
+}
+
+export interface ProxLuaTrades {
+  status: string;
+  scope: ProxScope;
+  leaders: { guid: string; name: string; trades: number; avg_reaction_ms: number; fastest_ms: number }[];
+  recent_trades: { victim: string; killer: string; trader: string; delta_ms: number; map: string; date: string }[];
+  speed_distribution: { tier: string; count: number }[];
+}
+
+export interface ProxRevives {
+  status: string;
+  summary: { total_revives: number; avg_enemy_distance: number; under_fire_pct: number };
+  leaders: { guid: string; name: string; revives: number; under_fire_count: number; avg_enemy_dist: number }[];
+}
+
+export interface ProxFocusFire {
+  status: string;
+  summary: {
+    total_events: number; avg_score: number; avg_attackers: number;
+    avg_damage: number; avg_duration_ms: number;
+  };
+  targets: {
+    guid: string; name: string; times_focused: number; avg_score: number;
+    total_damage_taken: number; avg_attackers: number;
+  }[];
+  recent: {
+    target_name: string; attacker_count: number; total_damage: number;
+    duration: number; focus_score: number; map_name: string; session_date: string;
+  }[];
+}
+
+export interface ProxSupportSummary {
+  status: string;
+  /** Deliberately `{}` when the support column has not been migrated —
+   *  every field optional, and emptiness is judged on total_rounds being
+   *  MISSING or zero, never formatted blind (Codex on #861, P1). */
+  summary: { total_rounds?: number; avg_uptime_pct?: number; max_uptime_pct?: number; avg_coverage_pct?: number };
+  by_map: {
+    map_name: string; rounds: number; avg_uptime_pct: number; max_uptime_pct: number;
+    total_support_samples: number; total_samples: number;
+  }[];
+  rounds: {
+    map_name: string; round_number: number; support_uptime_pct: number;
+    support_samples: number; total_samples: number; session_date: string;
+  }[];
+}
+
+export interface ProxCombatPositions {
+  status: string;
+  /** Deliberately `{}` when the table/column has not been migrated — the
+   *  same sparse species as support-summary (Codex on #861, round two). */
+  summary: {
+    total_kills?: number; avg_kill_distance?: number; median_kill_distance?: number;
+    unique_attackers?: number; maps_tracked?: number;
+  };
+  by_class: { class: string; kills: number; avg_distance: number }[];
+  by_map: { map_name: string; kills: number; avg_distance: number }[];
+}
+
+export interface ProxClasses {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  scope: ProxScope;
+  /** The movement averages are nullable — a class whose tracked rows carry
+   *  no sprint_percentage gets avg_sprint_pct: null (Codex on #861 r2). */
+  classes: {
+    player_class: string; tracks: number; players: number; avg_duration_ms: number | null;
+    avg_distance: number | null; avg_sprint_pct: number | null; avg_spawn_reaction_ms: number | null;
+  }[];
+}
+
+export interface ProxReactionRow {
+  guid: string;
+  name: string;
+  player_class: string;
+  reaction_ms: number;
+  samples: number;
+}
+
+export interface ProxReactions {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  scope: ProxScope;
+  limit: number;
+  return_fire: ProxReactionRow[];
+  dodge: ProxReactionRow[];
+  support: ProxReactionRow[];
+  /** A class can have dodge/support events and ZERO return-fire samples —
+   *  the backend then sends avg_return_fire_ms: null (Codex on #861, P1). */
+  class_summary: {
+    player_class: string; events: number; return_samples: number; avg_return_fire_ms: number | null;
+    dodge_samples: number; avg_dodge_reaction_ms: number | null;
+    support_samples: number; avg_support_reaction_ms: number | null;
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 3 — the competitive section (07 §B.2). Every panel quotes
+// the wire's own `description` — the formula text lives server-side and the
+// page repeats it, never paraphrases. wave-cycles is NOT here: it requires
+// map_name + round_number and belongs to the round-scope slice.
+
+export interface CompStagger {
+  status: string;
+  scope: ProxScope;
+  threshold: number;
+  description: string;
+  players: {
+    guid: string; name: string; team: string; kills: number;
+    stagger_kills: number; stagger_rate: number; denied_s: number; avg_score: number;
+  }[];
+}
+
+export interface CompFirstBlood {
+  status: string;
+  scope: ProxScope;
+  rounds: number;
+  decided_rounds: number;
+  converted: number;
+  conversion_pct: number;
+  description: string;
+  players: { guid: string; name: string; first_picks: number; first_deaths: number; fp_converted: number }[];
+}
+
+export interface CompPersonalBests {
+  status: string;
+  session_date: string;
+  description: string;
+  cards: {
+    guid: string; name: string; metric: string; label: string;
+    value: number; prev_best: number | null; prev_best_date: string | null;
+    sessions_played: number;
+  }[];
+  scope_note: string;
+}
+
+export interface CompManAdvantage {
+  status: string;
+  scope: ProxScope;
+  rounds: number;
+  description: string;
+  /** Keyed by team name; by_size keyed by "1" | "2" | "3+". */
+  teams: Record<string, {
+    windows: number;
+    converted: number;
+    by_size: Record<string, { windows: number; converted: number }>;
+    conversion_pct: number;
+  }>;
+  total_windows: number;
+  top_converters: { guid: string; name: string; conversions: number }[];
+}
+
+export interface CompClutch {
+  status: string;
+  scope: ProxScope;
+  clock_protocol: string;
+  rounds: number;
+  skipped_rounds_no_clock: number;
+  description: string;
+  players: {
+    guid: string; name: string; situations: number; wins: number; win_pct: number;
+    best: { enemies: number; kills: number; survived: boolean } | null;
+  }[];
+}
+
+export interface CompSideSplits {
+  status: string;
+  scope: ProxScope;
+  description: string;
+  /** Either side can be NULL — a player who only played one half of the
+   *  evening has no row for the other (caught live on the single-round
+   *  2026-09-01 scope: the recorded 08-31 fixture had both sides for
+   *  everyone, so the fixture could not refute the non-null guess). */
+  players: {
+    guid: string; name: string;
+    attack: { kills: number; stagger_kills: number; denied_s: number; minutes: number; kpm: number } | null;
+    defense: { kills: number; stagger_kills: number; denied_s: number; minutes: number; kpm: number } | null;
+  }[];
+}
+
+export interface V7Status {
+  status: string;
+  lua_version_draft: string;
+  deployed: boolean;
+  doc: string;
+  capabilities: {
+    key: string; title: string; what: string; api: string;
+    rows: number; rounds: number; live: boolean;
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 4 — carrier and objective intel (07 §B.2). The sparse
+// species discipline is applied UP FRONT this time: summaries carry
+// optional fields (the deliberate-{} pattern three earlier panels crashed
+// on), and any name the backend resolves through a scoped lookup is
+// nullable.
+
+export interface CarrierEvents {
+  status: string;
+  /** NARROWER than ProxScope — this handler's scope carries only these
+   *  three keys (the satisfies check on the recorded fixture said so the
+   *  moment it existed; the full-scope guess was a lie of one family). */
+  scope: { session_date: string | null; map_name: string | null; round_number: number | null };
+  carriers: {
+    guid: string; name: string | null; carries: number; secures: number;
+    killed: number; dropped: number; total_distance: number;
+    avg_efficiency: number; avg_duration_ms: number; secure_rate: number;
+  }[];
+  events: {
+    carrier_name: string | null; carrier_team: string; flag_team: string;
+    outcome: string; carry_distance: number; beeline_distance: number;
+    efficiency: number; duration_ms: number; map_name: string;
+    /** Empty string when nobody killed the carrier (drop/secure). */
+    killer_name: string | null; pickup_time: number;
+  }[];
+  summary: {
+    total_carries?: number; total_secures?: number; total_killed?: number;
+    avg_distance?: number; avg_efficiency?: number; secure_rate?: number;
+  };
+}
+
+export interface CarrierKills {
+  status: string;
+  killers: { guid: string; name: string | null; carrier_kills: number; avg_distance_stopped: number }[];
+}
+
+export interface CarrierReturns {
+  status: string;
+  scope: { range_days?: number; session_date: string | null; map_name: string | null };
+  returners: { guid: string; name: string | null; returns: number; avg_delay_ms: number }[];
+  events: {
+    returner_name: string | null; returner_team: string; flag_team: string;
+    original_carrier_guid: string; return_delay_ms: number; map_name: string;
+    return_time: number;
+  }[];
+  /** avg_delay_ms arrives as NULL (not absent) on an empty scope —
+   *  measured on 2026-09-01 and 2026-05-01. */
+  summary: { total_returns?: number; avg_delay_ms?: number | null };
+}
+
+export interface VehicleProgress {
+  status: string;
+  vehicles: {
+    vehicle_name: string; vehicle_type: string; map_name: string;
+    session_date: string; round_number: number; total_distance: number;
+    max_health: number; final_health: number; destroyed_count: number;
+  }[];
+}
+
+export interface EscortCredits {
+  status: string;
+  escorts: {
+    guid: string; name: string | null; total_credit_distance: number;
+    total_mounted_ms: number; total_proximity_ms: number;
+    total_escort_distance: number; total_samples: number;
+  }[];
+}
+
+export interface ConstructionEvents {
+  status: string;
+  engineers: {
+    guid: string; name: string | null; total_events: number; plants: number;
+    defuses: number; destructions: number; constructions: number;
+  }[];
+  events: {
+    event_type: string; player_name: string | null; player_team: string;
+    track_name: string; map_name: string; session_date: string;
+    round_number: number; event_time: number;
+  }[];
+}
+
+export interface ObjectiveRuns {
+  status: string;
+  objective_runners: {
+    engineer_guid: string; engineer_name: string | null; total_runs: number;
+    successful_runs: number; denied_runs: number; solo_runs: number;
+    assisted_runs: number; team_effort_runs: number; unopposed_runs: number;
+    total_self_kills: number; total_team_kills: number;
+    avg_path_efficiency: number | null;
+  }[];
+  recent_runs: {
+    engineer_name: string | null; action_type: string; track_name: string;
+    run_type: string; self_kills: number; team_kills: number;
+    nearby_teammates: number; approach_time_ms: number;
+    path_efficiency: number | null; map_name: string; session_date: string;
+    killer_name: string | null;
+  }[];
+  summary: {
+    total_runs?: number; total_denied?: number; total_solo?: number;
+    total_assisted?: number; total_team_effort?: number; total_unopposed?: number;
+    avg_path_efficiency?: number | null; most_active_objective?: string | null;
+  };
+}
+
+export interface ObjectiveFocus {
+  status: string;
+  summary: {
+    unique_players?: number; objectives_tracked?: number;
+    avg_time_near_obj_s?: number; avg_distance?: number;
+  };
+  players: {
+    guid: string; name: string | null; total_time_ms: number; avg_dist: number;
+    objectives_played: number; total_samples: number; total_time_s: number;
+  }[];
+  objectives: {
+    objective: string; map_name: string; players: number;
+    avg_time_s: number; avg_dist: number;
+  }[];
 }

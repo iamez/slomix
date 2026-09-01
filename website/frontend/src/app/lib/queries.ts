@@ -68,6 +68,43 @@ import type {
   WeaponRow,
   WeaponsByPlayer,
   WeaponsHallOfFame,
+  CompositeStats,
+  LiveSession,
+  PlayerIdentity,
+  PlayerMatchRound,
+  CarrierEvents,
+  CarrierKills,
+  CarrierReturns,
+  CompClutch,
+  CompFirstBlood,
+  CompManAdvantage,
+  CompPersonalBests,
+  CompSideSplits,
+  CompStagger,
+  ProxAimLock,
+  ProxClasses,
+  ProxCohesion,
+  ProxCombatPositions,
+  ProxCrossfireAngles,
+  ProxFocusFire,
+  ProximityLeaderboard,
+  ProxLuaTrades,
+  ProxPushes,
+  ProxQuality,
+  ProxReactions,
+  ProxScopes,
+  ProxRevives,
+  ConstructionEvents,
+  EscortCredits,
+  ObjectiveFocus,
+  ObjectiveRuns,
+  ProxSpawnTiming,
+  ProxSupportSummary,
+  V7Status,
+  VehicleProgress,
+  RecentPrediction,
+  SessionLeaderRow,
+  SkillPlayer,
 } from './types';
 
 /**
@@ -801,3 +838,274 @@ export function useSessionMvp(sessionId: number | null) {
       }) as Promise<SessionMvp>,
   });
 }
+
+
+// ---------------------------------------------------------------------------
+// The backwards-debt eight (docs/design plan §2a): hooks for paths only the
+// legacy frontend called until now.
+
+/** Rounds in the LAST 30 MINUTES — a stricter liveness than /api/stats/tonight
+ *  (which answers "was there anything today"). no-store for the same reason
+ *  as useTonight: an evening in progress must appear without a reload. */
+export function useLiveSession() {
+  return useQuery({
+    queryKey: ['live-session'],
+    queryFn: () => apiGet('/api/stats/live-session', { cache: 'no-store' }) as Promise<LiveSession>,
+    refetchInterval: 60 * 1000,
+  });
+}
+
+/** Published match predictions only (shadow program AUD-006) — the dev
+ *  database has zero published rows, so [] is this hook's normal answer,
+ *  not its failure. */
+export function useRecentPredictions(limit: number) {
+  return useQuery({
+    queryKey: ['predictions-recent', limit],
+    queryFn: () =>
+      apiGet('/api/predictions/recent', { query: { limit } }) as Promise<RecentPrediction[]>,
+  });
+}
+
+/** Top DPM rows of one session (or the latest, when sessionId is null —
+ *  the endpoint's own default; the page passes the id so the claim is
+ *  scoped, never "whatever was latest at fetch time"). */
+export function useSessionLeaderboard(sessionId: number | null, limit: number) {
+  return useQuery({
+    queryKey: ['session-leaderboard', sessionId, limit],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session-leaderboard', {
+        query: { session_id: sessionId!, limit },
+      }) as Promise<SessionLeaderRow[]>,
+  });
+}
+
+/** One player's weapons within ONE session — the hyphen spelling, on
+ *  purpose: this is the session-scoped call legacy session-detail.js made,
+ *  and both spellings are one handler since #848. WeaponsPage keeps the
+ *  underscore for its period-scoped grid; neither is a fallback of the
+ *  other. */
+export function useSessionPlayerWeapons(sessionId: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['session-player-weapons', sessionId, playerGuid],
+    enabled: sessionId != null && !!playerGuid,
+    queryFn: () =>
+      apiGet('/api/stats/weapons/by-player', {
+        query: {
+          period: 'session',
+          gaming_session_id: sessionId!,
+          player_guid: playerGuid!,
+          player_limit: 1,
+          weapon_limit: 8,
+        },
+      }) as Promise<WeaponsByPlayer>,
+  });
+}
+
+/** The composite five (tir/ci/kpi/sds/cp) with #848's coverage block —
+ *  the first page anywhere to RENDER unmeasured_metrics instead of
+ *  presenting an unmeasured zero as a score. */
+export function useComposite(sessionId: number | null, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['skill-composite', sessionId, sessionDate],
+    enabled: sessionId != null || sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/skill/composite', {
+        query: sessionId != null ? { gaming_session_id: sessionId } : { session_date: sessionDate! },
+      }) as Promise<CompositeStats>,
+  });
+}
+
+/** ET Rating v2.1 for one player — 200-with-status: "not rated yet (need
+ *  5+ rounds)" arrives as {status:'error'}, which the panel renders as a
+ *  fact about the player, not as a failure. */
+export function useSkillPlayer(identifier: string | null) {
+  return useQuery({
+    queryKey: ['skill-player', identifier],
+    enabled: !!identifier,
+    queryFn: () =>
+      apiGet('/api/skill/player/{identifier}', {
+        pathParams: { identifier: identifier! },
+      }) as Promise<SkillPlayer>,
+  });
+}
+
+/** The identity card: aliases, Discord link, sick-leave attribution,
+ *  achievement milestones. 404 on an unknown player — a real one. */
+export function usePlayerIdentity(identifier: string | null) {
+  return useQuery({
+    queryKey: ['player-identity', identifier],
+    enabled: !!identifier,
+    queryFn: () =>
+      apiGet('/api/stats/player/{player_name}', {
+        pathParams: { player_name: identifier! },
+      }) as Promise<PlayerIdentity>,
+  });
+}
+
+/** Round-level recent rows, richer than the profile's recent_matches:
+ *  gibs, damage received, headshot kills, revives. */
+export function usePlayerMatchRounds(identifier: string | null, limit: number) {
+  return useQuery({
+    queryKey: ['player-match-rounds', identifier, limit],
+    enabled: !!identifier,
+    queryFn: () =>
+      apiGet('/api/player/{player_name}/matches', {
+        pathParams: { player_name: identifier! },
+        query: { limit },
+      }) as Promise<PlayerMatchRound[]>,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — proximity.
+
+/** One of the nine leaderboard categories over a rolling window. Measured
+ *  cold on 31. 8.: 20-500 ms per category at range_days=30 — this endpoint
+ *  is NOT the /proximity/players backbone and needs no scope to be safe,
+ *  but the range still ships with every call so the first paint is never
+ *  an unbounded query. */
+export function useProximityLeaderboard(category: string, rangeDays: number) {
+  return useQuery({
+    queryKey: ['proximity-leaderboard', category, rangeDays],
+    queryFn: () =>
+      apiGet('/api/proximity/leaderboards', {
+        query: { category, range_days: rangeDays, limit: 10 },
+      }) as Promise<ProximityLeaderboard>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 2 — the instruments. One generic hook, thirteen paths:
+// every one takes the same optional session_date scope (the endpoint falls
+// back to a 30-day window without it — measured up to 1.9 s cold, which is
+// why the page defaults to a DATE and offers the window as an explicit
+// choice, never as the first paint).
+
+function useProxInstrument<T>(path: ProxInstrumentPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-instrument', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+type ProxInstrumentPath =
+  | '/api/proximity/quality'
+  | '/api/proximity/spawn-timing'
+  | '/api/proximity/aim-lock'
+  | '/api/proximity/cohesion'
+  | '/api/proximity/crossfire-angles'
+  | '/api/proximity/pushes'
+  | '/api/proximity/lua-trades'
+  | '/api/proximity/revives'
+  | '/api/proximity/focus-fire'
+  | '/api/proximity/support-summary'
+  | '/api/proximity/combat-position-stats'
+  | '/api/proximity/classes'
+  | '/api/proximity/reactions';
+
+export const useProxQuality = (d: string | null) => useProxInstrument<ProxQuality>('/api/proximity/quality', d);
+export const useProxSpawnTiming = (d: string | null) => useProxInstrument<ProxSpawnTiming>('/api/proximity/spawn-timing', d);
+export const useProxAimLock = (d: string | null) => useProxInstrument<ProxAimLock>('/api/proximity/aim-lock', d);
+export const useProxCohesion = (d: string | null) => useProxInstrument<ProxCohesion>('/api/proximity/cohesion', d);
+export const useProxCrossfireAngles = (d: string | null) => useProxInstrument<ProxCrossfireAngles>('/api/proximity/crossfire-angles', d);
+export const useProxPushes = (d: string | null) => useProxInstrument<ProxPushes>('/api/proximity/pushes', d);
+export const useProxLuaTrades = (d: string | null) => useProxInstrument<ProxLuaTrades>('/api/proximity/lua-trades', d);
+export const useProxRevives = (d: string | null) => useProxInstrument<ProxRevives>('/api/proximity/revives', d);
+export const useProxFocusFire = (d: string | null) => useProxInstrument<ProxFocusFire>('/api/proximity/focus-fire', d);
+export const useProxSupportSummary = (d: string | null) => useProxInstrument<ProxSupportSummary>('/api/proximity/support-summary', d);
+export const useProxCombatPositions = (d: string | null) => useProxInstrument<ProxCombatPositions>('/api/proximity/combat-position-stats', d);
+export const useProxClasses = (d: string | null) => useProxInstrument<ProxClasses>('/api/proximity/classes', d);
+export const useProxReactions = (d: string | null) => useProxInstrument<ProxReactions>('/api/proximity/reactions', d);
+
+
+/** The dates where the proximity tracker actually captured data — the
+ *  instrument chips' only honest source (the sessions list names parsed
+ *  evenings, and an evening can exist with no telemetry). */
+export function useProxScopes() {
+  return useQuery({
+    queryKey: ['prox-scopes'],
+    queryFn: () => apiGet('/api/proximity/scopes') as Promise<ProxScopes>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5, slice 3 — the competitive section (same scope contract as the
+// instruments: a date or the explicit window, never an implicit unscoped
+// first paint).
+
+type CompPath =
+  | '/api/proximity/competitive/stagger'
+  | '/api/proximity/competitive/first-blood'
+  | '/api/proximity/competitive/personal-bests'
+  | '/api/proximity/competitive/man-advantage'
+  | '/api/proximity/competitive/clutch'
+  | '/api/proximity/competitive/side-splits';
+
+function useCompetitive<T>(path: CompPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-competitive', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export const useCompStagger = (d: string | null) => useCompetitive<CompStagger>('/api/proximity/competitive/stagger', d);
+export const useCompFirstBlood = (d: string | null) => useCompetitive<CompFirstBlood>('/api/proximity/competitive/first-blood', d);
+export const useCompPersonalBests = (d: string | null) => useCompetitive<CompPersonalBests>('/api/proximity/competitive/personal-bests', d);
+export const useCompManAdvantage = (d: string | null) => useCompetitive<CompManAdvantage>('/api/proximity/competitive/man-advantage', d);
+export const useCompClutch = (d: string | null) => useCompetitive<CompClutch>('/api/proximity/competitive/clutch', d);
+export const useCompSideSplits = (d: string | null) => useCompetitive<CompSideSplits>('/api/proximity/competitive/side-splits', d);
+
+/** The v7 capture roadmap — which Lua capabilities are live and how many
+ *  rows each has produced. Global, no scope. */
+export function useV7Status() {
+  return useQuery({
+    queryKey: ['prox-v7-status'],
+    queryFn: () => apiGet('/api/proximity/v7-status') as Promise<V7Status>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5, slice 4 — carrier and objective intel, same scope contract.
+
+type IntelPath =
+  | '/api/proximity/carrier-events'
+  | '/api/proximity/carrier-kills'
+  | '/api/proximity/carrier-returns'
+  | '/api/proximity/vehicle-progress'
+  | '/api/proximity/escort-credits'
+  | '/api/proximity/construction-events'
+  | '/api/proximity/objective-runs'
+  | '/api/proximity/objective-focus';
+
+function useIntel<T>(path: IntelPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-intel', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export const useCarrierEvents = (d: string | null) => useIntel<CarrierEvents>('/api/proximity/carrier-events', d);
+export const useCarrierKills = (d: string | null) => useIntel<CarrierKills>('/api/proximity/carrier-kills', d);
+export const useCarrierReturns = (d: string | null) => useIntel<CarrierReturns>('/api/proximity/carrier-returns', d);
+export const useVehicleProgress = (d: string | null) => useIntel<VehicleProgress>('/api/proximity/vehicle-progress', d);
+export const useEscortCredits = (d: string | null) => useIntel<EscortCredits>('/api/proximity/escort-credits', d);
+export const useConstructionEvents = (d: string | null) => useIntel<ConstructionEvents>('/api/proximity/construction-events', d);
+export const useObjectiveRuns = (d: string | null) => useIntel<ObjectiveRuns>('/api/proximity/objective-runs', d);
+export const useObjectiveFocus = (d: string | null) => useIntel<ObjectiveFocus>('/api/proximity/objective-focus', d);

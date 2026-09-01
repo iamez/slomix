@@ -1,0 +1,188 @@
+{
+ "status": "ok",
+ "summary": {
+  "unique_players": 7,
+  "objectives_tracked": 13,
+  "avg_time_near_obj_s": 43.0,
+  "avg_distance": 1354.0
+ },
+ "players": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "total_time_ms": 810400,
+   "avg_dist": 1294,
+   "objectives_played": 10,
+   "total_samples": 21875,
+   "total_time_s": 810.4
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "total_time_ms": 764800,
+   "avg_dist": 1394,
+   "objectives_played": 11,
+   "total_samples": 21547,
+   "total_time_s": 764.8
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "total_time_ms": 733000,
+   "avg_dist": 1375,
+   "objectives_played": 10,
+   "total_samples": 23803,
+   "total_time_s": 733.0
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "total_time_ms": 646600,
+   "avg_dist": 1454,
+   "objectives_played": 9,
+   "total_samples": 25981,
+   "total_time_s": 646.6
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "total_time_ms": 618400,
+   "avg_dist": 1287,
+   "objectives_played": 10,
+   "total_samples": 25060,
+   "total_time_s": 618.4
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "total_time_ms": 412600,
+   "avg_dist": 1166,
+   "objectives_played": 8,
+   "total_samples": 15775,
+   "total_time_s": 412.6
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "total_time_ms": 401800,
+   "avg_dist": 1688,
+   "objectives_played": 4,
+   "total_samples": 8528,
+   "total_time_s": 401.8
+  }
+ ],
+ "objectives": [
+  {
+   "objective": "jagdpanther",
+   "map_name": "sw_goldrush_te",
+   "players": 5,
+   "avg_time_s": 219.8,
+   "avg_dist": 705
+  },
+  {
+   "objective": "truck_barrier",
+   "map_name": "sw_goldrush_te",
+   "players": 2,
+   "avg_time_s": 170.0,
+   "avg_dist": 709
+  },
+  {
+   "objective": "tank_barrier",
+   "map_name": "sw_goldrush_te",
+   "players": 3,
+   "avg_time_s": 148.7,
+   "avg_dist": 832
+  },
+  {
+   "objective": "command_post",
+   "map_name": "supply",
+   "players": 4,
+   "avg_time_s": 112.3,
+   "avg_dist": 871
+  },
+  {
+   "objective": "health_and_ammo_cabinets",
+   "map_name": "sw_goldrush_te",
+   "players": 2,
+   "avg_time_s": 105.9,
+   "avg_dist": 985
+  },
+  {
+   "objective": "crane_controls",
+   "map_name": "supply",
+   "players": 6,
+   "avg_time_s": 104.4,
+   "avg_dist": 862
+  },
+  {
+   "objective": "axis_gold",
+   "map_name": "etl_sp_delivery",
+   "players": 3,
+   "avg_time_s": 35.7,
+   "avg_dist": 1583
+  },
+  {
+   "objective": "secret_exit",
+   "map_name": "te_escape2",
+   "players": 6,
+   "avg_time_s": 24.1,
+   "avg_dist": 957
+  },
+  {
+   "objective": "command_post",
+   "map_name": "braundorf_b4",
+   "players": 1,
+   "avg_time_s": 22.8,
+   "avg_dist": 1453
+  },
+  {
+   "objective": "command_post",
+   "map_name": "te_escape2",
+   "players": 3,
+   "avg_time_s": 15.8,
+   "avg_dist": 940
+  },
+  {
+   "objective": "health_and_ammo_cabinets",
+   "map_name": "te_escape2",
+   "players": 4,
+   "avg_time_s": 10.3,
+   "avg_dist": 1128
+  },
+  {
+   "objective": "neutral_command_post",
+   "map_name": "erdenberg_t2",
+   "players": 6,
+   "avg_time_s": 7.8,
+   "avg_dist": 2487
+  },
+  {
+   "objective": "documents",
+   "map_name": "etl_adlernest",
+   "players": 3,
+   "avg_time_s": 6.6,
+   "avg_dist": 1474
+  },
+  {
+   "objective": "the_side_gate",
+   "map_name": "braundorf_b4",
+   "players": 5,
+   "avg_time_s": 6.4,
+   "avg_dist": 2264
+  },
+  {
+   "objective": "transmitter",
+   "map_name": "etl_adlernest",
+   "players": 6,
+   "avg_time_s": 6.0,
+   "avg_dist": 1762
+  },
+  {
+   "objective": "getaway_trucks",
+   "map_name": "etl_sp_delivery",
+   "players": 6,
+   "avg_time_s": 6.0,
+   "avg_dist": 1614
+  }
+ ]
+}

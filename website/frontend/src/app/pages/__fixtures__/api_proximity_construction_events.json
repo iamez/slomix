@@ -1,0 +1,270 @@
+{
+ "status": "ok",
+ "engineers": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "total_events": 44,
+   "plants": 17,
+   "defuses": 2,
+   "destructions": 12,
+   "constructions": 13
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "total_events": 38,
+   "plants": 10,
+   "defuses": 4,
+   "destructions": 8,
+   "constructions": 16
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "total_events": 15,
+   "plants": 5,
+   "defuses": 0,
+   "destructions": 5,
+   "constructions": 5
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "total_events": 13,
+   "plants": 7,
+   "defuses": 0,
+   "destructions": 5,
+   "constructions": 1
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "total_events": 7,
+   "plants": 3,
+   "defuses": 0,
+   "destructions": 2,
+   "constructions": 2
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "total_events": 5,
+   "plants": 2,
+   "defuses": 0,
+   "destructions": 2,
+   "constructions": 1
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "total_events": 4,
+   "plants": 2,
+   "defuses": 0,
+   "destructions": 2,
+   "constructions": 0
+  }
+ ],
+ "events": [
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 647125
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "ALLIES",
+   "track_name": "",
+   "map_name": "supply",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 570850
+  },
+  {
+   "event_type": "dynamite_plant",
+   "player_name": "^7K^4a^7Nii^4.^7[D]",
+   "player_team": "ALLIES",
+   "track_name": "the Command Post",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 567275
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^7K^4a^7Nii^4.^7[D]",
+   "player_team": "ALLIES",
+   "track_name": "",
+   "map_name": "supply",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 551150
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^7K^4a^7Nii^4.^7[D]",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 548775
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 494875
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 484050
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^7K^4a^7Nii^4.^7[D]",
+   "player_team": "ALLIES",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 450050
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "et_brewdog",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 416475
+  },
+  {
+   "event_type": "objective_destroyed",
+   "player_name": "^7K^4a^7Nii^4.^7[D]",
+   "player_team": "ALLIES",
+   "track_name": "the Depot Gate",
+   "map_name": "supply",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 406650
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "supply",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 403650
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 402475
+  },
+  {
+   "event_type": "dynamite_plant",
+   "player_name": "^c.^7lgz",
+   "player_team": "ALLIES",
+   "track_name": "Truck Barrier",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 399050
+  },
+  {
+   "event_type": "objective_destroyed",
+   "player_name": "Cru^53^7lzor^5.",
+   "player_team": "ALLIES",
+   "track_name": "the Tunnel Door",
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 395500
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^c.^7lgz",
+   "player_team": "AXIS",
+   "track_name": "",
+   "map_name": "et_brewdog",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 394200
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "bronze",
+   "player_team": "ALLIES",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 392700
+  },
+  {
+   "event_type": "objective_destroyed",
+   "player_name": "^c.^7lgz",
+   "player_team": "ALLIES",
+   "track_name": "the Main Gate!",
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 390125
+  },
+  {
+   "event_type": "dynamite_defuse",
+   "player_name": "^c.^7lgz",
+   "player_team": "ALLIES",
+   "track_name": "the Command Post",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 386575
+  },
+  {
+   "event_type": "dynamite_plant",
+   "player_name": "^7K^4a^7Nii^4.^7[D]",
+   "player_team": "ALLIES",
+   "track_name": "the Depot Gate",
+   "map_name": "supply",
+   "session_date": "2026-08-31",
+   "round_number": 1,
+   "event_time": 376675
+  },
+  {
+   "event_type": "construction_complete",
+   "player_name": "^6S^2uper^6B^2oyy",
+   "player_team": "ALLIES",
+   "track_name": "",
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31",
+   "round_number": 2,
+   "event_time": 369625
+  }
+ ]
+}

@@ -1,0 +1,68 @@
+{
+ "status": "ok",
+ "escorts": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7K^4a^7Nii^4.^7[D]",
+   "total_credit_distance": 6363,
+   "total_mounted_ms": 11000,
+   "total_proximity_ms": 82500,
+   "total_escort_distance": 11431,
+   "total_samples": 187
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "total_credit_distance": 4105,
+   "total_mounted_ms": 8500,
+   "total_proximity_ms": 68000,
+   "total_escort_distance": 8496,
+   "total_samples": 153
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "total_credit_distance": 4011,
+   "total_mounted_ms": 0,
+   "total_proximity_ms": 75000,
+   "total_escort_distance": 10146,
+   "total_samples": 150
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "total_credit_distance": 2416,
+   "total_mounted_ms": 0,
+   "total_proximity_ms": 53000,
+   "total_escort_distance": 6467,
+   "total_samples": 106
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "total_credit_distance": 1771,
+   "total_mounted_ms": 3000,
+   "total_proximity_ms": 44500,
+   "total_escort_distance": 3823,
+   "total_samples": 95
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "total_credit_distance": 1745,
+   "total_mounted_ms": 0,
+   "total_proximity_ms": 31000,
+   "total_escort_distance": 4273,
+   "total_samples": 62
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "total_credit_distance": 1609,
+   "total_mounted_ms": 37000,
+   "total_proximity_ms": 37000,
+   "total_escort_distance": 3018,
+   "total_samples": 148
+  }
+ ]
+}

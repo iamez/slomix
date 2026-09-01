@@ -1,0 +1,103 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "total_opportunities": 277,
+ "executed": 73,
+ "utilization_rate_pct": 26.4,
+ "avg_angle": 91.8,
+ "avg_damage": 67,
+ "angle_buckets": [
+  {
+   "bucket": "narrow (< 60)",
+   "count": 75,
+   "executed": 15
+  },
+  {
+   "bucket": "medium (60-90)",
+   "count": 87,
+   "executed": 22
+  },
+  {
+   "bucket": "wide (90-120)",
+   "count": 45,
+   "executed": 12
+  },
+  {
+   "bucket": "flanking (120+)",
+   "count": 70,
+   "executed": 24
+  }
+ ],
+ "top_duos": [
+  {
+   "teammate1_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "teammate2_guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "^7kan^6i^7i",
+   "partner_name": "bronze",
+   "executions": 15,
+   "avg_angle": 95.1
+  },
+  {
+   "teammate1_guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "teammate2_guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^c.^7lgz",
+   "partner_name": "^1.^7olz",
+   "executions": 15,
+   "avg_angle": 95.1
+  },
+  {
+   "teammate1_guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "teammate2_guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "^pvid",
+   "partner_name": "bronze",
+   "executions": 12,
+   "avg_angle": 74.8
+  },
+  {
+   "teammate1_guid": "5D9891600C7948FF85709360E669D5A4",
+   "teammate2_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^1.^7olz",
+   "partner_name": "^6S^2uper^6B^2oyy",
+   "executions": 11,
+   "avg_angle": 138.8
+  },
+  {
+   "teammate1_guid": "5D9891600C7948FF85709360E669D5A4",
+   "teammate2_guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "^1.^7olz",
+   "partner_name": "Cru^53^7lzor^5.",
+   "executions": 8,
+   "avg_angle": 95.5
+  },
+  {
+   "teammate1_guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "teammate2_guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "^c.^7lgz",
+   "partner_name": "Cru^53^7lzor^5.",
+   "executions": 8,
+   "avg_angle": 104.1
+  },
+  {
+   "teammate1_guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "teammate2_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^c.^7lgz",
+   "partner_name": "^6S^2uper^6B^2oyy",
+   "executions": 2,
+   "avg_angle": 82.5
+  },
+  {
+   "teammate1_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "teammate2_guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^7kan^6i^7i",
+   "partner_name": "^pvid",
+   "executions": 2,
+   "avg_angle": 98.3
+  }
+ ]
+}

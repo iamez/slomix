@@ -1,0 +1,168 @@
+{
+ "status": "ok",
+ "ready": true,
+ "message": null,
+ "range_days": 30,
+ "generated_at": "2026-09-01T06:53:31.611361Z",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "limit": 5,
+ "return_fire": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7K^4a^7Nii^4.^7[D]",
+   "player_class": "FIELDOPS",
+   "reaction_ms": 125,
+   "samples": 2
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "player_class": "FIELDOPS",
+   "reaction_ms": 275,
+   "samples": 1
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "player_class": "ENGINEER",
+   "reaction_ms": 375,
+   "samples": 5
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "player_class": "ENGINEER",
+   "reaction_ms": 404,
+   "samples": 7
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "player_class": "MEDIC",
+   "reaction_ms": 466,
+   "samples": 238
+  }
+ ],
+ "dodge": [
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "player_class": "FIELDOPS",
+   "reaction_ms": 600,
+   "samples": 2
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "player_class": "COVERTOPS",
+   "reaction_ms": 600,
+   "samples": 1
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "player_class": "FIELDOPS",
+   "reaction_ms": 675,
+   "samples": 2
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "player_class": "FIELDOPS",
+   "reaction_ms": 933,
+   "samples": 3
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "player_class": "COVERTOPS",
+   "reaction_ms": 943,
+   "samples": 7
+  }
+ ],
+ "support": [
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "player_class": "COVERTOPS",
+   "reaction_ms": 75,
+   "samples": 1
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "player_class": "COVERTOPS",
+   "reaction_ms": 450,
+   "samples": 1
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "player_class": "ENGINEER",
+   "reaction_ms": 742,
+   "samples": 3
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "player_class": "ENGINEER",
+   "reaction_ms": 1034,
+   "samples": 11
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "player_class": "FIELDOPS",
+   "reaction_ms": 1180,
+   "samples": 10
+  }
+ ],
+ "class_summary": [
+  {
+   "player_class": "MEDIC",
+   "events": 2235,
+   "return_samples": 1176,
+   "avg_return_fire_ms": 609,
+   "dodge_samples": 1678,
+   "avg_dodge_reaction_ms": 1323,
+   "support_samples": 617,
+   "avg_support_reaction_ms": 1811
+  },
+  {
+   "player_class": "ENGINEER",
+   "events": 432,
+   "return_samples": 135,
+   "avg_return_fire_ms": 686,
+   "dodge_samples": 236,
+   "avg_dodge_reaction_ms": 1416,
+   "support_samples": 109,
+   "avg_support_reaction_ms": 1538
+  },
+  {
+   "player_class": "FIELDOPS",
+   "events": 53,
+   "return_samples": 20,
+   "avg_return_fire_ms": 914,
+   "dodge_samples": 34,
+   "avg_dodge_reaction_ms": 1262,
+   "support_samples": 16,
+   "avg_support_reaction_ms": 2042
+  },
+  {
+   "player_class": "COVERTOPS",
+   "events": 46,
+   "return_samples": 12,
+   "avg_return_fire_ms": 1265,
+   "dodge_samples": 23,
+   "avg_dodge_reaction_ms": 1293,
+   "support_samples": 13,
+   "avg_support_reaction_ms": 1644
+  }
+ ]
+}
