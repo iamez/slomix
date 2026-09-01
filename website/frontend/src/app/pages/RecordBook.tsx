@@ -335,6 +335,10 @@ function SeasonTab() {
   const season = useSeasonCurrent();
   const leaders = useSeasonLeaders();
   const lead = leaders.data?.leaders;
+  // #862's contract, same as Home's SeasonBlock: a null category NAMED in
+  // failed_metrics is a failed query, not an empty board — filtering it
+  // away here read as "nobody led" (Copilot on #869, the second consumer).
+  const failedLeaders = new Set(leaders.data?.status === 'partial' ? leaders.data.failed_metrics : []);
   return (
     <div data-parity="record-book.season">
       {season.isPending && <Pending label="season" />}
@@ -356,17 +360,23 @@ function SeasonTab() {
       {leaders.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="leaders" /></div>}
       {lead && (
         <div style={{ marginTop: 'var(--space-2)' }}>
-          {LEADER_LABELS.filter(([key]) => lead[key] != null).map(([key, label]) => {
+          {LEADER_LABELS.filter(([key]) => lead[key] != null || failedLeaders.has(key)).map(([key, label]) => {
             const row = lead[key];
             return (
               <div key={key} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '140px minmax(0,1fr) auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
                 <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{label}</Lbl>
-                <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
-                <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
+                {row != null ? (
+                  <>
+                    <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
+                    <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row.value)}</span>
+                  </>
+                ) : (
+                  <Unavailable what={label} />
+                )}
               </div>
             );
           })}
-          {LEADER_LABELS.every(([key]) => lead[key] == null) && (
+          {LEADER_LABELS.every(([key]) => lead[key] == null && !failedLeaders.has(key)) && (
             <Absent block style={{ marginTop: 'var(--space-2)' }} reason="no leaders yet" />
           )}
         </div>
