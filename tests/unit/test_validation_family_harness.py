@@ -27,6 +27,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from validation_family import (  # noqa: E402 - path set above
+    DEFAULT_FAMILY,
+    ESTIMATORS,
+    ROWS_SQL,
     Candidate,
     Family,
     _Rng,
@@ -37,10 +40,13 @@ from validation_family import (  # noqa: E402 - path set above
     chronological_split,
     detectable_effect,
     holm,
+    instrument_check,
+    manifest_gate,
     margin_agreement,
     max_t_intervals,
     outcome_seconds,
     outcome_win,
+    preregister,
     within_round_point_biserial,
     within_round_spread,
 )
@@ -445,8 +451,15 @@ class TestTheSecondCodexRound:
             sys.path.remove(str(tmp_path))
             sys.modules.pop("vf_mutant", None)
         moved = [cid for cid in before if before[cid] != after[cid]]
-        assert moved == ["dpm"], (
-            f"changing _minutes moved {moved}; it must move exactly dpm")
+        # ⚠️ BOTH members carrying that formula, one per estimator. This read
+        # `== ["dpm"]` until the point-biserial variants were registered; the
+        # formula is the SAME object in both, so a helper change must move both
+        # fingerprints or one of them would keep claiming the old experiment.
+        # Widened by naming the second member, not by relaxing to a subset —
+        # `in moved` would also pass if the fingerprint covered the whole family.
+        assert moved == ["dpm", "dpm@pb"], (
+            f"changing _minutes moved {moved}; it must move exactly the two "
+            f"members whose formula it is")
 
     def test_p_value_ignores_unmeasurable_replicates(self):
         """max_t_intervals supports gaps, so the p-value must not crash on them
@@ -548,3 +561,390 @@ class TestNothingMeasuredIsNotACleanRun:
         assert "null" not in intervals, (
             "an unmeasurable null would still be reported FAILS — "
             "indistinguishable from a correctly rejected one")
+
+
+NAN = float("nan")
+
+
+def _row(cid, verdict, lo, hi, confirmation=0.0):
+    """One `results` row in the shape `report()` emits."""
+    return {"id": cid, "discovery": confirmation, "confirmation": confirmation,
+            "interval": [lo, hi], "margin_sd": 0.01, "holm_p": 0.5,
+            "verdict": verdict}
+
+
+def _kpr_ok():
+    """A calibration row inside the #556 range, so `kpr` never decides these."""
+    return _row("kpr", "FAILS", 0.01, 0.05, confirmation=0.028)
+
+
+class TestTheNullControlMustHaveBeenMEASURED:
+    """⛔ `FAILS` IS A LABEL, NOT A MEASUREMENT.
+
+    `null` is pure noise by construction, so a run is only trustworthy if the
+    harness looked at it and rejected it. But a candidate with no usable
+    bootstrap spread is ALSO labelled `FAILS` — `report()` says so itself:
+    "unmeasured, which is not the same as measured-and-clear".
+
+    The family-wide guard above only fires when NOTHING was measurable. So the
+    hole is precise: measure any OTHER candidate, leave `null` unmeasurable, and
+    the run prints `null FAILS ok` and exits 0 with the structural control never
+    actually tested. Codex on #818.
+    """
+
+    def _family(self, outcome="win"):
+        return Family(name="t", candidates=[Candidate("x", "d", "higher_is_better", _metric)],
+                      filters="WHERE 1=1", outcome=outcome)
+
+    def test_an_unmeasurable_null_is_not_a_null_that_failed(self):
+        # `real` carries a usable interval, so the family-wide "nothing was
+        # measurable" guard stays quiet — which is exactly the state that hid this.
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok(),
+                   _row("null", "FAILS", NAN, NAN)]
+        assert instrument_check(self._family(), results) is True
+
+    def test_too_few_usable_replicates_reach_the_check_as_a_nan_PAIR(self):
+        """Why reading only `interval[0]` is enough — pinned, not assumed.
+
+        ⚠️ My first version of this test fabricated a one-sided `[-0.05, nan]`
+        row, on the theory that `measured` inspects only the low end and would
+        wave it through. That state is UNREACHABLE: `max_t_intervals()` returns
+        no entry at all for a candidate without a usable spread, and `report()`
+        then writes `lo = hi = nan` together. Asserting on an impossible input
+        would have been a test that can never fire in the direction that matters.
+
+        So the honest thing to pin is the invariant the shortcut rests on: too
+        few usable replicates produce NO interval, which is what makes both ends
+        nan and one end sufficient to detect it.
+        """
+        boot = {"null": [0.1] + [None] * 40}     # 1 usable replicate
+        point = {"null": 0.1}
+        intervals, crit, sds = max_t_intervals(boot, point, alpha=0.05)
+        assert intervals == {}, "an unusable bootstrap must yield NO interval"
+        assert math.isnan(crit)
+
+    def test_a_MEASURED_null_that_failed_is_the_healthy_run(self):
+        # CONTROL. Without this the fix could pass by calling every null broken,
+        # which would refuse every valid run instead of the dishonest ones.
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok(),
+                   _row("null", "FAILS", -0.04, 0.03)]
+        assert instrument_check(self._family(), results) is False
+
+    def test_noise_that_ships_is_still_broken(self):
+        # CONTROL for the check that already existed: it must not be lost.
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok(),
+                   _row("null", "SHIPS", 0.20, 0.40)]
+        assert instrument_check(self._family(), results) is True
+
+    def test_a_missing_null_is_still_broken(self):
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok()]
+        assert instrument_check(self._family(), results) is True
+
+    def test_a_family_where_nothing_was_measurable_is_still_broken(self):
+        # CONTROL for the family-wide guard, so the new one cannot replace it.
+        # ⚠️ Every row must be unmeasurable INCLUDING kpr — my first version of
+        # this test left kpr a usable interval, so `measured` was non-empty and
+        # the family-wide guard had no reason to fire. The test was wrong, not
+        # the guard: a fixture that cannot reach the branch proves nothing.
+        results = [_row("real", "FAILS", NAN, NAN),
+                   _row("kpr", "FAILS", NAN, NAN, confirmation=0.028),
+                   _row("null", "FAILS", NAN, NAN)]
+        assert instrument_check(self._family(), results) is True
+
+
+class TestThePreregistrationIsAnArtifactNotAPromise:
+    """⛔ A HOLDOUT THAT HAS BEEN LOOKED AT IS NOT A HOLDOUT — AND NEITHER IS
+    ONE WHOSE TERMS WERE NEVER WRITTEN DOWN.
+
+    Without a cutoff the run stops rather than opening the confirmation half.
+    That half was right and the reason is in the source. But it printed only the
+    proposed timestamp: `manifest_hash()` and `frozen()` are reachable solely
+    from `report()`, which runs AFTER confirmation is analysed. So nothing
+    committed the candidates, formulas, filters, seed, resamples and cutoff
+    BEFORE the rerun opened the holdout, and any change made between the two
+    runs was undetectable — the freeze was a promise, not an artifact.
+
+    Codex on #818. What makes it real is that the preregistered hash must equal
+    the hash the rerun computes, or the artifact commits to nothing.
+    """
+
+    def _family(self, **kw):
+        return Family(name="t", candidates=[Candidate("x", "d", "higher_is_better", _metric)],
+                      filters="WHERE 1=1", **kw)
+
+    def test_the_preregistered_hash_is_the_one_the_rerun_will_compute(self):
+        proposed = "2026-08-26 21:00:00"
+        pre = preregister(self._family(), proposed)
+        rerun = self._family(frozen_cutoff=proposed)
+        assert pre["manifest_sha256"] == rerun.manifest_hash()
+
+    def test_the_artifact_carries_the_terms_not_only_the_digest(self):
+        # §8.5: a one-way digest nobody can expand is not a published manifest.
+        pre = preregister(self._family(), "2026-08-26 21:00:00")
+        assert pre["manifest"]["frozen_cutoff"] == "2026-08-26 21:00:00"
+        for key in ("candidates", "filters", "outcome", "seed", "resamples",
+                    "alpha", "split_fraction", "protocol_fingerprint"):
+            assert key in pre["manifest"], key
+
+    def test_changing_a_knob_after_preregistering_breaks_the_match(self):
+        # CONTROL — without this the test above would pass on a constant.
+        proposed = "2026-08-26 21:00:00"
+        pre = preregister(self._family(), proposed)
+        assert pre["manifest_sha256"] != self._family(
+            frozen_cutoff=proposed, seed=999).manifest_hash()
+
+    def test_a_different_cutoff_is_a_different_freeze(self):
+        # CONTROL — the cutoff must be INSIDE the hashed terms, not beside them.
+        a = preregister(self._family(), "2026-08-26 21:00:00")
+        b = preregister(self._family(), "2026-08-27 21:00:00")
+        assert a["manifest_sha256"] != b["manifest_sha256"]
+
+
+def _sql_without_comments(sql: str) -> str:
+    """SQL with `--` comments removed and whitespace flattened.
+
+    ⛔ Load-bearing. A guard that greps the raw source finds the clause in the
+    COMMENT that explains it and passes while the query says something else
+    entirely — the failure mode that let a test agree with its own docstring
+    twice before. The comments above the gate name the canonical module by
+    name, so this is not hypothetical here.
+    """
+    lines = [ln.split("--")[0] for ln in sql.splitlines()]
+    return " ".join(" ".join(lines).split())
+
+
+class TestThePopulationIsTheCanonicalOne:
+    """⛔ `is_valid` IS NOT THE ROUND GATE.
+
+    The repository's canonical gate also excludes rounds whose `round_status`
+    says they did not count. Without it, cancelled and orphan_r2 rounds enter
+    the eligible universe with `is_valid` still true, and from there the
+    chronological split, every point estimate and every bootstrap replicate.
+
+    Measured on this corpus when the gate was added: 148 of 2041 rounds (7.3%)
+    left the full universe — but only 1 of 867 left the SPATIAL one, and no
+    block changed places. So this corrects the population without overturning
+    the Layer 4 numbers, which is worth stating in both directions.
+
+    Codex on #818.
+    """
+
+    def test_the_round_gate_is_the_canonical_one(self):
+        from website.backend.services.session_scope import _ROUND_GATE_SQL
+        clause = _ROUND_GATE_SQL.split("AND ", 2)[2]          # the round_status half
+        assert "round_status" in clause                        # the split found it
+        want = " ".join(clause.replace("round_status", "r.round_status").split())
+        assert want in _sql_without_comments(ROWS_SQL)
+
+    def test_the_guard_would_notice_a_drifted_copy(self):
+        # CONTROL. Without this, `want in sql` could pass on any substring and
+        # the test would agree with anything.
+        drifted = "(r.round_status IN ('completed') OR r.round_status IS NULL)"
+        assert drifted not in _sql_without_comments(ROWS_SQL)
+
+    def test_a_comment_alone_would_not_satisfy_it(self):
+        # CONTROL for the stripper itself: the phrase inside a comment must not
+        # count as the query saying it.
+        assert "cancelled" in ROWS_SQL                          # it is in a comment
+        assert "cancelled" not in _sql_without_comments(ROWS_SQL)
+
+
+class TestTheSplitRunsOnMatchTime:
+    """⛔ `created_at` IS WHEN THE ROW WAS WRITTEN, NOT WHEN THE MATCH HAPPENED.
+
+    It defaults to CURRENT_TIMESTAMP and one importer writes `datetime.now()`,
+    so a historical import or a repair lands among the NEWEST confirmation
+    blocks and the holdout stops being chronological in the data-generating
+    process. Codex on #818.
+    """
+
+    def test_the_ordering_column_is_the_matchs_own_clock(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert ("(r.round_date || ' ' || lpad(regexp_replace(r.round_time, "
+                "'^([0-9]{2}):([0-9]{2}):([0-9]{2})$', '\\1\\2\\3'), 6, '0'))"
+                "::timestamp AS at") in sql
+        # ⛔ ZERO-FILLED, not raw. `round_time` can lose its leading zeros for a
+        # round just after midnight, and measured against Postgres both failure
+        # modes are real: `'2026-06-11 4918'` parses SILENTLY as
+        # `2026-06-13 01:18:00` (two days off, across the split), while `918`
+        # and `12345` raise and abort the query.
+        assert "|| r.round_time)" not in sql, "the raw value is being cast again"
+        # ⛔ AND the colon form is folded, not truncated: `lpad('23:41:53',6,'0')`
+        # is `'23:41:'`, which is how the same helper 500s a session endpoint.
+        assert "regexp_replace(r.round_time" in sql
+
+    def test_a_round_time_that_cannot_be_read_is_excluded_not_guessed(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "r.round_time ~ '^[0-9]{1,6}$'" in sql
+        # Both supported shapes are admitted; the importer accepts each, so
+        # excluding one would silently shrink the universe instead of ordering it.
+        assert "r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$'" in sql
+
+    def test_the_pairing_cte_carries_the_same_round_gate(self):
+        """⛔ Gating only the outer SELECT removes a cancelled round's PLAYER
+        rows while the pairing CTE still lets it pair — its duration, winner and
+        defender then ride onto the retained half, and the mutual-choice logic
+        lets it DISPLACE a valid pairing."""
+        sql = _sql_without_comments(ROWS_SQL)
+        for alias in ("r1", "r2"):
+            assert (f"({alias}.round_status IN ('completed', 'substitution') "
+                    f"OR {alias}.round_status IS NULL)") in sql, alias
+
+    def test_ingestion_time_no_longer_labels_a_row_as_its_time(self):
+        assert "r.created_at                      AS at" not in ROWS_SQL
+
+    def test_the_pairing_window_is_deliberately_left_on_ingestion_time(self):
+        """⚠️ SCOPE, RECORDED SO IT IS NOT MISTAKEN FOR AN OVERSIGHT.
+
+        The R1/R2 pairing window still uses `created_at`. Switching it too is a
+        separate, larger decision: measured, 761 pairs have gaps that differ by
+        more than a minute between the two clocks, so it would change WHICH
+        rounds pair — a different question from which blocks are newest.
+        """
+        assert "r2.created_at - r1.created_at AS gap" in ROWS_SQL
+
+    def test_the_two_clocks_are_not_mixed(self):
+        # ⛔ round_start_unix and round_date/round_time run 61-136 minutes apart
+        # (median 125). COALESCEing them would scramble the ordering exactly at
+        # the split boundary, which is the one place it must not be scrambled.
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "round_start_unix" not in sql
+
+
+class TestBothEstimatorsAreInTheFrozenFamily:
+    """⛔ THE HOLDOUT WAS SPENT ON A CANDIDATE THAT WAS NEVER DECLARED.
+
+    `within_round_point_biserial()` records in its own docstring that it was
+    measured on 2026-08-26 with 600 block resamples ON THE CONFIRMATION HALF,
+    for kpr, kd_ratio, dpm and dmg_ratio. But `analyse()` only ever evaluated
+    `within_round_spread`, so the continuous estimator appeared in no manifest,
+    no max-T family and no results table.
+
+    That understates multiplicity twice over: the family-wise critical value was
+    computed across half the members actually tried, and the confirmation data
+    was consumed comparing an undeclared variant. `block_bootstrap()` even takes
+    an `estimator` argument — nothing ever passed one. A mechanism with no
+    caller, which is the shape of every other defect found this week.
+
+    Codex on #818. The owner's call (2026-09-01) was to register the estimator
+    and re-freeze on a NEW cutoff rather than publish the old run as confirmed.
+    """
+
+    def test_the_registry_names_both_estimators(self):
+        assert set(ESTIMATORS) == {"median_split", "point_biserial"}
+        assert ESTIMATORS["median_split"] is within_round_spread
+        assert ESTIMATORS["point_biserial"] is within_round_point_biserial
+
+    def test_the_default_family_declares_the_variant_that_was_run(self):
+        by_est = {}
+        for c in DEFAULT_FAMILY:
+            by_est.setdefault(c.estimator, set()).add(c.cid)
+        assert "point_biserial" in by_est, (
+            "the continuous estimator was run on the confirmation half and must "
+            "be declared, or the holdout was spent on an undeclared variant")
+        # the four it was actually measured on, per its own docstring
+        for base in ("kpr", "kd_ratio", "dpm", "dmg_ratio"):
+            assert any(c.cid.startswith(base) and c.estimator == "point_biserial"
+                       for c in DEFAULT_FAMILY), base
+
+    def test_every_estimator_carries_its_own_noise_control(self):
+        """A family member with no control is a member nobody can falsify.
+
+        The structural `null` control says the harness rejects pure noise. It
+        says that about the estimator it was run under and no other, so adding a
+        second estimator without a second control would leave half the family
+        unchecked — and would quietly weaken the check fixed one commit ago.
+        """
+        controls = {c.estimator for c in DEFAULT_FAMILY if c.cid.startswith("null")}
+        used = {c.estimator for c in DEFAULT_FAMILY}
+        assert controls == used, f"estimators without a null control: {used - controls}"
+
+    def test_the_manifest_tells_the_two_variants_apart(self):
+        """CONTROL. Same formula, different estimator — the frozen entry must
+        differ, or two materially different experiments hash the same."""
+        a = Candidate("m", "d", "higher_is_better", _metric)
+        b = Candidate("m", "d", "higher_is_better", _metric,
+                      estimator="point_biserial")
+        assert a.manifest_entry() != b.manifest_entry()
+        fam = lambda c: Family(name="t", candidates=[c], filters="f")  # noqa: E731
+        assert fam(a).manifest_hash() != fam(b).manifest_hash()
+
+    def test_analyse_evaluates_each_candidate_with_ITS_estimator(self):
+        blocks = {}
+        for b in range(12):
+            winner = 1 if b % 3 else 2
+            blocks[b] = {b: _round([(9, 1), (8, 1), (2, 2), (1, 2)], winner)}
+        fam = Family(name="t", filters="f", resamples=120, seed=99, candidates=[
+            Candidate("ms", "d", "higher_is_better", _metric),
+            Candidate("pb", "d", "higher_is_better", _metric,
+                      estimator="point_biserial"),
+        ])
+        out = analyse(blocks, set(blocks), fam)
+        assert out["point"]["ms"] != out["point"]["pb"], (
+            "both members produced the same point estimate — the declared "
+            "estimator is being ignored, which is the whole defect")
+        assert out["boot"]["ms"] != out["boot"]["pb"]
+
+
+class TestTheRerunHasToCheckTheFreeze:
+    """⛔ A DIGEST THAT NOBODY COMPARES IS A DIGEST THAT BINDS NOTHING.
+
+    The preregistration prints a manifest sha256 before the holdout opens. The
+    confirmation run used to print its OWN freshly computed digest and nothing
+    else — so a formula, a filter, the seed, the resample count or a line of
+    this module could move between the two, and the verdicts would be published
+    under a freeze nobody registered. The mismatch was visible only to an
+    operator comparing two hex strings by eye. Codex on #818.
+    """
+
+    H = "a" * 64
+
+    def test_a_matching_digest_lets_the_run_proceed(self):
+        assert manifest_gate(self.H, self.H, "2026-07-15 21:22:15") is None
+
+    def test_whitespace_and_case_are_not_a_mismatch(self):
+        # CONTROL: a digest copied out of terminal output must not be refused
+        # for being upper-case or having a trailing newline.
+        assert manifest_gate(f"  {self.H.upper()}\n", self.H, "x") is None
+
+    def test_a_different_digest_refuses_before_the_holdout_opens(self):
+        gate = manifest_gate("b" * 64, self.H, "x")
+        assert gate is not None
+        code, msg = gate
+        assert code == 6
+        assert "MISMATCH" in msg
+        assert self.H in msg and "b" * 64 in msg, "the message must show BOTH"
+
+    def test_no_digest_at_all_is_also_a_refusal(self):
+        """⛔ Not a warning. An unregistered freeze and a broken one are the
+        same amount of evidence, and continuing would open the holdout to find
+        out."""
+        for empty in (None, "", "   "):
+            gate = manifest_gate(empty, self.H, "2026-07-15 21:22:15")
+            assert gate is not None, empty
+            assert gate[0] == 5
+            assert "--expect-manifest" in gate[1]
+            assert self.H in gate[1], "the message must print the digest to use"
+
+
+class TestTheInstrumentSaysWHICHWayItIsBroken:
+    def _note(self, capsys, results):
+        family = Family(name="t", filters="f", candidates=[
+            Candidate("null", "d", "higher_is_better", _metric)])
+        instrument_check(family, results)
+        return capsys.readouterr().out
+
+    def test_an_absent_control_does_not_report_shipped_noise(self, capsys):
+        """⚠️ The instrument IS broken when the control is missing — but not
+        because noise shipped. Printing the wrong reason sends the reader
+        looking for a verdict that is not in the table at all."""
+        out = self._note(capsys, [_row("real", "SHIPS", 0.2, 0.4), _kpr_ok()])
+        assert "ABSENT" in out
+        assert "NOISE SHIPPED" not in out
+
+    def test_shipped_noise_still_says_so(self, capsys):
+        # CONTROL: the new branch must not swallow the original one.
+        out = self._note(capsys, [_row("real", "SHIPS", 0.2, 0.4), _kpr_ok(),
+                                  _row("null", "SHIPS", 0.2, 0.4)])
+        assert "NOISE SHIPPED" in out
+        assert "ABSENT" not in out
