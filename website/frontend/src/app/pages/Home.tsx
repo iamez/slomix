@@ -295,13 +295,22 @@ function SeasonBlock() {
   const done = Date.now() - Date.parse(s.start_date);
   const pct = total > 0 ? Math.min(100, Math.max(0, (done / total) * 100)) : 0;
   const totals = summary.data?.totals;
+  // #862's contract, same as StandingFigures: when status is partial,
+  // failed_metrics NAMES what is missing and its zero is an
+  // initialization, never a measurement — render the dash, not the zero.
+  const failedTotals = new Set(summary.data?.status === 'partial' ? summary.data.failed_metrics : []);
+  // The WIRE's metric names, read from the emitter, not guessed: the first
+  // version keyed on 'kills' while the backend appends 'kills_total' — a
+  // partial season would have rendered its failures as real zeros
+  // (Copilot on #869, both threads).
+  const seasonFig = (wireKey: string, v: number) => (failedTotals.has(wireKey) ? '—' : figure(v));
   const seasonFigures = totals
     ? [
-        { k: 'players', v: figure(totals.players) },
-        { k: 'rounds', v: figure(totals.rounds) },
-        { k: 'maps', v: figure(totals.maps) },
-        { k: 'sessions', v: figure(totals.sessions) },
-        { k: 'kills', v: figure(totals.kills) },
+        { k: 'players', v: seasonFig('players_count', totals.players) },
+        { k: 'rounds', v: seasonFig('rounds_count', totals.rounds) },
+        { k: 'maps', v: seasonFig('maps_count', totals.maps) },
+        { k: 'sessions', v: seasonFig('sessions_count', totals.sessions) },
+        { k: 'kills', v: seasonFig('kills_total', totals.kills) },
         {
           // {name: null, plays: 0} is the endpoint's EMPTY season shape —
           // the object is truthy, the name is the gate (Codex wave 3).
@@ -311,11 +320,15 @@ function SeasonBlock() {
       ]
     : [];
   const lead = leaders.data?.leaders;
+  // A missing category can be a FAILED query, not an empty board — the
+  // wire names them since #862, and a filtered-away row must not read as
+  // "nobody led" (the absence-is-not-agreement class).
+  const failedLeaders = new Set(leaders.data?.status === 'partial' ? leaders.data.failed_metrics : []);
   const leaderRows = [
     { k: 'kills', row: lead?.kills },
     { k: 'dpm', row: lead?.dpm },
     { k: 'xp', row: lead?.xp },
-  ].filter((r) => r.row != null);
+  ].filter((r) => r.row != null || failedLeaders.has(r.k));
   // An empty activity object is the endpoint's failure shape inside a 200
   // (and a 90-day window with zero active days does not happen in this
   // dataset) — no line beats a false 'active on 0 days' (Codex wave 3).
@@ -353,8 +366,17 @@ function SeasonBlock() {
           {leaderRows.map(({ k, row }) => (
             <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
-              <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row?.player}</span>
-              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row?.value ?? 0)}</span>
+              {row != null ? (
+                <>
+                  <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row.value)}</span>
+                </>
+              ) : (
+                // Kept by failed_metrics: the query for THIS category
+                // failed — a board with the row silently gone would read
+                // as "nobody led" (#862).
+                <Unavailable what={k} />
+              )}
             </div>
           ))}
         </div>

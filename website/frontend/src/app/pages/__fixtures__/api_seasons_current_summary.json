@@ -1,1 +1,21 @@
-{"season_id":"2026-Q3","start_date":"2026-07-01","end_date":"2026-09-30","totals":{"rounds":295,"players":15,"sessions":20,"maps":10,"kills":14935,"active_days":0,"avg_rounds_per_day":0},"top_map":{"name":"te_escape2","plays":133}}
+{
+ "season_id": "2026-Q3",
+ "start_date": "2026-07-01",
+ "end_date": "2026-09-30",
+ "totals": {
+  "rounds": 336,
+  "players": 15,
+  "sessions": 22,
+  "maps": 10,
+  "kills": 17522,
+  "active_days": 26,
+  "avg_rounds_per_day": 12.9
+ },
+ "top_map": {
+  "name": "te_escape2",
+  "plays": 159
+ },
+ "status": "ok",
+ "note": null,
+ "failed_metrics": []
+}
