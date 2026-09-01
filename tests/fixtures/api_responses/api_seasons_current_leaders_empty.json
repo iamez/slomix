@@ -15,5 +15,8 @@
     "time_alive": null,
     "time_dead": null,
     "longest_session": null
-  }
+  },
+  "status": "ok",
+  "note": null,
+  "failed_metrics": []
 }

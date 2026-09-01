@@ -357,7 +357,20 @@ async def get_records(
         if isinstance(outcome, BaseException) and not isinstance(outcome, Exception):
             raise outcome
         if isinstance(outcome, Exception):
-            # Match prior behavior: exception falls back to []
+            # ⛔ `[]` MEANS FAILED HERE, AND AN ABSENT KEY MEANS GENUINELY EMPTY.
+            # That is backwards from what any reader would guess, and it was an
+            # ACCIDENT: the success path below omits the key when there are no
+            # rows (`if rows:`), while this path sets it. The distinction is
+            # real and it is the only failure signal this endpoint has, so it is
+            # pinned by a test rather than left to be "tidied" into agreement.
+            #
+            # ⚠️ It is NOT fixed by adding a `status` field, which is what every
+            # other endpoint in this family got. `StatsRecords` is declared on
+            # the client as `export type StatsRecords = Record<string,
+            # RecordEntry[]>` — a type ALIAS whose values are all arrays — so a
+            # string field here breaks the SPA type. Changing the wire needs
+            # both sides moved together; until then, this comment and its test
+            # are the contract.
             logger.error(f"Error fetching record for {key}: {outcome}")
             results[key] = []
             continue
