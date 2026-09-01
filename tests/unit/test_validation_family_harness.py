@@ -760,17 +760,25 @@ class TestTheSplitRunsOnMatchTime:
 
     def test_the_ordering_column_is_the_matchs_own_clock(self):
         sql = _sql_without_comments(ROWS_SQL)
-        assert ("(r.round_date || ' ' || lpad(r.round_time, 6, '0'))::timestamp "
-                "AS at") in sql
+        assert ("(r.round_date || ' ' || lpad(regexp_replace(r.round_time, "
+                "'^([0-9]{2}):([0-9]{2}):([0-9]{2})$', '\\1\\2\\3'), 6, '0'))"
+                "::timestamp AS at") in sql
         # ⛔ ZERO-FILLED, not raw. `round_time` can lose its leading zeros for a
         # round just after midnight, and measured against Postgres both failure
         # modes are real: `'2026-06-11 4918'` parses SILENTLY as
         # `2026-06-13 01:18:00` (two days off, across the split), while `918`
         # and `12345` raise and abort the query.
         assert "|| r.round_time)" not in sql, "the raw value is being cast again"
+        # ⛔ AND the colon form is folded, not truncated: `lpad('23:41:53',6,'0')`
+        # is `'23:41:'`, which is how the same helper 500s a session endpoint.
+        assert "regexp_replace(r.round_time" in sql
 
     def test_a_round_time_that_cannot_be_read_is_excluded_not_guessed(self):
-        assert "r.round_time ~ '^[0-9]{1,6}$'" in _sql_without_comments(ROWS_SQL)
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "r.round_time ~ '^[0-9]{1,6}$'" in sql
+        # Both supported shapes are admitted; the importer accepts each, so
+        # excluding one would silently shrink the universe instead of ordering it.
+        assert "r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$'" in sql
 
     def test_the_pairing_cte_carries_the_same_round_gate(self):
         """⛔ Gating only the outer SELECT removes a cancelled round's PLAYER

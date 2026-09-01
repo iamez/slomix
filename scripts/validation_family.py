@@ -170,7 +170,13 @@ SELECT pcs.round_id                      AS rid,
        -- across the chronological split with nothing to show for it. `918` and
        -- `12345` do raise, aborting the whole query. `lpad(...,6,'0')` reads all
        -- of them correctly. Codex on #818.
-       (r.round_date || ' ' || lpad(r.round_time, 6, '0'))::timestamp  AS at,
+       -- ⛔ AND `HH:MM:SS` IS ALSO A SUPPORTED FORM — `lpad` alone TRUNCATES it
+       -- ('23:41:53' → '23:41:'), which is how the same helper 500s a session
+       -- endpoint (Codex on #824). Colons are folded away first; the WHERE
+       -- accepts both shapes so neither is silently dropped from the universe.
+       (r.round_date || ' ' ||
+        lpad(regexp_replace(r.round_time, '^([0-9]{2}):([0-9]{2}):([0-9]{2})$',
+                            '\\1\\2\\3'), 6, '0'))::timestamp  AS at,
        pcs.player_guid                   AS guid,
        pcs.team                          AS team,
        r.winner_team                     AS winner,
@@ -204,7 +210,8 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- different hat. Measured: 3209 of 3209 rounds are six digits today, so this
   -- excludes nothing — it stops `lpad` from turning malformed text into a
   -- plausible time (`049180` reads as 05:32:20).
-  AND r.round_time ~ '^[0-9]{1,6}$'
+  AND (r.round_time ~ '^[0-9]{1,6}$'
+       OR r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$')
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
