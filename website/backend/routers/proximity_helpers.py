@@ -337,7 +337,23 @@ def _build_proximity_where_clause(
     return "WHERE " + " AND ".join(clauses), params, scope
 
 
-async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name: str) -> bool:
+async def _table_column_exists(
+    db: DatabaseAdapter, table_name: str, column_name: str
+) -> bool | None:
+    """Is the column deployed? True / False / **None when we could not tell.**
+
+    ⛔ THREE STATES, NOT TWO. This returned `False` on any exception, and every
+    caller read `False` as "the telemetry table is not deployed yet" and
+    answered `{"status": "ok", ...empty}`. So with the database DOWN, eleven
+    endpoints told the client the answer was GOOD and empty — byte-identical to
+    a deployed-but-unpopulated table, and worse than silence: `responseStatus.ts`
+    classifies `ok` as success, so the page actively renders "nothing happened"
+    over an outage.
+
+    `None` is the third state. Callers must handle it explicitly; `not None` is
+    `True`, so a caller that forgets still takes the not-deployed branch rather
+    than crashing — but the branch is now reachable only by deciding to take it.
+    """
     try:
         return bool(
             await db.fetch_val(
@@ -354,7 +370,28 @@ async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name
         )
     except Exception as e:
         logger.warning("_table_column_exists check failed for %s.%s: %s", table_name, column_name, e)
-        return False
+        return None
+
+
+def _probe_unavailable(table_name: str, column_name: str, **payload: Any) -> dict[str, Any]:
+    """The answer when the deployment probe itself could not run.
+
+    ⚠️ `unavailable` on purpose, not a new word: it is already in
+    `FAILURE_STATUSES` in `website/frontend/src/app/lib/responseStatus.ts`, so
+    every page that already distinguishes a failure from an empty answer renders
+    this correctly with no new branch. A third spelling would need classifying
+    on both sides of the language boundary to say something the vocabulary can
+    already say.
+
+    The data keys are kept and left empty so the shape does not change — only
+    the claim about it does.
+    """
+    return {
+        "status": "unavailable",
+        "reason": (f"could not check whether {table_name}.{column_name} is "
+                   f"deployed — the database did not answer"),
+        **payload,
+    }
 
 
 def _iter_attackers(attackers_raw: Any) -> list[dict[str, Any]]:

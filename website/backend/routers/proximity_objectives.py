@@ -8,6 +8,7 @@ from website.backend.routers.api_helpers import handle_router_errors
 from website.backend.routers.proximity_helpers import (
     ProximityQueryBuilder,
     _parse_iso_date,
+    _probe_unavailable,
     _table_column_exists,
 )
 from website.backend.services.objective_pressure_service import (
@@ -45,6 +46,9 @@ async def get_proximity_carrier_events(
     scope = {"session_date": session_date, "map_name": map_name, "round_number": round_number}
 
     exists = await _table_column_exists(db, "proximity_carrier_event", "carrier_guid")
+    if exists is None:
+        return _probe_unavailable("proximity_carrier_event", "carrier_guid",
+                                  carriers=[], events=[], summary={})
     if not exists:
         return {"status": "ok", "carriers": [], "events": [], "summary": {}}
 
@@ -166,6 +170,8 @@ async def get_proximity_carrier_kills(
     safe_limit = max(1, min(limit, 50))
 
     exists = await _table_column_exists(db, "proximity_carrier_kill", "killer_guid")
+    if exists is None:
+        return _probe_unavailable("proximity_carrier_kill", "killer_guid", killers=[])
     if not exists:
         return {"status": "ok", "killers": []}
 
@@ -207,7 +213,10 @@ async def get_proximity_carrier_returns(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Carrier return intelligence — Phase 1.5"""
-    if not await _table_column_exists(db, 'proximity_carrier_return', 'returner_guid'):
+    exists = await _table_column_exists(db, 'proximity_carrier_return', 'returner_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_carrier_return', 'returner_guid', returners=[], events=[], summary={})
+    if not exists:
         return {"status": "ok", "returners": [], "events": [], "summary": {}}
 
     where_parts: list = []
@@ -288,7 +297,10 @@ async def get_proximity_vehicle_progress(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Vehicle progress intelligence — Phase 2"""
-    if not await _table_column_exists(db, 'proximity_vehicle_progress', 'vehicle_name'):
+    exists = await _table_column_exists(db, 'proximity_vehicle_progress', 'vehicle_name')
+    if exists is None:
+        return _probe_unavailable('proximity_vehicle_progress', 'vehicle_name', vehicles=[])
+    if not exists:
         return {"status": "ok", "vehicles": []}
 
     where_parts: list = []
@@ -339,7 +351,10 @@ async def get_proximity_escort_credits(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Escort credit intelligence — Phase 2"""
-    if not await _table_column_exists(db, 'proximity_escort_credit', 'player_guid'):
+    exists = await _table_column_exists(db, 'proximity_escort_credit', 'player_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_escort_credit', 'player_guid', escorts=[])
+    if not exists:
         return {"status": "ok", "escorts": []}
 
     where_parts: list = []
@@ -396,7 +411,10 @@ async def get_proximity_construction_events(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Construction/destruction event intelligence — Phase 3"""
-    if not await _table_column_exists(db, 'proximity_construction_event', 'player_guid'):
+    exists = await _table_column_exists(db, 'proximity_construction_event', 'player_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_construction_event', 'player_guid', engineers=[], events=[])
+    if not exists:
         return {"status": "ok", "engineers": [], "events": []}
 
     where_parts: list = []
@@ -467,7 +485,10 @@ async def get_proximity_objective_runs(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Objective run intelligence — engineer runs with path clearing attribution"""
-    if not await _table_column_exists(db, 'proximity_objective_run', 'engineer_guid'):
+    exists = await _table_column_exists(db, 'proximity_objective_run', 'engineer_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_objective_run', 'engineer_guid', objective_runners=[], recent_runs=[], summary=None)
+    if not exists:
         return {"status": "ok", "objective_runners": [], "recent_runs": [], "summary": None}
 
     where_parts: list = []
@@ -583,7 +604,10 @@ async def get_proximity_objective_focus(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Objective focus — time players spend near objectives."""
-    if not await _table_column_exists(db, 'proximity_objective_focus', 'player_guid'):
+    exists = await _table_column_exists(db, 'proximity_objective_focus', 'player_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_objective_focus', 'player_guid', summary={}, players=[], objectives=[])
+    if not exists:
         return {"status": "ok", "summary": {}, "players": [], "objectives": []}
 
     where_parts: list = []
