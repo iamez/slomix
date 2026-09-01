@@ -296,3 +296,42 @@ describe('Home', () => {
   });
 
 });
+describe('season partial contract (#862)', () => {
+  it('renders a failed season metric as missing and a failed leader as unavailable', async () => {
+    const partialSummary = {
+      ...(seasonSummary as Record<string, unknown>),
+      status: 'partial',
+      failed_metrics: ['kills'],
+      note: 'kills query failed',
+    };
+    const partialLeaders = {
+      ...(seasonLeaders as { leaders: Record<string, unknown> }),
+      status: 'partial',
+      failed_metrics: ['dpm'],
+      note: 'dpm query failed',
+      leaders: { ...(seasonLeaders as { leaders: Record<string, unknown> }).leaders, dpm: null },
+    };
+    const map = new Map(FIXTURES);
+    map.set('/api/seasons/current/summary', partialSummary);
+    map.set('/api/seasons/current/leaders', partialLeaders);
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const pathname = String(input).split('?')[0];
+      const body = map.get(pathname);
+      if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    }));
+    const client = testClient();
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter><Home /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+    // The failed total renders the dash — its zero is an initialization,
+    // not a measurement (#862's contract, same as /stats/overview).
+    await waitFor(() => expect(screen.getByText(/kills query failed|—/)).toBeInTheDocument());
+    // And the failed leader category says so instead of vanishing into
+    // "nobody led".
+    await waitFor(() => expect(screen.getByText('dpm: unavailable')).toBeInTheDocument());
+  });
+});
+
