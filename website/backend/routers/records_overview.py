@@ -85,6 +85,22 @@ _OVERVIEW_FAILURES: ContextVar[list[str] | None] = ContextVar(
 )
 
 
+#: ⛔ THE LABELS ARE A CONTRACT WITH THE PAGE, NOT A LOG STRING. `failed_metrics`
+#: is read by `Home.StandingFigures`, which looks up the RESPONSE FIELD it is
+#: about to render — so a label that does not equal that field name marks
+#: nothing, silently. Two of the four rendered cells were in exactly that state:
+#: the backend emitted `rounds_count` and `sessions_count` while the page asked
+#: about `rounds` and `sessions`, so a failed rounds query rendered as an
+#: ordinary dash — the outage-as-zero ambiguity this whole field exists to
+#: remove, surviving inside the fix for it. The other two matched by coincidence
+#: of naming, which is why nothing looked wrong. Codex on #848.
+#:
+#: `*_recent` labels stay as they are: they feed `rounds_14d` / `sessions_14d`,
+#: which no cell renders today. `test_the_homepage_asks_about_labels_the_api_emits`
+#: is what keeps the two lists from drifting apart again.
+_RENDERED_METRICS = ("rounds", "sessions", "total_kills", "players_all_time")
+
+
 def _note_failure(metric: str) -> None:
     bucket = _OVERVIEW_FAILURES.get()
     if bucket is not None:
@@ -132,7 +148,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
     module-level constant defined at import time; no user input reaches
     these queries. Date filters use $1 parameters.
     """
-    rounds_count = await _safe_val(db, f"SELECT COUNT(*) FROM rounds {_ROUND_FILTER}", metric="rounds_count")  # nosec B608 - trusted module constant, not user input
+    rounds_count = await _safe_val(db, f"SELECT COUNT(*) FROM rounds {_ROUND_FILTER}", metric="rounds")  # nosec B608 - trusted module constant, not user input
     rounds_first = await _safe_val(
         db,
         f"SELECT MIN(SUBSTR(CAST(round_date AS TEXT), 1, 10)) FROM rounds {_ROUND_FILTER}",  # nosec B608 - trusted module constant, not user input
@@ -164,7 +180,7 @@ async def _fetch_rounds_stats(db: DatabaseAdapter, start_date_str: str) -> dict:
         {_ROUND_FILTER}
           AND gaming_session_id IS NOT NULL
         """,  # nosec B608 - trusted module constant, not user input
-        metric="sessions_count",
+        metric="sessions",
     )
     sessions_recent = await _safe_val(
         db,
