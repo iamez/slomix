@@ -471,8 +471,15 @@
       "type": "string"
      },
      "guid": {
-      "title": "Guid",
-      "type": "string"
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Guid"
      },
      "map": {
       "title": "Map",

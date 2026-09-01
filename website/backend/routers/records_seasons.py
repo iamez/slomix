@@ -164,7 +164,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
             """,
             (start_str, end_str),
         )
@@ -192,7 +192,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COALESCE(SUM(kills), 0)
             FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
             """,
             (start_str, end_str),
         )
@@ -281,7 +281,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COUNT(DISTINCT player_guid)
             FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
             """,
             (start_str, end_str),
         )
@@ -289,7 +289,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """
             SELECT COALESCE(SUM(kills), 0)
             FROM player_comprehensive_stats
-            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+            WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
             """,
             (start_str, end_str),
         )
@@ -406,7 +406,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     dmg_given_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(damage_given) as total_damage
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_damage DESC
         LIMIT 1
@@ -414,7 +414,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     dmg_recv_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(damage_received) as total_damage
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_damage DESC
         LIMIT 1
@@ -422,7 +422,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     team_dmg_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(team_damage_given) as total_team_damage
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_team_damage DESC
         LIMIT 1
@@ -430,7 +430,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     revives_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(revives_given) as total_revives
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_revives DESC
         LIMIT 1
@@ -438,7 +438,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     deaths_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(deaths) as total_deaths
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_deaths DESC
         LIMIT 1
@@ -446,7 +446,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     gibs_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(gibs) as total_gibs
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_gibs DESC
         LIMIT 1
@@ -462,7 +462,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
                     COALESCE(dynamites_defused, 0)
                ) as total_objectives
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_objectives DESC
         LIMIT 1
@@ -470,7 +470,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     xp_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(xp) as total_xp
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_xp DESC
         LIMIT 1
@@ -478,7 +478,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     kills_query = """
         SELECT player_guid, MAX(player_name) as player_name, SUM(kills) as total_kills
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY total_kills DESC
         LIMIT 1
@@ -487,7 +487,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                ROUND((SUM(damage_given)::numeric / NULLIF(SUM(time_played_seconds), 0) * 60), 1) as dpm
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         HAVING SUM(time_played_seconds) > 600
         ORDER BY dpm DESC
@@ -497,7 +497,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(time_played_seconds) - SUM(LEAST(COALESCE(time_dead_minutes, 0) * 60, time_played_seconds)) as time_alive_seconds
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY time_alive_seconds DESC
         LIMIT 1
@@ -506,7 +506,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(time_played_seconds) as time_alive_seconds
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY time_alive_seconds DESC
         LIMIT 1
@@ -515,7 +515,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(LEAST(COALESCE(time_dead_minutes, 0) * 60, time_played_seconds)) / 60.0 as time_dead_minutes
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY time_dead_minutes DESC
         LIMIT 1
@@ -524,7 +524,7 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         SELECT player_guid, MAX(player_name) as player_name,
                SUM(COALESCE(time_dead_minutes, 0)) as time_dead_minutes
         FROM player_comprehensive_stats
-        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.round_status = 'orphan_r2'))
+        WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
         GROUP BY player_guid
         ORDER BY time_dead_minutes DESC
         LIMIT 1
