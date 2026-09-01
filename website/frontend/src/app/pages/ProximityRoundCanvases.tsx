@@ -176,8 +176,13 @@ function nearestPoint(life: JourneyLife, t: number) {
 
 function LifePath({ life, extent }: { life: JourneyLife; extent: { minX: number; spanX: number; minY: number; spanY: number } }) {
   const w = 420; const h = 260;
-  const px = (x: number) => ((x - extent.minX) / extent.spanX) * (w - 20) + 10;
-  const py = (y: number) => h - (((y - extent.minY) / extent.spanY) * (h - 20) + 10);
+  // The same midpoint rule as the heatmap (Codex on #867 r3): a
+  // zero-width axis — a stationary life, or dead-straight movement —
+  // centres instead of pinning everything to a border.
+  const nx = (x: number) => (extent.spanX === 0 ? 0.5 : (x - extent.minX) / extent.spanX);
+  const ny = (y: number) => (extent.spanY === 0 ? 0.5 : (y - extent.minY) / extent.spanY);
+  const px = (x: number) => nx(x) * (w - 20) + 10;
+  const py = (y: number) => h - (ny(y) * (h - 20) + 10);
   const pathPts = life.path.filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
   const d = pathPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${px(p.x).toFixed(1)} ${py(p.y).toFixed(1)}`).join(' ');
   const spawn = pathPts[0];
@@ -255,8 +260,8 @@ function Journey({ sessionDate, mapName, roundNumber, roundStartUnix }: { sessio
             .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
           const xs = pts.map((p) => p.x); const ys = pts.map((p) => p.y);
           const extent = {
-            minX: Math.min(...xs), spanX: Math.max(1, Math.max(...xs) - Math.min(...xs)),
-            minY: Math.min(...ys), spanY: Math.max(1, Math.max(...ys) - Math.min(...ys)),
+            minX: Math.min(...xs), spanX: Math.max(...xs) - Math.min(...xs),
+            minY: Math.min(...ys), spanY: Math.max(...ys) - Math.min(...ys),
           };
           return (
             <Stack gap={2}>
