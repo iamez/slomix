@@ -17,7 +17,8 @@ import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import { isFailureStatus } from '../lib/responseStatus';
-import { useProximityLeaderboard, useSsr } from '../lib/queries';
+import { useProximityLeaderboard, useProxScopes, useSsr } from '../lib/queries';
+import { ProximityInstruments } from './ProximityInstruments';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
@@ -153,6 +154,20 @@ function CompSkillBoard() {
 export function Proximity() {
   const [tab, setTab] = useState<LbCategory | 'comp_skill'>('power');
   const [rangeDays, setRangeDays] = useState<number>(30);
+  // Scope for the instruments: a CAPTURE date, defaulting to the newest.
+  // The source is /api/proximity/scopes — the dates where the tracker
+  // actually recorded — not the sessions list: an evening can exist with
+  // no telemetry, and the recorded corpus had exactly that skew (Codex on
+  // #861, P1). The 30-day window exists as an explicit chip, never as the
+  // first paint (unscoped instrument queries measured up to 1.9 s cold),
+  // and a failed or empty scope lookup mounts NOTHING — three reviewers
+  // independently caught the fall-through that would have fired thirteen
+  // unbounded queries on a degraded page.
+  const scopes = useProxScopes();
+  const dates = [...new Set((scopes.data?.sessions ?? []).map((s) => s.session_date))].slice(0, 6);
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const windowPicked = pickedDate === 'window';
+  const scopeDate = windowPicked ? null : (pickedDate ?? dates[0] ?? null);
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>proximity · positional telemetry</Lbl>
@@ -186,9 +201,52 @@ export function Proximity() {
         />
         {tab === 'comp_skill' ? <CompSkillBoard /> : <Board category={tab} rangeDays={rangeDays} />}
       </Stack>
+      <Stack gap={3} parity="proximity.scope" style={{ marginTop: 'var(--space-8)' }}>
+        <SectionHead
+          label="instruments"
+          aside={
+            <Cluster gap={2} align="baseline" style={{ flexWrap: 'wrap' }}>
+              {dates.map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setPickedDate(d)}
+                  aria-pressed={scopeDate === d}
+                  style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: scopeDate === d ? 'var(--color-text-100)' : 'var(--color-text-400)' }}
+                >
+                  {d}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPickedDate('window')}
+                aria-pressed={scopeDate == null}
+                style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', textTransform: 'uppercase', color: scopeDate == null ? 'var(--color-text-100)' : 'var(--color-text-400)' }}
+              >
+                30d window
+              </button>
+            </Cluster>
+          }
+        />
+        {/* Fail-closed: unscoped mounting happens ONLY on the explicit
+          * window chip. A pending lookup waits; a failed one says so; an
+          * empty one names what it means. */}
+        {windowPicked ? (
+          <ProximityInstruments sessionDate={null} />
+        ) : scopes.isPending ? (
+          <Pending label="scope" />
+        ) : scopes.isError ? (
+          <Unavailable what="capture dates" />
+        ) : scopeDate == null ? (
+          <Absent reason="the tracker has not captured any session in this window — there is no date to scope the instruments to" />
+        ) : (
+          <ProximityInstruments sessionDate={scopeDate} />
+        )}
+      </Stack>
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
-        first slice of the proximity page — roster, engagements, maps and the
-        other legacy panels are pinned as pending in docs/parity/proximity_inventory.json
+        slices one and two of the proximity page — the competitive section,
+        carrier and objective intel, journeys and canvases are pinned as
+        pending in docs/parity/proximity_inventory.json
       </Lbl>
     </div>
   );

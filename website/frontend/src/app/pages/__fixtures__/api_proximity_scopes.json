@@ -1,0 +1,3049 @@
+{
+ "status": "ok",
+ "ready": true,
+ "message": null,
+ "range_days": 60,
+ "generated_at": "2026-09-01T07:30:52.761229Z",
+ "sessions": [
+  {
+   "session_date": "2026-09-01",
+   "engagements": 46,
+   "map_count": 1,
+   "maps_played": 0,
+   "round_count": 1,
+   "maps": [
+    {
+     "map_name": "braundorf_b4",
+     "engagements": 46,
+     "round_count": 1,
+     "rounds": [
+      {
+       "round_number": 2,
+       "round_start_unix": 1788213501,
+       "round_end_unix": 1788213640,
+       "engagements": 46
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-31",
+   "engagements": 2766,
+   "map_count": 9,
+   "maps_played": 11,
+   "round_count": 21,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 124,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788204526,
+       "round_end_unix": 1788204681,
+       "engagements": 66
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788204727,
+       "round_end_unix": 1788204881,
+       "engagements": 58
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 486,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788204949,
+       "round_end_unix": 1788205619,
+       "engagements": 247
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788205660,
+       "round_end_unix": 1788206280,
+       "engagements": 239
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 369,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788206357,
+       "round_end_unix": 1788207050,
+       "engagements": 235
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788207115,
+       "round_end_unix": 1788207514,
+       "engagements": 134
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 589,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788207606,
+       "round_end_unix": 1788207811,
+       "engagements": 86
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788207849,
+       "round_end_unix": 1788207975,
+       "engagements": 59
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1788208023,
+       "round_end_unix": 1788208506,
+       "engagements": 190
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788208544,
+       "round_end_unix": 1788209027,
+       "engagements": 165
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1788209166,
+       "round_end_unix": 1788209309,
+       "engagements": 49
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788209374,
+       "round_end_unix": 1788209461,
+       "engagements": 40
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 301,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788209551,
+       "round_end_unix": 1788210053,
+       "engagements": 154
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788210096,
+       "round_end_unix": 1788210576,
+       "engagements": 147
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 526,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788210641,
+       "round_end_unix": 1788211360,
+       "engagements": 268
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788211400,
+       "round_end_unix": 1788212082,
+       "engagements": 258
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 90,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788212151,
+       "round_end_unix": 1788212300,
+       "engagements": 42
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788212343,
+       "round_end_unix": 1788212492,
+       "engagements": 48
+      }
+     ]
+    },
+    {
+     "map_name": "erdenberg_t2",
+     "engagements": 243,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788212543,
+       "round_end_unix": 1788212896,
+       "engagements": 129
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1788212935,
+       "round_end_unix": 1788213256,
+       "engagements": 114
+      }
+     ]
+    },
+    {
+     "map_name": "braundorf_b4",
+     "engagements": 38,
+     "round_count": 1,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1788213313,
+       "round_end_unix": 1788213452,
+       "engagements": 38
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-27",
+   "engagements": 1996,
+   "map_count": 4,
+   "maps_played": 6,
+   "round_count": 12,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 317,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787855942,
+       "round_end_unix": 1787856541,
+       "engagements": 232
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787856588,
+       "round_end_unix": 1787856801,
+       "engagements": 85
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 425,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787856901,
+       "round_end_unix": 1787857620,
+       "engagements": 249
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787857659,
+       "round_end_unix": 1787858160,
+       "engagements": 176
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 553,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787858291,
+       "round_end_unix": 1787859011,
+       "engagements": 283
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787859056,
+       "round_end_unix": 1787859775,
+       "engagements": 270
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 701,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787859839,
+       "round_end_unix": 1787860071,
+       "engagements": 94
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787860113,
+       "round_end_unix": 1787860317,
+       "engagements": 83
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787860430,
+       "round_end_unix": 1787860959,
+       "engagements": 236
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787861000,
+       "round_end_unix": 1787861382,
+       "engagements": 156
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787861468,
+       "round_end_unix": 1787861695,
+       "engagements": 86
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787861734,
+       "round_end_unix": 1787861913,
+       "engagements": 46
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-26",
+   "engagements": 2446,
+   "map_count": 6,
+   "maps_played": 9,
+   "round_count": 18,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 165,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787770309,
+       "round_end_unix": 1787770532,
+       "engagements": 80
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787770579,
+       "round_end_unix": 1787770801,
+       "engagements": 85
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 387,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787770938,
+       "round_end_unix": 1787771391,
+       "engagements": 190
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787771607,
+       "round_end_unix": 1787772172,
+       "engagements": 197
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 347,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787772253,
+       "round_end_unix": 1787772847,
+       "engagements": 204
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787772898,
+       "round_end_unix": 1787773349,
+       "engagements": 143
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 687,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787773454,
+       "round_end_unix": 1787773609,
+       "engagements": 63
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787773657,
+       "round_end_unix": 1787773812,
+       "engagements": 77
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787774069,
+       "round_end_unix": 1787774420,
+       "engagements": 133
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787774465,
+       "round_end_unix": 1787774816,
+       "engagements": 116
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787774951,
+       "round_end_unix": 1787775420,
+       "engagements": 171
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787775461,
+       "round_end_unix": 1787775753,
+       "engagements": 127
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 389,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787775806,
+       "round_end_unix": 1787775998,
+       "engagements": 71
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787776040,
+       "round_end_unix": 1787776204,
+       "engagements": 52
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787776253,
+       "round_end_unix": 1787776852,
+       "engagements": 203
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787776895,
+       "round_end_unix": 1787777083,
+       "engagements": 63
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 471,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787777160,
+       "round_end_unix": 1787777807,
+       "engagements": 227
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787777860,
+       "round_end_unix": 1787778507,
+       "engagements": 244
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-23",
+   "engagements": 1581,
+   "map_count": 4,
+   "maps_played": 5,
+   "round_count": 10,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 86,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787512807,
+       "round_end_unix": 1787512925,
+       "engagements": 37
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787512995,
+       "round_end_unix": 1787513113,
+       "engagements": 49
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 571,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787513201,
+       "round_end_unix": 1787513920,
+       "engagements": 288
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787514030,
+       "round_end_unix": 1787514750,
+       "engagements": 283
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 381,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787514927,
+       "round_end_unix": 1787515609,
+       "engagements": 235
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787515673,
+       "round_end_unix": 1787516087,
+       "engagements": 146
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 543,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787516589,
+       "round_end_unix": 1787517002,
+       "engagements": 147
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787517038,
+       "round_end_unix": 1787517451,
+       "engagements": 166
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787517519,
+       "round_end_unix": 1787517908,
+       "engagements": 159
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787517971,
+       "round_end_unix": 1787518167,
+       "engagements": 71
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-21",
+   "engagements": 781,
+   "map_count": 2,
+   "maps_played": 2,
+   "round_count": 4,
+   "maps": [
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 498,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787262832,
+       "round_end_unix": 1787263543,
+       "engagements": 221
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787263607,
+       "round_end_unix": 1787264326,
+       "engagements": 277
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 283,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787264382,
+       "round_end_unix": 1787264877,
+       "engagements": 200
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787264926,
+       "round_end_unix": 1787265157,
+       "engagements": 83
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-20",
+   "engagements": 3102,
+   "map_count": 6,
+   "maps_played": 9,
+   "round_count": 18,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 617,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787253648,
+       "round_end_unix": 1787254092,
+       "engagements": 174
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787254137,
+       "round_end_unix": 1787254536,
+       "engagements": 180
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787254801,
+       "round_end_unix": 1787255204,
+       "engagements": 131
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787255253,
+       "round_end_unix": 1787255511,
+       "engagements": 132
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 650,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787255658,
+       "round_end_unix": 1787256433,
+       "engagements": 370
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787256540,
+       "round_end_unix": 1787257140,
+       "engagements": 280
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 207,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787257236,
+       "round_end_unix": 1787257525,
+       "engagements": 142
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787257588,
+       "round_end_unix": 1787257737,
+       "engagements": 65
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 1279,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787257822,
+       "round_end_unix": 1787258265,
+       "engagements": 210
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787258309,
+       "round_end_unix": 1787258752,
+       "engagements": 214
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787259324,
+       "round_end_unix": 1787259711,
+       "engagements": 193
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787259773,
+       "round_end_unix": 1787260160,
+       "engagements": 187
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787260258,
+       "round_end_unix": 1787260977,
+       "engagements": 341
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787261162,
+       "round_end_unix": 1787261427,
+       "engagements": 134
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 230,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787261479,
+       "round_end_unix": 1787261745,
+       "engagements": 115
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787261783,
+       "round_end_unix": 1787262048,
+       "engagements": 115
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 119,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787262303,
+       "round_end_unix": 1787262515,
+       "engagements": 62
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787262558,
+       "round_end_unix": 1787262770,
+       "engagements": 57
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-18",
+   "engagements": 2205,
+   "map_count": 7,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 221,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787081958,
+       "round_end_unix": 1787082259,
+       "engagements": 111
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787082302,
+       "round_end_unix": 1787082553,
+       "engagements": 110
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 442,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787082619,
+       "round_end_unix": 1787083291,
+       "engagements": 269
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787083338,
+       "round_end_unix": 1787083805,
+       "engagements": 173
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 390,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787083862,
+       "round_end_unix": 1787084582,
+       "engagements": 260
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787084679,
+       "round_end_unix": 1787085052,
+       "engagements": 130
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 484,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787085174,
+       "round_end_unix": 1787085514,
+       "engagements": 144
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787085557,
+       "round_end_unix": 1787085896,
+       "engagements": 138
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1787085959,
+       "round_end_unix": 1787086251,
+       "engagements": 113
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787086291,
+       "round_end_unix": 1787086516,
+       "engagements": 89
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 284,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787086591,
+       "round_end_unix": 1787087040,
+       "engagements": 136
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787087080,
+       "round_end_unix": 1787087530,
+       "engagements": 148
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 271,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787087652,
+       "round_end_unix": 1787088086,
+       "engagements": 149
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787088136,
+       "round_end_unix": 1787088491,
+       "engagements": 122
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 113,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1787088553,
+       "round_end_unix": 1787088734,
+       "engagements": 60
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1787088768,
+       "round_end_unix": 1787088911,
+       "engagements": 53
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-17",
+   "engagements": 2151,
+   "map_count": 6,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 224,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786992302,
+       "round_end_unix": 1786992691,
+       "engagements": 166
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786992745,
+       "round_end_unix": 1786992912,
+       "engagements": 58
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 530,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786993002,
+       "round_end_unix": 1786993721,
+       "engagements": 263
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786993779,
+       "round_end_unix": 1786994421,
+       "engagements": 267
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 419,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786994503,
+       "round_end_unix": 1786995185,
+       "engagements": 265
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786995237,
+       "round_end_unix": 1786995678,
+       "engagements": 154
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 616,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786995729,
+       "round_end_unix": 1786996106,
+       "engagements": 157
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786996158,
+       "round_end_unix": 1786996551,
+       "engagements": 161
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1786996598,
+       "round_end_unix": 1786996745,
+       "engagements": 47
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786996788,
+       "round_end_unix": 1786996903,
+       "engagements": 54
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1786996956,
+       "round_end_unix": 1786997224,
+       "engagements": 96
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786997271,
+       "round_end_unix": 1786997539,
+       "engagements": 101
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 203,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786997604,
+       "round_end_unix": 1786997902,
+       "engagements": 93
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786997946,
+       "round_end_unix": 1786998243,
+       "engagements": 110
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 159,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786998334,
+       "round_end_unix": 1786998575,
+       "engagements": 86
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786998623,
+       "round_end_unix": 1786998865,
+       "engagements": 73
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-11",
+   "engagements": 1385,
+   "map_count": 5,
+   "maps_played": 7,
+   "round_count": 14,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 212,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786476912,
+       "round_end_unix": 1786477251,
+       "engagements": 124
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786477294,
+       "round_end_unix": 1786477522,
+       "engagements": 88
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 198,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786477781,
+       "round_end_unix": 1786478169,
+       "engagements": 142
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786478215,
+       "round_end_unix": 1786478359,
+       "engagements": 56
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 411,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786478421,
+       "round_end_unix": 1786479140,
+       "engagements": 262
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786479194,
+       "round_end_unix": 1786479586,
+       "engagements": 149
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 369,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786479677,
+       "round_end_unix": 1786479856,
+       "engagements": 76
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786479905,
+       "round_end_unix": 1786480084,
+       "engagements": 76
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1786480196,
+       "round_end_unix": 1786480493,
+       "engagements": 103
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786480537,
+       "round_end_unix": 1786480801,
+       "engagements": 114
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 195,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1786480914,
+       "round_end_unix": 1786481243,
+       "engagements": 116
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786481291,
+       "round_end_unix": 1786481467,
+       "engagements": 39
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1786481525,
+       "round_end_unix": 1786481618,
+       "engagements": 25
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1786481660,
+       "round_end_unix": 1786481711,
+       "engagements": 15
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-05",
+   "engagements": 541,
+   "map_count": 1,
+   "maps_played": 1,
+   "round_count": 3,
+   "maps": [
+    {
+     "map_name": "te_escape2",
+     "engagements": 541,
+     "round_count": 3,
+     "rounds": [
+      {
+       "round_number": 2,
+       "round_start_unix": 1785880655,
+       "round_end_unix": 1785880914,
+       "engagements": 90
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785880963,
+       "round_end_unix": 1785881557,
+       "engagements": 216
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785881598,
+       "round_end_unix": 1785882189,
+       "engagements": 235
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-04",
+   "engagements": 1905,
+   "map_count": 5,
+   "maps_played": 7,
+   "round_count": 14,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 432,
+     "round_count": 3,
+     "rounds": [
+      {
+       "round_number": 2,
+       "round_start_unix": 1785794322,
+       "round_end_unix": 1785794640,
+       "engagements": 124
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785876341,
+       "round_end_unix": 1785876807,
+       "engagements": 174
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785876860,
+       "round_end_unix": 1785877216,
+       "engagements": 134
+      }
+     ]
+    },
+    {
+     "map_name": "et_beach",
+     "engagements": 413,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785873174,
+       "round_end_unix": 1785873415,
+       "engagements": 64
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785873482,
+       "round_end_unix": 1785873723,
+       "engagements": 56
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785873782,
+       "round_end_unix": 1785874382,
+       "engagements": 167
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785874432,
+       "round_end_unix": 1785874840,
+       "engagements": 126
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 420,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785877290,
+       "round_end_unix": 1785877908,
+       "engagements": 241
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785877948,
+       "round_end_unix": 1785878445,
+       "engagements": 179
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 238,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785878507,
+       "round_end_unix": 1785879020,
+       "engagements": 163
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785879064,
+       "round_end_unix": 1785879303,
+       "engagements": 75
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 402,
+     "round_count": 3,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785879389,
+       "round_end_unix": 1785879737,
+       "engagements": 114
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785879781,
+       "round_end_unix": 1785879990,
+       "engagements": 78
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785880044,
+       "round_end_unix": 1785880617,
+       "engagements": 210
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-03",
+   "engagements": 2628,
+   "map_count": 8,
+   "maps_played": 11,
+   "round_count": 21,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 204,
+     "round_count": 3,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785784964,
+       "round_end_unix": 1785785086,
+       "engagements": 38
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785785163,
+       "round_end_unix": 1785785259,
+       "engagements": 50
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785793956,
+       "round_end_unix": 1785794274,
+       "engagements": 116
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 476,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785785337,
+       "round_end_unix": 1785786015,
+       "engagements": 241
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785786057,
+       "round_end_unix": 1785786679,
+       "engagements": 235
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 266,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785786770,
+       "round_end_unix": 1785787216,
+       "engagements": 159
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785787256,
+       "round_end_unix": 1785787553,
+       "engagements": 107
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 723,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785787632,
+       "round_end_unix": 1785787921,
+       "engagements": 122
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785787962,
+       "round_end_unix": 1785788726,
+       "engagements": 100
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785788828,
+       "round_end_unix": 1785789322,
+       "engagements": 190
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785789361,
+       "round_end_unix": 1785789592,
+       "engagements": 81
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785789653,
+       "round_end_unix": 1785790084,
+       "engagements": 159
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785790127,
+       "round_end_unix": 1785790299,
+       "engagements": 71
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 204,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785790374,
+       "round_end_unix": 1785790728,
+       "engagements": 95
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785790767,
+       "round_end_unix": 1785791098,
+       "engagements": 109
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 475,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785791281,
+       "round_end_unix": 1785791939,
+       "engagements": 224
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785791987,
+       "round_end_unix": 1785792698,
+       "engagements": 251
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 99,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785792802,
+       "round_end_unix": 1785792989,
+       "engagements": 58
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785793050,
+       "round_end_unix": 1785793206,
+       "engagements": 41
+      }
+     ]
+    },
+    {
+     "map_name": "erdenberg_t2",
+     "engagements": 181,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785793280,
+       "round_end_unix": 1785793570,
+       "engagements": 107
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785793611,
+       "round_end_unix": 1785793852,
+       "engagements": 74
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-08-02",
+   "engagements": 2114,
+   "map_count": 6,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 520,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785698798,
+       "round_end_unix": 1785698965,
+       "engagements": 72
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785699018,
+       "round_end_unix": 1785699156,
+       "engagements": 54
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785699211,
+       "round_end_unix": 1785699733,
+       "engagements": 207
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785699777,
+       "round_end_unix": 1785700293,
+       "engagements": 187
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 502,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785700392,
+       "round_end_unix": 1785701108,
+       "engagements": 258
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785701157,
+       "round_end_unix": 1785701800,
+       "engagements": 244
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 131,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785702011,
+       "round_end_unix": 1785702215,
+       "engagements": 64
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785702265,
+       "round_end_unix": 1785702468,
+       "engagements": 67
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 361,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785702540,
+       "round_end_unix": 1785702934,
+       "engagements": 168
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785702975,
+       "round_end_unix": 1785703142,
+       "engagements": 61
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785703196,
+       "round_end_unix": 1785703380,
+       "engagements": 69
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785703420,
+       "round_end_unix": 1785703571,
+       "engagements": 63
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 258,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785703639,
+       "round_end_unix": 1785704148,
+       "engagements": 180
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785704203,
+       "round_end_unix": 1785704467,
+       "engagements": 78
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 342,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785704574,
+       "round_end_unix": 1785705215,
+       "engagements": 218
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785705262,
+       "round_end_unix": 1785705587,
+       "engagements": 124
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-29",
+   "engagements": 2553,
+   "map_count": 7,
+   "maps_played": 9,
+   "round_count": 18,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 235,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785353979,
+       "round_end_unix": 1785354297,
+       "engagements": 128
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785354517,
+       "round_end_unix": 1785354835,
+       "engagements": 107
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 311,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785354928,
+       "round_end_unix": 1785355434,
+       "engagements": 171
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785355471,
+       "round_end_unix": 1785355841,
+       "engagements": 140
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 433,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785355916,
+       "round_end_unix": 1785356556,
+       "engagements": 245
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785356617,
+       "round_end_unix": 1785357192,
+       "engagements": 188
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 656,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785357273,
+       "round_end_unix": 1785357768,
+       "engagements": 169
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785357813,
+       "round_end_unix": 1785357949,
+       "engagements": 58
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785357992,
+       "round_end_unix": 1785358464,
+       "engagements": 172
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785358514,
+       "round_end_unix": 1785358693,
+       "engagements": 68
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785358744,
+       "round_end_unix": 1785358978,
+       "engagements": 88
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785359021,
+       "round_end_unix": 1785359255,
+       "engagements": 101
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 303,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785359302,
+       "round_end_unix": 1785359774,
+       "engagements": 174
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785359820,
+       "round_end_unix": 1785360214,
+       "engagements": 129
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 219,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785360290,
+       "round_end_unix": 1785360593,
+       "engagements": 109
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785360638,
+       "round_end_unix": 1785360941,
+       "engagements": 110
+      }
+     ]
+    },
+    {
+     "map_name": "erdenberg_t2",
+     "engagements": 396,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785361002,
+       "round_end_unix": 1785361702,
+       "engagements": 291
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785361753,
+       "round_end_unix": 1785362059,
+       "engagements": 105
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-27",
+   "engagements": 2318,
+   "map_count": 6,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 335,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785180251,
+       "round_end_unix": 1785180755,
+       "engagements": 180
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785180825,
+       "round_end_unix": 1785181296,
+       "engagements": 155
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 356,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785181429,
+       "round_end_unix": 1785182067,
+       "engagements": 224
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785182155,
+       "round_end_unix": 1785182564,
+       "engagements": 132
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 378,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785182644,
+       "round_end_unix": 1785183605,
+       "engagements": 294
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785183647,
+       "round_end_unix": 1785183917,
+       "engagements": 84
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 688,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785184036,
+       "round_end_unix": 1785184628,
+       "engagements": 211
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785184672,
+       "round_end_unix": 1785184901,
+       "engagements": 82
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785184967,
+       "round_end_unix": 1785185258,
+       "engagements": 94
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785185297,
+       "round_end_unix": 1785185513,
+       "engagements": 84
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1785185566,
+       "round_end_unix": 1785185951,
+       "engagements": 140
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785186000,
+       "round_end_unix": 1785186196,
+       "engagements": 77
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 254,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785186317,
+       "round_end_unix": 1785186878,
+       "engagements": 187
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785186954,
+       "round_end_unix": 1785187135,
+       "engagements": 67
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 307,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1785187217,
+       "round_end_unix": 1785187833,
+       "engagements": 207
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1785187881,
+       "round_end_unix": 1785188154,
+       "engagements": 100
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-22",
+   "engagements": 261,
+   "map_count": 1,
+   "maps_played": 1,
+   "round_count": 2,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 261,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784670815,
+       "round_end_unix": 1784671237,
+       "engagements": 150
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784671291,
+       "round_end_unix": 1784671563,
+       "engagements": 111
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-21",
+   "engagements": 3391,
+   "map_count": 8,
+   "maps_played": 10,
+   "round_count": 20,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 301,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784661161,
+       "round_end_unix": 1784661609,
+       "engagements": 169
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784661650,
+       "round_end_unix": 1784661991,
+       "engagements": 132
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 467,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784662139,
+       "round_end_unix": 1784662660,
+       "engagements": 235
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784662718,
+       "round_end_unix": 1784663209,
+       "engagements": 232
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 676,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784663272,
+       "round_end_unix": 1784664021,
+       "engagements": 360
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784664135,
+       "round_end_unix": 1784664768,
+       "engagements": 316
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 1058,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784664911,
+       "round_end_unix": 1784665199,
+       "engagements": 136
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784665244,
+       "round_end_unix": 1784665531,
+       "engagements": 138
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784665585,
+       "round_end_unix": 1784665966,
+       "engagements": 211
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784666031,
+       "round_end_unix": 1784666411,
+       "engagements": 209
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784666587,
+       "round_end_unix": 1784667306,
+       "engagements": 272
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784667370,
+       "round_end_unix": 1784667661,
+       "engagements": 92
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 63,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784667738,
+       "round_end_unix": 1784667856,
+       "engagements": 35
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784667913,
+       "round_end_unix": 1784668031,
+       "engagements": 28
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 348,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784668102,
+       "round_end_unix": 1784668637,
+       "engagements": 183
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784668677,
+       "round_end_unix": 1784669138,
+       "engagements": 165
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 148,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784669231,
+       "round_end_unix": 1784669451,
+       "engagements": 71
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784669521,
+       "round_end_unix": 1784669741,
+       "engagements": 77
+      }
+     ]
+    },
+    {
+     "map_name": "erdenberg_t2",
+     "engagements": 330,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784669789,
+       "round_end_unix": 1784670350,
+       "engagements": 211
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784670405,
+       "round_end_unix": 1784670730,
+       "engagements": 119
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-19",
+   "engagements": 371,
+   "map_count": 1,
+   "maps_played": 2,
+   "round_count": 4,
+   "maps": [
+    {
+     "map_name": "et_brewdog",
+     "engagements": 371,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784412037,
+       "round_end_unix": 1784412412,
+       "engagements": 111
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784412460,
+       "round_end_unix": 1784412810,
+       "engagements": 106
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784412866,
+       "round_end_unix": 1784413093,
+       "engagements": 78
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784413159,
+       "round_end_unix": 1784413386,
+       "engagements": 76
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-18",
+   "engagements": 2837,
+   "map_count": 6,
+   "maps_played": 10,
+   "round_count": 19,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 588,
+     "round_count": 3,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784402640,
+       "round_end_unix": 1784403458,
+       "engagements": 340
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784404112,
+       "round_end_unix": 1784404426,
+       "engagements": 110
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784404479,
+       "round_end_unix": 1784404793,
+       "engagements": 138
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 489,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784404885,
+       "round_end_unix": 1784405551,
+       "engagements": 244
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784405598,
+       "round_end_unix": 1784406211,
+       "engagements": 245
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 256,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784406270,
+       "round_end_unix": 1784406777,
+       "engagements": 197
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784406822,
+       "round_end_unix": 1784407005,
+       "engagements": 59
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 896,
+     "round_count": 8,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784407121,
+       "round_end_unix": 1784407511,
+       "engagements": 136
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784407570,
+       "round_end_unix": 1784407765,
+       "engagements": 86
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784407830,
+       "round_end_unix": 1784408080,
+       "engagements": 100
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784408144,
+       "round_end_unix": 1784408395,
+       "engagements": 108
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784408489,
+       "round_end_unix": 1784408697,
+       "engagements": 71
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784408738,
+       "round_end_unix": 1784408945,
+       "engagements": 75
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784409014,
+       "round_end_unix": 1784409597,
+       "engagements": 215
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784409653,
+       "round_end_unix": 1784409925,
+       "engagements": 105
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 474,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784410067,
+       "round_end_unix": 1784410786,
+       "engagements": 265
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784410832,
+       "round_end_unix": 1784411455,
+       "engagements": 209
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 134,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784411511,
+       "round_end_unix": 1784411738,
+       "engagements": 62
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784411787,
+       "round_end_unix": 1784411998,
+       "engagements": 72
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-16",
+   "engagements": 2778,
+   "map_count": 6,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 423,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784230297,
+       "round_end_unix": 1784230806,
+       "engagements": 214
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784230860,
+       "round_end_unix": 1784231363,
+       "engagements": 209
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 490,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784231520,
+       "round_end_unix": 1784232205,
+       "engagements": 262
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784232248,
+       "round_end_unix": 1784232842,
+       "engagements": 228
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 291,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784232944,
+       "round_end_unix": 1784233380,
+       "engagements": 161
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784233424,
+       "round_end_unix": 1784233790,
+       "engagements": 130
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 978,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784233894,
+       "round_end_unix": 1784234613,
+       "engagements": 264
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784234658,
+       "round_end_unix": 1784234868,
+       "engagements": 84
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784234941,
+       "round_end_unix": 1784235613,
+       "engagements": 230
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784235677,
+       "round_end_unix": 1784235939,
+       "engagements": 98
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784235981,
+       "round_end_unix": 1784236402,
+       "engagements": 167
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784236460,
+       "round_end_unix": 1784236867,
+       "engagements": 135
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 336,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784236999,
+       "round_end_unix": 1784237490,
+       "engagements": 172
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784237542,
+       "round_end_unix": 1784237987,
+       "engagements": 164
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 260,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784238056,
+       "round_end_unix": 1784238600,
+       "engagements": 190
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784238647,
+       "round_end_unix": 1784238867,
+       "engagements": 70
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-15",
+   "engagements": 2221,
+   "map_count": 7,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 424,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784142733,
+       "round_end_unix": 1784143332,
+       "engagements": 236
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784143391,
+       "round_end_unix": 1784143902,
+       "engagements": 188
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 381,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784144044,
+       "round_end_unix": 1784144660,
+       "engagements": 199
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784144699,
+       "round_end_unix": 1784145249,
+       "engagements": 182
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 182,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784145315,
+       "round_end_unix": 1784145603,
+       "engagements": 95
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784145642,
+       "round_end_unix": 1784145864,
+       "engagements": 87
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 527,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784146002,
+       "round_end_unix": 1784146722,
+       "engagements": 284
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784146772,
+       "round_end_unix": 1784146997,
+       "engagements": 98
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1784147049,
+       "round_end_unix": 1784147238,
+       "engagements": 58
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784147298,
+       "round_end_unix": 1784147487,
+       "engagements": 87
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 91,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784147570,
+       "round_end_unix": 1784147783,
+       "engagements": 69
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784147828,
+       "round_end_unix": 1784147943,
+       "engagements": 22
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 351,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784148032,
+       "round_end_unix": 1784148733,
+       "engagements": 241
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784148785,
+       "round_end_unix": 1784149069,
+       "engagements": 110
+      }
+     ]
+    },
+    {
+     "map_name": "etl_frostbite",
+     "engagements": 265,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1784149147,
+       "round_end_unix": 1784149615,
+       "engagements": 162
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1784149667,
+       "round_end_unix": 1784149988,
+       "engagements": 103
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-13",
+   "engagements": 3247,
+   "map_count": 6,
+   "maps_played": 8,
+   "round_count": 16,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 135,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783971033,
+       "round_end_unix": 1783971302,
+       "engagements": 82
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783971343,
+       "round_end_unix": 1783971485,
+       "engagements": 53
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 514,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783971554,
+       "round_end_unix": 1783972175,
+       "engagements": 231
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783972229,
+       "round_end_unix": 1783972948,
+       "engagements": 283
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 635,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783973323,
+       "round_end_unix": 1783974042,
+       "engagements": 361
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783974100,
+       "round_end_unix": 1783974715,
+       "engagements": 274
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 1351,
+     "round_count": 6,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783974806,
+       "round_end_unix": 1783975525,
+       "engagements": 352
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783975580,
+       "round_end_unix": 1783976299,
+       "engagements": 366
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1783976343,
+       "round_end_unix": 1783976697,
+       "engagements": 194
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783976750,
+       "round_end_unix": 1783977104,
+       "engagements": 179
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1783977151,
+       "round_end_unix": 1783977414,
+       "engagements": 130
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783977468,
+       "round_end_unix": 1783977731,
+       "engagements": 130
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 472,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783977869,
+       "round_end_unix": 1783978588,
+       "engagements": 246
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783978656,
+       "round_end_unix": 1783979287,
+       "engagements": 226
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 140,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783979374,
+       "round_end_unix": 1783979609,
+       "engagements": 80
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783979666,
+       "round_end_unix": 1783979865,
+       "engagements": 60
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "session_date": "2026-07-07",
+   "engagements": 2123,
+   "map_count": 6,
+   "maps_played": 7,
+   "round_count": 14,
+   "maps": [
+    {
+     "map_name": "etl_adlernest",
+     "engagements": 386,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783452523,
+       "round_end_unix": 1783452989,
+       "engagements": 188
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783453027,
+       "round_end_unix": 1783453493,
+       "engagements": 198
+      }
+     ]
+    },
+    {
+     "map_name": "supply",
+     "engagements": 304,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783453555,
+       "round_end_unix": 1783454000,
+       "engagements": 166
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783454038,
+       "round_end_unix": 1783454411,
+       "engagements": 138
+      }
+     ]
+    },
+    {
+     "map_name": "etl_sp_delivery",
+     "engagements": 309,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783454469,
+       "round_end_unix": 1783455031,
+       "engagements": 192
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783455068,
+       "round_end_unix": 1783455391,
+       "engagements": 117
+      }
+     ]
+    },
+    {
+     "map_name": "te_escape2",
+     "engagements": 486,
+     "round_count": 4,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783455446,
+       "round_end_unix": 1783455885,
+       "engagements": 163
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783455994,
+       "round_end_unix": 1783456321,
+       "engagements": 133
+      },
+      {
+       "round_number": 1,
+       "round_start_unix": 1783456375,
+       "round_end_unix": 1783456629,
+       "engagements": 100
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783456670,
+       "round_end_unix": 1783456924,
+       "engagements": 90
+      }
+     ]
+    },
+    {
+     "map_name": "sw_goldrush_te",
+     "engagements": 392,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783457021,
+       "round_end_unix": 1783457617,
+       "engagements": 210
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783457652,
+       "round_end_unix": 1783458173,
+       "engagements": 182
+      }
+     ]
+    },
+    {
+     "map_name": "et_brewdog",
+     "engagements": 246,
+     "round_count": 2,
+     "rounds": [
+      {
+       "round_number": 1,
+       "round_start_unix": 1783458236,
+       "round_end_unix": 1783458620,
+       "engagements": 130
+      },
+      {
+       "round_number": 2,
+       "round_start_unix": 1783458655,
+       "round_end_unix": 1783459015,
+       "engagements": 116
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "scope": {
+  "session_date": "2026-09-01",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null
+ }
+}

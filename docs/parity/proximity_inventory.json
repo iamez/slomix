@@ -42,7 +42,8 @@
         "bytes": 3449,
         "file": "api_proximity_aim_lock.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/aim-lock"
     },
     {
       "path": "/api/proximity/carrier-events",
@@ -106,7 +107,8 @@
         "bytes": 825,
         "file": "api_proximity_classes.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/classes"
     },
     {
       "path": "/api/proximity/cohesion",
@@ -122,7 +124,8 @@
         "bytes": 223093,
         "file": "api_proximity_cohesion.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/cohesion"
     },
     {
       "path": "/api/proximity/combat-position-stats",
@@ -138,7 +141,8 @@
         "bytes": 956,
         "file": "api_proximity_combat_position_stats.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/combat-position-stats"
     },
     {
       "path": "/api/proximity/combat-positions/danger-zones",
@@ -352,7 +356,8 @@
         "bytes": 2432,
         "file": "api_proximity_crossfire_angles.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/crossfire-angles"
     },
     {
       "path": "/api/proximity/dashboard",
@@ -462,7 +467,8 @@
         "bytes": 5617,
         "file": "api_proximity_focus_fire.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/focus-fire"
     },
     {
       "path": "/api/proximity/hit-regions",
@@ -603,7 +609,8 @@
         "bytes": 3835,
         "file": "api_proximity_lua_trades.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/lua-trades"
     },
     {
       "path": "/api/proximity/movement-stats",
@@ -863,7 +870,8 @@
         "bytes": 875,
         "file": "api_proximity_pushes.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/pushes"
     },
     {
       "path": "/api/proximity/quality",
@@ -880,7 +888,8 @@
         "bytes": 5455,
         "file": "api_proximity_quality.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/quality"
     },
     {
       "path": "/api/proximity/reactions",
@@ -896,7 +905,8 @@
         "bytes": 2861,
         "file": "api_proximity_reactions.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/reactions"
     },
     {
       "path": "/api/proximity/revives",
@@ -912,7 +922,8 @@
         "bytes": 2437,
         "file": "api_proximity_revives.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/revives"
     },
     {
       "path": "/api/proximity/round/{round_id}/team-comparison",
@@ -981,7 +992,8 @@
         "bytes": 38924,
         "file": "api_proximity_scopes.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/scopes"
     },
     {
       "path": "/api/proximity/spawn-timing",
@@ -997,7 +1009,8 @@
         "bytes": 2604,
         "file": "api_proximity_spawn_timing.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/spawn-timing"
     },
     {
       "path": "/api/proximity/summary",
@@ -1029,7 +1042,8 @@
         "bytes": 3813,
         "file": "api_proximity_support_summary.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/support-summary"
     },
     {
       "path": "/api/proximity/teamplay",

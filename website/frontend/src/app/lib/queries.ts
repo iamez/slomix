@@ -72,7 +72,21 @@ import type {
   LiveSession,
   PlayerIdentity,
   PlayerMatchRound,
+  ProxAimLock,
+  ProxClasses,
+  ProxCohesion,
+  ProxCombatPositions,
+  ProxCrossfireAngles,
+  ProxFocusFire,
   ProximityLeaderboard,
+  ProxLuaTrades,
+  ProxPushes,
+  ProxQuality,
+  ProxReactions,
+  ProxScopes,
+  ProxRevives,
+  ProxSpawnTiming,
+  ProxSupportSummary,
   RecentPrediction,
   SessionLeaderRow,
   SkillPlayer,
@@ -943,6 +957,66 @@ export function useProximityLeaderboard(category: string, rangeDays: number) {
       apiGet('/api/proximity/leaderboards', {
         query: { category, range_days: rangeDays, limit: 10 },
       }) as Promise<ProximityLeaderboard>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 2 — the instruments. One generic hook, thirteen paths:
+// every one takes the same optional session_date scope (the endpoint falls
+// back to a 30-day window without it — measured up to 1.9 s cold, which is
+// why the page defaults to a DATE and offers the window as an explicit
+// choice, never as the first paint).
+
+function useProxInstrument<T>(path: ProxInstrumentPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-instrument', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+type ProxInstrumentPath =
+  | '/api/proximity/quality'
+  | '/api/proximity/spawn-timing'
+  | '/api/proximity/aim-lock'
+  | '/api/proximity/cohesion'
+  | '/api/proximity/crossfire-angles'
+  | '/api/proximity/pushes'
+  | '/api/proximity/lua-trades'
+  | '/api/proximity/revives'
+  | '/api/proximity/focus-fire'
+  | '/api/proximity/support-summary'
+  | '/api/proximity/combat-position-stats'
+  | '/api/proximity/classes'
+  | '/api/proximity/reactions';
+
+export const useProxQuality = (d: string | null) => useProxInstrument<ProxQuality>('/api/proximity/quality', d);
+export const useProxSpawnTiming = (d: string | null) => useProxInstrument<ProxSpawnTiming>('/api/proximity/spawn-timing', d);
+export const useProxAimLock = (d: string | null) => useProxInstrument<ProxAimLock>('/api/proximity/aim-lock', d);
+export const useProxCohesion = (d: string | null) => useProxInstrument<ProxCohesion>('/api/proximity/cohesion', d);
+export const useProxCrossfireAngles = (d: string | null) => useProxInstrument<ProxCrossfireAngles>('/api/proximity/crossfire-angles', d);
+export const useProxPushes = (d: string | null) => useProxInstrument<ProxPushes>('/api/proximity/pushes', d);
+export const useProxLuaTrades = (d: string | null) => useProxInstrument<ProxLuaTrades>('/api/proximity/lua-trades', d);
+export const useProxRevives = (d: string | null) => useProxInstrument<ProxRevives>('/api/proximity/revives', d);
+export const useProxFocusFire = (d: string | null) => useProxInstrument<ProxFocusFire>('/api/proximity/focus-fire', d);
+export const useProxSupportSummary = (d: string | null) => useProxInstrument<ProxSupportSummary>('/api/proximity/support-summary', d);
+export const useProxCombatPositions = (d: string | null) => useProxInstrument<ProxCombatPositions>('/api/proximity/combat-position-stats', d);
+export const useProxClasses = (d: string | null) => useProxInstrument<ProxClasses>('/api/proximity/classes', d);
+export const useProxReactions = (d: string | null) => useProxInstrument<ProxReactions>('/api/proximity/reactions', d);
+
+
+/** The dates where the proximity tracker actually captured data — the
+ *  instrument chips' only honest source (the sessions list names parsed
+ *  evenings, and an evening can exist with no telemetry). */
+export function useProxScopes() {
+  return useQuery({
+    queryKey: ['prox-scopes'],
+    queryFn: () => apiGet('/api/proximity/scopes') as Promise<ProxScopes>,
     staleTime: 5 * 60 * 1000,
   });
 }
