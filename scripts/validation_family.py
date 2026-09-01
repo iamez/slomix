@@ -204,6 +204,15 @@ class Candidate:
     description: str
     direction: str                 # "higher_is_better" | "lower_is_better"
     fn: Callable[[dict], float | None] = field(compare=False, repr=False)
+    # ⛔ THE ESTIMATOR IS PART OF THE HYPOTHESIS, NOT A RUNTIME OPTION. The same
+    # formula read through the median split and through the continuous form are
+    # two different experiments, and both were run on the confirmation half.
+    # Leaving the choice outside the family let the second one be compared
+    # without ever being declared: absent from the manifest, absent from the
+    # max-T family, so the family-wise critical value was computed across half
+    # the members actually tried. A key into ESTIMATORS rather than a callable,
+    # because it has to survive into a JSON manifest. Codex on #818.
+    estimator: str = "median_split"
 
     def formula_fingerprint(self) -> str:
         """Hash of the EXECUTABLE formula, not its prose.
@@ -245,7 +254,7 @@ class Candidate:
 
     def manifest_entry(self) -> dict:
         return {"id": self.cid, "description": self.description,
-                "direction": self.direction,
+                "direction": self.direction, "estimator": self.estimator,
                 "formula": self.formula_fingerprint()}
 
 
@@ -693,7 +702,7 @@ def _null_value(p: dict) -> float:
     return int.from_bytes(h[:4], "big") / 0xFFFFFFFF
 
 
-DEFAULT_FAMILY = [
+_MEDIAN_SPLIT_FAMILY = [
     Candidate("kpr", "kills per round — retired in #556, must fail again",
               "higher_is_better", lambda p: float(p["kills"] or 0)),
     Candidate("null", "deterministic pseudo-random control — must fail",
@@ -710,6 +719,33 @@ DEFAULT_FAMILY = [
               "higher_is_better",
               lambda p: float(p["dg"] or 0) / max(float(p["dr"] or 0), 1.0)),
 ]
+
+# ⛔ THE VARIANT THAT SPENT THE HOLDOUT, NOW DECLARED. `within_round_point_biserial()`
+# records in its own docstring that it was measured on 2026-08-26 with 600 block
+# resamples ON THE CONFIRMATION HALF for kpr, kd_ratio, dpm and dmg_ratio. It was
+# in no manifest and in no max-T family, so the family-wise critical value was
+# computed across half the members actually tried and the confirmation data was
+# consumed comparing something nobody had registered.
+#
+# Built with `replace` from the members above so the FORMULA is the identical
+# object: same formula fingerprint, different estimator, which is precisely the
+# distinction the manifest has to record.
+#
+# ⛔ `null` comes along. It is the only structural control, and it says the
+# harness rejects pure noise UNDER THE ESTIMATOR IT RAN WITH. A second estimator
+# without a second control would leave half the family unfalsifiable and quietly
+# weaken the check that noise must fail measurably.
+#
+# ⚠️ This doubles the family, which RAISES the max-T critical value and makes
+# every verdict harder to earn. That is the correction, not a side effect:
+# multiplicity was understated for as long as the variant went undeclared.
+_POINT_BISERIAL_FAMILY = [
+    replace(c, cid=f"{c.cid}@pb", estimator="point_biserial",
+            description=f"{c.description} [continuous estimator]")
+    for c in _MEDIAN_SPLIT_FAMILY
+]
+
+DEFAULT_FAMILY = _MEDIAN_SPLIT_FAMILY + _POINT_BISERIAL_FAMILY
 
 
 async def load(spatial: bool) -> tuple[dict, dict]:
@@ -761,11 +797,16 @@ def analyse(blocks: dict, keep: set, family: Family) -> dict:
     draws = block_draws(sub, family.resamples, family.seed)
     point, boot = {}, {}
     for c in family.candidates:
-        pt = within_round_spread(flat, c.fn, oc)
+        # ⛔ THE CANDIDATE'S OWN ESTIMATOR, on both halves of its evidence.
+        # `block_bootstrap()` has taken an `estimator` argument all along and
+        # nothing ever passed one, so every declared variant was silently
+        # evaluated through the median split — a mechanism with no caller.
+        est = ESTIMATORS[c.estimator]
+        pt = est(flat, c.fn, oc)
         if pt is None:
             continue
         point[c.cid] = pt
-        boot[c.cid] = block_bootstrap(sub, c.fn, draws, outcome=oc)
+        boot[c.cid] = block_bootstrap(sub, c.fn, draws, estimator=est, outcome=oc)
     return {"point": point, "boot": boot, "rounds": len(flat)}
 
 
@@ -848,18 +889,34 @@ def report(family: Family, disc: dict, conf: dict,
                         "holm_p": hp[cid], "verdict": verdict})
     print("-" * 108)
 
-    floors = [detectable_effect(sds[c]) for c in sds
-              if sds[c] and not math.isnan(sds[c])]
-    if floors:
+    # ⛔ ONE FLOOR PER ESTIMATOR, NEVER A MEDIAN ACROSS BOTH. A within-round
+    # spread is a difference of win rates; a within-round point-biserial is a
+    # correlation. `within_round_point_biserial()` says so in its own docstring
+    # — "compare the two by their t, never by their raw size" — and a median
+    # taken across the two is a number on neither scale. The max-T critical
+    # value is unaffected (every candidate is standardised by its own bootstrap
+    # SD before the maximum is taken), but the FLOOR is printed in raw effect
+    # units, so mixing them silently produces a threshold nobody can check an
+    # idea against. Introduced the moment the family gained a second estimator.
+    by_estimator: dict[str, list[float]] = {}
+    for c in family.candidates:
+        sd = sds.get(c.cid)
+        if sd and not math.isnan(sd):
+            by_estimator.setdefault(c.estimator, []).append(detectable_effect(sd))
+    if by_estimator:
         print(f"\nFLOOR (§8.4 by-product). At {c_counts[0]} confirmation blocks / "
-              f"{c_counts[1]} rounds, a single candidate needs an effect of about "
-              f"{statistics.median(floors):+.3f}\nto be found {int(POWER_TARGET*100)}% "
-              f"of the time. Family-wise correction raises this further: the max-T "
-              f"critical value is\n{crit:.3f} rather than {_Z_ALPHA:.3f}, so the real "
-              f"family floor is roughly {statistics.median(floors)*crit/_Z_ALPHA:+.3f}. "
-              f"Anything smaller\nthan that cannot be distinguished from chance with "
-              f"the data we have — check the next idea against this\nnumber BEFORE "
-              f"building it.")
+              f"{c_counts[1]} rounds, the family-wise\nmax-T critical value is "
+              f"{crit:.3f} rather than {_Z_ALPHA:.3f}, so each estimator's floor is "
+              f"raised by {crit/_Z_ALPHA:.2f}x.\nAn effect smaller than its own "
+              f"estimator's family floor cannot be distinguished from chance with\n"
+              f"the data we have — check the next idea against THAT number, on ITS "
+              f"scale, before building it.")
+        for est in sorted(by_estimator):
+            single = statistics.median(by_estimator[est])
+            print(f"  {est:<15} single {single:+.3f}   family "
+                  f"{single * crit / _Z_ALPHA:+.3f}   "
+                  f"({len(by_estimator[est])} candidates, "
+                  f"{int(POWER_TARGET * 100)}% power)")
     return results
 
 
@@ -933,17 +990,23 @@ def instrument_check(family: Family, results: list[dict]) -> bool:
     # `null FAILS ok`, exits 0, and never looked at the noise at all. Requiring
     # membership in `measured` is what makes the word mean the measurement.
     # Codex on #818.
-    nullr = by_id.get("null", {}).get("verdict", "MISSING")
-    if nullr != "FAILS":
-        broken = True
-        null_note = "NOISE SHIPPED — BROKEN"
-    elif not any(r["id"] == "null" for r in measured):
-        broken = True
-        null_note = ("UNMEASURED — this 'FAILS' means no usable interval, "
-                     "not rejected noise")
-    else:
-        null_note = "ok"
-    print(f"  null  {nullr:<9} {null_note}")
+    # ⛔ ONE CONTROL PER ESTIMATOR. The family carries a `null` member for every
+    # estimator it declares, and each one has to fail measurably: a control that
+    # ran under the median split says nothing about the continuous form.
+    controls = [c.cid for c in family.candidates if c.cid.startswith("null")]
+    measured_ids = {r["id"] for r in measured}
+    for cid in controls or ["null"]:
+        nullr = by_id.get(cid, {}).get("verdict", "MISSING")
+        if nullr != "FAILS":
+            broken = True
+            null_note = "NOISE SHIPPED — BROKEN"
+        elif cid not in measured_ids:
+            broken = True
+            null_note = ("UNMEASURED — this 'FAILS' means no usable interval, "
+                         "not rejected noise")
+        else:
+            null_note = "ok"
+        print(f"  {cid:<5} {nullr:<9} {null_note}")
 
     # `kpr` is CALIBRATION, not a control. #556 measured a spread near +0.028;
     # reproducing that number is what says the instrument measures the same

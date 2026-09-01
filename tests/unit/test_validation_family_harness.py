@@ -27,6 +27,8 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
 
 from validation_family import (  # noqa: E402 - path set above
+    DEFAULT_FAMILY,
+    ESTIMATORS,
     ROWS_SQL,
     Candidate,
     Family,
@@ -448,8 +450,15 @@ class TestTheSecondCodexRound:
             sys.path.remove(str(tmp_path))
             sys.modules.pop("vf_mutant", None)
         moved = [cid for cid in before if before[cid] != after[cid]]
-        assert moved == ["dpm"], (
-            f"changing _minutes moved {moved}; it must move exactly dpm")
+        # ⚠️ BOTH members carrying that formula, one per estimator. This read
+        # `== ["dpm"]` until the point-biserial variants were registered; the
+        # formula is the SAME object in both, so a helper change must move both
+        # fingerprints or one of them would keep claiming the old experiment.
+        # Widened by naming the second member, not by relaxing to a subset —
+        # `in moved` would also pass if the fingerprint covered the whole family.
+        assert moved == ["dpm", "dpm@pb"], (
+            f"changing _minutes moved {moved}; it must move exactly the two "
+            f"members whose formula it is")
 
     def test_p_value_ignores_unmeasurable_replicates(self):
         """max_t_intervals supports gaps, so the p-value must not crash on them
@@ -771,3 +780,78 @@ class TestTheSplitRunsOnMatchTime:
         # the split boundary, which is the one place it must not be scrambled.
         sql = _sql_without_comments(ROWS_SQL)
         assert "round_start_unix" not in sql
+
+
+class TestBothEstimatorsAreInTheFrozenFamily:
+    """⛔ THE HOLDOUT WAS SPENT ON A CANDIDATE THAT WAS NEVER DECLARED.
+
+    `within_round_point_biserial()` records in its own docstring that it was
+    measured on 2026-08-26 with 600 block resamples ON THE CONFIRMATION HALF,
+    for kpr, kd_ratio, dpm and dmg_ratio. But `analyse()` only ever evaluated
+    `within_round_spread`, so the continuous estimator appeared in no manifest,
+    no max-T family and no results table.
+
+    That understates multiplicity twice over: the family-wise critical value was
+    computed across half the members actually tried, and the confirmation data
+    was consumed comparing an undeclared variant. `block_bootstrap()` even takes
+    an `estimator` argument — nothing ever passed one. A mechanism with no
+    caller, which is the shape of every other defect found this week.
+
+    Codex on #818. The owner's call (2026-09-01) was to register the estimator
+    and re-freeze on a NEW cutoff rather than publish the old run as confirmed.
+    """
+
+    def test_the_registry_names_both_estimators(self):
+        assert set(ESTIMATORS) == {"median_split", "point_biserial"}
+        assert ESTIMATORS["median_split"] is within_round_spread
+        assert ESTIMATORS["point_biserial"] is within_round_point_biserial
+
+    def test_the_default_family_declares_the_variant_that_was_run(self):
+        by_est = {}
+        for c in DEFAULT_FAMILY:
+            by_est.setdefault(c.estimator, set()).add(c.cid)
+        assert "point_biserial" in by_est, (
+            "the continuous estimator was run on the confirmation half and must "
+            "be declared, or the holdout was spent on an undeclared variant")
+        # the four it was actually measured on, per its own docstring
+        for base in ("kpr", "kd_ratio", "dpm", "dmg_ratio"):
+            assert any(c.cid.startswith(base) and c.estimator == "point_biserial"
+                       for c in DEFAULT_FAMILY), base
+
+    def test_every_estimator_carries_its_own_noise_control(self):
+        """A family member with no control is a member nobody can falsify.
+
+        The structural `null` control says the harness rejects pure noise. It
+        says that about the estimator it was run under and no other, so adding a
+        second estimator without a second control would leave half the family
+        unchecked — and would quietly weaken the check fixed one commit ago.
+        """
+        controls = {c.estimator for c in DEFAULT_FAMILY if c.cid.startswith("null")}
+        used = {c.estimator for c in DEFAULT_FAMILY}
+        assert controls == used, f"estimators without a null control: {used - controls}"
+
+    def test_the_manifest_tells_the_two_variants_apart(self):
+        """CONTROL. Same formula, different estimator — the frozen entry must
+        differ, or two materially different experiments hash the same."""
+        a = Candidate("m", "d", "higher_is_better", _metric)
+        b = Candidate("m", "d", "higher_is_better", _metric,
+                      estimator="point_biserial")
+        assert a.manifest_entry() != b.manifest_entry()
+        fam = lambda c: Family(name="t", candidates=[c], filters="f")  # noqa: E731
+        assert fam(a).manifest_hash() != fam(b).manifest_hash()
+
+    def test_analyse_evaluates_each_candidate_with_ITS_estimator(self):
+        blocks = {}
+        for b in range(12):
+            winner = 1 if b % 3 else 2
+            blocks[b] = {b: _round([(9, 1), (8, 1), (2, 2), (1, 2)], winner)}
+        fam = Family(name="t", filters="f", resamples=120, seed=99, candidates=[
+            Candidate("ms", "d", "higher_is_better", _metric),
+            Candidate("pb", "d", "higher_is_better", _metric,
+                      estimator="point_biserial"),
+        ])
+        out = analyse(blocks, set(blocks), fam)
+        assert out["point"]["ms"] != out["point"]["pb"], (
+            "both members produced the same point estimate — the declared "
+            "estimator is being ignored, which is the whole defect")
+        assert out["boot"]["ms"] != out["boot"]["pb"]
