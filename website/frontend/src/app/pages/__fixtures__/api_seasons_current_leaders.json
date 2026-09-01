@@ -1,1 +1,61 @@
-{"start_date":"2026-07-01 00:00:00","end_date":"2026-09-30 23:59:59","leaders":{"damage_given":{"player":"vid","value":439196},"damage_received":{"player":".olz","value":439518},"team_damage":{"player":".olz","value":7960},"revives":{"player":".olz","value":449},"deaths":{"player":".lgz","value":2338},"gibs":{"player":"vid","value":751},"objectives":{"player":".lgz","value":211},"xp":{"player":".lgz","value":15393},"kills":{"player":"vid","value":2131},"dpm":{"player":"SHIFT+W squAzE__","value":397.5},"time_alive":{"player":".olz","value":72088},"time_dead":{"player":".lgz","value":341.29999981075525},"longest_session":null}}
+{
+ "start_date": "2026-07-01 00:00:00",
+ "end_date": "2026-09-30 23:59:59",
+ "leaders": {
+  "damage_given": {
+   "player": "vid",
+   "value": 513714
+  },
+  "damage_received": {
+   "player": ".olz",
+   "value": 509306
+  },
+  "team_damage": {
+   "player": ".olz",
+   "value": 8755
+  },
+  "revives": {
+   "player": ".olz",
+   "value": 501
+  },
+  "deaths": {
+   "player": ".lgz",
+   "value": 2717
+  },
+  "gibs": {
+   "player": "vid",
+   "value": 901
+  },
+  "objectives": {
+   "player": ".lgz",
+   "value": 241
+  },
+  "xp": {
+   "player": ".lgz",
+   "value": 17358
+  },
+  "kills": {
+   "player": "vid",
+   "value": 2494
+  },
+  "dpm": {
+   "player": "SHIFT+W squAzE__",
+   "value": 399.4
+  },
+  "time_alive": {
+   "player": ".olz",
+   "value": 83243
+  },
+  "time_dead": {
+   "player": "kanii",
+   "value": 395.10000032931566
+  },
+  "longest_session": {
+   "rounds": 23,
+   "date": "2026-07-18"
+  }
+ },
+ "status": "ok",
+ "note": null,
+ "failed_metrics": []
+}

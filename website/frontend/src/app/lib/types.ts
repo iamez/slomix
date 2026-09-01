@@ -353,11 +353,23 @@ export interface SeasonCurrent {
  *  for this route is `SeasonLeadersResponse`, and `SeasonLeaders` there is
  *  the inner object.) */
 export interface SeasonLeaders {
+  /** Same contract as SeasonSummary (#862): partial names its missing
+   *  categories; a leaders board with a failed category must say WHICH. */
+  status: string;
+  note: string | null;
+  failed_metrics: string[];
   leaders: Record<string, { player: string; value: number } | null>;
 }
 
 /** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
 export interface SeasonSummary {
+  /** "ok" or "partial" — REQUIRED on the wire (no model default, so a
+   *  handler path that forgets fails loudly, #862). When partial,
+   *  failed_metrics NAMES what is missing and the zeros below it mean
+   *  MISSING, not measured — the same contract as /stats/overview. */
+  status: string;
+  note: string | null;
+  failed_metrics: string[];
   season_id: string;
   start_date: string;
   end_date: string;
