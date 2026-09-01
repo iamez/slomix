@@ -83,6 +83,7 @@ import type {
   ProxPushes,
   ProxQuality,
   ProxReactions,
+  ProxScopes,
   ProxRevives,
   ProxSpawnTiming,
   ProxSupportSummary,
@@ -1007,3 +1008,15 @@ export const useProxSupportSummary = (d: string | null) => useProxInstrument<Pro
 export const useProxCombatPositions = (d: string | null) => useProxInstrument<ProxCombatPositions>('/api/proximity/combat-position-stats', d);
 export const useProxClasses = (d: string | null) => useProxInstrument<ProxClasses>('/api/proximity/classes', d);
 export const useProxReactions = (d: string | null) => useProxInstrument<ProxReactions>('/api/proximity/reactions', d);
+
+
+/** The dates where the proximity tracker actually captured data — the
+ *  instrument chips' only honest source (the sessions list names parsed
+ *  evenings, and an evening can exist with no telemetry). */
+export function useProxScopes() {
+  return useQuery({
+    queryKey: ['prox-scopes'],
+    queryFn: () => apiGet('/api/proximity/scopes') as Promise<ProxScopes>,
+    staleTime: 5 * 60 * 1000,
+  });
+}

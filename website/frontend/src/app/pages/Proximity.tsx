@@ -17,7 +17,7 @@ import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import { isFailureStatus } from '../lib/responseStatus';
-import { useProximityLeaderboard, useSessions, useSsr } from '../lib/queries';
+import { useProximityLeaderboard, useProxScopes, useSsr } from '../lib/queries';
 import { ProximityInstruments } from './ProximityInstruments';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
@@ -154,13 +154,20 @@ function CompSkillBoard() {
 export function Proximity() {
   const [tab, setTab] = useState<LbCategory | 'comp_skill'>('power');
   const [rangeDays, setRangeDays] = useState<number>(30);
-  // Scope for the instruments: a session DATE, defaulting to the newest
-  // session. The 30-day window exists as an explicit chip, never as the
-  // first paint — unscoped instrument queries measured up to 1.9 s cold.
-  const sessions = useSessions(30);
-  const dates = [...new Set((sessions.data ?? []).map((s) => s.date))].slice(0, 6);
+  // Scope for the instruments: a CAPTURE date, defaulting to the newest.
+  // The source is /api/proximity/scopes — the dates where the tracker
+  // actually recorded — not the sessions list: an evening can exist with
+  // no telemetry, and the recorded corpus had exactly that skew (Codex on
+  // #861, P1). The 30-day window exists as an explicit chip, never as the
+  // first paint (unscoped instrument queries measured up to 1.9 s cold),
+  // and a failed or empty scope lookup mounts NOTHING — three reviewers
+  // independently caught the fall-through that would have fired thirteen
+  // unbounded queries on a degraded page.
+  const scopes = useProxScopes();
+  const dates = [...new Set((scopes.data?.sessions ?? []).map((s) => s.session_date))].slice(0, 6);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
-  const scopeDate = pickedDate === 'window' ? null : (pickedDate ?? dates[0] ?? null);
+  const windowPicked = pickedDate === 'window';
+  const scopeDate = windowPicked ? null : (pickedDate ?? dates[0] ?? null);
   return (
     <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-7)', maxWidth: 980 }}>
       <Lbl>proximity · positional telemetry</Lbl>
@@ -221,11 +228,17 @@ export function Proximity() {
             </Cluster>
           }
         />
-        {/* The chips come from the sessions list; until it answers, the
-          * instruments run UNSCOPED only if the visitor explicitly asked
-          * for the window — otherwise they wait for the date. */}
-        {sessions.isPending && pickedDate !== 'window' ? (
+        {/* Fail-closed: unscoped mounting happens ONLY on the explicit
+          * window chip. A pending lookup waits; a failed one says so; an
+          * empty one names what it means. */}
+        {windowPicked ? (
+          <ProximityInstruments sessionDate={null} />
+        ) : scopes.isPending ? (
           <Pending label="scope" />
+        ) : scopes.isError ? (
+          <Unavailable what="capture dates" />
+        ) : scopeDate == null ? (
+          <Absent reason="the tracker has not captured any session in this window — there is no date to scope the instruments to" />
         ) : (
           <ProximityInstruments sessionDate={scopeDate} />
         )}

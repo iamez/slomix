@@ -992,7 +992,8 @@
         "bytes": 38924,
         "file": "api_proximity_scopes.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/scopes"
     },
     {
       "path": "/api/proximity/spawn-timing",

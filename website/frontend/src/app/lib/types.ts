@@ -2408,16 +2408,40 @@ export interface ProxQuality {
   global_maintenance_status: string;
   scope: ProxScope & { range_days?: number };
   signals: Record<string, ProxQualitySignal>;
+  /** The HTTP-200 error shape (SQLite mode, any quality-check exception)
+   *  carries only status+ready here — every count is OPTIONAL, and the
+   *  first version crashed the whole route on `.toFixed()` of a missing
+   *  number (Codex on #861, P1). */
   round_correlation: {
     status: string;
     ready: boolean;
-    correlation_count: number;
-    complete_count: number;
-    avg_completeness_pct: number;
+    correlation_count?: number;
+    complete_count?: number;
+    avg_completeness_pct?: number;
   };
-  linkage: { scope: string; status: string; breach_count: number };
-  warnings: string[];
+  linkage?: { scope: string; status: string; breach_count: number };
+  /** RECORDS, not strings — joining them rendered "[object Object]" in the
+   *  truth strip precisely when a warning existed (Codex on #861). */
+  warnings: { code: string; level: string; message: string }[];
+  generated_at?: string;
+}
+
+/** GET /api/proximity/scopes — the dates where the TRACKER captured data,
+ *  which is the only honest source for the instrument chips: the sessions
+ *  list names parsed evenings, and an evening can exist with no telemetry
+ *  (Codex on #861, P1 — the recorded corpus had exactly that skew). */
+export interface ProxScopes {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
   generated_at: string;
+  sessions: {
+    session_date: string;
+    engagements: number;
+    map_count: number;
+    round_count: number;
+  }[];
 }
 
 export interface ProxSpawnTiming {
@@ -2463,8 +2487,11 @@ export interface ProxCrossfireAngles {
   /** THE place partner_name actually lives — the field legacy tried to
    *  read off the leaderboards endpoint, which never sent it. */
   top_duos: {
-    teammate1_guid: string; teammate2_guid: string; name: string;
-    partner_name: string; executions: number; avg_angle: number;
+    teammate1_guid: string; teammate2_guid: string;
+    /** null when the scoped player_track lookup cannot resolve the guid —
+     *  render the eight-char guid, never a blank " + " row. */
+    name: string | null;
+    partner_name: string | null; executions: number; avg_angle: number;
   }[];
 }
 
@@ -2510,7 +2537,10 @@ export interface ProxFocusFire {
 
 export interface ProxSupportSummary {
   status: string;
-  summary: { total_rounds: number; avg_uptime_pct: number; max_uptime_pct: number; avg_coverage_pct: number };
+  /** Deliberately `{}` when the support column has not been migrated —
+   *  every field optional, and emptiness is judged on total_rounds being
+   *  MISSING or zero, never formatted blind (Codex on #861, P1). */
+  summary: { total_rounds?: number; avg_uptime_pct?: number; max_uptime_pct?: number; avg_coverage_pct?: number };
   by_map: {
     map_name: string; rounds: number; avg_uptime_pct: number; max_uptime_pct: number;
     total_support_samples: number; total_samples: number;
@@ -2563,9 +2593,11 @@ export interface ProxReactions {
   return_fire: ProxReactionRow[];
   dodge: ProxReactionRow[];
   support: ProxReactionRow[];
+  /** A class can have dodge/support events and ZERO return-fire samples —
+   *  the backend then sends avg_return_fire_ms: null (Codex on #861, P1). */
   class_summary: {
-    player_class: string; events: number; return_samples: number; avg_return_fire_ms: number;
-    dodge_samples: number; avg_dodge_reaction_ms: number;
-    support_samples: number; avg_support_reaction_ms: number;
+    player_class: string; events: number; return_samples: number; avg_return_fire_ms: number | null;
+    dodge_samples: number; avg_dodge_reaction_ms: number | null;
+    support_samples: number; avg_support_reaction_ms: number | null;
   }[];
 }

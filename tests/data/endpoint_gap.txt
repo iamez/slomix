@@ -75,7 +75,6 @@
 /api/proximity/prox-scores/formula
 /api/proximity/push-deaths/heatmap
 /api/proximity/round
-/api/proximity/scopes
 /api/proximity/summary
 /api/proximity/teamplay
 /api/proximity/trades/events

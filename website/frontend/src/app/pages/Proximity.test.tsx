@@ -6,7 +6,7 @@ import { makeQueryClient } from '../lib/queries';
 import { Proximity } from './Proximity';
 import type { ProximityLeaderboard } from '../lib/types';
 import boardJson from './__fixtures__/api_proximity_leaderboards.json';
-import sessions from './__fixtures__/api_sessions.json';
+import scopes from './__fixtures__/api_proximity_scopes.json';
 import quality from './__fixtures__/api_proximity_quality.json';
 import spawnTiming from './__fixtures__/api_proximity_spawn_timing.json';
 import aimLock from './__fixtures__/api_proximity_aim_lock.json';
@@ -22,7 +22,7 @@ import classes from './__fixtures__/api_proximity_classes.json';
 import reactions from './__fixtures__/api_proximity_reactions.json';
 
 const INSTRUMENTS = new Map<string, unknown>([
-  ['/api/sessions', sessions],
+  ['/api/proximity/scopes', scopes],
   ['/api/proximity/quality', quality],
   ['/api/proximity/spawn-timing', spawnTiming],
   ['/api/proximity/aim-lock', aimLock],
@@ -127,21 +127,42 @@ describe('Proximity', () => {
     expect(screen.getByText(/kanii \+ bronze/)).toBeInTheDocument();
   });
 
-  it('scopes the instruments to the newest session date by default', async () => {
+  it('scopes the instruments to the newest CAPTURE date by default', async () => {
     const fetchSpy = vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]])));
     vi.stubGlobal('fetch', fetchSpy);
     renderPage();
     await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
-    const newest = (sessions as { date: string }[])[0].date;
+    const newest = (scopes as { sessions: { session_date: string }[] }).sessions[0].session_date;
     const instrumentCalls = fetchSpy.mock.calls
       .map((c) => String(c[0]))
-      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards'));
+      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes'));
     expect(instrumentCalls.length).toBeGreaterThan(0);
     for (const u of instrumentCalls) {
       // ⛔ Unscoped instruments measured up to 1.9 s cold — the first
       // paint must NEVER be the unbounded window.
       expect(u, `unscoped instrument call: ${u}`).toContain(`session_date=${newest}`);
     }
+  });
+
+  it('mounts nothing unscoped when the scope lookup fails', async () => {
+    // Three reviewers independently: a failed /proximity/scopes must not
+    // fall through into thirteen unbounded instrument queries.
+    const fetchSpy = vi.fn((input: RequestInfo | URL) => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/proximity/scopes') {
+        return Promise.resolve({ ok: false, status: 503, json: () => Promise.resolve({}) } as Response);
+      }
+      const body = new Map([['/api/proximity/leaderboards', board as unknown]]).get(pathname) ?? INSTRUMENTS.get(pathname);
+      if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/capture dates: unavailable/)).toBeInTheDocument());
+    const instrumentCalls = fetchSpy.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes'));
+    expect(instrumentCalls).toEqual([]);
   });
 
   it('treats a 200 with status:error as a failure, not as data', async () => {

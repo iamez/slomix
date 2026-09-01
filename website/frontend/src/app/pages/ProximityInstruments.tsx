@@ -12,7 +12,7 @@
  * is drawn as a thinned sparkline, never a table.
  */
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import { isFailureStatus } from '../lib/responseStatus';
 import {
@@ -77,12 +77,21 @@ function QualityBand({ sessionDate }: { sessionDate: string | null }) {
       <SectionHead label="data completeness" aside={<span className="lbl">per source table · this scope</span>} />
       {q.isPending && <Pending label="data completeness" />}
       {q.isError && <Unavailable what="data completeness" />}
-      {q.data && (
+      {q.data && (q.data.overall_status !== 'ready' && q.data.overall_status !== 'ok' ? (
+        // The HTTP-200 error shape carries only statuses — formatting its
+        // missing counts crashed the whole route into the error boundary
+        // instead of this line (Codex on #861, P1).
+        <Unavailable what={`data completeness (${q.data.overall_status})`} />
+      ) : (
         <Stack gap={1}>
           <Meta>
             scope {q.data.selected_scope_status} · maintenance {q.data.global_maintenance_status}
-            {' · '}correlation {q.data.round_correlation.avg_completeness_pct.toFixed(1)}%
-            {' ('}{q.data.round_correlation.complete_count}/{q.data.round_correlation.correlation_count} complete{')'}
+            {q.data.round_correlation.avg_completeness_pct != null && (
+              <>
+                {' · '}correlation {q.data.round_correlation.avg_completeness_pct.toFixed(1)}%
+                {' ('}{q.data.round_correlation.complete_count}/{q.data.round_correlation.correlation_count} complete{')'}
+              </>
+            )}
           </Meta>
           <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
             {Object.entries(q.data.signals).map(([key, sig]) => (
@@ -102,10 +111,10 @@ function QualityBand({ sessionDate }: { sessionDate: string | null }) {
             ))}
           </Cluster>
           {q.data.warnings.length > 0 && (
-            <Meta>{q.data.warnings.join(' · ')}</Meta>
+            <Meta>{q.data.warnings.map((w) => w.message).join(' · ')}</Meta>
           )}
         </Stack>
-      )}
+      ))}
     </Stack>
   );
 }
@@ -116,7 +125,15 @@ function CohesionSparkline({ data }: { data: ProxCohesion }) {
   const w = 560; const h = 60;
   const all = data.timeline;
   if (all.length < 2) return null;
-  const maxD = Math.max(...all.map((t) => t.dispersion));
+  // Math.max(1, …): an all-zero evening must draw a flat line, not NaN
+  // coordinates that silently blank the chart (CodeRabbit on #861).
+  const maxD = Math.max(1, ...all.map((t) => t.dispersion));
+  // A SHARED time axis: deriving x from each team's local index forced
+  // samples at different times onto the same column — the recorded fixture
+  // has different timestamp sets per team (Codex on #861).
+  const t0 = Math.min(...all.map((t) => t.time));
+  const t1 = Math.max(...all.map((t) => t.time));
+  const span = Math.max(1, t1 - t0);
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '100%', maxWidth: w, height: h }} role="img" aria-label="team dispersion over the evening">
       {teams.map((team) => {
@@ -126,7 +143,7 @@ function CohesionSparkline({ data }: { data: ProxCohesion }) {
         const step = Math.max(1, Math.floor(pts.length / 140));
         const thin = pts.filter((_, i) => i % step === 0);
         const path = thin.map((t, i) => {
-          const x = (i / Math.max(1, thin.length - 1)) * w;
+          const x = ((t.time - t0) / span) * w;
           const y = h - (t.dispersion / maxD) * (h - 4) - 2;
           return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
         }).join(' ');
@@ -195,11 +212,16 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
         </div>
 
         <div data-parity="proximity.revives">
-          <Instrument label="revives" aside="medics under pressure" q={revives} empty={noTracker} isEmpty={(d) => d.leaders.length === 0}>
+          <Instrument label="revives" aside="medics under pressure" q={revives} empty={noTracker} isEmpty={(d) => d.summary.total_revives === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.summary.total_revives)} revives · {d.summary.under_fire_pct.toFixed(1)}% under fire</Meta>
-                {d.leaders.slice(0, 5).map((l) => (
+                {/* The board needs 2+ revives per medic, so a sparse scope
+                  * can have real totals and NO qualifying leader — the
+                  * totals must survive that (Codex on #861). */}
+                {d.leaders.length === 0 ? (
+                  <Meta>no medic reached the two-revive board threshold here</Meta>
+                ) : d.leaders.slice(0, 5).map((l) => (
                   <Row key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire`} val={figure(l.revives)} />
                 ))}
               </Stack>
@@ -281,7 +303,7 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 {d.top_duos.slice(0, 5).map((duo) => (
                   <Row
                     key={`${duo.teammate1_guid}:${duo.teammate2_guid}`}
-                    name={`${stripEtColors(duo.name)} + ${stripEtColors(duo.partner_name)}`}
+                    name={`${duo.name ? stripEtColors(duo.name) : duo.teammate1_guid.slice(0, 8)} + ${duo.partner_name ? stripEtColors(duo.partner_name) : duo.teammate2_guid.slice(0, 8)}`}
                     mid={`avg ${duo.avg_angle.toFixed(0)}°`}
                     val={`${figure(duo.executions)}×`}
                   />
@@ -292,10 +314,10 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
         </div>
 
         <div data-parity="proximity.support-summary">
-          <Instrument label="support uptime" aside="time spent near teammates" q={support} empty={noTracker} isEmpty={(d) => d.summary.total_rounds === 0}>
+          <Instrument label="support uptime" aside="time spent near teammates" q={support} empty={noTracker} isEmpty={(d) => !d.summary.total_rounds}>
             {(d) => (
               <Stack gap={1} className="rows">
-                <Meta>{figure(d.summary.total_rounds)} rounds · avg {d.summary.avg_uptime_pct.toFixed(1)}%</Meta>
+                <Meta>{figure(d.summary.total_rounds ?? 0)} rounds · avg {(d.summary.avg_uptime_pct ?? 0).toFixed(1)}%</Meta>
                 {d.by_map.slice(0, 5).map((m) => (
                   <Row key={m.map_name} name={mapLabel(m.map_name)} mid={`${figure(m.rounds)} rd`} val={`${m.avg_uptime_pct.toFixed(1)}%`} />
                 ))}
@@ -326,7 +348,14 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                   <Row key={`rf:${r.guid}`} name={stripEtColors(r.name)} mid={`return fire · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
                 ))}
                 {d.class_summary.map((c) => (
-                  <Row key={c.player_class} name={c.player_class.toLowerCase()} mid={`${figure(c.events)} events`} val={`${figure(c.avg_return_fire_ms)} ms rf`} />
+                  <Row
+                    key={c.player_class}
+                    name={c.player_class.toLowerCase()}
+                    mid={`${figure(c.events)} events`}
+                    // null, not zero: a class with no return-fire SAMPLES has
+                    // no average to claim (Codex on #861, P1).
+                    val={c.avg_return_fire_ms == null ? '— rf' : `${figure(c.avg_return_fire_ms)} ms rf`}
+                  />
                 ))}
               </Stack>
             )}
