@@ -37,7 +37,59 @@ def _report() -> dict:
     out = subprocess.run([sys.executable, str(SCRIPT), "--json"],
                          capture_output=True, text=True, cwd=ROOT)
     assert out.stdout.strip(), f"checker produced no output:\n{out.stderr}"
+    # ⛔ PARSED WITHOUT MERCY. Any diagnostic that leaks onto stdout puts a
+    # warning line in front of the JSON, and the honest failure is right here
+    # rather than a lenient reader that strips it — a channel that tolerates
+    # noise stops being machine-readable one line at a time. Codex on #860.
     return json.loads(out.stdout)
+
+
+def _schemas_that_left(not_compared) -> list[str]:
+    """The rule, as a function, so a test can drive it with inputs the live tree
+    does not currently produce.
+
+    ⛔ Asserting it against today's report alone proves nothing: `not_compared`
+    equals `KNOWN_NOT_COMPARED` right now, so the assertion holds whether the
+    rule works or not. A mutation replacing it with `[]` survived exactly there.
+    """
+    return sorted(set(not_compared) - set(KNOWN_NOT_COMPARED))
+
+
+def test_a_schema_leaving_the_comparison_is_named():
+    assert _schemas_that_left(["StatsRecords"]) == []
+    assert _schemas_that_left(["StatsRecords", "RoundViz"]) == ["RoundViz"]
+    assert _schemas_that_left([]) == []
+
+
+def test_the_import_diagnostic_goes_to_stderr():
+    """⛔ THE BRANCH NO CURRENT TREE REACHES.
+
+    Every router imports today, so the diagnostic never fires and a test driving
+    the real script cannot tell stdout from stderr for it — a mutation moving
+    the print back to stdout survived exactly there.
+
+    Read from the SOURCE instead, with comments stripped and the stripping
+    asserted, because the comment above that line explains the fix using the
+    same words the check looks for.
+    """
+    src = SCRIPT.read_text(encoding="utf-8")
+    src = "\n".join(ln.split("#")[0] for ln in src.splitlines())
+    assert "could not import" in src, "the diagnostic itself is gone"
+    line = next(ln for ln in src.splitlines() if "could not import" in ln)
+    assert "sys.stderr" in line, (
+        f"the import diagnostic writes to stdout, which puts a warning line in "
+        f"front of the JSON: {line.strip()}")
+    assert "stdout" not in src.replace("sys.stdout", ""), "unexpected stdout use"
+
+
+def test_the_json_channel_carries_only_json():
+    """CONTROL for the channel itself: stdout must parse with nothing removed,
+    even though the tool has diagnostics to emit."""
+    out = subprocess.run([sys.executable, str(SCRIPT), "--json"],
+                         capture_output=True, text=True, cwd=ROOT)
+    assert out.stdout.lstrip().startswith("{"), (
+        f"stdout does not begin with JSON:\n{out.stdout[:200]}")
+    json.loads(out.stdout)
 
 
 def _recorded() -> set[str]:
@@ -50,6 +102,13 @@ def _measured(report: dict) -> set[str]:
 
 
 COMPARED_FLOOR = 36
+
+#: Schemas the parser cannot read, BY NAME. `StatsRecords` is declared on the
+#: client as `export type StatsRecords = Record<string, RecordEntry[]>` — a type
+#: ALIAS, and this parser reads `interface` declarations only. Recorded here so
+#: that a schema silently JOINING this list fails the test instead of quietly
+#: taking its findings with it.
+KNOWN_NOT_COMPARED = {"StatsRecords"}
 
 
 def test_the_set_of_compared_schemas_does_not_shrink():
@@ -69,6 +128,17 @@ def test_the_set_of_compared_schemas_does_not_shrink():
         f"only {report['compared']} schemas compared, down from {COMPARED_FLOOR} "
         f"— a schema left the comparison, so any finding about it vanished "
         f"rather than being fixed. Not compared: {report['not_compared']}")
+    # ⛔ AND THE COUNT ALONE IS NOT ENOUGH. If one interface becomes
+    # parser-invisible in the same change that makes another comparable, the
+    # total stays 36 and this passes while every finding about the removed one
+    # disappears. A scalar floor cannot see a swap; the identities can.
+    # Codex on #860.
+    gone = _schemas_that_left(report["not_compared"])
+    assert not gone, (
+        f"these schemas left the comparison: {gone}\n"
+        f"Every drift finding about them disappeared with them. Fix the parser, "
+        f"restore the interface, or record the name in KNOWN_NOT_COMPARED with "
+        f"the reason it cannot be read.")
 
 
 def test_the_checker_actually_compared_something():

@@ -291,8 +291,17 @@ async def get_proximity_duos(
     guid_key = _guid_key(player_guid)
     player_sql, player_params = "", ()
     if guid_key:
-        player_sql = (f" AND UPPER(CAST(crossfire_participants AS TEXT)) "
-                      f"LIKE ${len(params) + 1}")
+        # ⛔ BOTH COLUMNS. `_compute_scoped_duos` deliberately falls back to
+        # `attackers` when `crossfire_participants` is empty — it even searches
+        # `guid_to_name`, which is built from attackers, when applying the exact
+        # filter. Narrowing on participants alone therefore discarded rows the
+        # UNFILTERED endpoint can still aggregate: a filtered request answering
+        # with LESS than the data supports, which is the failure this narrowing
+        # was added to prevent, inverted. Measured: 0 such rows today, and the
+        # fallback exists because they are expected. Codex on #860.
+        player_sql = (f" AND (UPPER(CAST(crossfire_participants AS TEXT)) "
+                      f"LIKE ${len(params) + 1}"
+                      f" OR UPPER(CAST(attackers AS TEXT)) LIKE ${len(params) + 1})")
         player_params = (f"%{guid_key}%",)
     scope["player_guid"] = guid_key or None
     fetch_params = query_params + player_params
