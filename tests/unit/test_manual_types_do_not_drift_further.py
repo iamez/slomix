@@ -7,9 +7,15 @@ script. A repo-wide grep for its name finds three mentions and zero invocations,
 so for as long as it existed it reported to nobody.
 
 That is the same defect it was built to detect, one level up. This test is its
-caller. It is a ratchet, not a gate: the six disagreements that exist today are
-recorded, and it fails when a NEW one appears — or when a recorded one is fixed
-and its line is left behind.
+caller. It is a ratchet, not a gate: known disagreements are recorded and it fails when
+a NEW one appears — or when a recorded one is fixed and its line is left behind.
+
+⭐ Both directions fired within a day of being written. The six entries it was
+seeded with were fixed at the source by the parallel session (`7e381f45`, #861)
+the moment the checker had a caller, and this test then failed as "stale" —
+from a merge with `main` that the branch itself did not contain, because CI runs
+a pull request against the merge result. The baseline is empty now, on purpose:
+the guard is the point, not the list.
 
 ⚠️ It reads the checker's `--json` output, not its prose. Grepping sentences is
 how a guard ends up agreeing with the comment that explains the code.
