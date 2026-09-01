@@ -505,11 +505,13 @@ export interface ActivityCalendar {
   activity: Record<string, number>;
   /** Three states, and the page must not collapse them: `ok` (measured),
    *  `no_data` (measured and empty) and `unavailable` (the query failed and
-   *  the endpoint still answered 200). Optional because the field arrives
-   *  with #830 — until then it is absent and the emptiness heuristic below
-   *  is all there is. `note` carries the reason when the state is not ok. */
-  status?: string;
-  note?: string;
+   *  the endpoint still answered 200). REQUIRED since #830 landed — the
+   *  "optional until it arrives" hedge outlived the arrival, which is
+   *  exactly the drift check_manual_types_against_openapi exists to catch
+   *  (its first run with a caller, #860, named these six). `note` carries
+   *  the reason and is null when the state is ok. */
+  status: string;
+  note?: string | null;
 }
 
 /* ---------- phase 2, batch 2: leaderboards · record-book · awards ---------- */
@@ -715,12 +717,12 @@ export interface WeaponRow {
  * api_stats_weapons_hall_of_fame.json (object keyed by weapon_key). */
 export interface WeaponsHallOfFame {
   period: string;
-  /** Same three states as the activity calendar (#830): `ok`, `no_data`,
-   *  `unavailable`. Absent until that lands; present afterwards, and then
-   *  it — not the emptiness of `leaders` — decides whether this is an
-   *  outage rather than a quiet season. */
-  status?: string;
-  note?: string;
+  /** Same three states as the activity calendar: `ok`, `no_data`,
+   *  `unavailable` — it, not the emptiness of `leaders`, decides whether
+   *  this is an outage rather than a quiet season. Required since #830
+   *  landed (same drift, same first-run catch). */
+  status: string;
+  note?: string | null;
   leaders: Record<string, {
     weapon: string;
     weapon_key: string;
@@ -796,13 +798,15 @@ export interface VizPlayer {
  * families disagree on the number, so it never leaves this page. */
 export interface RoundViz {
   round_id: number;
-  map_name: string;
+  /** Nullable in the spec — the round row's map_name column allows it
+   *  (same class as the two names #841 fixed). */
+  map_name: string | null;
   /** Nullable in the handler — `str(row[2]) if row[2] else None`, the same
    *  expression as /rounds/recent. Neither of us has ever seen a null here;
    *  the branch exists, so the type says so and the page prints "unknown"
    *  rather than a blank cell (#830). */
   round_date: string | null;
-  round_number: number;
+  round_number: number | null;
   round_label: string;
   winner_team: number | null;
   /** null for historical rounds without a measured duration — unknown,
