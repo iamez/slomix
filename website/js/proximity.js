@@ -1567,8 +1567,36 @@ function formatQualityTimestamp(value) {
     return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function getQualityTone(status, ready = null) {
+/**
+ * ⛔ `error` IS NOT THE ONLY WAY A PANEL FAILS.
+ *
+ * Eleven proximity endpoints used to answer `{"status": "ok", ...empty}` during
+ * a database outage; they now answer `unavailable` with a `reason`. This page
+ * does NOT use `responseStatus.ts` — it is the legacy renderer — and every gate
+ * below tested `status === 'error'` alone, so the new status fell straight
+ * through to the empty-render path and the outage was still presented as "no
+ * data yet". Same trap as the snowflake change earlier this week: the schema and
+ * the new SPA were counted, and the third client was not. Codex on #862.
+ */
+export function proximityFailed(data) {
+    return !data || data.status === 'error' || data.status === 'unavailable';
+}
+
+/** The line to show when the answer failed BECAUSE the probe could not run —
+ *  null when this is an ordinary error or a genuinely empty answer, so callers
+ *  keep their own "no data yet" wording for the case it actually describes. */
+export function proximityUnavailableNote(data) {
+    if (!data || data.status !== 'unavailable') return null;
+    const why = data.reason ? ` (${data.reason})` : '';
+    return `<div class="text-[11px] text-amber-400/80">Temporarily unavailable${why}.</div>`;
+}
+
+export function getQualityTone(status, ready = null) {
     if (status === 'error') return 'rose';
+    // ⛔ A panel that could not be measured is not a neutral panel. Without
+    // this, `unavailable` fell past every case here to the default tone and an
+    // outage was painted the same colour as a healthy section (#862).
+    if (status === 'unavailable') return 'rose';
     if (status === 'insufficient') return 'rose';
     if (status === 'warning') return 'amber';
     if (status === 'partial') return 'amber';
@@ -4502,8 +4530,10 @@ function renderWeaponAccuracy(data) {
 function renderRevives(data) {
     const summaryEl = document.getElementById('revive-summary');
     const leadersEl = document.getElementById('revive-leaders');
-    if (!data || data.status === 'error') {
-        if (leadersEl) leadersEl.innerHTML = '<div class="text-[11px] text-slate-500">No revive data available.</div>';
+    if (proximityFailed(data)) {
+        const note = proximityUnavailableNote(data);
+        if (leadersEl) leadersEl.innerHTML = note
+            || '<div class="text-[11px] text-slate-500">No revive data available.</div>';
         return;
     }
     const summary = data.summary || {};
@@ -4675,7 +4705,7 @@ function bindV52PanelEvents() {
 // ===== v6 CARRIER INTELLIGENCE RENDERERS =====
 
 function renderCarrierIntel(data) {
-    if (!data || data.status === 'error') return;
+    if (proximityFailed(data)) return;
 
     // Summary stats
     const summaryEl = document.getElementById('carrier-summary');
@@ -4742,7 +4772,7 @@ function renderCarrierIntel(data) {
 }
 
 function renderCarrierKillers(data) {
-    if (!data || data.status === 'error') return;
+    if (proximityFailed(data)) return;
     const el = document.getElementById('carrier-killer-leaders');
     if (!el) return;
 
@@ -5000,7 +5030,7 @@ function renderObjectiveRuns(data) {
 // FOCUS FIRE
 // ========================================
 function renderFocusFire(data) {
-    if (!data || data.status === 'error') return;
+    if (proximityFailed(data)) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('focus-fire-summary');
     if (summaryEl) {
@@ -5053,7 +5083,7 @@ function renderFocusFire(data) {
 // OBJECTIVE FOCUS
 // ========================================
 function renderObjectiveFocus(data) {
-    if (!data || data.status === 'error') return;
+    if (proximityFailed(data)) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('obj-focus-summary');
     if (summaryEl) {
@@ -5094,7 +5124,7 @@ function renderObjectiveFocus(data) {
 // SUPPORT SUMMARY
 // ========================================
 function renderSupportSummary(data) {
-    if (!data || data.status === 'error') return;
+    if (proximityFailed(data)) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('support-summary-cards');
     if (summaryEl) {
@@ -5127,7 +5157,7 @@ function renderSupportSummary(data) {
 // COMBAT POSITION STATS
 // ========================================
 function renderCombatPositionStats(data) {
-    if (!data || data.status === 'error') return;
+    if (proximityFailed(data)) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('combat-pos-summary');
     if (summaryEl) {

@@ -195,3 +195,98 @@ class TestTheSeasonEndpointsSayWhenTheyCouldNotMeasure:
         body = self._body(_Broken, "/api/seasons/current/leaders")
         assert len(body["failed_metrics"]) > 5, body["failed_metrics"]
         assert "round_date" not in body["failed_metrics"]
+
+
+class _SqliteLike:
+    """A healthy SQLite adapter: it has a `db_path`, and it raises on the
+    PostgreSQL catalogue query the way `SQLiteAdapter.fetch_val` does."""
+    db_path = "/tmp/dev.sqlite3"
+
+    def __init__(self, columns=("attacker_guid",)):
+        self._columns = columns
+
+    async def fetch_all(self, query, params=None):
+        if "PRAGMA table_info" in query:
+            return [(0, c, "TEXT", 0, None, 0) for c in self._columns]
+        return []
+
+    async def fetch_one(self, *a, **k): return None
+
+    async def fetch_val(self, query, params=None):
+        if "information_schema" in query:
+            raise RuntimeError('no such table: information_schema.columns')
+        return 0
+
+
+class TestAnUnsupportedCatalogueIsNotAnOutage:
+    """⛔ THE DIALECT IS NOT THE SERVER.
+
+    `information_schema` does not exist in SQLite, so the probe raised on EVERY
+    call in the supported local development configuration. Once an exception
+    started meaning "the database did not answer", all eleven handlers would
+    have reported an outage against a perfectly healthy dev database — the fix
+    for one false claim manufacturing another. Codex on #862.
+    """
+
+    def _probe(self, db, table="proximity_combat_position", column="attacker_guid"):
+        import asyncio
+
+        from website.backend.routers.proximity_helpers import _table_column_exists
+        return asyncio.run(_table_column_exists(db, table, column))
+
+    def test_sqlite_answers_the_question_instead_of_failing_it(self):
+        assert self._probe(_SqliteLike()) is True
+
+    def test_sqlite_can_still_say_the_column_is_absent(self):
+        # CONTROL: a dialect-aware probe that always said True would be useless.
+        assert self._probe(_SqliteLike(columns=("something_else",))) is False
+
+    def test_a_real_sqlite_outage_is_still_an_outage(self):
+        class _Down(_SqliteLike):
+            async def fetch_all(self, *a, **k):
+                raise RuntimeError("database is locked")
+        assert self._probe(_Down()) is None
+
+    def test_postgres_is_untouched(self):
+        # CONTROL: the branch must not capture the adapter that has no db_path.
+        assert self._probe(_Broken()) is None
+        assert self._probe(_DeployedButEmpty()) is True
+
+    def test_a_table_name_that_is_not_an_identifier_is_refused(self):
+        """The PRAGMA path interpolates, because SQLite accepts no parameter
+        there. Every caller passes a literal, and this is what keeps it so."""
+        import pytest as _pytest
+        with _pytest.raises(ValueError):
+            self._probe(_SqliteLike(), table="rounds; DROP TABLE rounds")
+
+
+class TestTheHelperCannotBeTalkedOutOfItsOwnStatus:
+    def test_a_payload_key_cannot_overwrite_the_status(self):
+        from website.backend.routers.proximity_helpers import _probe_unavailable
+        out = _probe_unavailable("t", "c", status="ok", reason="nothing wrong", rows=[])
+        assert out["status"] == "unavailable"
+        assert "did not answer" in out["reason"]
+        assert out["rows"] == []
+
+
+class TestTheDashboardCountsAnUnavailableSectionAsFailed:
+    """An outage across all six objective probes was still reported as
+    `sections_ok: 6, sections_error: 0` — the aggregate being the last place
+    still claiming the page was fine."""
+
+    def test_the_classification_rule_itself(self):
+        # The rule as the aggregator now spells it, pinned against drift.
+        import inspect
+
+        from website.backend.routers import proximity_dashboard as pd
+        src = inspect.getsource(pd.get_proximity_dashboard)
+        src = "\n".join(ln.split("#")[0] for ln in src.splitlines())
+        assert '("error", "unavailable")' in src, (
+            "the dashboard aggregator no longer counts `unavailable` as a "
+            "failed section, so an outage reports sections_ok")
+        # ⚠️ CONTROL FOR THE READER ITSELF. A source guard that greps a file is
+        # one comment away from agreeing with the prose that explains the code,
+        # so this proves the stripper removed comments and that the phrase is
+        # being read from executable text.
+        assert "#" not in src
+        assert "Codex on #862" not in src
