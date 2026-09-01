@@ -20,6 +20,7 @@ import inspect
 import math
 import random
 import sys
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -1055,3 +1056,180 @@ class TestTheHoldoutIsAFIXEDCOHORTNotJustALowerBound:
                    frozen_cutoff="2026-07-15", frozen_cohort=cohort_digest(["b1", "b2"]))
         assert a.manifest_hash() != b.manifest_hash()
         assert a.frozen()["frozen_cohort"] == cohort_digest(["b1"])
+
+
+class TestTheAgreementGateCountsMapsNotHalves:
+    """⛔ THE FUNCTION CONTRADICTED ITS OWN DOCSTRING.
+
+    `margin_agreement` says "one vote per matched pair, not one per player" and
+    then deduplicated on `(rid, half)`. The two halves of a map have DIFFERENT
+    round ids and `pair_margin` copies the same margin, winner and defender onto
+    both — so a fully loaded map cast TWO identical votes while a pair with
+    eligible rows in only one half cast one.
+
+    That weights the agreement percentage by per-half row availability, and the
+    percentage is compared against `MARGIN_AGREEMENT_FLOOR` to decide whether the
+    `seconds` outcome is believable at all. Codex on #818.
+    """
+
+    @staticmethod
+    def _p(rid, half, pair, margin=5.0, winner=1, defender=2):
+        return {"rid": rid, "half": half, "pair": pair, "margin": margin,
+                "map_winner_side": winner, "r2_defender": defender,
+                "guid": f"g{rid}", "team": 1, "winner": winner}
+
+    def test_a_map_loaded_on_both_halves_votes_once(self):
+        rows = {1: [self._p(1, 1, 100), self._p(1, 1, 100)],
+                2: [self._p(2, 2, 100)]}
+        agree, total = margin_agreement(rows)
+        assert total == 1, f"one map cast {total} votes"
+
+    def test_two_different_maps_vote_twice(self):
+        # CONTROL: deduplicating too hard would collapse the whole corpus to one.
+        rows = {1: [self._p(1, 1, 100)], 2: [self._p(2, 1, 200)]}
+        assert margin_agreement(rows)[1] == 2
+
+    def test_a_half_only_pair_is_not_worth_less_than_a_full_one(self):
+        """The defect in one line: both of these are ONE map, so both must
+        contribute exactly one vote."""
+        full = {1: [self._p(1, 1, 100)], 2: [self._p(2, 2, 100)]}
+        half = {1: [self._p(1, 1, 100)]}
+        assert margin_agreement(full)[1] == margin_agreement(half)[1] == 1
+
+
+class TestTheFrozenCutoffIsAnInstantNotAString:
+    """⛔ LEXICOGRAPHIC COMPARISON OF TIMESTAMPS.
+
+    `str(block_times[b]) < frozen_cutoff` compares text. A perfectly ordinary
+    ISO cutoff — `2026-07-13T21:35:13` — sorts ABOVE every database value from
+    that day, because the database stringifies with a space (0x20) and `T` is
+    0x54. Every block on the cutoff date then lands in discovery regardless of
+    its time, and the "absolute" frozen split is decided by a formatting choice.
+    Codex on #818.
+    """
+
+    # ⚠️ Naive datetimes on purpose, and ruff's DTZ001 is right to ask: these
+    # stand in for `rounds.round_date`+`round_time`, which is `timestamp WITHOUT
+    # time zone`. Attaching a zone here would make the fixture describe a column
+    # that does not exist, and the split would then be tested against a shape
+    # the database never produces.
+    TIMES = {  # noqa: DTZ001 - mirrors a naive database column, see above
+        "early": datetime(2026, 7, 13, 9, 0, 0),  # noqa: DTZ001
+        "same_day_late": datetime(2026, 7, 13, 23, 0, 0),  # noqa: DTZ001
+        "next_day": datetime(2026, 7, 14, 9, 0, 0),  # noqa: DTZ001
+    }
+
+    def test_the_space_form_splits_where_it_says(self):
+        disc, conf, _, _ = chronological_split(self.TIMES, 0.7,
+                                               "2026-07-13 21:35:13")
+        assert disc == {"early"}
+        assert conf == {"same_day_late", "next_day"}
+
+    def test_the_T_form_is_the_SAME_instant_and_must_split_the_same(self):
+        disc, conf, _, _ = chronological_split(self.TIMES, 0.7,
+                                               "2026-07-13T21:35:13")
+        assert conf == {"same_day_late", "next_day"}, (
+            "the ISO 'T' form put a same-day evening block in DISCOVERY — the "
+            "cutoff was compared as text, so the format decided the split")
+
+    def test_an_unparseable_cutoff_is_refused_not_guessed(self):
+        import pytest as _pytest
+        with _pytest.raises(ValueError):
+            chronological_split(self.TIMES, 0.7, "last tuesday")
+
+
+class TestARoundWhereEverybodyWonIsNotAMeasuredZero:
+    """⛔ NO WITHIN-ROUND COMPARISON, BUT A VOTE ANYWAY.
+
+    §8.1's whole claim is that the comparison never leaves the round. When
+    filtering or an incomplete import leaves every eligible row on the SAME
+    side, there is no winner-versus-loser comparison in that round at all — yet
+    `within_round_spread` appended `0.0`, a measured zero, which drags the point
+    estimate and every bootstrap replicate toward the null.
+
+    `within_round_point_biserial` already skipped these (`len(set(ws)) < 2`).
+    The two estimators disagreed about what counts as a measurement, which is
+    the kind of difference that shows up as one of them being "less powerful".
+    Codex on #818.
+    """
+
+    @staticmethod
+    def _one_sided(rid):
+        """Four players, ALL on the winning side — no comparison exists here."""
+        return [{"guid": f"p{rid}{i}", "rid": rid, "team": 1, "v": v,
+                 "winner": 1} for i, v in enumerate([9, 8, 2, 1])]
+
+    @staticmethod
+    def _two_sided(rid):
+        return [{"guid": f"q{rid}{i}", "rid": rid, "team": t, "v": v,
+                 "winner": 1} for i, (v, t) in
+                enumerate([(9, 1), (8, 1), (2, 2), (1, 2)])]
+
+    def test_a_round_with_one_outcome_is_skipped_not_scored_zero(self):
+        # ⚠️ THREE rounds, not one: `within_round_spread` needs at least two
+        # measured rounds before it returns anything, so a single-round fixture
+        # returns None whatever the fix does — it could not reach the branch it
+        # was written for. My first version of this test did exactly that, and
+        # its own CONTROL failed, which is how it got caught.
+        flat = {r: self._one_sided(r) for r in (1, 2, 3)}
+        assert within_round_spread(flat, _metric) is None, (
+            "rounds with no winner-versus-loser comparison were scored as "
+            "measured zeros")
+
+    def test_two_sided_rounds_are_still_measured(self):
+        # CONTROL: skipping too eagerly would empty the corpus.
+        flat = {r: self._two_sided(r) for r in (1, 2, 3)}
+        out = within_round_spread(flat, _metric)
+        assert out is not None and out > 0, out
+
+    def test_one_sided_rounds_do_not_dilute_the_measured_ones(self):
+        """The defect stated as an effect: adding rounds that contain no
+        comparison must not pull the estimate toward zero."""
+        clean = {r: self._two_sided(r) for r in (1, 2, 3)}
+        diluted = dict(clean)
+        diluted.update({r: self._one_sided(r) for r in (4, 5, 6)})
+        assert within_round_spread(clean, _metric) == within_round_spread(diluted, _metric)
+
+    def test_the_two_estimators_agree_about_what_counts(self):
+        """⭐ Why it matters beyond one round: the median split and the
+        continuous form must measure the SAME set, or a difference in their
+        power is really a difference in their denominators."""
+        flat = {r: self._one_sided(r) for r in (1, 2, 3)}
+        assert within_round_spread(flat, _metric) is None
+        assert within_round_point_biserial(flat, _metric) is None
+
+
+class TestTheSpatialUniverseUsesTheCanonicalTrackLink:
+    """⛔ THE FOREIGN KEY IS NOT THE WHOLE LINK.
+
+    1,981 `player_track` rows still carry `round_id IS NULL`, and
+    `replay_service._TRACK_ROUND_JOIN` resolves those by the date/round/map key
+    WHEN THAT KEY IDENTIFIES EXACTLY ONE ROUND. Using the FK alone made
+    `--spatial` analyse a smaller Layer 4 universe than the repository considers
+    linked — and a smaller universe moves the cutoff and the confirmation
+    cohort with it.
+
+    Measured against the live database: 967 rounds by FK, 971 canonically, and
+    inside the eligible §8 population +4 rounds and **+1 BLOCK**. Codex on #818.
+    """
+
+    def test_the_ambiguity_refusal_is_present(self):
+        """The `NOT EXISTS` is the whole safety of the fallback: without it a
+        date/round/map key shared by two rounds would attach one round's tracks
+        to both."""
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "tracked_rounds" in sql
+        assert "r2.id <> r.id" in sql, (
+            "the fallback no longer refuses an ambiguous key, so tracks can be "
+            "attributed to the wrong round")
+
+    def test_the_fk_half_and_the_fallback_half_are_both_there(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "WHERE round_id IS NOT NULL" in sql, "the FK half is missing"
+        assert "WHERE pt.round_id IS NULL" in sql, "the fallback half is missing"
+
+    def test_the_spatial_flag_still_gates_it(self):
+        """CONTROL: `tracked_rounds` must apply only under --spatial, or the
+        full universe silently becomes the Layer 4 one."""
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "NOT $1::boolean OR r.id IN (SELECT id FROM tracked_rounds)" in sql
