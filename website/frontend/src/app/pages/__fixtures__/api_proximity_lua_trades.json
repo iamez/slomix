@@ -1,0 +1,161 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "leaders": [
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "trades": 29,
+   "avg_reaction_ms": 1367,
+   "fastest_ms": 25
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "trades": 22,
+   "avg_reaction_ms": 1295,
+   "fastest_ms": 0
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "trades": 20,
+   "avg_reaction_ms": 1400,
+   "fastest_ms": 25
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "trades": 19,
+   "avg_reaction_ms": 1322,
+   "fastest_ms": 25
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "trades": 17,
+   "avg_reaction_ms": 1513,
+   "fastest_ms": 150
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "trades": 14,
+   "avg_reaction_ms": 1068,
+   "fastest_ms": 100
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "trades": 9,
+   "avg_reaction_ms": 1750,
+   "fastest_ms": 50
+  }
+ ],
+ "recent_trades": [
+  {
+   "victim": "^pvid",
+   "killer": "^1.^7olz",
+   "trader": "bronze",
+   "delta_ms": 300,
+   "map": "etl_sp_delivery",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^c.^7lgz",
+   "killer": "^pvid",
+   "trader": "^1.^7olz",
+   "delta_ms": 1350,
+   "map": "etl_sp_delivery",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^pvid",
+   "killer": "^6S^2uper^6B^2oyy",
+   "trader": "^7K^4a^7Nii^4.^7[D]",
+   "delta_ms": 375,
+   "map": "sw_goldrush_te",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^1.^7olz",
+   "killer": "^7K^4a^7Nii^4.^7[D]",
+   "trader": "^1.^7olz",
+   "delta_ms": 25,
+   "map": "sw_goldrush_te",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^pvid",
+   "killer": "^1.^7olz",
+   "trader": "^7K^4a^7Nii^4.^7[D]",
+   "delta_ms": 275,
+   "map": "supply",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^6S^2uper^6B^2oyy",
+   "killer": "^pvid",
+   "trader": "^1.^7olz",
+   "delta_ms": 1500,
+   "map": "sw_goldrush_te",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "bronze",
+   "killer": "^1.^7olz",
+   "trader": "^pvid",
+   "delta_ms": 1250,
+   "map": "sw_goldrush_te",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^6S^2uper^6B^2oyy",
+   "killer": "bronze",
+   "trader": "^1.^7olz",
+   "delta_ms": 2400,
+   "map": "sw_goldrush_te",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "Cru^53^7lzor^5.",
+   "killer": "bronze",
+   "trader": "^c.^7lgz",
+   "delta_ms": 2475,
+   "map": "supply",
+   "date": "2026-08-31"
+  },
+  {
+   "victim": "^6S^2uper^6B^2oyy",
+   "killer": "^7K^4a^7Nii^4.^7[D]",
+   "trader": "^1.^7olz",
+   "delta_ms": 425,
+   "map": "sw_goldrush_te",
+   "date": "2026-08-31"
+  }
+ ],
+ "speed_distribution": [
+  {
+   "tier": "instant (< 500ms)",
+   "count": 25
+  },
+  {
+   "tier": "fast (500-1000ms)",
+   "count": 23
+  },
+  {
+   "tier": "normal (1-2s)",
+   "count": 48
+  },
+  {
+   "tier": "slow (2s+)",
+   "count": 34
+  }
+ ]
+}

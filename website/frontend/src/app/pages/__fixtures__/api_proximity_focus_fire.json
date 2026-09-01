@@ -1,0 +1,205 @@
+{
+ "status": "ok",
+ "summary": {
+  "total_events": 741,
+  "avg_score": 0.23,
+  "avg_attackers": 2.1,
+  "avg_damage": 136.0,
+  "avg_duration_ms": 5537.0
+ },
+ "targets": [
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "times_focused": 135,
+   "avg_score": 0.25,
+   "total_damage_taken": 18078,
+   "avg_attackers": 2.1
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "times_focused": 125,
+   "avg_score": 0.25,
+   "total_damage_taken": 18054,
+   "avg_attackers": 2.1
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "times_focused": 123,
+   "avg_score": 0.23,
+   "total_damage_taken": 16914,
+   "avg_attackers": 2.1
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "times_focused": 123,
+   "avg_score": 0.2,
+   "total_damage_taken": 16693,
+   "avg_attackers": 2.1
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "times_focused": 120,
+   "avg_score": 0.24,
+   "total_damage_taken": 15845,
+   "avg_attackers": 2.1
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "times_focused": 60,
+   "avg_score": 0.24,
+   "total_damage_taken": 8267,
+   "avg_attackers": 2.1
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "times_focused": 55,
+   "avg_score": 0.23,
+   "total_damage_taken": 7029,
+   "avg_attackers": 2.1
+  }
+ ],
+ "recent": [
+  {
+   "target_name": "^7K^4a^7Nii^4.^7[D]",
+   "attacker_count": 2,
+   "total_damage": 140,
+   "duration": 0,
+   "focus_score": 1.0,
+   "map_name": "supply",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "Cru^53^7lzor^5.",
+   "attacker_count": 2,
+   "total_damage": 58,
+   "duration": 25,
+   "focus_score": 0.9929999709129333,
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^7K^4a^7Nii^4.^7[D]",
+   "attacker_count": 3,
+   "total_damage": 148,
+   "duration": 100,
+   "focus_score": 0.9700000286102295,
+   "map_name": "supply",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^pvid",
+   "attacker_count": 3,
+   "total_damage": 142,
+   "duration": 125,
+   "focus_score": 0.9629999995231628,
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^c.^7lgz",
+   "attacker_count": 2,
+   "total_damage": 144,
+   "duration": 300,
+   "focus_score": 0.9470000267028809,
+   "map_name": "etl_sp_delivery",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "bronze",
+   "attacker_count": 2,
+   "total_damage": 144,
+   "duration": 300,
+   "focus_score": 0.9470000267028809,
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^6S^2uper^6B^2oyy",
+   "attacker_count": 2,
+   "total_damage": 168,
+   "duration": 300,
+   "focus_score": 0.9399999976158142,
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "Cru^53^7lzor^5.",
+   "attacker_count": 2,
+   "total_damage": 181,
+   "duration": 225,
+   "focus_score": 0.9319999814033508,
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^pvid",
+   "attacker_count": 2,
+   "total_damage": 122,
+   "duration": 300,
+   "focus_score": 0.925000011920929,
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^6S^2uper^6B^2oyy",
+   "attacker_count": 2,
+   "total_damage": 136,
+   "duration": 300,
+   "focus_score": 0.9179999828338623,
+   "map_name": "et_brewdog",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^c.^7lgz",
+   "attacker_count": 2,
+   "total_damage": 126,
+   "duration": 300,
+   "focus_score": 0.906000018119812,
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "bronze",
+   "attacker_count": 2,
+   "total_damage": 105,
+   "duration": 225,
+   "focus_score": 0.906000018119812,
+   "map_name": "sw_goldrush_te",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "Cru^53^7lzor^5.",
+   "attacker_count": 2,
+   "total_damage": 126,
+   "duration": 300,
+   "focus_score": 0.890999972820282,
+   "map_name": "etl_adlernest",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^c.^7lgz",
+   "attacker_count": 2,
+   "total_damage": 112,
+   "duration": 300,
+   "focus_score": 0.8840000033378601,
+   "map_name": "supply",
+   "session_date": "2026-08-31"
+  },
+  {
+   "target_name": "^1.^7olz",
+   "attacker_count": 2,
+   "total_damage": 140,
+   "duration": 375,
+   "focus_score": 0.8690000176429749,
+   "map_name": "te_escape2",
+   "session_date": "2026-08-31"
+  }
+ ]
+}

@@ -1,0 +1,79 @@
+{
+ "status": "ok",
+ "summary": {
+  "total_kills": 1004,
+  "avg_kill_distance": 684.0,
+  "median_kill_distance": 513.0,
+  "unique_attackers": 7,
+  "maps_tracked": 9
+ },
+ "by_class": [
+  {
+   "class": "MEDIC",
+   "kills": 856,
+   "avg_distance": 632
+  },
+  {
+   "class": "ENGINEER",
+   "kills": 116,
+   "avg_distance": 804
+  },
+  {
+   "class": "COVERTOPS",
+   "kills": 20,
+   "avg_distance": 2257
+  },
+  {
+   "class": "FIELDOPS",
+   "kills": 12,
+   "avg_distance": 640
+  }
+ ],
+ "by_map": [
+  {
+   "map_name": "te_escape2",
+   "kills": 214,
+   "avg_distance": 535
+  },
+  {
+   "map_name": "sw_goldrush_te",
+   "kills": 180,
+   "avg_distance": 697
+  },
+  {
+   "map_name": "supply",
+   "kills": 176,
+   "avg_distance": 779
+  },
+  {
+   "map_name": "etl_sp_delivery",
+   "kills": 140,
+   "avg_distance": 467
+  },
+  {
+   "map_name": "et_brewdog",
+   "kills": 113,
+   "avg_distance": 1014
+  },
+  {
+   "map_name": "erdenberg_t2",
+   "kills": 95,
+   "avg_distance": 682
+  },
+  {
+   "map_name": "etl_adlernest",
+   "kills": 44,
+   "avg_distance": 1012
+  },
+  {
+   "map_name": "etl_frostbite",
+   "kills": 27,
+   "avg_distance": 433
+  },
+  {
+   "map_name": "braundorf_b4",
+   "kills": 15,
+   "avg_distance": 590
+  }
+ ]
+}

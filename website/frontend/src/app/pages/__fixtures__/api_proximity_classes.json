@@ -1,0 +1,52 @@
+{
+ "status": "ok",
+ "ready": true,
+ "message": null,
+ "range_days": 30,
+ "generated_at": "2026-09-01T06:53:31.544603Z",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "classes": [
+  {
+   "player_class": "MEDIC",
+   "tracks": 1070,
+   "players": 7,
+   "avg_duration_ms": 26588,
+   "avg_distance": 6053.4,
+   "avg_sprint_pct": 23.2,
+   "avg_spawn_reaction_ms": 355
+  },
+  {
+   "player_class": "ENGINEER",
+   "tracks": 196,
+   "players": 7,
+   "avg_duration_ms": 23061,
+   "avg_distance": 5336.4,
+   "avg_sprint_pct": 25.1,
+   "avg_spawn_reaction_ms": 386
+  },
+  {
+   "player_class": "COVERTOPS",
+   "tracks": 28,
+   "players": 6,
+   "avg_duration_ms": 23840,
+   "avg_distance": 4355.3,
+   "avg_sprint_pct": 16.7,
+   "avg_spawn_reaction_ms": 395
+  },
+  {
+   "player_class": "FIELDOPS",
+   "tracks": 27,
+   "players": 6,
+   "avg_duration_ms": 21351,
+   "avg_distance": 4715.1,
+   "avg_sprint_pct": 30.1,
+   "avg_spawn_reaction_ms": 369
+  }
+ ]
+}

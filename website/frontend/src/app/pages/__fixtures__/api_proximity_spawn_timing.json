@@ -1,0 +1,74 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "total_events": 1004,
+ "leaders": [
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "^6S^2uper^6B^2oyy",
+   "avg_score": 0.455,
+   "kills": 91,
+   "avg_denial_ms": 11263
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "avg_score": 0.451,
+   "kills": 208,
+   "avg_denial_ms": 10833
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "avg_score": 0.445,
+   "kills": 222,
+   "avg_denial_ms": 10913
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "avg_score": 0.424,
+   "kills": 91,
+   "avg_denial_ms": 10050
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7kan^6i^7i",
+   "avg_score": 0.414,
+   "kills": 101,
+   "avg_denial_ms": 10203
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "avg_score": 0.404,
+   "kills": 131,
+   "avg_denial_ms": 10062
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "avg_score": 0.401,
+   "kills": 160,
+   "avg_denial_ms": 9818
+  }
+ ],
+ "team_averages": [
+  {
+   "team": "ALLIES",
+   "avg_score": 0.416,
+   "total_kills": 429
+  },
+  {
+   "team": "AXIS",
+   "avg_score": 0.44,
+   "total_kills": 575
+  }
+ ]
+}

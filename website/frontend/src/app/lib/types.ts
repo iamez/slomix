@@ -505,11 +505,13 @@ export interface ActivityCalendar {
   activity: Record<string, number>;
   /** Three states, and the page must not collapse them: `ok` (measured),
    *  `no_data` (measured and empty) and `unavailable` (the query failed and
-   *  the endpoint still answered 200). Optional because the field arrives
-   *  with #830 — until then it is absent and the emptiness heuristic below
-   *  is all there is. `note` carries the reason when the state is not ok. */
-  status?: string;
-  note?: string;
+   *  the endpoint still answered 200). REQUIRED since #830 landed — the
+   *  "optional until it arrives" hedge outlived the arrival, which is
+   *  exactly the drift check_manual_types_against_openapi exists to catch
+   *  (its first run with a caller, #860, named these six). `note` carries
+   *  the reason and is null when the state is ok. */
+  status: string;
+  note?: string | null;
 }
 
 /* ---------- phase 2, batch 2: leaderboards · record-book · awards ---------- */
@@ -715,12 +717,12 @@ export interface WeaponRow {
  * api_stats_weapons_hall_of_fame.json (object keyed by weapon_key). */
 export interface WeaponsHallOfFame {
   period: string;
-  /** Same three states as the activity calendar (#830): `ok`, `no_data`,
-   *  `unavailable`. Absent until that lands; present afterwards, and then
-   *  it — not the emptiness of `leaders` — decides whether this is an
-   *  outage rather than a quiet season. */
-  status?: string;
-  note?: string;
+  /** Same three states as the activity calendar: `ok`, `no_data`,
+   *  `unavailable` — it, not the emptiness of `leaders`, decides whether
+   *  this is an outage rather than a quiet season. Required since #830
+   *  landed (same drift, same first-run catch). */
+  status: string;
+  note?: string | null;
   leaders: Record<string, {
     weapon: string;
     weapon_key: string;
@@ -796,13 +798,15 @@ export interface VizPlayer {
  * families disagree on the number, so it never leaves this page. */
 export interface RoundViz {
   round_id: number;
-  map_name: string;
+  /** Nullable in the spec — the round row's map_name column allows it
+   *  (same class as the two names #841 fixed). */
+  map_name: string | null;
   /** Nullable in the handler — `str(row[2]) if row[2] else None`, the same
    *  expression as /rounds/recent. Neither of us has ever seen a null here;
    *  the branch exists, so the type says so and the page prints "unknown"
    *  rather than a blank cell (#830). */
   round_date: string | null;
-  round_number: number;
+  round_number: number | null;
   round_label: string;
   winner_team: number | null;
   /** null for historical rounds without a measured duration — unknown,
@@ -2368,4 +2372,331 @@ export interface ProximityLeaderboard {
   entries: (LbEntryBase & Partial<LbPowerEntry & LbSpawnEntry & LbCrossfireEntry &
     LbTradesEntry & LbReactionsEntry & LbSurvivorsEntry & LbMovementEntry &
     LbFocusFireEntry & LbKrogtEntry>)[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 2 — the instruments (13 single-endpoint panels, 07 §B.2).
+// All typed from the handlers' live answers on 2026-08-31 scope; every one
+// speaks the 200-with-status convention except /quality, which has its own
+// three-status header (overall/selected_scope/global_maintenance).
+
+export interface ProxScope {
+  session_date: string | null;
+  map_name: string | null;
+  round_number: number | null;
+  round_start_unix: number | null;
+  player_guid: string | null;
+}
+
+/** /proximity/quality — the data-completeness band (design 12 row 12). */
+export interface ProxQualitySignal {
+  table: string;
+  row_count: number;
+  /** The linkage columns are null for cache tables (storytelling_kill_impact). */
+  linked_rows: number | null;
+  linked_round_count: number | null;
+  exact_link_ratio: number | null;
+  latest_created_at: string | null;
+  ready: boolean;
+  status: string;
+  required: boolean;
+}
+
+export interface ProxQuality {
+  overall_status: string;
+  selected_scope_status: string;
+  global_maintenance_status: string;
+  scope: ProxScope & { range_days?: number };
+  signals: Record<string, ProxQualitySignal>;
+  /** The HTTP-200 error shape (SQLite mode, any quality-check exception)
+   *  carries only status+ready here — every count is OPTIONAL, and the
+   *  first version crashed the whole route on `.toFixed()` of a missing
+   *  number (Codex on #861, P1). */
+  round_correlation: {
+    status: string;
+    ready: boolean;
+    correlation_count?: number;
+    complete_count?: number;
+    avg_completeness_pct?: number;
+  };
+  linkage?: { scope: string; status: string; breach_count: number };
+  /** RECORDS, not strings — joining them rendered "[object Object]" in the
+   *  truth strip precisely when a warning existed (Codex on #861). */
+  warnings: { code: string; level: string; message: string }[];
+  generated_at?: string;
+}
+
+/** GET /api/proximity/scopes — the dates where the TRACKER captured data,
+ *  which is the only honest source for the instrument chips: the sessions
+ *  list names parsed evenings, and an evening can exist with no telemetry
+ *  (Codex on #861, P1 — the recorded corpus had exactly that skew). */
+export interface ProxScopes {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  sessions: {
+    session_date: string;
+    engagements: number;
+    map_count: number;
+    round_count: number;
+  }[];
+}
+
+export interface ProxSpawnTiming {
+  status: string;
+  scope: ProxScope;
+  total_events: number;
+  leaders: { guid: string; name: string; avg_score: number; kills: number; avg_denial_ms: number }[];
+  team_averages: { team: string; avg_score: number; total_kills: number }[];
+}
+
+export interface ProxAimLock {
+  status: string;
+  scope: ProxScope;
+  total_events: number;
+  leaders: {
+    guid: string; name: string; locks: number; avg_lock_ms: number;
+    total_lock_ms: number; avg_err_deg: number; avg_dist: number; targets: number;
+  }[];
+}
+
+export interface ProxCohesion {
+  status: string;
+  scope: ProxScope;
+  team_summary: {
+    team: string; avg_dispersion: number; avg_max_spread: number;
+    avg_stragglers: number; avg_alive: number; samples: number;
+  }[];
+  /** Measured 1,880 points for one evening — rendered as a thinned
+   *  sparkline, never a table. */
+  timeline: { time: number; team: string; dispersion: number; round_start_unix: number; round_time: number }[];
+  buddy_pairs: { guids: string; times_paired: number; avg_distance: number }[];
+}
+
+export interface ProxCrossfireAngles {
+  status: string;
+  scope: ProxScope;
+  total_opportunities: number;
+  executed: number;
+  utilization_rate_pct: number;
+  avg_angle: number;
+  avg_damage: number;
+  angle_buckets: { bucket: string; count: number; executed: number }[];
+  /** THE place partner_name actually lives — the field legacy tried to
+   *  read off the leaderboards endpoint, which never sent it. */
+  top_duos: {
+    teammate1_guid: string; teammate2_guid: string;
+    /** null when the scoped player_track lookup cannot resolve the guid —
+     *  render the eight-char guid, never a blank " + " row. */
+    name: string | null;
+    partner_name: string | null; executions: number; avg_angle: number;
+  }[];
+}
+
+export interface ProxPushes {
+  status: string;
+  scope: ProxScope;
+  team_summary: {
+    team: string; pushes: number; avg_quality: number; avg_alignment: number;
+    avg_speed: number; avg_participants: number; objective_pushes: number;
+  }[];
+  quality_distribution: { tier: string; team: string; count: number }[];
+}
+
+export interface ProxLuaTrades {
+  status: string;
+  scope: ProxScope;
+  leaders: { guid: string; name: string; trades: number; avg_reaction_ms: number; fastest_ms: number }[];
+  recent_trades: { victim: string; killer: string; trader: string; delta_ms: number; map: string; date: string }[];
+  speed_distribution: { tier: string; count: number }[];
+}
+
+export interface ProxRevives {
+  status: string;
+  summary: { total_revives: number; avg_enemy_distance: number; under_fire_pct: number };
+  leaders: { guid: string; name: string; revives: number; under_fire_count: number; avg_enemy_dist: number }[];
+}
+
+export interface ProxFocusFire {
+  status: string;
+  summary: {
+    total_events: number; avg_score: number; avg_attackers: number;
+    avg_damage: number; avg_duration_ms: number;
+  };
+  targets: {
+    guid: string; name: string; times_focused: number; avg_score: number;
+    total_damage_taken: number; avg_attackers: number;
+  }[];
+  recent: {
+    target_name: string; attacker_count: number; total_damage: number;
+    duration: number; focus_score: number; map_name: string; session_date: string;
+  }[];
+}
+
+export interface ProxSupportSummary {
+  status: string;
+  /** Deliberately `{}` when the support column has not been migrated —
+   *  every field optional, and emptiness is judged on total_rounds being
+   *  MISSING or zero, never formatted blind (Codex on #861, P1). */
+  summary: { total_rounds?: number; avg_uptime_pct?: number; max_uptime_pct?: number; avg_coverage_pct?: number };
+  by_map: {
+    map_name: string; rounds: number; avg_uptime_pct: number; max_uptime_pct: number;
+    total_support_samples: number; total_samples: number;
+  }[];
+  rounds: {
+    map_name: string; round_number: number; support_uptime_pct: number;
+    support_samples: number; total_samples: number; session_date: string;
+  }[];
+}
+
+export interface ProxCombatPositions {
+  status: string;
+  /** Deliberately `{}` when the table/column has not been migrated — the
+   *  same sparse species as support-summary (Codex on #861, round two). */
+  summary: {
+    total_kills?: number; avg_kill_distance?: number; median_kill_distance?: number;
+    unique_attackers?: number; maps_tracked?: number;
+  };
+  by_class: { class: string; kills: number; avg_distance: number }[];
+  by_map: { map_name: string; kills: number; avg_distance: number }[];
+}
+
+export interface ProxClasses {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  scope: ProxScope;
+  /** The movement averages are nullable — a class whose tracked rows carry
+   *  no sprint_percentage gets avg_sprint_pct: null (Codex on #861 r2). */
+  classes: {
+    player_class: string; tracks: number; players: number; avg_duration_ms: number | null;
+    avg_distance: number | null; avg_sprint_pct: number | null; avg_spawn_reaction_ms: number | null;
+  }[];
+}
+
+export interface ProxReactionRow {
+  guid: string;
+  name: string;
+  player_class: string;
+  reaction_ms: number;
+  samples: number;
+}
+
+export interface ProxReactions {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string;
+  scope: ProxScope;
+  limit: number;
+  return_fire: ProxReactionRow[];
+  dodge: ProxReactionRow[];
+  support: ProxReactionRow[];
+  /** A class can have dodge/support events and ZERO return-fire samples —
+   *  the backend then sends avg_return_fire_ms: null (Codex on #861, P1). */
+  class_summary: {
+    player_class: string; events: number; return_samples: number; avg_return_fire_ms: number | null;
+    dodge_samples: number; avg_dodge_reaction_ms: number | null;
+    support_samples: number; avg_support_reaction_ms: number | null;
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 3 — the competitive section (07 §B.2). Every panel quotes
+// the wire's own `description` — the formula text lives server-side and the
+// page repeats it, never paraphrases. wave-cycles is NOT here: it requires
+// map_name + round_number and belongs to the round-scope slice.
+
+export interface CompStagger {
+  status: string;
+  scope: ProxScope;
+  threshold: number;
+  description: string;
+  players: {
+    guid: string; name: string; team: string; kills: number;
+    stagger_kills: number; stagger_rate: number; denied_s: number; avg_score: number;
+  }[];
+}
+
+export interface CompFirstBlood {
+  status: string;
+  scope: ProxScope;
+  rounds: number;
+  decided_rounds: number;
+  converted: number;
+  conversion_pct: number;
+  description: string;
+  players: { guid: string; name: string; first_picks: number; first_deaths: number; fp_converted: number }[];
+}
+
+export interface CompPersonalBests {
+  status: string;
+  session_date: string;
+  description: string;
+  cards: {
+    guid: string; name: string; metric: string; label: string;
+    value: number; prev_best: number | null; prev_best_date: string | null;
+    sessions_played: number;
+  }[];
+  scope_note: string;
+}
+
+export interface CompManAdvantage {
+  status: string;
+  scope: ProxScope;
+  rounds: number;
+  description: string;
+  /** Keyed by team name; by_size keyed by "1" | "2" | "3+". */
+  teams: Record<string, {
+    windows: number;
+    converted: number;
+    by_size: Record<string, { windows: number; converted: number }>;
+    conversion_pct: number;
+  }>;
+  total_windows: number;
+  top_converters: { guid: string; name: string; conversions: number }[];
+}
+
+export interface CompClutch {
+  status: string;
+  scope: ProxScope;
+  clock_protocol: string;
+  rounds: number;
+  skipped_rounds_no_clock: number;
+  description: string;
+  players: {
+    guid: string; name: string; situations: number; wins: number; win_pct: number;
+    best: { enemies: number; kills: number; survived: boolean } | null;
+  }[];
+}
+
+export interface CompSideSplits {
+  status: string;
+  scope: ProxScope;
+  description: string;
+  /** Either side can be NULL — a player who only played one half of the
+   *  evening has no row for the other (caught live on the single-round
+   *  2026-09-01 scope: the recorded 08-31 fixture had both sides for
+   *  everyone, so the fixture could not refute the non-null guess). */
+  players: {
+    guid: string; name: string;
+    attack: { kills: number; stagger_kills: number; denied_s: number; minutes: number; kpm: number } | null;
+    defense: { kills: number; stagger_kills: number; denied_s: number; minutes: number; kpm: number } | null;
+  }[];
+}
+
+export interface V7Status {
+  status: string;
+  lua_version_draft: string;
+  deployed: boolean;
+  doc: string;
+  capabilities: {
+    key: string; title: string; what: string; api: string;
+    rows: number; rounds: number; live: boolean;
+  }[];
 }

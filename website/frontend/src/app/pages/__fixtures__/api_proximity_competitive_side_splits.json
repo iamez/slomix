@@ -1,0 +1,139 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "description": "Side from rounds.defender_team (1=AXIS defends, 2=ALLIES defend); kpm = kills per minute actually played on that side. Unlinked rounds and unknown defenders are excluded.",
+ "players": [
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "attack": {
+    "kills": 92,
+    "stagger_kills": 14,
+    "denied_s": 1254.6,
+    "minutes": 48.9,
+    "kpm": 1.88
+   },
+   "defense": {
+    "kills": 130,
+    "stagger_kills": 19,
+    "denied_s": 1168.0,
+    "minutes": 53.9,
+    "kpm": 2.41
+   }
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "vid",
+   "attack": {
+    "kills": 84,
+    "stagger_kills": 9,
+    "denied_s": 1074.8,
+    "minutes": 48.1,
+    "kpm": 1.75
+   },
+   "defense": {
+    "kills": 124,
+    "stagger_kills": 20,
+    "denied_s": 1178.4,
+    "minutes": 53.0,
+    "kpm": 2.34
+   }
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": ".lgz",
+   "attack": {
+    "kills": 71,
+    "stagger_kills": 7,
+    "denied_s": 794.7,
+    "minutes": 43.1,
+    "kpm": 1.65
+   },
+   "defense": {
+    "kills": 89,
+    "stagger_kills": 6,
+    "denied_s": 776.1,
+    "minutes": 42.5,
+    "kpm": 2.09
+   }
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": ".olz",
+   "attack": {
+    "kills": 61,
+    "stagger_kills": 4,
+    "denied_s": 733.7,
+    "minutes": 50.3,
+    "kpm": 1.21
+   },
+   "defense": {
+    "kills": 70,
+    "stagger_kills": 13,
+    "denied_s": 584.4,
+    "minutes": 44.6,
+    "kpm": 1.57
+   }
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "kanii",
+   "attack": {
+    "kills": 44,
+    "stagger_kills": 6,
+    "denied_s": 518.2,
+    "minutes": 43.4,
+    "kpm": 1.01
+   },
+   "defense": {
+    "kills": 57,
+    "stagger_kills": 9,
+    "denied_s": 512.4,
+    "minutes": 45.0,
+    "kpm": 1.27
+   }
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru3lzor.",
+   "attack": {
+    "kills": 39,
+    "stagger_kills": 4,
+    "denied_s": 426.9,
+    "minutes": 28.1,
+    "kpm": 1.39
+   },
+   "defense": {
+    "kills": 52,
+    "stagger_kills": 8,
+    "denied_s": 487.6,
+    "minutes": 24.3,
+    "kpm": 2.14
+   }
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "SuperBoyy",
+   "attack": {
+    "kills": 38,
+    "stagger_kills": 7,
+    "denied_s": 548.6,
+    "minutes": 21.3,
+    "kpm": 1.78
+   },
+   "defense": {
+    "kills": 53,
+    "stagger_kills": 5,
+    "denied_s": 476.3,
+    "minutes": 23.5,
+    "kpm": 2.26
+   }
+  }
+ ]
+}

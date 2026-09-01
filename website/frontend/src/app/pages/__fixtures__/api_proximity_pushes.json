@@ -1,0 +1,72 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": null,
+  "round_number": null,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "team_summary": [
+  {
+   "team": "ALLIES",
+   "pushes": 1223,
+   "avg_quality": 0.644,
+   "avg_alignment": 0.777,
+   "avg_speed": 249.9,
+   "avg_participants": 2.6,
+   "objective_pushes": 697
+  },
+  {
+   "team": "AXIS",
+   "pushes": 1442,
+   "avg_quality": 0.603,
+   "avg_alignment": 0.76,
+   "avg_speed": 239.6,
+   "avg_participants": 2.6,
+   "objective_pushes": 701
+  }
+ ],
+ "quality_distribution": [
+  {
+   "tier": "low (< 0.2)",
+   "team": "AXIS",
+   "count": 16
+  },
+  {
+   "tier": "low (< 0.2)",
+   "team": "ALLIES",
+   "count": 9
+  },
+  {
+   "tier": "medium (0.2-0.5)",
+   "team": "ALLIES",
+   "count": 320
+  },
+  {
+   "tier": "medium (0.2-0.5)",
+   "team": "AXIS",
+   "count": 442
+  },
+  {
+   "tier": "high (0.5-0.8)",
+   "team": "ALLIES",
+   "count": 596
+  },
+  {
+   "tier": "high (0.5-0.8)",
+   "team": "AXIS",
+   "count": 714
+  },
+  {
+   "tier": "excellent (0.8+)",
+   "team": "ALLIES",
+   "count": 298
+  },
+  {
+   "tier": "excellent (0.8+)",
+   "team": "AXIS",
+   "count": 270
+  }
+ ]
+}
