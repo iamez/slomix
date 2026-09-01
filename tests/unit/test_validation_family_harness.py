@@ -46,6 +46,7 @@ from validation_family import (  # noqa: E402 - path set above
     manifest_gate,
     margin_agreement,
     max_t_intervals,
+    normalise_digest,
     outcome_seconds,
     outcome_win,
     preregister,
@@ -703,7 +704,8 @@ class TestThePreregistrationIsAnArtifactNotAPromise:
         # can reproduce the digest without naming the cohort is a rerun that can
         # analyse a different one.
         rerun = self._family(frozen_cutoff=proposed,
-                             frozen_cohort=cohort_digest(blocks))
+                             frozen_cohort=cohort_digest(blocks),
+                             frozen_discovery=cohort_digest([]))
         assert pre["manifest_sha256"] == rerun.manifest_hash()
 
     def test_a_rerun_that_forgets_the_cohort_does_not_reproduce_the_digest(self):
@@ -1353,3 +1355,174 @@ class TestTheProtocolResampleFloorIsSeparateFromTheUsableOne:
         from validation_family import MIN_USABLE_REPLICATES, PROTOCOL_RESAMPLE_FLOOR
         assert PROTOCOL_RESAMPLE_FLOOR > MIN_USABLE_REPLICATES
         assert PROTOCOL_RESAMPLE_FLOOR >= 2000
+
+
+class TestTheCohortIsRoundsNotBlocks:
+    """⛔ THE FREEZE WAS DEFEATED FROM INSIDE A BLOCK.
+
+    `_calculate_gaming_session_id()` CONTINUES the preceding session for any gap
+    inside the configured limit, so rounds played after a preregistration land
+    under the SAME `gaming_session_id`. `load()` adds them beneath the existing
+    block and `analyse()` consumes them — and a digest over block ids alone does
+    not move. The holdout grows while both gates report that nothing changed.
+
+    Codex on #866, immediately after the block-level cohort landed: the same
+    optional-stopping hole, entered through a different door.
+    """
+
+    BLOCKS = {"s1": {101: [], 102: []}, "s2": {201: []}}
+
+    def test_a_round_added_to_an_existing_block_moves_the_digest(self):
+        grown = {"s1": {101: [], 102: [], 103: []}, "s2": {201: []}}
+        assert cohort_digest(self.BLOCKS, {"s1", "s2"}) != cohort_digest(grown, {"s1", "s2"})
+
+    def test_the_same_rounds_hash_the_same_whatever_the_order(self):
+        same = {"s2": {201: []}, "s1": {102: [], 101: []}}
+        assert cohort_digest(self.BLOCKS, {"s1", "s2"}) == cohort_digest(same, {"s1", "s2"})
+
+    def test_a_block_left_out_is_a_different_cohort(self):
+        # CONTROL: the block selection still matters, it is just not the whole
+        # identity any more.
+        assert cohort_digest(self.BLOCKS, {"s1"}) != cohort_digest(self.BLOCKS, {"s1", "s2"})
+
+    def test_block_level_hashing_would_NOT_have_caught_it(self):
+        """The measurement that makes the previous fix insufficient, stated as a
+        test: hashing block ids gives the same answer before and after growth."""
+        grown = {"s1": {101: [], 102: [], 103: []}, "s2": {201: []}}
+        assert cohort_digest(sorted(self.BLOCKS)) == cohort_digest(sorted(grown))
+
+
+class TestBothHalvesAreFrozen:
+    """⛔ FREEZING ONE HALF BINDS HALF THE EXPERIMENT.
+
+    A historical match imported with a timestamp BELOW the cutoff leaves the
+    confirmation cohort untouched, so both gates pass — but `report()` requires
+    the discovery estimate to have the expected direction before it will say
+    SHIPS. The published verdict can therefore change under the same
+    preregistered artifact. Codex on #866.
+    """
+
+    def _family(self, **kw):
+        return Family(name="t", filters="f", candidates=[
+            Candidate("x", "d", "higher_is_better", _metric)], **kw)
+
+    def test_the_discovery_digest_is_in_the_frozen_terms(self):
+        a = self._family(frozen_cutoff="c", frozen_cohort="aa", frozen_discovery="d1")
+        b = self._family(frozen_cutoff="c", frozen_cohort="aa", frozen_discovery="d2")
+        assert a.manifest_hash() != b.manifest_hash()
+        assert a.frozen()["frozen_discovery"] == "d1"
+
+    def test_preregistration_publishes_both(self):
+        blocks = {"s1": {1: []}, "s2": {2: []}}
+        pre = preregister(self._family(), "2026-07-15", {"s2"}, blocks, {"s1"})
+        assert pre["manifest"]["frozen_cohort"] == cohort_digest(blocks, {"s2"})
+        assert pre["manifest"]["frozen_discovery"] == cohort_digest(blocks, {"s1"})
+        assert pre["manifest"]["frozen_cohort"] != pre["manifest"]["frozen_discovery"]
+
+
+class TestADateThatIsNotOnTheCalendar:
+    """⛔ MONTH AND DAY RANGES ARE NOT A CALENDAR.
+
+    Independent ranges admit `2026-02-31`, `2026-04-31` and non-leap
+    `2025-02-29`; the cast then raises "date/time field value out of range" and
+    aborts the WHOLE query — exactly the malformed-date case the guard was added
+    to exclude. `to_date` cannot be the guard either: it raises too.
+
+    Checked arithmetically inside ONE `CASE`, because PostgreSQL does not
+    promise an evaluation order for separate `AND` operands and the `::int`
+    casts must not run before the shape test. Codex on #866.
+    """
+
+    def test_the_day_count_depends_on_the_month(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "WHEN '04' THEN 30" in sql and "WHEN '11' THEN 30" in sql
+
+    def test_all_three_call_sites_carry_the_SAME_gate(self):
+        """⛔ FOUND BY A SURVIVING MUTATION. Breaking ONE of the three pasted
+        copies left this file green, because the phrase the source test grepped
+        still existed in the other two — a guard agreeing with a copy it was not
+        testing. The gate is built from one template now, and this counts."""
+        sql = _sql_without_comments(ROWS_SQL)
+        assert sql.count("WHEN '04' THEN 30") == 3, (
+            "the calendar gate is not on all three call sites")
+        assert sql.count("% 400 = 0") == 3
+
+    def test_the_template_is_the_single_source(self):
+        from validation_family import _calendar_gate
+        for alias in ("r", "r1", "r2"):
+            assert _calendar_gate(alias) in _sql_without_comments(
+                ROWS_SQL).replace("  ", " ") or _calendar_gate(alias)[:40] in ROWS_SQL
+        assert "@A@" not in ROWS_SQL, "a placeholder survived into the query"
+
+    def test_february_knows_about_leap_years(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "% 4 = 0" in sql and "% 100 <> 0" in sql and "% 400 = 0" in sql
+
+    def test_the_shape_test_guards_the_casts(self):
+        """CASE, not a bare AND: the `::int` on a non-numeric date would raise
+        the very error being prevented."""
+        sql = _sql_without_comments(ROWS_SQL)
+        i = sql.index("substr(r.round_date, 9, 2)::int")
+        assert "CASE WHEN r.round_date ~" in sql[:i]
+
+    def test_the_pairing_cte_carries_the_clock_gate_too(self):
+        """Rejecting a malformed half in the outer filter removes only its
+        PLAYER rows; this CTE would still let it pair and ride its duration onto
+        the retained half."""
+        sql = _sql_without_comments(ROWS_SQL)
+        for alias in ("r1", "r2"):
+            assert f"CASE WHEN {alias}.round_date ~" in sql, alias
+
+
+class TestAnOffsetBearingCutoffIsRefused:
+    """⛔ DISCARDING AN OFFSET IS NOT READING IT.
+
+    `replace(tzinfo=None)` dropped the offset rather than converting, so
+    `2026-07-13T19:00:00Z` and `2026-07-13T21:00:00+02:00` — one instant, two
+    spellings — selected different confirmation cohorts. The database clock is
+    naive, so there is no correct zone to convert INTO either; saying so beats
+    picking one silently. Codex on #866.
+    """
+
+    TIMES = {"a": datetime(2026, 7, 13, 20, 0, 0),  # noqa: DTZ001 - naive column
+             "b": datetime(2026, 7, 13, 22, 0, 0)}  # noqa: DTZ001
+
+    @pytest.mark.parametrize("cutoff", ["2026-07-13T19:00:00Z",
+                                        "2026-07-13T21:00:00+02:00",
+                                        "2026-07-13 21:00:00-05:00"])
+    def test_an_offset_is_refused_not_silently_dropped(self, cutoff):
+        with pytest.raises(ValueError, match="offset"):
+            chronological_split(self.TIMES, 0.7, cutoff)
+
+    def test_the_naive_forms_still_work(self):
+        # CONTROL: refusing offsets must not refuse the form the database uses.
+        for cutoff in ("2026-07-13 21:00:00", "2026-07-13T21:00:00"):
+            disc, conf, _, _ = chronological_split(self.TIMES, 0.7, cutoff)
+            assert disc == {"a"} and conf == {"b"}, cutoff
+
+
+class TestADigestHasOneSpelling:
+    """⛔ THE GATES NORMALISED AND THE MANIFEST DID NOT.
+
+    The cohort comparison used `strip().lower()` while `Family.frozen_cohort`
+    stored the raw string — and the manifest hashes what is STORED. A digest
+    pasted in upper case therefore passed the cohort gate and then failed the
+    manifest gate, reporting "something moved" about an experiment that had not
+    changed. Codex on #866.
+    """
+
+    H = "8d29cb96d9dbe7b0"
+
+    @pytest.mark.parametrize("raw", ["8D29CB96D9DBE7B0", "  8d29cb96d9dbe7b0\n",
+                                     "\t8D29Cb96D9dBe7B0 "])
+    def test_every_spelling_folds_to_one(self, raw):
+        assert normalise_digest(raw) == self.H
+
+    def test_nothing_stays_nothing(self):
+        # CONTROL: "" and "   " must remain absent, not become a digest — the
+        # gates tell "nothing was registered" apart from "something moved".
+        for empty in (None, "", "   "):
+            assert normalise_digest(empty) is None, empty
+
+    def test_a_different_digest_is_still_different(self):
+        assert normalise_digest("AAAA") != normalise_digest("BBBB")
