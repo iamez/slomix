@@ -35,6 +35,10 @@ import escortCredits from './__fixtures__/api_proximity_escort_credits.json';
 import constructionEvents from './__fixtures__/api_proximity_construction_events.json';
 import objectiveRuns from './__fixtures__/api_proximity_objective_runs.json';
 import objectiveFocus from './__fixtures__/api_proximity_objective_focus.json';
+import proxPlayers from './__fixtures__/api_proximity_players.json';
+import journey from './__fixtures__/api_proximity_player_journey.json';
+import heatmap from './__fixtures__/api_proximity_push_deaths_heatmap.json';
+import waveCycles from './__fixtures__/api_proximity_competitive_wave_cycles.json';
 import type {
   CarrierEvents, CarrierKills, CarrierReturns, ConstructionEvents,
   EscortCredits, ObjectiveFocus, ObjectiveRuns, VehicleProgress,
@@ -83,6 +87,10 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/construction-events', constructionEventsChecked],
   ['/api/proximity/objective-runs', objectiveRunsChecked],
   ['/api/proximity/objective-focus', objectiveFocusChecked],
+  ['/api/proximity/players', proxPlayers],
+  ['/api/proximity/player-journey', journey],
+  ['/api/proximity/push-deaths/heatmap', heatmap],
+  ['/api/proximity/competitive/wave-cycles', waveCycles],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the
@@ -214,6 +222,22 @@ describe('Proximity', () => {
       // global by design (no scope parameter exists on it).
       .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes') && !u.includes('v7-status'));
     expect(instrumentCalls).toEqual([]);
+  });
+
+  it('never calls a round-scoped canvas endpoint before the picker has its scope', async () => {
+    // These endpoints 422 without map/round — the wire demanding scope.
+    // The picker must make that state unreachable: no map or round is
+    // picked in this render, so none of the three may be fetched.
+    const fetchSpy = vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]])));
+    vi.stubGlobal('fetch', fetchSpy);
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
+    const canvasCalls = fetchSpy.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('player-journey') || u.includes('push-deaths') || u.includes('wave-cycles'));
+    expect(canvasCalls).toEqual([]);
+    // And the section says what to do instead of showing nothing.
+    expect(screen.getByText(/pick a map above/)).toBeInTheDocument();
   });
 
   it('treats a 200 with status:error as a failure, not as data', async () => {

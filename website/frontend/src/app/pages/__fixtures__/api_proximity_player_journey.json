@@ -1,0 +1,4093 @@
+{
+ "status": "ok",
+ "scope": {
+  "session_date": "2026-08-31",
+  "map_name": "etl_adlernest",
+  "round_number": 1,
+  "round_start_unix": null,
+  "player_guid": null
+ },
+ "player": {
+  "guid": "5D9891600C7948FF85709360E669D5A4",
+  "name": "^1.^7olz",
+  "team": "AXIS"
+ },
+ "lives": [
+  {
+   "life_index": 1,
+   "player_class": "MEDIC",
+   "spawn_time_ms": 500,
+   "death_time_ms": 23100,
+   "duration_ms": 22600,
+   "total_distance": 5687.8564453125,
+   "sprint_pct": 24.34782600402832,
+   "death_type": null,
+   "path": [
+    {
+     "t": 500,
+     "x": -1616.0,
+     "y": -164.0,
+     "z": 89.0,
+     "health": 119,
+     "speed": 0.0,
+     "stance": 2,
+     "sprint": 0,
+     "event": "spawn"
+    },
+    {
+     "t": 1000,
+     "x": -1616.0,
+     "y": -164.0,
+     "z": 89.0,
+     "health": 124,
+     "speed": 0.0,
+     "stance": 2,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 1400,
+     "x": -1429.1,
+     "y": -176.5,
+     "z": 72.1,
+     "health": 124,
+     "speed": 279.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 1800,
+     "x": -1377.0,
+     "y": -222.1,
+     "z": 72.1,
+     "health": 124,
+     "speed": 142.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 2200,
+     "x": -1400.0,
+     "y": -339.8,
+     "z": 72.1,
+     "health": 124,
+     "speed": 275.0,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 2600,
+     "x": -1385.3,
+     "y": -443.4,
+     "z": 72.1,
+     "health": 127,
+     "speed": 261.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 3000,
+     "x": -1342.7,
+     "y": -565.7,
+     "z": 72.1,
+     "health": 127,
+     "speed": 354.8,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 3400,
+     "x": -1335.7,
+     "y": -725.8,
+     "z": 115.9,
+     "health": 129,
+     "speed": 438.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 3800,
+     "x": -1303.8,
+     "y": -916.4,
+     "z": 89.1,
+     "health": 129,
+     "speed": 522.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 4200,
+     "x": -1220.7,
+     "y": -1120.7,
+     "z": 4.1,
+     "health": 129,
+     "speed": 580.5,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 4600,
+     "x": -1091.4,
+     "y": -1320.4,
+     "z": 27.2,
+     "health": 131,
+     "speed": 607.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 5000,
+     "x": -925.6,
+     "y": -1503.1,
+     "z": -68.6,
+     "health": 131,
+     "speed": 636.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 5400,
+     "x": -783.6,
+     "y": -1608.2,
+     "z": -136.5,
+     "health": 133,
+     "speed": 253.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 5800,
+     "x": -698.1,
+     "y": -1664.0,
+     "z": -151.9,
+     "health": 133,
+     "speed": 261.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 6200,
+     "x": -645.1,
+     "y": -1648.2,
+     "z": -151.9,
+     "health": 123,
+     "speed": 293.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 6600,
+     "x": -649.9,
+     "y": -1660.9,
+     "z": -151.9,
+     "health": 126,
+     "speed": 53.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 7000,
+     "x": -639.7,
+     "y": -1565.1,
+     "z": -151.9,
+     "health": 116,
+     "speed": 352.8,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 7400,
+     "x": -651.8,
+     "y": -1599.3,
+     "z": -151.9,
+     "health": 119,
+     "speed": 21.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 7800,
+     "x": -647.2,
+     "y": -1574.9,
+     "z": -151.9,
+     "health": 119,
+     "speed": 194.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 8200,
+     "x": -621.3,
+     "y": -1489.7,
+     "z": -151.9,
+     "health": 119,
+     "speed": 17.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 8600,
+     "x": -669.5,
+     "y": -1562.2,
+     "z": -151.9,
+     "health": 122,
+     "speed": 256.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 9000,
+     "x": -687.3,
+     "y": -1589.2,
+     "z": -151.9,
+     "health": 122,
+     "speed": 237.1,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 9400,
+     "x": -585.9,
+     "y": -1588.9,
+     "z": -151.9,
+     "health": 125,
+     "speed": 269.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 9800,
+     "x": -529.5,
+     "y": -1580.6,
+     "z": -143.9,
+     "health": 125,
+     "speed": 85.1,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 10200,
+     "x": -532.3,
+     "y": -1566.4,
+     "z": -146.0,
+     "health": 107,
+     "speed": 43.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 10600,
+     "x": -552.8,
+     "y": -1544.5,
+     "z": -151.9,
+     "health": 92,
+     "speed": 83.1,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 11000,
+     "x": -542.7,
+     "y": -1520.7,
+     "z": -151.9,
+     "health": 92,
+     "speed": 11.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 11400,
+     "x": -545.7,
+     "y": -1552.4,
+     "z": -151.9,
+     "health": 95,
+     "speed": 308.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 11800,
+     "x": -517.7,
+     "y": -1658.9,
+     "z": -143.9,
+     "health": 95,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 12200,
+     "x": -486.9,
+     "y": -1756.7,
+     "z": -143.9,
+     "health": 95,
+     "speed": 276.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 12600,
+     "x": -426.6,
+     "y": -1848.4,
+     "z": -201.5,
+     "health": 118,
+     "speed": 274.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 13000,
+     "x": -366.2,
+     "y": -1946.4,
+     "z": -264.9,
+     "health": 118,
+     "speed": 293.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 13400,
+     "x": -283.1,
+     "y": -2040.5,
+     "z": -259.9,
+     "health": 121,
+     "speed": 324.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 13800,
+     "x": -210.3,
+     "y": -2136.4,
+     "z": -296.1,
+     "health": 121,
+     "speed": 260.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 14200,
+     "x": -159.0,
+     "y": -2235.8,
+     "z": -335.9,
+     "health": 121,
+     "speed": 269.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 14600,
+     "x": -76.4,
+     "y": -2296.4,
+     "z": -335.9,
+     "health": 124,
+     "speed": 257.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 15000,
+     "x": 17.1,
+     "y": -2331.0,
+     "z": -335.9,
+     "health": 124,
+     "speed": 161.7,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 15400,
+     "x": 24.4,
+     "y": -2323.8,
+     "z": -335.9,
+     "health": 127,
+     "speed": 4.3,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 15800,
+     "x": 24.4,
+     "y": -2339.7,
+     "z": -335.9,
+     "health": 109,
+     "speed": 134.7,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 16200,
+     "x": -46.0,
+     "y": -2318.9,
+     "z": -335.9,
+     "health": 91,
+     "speed": 255.5,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 16600,
+     "x": -22.4,
+     "y": -2355.6,
+     "z": -335.9,
+     "health": 94,
+     "speed": 280.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 17000,
+     "x": 12.3,
+     "y": -2366.8,
+     "z": -335.9,
+     "health": 94,
+     "speed": 43.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 17400,
+     "x": -52.2,
+     "y": -2319.5,
+     "z": -335.9,
+     "health": 97,
+     "speed": 275.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 17800,
+     "x": -122.9,
+     "y": -2242.5,
+     "z": -308.9,
+     "health": 97,
+     "speed": 267.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 18200,
+     "x": -199.8,
+     "y": -2163.4,
+     "z": -296.8,
+     "health": 97,
+     "speed": 301.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 18600,
+     "x": -244.3,
+     "y": -2058.3,
+     "z": -295.9,
+     "health": 100,
+     "speed": 279.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 19000,
+     "x": -194.5,
+     "y": -1965.8,
+     "z": -295.9,
+     "health": 100,
+     "speed": 257.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 19400,
+     "x": -148.9,
+     "y": -1918.3,
+     "z": -295.9,
+     "health": 103,
+     "speed": 92.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 19800,
+     "x": -201.7,
+     "y": -1996.9,
+     "z": -295.9,
+     "health": 103,
+     "speed": 256.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 20200,
+     "x": -244.0,
+     "y": -2090.7,
+     "z": -295.9,
+     "health": 103,
+     "speed": 279.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 20600,
+     "x": -199.7,
+     "y": -2187.6,
+     "z": -318.0,
+     "health": 106,
+     "speed": 277.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 21000,
+     "x": -105.7,
+     "y": -2249.6,
+     "z": -335.8,
+     "health": 106,
+     "speed": 263.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 21400,
+     "x": -60.3,
+     "y": -2260.0,
+     "z": -335.8,
+     "health": 109,
+     "speed": 80.5,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 21800,
+     "x": -35.7,
+     "y": -2312.0,
+     "z": -335.8,
+     "health": 109,
+     "speed": 257.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 22200,
+     "x": 73.5,
+     "y": -2364.0,
+     "z": -314.1,
+     "health": 109,
+     "speed": 360.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 22600,
+     "x": 216.0,
+     "y": -2375.4,
+     "z": -293.7,
+     "health": 112,
+     "speed": 352.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 23000,
+     "x": 337.5,
+     "y": -2362.9,
+     "z": -335.8,
+     "health": 112,
+     "speed": 144.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    }
+   ],
+   "kills": [],
+   "death": null,
+   "proximity_series": [
+    {
+     "t": 500,
+     "nearest_teammate": 64.0,
+     "nearest_enemy": 4757.8,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 1000,
+     "nearest_teammate": 64.0,
+     "nearest_enemy": 4463.4,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 2000,
+     "nearest_teammate": 83.0,
+     "nearest_enemy": 4094.5,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 3000,
+     "nearest_teammate": 178.7,
+     "nearest_enemy": 3495.5,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 4000,
+     "nearest_teammate": 182.3,
+     "nearest_enemy": 2719.1,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 5000,
+     "nearest_teammate": 253.3,
+     "nearest_enemy": 1791.2,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 6000,
+     "nearest_teammate": 64.3,
+     "nearest_enemy": 1193.3,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 7000,
+     "nearest_teammate": 441.5,
+     "nearest_enemy": 1002.2,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 8000,
+     "nearest_teammate": 391.2,
+     "nearest_enemy": 902.6,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 9000,
+     "nearest_teammate": 466.4,
+     "nearest_enemy": 892.0,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 10000,
+     "nearest_teammate": 319.2,
+     "nearest_enemy": 752.0,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 11000,
+     "nearest_teammate": 539.9,
+     "nearest_enemy": 787.3,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 12000,
+     "nearest_teammate": 481.8,
+     "nearest_enemy": 799.3,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 13000,
+     "nearest_teammate": 382.4,
+     "nearest_enemy": 1160.4,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 14000,
+     "nearest_teammate": 867.6,
+     "nearest_enemy": 1007.0,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 15000,
+     "nearest_teammate": 811.5,
+     "nearest_enemy": 860.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 16000,
+     "nearest_teammate": 828.0,
+     "nearest_enemy": 883.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 17000,
+     "nearest_teammate": 843.3,
+     "nearest_enemy": 880.3,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 18000,
+     "nearest_teammate": 957.1,
+     "nearest_enemy": 1030.6,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 19000,
+     "nearest_teammate": 1066.6,
+     "nearest_enemy": 1123.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 20000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1234.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 21000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1202.6,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 22000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1246.7,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 23000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1069.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    }
+   ],
+   "solo_pct": 45.8,
+   "objective_events": [],
+   "narrative": ".olz spawned as MEDIC, lived 23s."
+  },
+  {
+   "life_index": 2,
+   "player_class": "MEDIC",
+   "spawn_time_ms": 23975,
+   "death_time_ms": 40750,
+   "duration_ms": 16775,
+   "total_distance": 5179.36572265625,
+   "sprint_pct": 27.9069766998291,
+   "death_type": null,
+   "path": [
+    {
+     "t": 23975,
+     "x": -1616.0,
+     "y": -164.0,
+     "z": 89.0,
+     "health": 124,
+     "speed": 0.0,
+     "stance": 2,
+     "sprint": 0,
+     "event": "spawn"
+    },
+    {
+     "t": 24400,
+     "x": -1565.7,
+     "y": -163.9,
+     "z": 72.1,
+     "health": 124,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 24800,
+     "x": -1465.3,
+     "y": -229.4,
+     "z": 72.1,
+     "health": 124,
+     "speed": 366.2,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 25200,
+     "x": -1433.1,
+     "y": -375.4,
+     "z": 72.1,
+     "health": 126,
+     "speed": 374.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 25600,
+     "x": -1399.6,
+     "y": -512.6,
+     "z": 72.1,
+     "health": 126,
+     "speed": 379.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 26000,
+     "x": -1408.0,
+     "y": -668.1,
+     "z": 106.9,
+     "health": 128,
+     "speed": 416.0,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 26400,
+     "x": -1425.2,
+     "y": -852.1,
+     "z": 112.6,
+     "health": 128,
+     "speed": 501.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 26800,
+     "x": -1392.0,
+     "y": -1059.3,
+     "z": 24.5,
+     "health": 128,
+     "speed": 558.8,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 27200,
+     "x": -1311.4,
+     "y": -1273.5,
+     "z": -65.1,
+     "health": 130,
+     "speed": 583.1,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 27600,
+     "x": -1190.0,
+     "y": -1477.5,
+     "z": -59.8,
+     "health": 130,
+     "speed": 596.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 28000,
+     "x": -1146.1,
+     "y": -1633.0,
+     "z": -95.9,
+     "health": 132,
+     "speed": 289.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 28400,
+     "x": -1047.3,
+     "y": -1673.8,
+     "z": -95.9,
+     "health": 132,
+     "speed": 256.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 28800,
+     "x": -959.4,
+     "y": -1717.9,
+     "z": -95.9,
+     "health": 132,
+     "speed": 270.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 29200,
+     "x": -839.9,
+     "y": -1717.9,
+     "z": -123.4,
+     "health": 134,
+     "speed": 317.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 29600,
+     "x": -735.8,
+     "y": -1714.2,
+     "z": -147.7,
+     "health": 134,
+     "speed": 249.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 30000,
+     "x": -623.0,
+     "y": -1771.0,
+     "z": -143.1,
+     "health": 134,
+     "speed": 401.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 30400,
+     "x": -544.1,
+     "y": -1914.4,
+     "z": -105.4,
+     "health": 134,
+     "speed": 431.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 30800,
+     "x": -429.8,
+     "y": -2058.4,
+     "z": -188.0,
+     "health": 134,
+     "speed": 485.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 31200,
+     "x": -279.1,
+     "y": -2191.0,
+     "z": -304.4,
+     "health": 134,
+     "speed": 515.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 31600,
+     "x": -101.8,
+     "y": -2302.0,
+     "z": -286.8,
+     "health": 134,
+     "speed": 532.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 32000,
+     "x": 70.3,
+     "y": -2364.2,
+     "z": -335.9,
+     "health": 134,
+     "speed": 213.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 32400,
+     "x": 111.2,
+     "y": -2349.5,
+     "z": -335.9,
+     "health": 134,
+     "speed": 80.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 32800,
+     "x": 177.6,
+     "y": -2338.9,
+     "z": -335.9,
+     "health": 134,
+     "speed": 256.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 33200,
+     "x": 309.7,
+     "y": -2347.3,
+     "z": -300.8,
+     "health": 134,
+     "speed": 387.5,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 33600,
+     "x": 471.8,
+     "y": -2347.5,
+     "z": -303.2,
+     "health": 134,
+     "speed": 425.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 34000,
+     "x": 618.6,
+     "y": -2342.2,
+     "z": -335.7,
+     "health": 134,
+     "speed": 306.0,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 34400,
+     "x": 612.2,
+     "y": -2334.3,
+     "z": -335.7,
+     "health": 134,
+     "speed": 258.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 34800,
+     "x": 508.4,
+     "y": -2329.8,
+     "z": -335.7,
+     "health": 134,
+     "speed": 267.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 35200,
+     "x": 449.3,
+     "y": -2267.6,
+     "z": -335.7,
+     "health": 134,
+     "speed": 58.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 35600,
+     "x": 449.9,
+     "y": -2249.2,
+     "z": -335.7,
+     "health": 134,
+     "speed": 54.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 36000,
+     "x": 450.2,
+     "y": -2246.8,
+     "z": -335.7,
+     "health": 134,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 36400,
+     "x": 461.9,
+     "y": -2253.0,
+     "z": -335.7,
+     "health": 134,
+     "speed": 72.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 36800,
+     "x": 489.9,
+     "y": -2267.4,
+     "z": -335.7,
+     "health": 134,
+     "speed": 53.7,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 37200,
+     "x": 461.4,
+     "y": -2208.8,
+     "z": -335.7,
+     "health": 134,
+     "speed": 256.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 37600,
+     "x": 391.7,
+     "y": -2140.1,
+     "z": -335.7,
+     "health": 134,
+     "speed": 258.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 38000,
+     "x": 345.2,
+     "y": -2107.6,
+     "z": -335.7,
+     "health": 134,
+     "speed": 257.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 38400,
+     "x": 429.6,
+     "y": -2143.7,
+     "z": -335.7,
+     "health": 134,
+     "speed": 281.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 38800,
+     "x": 422.2,
+     "y": -2247.1,
+     "z": -335.7,
+     "health": 134,
+     "speed": 256.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 39200,
+     "x": 444.7,
+     "y": -2343.3,
+     "z": -335.7,
+     "health": 117,
+     "speed": 185.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 39600,
+     "x": 362.9,
+     "y": -2390.0,
+     "z": -335.7,
+     "health": 100,
+     "speed": 369.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 40000,
+     "x": 274.8,
+     "y": -2297.3,
+     "z": -335.7,
+     "health": 83,
+     "speed": 275.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 40400,
+     "x": 245.6,
+     "y": -2206.7,
+     "z": -335.7,
+     "health": 12,
+     "speed": 59.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    }
+   ],
+   "kills": [],
+   "death": {
+    "time": 40750,
+    "killer_name": "^pvid",
+    "outcome": "tapped_out",
+    "reviver_name": null,
+    "gibber_name": null,
+    "victim_wait_ms": 13250
+   },
+   "proximity_series": [
+    {
+     "t": 23975,
+     "nearest_teammate": 64.0,
+     "nearest_enemy": 2401.1,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 24000,
+     "nearest_teammate": 64.0,
+     "nearest_enemy": 2357.5,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 25000,
+     "nearest_teammate": 49.2,
+     "nearest_enemy": 2148.4,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 26000,
+     "nearest_teammate": 72.6,
+     "nearest_enemy": 1946.7,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 27000,
+     "nearest_teammate": 113.9,
+     "nearest_enemy": 1478.0,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 28000,
+     "nearest_teammate": 228.1,
+     "nearest_enemy": 1155.4,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 29000,
+     "nearest_teammate": 292.2,
+     "nearest_enemy": 929.9,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 30000,
+     "nearest_teammate": 441.7,
+     "nearest_enemy": 629.2,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 31000,
+     "nearest_teammate": 722.3,
+     "nearest_enemy": 517.4,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 32000,
+     "nearest_teammate": 1001.4,
+     "nearest_enemy": 641.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 33000,
+     "nearest_teammate": 1099.1,
+     "nearest_enemy": 706.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 34000,
+     "nearest_teammate": 1383.3,
+     "nearest_enemy": 2419.5,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 35000,
+     "nearest_teammate": 1232.1,
+     "nearest_enemy": 2153.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 36000,
+     "nearest_teammate": 1194.2,
+     "nearest_enemy": 1604.3,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 37000,
+     "nearest_teammate": 1236.7,
+     "nearest_enemy": 968.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 38000,
+     "nearest_teammate": 817.7,
+     "nearest_enemy": 736.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 39000,
+     "nearest_teammate": 1004.7,
+     "nearest_enemy": 764.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 40000,
+     "nearest_teammate": 905.7,
+     "nearest_enemy": 886.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    }
+   ],
+   "solo_pct": 55.6,
+   "objective_events": [],
+   "narrative": ".olz spawned as MEDIC, lived 17s, mostly alone (56% solo), died to vid (tapped_out)."
+  },
+  {
+   "life_index": 3,
+   "player_class": "MEDIC",
+   "spawn_time_ms": 53975,
+   "death_time_ms": 79725,
+   "duration_ms": 25750,
+   "total_distance": 5801.4990234375,
+   "sprint_pct": 21.374046325683594,
+   "death_type": null,
+   "path": [
+    {
+     "t": 53975,
+     "x": -1616.0,
+     "y": -164.0,
+     "z": 89.0,
+     "health": 119,
+     "speed": 0.0,
+     "stance": 2,
+     "sprint": 0,
+     "event": "spawn"
+    },
+    {
+     "t": 54400,
+     "x": -1580.4,
+     "y": -199.6,
+     "z": 72.1,
+     "health": 119,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 54800,
+     "x": -1518.9,
+     "y": -328.4,
+     "z": 72.1,
+     "health": 119,
+     "speed": 361.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 55200,
+     "x": -1514.4,
+     "y": -474.3,
+     "z": 72.1,
+     "health": 121,
+     "speed": 363.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 55600,
+     "x": -1469.4,
+     "y": -618.3,
+     "z": 84.7,
+     "health": 121,
+     "speed": 398.1,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 56000,
+     "x": -1481.9,
+     "y": -792.9,
+     "z": 117.1,
+     "health": 123,
+     "speed": 477.4,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 56400,
+     "x": -1449.5,
+     "y": -994.8,
+     "z": 63.4,
+     "health": 123,
+     "speed": 543.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 56800,
+     "x": -1378.8,
+     "y": -1213.3,
+     "z": -90.6,
+     "health": 123,
+     "speed": 601.5,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 57200,
+     "x": -1262.7,
+     "y": -1431.7,
+     "z": -48.7,
+     "health": 125,
+     "speed": 631.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 57600,
+     "x": -1173.3,
+     "y": -1622.8,
+     "z": -95.9,
+     "health": 125,
+     "speed": 324.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 58000,
+     "x": -1071.8,
+     "y": -1654.9,
+     "z": -95.9,
+     "health": 127,
+     "speed": 261.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 58400,
+     "x": -991.8,
+     "y": -1717.9,
+     "z": -95.9,
+     "health": 127,
+     "speed": 141.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 58800,
+     "x": -976.9,
+     "y": -1717.9,
+     "z": -95.9,
+     "health": 127,
+     "speed": 0.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 59200,
+     "x": -976.9,
+     "y": -1717.9,
+     "z": -95.9,
+     "health": 129,
+     "speed": 0.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 59600,
+     "x": -976.9,
+     "y": -1717.2,
+     "z": -95.9,
+     "health": 129,
+     "speed": 16.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 60000,
+     "x": -976.2,
+     "y": -1695.6,
+     "z": -95.9,
+     "health": 131,
+     "speed": 80.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 60400,
+     "x": -975.7,
+     "y": -1700.0,
+     "z": -95.9,
+     "health": 131,
+     "speed": 43.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 60800,
+     "x": -979.2,
+     "y": -1701.6,
+     "z": -95.9,
+     "health": 131,
+     "speed": 37.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 61200,
+     "x": -1012.9,
+     "y": -1685.9,
+     "z": -95.9,
+     "health": 107,
+     "speed": 80.1,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 61600,
+     "x": -1036.0,
+     "y": -1709.1,
+     "z": -95.9,
+     "health": 81,
+     "speed": 97.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 62000,
+     "x": -1059.6,
+     "y": -1701.8,
+     "z": -95.9,
+     "health": 71,
+     "speed": 34.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 62400,
+     "x": -1059.9,
+     "y": -1692.8,
+     "z": -95.9,
+     "health": 71,
+     "speed": 221.4,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 62800,
+     "x": -1138.0,
+     "y": -1605.9,
+     "z": -95.9,
+     "health": 71,
+     "speed": 363.1,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 63200,
+     "x": -1252.3,
+     "y": -1544.6,
+     "z": -95.9,
+     "health": 74,
+     "speed": 262.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 63600,
+     "x": -1258.4,
+     "y": -1437.0,
+     "z": -95.9,
+     "health": 74,
+     "speed": 353.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 64000,
+     "x": -1151.4,
+     "y": -1333.8,
+     "z": -55.2,
+     "health": 77,
+     "speed": 396.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 64400,
+     "x": -998.2,
+     "y": -1275.8,
+     "z": -71.7,
+     "health": 77,
+     "speed": 397.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 64800,
+     "x": -984.6,
+     "y": -1288.2,
+     "z": -95.7,
+     "health": 77,
+     "speed": 240.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 65200,
+     "x": -878.0,
+     "y": -1297.8,
+     "z": -113.5,
+     "health": 80,
+     "speed": 293.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 65600,
+     "x": -840.1,
+     "y": -1291.8,
+     "z": -123.1,
+     "health": 80,
+     "speed": 27.8,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 66000,
+     "x": -874.8,
+     "y": -1321.4,
+     "z": -115.1,
+     "health": 83,
+     "speed": 248.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 66400,
+     "x": -958.3,
+     "y": -1290.1,
+     "z": -95.9,
+     "health": 83,
+     "speed": 153.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 66800,
+     "x": -963.7,
+     "y": -1290.1,
+     "z": -95.9,
+     "health": 83,
+     "speed": 35.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 67200,
+     "x": -1043.7,
+     "y": -1279.5,
+     "z": -95.9,
+     "health": 106,
+     "speed": 275.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 67600,
+     "x": -1145.9,
+     "y": -1252.9,
+     "z": -95.9,
+     "health": 106,
+     "speed": 353.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 68000,
+     "x": -1282.4,
+     "y": -1199.8,
+     "z": -47.4,
+     "health": 128,
+     "speed": 365.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 68400,
+     "x": -1412.6,
+     "y": -1176.1,
+     "z": -95.9,
+     "health": 128,
+     "speed": 149.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 68800,
+     "x": -1407.6,
+     "y": -1141.4,
+     "z": -95.9,
+     "health": 128,
+     "speed": 80.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 69200,
+     "x": -1382.6,
+     "y": -1120.7,
+     "z": -95.9,
+     "health": 130,
+     "speed": 85.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 69600,
+     "x": -1378.1,
+     "y": -1114.5,
+     "z": -95.9,
+     "health": 130,
+     "speed": 20.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 70000,
+     "x": -1385.8,
+     "y": -1135.5,
+     "z": -95.9,
+     "health": 132,
+     "speed": 80.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 70400,
+     "x": -1384.6,
+     "y": -1167.3,
+     "z": -95.9,
+     "health": 132,
+     "speed": 79.1,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 70800,
+     "x": -1368.6,
+     "y": -1159.6,
+     "z": -95.9,
+     "health": 132,
+     "speed": 63.9,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 71200,
+     "x": -1339.6,
+     "y": -1171.0,
+     "z": -95.9,
+     "health": 134,
+     "speed": 80.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 71600,
+     "x": -1341.8,
+     "y": -1170.7,
+     "z": -95.9,
+     "health": 134,
+     "speed": 50.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 72000,
+     "x": -1382.0,
+     "y": -1240.3,
+     "z": -95.9,
+     "health": 134,
+     "speed": 281.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 72400,
+     "x": -1350.3,
+     "y": -1338.9,
+     "z": -95.9,
+     "health": 134,
+     "speed": 273.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 72800,
+     "x": -1245.2,
+     "y": -1398.3,
+     "z": -95.9,
+     "health": 134,
+     "speed": 263.1,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 73200,
+     "x": -1237.3,
+     "y": -1502.4,
+     "z": -95.9,
+     "health": 134,
+     "speed": 278.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 73600,
+     "x": -1190.9,
+     "y": -1593.9,
+     "z": -95.9,
+     "health": 134,
+     "speed": 257.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 74000,
+     "x": -1185.2,
+     "y": -1691.3,
+     "z": -95.9,
+     "health": 119,
+     "speed": 256.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 74400,
+     "x": -1216.3,
+     "y": -1782.0,
+     "z": -95.9,
+     "health": 119,
+     "speed": 139.7,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 74800,
+     "x": -1241.1,
+     "y": -1737.2,
+     "z": -95.9,
+     "health": 121,
+     "speed": 256.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 75200,
+     "x": -1249.4,
+     "y": -1686.9,
+     "z": -95.9,
+     "health": 121,
+     "speed": 202.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 75600,
+     "x": -1226.0,
+     "y": -1669.6,
+     "z": -95.9,
+     "health": 121,
+     "speed": 245.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 76000,
+     "x": -1320.9,
+     "y": -1628.2,
+     "z": -95.9,
+     "health": 123,
+     "speed": 256.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 76400,
+     "x": -1305.5,
+     "y": -1601.7,
+     "z": -95.9,
+     "health": 123,
+     "speed": 257.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 76800,
+     "x": -1207.8,
+     "y": -1640.5,
+     "z": -95.9,
+     "health": 125,
+     "speed": 256.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 77200,
+     "x": -1077.2,
+     "y": -1675.5,
+     "z": -59.4,
+     "health": 125,
+     "speed": 390.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 77600,
+     "x": -913.3,
+     "y": -1693.2,
+     "z": -66.2,
+     "health": 125,
+     "speed": 424.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 78000,
+     "x": -759.7,
+     "y": -1717.9,
+     "z": -142.1,
+     "health": 127,
+     "speed": 253.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 78400,
+     "x": -662.0,
+     "y": -1691.0,
+     "z": -151.8,
+     "health": 87,
+     "speed": 218.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 78800,
+     "x": -609.5,
+     "y": -1696.3,
+     "z": -151.7,
+     "health": 22,
+     "speed": 185.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 79200,
+     "x": -572.7,
+     "y": -1634.7,
+     "z": -151.7,
+     "health": 4,
+     "speed": 259.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 79600,
+     "x": -524.3,
+     "y": -1573.2,
+     "z": -143.9,
+     "health": 4,
+     "speed": 181.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    }
+   ],
+   "kills": [],
+   "death": {
+    "time": 79725,
+    "killer_name": "bronze",
+    "outcome": "tapped_out",
+    "reviver_name": null,
+    "gibber_name": null,
+    "victim_wait_ms": 4275
+   },
+   "proximity_series": [
+    {
+     "t": 53975,
+     "nearest_teammate": 63.8,
+     "nearest_enemy": 1645.0,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 54000,
+     "nearest_teammate": 63.9,
+     "nearest_enemy": 1819.1,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 55000,
+     "nearest_teammate": 63.0,
+     "nearest_enemy": 1866.2,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 56000,
+     "nearest_teammate": 80.7,
+     "nearest_enemy": 1643.5,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 57000,
+     "nearest_teammate": 119.3,
+     "nearest_enemy": 1335.6,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 58000,
+     "nearest_teammate": 236.6,
+     "nearest_enemy": 1030.3,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 59000,
+     "nearest_teammate": 208.5,
+     "nearest_enemy": 944.3,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 60000,
+     "nearest_teammate": 78.1,
+     "nearest_enemy": 940.1,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 61000,
+     "nearest_teammate": 73.7,
+     "nearest_enemy": 961.2,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 62000,
+     "nearest_teammate": 89.7,
+     "nearest_enemy": 1028.8,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 63000,
+     "nearest_teammate": 332.5,
+     "nearest_enemy": 1049.4,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 64000,
+     "nearest_teammate": 388.1,
+     "nearest_enemy": 723.2,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 65000,
+     "nearest_teammate": 333.2,
+     "nearest_enemy": 507.8,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 66000,
+     "nearest_teammate": null,
+     "nearest_enemy": 454.4,
+     "teammates_500u": 0,
+     "enemies_500u": 1
+    },
+    {
+     "t": 67000,
+     "nearest_teammate": null,
+     "nearest_enemy": 524.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 68000,
+     "nearest_teammate": null,
+     "nearest_enemy": 776.5,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 69000,
+     "nearest_teammate": null,
+     "nearest_enemy": 906.0,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 70000,
+     "nearest_teammate": null,
+     "nearest_enemy": 895.4,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 71000,
+     "nearest_teammate": null,
+     "nearest_enemy": 996.6,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 72000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1211.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 73000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1054.9,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 74000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1605.7,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 75000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1670.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 76000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1755.3,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 77000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1631.4,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 78000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1231.3,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 79000,
+     "nearest_teammate": null,
+     "nearest_enemy": 1091.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    }
+   ],
+   "solo_pct": 51.9,
+   "objective_events": [],
+   "narrative": ".olz spawned as MEDIC, lived 26s, mostly alone (52% solo), died to bronze (tapped_out)."
+  },
+  {
+   "life_index": 4,
+   "player_class": "MEDIC",
+   "spawn_time_ms": 83975,
+   "death_time_ms": 126150,
+   "duration_ms": 42175,
+   "total_distance": 7793.6875,
+   "sprint_pct": 11.737089157104492,
+   "death_type": null,
+   "path": [
+    {
+     "t": 83975,
+     "x": -1616.0,
+     "y": -164.0,
+     "z": 89.0,
+     "health": 119,
+     "speed": 0.0,
+     "stance": 2,
+     "sprint": 0,
+     "event": "spawn"
+    },
+    {
+     "t": 84400,
+     "x": -1579.7,
+     "y": -191.9,
+     "z": 72.1,
+     "health": 119,
+     "speed": 201.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 84800,
+     "x": -1544.3,
+     "y": -280.4,
+     "z": 72.1,
+     "health": 119,
+     "speed": 257.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 85200,
+     "x": -1575.9,
+     "y": -421.9,
+     "z": 104.5,
+     "health": 122,
+     "speed": 405.7,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 85600,
+     "x": -1631.6,
+     "y": -584.6,
+     "z": 105.5,
+     "health": 122,
+     "speed": 426.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 86000,
+     "x": -1675.4,
+     "y": -720.5,
+     "z": 72.3,
+     "health": 125,
+     "speed": 247.3,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 86400,
+     "x": -1680.3,
+     "y": -764.9,
+     "z": 72.3,
+     "health": 125,
+     "speed": 80.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 86800,
+     "x": -1673.1,
+     "y": -814.7,
+     "z": 65.4,
+     "health": 125,
+     "speed": 87.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 87200,
+     "x": -1659.8,
+     "y": -807.2,
+     "z": 65.0,
+     "health": 127,
+     "speed": 28.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 87600,
+     "x": -1654.7,
+     "y": -803.5,
+     "z": 68.0,
+     "health": 127,
+     "speed": 39.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 88000,
+     "x": -1647.5,
+     "y": -797.1,
+     "z": 72.1,
+     "health": 129,
+     "speed": 44.8,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 88400,
+     "x": -1630.5,
+     "y": -778.7,
+     "z": 72.1,
+     "health": 129,
+     "speed": 12.8,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 88800,
+     "x": -1631.8,
+     "y": -769.6,
+     "z": 72.1,
+     "health": 129,
+     "speed": 36.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 89200,
+     "x": -1639.4,
+     "y": -776.9,
+     "z": 72.1,
+     "health": 131,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 89600,
+     "x": -1639.4,
+     "y": -776.9,
+     "z": 72.1,
+     "health": 131,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 90000,
+     "x": -1639.8,
+     "y": -767.1,
+     "z": 72.1,
+     "health": 133,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 90400,
+     "x": -1639.8,
+     "y": -767.1,
+     "z": 72.1,
+     "health": 133,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 90800,
+     "x": -1639.8,
+     "y": -767.1,
+     "z": 72.1,
+     "health": 133,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 91200,
+     "x": -1639.8,
+     "y": -767.1,
+     "z": 72.1,
+     "health": 135,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 91600,
+     "x": -1639.8,
+     "y": -767.1,
+     "z": 72.1,
+     "health": 135,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 92000,
+     "x": -1635.3,
+     "y": -762.3,
+     "z": 72.1,
+     "health": 137,
+     "speed": 4.8,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 92400,
+     "x": -1640.0,
+     "y": -767.4,
+     "z": 72.1,
+     "health": 137,
+     "speed": 21.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 92800,
+     "x": -1634.6,
+     "y": -761.6,
+     "z": 72.1,
+     "health": 137,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 93200,
+     "x": -1634.4,
+     "y": -761.3,
+     "z": 72.1,
+     "health": 139,
+     "speed": 12.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 93600,
+     "x": -1636.7,
+     "y": -763.8,
+     "z": 72.1,
+     "health": 139,
+     "speed": 46.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 94000,
+     "x": -1655.3,
+     "y": -784.0,
+     "z": 72.1,
+     "health": 140,
+     "speed": 34.4,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 94400,
+     "x": -1631.4,
+     "y": -756.4,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 94800,
+     "x": -1532.1,
+     "y": -679.8,
+     "z": 91.1,
+     "health": 140,
+     "speed": 410.2,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 95200,
+     "x": -1403.9,
+     "y": -571.9,
+     "z": 115.4,
+     "health": 140,
+     "speed": 428.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 95600,
+     "x": -1305.5,
+     "y": -441.1,
+     "z": 72.1,
+     "health": 140,
+     "speed": 327.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 96000,
+     "x": -1287.4,
+     "y": -304.8,
+     "z": 72.1,
+     "health": 140,
+     "speed": 421.8,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 96400,
+     "x": -1175.1,
+     "y": -174.3,
+     "z": 120.7,
+     "health": 140,
+     "speed": 455.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 96800,
+     "x": -1079.7,
+     "y": -9.2,
+     "z": 72.1,
+     "health": 140,
+     "speed": 441.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 97200,
+     "x": -1037.9,
+     "y": 125.8,
+     "z": 72.1,
+     "health": 140,
+     "speed": 416.5,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 97600,
+     "x": -892.3,
+     "y": 215.4,
+     "z": 120.6,
+     "health": 140,
+     "speed": 434.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 98000,
+     "x": -724.9,
+     "y": 291.5,
+     "z": 72.3,
+     "health": 140,
+     "speed": 449.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 98400,
+     "x": -557.2,
+     "y": 273.2,
+     "z": 120.5,
+     "health": 140,
+     "speed": 421.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 98800,
+     "x": -465.6,
+     "y": 269.5,
+     "z": 72.1,
+     "health": 140,
+     "speed": 71.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 99200,
+     "x": -381.2,
+     "y": 295.8,
+     "z": 72.1,
+     "health": 140,
+     "speed": 265.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 99600,
+     "x": -323.9,
+     "y": 194.2,
+     "z": 97.1,
+     "health": 140,
+     "speed": 395.8,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 100000,
+     "x": -313.8,
+     "y": 31.0,
+     "z": 112.9,
+     "health": 140,
+     "speed": 439.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 100400,
+     "x": -249.8,
+     "y": -120.4,
+     "z": 85.6,
+     "health": 140,
+     "speed": 345.2,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 100800,
+     "x": -146.9,
+     "y": -215.5,
+     "z": 117.1,
+     "health": 140,
+     "speed": 356.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 101200,
+     "x": -32.2,
+     "y": -290.3,
+     "z": 72.1,
+     "health": 140,
+     "speed": 268.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 101600,
+     "x": 69.0,
+     "y": -311.2,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 102000,
+     "x": 170.3,
+     "y": -326.0,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 102400,
+     "x": 193.2,
+     "y": -328.6,
+     "z": 72.1,
+     "health": 140,
+     "speed": 229.4,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 102800,
+     "x": 92.4,
+     "y": -305.7,
+     "z": 72.1,
+     "health": 140,
+     "speed": 247.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 103200,
+     "x": 144.7,
+     "y": -348.8,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 103600,
+     "x": 180.1,
+     "y": -360.6,
+     "z": 72.1,
+     "health": 140,
+     "speed": 240.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 104000,
+     "x": 78.4,
+     "y": -313.4,
+     "z": 73.2,
+     "health": 140,
+     "speed": 388.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 104400,
+     "x": -60.3,
+     "y": -238.9,
+     "z": 120.0,
+     "health": 140,
+     "speed": 401.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 104800,
+     "x": -201.7,
+     "y": -163.5,
+     "z": 72.1,
+     "health": 140,
+     "speed": 355.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 105200,
+     "x": -210.4,
+     "y": -55.4,
+     "z": 72.1,
+     "health": 140,
+     "speed": 318.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 105600,
+     "x": -98.0,
+     "y": -12.0,
+     "z": 46.0,
+     "health": 140,
+     "speed": 309.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 106000,
+     "x": 11.5,
+     "y": 49.0,
+     "z": -39.9,
+     "health": 140,
+     "speed": 273.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 106400,
+     "x": 96.1,
+     "y": 110.5,
+     "z": -39.9,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 106800,
+     "x": 145.2,
+     "y": 128.4,
+     "z": -39.9,
+     "health": 140,
+     "speed": 65.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 107200,
+     "x": 138.0,
+     "y": 130.6,
+     "z": -39.9,
+     "health": 140,
+     "speed": 64.8,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 107600,
+     "x": 134.3,
+     "y": 131.3,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 108000,
+     "x": 133.2,
+     "y": 131.5,
+     "z": -39.9,
+     "health": 140,
+     "speed": 21.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 108400,
+     "x": 112.5,
+     "y": 140.6,
+     "z": -39.9,
+     "health": 140,
+     "speed": 80.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 108800,
+     "x": 90.4,
+     "y": 161.1,
+     "z": -39.9,
+     "health": 140,
+     "speed": 51.1,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 109200,
+     "x": 114.9,
+     "y": 166.1,
+     "z": -39.9,
+     "health": 140,
+     "speed": 80.1,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 109600,
+     "x": 140.3,
+     "y": 164.4,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 110000,
+     "x": 128.6,
+     "y": 163.8,
+     "z": -39.9,
+     "health": 140,
+     "speed": 68.2,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 110400,
+     "x": 128.3,
+     "y": 163.8,
+     "z": -39.9,
+     "health": 140,
+     "speed": 55.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 110800,
+     "x": 138.3,
+     "y": 164.7,
+     "z": -39.9,
+     "health": 140,
+     "speed": 8.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 111200,
+     "x": 119.4,
+     "y": 162.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 62.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 111600,
+     "x": 124.4,
+     "y": 163.4,
+     "z": -39.9,
+     "health": 140,
+     "speed": 56.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 112000,
+     "x": 127.2,
+     "y": 163.7,
+     "z": -39.9,
+     "health": 140,
+     "speed": 40.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 112400,
+     "x": 102.9,
+     "y": 160.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 14.6,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 112800,
+     "x": 102.7,
+     "y": 160.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 113200,
+     "x": 102.7,
+     "y": 160.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 113600,
+     "x": 102.7,
+     "y": 160.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 114000,
+     "x": 102.7,
+     "y": 160.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 114400,
+     "x": 102.7,
+     "y": 160.9,
+     "z": -39.9,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 114800,
+     "x": 98.4,
+     "y": 175.2,
+     "z": -39.9,
+     "health": 140,
+     "speed": 76.7,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 115200,
+     "x": 95.3,
+     "y": 207.0,
+     "z": -39.9,
+     "health": 140,
+     "speed": 80.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 115600,
+     "x": 87.3,
+     "y": 285.6,
+     "z": -7.9,
+     "health": 140,
+     "speed": 261.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 116000,
+     "x": 50.8,
+     "y": 381.6,
+     "z": 40.1,
+     "health": 140,
+     "speed": 257.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 116400,
+     "x": -17.5,
+     "y": 459.3,
+     "z": 56.1,
+     "health": 140,
+     "speed": 256.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 116800,
+     "x": -114.5,
+     "y": 493.1,
+     "z": 72.1,
+     "health": 140,
+     "speed": 280.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 117200,
+     "x": -210.5,
+     "y": 448.6,
+     "z": 72.1,
+     "health": 140,
+     "speed": 345.0,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 117600,
+     "x": -275.8,
+     "y": 315.4,
+     "z": 120.5,
+     "health": 140,
+     "speed": 395.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 118000,
+     "x": -315.4,
+     "y": 161.1,
+     "z": 72.1,
+     "health": 140,
+     "speed": 362.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 118400,
+     "x": -340.5,
+     "y": 45.7,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 118800,
+     "x": -344.8,
+     "y": -58.2,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 119200,
+     "x": -328.2,
+     "y": -81.3,
+     "z": 72.1,
+     "health": 140,
+     "speed": 256.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 119600,
+     "x": -301.7,
+     "y": -59.2,
+     "z": 72.1,
+     "health": 140,
+     "speed": 0.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 120000,
+     "x": -295.7,
+     "y": -39.1,
+     "z": 72.1,
+     "health": 82,
+     "speed": 219.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 120400,
+     "x": -340.9,
+     "y": -43.4,
+     "z": 72.1,
+     "health": 82,
+     "speed": 257.3,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 120800,
+     "x": -349.1,
+     "y": -87.0,
+     "z": 72.1,
+     "health": 82,
+     "speed": 244.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 121200,
+     "x": -304.7,
+     "y": -53.9,
+     "z": 72.1,
+     "health": 85,
+     "speed": 185.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 121600,
+     "x": -317.7,
+     "y": -59.4,
+     "z": 72.1,
+     "health": 67,
+     "speed": 262.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 122000,
+     "x": -248.4,
+     "y": 17.2,
+     "z": 72.1,
+     "health": 70,
+     "speed": 256.2,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 122400,
+     "x": -249.4,
+     "y": 88.3,
+     "z": 72.1,
+     "health": 70,
+     "speed": 257.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 122800,
+     "x": -271.3,
+     "y": 126.0,
+     "z": 72.1,
+     "health": 70,
+     "speed": 206.7,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 123200,
+     "x": -191.8,
+     "y": 58.5,
+     "z": 72.1,
+     "health": 93,
+     "speed": 273.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 123600,
+     "x": -128.4,
+     "y": -26.7,
+     "z": 41.0,
+     "health": 93,
+     "speed": 285.9,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 124000,
+     "x": -24.7,
+     "y": -61.0,
+     "z": -39.7,
+     "health": 116,
+     "speed": 276.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 124400,
+     "x": 79.5,
+     "y": -49.6,
+     "z": -39.7,
+     "health": 116,
+     "speed": 259.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 124800,
+     "x": 101.9,
+     "y": -65.9,
+     "z": -39.7,
+     "health": 116,
+     "speed": 0.0,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 125200,
+     "x": 82.2,
+     "y": -61.1,
+     "z": -39.7,
+     "health": 119,
+     "speed": 242.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 125600,
+     "x": -27.4,
+     "y": -38.7,
+     "z": -39.6,
+     "health": 51,
+     "speed": 137.8,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 126000,
+     "x": -60.1,
+     "y": -41.7,
+     "z": -39.7,
+     "health": 36,
+     "speed": 280.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    }
+   ],
+   "kills": [],
+   "death": {
+    "time": 126150,
+    "killer_name": "^pvid",
+    "outcome": "tapped_out",
+    "reviver_name": null,
+    "gibber_name": null,
+    "victim_wait_ms": 17850
+   },
+   "proximity_series": [
+    {
+     "t": 83975,
+     "nearest_teammate": 64.0,
+     "nearest_enemy": 1951.9,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 84000,
+     "nearest_teammate": 63.9,
+     "nearest_enemy": 1951.8,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 85000,
+     "nearest_teammate": 136.3,
+     "nearest_enemy": 1765.7,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 86000,
+     "nearest_teammate": 496.1,
+     "nearest_enemy": 1767.9,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 87000,
+     "nearest_teammate": 590.2,
+     "nearest_enemy": 1947.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 88000,
+     "nearest_teammate": 585.5,
+     "nearest_enemy": 2316.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 89000,
+     "nearest_teammate": 698.1,
+     "nearest_enemy": 2075.9,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 90000,
+     "nearest_teammate": 944.5,
+     "nearest_enemy": 1797.0,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 91000,
+     "nearest_teammate": 1236.5,
+     "nearest_enemy": 1622.5,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 92000,
+     "nearest_teammate": 1542.1,
+     "nearest_enemy": 1596.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 93000,
+     "nearest_teammate": 1570.2,
+     "nearest_enemy": 1585.7,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 94000,
+     "nearest_teammate": 1597.2,
+     "nearest_enemy": 1568.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 95000,
+     "nearest_teammate": 1683.4,
+     "nearest_enemy": 1485.5,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 96000,
+     "nearest_teammate": 1688.1,
+     "nearest_enemy": 1562.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 97000,
+     "nearest_teammate": 1616.0,
+     "nearest_enemy": 1828.7,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 98000,
+     "nearest_teammate": 1472.4,
+     "nearest_enemy": 1916.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 99000,
+     "nearest_teammate": 1240.6,
+     "nearest_enemy": 1853.4,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 100000,
+     "nearest_teammate": 977.7,
+     "nearest_enemy": 1611.4,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 101000,
+     "nearest_teammate": 579.2,
+     "nearest_enemy": 2066.6,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 102000,
+     "nearest_teammate": 352.6,
+     "nearest_enemy": 1960.7,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 103000,
+     "nearest_teammate": 395.2,
+     "nearest_enemy": 1942.2,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 104000,
+     "nearest_teammate": 419.3,
+     "nearest_enemy": 1816.1,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 105000,
+     "nearest_teammate": 945.1,
+     "nearest_enemy": 2019.7,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 106000,
+     "nearest_teammate": 1156.6,
+     "nearest_enemy": 2171.5,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 107000,
+     "nearest_teammate": 1286.8,
+     "nearest_enemy": 2259.0,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 108000,
+     "nearest_teammate": 1315.8,
+     "nearest_enemy": 2291.4,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 109000,
+     "nearest_teammate": 1347.8,
+     "nearest_enemy": 2107.5,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 110000,
+     "nearest_teammate": 1347.6,
+     "nearest_enemy": 1977.8,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 111000,
+     "nearest_teammate": 1337.8,
+     "nearest_enemy": 1805.2,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 112000,
+     "nearest_teammate": 1337.0,
+     "nearest_enemy": 1803.6,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 113000,
+     "nearest_teammate": 1332.7,
+     "nearest_enemy": null,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 114000,
+     "nearest_teammate": 1514.0,
+     "nearest_enemy": 2754.9,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 115000,
+     "nearest_teammate": 1174.9,
+     "nearest_enemy": 2345.1,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 116000,
+     "nearest_teammate": 1015.7,
+     "nearest_enemy": 2102.9,
+     "teammates_500u": 0,
+     "enemies_500u": 0
+    },
+    {
+     "t": 117000,
+     "nearest_teammate": 462.1,
+     "nearest_enemy": 1993.8,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 118000,
+     "nearest_teammate": 172.5,
+     "nearest_enemy": 1453.7,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 119000,
+     "nearest_teammate": 224.5,
+     "nearest_enemy": 1120.8,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 120000,
+     "nearest_teammate": 167.0,
+     "nearest_enemy": 1104.2,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 121000,
+     "nearest_teammate": 180.5,
+     "nearest_enemy": 1062.0,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 122000,
+     "nearest_teammate": 245.5,
+     "nearest_enemy": 893.1,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 123000,
+     "nearest_teammate": 261.4,
+     "nearest_enemy": 730.5,
+     "teammates_500u": 1,
+     "enemies_500u": 0
+    },
+    {
+     "t": 124000,
+     "nearest_teammate": 514.4,
+     "nearest_enemy": 413.2,
+     "teammates_500u": 0,
+     "enemies_500u": 3
+    },
+    {
+     "t": 125000,
+     "nearest_teammate": 591.2,
+     "nearest_enemy": 251.4,
+     "teammates_500u": 0,
+     "enemies_500u": 3
+    },
+    {
+     "t": 126000,
+     "nearest_teammate": 522.9,
+     "nearest_enemy": 243.5,
+     "teammates_500u": 0,
+     "enemies_500u": 3
+    }
+   ],
+   "solo_pct": 68.2,
+   "objective_events": [],
+   "narrative": ".olz spawned as MEDIC, lived 42s, mostly alone (68% solo), died to vid (tapped_out)."
+  },
+  {
+   "life_index": 5,
+   "player_class": "FIELDOPS",
+   "spawn_time_ms": 143975,
+   "death_time_ms": 148975,
+   "duration_ms": 5000,
+   "total_distance": 2014.9422607421875,
+   "sprint_pct": 55.55555725097656,
+   "death_type": null,
+   "path": [
+    {
+     "t": 143975,
+     "x": -1616.0,
+     "y": -100.0,
+     "z": 89.0,
+     "health": 120,
+     "speed": 0.0,
+     "stance": 2,
+     "sprint": 0,
+     "event": "spawn"
+    },
+    {
+     "t": 144400,
+     "x": -1568.9,
+     "y": -152.2,
+     "z": 72.1,
+     "health": 120,
+     "speed": 375.6,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 144800,
+     "x": -1546.1,
+     "y": -298.5,
+     "z": 72.1,
+     "health": 120,
+     "speed": 352.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 145200,
+     "x": -1497.7,
+     "y": -412.0,
+     "z": 72.1,
+     "health": 120,
+     "speed": 277.5,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 145600,
+     "x": -1399.3,
+     "y": -497.9,
+     "z": 72.1,
+     "health": 120,
+     "speed": 360.4,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 146000,
+     "x": -1375.5,
+     "y": -650.6,
+     "z": 107.3,
+     "health": 120,
+     "speed": 424.2,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 146400,
+     "x": -1354.3,
+     "y": -833.5,
+     "z": 114.4,
+     "health": 120,
+     "speed": 489.4,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 146800,
+     "x": -1272.9,
+     "y": -1024.5,
+     "z": 32.9,
+     "health": 120,
+     "speed": 543.9,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 147200,
+     "x": -1153.0,
+     "y": -1213.4,
+     "z": 30.0,
+     "health": 120,
+     "speed": 591.2,
+     "stance": 0,
+     "sprint": 1,
+     "event": "sample"
+    },
+    {
+     "t": 147600,
+     "x": -993.5,
+     "y": -1391.6,
+     "z": -3.3,
+     "health": 107,
+     "speed": 557.1,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 148000,
+     "x": -874.2,
+     "y": -1486.9,
+     "z": -45.6,
+     "health": 93,
+     "speed": 375.6,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 148400,
+     "x": -760.8,
+     "y": -1519.5,
+     "z": -98.3,
+     "health": 46,
+     "speed": 226.3,
+     "stance": 0,
+     "sprint": 0,
+     "event": "sample"
+    },
+    {
+     "t": 148800,
+     "x": -669.5,
+     "y": -1464.6,
+     "z": -151.9,
+     "health": 12,
+     "speed": 296.0,
+     "stance": 1,
+     "sprint": 0,
+     "event": "sample"
+    }
+   ],
+   "kills": [],
+   "death": {
+    "time": 148975,
+    "killer_name": "bronze",
+    "outcome": "revived",
+    "reviver_name": null,
+    "gibber_name": null,
+    "victim_wait_ms": 25025
+   },
+   "proximity_series": [
+    {
+     "t": 143975,
+     "nearest_teammate": 64.0,
+     "nearest_enemy": 2005.0,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 144000,
+     "nearest_teammate": 63.8,
+     "nearest_enemy": 2004.7,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 145000,
+     "nearest_teammate": 63.7,
+     "nearest_enemy": 1876.5,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 146000,
+     "nearest_teammate": 135.1,
+     "nearest_enemy": 1635.0,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 147000,
+     "nearest_teammate": 75.8,
+     "nearest_enemy": 1527.4,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    },
+    {
+     "t": 148000,
+     "nearest_teammate": 25.0,
+     "nearest_enemy": 1423.1,
+     "teammates_500u": 2,
+     "enemies_500u": 0
+    }
+   ],
+   "solo_pct": 0.0,
+   "objective_events": [],
+   "narrative": ".olz spawned as FIELDOPS, lived 5s, glued to the team, downed by bronze but revived."
+  }
+ ],
+ "summary": {
+  "lives": 5,
+  "kills": 0,
+  "deaths": 4,
+  "avg_life_s": 22.5,
+  "objective_events": 0
+ }
+}

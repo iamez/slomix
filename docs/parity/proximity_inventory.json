@@ -333,7 +333,8 @@
         "bytes": 802,
         "file": "api_proximity_competitive_wave_cycles.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/competitive/wave-cycles"
     },
     {
       "path": "/api/proximity/construction-events",
@@ -761,7 +762,8 @@
         "bytes": 241,
         "file": "api_proximity_player_journey.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/player-journey"
     },
     {
       "path": "/api/proximity/player/{guid}/profile",
@@ -813,7 +815,8 @@
         "bytes": 2390,
         "file": "api_proximity_players.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/players"
     },
     {
       "path": "/api/proximity/prox-scores",
@@ -867,7 +870,8 @@
         "bytes": 33,
         "file": null
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/push-deaths/heatmap"
     },
     {
       "path": "/api/proximity/pushes",

@@ -91,8 +91,25 @@ def _names_used(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
             for stmt in body:
                 walk(stmt, shadowed | own)
             return
+        if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name):
+            # ⚠️ `param += 1` READS the prior value, and Python still labels the
+            # target `Store` — so a Load-only rule reports such a parameter as
+            # unused, which is a FALSE POSITIVE and the worse direction for this
+            # scanner: it sends someone hunting for a bug that is not there.
+            # Codex on #870, on the Load-only fix from #860. Measured: 0
+            # handlers do this today, which is when to get it right rather than
+            # the argument that it cannot happen.
+            if node.target.id not in shadowed:
+                used.add(node.target.id)
+            walk(node.value, shadowed)
+            return
         if isinstance(node, ast.Name):
-            if node.id not in shadowed:
+            # ⛔ A STORE IS NOT A READ. `player_guid = None` at the top of a
+            # handler is an `ast.Name` too, and counting it marked the parameter
+            # used while the caller's value could never reach the response —
+            # precisely the shape this scanner exists to find, excused by the
+            # scanner. Codex on #860.
+            if isinstance(node.ctx, ast.Load) and node.id not in shadowed:
                 used.add(node.id)
             return
         for child in ast.iter_child_nodes(node):
@@ -140,10 +157,14 @@ def test_the_scanner_can_actually_find_one():
         "@router.get('/x')\n"
         "async def h(used: int = 1, ignored: str | None = None,\n"
         "            shadowed: str | None = None, kw: int = 0,\n"
+        "            overwritten: str | None = None,\n"
+        "            accumulated: int = 0, step: int = 1,\n"
         "            db: DatabaseAdapter = Depends(get_db)):\n"
         "    def inner(shadowed):\n"
         "        return shadowed\n"
         "    helper(kw=1)\n"
+        "    overwritten = None\n"
+        "    accumulated += step\n"
         "    return {'v': used}\n"
     )
     tree = ast.parse(src)
@@ -157,6 +178,22 @@ def test_the_scanner_can_actually_find_one():
         "outer parameter of the same name")
     assert "kw" not in used, (
         "the NAME of a keyword argument at a call site was counted as a read")
+    assert "overwritten" not in used, (
+        "a parameter that is only ASSIGNED TO was counted as read, so a value "
+        "the caller supplies and the handler discards looks used")
+    # ⚠️ THE OTHER DIRECTION, AND THE WORSE ONE. `accumulated += 1` reads the
+    # prior value while Python labels the target `Store`, so a Load-only rule
+    # would report a genuinely used parameter as unused — sending somebody
+    # hunting for a bug that is not there.
+    assert "accumulated" in used, (
+        "an augmented assignment reads the prior value; reporting that "
+        "parameter as unused is a false positive")
+    # ⚠️ And the RIGHT-HAND SIDE is a read too. My first fixture wrote
+    # `accumulated += 1`, so nothing was read from the value — a mutation that
+    # stopped walking it survived, because the fixture could not tell.
+    assert "step" in used, (
+        "the value of an augmented assignment was not visited, so a parameter "
+        "read only there looks unused")
 
 
 def test_the_scanner_reaches_the_real_routers():
