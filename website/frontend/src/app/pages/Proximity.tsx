@@ -20,6 +20,7 @@ import { isFailureStatus } from '../lib/responseStatus';
 import { useProximityLeaderboard, useProxScopes, useSsr } from '../lib/queries';
 import { ProximityInstruments } from './ProximityInstruments';
 import { ProximityCompetitive } from './ProximityCompetitive';
+import { ProximityObjectiveIntel } from './ProximityObjectiveIntel';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
@@ -236,6 +237,7 @@ export function Proximity() {
           <>
             <ProximityInstruments sessionDate={null} />
             <ProximityCompetitive sessionDate={null} />
+            <ProximityObjectiveIntel sessionDate={null} />
           </>
         ) : scopes.isPending ? (
           <Pending label="scope" />
@@ -247,13 +249,14 @@ export function Proximity() {
           <>
             <ProximityInstruments sessionDate={scopeDate} />
             <ProximityCompetitive sessionDate={scopeDate} />
+            <ProximityObjectiveIntel sessionDate={scopeDate} />
           </>
         )}
       </Stack>
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
-        slices one to three of the proximity page — carrier and objective
-        intel, journeys, canvases and the round-scoped wave ledger are
-        pinned as pending in docs/parity/proximity_inventory.json
+        slices one to four of the proximity page — journeys, canvases, the
+        event drill-down and the round-scoped wave ledger are pinned as
+        pending in docs/parity/proximity_inventory.json
       </Lbl>
     </div>
   );

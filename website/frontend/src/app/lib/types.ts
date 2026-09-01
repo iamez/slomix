@@ -605,7 +605,9 @@ export interface SeasonAwards {
 export interface AwardRow {
   award: string;
   player: string;
-  guid: string;
+  /** Null when the winning legacy row carries no guid — the page already
+   *  guarded the link; only this type lied (one null 500d the endpoint). */
+  guid: string | null;
   value: string;
   date: string;
   map: string;
@@ -2698,5 +2700,125 @@ export interface V7Status {
   capabilities: {
     key: string; title: string; what: string; api: string;
     rows: number; rounds: number; live: boolean;
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 4 — carrier and objective intel (07 §B.2). The sparse
+// species discipline is applied UP FRONT this time: summaries carry
+// optional fields (the deliberate-{} pattern three earlier panels crashed
+// on), and any name the backend resolves through a scoped lookup is
+// nullable.
+
+export interface CarrierEvents {
+  status: string;
+  /** NARROWER than ProxScope — this handler's scope carries only these
+   *  three keys (the satisfies check on the recorded fixture said so the
+   *  moment it existed; the full-scope guess was a lie of one family). */
+  scope: { session_date: string | null; map_name: string | null; round_number: number | null };
+  carriers: {
+    guid: string; name: string | null; carries: number; secures: number;
+    killed: number; dropped: number; total_distance: number;
+    avg_efficiency: number; avg_duration_ms: number; secure_rate: number;
+  }[];
+  events: {
+    carrier_name: string | null; carrier_team: string; flag_team: string;
+    outcome: string; carry_distance: number; beeline_distance: number;
+    efficiency: number; duration_ms: number; map_name: string;
+    /** Empty string when nobody killed the carrier (drop/secure). */
+    killer_name: string | null; pickup_time: number;
+  }[];
+  summary: {
+    total_carries?: number; total_secures?: number; total_killed?: number;
+    avg_distance?: number; avg_efficiency?: number; secure_rate?: number;
+  };
+}
+
+export interface CarrierKills {
+  status: string;
+  killers: { guid: string; name: string | null; carrier_kills: number; avg_distance_stopped: number }[];
+}
+
+export interface CarrierReturns {
+  status: string;
+  scope: { range_days?: number; session_date: string | null; map_name: string | null };
+  returners: { guid: string; name: string | null; returns: number; avg_delay_ms: number }[];
+  events: {
+    returner_name: string | null; returner_team: string; flag_team: string;
+    original_carrier_guid: string; return_delay_ms: number; map_name: string;
+    return_time: number;
+  }[];
+  /** avg_delay_ms arrives as NULL (not absent) on an empty scope —
+   *  measured on 2026-09-01 and 2026-05-01. */
+  summary: { total_returns?: number; avg_delay_ms?: number | null };
+}
+
+export interface VehicleProgress {
+  status: string;
+  vehicles: {
+    vehicle_name: string; vehicle_type: string; map_name: string;
+    session_date: string; round_number: number; total_distance: number;
+    max_health: number; final_health: number; destroyed_count: number;
+  }[];
+}
+
+export interface EscortCredits {
+  status: string;
+  escorts: {
+    guid: string; name: string | null; total_credit_distance: number;
+    total_mounted_ms: number; total_proximity_ms: number;
+    total_escort_distance: number; total_samples: number;
+  }[];
+}
+
+export interface ConstructionEvents {
+  status: string;
+  engineers: {
+    guid: string; name: string | null; total_events: number; plants: number;
+    defuses: number; destructions: number; constructions: number;
+  }[];
+  events: {
+    event_type: string; player_name: string | null; player_team: string;
+    track_name: string; map_name: string; session_date: string;
+    round_number: number; event_time: number;
+  }[];
+}
+
+export interface ObjectiveRuns {
+  status: string;
+  objective_runners: {
+    engineer_guid: string; engineer_name: string | null; total_runs: number;
+    successful_runs: number; denied_runs: number; solo_runs: number;
+    assisted_runs: number; team_effort_runs: number; unopposed_runs: number;
+    total_self_kills: number; total_team_kills: number;
+    avg_path_efficiency: number | null;
+  }[];
+  recent_runs: {
+    engineer_name: string | null; action_type: string; track_name: string;
+    run_type: string; self_kills: number; team_kills: number;
+    nearby_teammates: number; approach_time_ms: number;
+    path_efficiency: number | null; map_name: string; session_date: string;
+    killer_name: string | null;
+  }[];
+  summary: {
+    total_runs?: number; total_denied?: number; total_solo?: number;
+    total_assisted?: number; total_team_effort?: number; total_unopposed?: number;
+    avg_path_efficiency?: number | null; most_active_objective?: string | null;
+  };
+}
+
+export interface ObjectiveFocus {
+  status: string;
+  summary: {
+    unique_players?: number; objectives_tracked?: number;
+    avg_time_near_obj_s?: number; avg_distance?: number;
+  };
+  players: {
+    guid: string; name: string | null; total_time_ms: number; avg_dist: number;
+    objectives_played: number; total_samples: number; total_time_s: number;
+  }[];
+  objectives: {
+    objective: string; map_name: string; players: number;
+    avg_time_s: number; avg_dist: number;
   }[];
 }

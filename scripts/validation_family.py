@@ -72,7 +72,7 @@ import random
 import statistics
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 import asyncpg
@@ -108,7 +108,18 @@ WITH candidate_pairs AS (
    AND r1.round_number = 1 AND r2.round_number = 2
    AND r2.created_at > r1.created_at
    AND r2.created_at < r1.created_at + interval '45 minutes'
+  -- ⛔ THE SAME GATE HAS TO HOLD HERE, NOT ONLY IN THE OUTER FILTER. Gating
+  -- only the outer SELECT removes a cancelled round's PLAYER rows while this
+  -- CTE still lets it pair: its duration, winner and defender are then carried
+  -- onto the retained half through `pair_margin`, and under `--outcome seconds`
+  -- the bootstrap consumes them. Worse, the mutual-choice logic lets an
+  -- excluded round DISPLACE a valid pairing, so a real match loses its margin
+  -- to one that did not count. Codex on #818.
   WHERE r1.is_valid AND r2.is_valid
+    AND (r1.round_status IN ('completed', 'substitution')
+         OR r1.round_status IS NULL)
+    AND (r2.round_status IN ('completed', 'substitution')
+         OR r2.round_status IS NULL)
     AND r1.actual_duration_seconds IS NOT NULL
     AND r2.actual_duration_seconds IS NOT NULL
 ), r1_choice AS (
@@ -138,7 +149,34 @@ WITH candidate_pairs AS (
 )
 SELECT pcs.round_id                      AS rid,
        r.gaming_session_id               AS block,
-       r.created_at                      AS at,
+       -- ⛔ MATCH TIME, NOT INGESTION TIME. `created_at` defaults to
+       -- CURRENT_TIMESTAMP and one importer writes datetime.now(), so a
+       -- historical import lands among the NEWEST confirmation blocks and the
+       -- "chronological" holdout stops being chronological in the
+       -- data-generating process. `round_date`+`round_time` is the match's own
+       -- clock from the stats file: 1893/1893 eligible rounds carry it, all in
+       -- HHMMSS, which Postgres reads as ISO-8601 basic time.
+       -- ⛔ NOT COALESCEd with round_start_unix: the two are 61-136 minutes
+       -- apart (median 125), so they are different clocks, and mixing them would
+       -- scramble the ordering exactly at the split boundary. One clock, full
+       -- coverage. Codex on #818.
+       -- ⛔ ZERO-FILLED, AND THE SHAPE CHECKED IN THE WHERE. `round_time` can
+       -- lose its leading zeros for a round just after midnight — the repo
+       -- documents `4918` as the stored form of `00:49:18`
+       -- (test_capture_lookup_zero_fills_a_short_round_time). Measured against
+       -- Postgres, both failure modes are real and one is worse than the
+       -- report: `'2026-06-11 4918'` does NOT raise, it parses as
+       -- `2026-06-13 01:18:00` — two days off, which would move the round
+       -- across the chronological split with nothing to show for it. `918` and
+       -- `12345` do raise, aborting the whole query. `lpad(...,6,'0')` reads all
+       -- of them correctly. Codex on #818.
+       -- ⛔ AND `HH:MM:SS` IS ALSO A SUPPORTED FORM — `lpad` alone TRUNCATES it
+       -- ('23:41:53' → '23:41:'), which is how the same helper 500s a session
+       -- endpoint (Codex on #824). Colons are folded away first; the WHERE
+       -- accepts both shapes so neither is silently dropped from the universe.
+       (r.round_date || ' ' ||
+        lpad(regexp_replace(r.round_time, '^([0-9]{2}):([0-9]{2}):([0-9]{2})$',
+                            '\\1\\2\\3'), 6, '0'))::timestamp  AS at,
        pcs.player_guid                   AS guid,
        pcs.team                          AS team,
        r.winner_team                     AS winner,
@@ -157,6 +195,23 @@ JOIN rounds r ON r.id = pcs.round_id
 LEFT JOIN pair_margin pm ON pm.rid = r.id
 WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   AND r.winner_team IN (1, 2)
+  -- ⛔ THE CANONICAL ROUND GATE (`session_scope._ROUND_GATE_SQL`). `is_valid`
+  -- alone admits cancelled, warmup and orphan_r2 rounds, which then affect the
+  -- eligible universe, the chronological split, every point estimate and every
+  -- bootstrap replicate. Measured on this corpus: 148 of 2041 rounds (7.3%) —
+  -- 147 cancelled, the rest orphan_r2 — were entering with is_valid still true.
+  -- Copied rather than imported: session_scope pulls in FastAPI and the database
+  -- adapter and this harness has to run standalone. The copy cannot drift — a
+  -- test pins it against the original. Codex on #818.
+  AND (r.round_status IN ('completed', 'substitution')
+       OR r.round_status IS NULL)
+  -- A round whose match time cannot be READ has no place on a chronological
+  -- axis, and guessing one would be the ingestion-time problem wearing a
+  -- different hat. Measured: 3209 of 3209 rounds are six digits today, so this
+  -- excludes nothing — it stops `lpad` from turning malformed text into a
+  -- plausible time (`049180` reads as 05:32:20).
+  AND (r.round_time ~ '^[0-9]{1,6}$'
+       OR r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$')
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
@@ -183,6 +238,15 @@ class Candidate:
     description: str
     direction: str                 # "higher_is_better" | "lower_is_better"
     fn: Callable[[dict], float | None] = field(compare=False, repr=False)
+    # ⛔ THE ESTIMATOR IS PART OF THE HYPOTHESIS, NOT A RUNTIME OPTION. The same
+    # formula read through the median split and through the continuous form are
+    # two different experiments, and both were run on the confirmation half.
+    # Leaving the choice outside the family let the second one be compared
+    # without ever being declared: absent from the manifest, absent from the
+    # max-T family, so the family-wise critical value was computed across half
+    # the members actually tried. A key into ESTIMATORS rather than a callable,
+    # because it has to survive into a JSON manifest. Codex on #818.
+    estimator: str = "median_split"
 
     def formula_fingerprint(self) -> str:
         """Hash of the EXECUTABLE formula, not its prose.
@@ -224,7 +288,7 @@ class Candidate:
 
     def manifest_entry(self) -> dict:
         return {"id": self.cid, "description": self.description,
-                "direction": self.direction,
+                "direction": self.direction, "estimator": self.estimator,
                 "formula": self.formula_fingerprint()}
 
 
@@ -672,7 +736,7 @@ def _null_value(p: dict) -> float:
     return int.from_bytes(h[:4], "big") / 0xFFFFFFFF
 
 
-DEFAULT_FAMILY = [
+_MEDIAN_SPLIT_FAMILY = [
     Candidate("kpr", "kills per round — retired in #556, must fail again",
               "higher_is_better", lambda p: float(p["kills"] or 0)),
     Candidate("null", "deterministic pseudo-random control — must fail",
@@ -689,6 +753,33 @@ DEFAULT_FAMILY = [
               "higher_is_better",
               lambda p: float(p["dg"] or 0) / max(float(p["dr"] or 0), 1.0)),
 ]
+
+# ⛔ THE VARIANT THAT SPENT THE HOLDOUT, NOW DECLARED. `within_round_point_biserial()`
+# records in its own docstring that it was measured on 2026-08-26 with 600 block
+# resamples ON THE CONFIRMATION HALF for kpr, kd_ratio, dpm and dmg_ratio. It was
+# in no manifest and in no max-T family, so the family-wise critical value was
+# computed across half the members actually tried and the confirmation data was
+# consumed comparing something nobody had registered.
+#
+# Built with `replace` from the members above so the FORMULA is the identical
+# object: same formula fingerprint, different estimator, which is precisely the
+# distinction the manifest has to record.
+#
+# ⛔ `null` comes along. It is the only structural control, and it says the
+# harness rejects pure noise UNDER THE ESTIMATOR IT RAN WITH. A second estimator
+# without a second control would leave half the family unfalsifiable and quietly
+# weaken the check that noise must fail measurably.
+#
+# ⚠️ This doubles the family, which RAISES the max-T critical value and makes
+# every verdict harder to earn. That is the correction, not a side effect:
+# multiplicity was understated for as long as the variant went undeclared.
+_POINT_BISERIAL_FAMILY = [
+    replace(c, cid=f"{c.cid}@pb", estimator="point_biserial",
+            description=f"{c.description} [continuous estimator]")
+    for c in _MEDIAN_SPLIT_FAMILY
+]
+
+DEFAULT_FAMILY = _MEDIAN_SPLIT_FAMILY + _POINT_BISERIAL_FAMILY
 
 
 async def load(spatial: bool) -> tuple[dict, dict]:
@@ -740,11 +831,16 @@ def analyse(blocks: dict, keep: set, family: Family) -> dict:
     draws = block_draws(sub, family.resamples, family.seed)
     point, boot = {}, {}
     for c in family.candidates:
-        pt = within_round_spread(flat, c.fn, oc)
+        # ⛔ THE CANDIDATE'S OWN ESTIMATOR, on both halves of its evidence.
+        # `block_bootstrap()` has taken an `estimator` argument all along and
+        # nothing ever passed one, so every declared variant was silently
+        # evaluated through the median split — a mechanism with no caller.
+        est = ESTIMATORS[c.estimator]
+        pt = est(flat, c.fn, oc)
         if pt is None:
             continue
         point[c.cid] = pt
-        boot[c.cid] = block_bootstrap(sub, c.fn, draws, outcome=oc)
+        boot[c.cid] = block_bootstrap(sub, c.fn, draws, estimator=est, outcome=oc)
     return {"point": point, "boot": boot, "rounds": len(flat)}
 
 
@@ -827,111 +923,103 @@ def report(family: Family, disc: dict, conf: dict,
                         "holm_p": hp[cid], "verdict": verdict})
     print("-" * 108)
 
-    floors = [detectable_effect(sds[c]) for c in sds
-              if sds[c] and not math.isnan(sds[c])]
-    if floors:
+    # ⛔ ONE FLOOR PER ESTIMATOR, NEVER A MEDIAN ACROSS BOTH. A within-round
+    # spread is a difference of win rates; a within-round point-biserial is a
+    # correlation. `within_round_point_biserial()` says so in its own docstring
+    # — "compare the two by their t, never by their raw size" — and a median
+    # taken across the two is a number on neither scale. The max-T critical
+    # value is unaffected (every candidate is standardised by its own bootstrap
+    # SD before the maximum is taken), but the FLOOR is printed in raw effect
+    # units, so mixing them silently produces a threshold nobody can check an
+    # idea against. Introduced the moment the family gained a second estimator.
+    by_estimator: dict[str, list[float]] = {}
+    for c in family.candidates:
+        sd = sds.get(c.cid)
+        if sd and not math.isnan(sd):
+            by_estimator.setdefault(c.estimator, []).append(detectable_effect(sd))
+    if by_estimator:
         print(f"\nFLOOR (§8.4 by-product). At {c_counts[0]} confirmation blocks / "
-              f"{c_counts[1]} rounds, a single candidate needs an effect of about "
-              f"{statistics.median(floors):+.3f}\nto be found {int(POWER_TARGET*100)}% "
-              f"of the time. Family-wise correction raises this further: the max-T "
-              f"critical value is\n{crit:.3f} rather than {_Z_ALPHA:.3f}, so the real "
-              f"family floor is roughly {statistics.median(floors)*crit/_Z_ALPHA:+.3f}. "
-              f"Anything smaller\nthan that cannot be distinguished from chance with "
-              f"the data we have — check the next idea against this\nnumber BEFORE "
-              f"building it.")
+              f"{c_counts[1]} rounds, the family-wise\nmax-T critical value is "
+              f"{crit:.3f} rather than {_Z_ALPHA:.3f}, so each estimator's floor is "
+              f"raised by {crit/_Z_ALPHA:.2f}x.\nAn effect smaller than its own "
+              f"estimator's family floor cannot be distinguished from chance with\n"
+              f"the data we have — check the next idea against THAT number, on ITS "
+              f"scale, before building it.")
+        for est in sorted(by_estimator):
+            single = statistics.median(by_estimator[est])
+            print(f"  {est:<15} single {single:+.3f}   family "
+                  f"{single * crit / _Z_ALPHA:+.3f}   "
+                  f"({len(by_estimator[est])} candidates, "
+                  f"{int(POWER_TARGET * 100)}% power)")
     return results
 
 
-async def main() -> int:
-    ap = argparse.ArgumentParser(description="Execute the §8 validation protocol.")
-    ap.add_argument("--spatial", action="store_true",
-                    help="restrict to rounds carrying position tracks (Layer 4 universe)")
-    ap.add_argument("--resamples", type=int, default=RESAMPLES)
-    ap.add_argument("--cutoff", default=None,
-                    help="frozen absolute cutoff (e.g. '2026-07-13 21:35:13'); "
-                         "without it the split is only PROPOSED, never frozen")
-    ap.add_argument("--outcome", choices=sorted(OUTCOMES), default="win",
-                    help="win = §8.6 reference; seconds = stopwatch margin")
-    ap.add_argument("--seed", type=int, default=SEED,
-                    help="published seed; changing it changes the manifest hash")
-    args = ap.parse_args()
+def manifest_gate(expected: str | None, computed: str,
+                  cutoff: str) -> tuple[int, str] | None:
+    """Refuse the confirmation half unless the freeze was registered and matches.
 
-    if args.resamples < MIN_USABLE_REPLICATES:
-        print(f"⛔ --resamples {args.resamples} is below the {MIN_USABLE_REPLICATES} "
-              f"needed for any usable interval.\n"
-              f"   Such a run produces no inference at all, yet every candidate "
-              f"would read FAILS and\n   both controls would look correct — a "
-              f"family retired by an instrument that never measured it.")
-        return 5
+    Returns `(exit_code, message)` to refuse, or None to proceed.
 
-    blocks, times = await load(args.spatial)
-    if not blocks:
-        print("no eligible rounds — nothing to validate")
-        return 1
+    ⛔ THE ARTIFACT ONLY BINDS IF THE RERUN CHECKS IT. Until this existed, the
+    confirmation run simply PRINTED its own freshly computed digest: a formula,
+    a filter, the seed, the resample count or a line of this module could change
+    between the proposal and the rerun, and verdicts would be published under a
+    manifest nobody registered — the mismatch visible only to an operator
+    comparing two hex strings by eye. Codex on #818.
 
-    family = Family(
-        name=("foundations-2026-08" + ("-spatial" if args.spatial else "")
-              + ("" if args.outcome == "win" else f"-{args.outcome}")),
-        candidates=DEFAULT_FAMILY,
-        filters=ROWS_SQL.strip() + f"\n-- bound $1 (spatial) = {args.spatial}",
-        resamples=args.resamples,
-        seed=args.seed,
-        outcome=args.outcome,
-        frozen_cutoff=args.cutoff,
-    )
+    A separate function so a test can drive it; the check itself lives in
+    `main()` immediately BEFORE `analyse()`, because after that the holdout has
+    been opened and refusing is too late.
+    """
+    # ⚠️ Normalised BEFORE the emptiness test. `--expect-manifest "   "` is not
+    # a digest, and letting it fall through to the mismatch branch would report
+    # "something moved" when in fact nothing was ever registered — two different
+    # situations, two different things for the reader to do.
+    expected = (expected or "").strip().lower()
+    if not expected:
+        return (5, f"⛔ NO PREREGISTERED MANIFEST. This run would analyse the "
+                   f"confirmation half without\n   checking that it matches what "
+                   f"was registered. Re-run with:\n\n"
+                   f"     --cutoff '{cutoff}' --expect-manifest {computed}\n\n"
+                   f"   and check that digest against the preregistration output "
+                   f"before you do.\n")
+    if expected != computed:
+        return (6, f"⛔ MANIFEST MISMATCH — refusing to open the confirmation "
+                   f"half.\n   registered : {expected}\n"
+                   f"   this run   : {computed}\n\n"
+                   f"   Something moved between the preregistration and now: a "
+                   f"formula, a filter, the\n   seed, the resample count, the "
+                   f"cutoff, or this module's own source. The verdicts\n   below "
+                   f"would have been published under a freeze nobody agreed to.\n")
+    return None
 
-    disc_b, conf_b, ordered, cut = chronological_split(
-        times, family.split_fraction, family.frozen_cutoff)
-    cutoff = family.frozen_cutoff or (
-        str(times[ordered[cut]]) if cut < len(ordered) else "n/a")
-    if not family.frozen_cutoff:
-        # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
-        # verdicts on it; re-running later with the printed flag cannot make
-        # that holdout untouched again. The proposal is the whole output.
-        print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
-              f"   Confirmation data stays unopened until the boundary is fixed,\n"
-              f"   because a holdout that has been looked at is not a holdout:\n\n"
-              f"     --cutoff '{cutoff}'\n")
-        return 4
 
-    # ⛔ AN OUTCOME MUST BE VALIDATED BEFORE IT IS BELIEVED.
-    # A stopwatch margin is not a correlate of the match result — it IS the
-    # result, so its sign must agree with who won. Measured here it agrees 48.5%
-    # of the time, which is chance: the quantity derived from
-    # `actual_duration_seconds` is NOT a stopwatch margin, and every verdict
-    # computed from it was measuring something nobody had identified.
-    if family.outcome == "seconds":
-        # ⛔ DISCOVERY ONLY. Validating the outcome definition against every
-        # block would consume the frozen holdout before it is analysed — and a
-        # holdout that has been looked at is spent whether the run went on to
-        # use it or not. A construct check is still a look.
-        flat_disc = {rid: pl for b in disc_b if b in blocks
-                     for rid, pl in blocks[b].items()}
-        agree, total = margin_agreement(flat_disc)
-        pct = 100.0 * agree / total if total else 0.0
-        print(f"OUTCOME CHECK (discovery blocks only) — margin sign vs map "
-              f"winner: {agree}/{total} = {pct:.1f}%")
-        if pct < MARGIN_AGREEMENT_FLOOR:
-            print(
-                f"\n⛔ REFUSING TO RUN. The margin agrees with the map winner\n"
-                f"   {pct:.1f}% of the time. A stopwatch margin is not a correlate\n"
-                f"   of the result — it IS the result, so this should be near\n"
-                f"   total. It is well above chance, so the quantity carries real\n"
-                f"   information; it is simply NOT the margin it is named after.\n"
-                f"   `rounds.actual_duration_seconds` is wall clock: an R1\n"
-                f"   fullhold runs to the timelimit rather than to an objective,\n"
-                f"   and a surrender ends a half early, so T1 - T2 is not 'how\n"
-                f"   much faster the second attack was'.\n"
-                f"   The real quantity is `time_to_beat_seconds`, populated on 33\n"
-                f"   of 2,007 eligible rounds. Making it available is capture-side\n"
-                f"   work, not analysis work.\n")
-            return 3
+def preregister(family: Family, proposed_cutoff: str) -> dict:
+    """The artifact §8.5 requires, produced BEFORE the holdout is opened.
 
-    disc = analyse(blocks, disc_b, family)
-    conf = analyse(blocks, conf_b, family)
-    results = report(family, disc, conf,
-                     _counts(blocks, disc_b), _counts(blocks, conf_b), cutoff)
+    ⛔ The no-cutoff branch was right to stop — a holdout that has been looked
+    at is not a holdout — but it printed only the proposed timestamp. Every call
+    to `manifest_hash()` and `frozen()` lived in `report()`, which runs AFTER
+    confirmation has been analysed. So nothing committed the candidates,
+    formulas, filters, seed, resamples and cutoff before the rerun opened the
+    holdout: a change made between the two runs was undetectable, and the freeze
+    was a promise rather than an artifact. Codex on #818.
 
+    The cutoff goes INSIDE the hashed terms, not beside them, because the whole
+    point is that the rerun recomputes the SAME hash from `--cutoff <proposed>`.
+    A digest that does not match the rerun commits to nothing.
+    """
+    frozen = replace(family, frozen_cutoff=proposed_cutoff)
+    return {"manifest": frozen.frozen(), "manifest_sha256": frozen.manifest_hash()}
+
+
+def instrument_check(family: Family, results: list[dict]) -> bool:
+    """Did the instrument fail its OWN controls? True means: do not believe it.
+
+    Extracted from `main()` so that a test can drive it. A check reachable only
+    through a 900-line async entry point is a check nobody can watch fail, and
+    an unwatched check is the failure mode this whole harness exists to name.
+    """
     # The instrument must fail its own controls before anyone trusts its verdict
     # on an unknown metric.
     #
@@ -967,10 +1055,39 @@ async def main() -> int:
 
     # `null` is the only STRUCTURAL control: pure noise by construction, so it
     # must fail under every outcome. If noise ships, the harness is broken.
-    nullr = by_id.get("null", {}).get("verdict", "MISSING")
-    if nullr != "FAILS":
-        broken = True
-    print(f"  null  {nullr:<9} {'ok' if nullr == 'FAILS' else 'NOISE SHIPPED — BROKEN'}")
+    #
+    # ⛔ AND THE LABEL HAS TO STAND FOR A MEASUREMENT. `report()` writes `FAILS`
+    # on a candidate with no usable bootstrap spread too — in its own words,
+    # "unmeasured, which is not the same as measured-and-clear". The family-wide
+    # guard above only fires when NOTHING was measurable, so a single measurable
+    # candidate elsewhere is enough to hide an untested control: the run prints
+    # `null FAILS ok`, exits 0, and never looked at the noise at all. Requiring
+    # membership in `measured` is what makes the word mean the measurement.
+    # Codex on #818.
+    # ⛔ ONE CONTROL PER ESTIMATOR. The family carries a `null` member for every
+    # estimator it declares, and each one has to fail measurably: a control that
+    # ran under the median split says nothing about the continuous form.
+    controls = [c.cid for c in family.candidates if c.cid.startswith("null")]
+    measured_ids = {r["id"] for r in measured}
+    for cid in controls or ["null"]:
+        nullr = by_id.get(cid, {}).get("verdict", "MISSING")
+        if nullr == "MISSING":
+            # ⚠️ Distinct from the line below on purpose. The instrument IS
+            # broken, but not because noise shipped — the control was never in
+            # the results at all, and printing the wrong reason sends the reader
+            # looking for a verdict that does not exist.
+            broken = True
+            null_note = "ABSENT — the structural control never ran"
+        elif nullr != "FAILS":
+            broken = True
+            null_note = "NOISE SHIPPED — BROKEN"
+        elif cid not in measured_ids:
+            broken = True
+            null_note = ("UNMEASURED — this 'FAILS' means no usable interval, "
+                         "not rejected noise")
+        else:
+            null_note = "ok"
+        print(f"  {cid:<5} {nullr:<9} {null_note}")
 
     # `kpr` is CALIBRATION, not a control. #556 measured a spread near +0.028;
     # reproducing that number is what says the instrument measures the same
@@ -1002,8 +1119,134 @@ async def main() -> int:
     elif kpr:
         print(f"  kpr   {kpr['verdict']:<9} not calibrated under outcome "
               f"'{family.outcome}' — #556 measured 'win' only")
+    return broken
 
-    if broken:
+
+async def main() -> int:
+    ap = argparse.ArgumentParser(description="Execute the §8 validation protocol.")
+    ap.add_argument("--spatial", action="store_true",
+                    help="restrict to rounds carrying position tracks (Layer 4 universe)")
+    ap.add_argument("--resamples", type=int, default=RESAMPLES)
+    ap.add_argument("--cutoff", default=None,
+                    help="frozen absolute cutoff (e.g. '2026-07-13 21:35:13'); "
+                         "without it the split is only PROPOSED, never frozen")
+    ap.add_argument("--outcome", choices=sorted(OUTCOMES), default="win",
+                    help="win = §8.6 reference; seconds = stopwatch margin")
+    ap.add_argument("--seed", type=int, default=SEED,
+                    help="published seed; changing it changes the manifest hash")
+    ap.add_argument(
+        "--expect-manifest", metavar="SHA256",
+        help="the sha256 printed by the preregistration run. ⛔ REQUIRED with "
+             "--cutoff: without it the freeze is a promise, because nothing "
+             "compares what is about to be analysed against what was registered.")
+    args = ap.parse_args()
+
+    if args.resamples < MIN_USABLE_REPLICATES:
+        print(f"⛔ --resamples {args.resamples} is below the {MIN_USABLE_REPLICATES} "
+              f"needed for any usable interval.\n"
+              f"   Such a run produces no inference at all, yet every candidate "
+              f"would read FAILS and\n   both controls would look correct — a "
+              f"family retired by an instrument that never measured it.")
+        return 5
+
+    blocks, times = await load(args.spatial)
+    if not blocks:
+        print("no eligible rounds — nothing to validate")
+        return 1
+
+    family = Family(
+        name=("foundations-2026-08" + ("-spatial" if args.spatial else "")
+              + ("" if args.outcome == "win" else f"-{args.outcome}")),
+        candidates=DEFAULT_FAMILY,
+        filters=ROWS_SQL.strip() + f"\n-- bound $1 (spatial) = {args.spatial}",
+        resamples=args.resamples,
+        seed=args.seed,
+        outcome=args.outcome,
+        frozen_cutoff=args.cutoff,
+    )
+
+    disc_b, conf_b, ordered, cut = chronological_split(
+        times, family.split_fraction, family.frozen_cutoff)
+    cutoff = family.frozen_cutoff or (
+        str(times[ordered[cut]]) if cut < len(ordered) else "n/a")
+    if not family.frozen_cutoff:
+        # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
+        # verdicts on it; re-running later with the printed flag cannot make
+        # that holdout untouched again. The proposal is the whole output.
+        pre = preregister(family, cutoff)
+        print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
+              f"   Confirmation data stays unopened until the boundary is fixed,\n"
+              f"   because a holdout that has been looked at is not a holdout:\n\n"
+              f"     --cutoff '{cutoff}'\n")
+        # ⛔ The freeze has to be an ARTIFACT before the holdout opens, not a
+        # promise made after it. The rerun recomputes this same sha256 from the
+        # flag above; if it prints a different one, something moved in between
+        # and the confirmation is not confirming what was registered.
+        print(f"preregistered manifest sha256 : {pre['manifest_sha256']}")
+        print(f"     rerun with: --cutoff '{cutoff}' "
+              f"--expect-manifest {pre['manifest_sha256']}")
+        print("frozen family manifest (record this BEFORE re-running):")
+        for line in json.dumps(pre["manifest"], indent=2,
+                               sort_keys=True).splitlines():
+            print(f"  {line}")
+        return 4
+
+    # ⛔ AN OUTCOME MUST BE VALIDATED BEFORE IT IS BELIEVED.
+    # A stopwatch margin is not a correlate of the match result — it IS the
+    # result, so its sign must agree with who won. Measured here it agrees 48.5%
+    # of the time, which is chance: the quantity derived from
+    # `actual_duration_seconds` is NOT a stopwatch margin, and every verdict
+    # computed from it was measuring something nobody had identified.
+    if family.outcome == "seconds":
+        # ⛔ DISCOVERY ONLY. Validating the outcome definition against every
+        # block would consume the frozen holdout before it is analysed — and a
+        # holdout that has been looked at is spent whether the run went on to
+        # use it or not. A construct check is still a look.
+        flat_disc = {rid: pl for b in disc_b if b in blocks
+                     for rid, pl in blocks[b].items()}
+        agree, total = margin_agreement(flat_disc)
+        pct = 100.0 * agree / total if total else 0.0
+        print(f"OUTCOME CHECK (discovery blocks only) — margin sign vs map "
+              f"winner: {agree}/{total} = {pct:.1f}%")
+        if pct < MARGIN_AGREEMENT_FLOOR:
+            print(
+                f"\n⛔ REFUSING TO RUN. The margin agrees with the map winner\n"
+                f"   {pct:.1f}% of the time. A stopwatch margin is not a correlate\n"
+                f"   of the result — it IS the result, so this should be near\n"
+                f"   total. It is well above chance, so the quantity carries real\n"
+                f"   information; it is simply NOT the margin it is named after.\n"
+                f"   `rounds.actual_duration_seconds` is wall clock: an R1\n"
+                f"   fullhold runs to the timelimit rather than to an objective,\n"
+                f"   and a surrender ends a half early, so T1 - T2 is not 'how\n"
+                f"   much faster the second attack was'.\n"
+                f"   The real quantity is `time_to_beat_seconds`, populated on 33\n"
+                f"   of 2,007 eligible rounds. Making it available is capture-side\n"
+                f"   work, not analysis work.\n")
+            return 3
+
+    # ⛔ THE ARTIFACT ONLY BINDS IF THE RERUN CHECKS IT. Until this comparison
+    # existed the confirmation run simply PRINTED its own freshly computed
+    # digest: a formula, a filter, the seed, the resample count or a line of
+    # this module could change between the proposal and the rerun, and verdicts
+    # would be published under a manifest nobody registered — the mismatch
+    # visible only to an operator comparing two hex strings by eye. Refused
+    # BEFORE `analyse()`, because after it the holdout has been opened.
+    # Codex on #818.
+    computed = family.manifest_hash()
+    gate = manifest_gate(args.expect_manifest, computed, cutoff)
+    if gate:
+        print(gate[1])
+        return gate[0]
+
+    disc = analyse(blocks, disc_b, family)
+    conf = analyse(blocks, conf_b, family)
+    results = report(family, disc, conf,
+                     _counts(blocks, disc_b), _counts(blocks, conf_b), cutoff)
+
+    # The instrument must fail its own controls before anyone trusts its
+    # verdict on an unknown metric. The checks themselves live in
+    # instrument_check() so they can be driven by a test.
+    if instrument_check(family, results):
         print("\nRefusing to report this run as valid: the instrument failed its "
               "own checks. Do not use these verdicts.")
         return 2
