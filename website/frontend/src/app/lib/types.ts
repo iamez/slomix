@@ -2261,7 +2261,9 @@ export interface PlayerMatchRound {
   deaths: number;
   damage: number;
   time_played: number;
-  team: string | null;
+  /** Numeric team id (pcs.team is INTEGER; the fixture carries 1/2) — the
+   *  first version typed it as a string from memory, not measurement. */
+  team: number | null;
   xp: number;
   accuracy: number;
   dpm: number;
@@ -2272,6 +2274,9 @@ export interface PlayerMatchRound {
   revives_given: number;
   round_status: string | null;
   gaming_session_id: number | null;
+  /** FALSE with a completed status is a real state — the uncounted mark
+   *  needs BOTH signals (Codex on #855, round six). */
+  is_valid: boolean | null;
 }
 
 // ---------------------------------------------------------------------------

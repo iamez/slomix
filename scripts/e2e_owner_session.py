@@ -34,19 +34,19 @@ REPO = Path(__file__).resolve().parents[1]
 
 def _load_env() -> None:
     # SESSION_SECRET lives in website/.env (the backend's own env file);
-    # the repo-root .env holds the bot's. Read both, backend first.
+    # the repo-root .env holds the bot's. Read both, backend first — and
+    # with the SAME loader the backend uses: a hand parser kept quotes,
+    # `export` prefixes and inline comments in the value, so the cookie
+    # was signed with a different secret and /auth/me answered 401
+    # (Codex on #855, round four).
+    from dotenv import dotenv_values
+
     for env in (REPO / "website" / ".env", REPO / ".env"):
-        if env.exists():
-            _load_env_file(env)
-
-
-def _load_env_file(env: Path) -> None:
-    for line in env.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+        if not env.exists():
             continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip())
+        for key, value in dotenv_values(env).items():
+            if value is not None:
+                os.environ.setdefault(key, value)
 
 
 def main() -> int:
@@ -58,14 +58,22 @@ def main() -> int:
 
     import itsdangerous
 
-    discord_id = os.getenv("E2E_OWNER_DISCORD_ID", "1")
+    # ⛔ The identity defaults are SENTINELS that cannot collide with a real
+    # account (Codex on #855, round seven): website user ids are positive
+    # serials and Discord snowflakes are non-zero, so -1 / "0" can never
+    # address the first real user on a populated database. Authenticated
+    # availability/planning routes trust website_user_id from the session —
+    # a default of 1 would have made every owner spec read (and potentially
+    # mutate) the first human's data. Real ids come only from explicit
+    # E2E_OWNER_* configuration.
+    discord_id = os.getenv("E2E_OWNER_DISCORD_ID", "0")
     guid = os.getenv("E2E_OWNER_GUID")
     user = {
         "id": str(discord_id),
         "username": "e2e-owner",
         "display_name": "e2e-owner",
         "avatar": None,
-        "website_user_id": int(os.getenv("E2E_OWNER_WEBSITE_USER_ID", "1")),
+        "website_user_id": int(os.getenv("E2E_OWNER_WEBSITE_USER_ID", "-1")),
         "linked_player": os.getenv("E2E_OWNER_PLAYER_NAME"),
         "linked_player_guid": guid,
     }

@@ -205,17 +205,19 @@
       "spa_route": "profile",
       "panels": {
         "table-0": {
-          "parity": "profile.recent"
+          "parity": "profile.maps"
         }
-      }
+      },
+      "note": "table-0 is the aggregate map table (Map / Rounds / Win% / K/D / DPM) — profile.maps renders all five since #855 round four; profile.recent is a per-round list and could not satisfy that contract"
     },
     "profile (other)": {
       "spa_route": "profile",
       "panels": {
         "table-0": {
-          "parity": "profile.recent"
+          "parity": "profile.maps"
         }
-      }
+      },
+      "note": "table-0 is the aggregate map table (Map / Rounds / Win% / K/D / DPM) — profile.maps renders all five since #855 round four; profile.recent is a per-round list and could not satisfy that contract"
     },
     "skill-rating": {
       "spa_route": "skill-rating",

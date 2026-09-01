@@ -1096,7 +1096,11 @@ function CompositeFive({ data }: { data: CompositeStats }) {
     return <Unavailable what="composite" />;
   }
   if (data.players.length === 0) {
-    return <Absent reason="no player had proximity rows in this session, so none of the five can be computed" />;
+    // An empty list does NOT establish a capture outage: the query drops
+    // every player with zero kills in counted rounds, so a support-only
+    // or abandoned session lands here with telemetry present — the
+    // coverage block is the honest oracle for what was captured.
+    return <Absent reason="no player qualified for the composite here (it needs kills in counted rounds) — the boards' coverage, not capture, decides this state" />;
   }
   const unmeasured = new Set(data.coverage.unmeasured_metrics);
   const partial = new Set(data.coverage.partially_synthetic_metrics);

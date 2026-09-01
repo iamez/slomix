@@ -467,6 +467,7 @@ async def get_weapon_stats_by_player(
             f"SELECT id FROM rounds WHERE gaming_session_id = ${param_idx}"
             f" AND round_number IN (1, 2)"
             f" AND is_valid IS DISTINCT FROM FALSE"
+            f" AND is_bot_round IS DISTINCT FROM TRUE"
             f" AND (round_status IN ('completed', 'substitution')"
             f" OR round_status IS NULL))"
         )

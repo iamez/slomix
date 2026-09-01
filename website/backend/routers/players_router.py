@@ -177,14 +177,29 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
     # play, which is exactly the claim the UI makes ("imported in the last
     # half hour"). A historical backfill would read as live for its half
     # hour; that is the honest trade for having a working clock at all.
+    # current_players comes from the LATEST round, not the window union:
+    # a substitution mid-window would otherwise count both the leaver and
+    # the joiner as "current" (Codex on #855, round four).
     query = """
         SELECT
             MAX(r.created_at) as last_round,
             COUNT(DISTINCT r.id) as rounds,
-            COUNT(DISTINCT p.player_guid) as players
+            (SELECT COUNT(DISTINCT p.player_guid)
+               FROM player_comprehensive_stats p
+              WHERE p.round_id = (
+                    SELECT r2.id FROM rounds r2
+                     WHERE r2.round_number IN (1, 2)
+                       AND r2.is_bot_round IS DISTINCT FROM TRUE
+                       AND r2.created_at >= NOW() - INTERVAL '30 minutes'
+                     ORDER BY r2.created_at DESC LIMIT 1
+              )) as players
         FROM rounds r
-        JOIN player_comprehensive_stats p ON p.round_id = r.id
         WHERE r.round_number IN (1, 2)
+            -- A bot test round imported in the window must not announce a
+            -- live evening on the public home page — /api/stats/tonight
+            -- already drops bot-only evenings for exactly this distinction
+            -- (Codex on #855, round six).
+            AND r.is_bot_round IS DISTINCT FROM TRUE
             AND r.created_at >= NOW() - INTERVAL '30 minutes'
     """
     try:
@@ -204,6 +219,7 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
             r.actual_duration_seconds
         FROM rounds r
         WHERE r.round_number IN (1, 2)
+          AND r.is_bot_round IS DISTINCT FROM TRUE
         ORDER BY r.created_at DESC
         LIMIT 1
     """
@@ -1750,7 +1766,8 @@ async def get_player_matches(
             pcs.headshot_kills,
             pcs.revives_given,
             r.round_status,
-            r.gaming_session_id
+            r.gaming_session_id,
+            r.is_valid
         FROM player_comprehensive_stats pcs
         LEFT JOIN rounds r ON r.id = pcs.round_id
         WHERE pcs.player_guid = $1
@@ -1805,6 +1822,11 @@ async def get_player_matches(
                 #: decides whether to count them, but must be able to SEE them.
                 "round_status": row[15],
                 "gaming_session_id": row[16],
+                #: is_valid FALSE with a completed status is a real state
+                #: (sessions 151/147/146/128/127) — without the flag the
+                #: caller cannot mark those rows uncounted (Codex on #855,
+                #: round six).
+                "is_valid": row[17],
             }
         )
 
