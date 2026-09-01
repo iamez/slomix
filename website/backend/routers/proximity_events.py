@@ -261,12 +261,17 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
                 if not guid:
                     return None
                 if round_start_unix and round_start_unix > 0:
+                    # One row per LIFE — pick the life nearest the engagement,
+                    # like the fallback branch below. ORDER BY spawn_time_ms
+                    # ASC always took the FIRST life, so any engagement in a
+                    # later life sliced an empty window: 0/60 sampled events
+                    # carried a derived path before this (2026-09-01).
                     track_row = await db.fetch_one(
                         "SELECT path FROM player_track "
                         "WHERE session_date = $1 AND map_name = $2 AND round_number = $3 "
                         "AND round_start_unix = $4 AND player_guid = $5 "
-                        "ORDER BY spawn_time_ms ASC LIMIT 1",
-                        (session_date, map_name, round_num, round_start_unix, guid),
+                        "ORDER BY ABS(spawn_time_ms - $6) ASC LIMIT 1",
+                        (session_date, map_name, round_num, round_start_unix, guid, start_time),
                     )
                 else:
                     track_row = await db.fetch_one(
