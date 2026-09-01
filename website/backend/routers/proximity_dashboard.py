@@ -160,7 +160,13 @@ async def get_proximity_dashboard(
         if isinstance(result, Exception):
             sections_dict[key] = {"_error": str(result), "status": "error"}
             err_count += 1
-        elif isinstance(result, dict) and result.get("status") == "error":
+        # ⛔ `unavailable` COUNTS AS A FAILED SECTION. It used to be impossible —
+        # the objective probes answered "ok" during an outage — and the moment
+        # they started telling the truth, an outage across all six of them was
+        # still reported here as `sections_ok: 6, sections_error: 0`. The
+        # aggregate would then be the last place still claiming the page was
+        # fine. Codex on #862.
+        elif isinstance(result, dict) and result.get("status") in ("error", "unavailable"):
             sections_dict[key] = result
             err_count += 1
         else:

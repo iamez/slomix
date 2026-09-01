@@ -423,13 +423,41 @@ class _ScopeLookupRaisesDb(_ScriptedDb):
         return await super().fetch_one(query, params)
 
 
+def test_an_empty_corpus_still_answers_ok():
+    """CONTROL, and the half that keeps the other one honest.
+
+    A working database with nothing recorded is not a failure. Without this,
+    answering `unavailable` for every empty result would pass the assertion
+    below while putting a failure banner over a brand-new season.
+    """
+    # ⚠️ `latest_date=None` is what takes the no-scope path. My first version
+    # left it out, the fixture answered with a date, and the control asserted
+    # nothing about the branch it was written for — a fixture that cannot reach
+    # a branch does not test it, which is the third time this week.
+    db = _ScriptedDb([], source_counts=[0, 0, 0, 0, 0, 0], latest_date=None)
+    body = _client(db).get("/api/skill/composite").json()
+    assert body["session_date"] is None, "fixture no longer takes the short path"
+    assert body["status"] == "ok", body["status"]
+    assert body["reason"] is None
+
+
 def test_a_failing_default_scope_lookup_answers_no_scope_not_500():
     db = _ScopeLookupRaisesDb([], source_counts=[0, 0, 0, 0, 0, 0])
     response = _client(db).get("/api/skill/composite")
     assert response.status_code == 200, f"the default-scope lookup failing returned {response.status_code}"
     body = response.json()
-    # The honest answer an unanswerable scope question already had: the
-    # early return, with every metric unmeasured and the same shape as
-    # every other answer.
+    # The shape an unanswerable scope question already had: the early
+    # return, with every metric unmeasured and the same keys as every
+    # other answer.
     assert body["session_date"] is None
     assert body["coverage"]["unmeasured_metrics"] == ALL_FOUR
+    # ⛔ AND IT MUST NOT CLAIM SUCCESS. This test used to stop one line
+    # above, which pinned exactly half of a two-sided fact: it proved the
+    # endpoint does not 500 and said nothing about what it then asserts.
+    # `status: "ok"` made an outage byte-identical to an empty corpus, and
+    # `responseStatus.ts` classifies `ok` as success — so the page rendered
+    # a dead database as a quiet one, with a passing test standing over it.
+    assert body["status"] == "unavailable", (
+        f"the endpoint answered status={body['status']!r} after the scope "
+        f"lookup raised; not-500 and not-ok are both required")
+    assert "unmeasured" in (body.get("reason") or "")

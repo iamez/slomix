@@ -15,6 +15,7 @@ from website.backend.routers.proximity_helpers import (
     ProximityQueryBuilder,
     _build_proximity_where_clause,
     _load_scoped_guid_name_map,
+    _probe_unavailable,
     _resolve_name_for_guid,
     _table_column_exists,
 )
@@ -1308,7 +1309,10 @@ async def get_proximity_combat_position_stats(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Combat position aggregate stats — kill distances, class matchups."""
-    if not await _table_column_exists(db, 'proximity_combat_position', 'attacker_guid'):
+    exists = await _table_column_exists(db, 'proximity_combat_position', 'attacker_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_combat_position', 'attacker_guid', summary={}, by_class=[], by_map=[])
+    if not exists:
         return {"status": "ok", "summary": {}, "by_class": [], "by_map": []}
 
     where_sql, params = (

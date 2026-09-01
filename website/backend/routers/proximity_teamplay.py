@@ -10,6 +10,7 @@ from website.backend.routers.proximity_helpers import (
     _compute_scoped_teamplay,
     _load_scoped_guid_name_map,
     _parse_iso_date,
+    _probe_unavailable,
     _proximity_stub_meta,
     _table_column_exists,
     logger,
@@ -654,7 +655,10 @@ async def get_proximity_focus_fire(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Focus fire intelligence — coordinated multi-attacker damage bursts."""
-    if not await _table_column_exists(db, 'proximity_focus_fire', 'target_guid'):
+    exists = await _table_column_exists(db, 'proximity_focus_fire', 'target_guid')
+    if exists is None:
+        return _probe_unavailable('proximity_focus_fire', 'target_guid', summary={}, targets=[], recent=[])
+    if not exists:
         return {"status": "ok", "summary": {}, "targets": [], "recent": []}
 
     where_parts: list = []
