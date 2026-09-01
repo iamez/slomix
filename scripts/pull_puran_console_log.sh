@@ -7,8 +7,13 @@
 set -euo pipefail
 
 DEST="${SLOMIX_CONSOLE_LOG_DIR:-$HOME/slomix-server-logs}"
-SSH_OPTS=(-p 48101 -i "$HOME/.ssh/etlegacy_bot" -o ConnectTimeout=10 -o BatchMode=yes)
-HOST="et@puran.hehe.si"
+# Same override names as scripts/system_status.sh, so one env reconfigures
+# every game-server script at once.
+GAME_SSH_HOST="${GAME_SSH_HOST:-et@puran.hehe.si}"
+GAME_SSH_PORT="${GAME_SSH_PORT:-48101}"
+GAME_SSH_KEY="${GAME_SSH_KEY:-$HOME/.ssh/etlegacy_bot}"
+SSH_OPTS=(-p "$GAME_SSH_PORT" -i "$GAME_SSH_KEY" -o ConnectTimeout=10 -o BatchMode=yes)
+HOST="$GAME_SSH_HOST"
 REMOTE_LOG='~/.etlegacy/legacy/etconsole.log'
 STATE="$DEST/.etconsole.offset"
 
