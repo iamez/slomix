@@ -72,7 +72,7 @@ import random
 import statistics
 import sys
 from collections import defaultdict
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable
 
 import asyncpg
@@ -842,6 +842,121 @@ def report(family: Family, disc: dict, conf: dict,
     return results
 
 
+def preregister(family: Family, proposed_cutoff: str) -> dict:
+    """The artifact §8.5 requires, produced BEFORE the holdout is opened.
+
+    ⛔ The no-cutoff branch was right to stop — a holdout that has been looked
+    at is not a holdout — but it printed only the proposed timestamp. Every call
+    to `manifest_hash()` and `frozen()` lived in `report()`, which runs AFTER
+    confirmation has been analysed. So nothing committed the candidates,
+    formulas, filters, seed, resamples and cutoff before the rerun opened the
+    holdout: a change made between the two runs was undetectable, and the freeze
+    was a promise rather than an artifact. Codex on #818.
+
+    The cutoff goes INSIDE the hashed terms, not beside them, because the whole
+    point is that the rerun recomputes the SAME hash from `--cutoff <proposed>`.
+    A digest that does not match the rerun commits to nothing.
+    """
+    frozen = replace(family, frozen_cutoff=proposed_cutoff)
+    return {"manifest": frozen.frozen(), "manifest_sha256": frozen.manifest_hash()}
+
+
+def instrument_check(family: Family, results: list[dict]) -> bool:
+    """Did the instrument fail its OWN controls? True means: do not believe it.
+
+    Extracted from `main()` so that a test can drive it. A check reachable only
+    through a 900-line async entry point is a check nobody can watch fail, and
+    an unwatched check is the failure mode this whole harness exists to name.
+    """
+    # The instrument must fail its own controls before anyone trusts its verdict
+    # on an unknown metric.
+    #
+    # `null` is pure noise by construction: it must fail under EVERY outcome
+    # definition. If noise ships, the harness is broken, full stop.
+    #
+    # `kpr` is a calibration point, not a universal control, and conflating the
+    # two was a design error here. #556 retired it against the WIN outcome; it
+    # says nothing about whether kill count tracks a stopwatch MARGIN. Enforcing
+    # it under --outcome seconds would be asserting a result nobody measured, so
+    # it is checked only for the outcome it was retired under and reported as
+    # information otherwise.
+    by_id = {r["id"]: r for r in results}
+    print("\nINSTRUMENT CHECK")
+    broken = False
+
+    # ⛔ A FAMILY WHERE NOTHING WAS MEASURABLE MUST NOT READ AS A CLEAN RUN.
+    # When no candidate has a usable bootstrap spread, every one of them reports
+    # FAILS — including `null`, which then looks exactly like a control doing
+    # its job. The controls cannot distinguish "noise was correctly rejected"
+    # from "nothing was measured at all", so the run has to say so itself.
+    # Same shape as the --resamples case: an instrument that measured nothing
+    # will happily retire a whole family.
+    measured = [r for r in results
+                if r.get("verdict") in ("SHIPS", "SHIPS?", "FAILS")
+                and r.get("interval") and not math.isnan(r["interval"][0])]
+    if not measured:
+        print("  ⛔ NOT ONE candidate produced a usable interval. Every verdict "
+              "above is\n     'unmeasured', not 'rejected' — including the "
+              "controls, which is why they\n     look correct. Nothing here "
+              "retires anything.")
+        broken = True
+
+    # `null` is the only STRUCTURAL control: pure noise by construction, so it
+    # must fail under every outcome. If noise ships, the harness is broken.
+    #
+    # ⛔ AND THE LABEL HAS TO STAND FOR A MEASUREMENT. `report()` writes `FAILS`
+    # on a candidate with no usable bootstrap spread too — in its own words,
+    # "unmeasured, which is not the same as measured-and-clear". The family-wide
+    # guard above only fires when NOTHING was measurable, so a single measurable
+    # candidate elsewhere is enough to hide an untested control: the run prints
+    # `null FAILS ok`, exits 0, and never looked at the noise at all. Requiring
+    # membership in `measured` is what makes the word mean the measurement.
+    # Codex on #818.
+    nullr = by_id.get("null", {}).get("verdict", "MISSING")
+    if nullr != "FAILS":
+        broken = True
+        null_note = "NOISE SHIPPED — BROKEN"
+    elif not any(r["id"] == "null" for r in measured):
+        broken = True
+        null_note = ("UNMEASURED — this 'FAILS' means no usable interval, "
+                     "not rejected noise")
+    else:
+        null_note = "ok"
+    print(f"  null  {nullr:<9} {null_note}")
+
+    # `kpr` is CALIBRATION, not a control. #556 measured a spread near +0.028;
+    # reproducing that number is what says the instrument measures the same
+    # thing. Demanding that it stay NON-SIGNIFICANT would be wrong: that was a
+    # property of #556's sample, not of the metric, and with more confirmation
+    # blocks its interval may legitimately exclude zero. Enforcing the old
+    # verdict would then discard a valid family for being better powered.
+    kpr = by_id.get("kpr")
+    if family.outcome == "win" and (kpr is None
+                                    or kpr.get("confirmation") is None):
+        # An EXCLUDED kpr has no confirmation figure, and falling through to the
+        # informational branch would let the run succeed WITHOUT ever
+        # reproducing the known calibration point. Unmeasured calibration is a
+        # failed instrument, not a silent pass.
+        broken = True
+        print("  kpr   MISSING   calibration could not be measured — the "
+              "instrument never reproduced the #556 reference")
+    elif kpr and family.outcome == "win":
+        k = kpr["confirmation"]
+        in_range = KPR_EXPECTED_RANGE[0] <= k <= KPR_EXPECTED_RANGE[1]
+        broken = broken or not in_range
+        print(f"  kpr   {k:+.3f}    "
+              + (f"ok — within the #556 range {KPR_EXPECTED_RANGE}"
+                 if in_range else
+                 f"OUTSIDE the #556 range {KPR_EXPECTED_RANGE} — the instrument "
+                 f"is not measuring what #556 measured"))
+        print(f"        verdict {kpr['verdict']} is reported, not enforced: "
+              f"significance is a property of this sample, not of the metric")
+    elif kpr:
+        print(f"  kpr   {kpr['verdict']:<9} not calibrated under outcome "
+              f"'{family.outcome}' — #556 measured 'win' only")
+    return broken
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser(description="Execute the §8 validation protocol.")
     ap.add_argument("--spatial", action="store_true",
@@ -888,10 +1003,20 @@ async def main() -> int:
         # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
         # verdicts on it; re-running later with the printed flag cannot make
         # that holdout untouched again. The proposal is the whole output.
+        pre = preregister(family, cutoff)
         print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
               f"   Confirmation data stays unopened until the boundary is fixed,\n"
               f"   because a holdout that has been looked at is not a holdout:\n\n"
               f"     --cutoff '{cutoff}'\n")
+        # ⛔ The freeze has to be an ARTIFACT before the holdout opens, not a
+        # promise made after it. The rerun recomputes this same sha256 from the
+        # flag above; if it prints a different one, something moved in between
+        # and the confirmation is not confirming what was registered.
+        print(f"preregistered manifest sha256 : {pre['manifest_sha256']}")
+        print("frozen family manifest (record this BEFORE re-running):")
+        for line in json.dumps(pre["manifest"], indent=2,
+                               sort_keys=True).splitlines():
+            print(f"  {line}")
         return 4
 
     # ⛔ AN OUTCOME MUST BE VALIDATED BEFORE IT IS BELIEVED.
@@ -932,78 +1057,10 @@ async def main() -> int:
     results = report(family, disc, conf,
                      _counts(blocks, disc_b), _counts(blocks, conf_b), cutoff)
 
-    # The instrument must fail its own controls before anyone trusts its verdict
-    # on an unknown metric.
-    #
-    # `null` is pure noise by construction: it must fail under EVERY outcome
-    # definition. If noise ships, the harness is broken, full stop.
-    #
-    # `kpr` is a calibration point, not a universal control, and conflating the
-    # two was a design error here. #556 retired it against the WIN outcome; it
-    # says nothing about whether kill count tracks a stopwatch MARGIN. Enforcing
-    # it under --outcome seconds would be asserting a result nobody measured, so
-    # it is checked only for the outcome it was retired under and reported as
-    # information otherwise.
-    by_id = {r["id"]: r for r in results}
-    print("\nINSTRUMENT CHECK")
-    broken = False
-
-    # ⛔ A FAMILY WHERE NOTHING WAS MEASURABLE MUST NOT READ AS A CLEAN RUN.
-    # When no candidate has a usable bootstrap spread, every one of them reports
-    # FAILS — including `null`, which then looks exactly like a control doing
-    # its job. The controls cannot distinguish "noise was correctly rejected"
-    # from "nothing was measured at all", so the run has to say so itself.
-    # Same shape as the --resamples case: an instrument that measured nothing
-    # will happily retire a whole family.
-    measured = [r for r in results
-                if r.get("verdict") in ("SHIPS", "SHIPS?", "FAILS")
-                and r.get("interval") and not math.isnan(r["interval"][0])]
-    if not measured:
-        print("  ⛔ NOT ONE candidate produced a usable interval. Every verdict "
-              "above is\n     'unmeasured', not 'rejected' — including the "
-              "controls, which is why they\n     look correct. Nothing here "
-              "retires anything.")
-        broken = True
-
-    # `null` is the only STRUCTURAL control: pure noise by construction, so it
-    # must fail under every outcome. If noise ships, the harness is broken.
-    nullr = by_id.get("null", {}).get("verdict", "MISSING")
-    if nullr != "FAILS":
-        broken = True
-    print(f"  null  {nullr:<9} {'ok' if nullr == 'FAILS' else 'NOISE SHIPPED — BROKEN'}")
-
-    # `kpr` is CALIBRATION, not a control. #556 measured a spread near +0.028;
-    # reproducing that number is what says the instrument measures the same
-    # thing. Demanding that it stay NON-SIGNIFICANT would be wrong: that was a
-    # property of #556's sample, not of the metric, and with more confirmation
-    # blocks its interval may legitimately exclude zero. Enforcing the old
-    # verdict would then discard a valid family for being better powered.
-    kpr = by_id.get("kpr")
-    if family.outcome == "win" and (kpr is None
-                                    or kpr.get("confirmation") is None):
-        # An EXCLUDED kpr has no confirmation figure, and falling through to the
-        # informational branch would let the run succeed WITHOUT ever
-        # reproducing the known calibration point. Unmeasured calibration is a
-        # failed instrument, not a silent pass.
-        broken = True
-        print("  kpr   MISSING   calibration could not be measured — the "
-              "instrument never reproduced the #556 reference")
-    elif kpr and family.outcome == "win":
-        k = kpr["confirmation"]
-        in_range = KPR_EXPECTED_RANGE[0] <= k <= KPR_EXPECTED_RANGE[1]
-        broken = broken or not in_range
-        print(f"  kpr   {k:+.3f}    "
-              + (f"ok — within the #556 range {KPR_EXPECTED_RANGE}"
-                 if in_range else
-                 f"OUTSIDE the #556 range {KPR_EXPECTED_RANGE} — the instrument "
-                 f"is not measuring what #556 measured"))
-        print(f"        verdict {kpr['verdict']} is reported, not enforced: "
-              f"significance is a property of this sample, not of the metric")
-    elif kpr:
-        print(f"  kpr   {kpr['verdict']:<9} not calibrated under outcome "
-              f"'{family.outcome}' — #556 measured 'win' only")
-
-    if broken:
+    # The instrument must fail its own controls before anyone trusts its
+    # verdict on an unknown metric. The checks themselves live in
+    # instrument_check() so they can be driven by a test.
+    if instrument_check(family, results):
         print("\nRefusing to report this run as valid: the instrument failed its "
               "own checks. Do not use these verdicts.")
         return 2

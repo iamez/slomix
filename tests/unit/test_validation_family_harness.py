@@ -37,10 +37,12 @@ from validation_family import (  # noqa: E402 - path set above
     chronological_split,
     detectable_effect,
     holm,
+    instrument_check,
     margin_agreement,
     max_t_intervals,
     outcome_seconds,
     outcome_win,
+    preregister,
     within_round_point_biserial,
     within_round_spread,
 )
@@ -548,3 +550,140 @@ class TestNothingMeasuredIsNotACleanRun:
         assert "null" not in intervals, (
             "an unmeasurable null would still be reported FAILS — "
             "indistinguishable from a correctly rejected one")
+
+
+NAN = float("nan")
+
+
+def _row(cid, verdict, lo, hi, confirmation=0.0):
+    """One `results` row in the shape `report()` emits."""
+    return {"id": cid, "discovery": confirmation, "confirmation": confirmation,
+            "interval": [lo, hi], "margin_sd": 0.01, "holm_p": 0.5,
+            "verdict": verdict}
+
+
+def _kpr_ok():
+    """A calibration row inside the #556 range, so `kpr` never decides these."""
+    return _row("kpr", "FAILS", 0.01, 0.05, confirmation=0.028)
+
+
+class TestTheNullControlMustHaveBeenMEASURED:
+    """⛔ `FAILS` IS A LABEL, NOT A MEASUREMENT.
+
+    `null` is pure noise by construction, so a run is only trustworthy if the
+    harness looked at it and rejected it. But a candidate with no usable
+    bootstrap spread is ALSO labelled `FAILS` — `report()` says so itself:
+    "unmeasured, which is not the same as measured-and-clear".
+
+    The family-wide guard above only fires when NOTHING was measurable. So the
+    hole is precise: measure any OTHER candidate, leave `null` unmeasurable, and
+    the run prints `null FAILS ok` and exits 0 with the structural control never
+    actually tested. Codex on #818.
+    """
+
+    def _family(self, outcome="win"):
+        return Family(name="t", candidates=[Candidate("x", "d", "higher_is_better", _metric)],
+                      filters="WHERE 1=1", outcome=outcome)
+
+    def test_an_unmeasurable_null_is_not_a_null_that_failed(self):
+        # `real` carries a usable interval, so the family-wide "nothing was
+        # measurable" guard stays quiet — which is exactly the state that hid this.
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok(),
+                   _row("null", "FAILS", NAN, NAN)]
+        assert instrument_check(self._family(), results) is True
+
+    def test_too_few_usable_replicates_reach_the_check_as_a_nan_PAIR(self):
+        """Why reading only `interval[0]` is enough — pinned, not assumed.
+
+        ⚠️ My first version of this test fabricated a one-sided `[-0.05, nan]`
+        row, on the theory that `measured` inspects only the low end and would
+        wave it through. That state is UNREACHABLE: `max_t_intervals()` returns
+        no entry at all for a candidate without a usable spread, and `report()`
+        then writes `lo = hi = nan` together. Asserting on an impossible input
+        would have been a test that can never fire in the direction that matters.
+
+        So the honest thing to pin is the invariant the shortcut rests on: too
+        few usable replicates produce NO interval, which is what makes both ends
+        nan and one end sufficient to detect it.
+        """
+        boot = {"null": [0.1] + [None] * 40}     # 1 usable replicate
+        point = {"null": 0.1}
+        intervals, crit, sds = max_t_intervals(boot, point, alpha=0.05)
+        assert intervals == {}, "an unusable bootstrap must yield NO interval"
+        assert math.isnan(crit)
+
+    def test_a_MEASURED_null_that_failed_is_the_healthy_run(self):
+        # CONTROL. Without this the fix could pass by calling every null broken,
+        # which would refuse every valid run instead of the dishonest ones.
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok(),
+                   _row("null", "FAILS", -0.04, 0.03)]
+        assert instrument_check(self._family(), results) is False
+
+    def test_noise_that_ships_is_still_broken(self):
+        # CONTROL for the check that already existed: it must not be lost.
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok(),
+                   _row("null", "SHIPS", 0.20, 0.40)]
+        assert instrument_check(self._family(), results) is True
+
+    def test_a_missing_null_is_still_broken(self):
+        results = [_row("real", "SHIPS", 0.20, 0.40), _kpr_ok()]
+        assert instrument_check(self._family(), results) is True
+
+    def test_a_family_where_nothing_was_measurable_is_still_broken(self):
+        # CONTROL for the family-wide guard, so the new one cannot replace it.
+        # ⚠️ Every row must be unmeasurable INCLUDING kpr — my first version of
+        # this test left kpr a usable interval, so `measured` was non-empty and
+        # the family-wide guard had no reason to fire. The test was wrong, not
+        # the guard: a fixture that cannot reach the branch proves nothing.
+        results = [_row("real", "FAILS", NAN, NAN),
+                   _row("kpr", "FAILS", NAN, NAN, confirmation=0.028),
+                   _row("null", "FAILS", NAN, NAN)]
+        assert instrument_check(self._family(), results) is True
+
+
+class TestThePreregistrationIsAnArtifactNotAPromise:
+    """⛔ A HOLDOUT THAT HAS BEEN LOOKED AT IS NOT A HOLDOUT — AND NEITHER IS
+    ONE WHOSE TERMS WERE NEVER WRITTEN DOWN.
+
+    Without a cutoff the run stops rather than opening the confirmation half.
+    That half was right and the reason is in the source. But it printed only the
+    proposed timestamp: `manifest_hash()` and `frozen()` are reachable solely
+    from `report()`, which runs AFTER confirmation is analysed. So nothing
+    committed the candidates, formulas, filters, seed, resamples and cutoff
+    BEFORE the rerun opened the holdout, and any change made between the two
+    runs was undetectable — the freeze was a promise, not an artifact.
+
+    Codex on #818. What makes it real is that the preregistered hash must equal
+    the hash the rerun computes, or the artifact commits to nothing.
+    """
+
+    def _family(self, **kw):
+        return Family(name="t", candidates=[Candidate("x", "d", "higher_is_better", _metric)],
+                      filters="WHERE 1=1", **kw)
+
+    def test_the_preregistered_hash_is_the_one_the_rerun_will_compute(self):
+        proposed = "2026-08-26 21:00:00"
+        pre = preregister(self._family(), proposed)
+        rerun = self._family(frozen_cutoff=proposed)
+        assert pre["manifest_sha256"] == rerun.manifest_hash()
+
+    def test_the_artifact_carries_the_terms_not_only_the_digest(self):
+        # §8.5: a one-way digest nobody can expand is not a published manifest.
+        pre = preregister(self._family(), "2026-08-26 21:00:00")
+        assert pre["manifest"]["frozen_cutoff"] == "2026-08-26 21:00:00"
+        for key in ("candidates", "filters", "outcome", "seed", "resamples",
+                    "alpha", "split_fraction", "protocol_fingerprint"):
+            assert key in pre["manifest"], key
+
+    def test_changing_a_knob_after_preregistering_breaks_the_match(self):
+        # CONTROL — without this the test above would pass on a constant.
+        proposed = "2026-08-26 21:00:00"
+        pre = preregister(self._family(), proposed)
+        assert pre["manifest_sha256"] != self._family(
+            frozen_cutoff=proposed, seed=999).manifest_hash()
+
+    def test_a_different_cutoff_is_a_different_freeze(self):
+        # CONTROL — the cutoff must be INSIDE the hashed terms, not beside them.
+        a = preregister(self._family(), "2026-08-26 21:00:00")
+        b = preregister(self._family(), "2026-08-27 21:00:00")
+        assert a["manifest_sha256"] != b["manifest_sha256"]
