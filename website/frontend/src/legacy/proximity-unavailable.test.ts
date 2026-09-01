@@ -15,10 +15,12 @@
  * these are behaviour tests on the real functions, not a grep over the source.
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
-// @ts-expect-error plain-JS module with no declaration file of its own
-import { getQualityTone, proximityFailed, proximityUnavailableNote } from '../../../js/proximity.js';
+import {
+  getQualityTone, proximityFailed, proximityShowFailure, proximityUnavailableNote,
+  // @ts-expect-error plain-JS module with no declaration file of its own
+} from '../../../js/proximity.js';
 
 describe('proximityFailed', () => {
   it('counts an outage as a failure, not as an empty answer', () => {
@@ -74,5 +76,46 @@ describe('getQualityTone', () => {
     expect(getQualityTone('error')).toBe('rose');
     expect(getQualityTone('partial')).toBe('amber');
     expect(getQualityTone('experimental')).toBe('purple');
+  });
+});
+
+describe('proximityShowFailure', () => {
+  const ids = ['carrier-summary', 'carrier-leaders'];
+
+  beforeEach(() => {
+    document.body.innerHTML = ids
+      .map((id) => `<div id="${id}">No carrier data yet.</div>`)
+      .join('');
+  });
+
+  it('replaces the stale placeholder instead of leaving it', () => {
+    // ⛔ THE DEFECT: the first version returned without touching the DOM, so an
+    // outage left "No carrier data yet" — or, after a reload, the PREVIOUS
+    // scope's numbers, which look current and are not.
+    const stopped = proximityShowFailure(
+      { status: 'unavailable', reason: 'the database did not answer' }, ...ids);
+    expect(stopped).toBe(true);
+    for (const id of ids) {
+      const el = document.getElementById(id)!;
+      expect(el.innerHTML).not.toContain('No carrier data yet');
+      expect(el.innerHTML).toContain('Temporarily unavailable');
+      expect(el.innerHTML).toContain('the database did not answer');
+    }
+  });
+
+  it('says something even when no reason came with the failure', () => {
+    proximityShowFailure({ status: 'error' }, ...ids);
+    expect(document.getElementById(ids[0])!.innerHTML).toContain('Unavailable');
+  });
+
+  it('leaves a successful answer alone and lets the renderer run', () => {
+    // CONTROL: a helper that painted every response would erase real data.
+    const stopped = proximityShowFailure({ status: 'ok', carriers: [] }, ...ids);
+    expect(stopped).toBe(false);
+    expect(document.getElementById(ids[0])!.innerHTML).toContain('No carrier data yet');
+  });
+
+  it('does not fall over on an element that is not on this page', () => {
+    expect(proximityShowFailure({ status: 'unavailable' }, 'no-such-element')).toBe(true);
   });
 });

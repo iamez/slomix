@@ -290,3 +290,92 @@ class TestTheDashboardCountsAnUnavailableSectionAsFailed:
         # being read from executable text.
         assert "#" not in src
         assert "Codex on #862" not in src
+
+
+class TestAFailureMarkerMustNameTheThingAndDisappearWhenRecovered:
+    """⛔ TWO WAYS `failed_metrics` LIED, BOTH IN MY OWN FIELD.
+
+    It exists so a consumer can suppress exactly the values that are missing.
+    That only works if the name is the CATEGORY and the list is what is still
+    failing after every retry. Codex on #862.
+
+    ⚠️ The fixtures below match on query text, and my first attempt matched on
+    text that is NOT in the query — `rounds_played` where the session query says
+    `round_count`. The test passed, on an empty `failed_metrics`, asserting
+    nothing. So each fixture here first proves it reached the branch.
+    """
+
+    def _leaders(self, stub):
+        from website.backend.routers import records_seasons
+        app = FastAPI()
+        app.include_router(records_seasons.router, prefix="/api")
+        app.dependency_overrides[get_db] = lambda: stub()
+        return TestClient(app, raise_server_exceptions=False).get(
+            "/api/seasons/current/leaders").json()
+
+    class _Base:
+        async def fetch_all(self, *a, **k): return []
+        async def fetch_val(self, *a, **k): return 0
+        async def fetch_one(self, query, params=None):
+            if "GROUP BY gaming_session_id" in query:
+                return (7, 12, "2026-08-01")          # session row: id, count, date
+            return ("AAAA1111", "alpha", 42)          # leader row: guid, name, value
+
+    def test_a_longest_session_failure_is_named_not_called_unknown(self):
+        class _SessionFails(self._Base):
+            async def fetch_one(self, query, params=None):
+                if "GROUP BY gaming_session_id" in query:
+                    raise RuntimeError("column does not exist")
+                return await super().fetch_one(query, params)
+        body = self._leaders(_SessionFails)
+        assert body["status"] == "partial", "fixture never reached the failure"
+        assert "unknown" not in body["failed_metrics"], (
+            "a failed leader was recorded as 'unknown', so the response says "
+            "partial and refuses to say WHICH category is gone")
+        assert "longest_session" in body["failed_metrics"], body["failed_metrics"]
+
+    def test_a_recovered_fallback_leaves_no_marker_behind(self):
+        """⛔ The response carried usable data AND told every consumer to
+        suppress it. A recovered value is not a failure."""
+        class _PrimaryFails(self._Base):
+            async def fetch_one(self, query, params=None):
+                if "LEAST(COALESCE(time_dead_minutes" in query and "time_alive_seconds" in query:
+                    raise RuntimeError("column does not exist")
+                return await super().fetch_one(query, params)
+        body = self._leaders(_PrimaryFails)
+        assert body["leaders"]["time_alive"] is not None, "fixture no longer recovers"
+        assert "time_alive" not in body["failed_metrics"], (
+            f"a recovered category is still listed as failed: "
+            f"{body['failed_metrics']}")
+
+    def test_recovering_one_category_does_not_forget_the_others(self):
+        """⛔ FOUND BY A SURVIVING MUTATION: `leader_failures.clear()` passed
+        every test above, because none of them had TWO failures at once.
+
+        `time_alive` recovers through its fallback while `dpm` stays broken.
+        Forgetting the whole list would then hide a category that really is
+        missing — trading a false "unavailable" for a false "here it is", which
+        is the worse direction."""
+        class _OneRecoversOneDoesNot(self._Base):
+            async def fetch_one(self, query, params=None):
+                if "LEAST(COALESCE(time_dead_minutes" in query and "time_alive_seconds" in query:
+                    raise RuntimeError("column does not exist")
+                if "damage_given" in query and "time_played_seconds" in query:
+                    raise RuntimeError("dpm is broken")
+                return await super().fetch_one(query, params)
+        body = self._leaders(_OneRecoversOneDoesNot)
+        assert body["leaders"]["time_alive"] is not None, "fixture no longer recovers"
+        assert "time_alive" not in body["failed_metrics"]
+        assert body["failed_metrics"], (
+            "recovering one category emptied the whole list, so a category that "
+            "is genuinely missing is now reported as fine")
+
+    def test_a_category_that_never_recovers_is_still_named(self):
+        """CONTROL: forgetting too eagerly would empty the list and take the
+        whole feature with it."""
+        class _EverythingFails(self._Base):
+            async def fetch_one(self, *a, **k):
+                raise RuntimeError("database is down")
+        body = self._leaders(_EverythingFails)
+        assert body["status"] == "partial"
+        assert "time_alive" in body["failed_metrics"], body["failed_metrics"]

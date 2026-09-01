@@ -640,6 +640,16 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
             leader_failures.append(metric or "unknown")
             return None
 
+    def _forget_failure(metric: str) -> None:
+        """Undo one recorded failure after a retry answered.
+
+        Removes a single occurrence rather than every one: if the same category
+        failed twice for different reasons, only the attempt that was recovered
+        is forgotten.
+        """
+        if metric in leader_failures:
+            leader_failures.remove(metric)
+
     async def _fetch_one_with_fallback(query: str, metric: str = ""):
         return await _fetch_one_with_field(query, "round_date", metric)
 
@@ -654,13 +664,26 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         xp = await _fetch_one_with_fallback(xp_query, "xp")
         kills = await _fetch_one_with_fallback(kills_query, "kills")
         dpm = await _fetch_one_with_fallback(dpm_query, "dpm")
+        # ⛔ A RECOVERED VALUE IS NOT A FAILURE. The primary query raising and the
+        # compatibility fallback succeeding is the schema-drift path working as
+        # designed — but the first attempt had already named the category in
+        # `leader_failures`, so the response carried usable data AND told every
+        # consumer to suppress it. The marker is dropped when the retry answers.
         time_alive = await _fetch_one_with_fallback(time_alive_query, "time_alive")
         if time_alive is None:
             time_alive = await _fetch_one_with_fallback(fallback_time_alive, "time_alive")
+            if time_alive is not None:
+                _forget_failure("time_alive")
         time_dead = await _fetch_one_with_fallback(time_dead_query, "time_dead")
         if time_dead is None:
             time_dead = await _fetch_one_with_fallback(fallback_time_dead, "time_dead")
-        session = await _fetch_one_with_field(session_query, "round_date")
+            if time_dead is not None:
+                _forget_failure("time_dead")
+        # ⚠️ `metric=` was missing here, so a longest-session failure was
+        # recorded as "unknown" — the response said "partial" and refused to say
+        # WHICH leader was gone, which is the one thing the field is for.
+        session = await _fetch_one_with_field(session_query, "round_date",
+                                              "longest_session")
         return {
             "damage_given": dmg_given,
             "damage_received": dmg_recv,

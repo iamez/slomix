@@ -1591,6 +1591,30 @@ export function proximityUnavailableNote(data) {
     return `<div class="text-[11px] text-amber-400/80">Temporarily unavailable${why}.</div>`;
 }
 
+/**
+ * ⛔ RETURNING EARLY IS NOT SHOWING A FAILURE.
+ *
+ * The first version of this guard stopped the renderers from painting zeros —
+ * and then returned WITHOUT touching the DOM, which leaves the initial
+ * "No carrier data yet" placeholder in place, or the previous scope's data
+ * after a reload. So the outage stayed indistinguishable from empty, pending,
+ * or stale-but-successful: three states the reader still cannot tell apart, and
+ * the third is the worst because the numbers look current.
+ *
+ * Writes the reason into every element the renderer owns and returns true when
+ * the caller should stop. Codex on #862, on my own fix.
+ */
+export function proximityShowFailure(data, ...elementIds) {
+    if (!proximityFailed(data)) return false;
+    const note = proximityUnavailableNote(data)
+        || '<div class="text-[11px] text-rose-400/80">Unavailable — this section could not be loaded.</div>';
+    for (const id of elementIds) {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = note;
+    }
+    return true;
+}
+
 export function getQualityTone(status, ready = null) {
     if (status === 'error') return 'rose';
     // ⛔ A panel that could not be measured is not a neutral panel. Without
@@ -4705,7 +4729,7 @@ function bindV52PanelEvents() {
 // ===== v6 CARRIER INTELLIGENCE RENDERERS =====
 
 function renderCarrierIntel(data) {
-    if (proximityFailed(data)) return;
+    if (proximityShowFailure(data, 'carrier-summary', 'carrier-leaders', 'carrier-event-log')) return;
 
     // Summary stats
     const summaryEl = document.getElementById('carrier-summary');
@@ -4772,7 +4796,7 @@ function renderCarrierIntel(data) {
 }
 
 function renderCarrierKillers(data) {
-    if (proximityFailed(data)) return;
+    if (proximityShowFailure(data, 'carrier-killer-leaders')) return;
     const el = document.getElementById('carrier-killer-leaders');
     if (!el) return;
 
@@ -5030,7 +5054,7 @@ function renderObjectiveRuns(data) {
 // FOCUS FIRE
 // ========================================
 function renderFocusFire(data) {
-    if (proximityFailed(data)) return;
+    if (proximityShowFailure(data, 'focus-fire-summary', 'focus-fire-recent')) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('focus-fire-summary');
     if (summaryEl) {
@@ -5083,7 +5107,7 @@ function renderFocusFire(data) {
 // OBJECTIVE FOCUS
 // ========================================
 function renderObjectiveFocus(data) {
-    if (proximityFailed(data)) return;
+    if (proximityShowFailure(data, 'obj-focus-summary', 'obj-focus-objectives')) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('obj-focus-summary');
     if (summaryEl) {
@@ -5124,7 +5148,7 @@ function renderObjectiveFocus(data) {
 // SUPPORT SUMMARY
 // ========================================
 function renderSupportSummary(data) {
-    if (proximityFailed(data)) return;
+    if (proximityShowFailure(data, 'support-summary-cards', 'support-summary-maps')) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('support-summary-cards');
     if (summaryEl) {
@@ -5157,7 +5181,7 @@ function renderSupportSummary(data) {
 // COMBAT POSITION STATS
 // ========================================
 function renderCombatPositionStats(data) {
-    if (proximityFailed(data)) return;
+    if (proximityShowFailure(data, 'combat-pos-summary', 'combat-pos-class', 'combat-pos-map')) return;
     const summary = data.summary || {};
     const summaryEl = document.getElementById('combat-pos-summary');
     if (summaryEl) {
