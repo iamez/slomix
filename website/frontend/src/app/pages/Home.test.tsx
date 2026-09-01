@@ -301,8 +301,8 @@ describe('season partial contract (#862)', () => {
     const partialSummary = {
       ...(seasonSummary as Record<string, unknown>),
       status: 'partial',
-      failed_metrics: ['kills'],
-      note: 'kills query failed',
+      failed_metrics: ['kills_total'],
+      note: 'kills_total query failed',
     };
     const partialLeaders = {
       ...(seasonLeaders as { leaders: Record<string, unknown> }),
@@ -334,4 +334,3 @@ describe('season partial contract (#862)', () => {
     await waitFor(() => expect(screen.getByText('dpm: unavailable')).toBeInTheDocument());
   });
 });
-

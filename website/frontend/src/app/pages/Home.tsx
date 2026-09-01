@@ -299,14 +299,18 @@ function SeasonBlock() {
   // failed_metrics NAMES what is missing and its zero is an
   // initialization, never a measurement — render the dash, not the zero.
   const failedTotals = new Set(summary.data?.status === 'partial' ? summary.data.failed_metrics : []);
-  const seasonFig = (key: string, v: number) => (failedTotals.has(key) ? '—' : figure(v));
+  // The WIRE's metric names, read from the emitter, not guessed: the first
+  // version keyed on 'kills' while the backend appends 'kills_total' — a
+  // partial season would have rendered its failures as real zeros
+  // (Copilot on #869, both threads).
+  const seasonFig = (wireKey: string, v: number) => (failedTotals.has(wireKey) ? '—' : figure(v));
   const seasonFigures = totals
     ? [
-        { k: 'players', v: seasonFig('players', totals.players) },
-        { k: 'rounds', v: seasonFig('rounds', totals.rounds) },
-        { k: 'maps', v: seasonFig('maps', totals.maps) },
-        { k: 'sessions', v: seasonFig('sessions', totals.sessions) },
-        { k: 'kills', v: seasonFig('kills', totals.kills) },
+        { k: 'players', v: seasonFig('players_count', totals.players) },
+        { k: 'rounds', v: seasonFig('rounds_count', totals.rounds) },
+        { k: 'maps', v: seasonFig('maps_count', totals.maps) },
+        { k: 'sessions', v: seasonFig('sessions_count', totals.sessions) },
+        { k: 'kills', v: seasonFig('kills_total', totals.kills) },
         {
           // {name: null, plays: 0} is the endpoint's EMPTY season shape —
           // the object is truthy, the name is the gate (Codex wave 3).
