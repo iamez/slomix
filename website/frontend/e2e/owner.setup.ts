@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test as setup } from '@playwright/test';
@@ -20,8 +20,15 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  */
 setup('mint owner session', async ({ baseURL }) => {
   const repoRoot = path.resolve(HERE, '..', '..', '..');
+  // The repo runs under more than one venv layout; take the first that
+  // exists rather than hard-coding one (Copilot on #855). python3 is the
+  // last resort so a bare machine fails with the script's own error, not
+  // ENOENT on a path.
+  const interpreter = ['venv/bin/python', '.venv/bin/python', 'website/venv/bin/python']
+    .map((p) => path.join(repoRoot, p))
+    .find((p) => existsSync(p)) ?? 'python3';
   const cookie = execFileSync(
-    path.join(repoRoot, 'venv', 'bin', 'python'),
+    interpreter,
     [path.join(repoRoot, 'scripts', 'e2e_owner_session.py')],
     { encoding: 'utf-8' },
   ).trim();

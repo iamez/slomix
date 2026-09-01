@@ -2261,7 +2261,9 @@ export interface PlayerMatchRound {
   deaths: number;
   damage: number;
   time_played: number;
-  team: string | null;
+  /** Numeric team id (pcs.team is INTEGER; the fixture carries 1/2) — the
+   *  first version typed it as a string from memory, not measurement. */
+  team: number | null;
   xp: number;
   accuracy: number;
   dpm: number;

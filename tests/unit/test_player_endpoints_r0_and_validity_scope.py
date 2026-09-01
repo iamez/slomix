@@ -122,6 +122,9 @@ async def test_session_scoped_weapon_rows_use_the_counted_round_predicate():
     assert hits, f"session-scoped query not seen; recorded: {db.queries}"
     q = hits[0]
     assert "is_valid IS DISTINCT FROM FALSE" in q
+    assert "is_bot_round IS DISTINCT FROM TRUE" in q, (
+        "the totals row above excludes bot rounds; the expanded weapons must too"
+    )
     assert "round_status IN ('completed', 'substitution') OR round_status IS NULL" in q
     assert "round_number IN (1, 2)" in q
 
