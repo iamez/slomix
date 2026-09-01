@@ -560,9 +560,16 @@ async def get_composite_stats(
             # zeros are true by construction rather than by assertion.
             # :503 (Codex on #848), the same contract as the coverage
             # guard: a missing or unavailable telemetry table must not
-            # turn the no-scope path into a 500 — an unanswerable
-            # default-scope question reads as "no scope", which the
-            # early return below already answers honestly.
+            # turn the no-scope path into a 500.
+            #
+            # ⚠️ That decision stands and is not being reversed — but the
+            # sentence that followed it, "the early return below already
+            # answers honestly", was wrong. It answered `status: "ok"`,
+            # which is a CLAIM of success, and it made an unanswerable
+            # question byte-identical to an empty corpus. Not 500 and not
+            # "ok" are both true at once; `scope_lookup_failed` is what
+            # keeps them apart.
+            scope_lookup_failed = False
             try:
                 row = await db.fetch_one(
                     """
@@ -599,10 +606,11 @@ async def get_composite_stats(
                 )
             except Exception:
                 logger.warning(
-                    "composite default-scope lookup failed; answering no-scope",
+                    "composite default-scope lookup failed",
                     exc_info=True,
                 )
                 row = None
+                scope_lookup_failed = True
             if not row or not row[0]:
                 # No proximity rows anywhere, so there is no default scope to
                 # pick. This used to return a SHORTER shape than the one
@@ -611,8 +619,19 @@ async def get_composite_stats(
                 # `coverage.unmeasured_metrics` would get a KeyError on
                 # exactly the state where the answer matters most. Same keys,
                 # every time.
+                # ⛔ AND IT HAS TO SAY WHICH OF THE TWO IT IS. `row is None`
+                # arrives both when the database answered "nothing recorded" and
+                # when it did not answer at all, and this returned `status: "ok"`
+                # for both — byte-identical payloads for an empty corpus and a
+                # dead database, with `responseStatus.ts` classifying `ok` as
+                # success. `unavailable` is the existing failure word, so no page
+                # needs a new branch to render it. Codex's audit of the outage
+                # family; the last of the fifteen.
                 return {
-                    "status": "ok",
+                    "status": "unavailable" if scope_lookup_failed else "ok",
+                    "reason": ("the default-scope lookup did not answer, so this "
+                               "is not an empty corpus — it is an unmeasured one")
+                    if scope_lookup_failed else None,
                     "session_date": None,
                     "gaming_session_id": None,
                     "players": [],
@@ -941,6 +960,13 @@ async def get_composite_stats(
 
     return {
         "status": "ok",
+        # ⚠️ SAME KEYS, EVERY TIME — the contract this endpoint already had
+        # and which `test_the_no_scope_answer_has_the_same_keys_as_every_other_answer`
+        # pins. `reason` belongs to the failure vocabulary, so it exists on
+        # both paths and is null where nothing failed; putting it only on the
+        # path that needs it would give the endpoint two shapes, which is the
+        # defect being fixed wearing the fix as a disguise.
+        "reason": None,
         "session_date": session_date,
         "gaming_session_id": gaming_session_id,
         "players": players,
