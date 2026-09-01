@@ -72,6 +72,9 @@ import type {
   LiveSession,
   PlayerIdentity,
   PlayerMatchRound,
+  CarrierEvents,
+  CarrierKills,
+  CarrierReturns,
   CompClutch,
   CompFirstBlood,
   CompManAdvantage,
@@ -91,9 +94,14 @@ import type {
   ProxReactions,
   ProxScopes,
   ProxRevives,
+  ConstructionEvents,
+  EscortCredits,
+  ObjectiveFocus,
+  ObjectiveRuns,
   ProxSpawnTiming,
   ProxSupportSummary,
   V7Status,
+  VehicleProgress,
   RecentPrediction,
   SessionLeaderRow,
   SkillPlayer,
@@ -1068,3 +1076,36 @@ export function useV7Status() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+
+// Phase 5, slice 4 — carrier and objective intel, same scope contract.
+
+type IntelPath =
+  | '/api/proximity/carrier-events'
+  | '/api/proximity/carrier-kills'
+  | '/api/proximity/carrier-returns'
+  | '/api/proximity/vehicle-progress'
+  | '/api/proximity/escort-credits'
+  | '/api/proximity/construction-events'
+  | '/api/proximity/objective-runs'
+  | '/api/proximity/objective-focus';
+
+function useIntel<T>(path: IntelPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-intel', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export const useCarrierEvents = (d: string | null) => useIntel<CarrierEvents>('/api/proximity/carrier-events', d);
+export const useCarrierKills = (d: string | null) => useIntel<CarrierKills>('/api/proximity/carrier-kills', d);
+export const useCarrierReturns = (d: string | null) => useIntel<CarrierReturns>('/api/proximity/carrier-returns', d);
+export const useVehicleProgress = (d: string | null) => useIntel<VehicleProgress>('/api/proximity/vehicle-progress', d);
+export const useEscortCredits = (d: string | null) => useIntel<EscortCredits>('/api/proximity/escort-credits', d);
+export const useConstructionEvents = (d: string | null) => useIntel<ConstructionEvents>('/api/proximity/construction-events', d);
+export const useObjectiveRuns = (d: string | null) => useIntel<ObjectiveRuns>('/api/proximity/objective-runs', d);
+export const useObjectiveFocus = (d: string | null) => useIntel<ObjectiveFocus>('/api/proximity/objective-focus', d);

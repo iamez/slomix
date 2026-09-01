@@ -1,0 +1,41 @@
+{
+ "status": "ok",
+ "killers": [
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "^pvid",
+   "carrier_kills": 9,
+   "avg_distance_stopped": 2739.0
+  },
+  {
+   "guid": "2B5938F5C5EA384863A3B2862DC61778",
+   "name": "bronze",
+   "carrier_kills": 7,
+   "avg_distance_stopped": 3066.0
+  },
+  {
+   "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+   "name": "^c.^7lgz",
+   "carrier_kills": 4,
+   "avg_distance_stopped": 4037.0
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": "^1.^7olz",
+   "carrier_kills": 4,
+   "avg_distance_stopped": 1730.0
+  },
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "^7K^4a^7Nii^4.^7[D]",
+   "carrier_kills": 1,
+   "avg_distance_stopped": 5067.0
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru^53^7lzor^5.",
+   "carrier_kills": 1,
+   "avg_distance_stopped": 4865.0
+  }
+ ]
+}
