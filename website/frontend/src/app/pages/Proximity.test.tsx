@@ -35,6 +35,23 @@ import escortCredits from './__fixtures__/api_proximity_escort_credits.json';
 import constructionEvents from './__fixtures__/api_proximity_construction_events.json';
 import objectiveRuns from './__fixtures__/api_proximity_objective_runs.json';
 import objectiveFocus from './__fixtures__/api_proximity_objective_focus.json';
+import type {
+  CarrierEvents, CarrierKills, CarrierReturns, ConstructionEvents,
+  EscortCredits, ObjectiveFocus, ObjectiveRuns, VehicleProgress,
+} from '../lib/types';
+
+// `satisfies` holds each RECORDED fixture against its wire type — the same
+// check that caught attribution.mode on #856 (CodeRabbit on #864: a map of
+// `unknown` lets a renamed field mock successfully while the page reads the
+// wrong shape).
+const carrierEventsChecked = carrierEvents satisfies CarrierEvents;
+const carrierKillsChecked = carrierKills satisfies CarrierKills;
+const carrierReturnsChecked = carrierReturns satisfies CarrierReturns;
+const vehicleProgressChecked = vehicleProgress satisfies VehicleProgress;
+const escortCreditsChecked = escortCredits satisfies EscortCredits;
+const constructionEventsChecked = constructionEvents satisfies ConstructionEvents;
+const objectiveRunsChecked = objectiveRuns satisfies ObjectiveRuns;
+const objectiveFocusChecked = objectiveFocus satisfies ObjectiveFocus;
 
 const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/scopes', scopes],
@@ -58,14 +75,14 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/competitive/clutch', compClutch],
   ['/api/proximity/competitive/side-splits', compSplits],
   ['/api/proximity/v7-status', v7Status],
-  ['/api/proximity/carrier-events', carrierEvents],
-  ['/api/proximity/carrier-kills', carrierKills],
-  ['/api/proximity/carrier-returns', carrierReturns],
-  ['/api/proximity/vehicle-progress', vehicleProgress],
-  ['/api/proximity/escort-credits', escortCredits],
-  ['/api/proximity/construction-events', constructionEvents],
-  ['/api/proximity/objective-runs', objectiveRuns],
-  ['/api/proximity/objective-focus', objectiveFocus],
+  ['/api/proximity/carrier-events', carrierEventsChecked],
+  ['/api/proximity/carrier-kills', carrierKillsChecked],
+  ['/api/proximity/carrier-returns', carrierReturnsChecked],
+  ['/api/proximity/vehicle-progress', vehicleProgressChecked],
+  ['/api/proximity/escort-credits', escortCreditsChecked],
+  ['/api/proximity/construction-events', constructionEventsChecked],
+  ['/api/proximity/objective-runs', objectiveRunsChecked],
+  ['/api/proximity/objective-focus', objectiveFocusChecked],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the

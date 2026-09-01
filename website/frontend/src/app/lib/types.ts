@@ -2710,7 +2710,10 @@ export interface V7Status {
 
 export interface CarrierEvents {
   status: string;
-  scope: ProxScope;
+  /** NARROWER than ProxScope — this handler's scope carries only these
+   *  three keys (the satisfies check on the recorded fixture said so the
+   *  moment it existed; the full-scope guess was a lie of one family). */
+  scope: { session_date: string | null; map_name: string | null; round_number: number | null };
   carriers: {
     guid: string; name: string | null; carries: number; secures: number;
     killed: number; dropped: number; total_distance: number;
@@ -2736,7 +2739,7 @@ export interface CarrierKills {
 
 export interface CarrierReturns {
   status: string;
-  scope: ProxScope & { range_days?: number };
+  scope: { range_days?: number; session_date: string | null; map_name: string | null };
   returners: { guid: string; name: string | null; returns: number; avg_delay_ms: number }[];
   events: {
     returner_name: string | null; returner_team: string; flag_team: string;

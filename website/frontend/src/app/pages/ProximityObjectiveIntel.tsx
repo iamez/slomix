@@ -6,7 +6,7 @@
  * discipline is in the types up front this time: summaries are the
  * deliberate-{} pattern, resolved names are nullable with guid fallbacks.
  */
-import { Cluster, Stack } from '../components/layout';
+import { Stack } from '../components/layout';
 import { Lbl, Meta, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
