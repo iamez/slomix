@@ -227,3 +227,19 @@ async def test_session_detail_rounds_carry_the_same_trio_as_the_list():
         "round_status IN ('completed', 'substitution') OR r.round_status IS NULL" in q
         or "r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL" in q
     )
+
+
+def test_session_rounds_order_by_play_time_not_ingest():
+    """The SELECT computed played_at for display while ORDER BY quietly used
+    created_at — measured 2026-09-01: 39 rounds across 4 sessions sat in the
+    wrong order, and session_date derives from the first (misordered) row.
+    The sixth round_time family entry: colons stripped FIRST, lpad second
+    (lpad-first truncates '23:41:53')."""
+    from website.backend.routers import sessions_router
+
+    sql = sessions_router._SESSION_ROUNDS_SQL
+    assert "ORDER BY r.created_at" not in sql, "ordering regressed to ingestion time"
+    assert "ORDER BY 4, r.id" in sql
+    assert "regexp_replace(r.round_time" in sql and "lpad(regexp_replace" in sql, (
+        "the dual-form time expression lost its colon-first half"
+    )

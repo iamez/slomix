@@ -873,6 +873,13 @@ async def get_sessions_list(
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
               AND r.is_bot_round IS DISTINCT FROM TRUE
+              -- Bot identity is a UNION of both forms on the ROW, not only
+              -- the round flag: round_contract.py documents older imports
+              -- that left bot rounds valid. Measured today: 0 rows escape —
+              -- latent, which is the reason to close it (sister's handover
+              -- on #848's thread, 1. 9.).
+              AND p.player_guid NOT LIKE 'OMNIBOT%'
+              AND COALESCE(p.player_name, '') NOT LIKE '[BOT]%'
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1693,6 +1700,13 @@ async def get_stats_sessions(
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
               AND r.is_bot_round IS DISTINCT FROM TRUE
+              -- Bot identity is a UNION of both forms on the ROW, not only
+              -- the round flag: round_contract.py documents older imports
+              -- that left bot rounds valid. Measured today: 0 rows escape —
+              -- latent, which is the reason to close it (sister's handover
+              -- on #848's thread, 1. 9.).
+              AND p.player_guid NOT LIKE 'OMNIBOT%'
+              AND COALESCE(p.player_name, '') NOT LIKE '[BOT]%'
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -1736,6 +1750,13 @@ async def get_stats_sessions(
               AND r.round_number IN (1, 2)
               AND r.is_valid IS DISTINCT FROM FALSE
               AND r.is_bot_round IS DISTINCT FROM TRUE
+              -- Bot identity is a UNION of both forms on the ROW, not only
+              -- the round flag: round_contract.py documents older imports
+              -- that left bot rounds valid. Measured today: 0 rows escape —
+              -- latent, which is the reason to close it (sister's handover
+              -- on #848's thread, 1. 9.).
+              AND p.player_guid NOT LIKE 'OMNIBOT%'
+              AND COALESCE(p.player_name, '') NOT LIKE '[BOT]%'
               AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
             GROUP BY r.gaming_session_id
         ),
@@ -2827,11 +2848,20 @@ _SESSION_ROUNDS_SQL = (
     -- created_at on a different DAY than their round_date. Showing a player an
     -- import date as "when this happened" is not a rounding error, it is the
     -- wrong fact.
+    -- Dual-form time expression (the round_time family's sixth entry, and
+    -- the lesson is now mechanical): strip colons FIRST, lpad SECOND.
+    -- lpad-first truncates '23:41:53' to '23:41:' (all 3,209 rows are
+    -- digit-form today, so the colon branch is latent — which is the reason
+    -- to handle it, not an argument against). Proven expression lifted from
+    -- validation_family.py's calendar gate.
     SELECT r.id, r.map_name, r.round_number,
            COALESCE(
              (r.round_date::text || ' ' ||
-              regexp_replace(lpad(r.round_time, 6, '0'),
-                             '^(..)(..)(..)$', '\\1:\\2:\\3'))::timestamp,
+              regexp_replace(
+                lpad(regexp_replace(r.round_time,
+                                    '^([0-9]{1,2}):([0-9]{2}):([0-9]{2})$',
+                                    '\\1\\2\\3'), 6, '0'),
+                '^(..)(..)(..)$', '\\1:\\2:\\3'))::timestamp,
              r.created_at) AS played_at,
            """
     + round_duration_sql("r")
@@ -2840,7 +2870,12 @@ _SESSION_ROUNDS_SQL = (
            r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
     FROM rounds r
     WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2)
-    ORDER BY r.created_at
+    -- ⛔ ORDER BY the PLAY time, not created_at: the SELECT already computed
+    -- played_at for display while the ordering quietly used ingestion time —
+    -- measured today, 14 rounds across 2 sessions sat in the wrong order,
+    -- and session_date derives from the first (misordered) row. r.id breaks
+    -- ties deterministically.
+    ORDER BY 4, r.id
 """
 )
 
