@@ -58,7 +58,7 @@ local modname = "proximity_tracker"
 -- the capture is off and when it is on with nothing to report. Consumers were
 -- resolving that ambiguity by assuming, which turns missing telemetry into a
 -- claim about the match.
-local version = "6.11"
+local version = "6.12"
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -66,6 +66,28 @@ local config = {
     debug = false,
     output_dir = "proximity/",
     output_delay_ms = 0,
+
+    -- v6.12: frame-health watcher (spec
+    -- docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md section perf; built
+    -- 2026-09-01 for the lag investigation). At the TOP of frame N it
+    -- reports on frame N-1: gap = start(N) - start(N-1) counts EVERYTHING
+    -- in that frame's period (engine, all six lua modules, host
+    -- scheduling), self = frame N-1's own tracker cost, recorded at its
+    -- end. Both numbers describe the SAME frame -- pairing them across
+    -- frames would misattribute the round-end write burst (which runs
+    -- inside et_RunFrame) to the host. A slow tracker frame needs no
+    -- separate trigger: the gap covers the whole frame period, so it
+    -- always fires the same line, now with the honest self beside it.
+    -- self = -1 marks a frame whose body never completed (a lua error
+    -- aborted the hook) -- a repeating -1 series is an error loop, not
+    -- a performance signal. The file is appended under output_dir and
+    -- capped per lua state; a map load starts a fresh cadence.
+    frame_health = {
+        enabled = true,
+        gap_threshold_ms = 100,       -- 4x the 25 ms budget at sv_fps 40
+        min_write_interval_ms = 1000, -- at most one line per second
+        max_lines_per_state = 300,    -- bound file growth per map load
+    },
     max_string_length = 256,
     log_in_intermission = false,
     output_guard = true,
@@ -4352,8 +4374,50 @@ local function runTraceProbe()
     return true
 end
 
+-- ===== FRAME-HEALTH WATCHER (v6.12) =====
+-- Runs at the TOP of every frame, reporting on the PREVIOUS one (see the
+-- config comment for why the pairing lives there). prev_wall/prev_self
+-- update before any of the frame body runs, so an error aborting the body
+-- cannot corrupt the cadence series -- it only leaves self at the -1
+-- sentinel, which is itself the signal. Open/write/close per line: at
+-- most 1/s, and a crash never loses buffered lines.
+local frame_health_state = {
+    prev_wall = nil, prev_self = -1, last_write = -math.huge, writes = 0,
+}
+
+local function frameHealthReport(wall_now)
+    local fh = config.frame_health
+    if not fh or not fh.enabled then return end
+    local st = frame_health_state
+    local prev_start = st.prev_wall
+    local prev_self = st.prev_self
+    st.prev_wall = wall_now
+    st.prev_self = -1  -- sentinel until this frame's body completes
+    if prev_start == nil then return end
+    local gap = wall_now - prev_start
+    if gap < (fh.gap_threshold_ms or 100) then return end
+    if wall_now - st.last_write < (fh.min_write_interval_ms or 1000) then return end
+    if st.writes >= (fh.max_lines_per_state or 300) then return end
+    st.last_write = wall_now
+    st.writes = st.writes + 1
+    local players = 0
+    for i = 0, get_max_clients() - 1 do
+        if isPlayerActive(i) then players = players + 1 end
+    end
+    local gs = math.floor(tonumber(et.trap_Cvar_Get("gamestate")) or -1)
+    -- endstats append idiom: the SECOND return signals an open failure
+    local fd, open_len = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
+    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d\n",
+        wall_now, gap, prev_self, gs, players)
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+
 function et_RunFrame(levelTime)
     if not config.enabled then return end
+    local fh_wall = et.trap_Milliseconds()
+    pcall(frameHealthReport, fh_wall)
     frame_level_time = levelTime  -- Bug 1 fix: store for gameTime(); freezes during pause
 
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate")) or -1
@@ -4512,6 +4576,11 @@ function et_RunFrame(levelTime)
         tracker.output_pending = false
         outputData()
     end
+
+    -- The frame body completed: replace the -1 sentinel with the real cost.
+    -- This is the LAST statement on purpose -- everything above it, the
+    -- round-end write burst included, is inside the measurement.
+    frame_health_state.prev_self = et.trap_Milliseconds() - fh_wall
 end
 
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)

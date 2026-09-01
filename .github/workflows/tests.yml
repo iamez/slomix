@@ -246,6 +246,14 @@ jobs:
           mapfile -t lua_files < <(git ls-files '*.lua')
           printf 'luac5.4 -p: %d tracked lua file(s)\n' "${#lua_files[@]}"
           for f in "${lua_files[@]}"; do luac5.4 -p "$f"; done
+      - name: Frame-health watcher harness (real tracker, stubbed et API)
+        # Drives proximity_tracker.lua's et_RunFrame through the four
+        # behaviours the watcher exists for -- including the P0 pairing pin
+        # (a slow tracker frame must be attributed to self, not the host)
+        # and the self=-1 aborted-body sentinel. Mutations of the pairing
+        # and of the end-of-frame self write were both watched failing
+        # before this landed (2026-09-02).
+        run: lua5.4 tests/lua/frame_health_harness.lua
       - name: Lua 5.4 semantics smoke (the classes that actually bit us)
         # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
         # fixes rely on, in the real interpreter: %d throws on non-integral
