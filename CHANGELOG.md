@@ -6,6 +6,29 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.43.0](https://github.com/iamez/slomix/compare/v1.42.0...v1.43.0) (2026-09-01)
+
+
+### Features
+
+* **proximity:** phase 5 opens — the inventory, and the ten boards ([#856](https://github.com/iamez/slomix/issues/856)) ([f6ff927](https://github.com/iamez/slomix/commit/f6ff927113119506aaf28b3d760aa868366d6261))
+* **proximity:** slice five — the round scope opens, and the canvases draw what the tracker saw ([#867](https://github.com/iamez/slomix/issues/867)) ([6fda0c5](https://github.com/iamez/slomix/commit/6fda0c5edd98b69a7f2898790f6d44827ee5b495))
+* **proximity:** slice four — carrier and objective intel, with the sparse species typed in advance ([#864](https://github.com/iamez/slomix/issues/864)) ([c39bb92](https://github.com/iamez/slomix/commit/c39bb922b3a88710ebd4c75449162a6f2878a4cb))
+* **proximity:** slice three — the competitive section, with the formulas quoted off the wire ([#863](https://github.com/iamez/slomix/issues/863)) ([bb54092](https://github.com/iamez/slomix/commit/bb540926ae7992f4209769cd1ee5ac43414b63d4))
+* **proximity:** slice two — thirteen instruments behind one scope, and the truth strip first ([#861](https://github.com/iamez/slomix/issues/861)) ([a548238](https://github.com/iamez/slomix/commit/a548238d8790f21c715b60cd652e08f901d6b35d))
+* **website:** the eight paths the app owed the pages it already built ([#855](https://github.com/iamez/slomix/issues/855)) ([575421f](https://github.com/iamez/slomix/commit/575421f039bf231bddaa7b47fee61ea1ca53a268))
+* **website:** the season consumers read [#862](https://github.com/iamez/slomix/issues/862)'s partial contract — the promised other half ([#869](https://github.com/iamez/slomix/issues/869)) ([26faad0](https://github.com/iamez/slomix/commit/26faad05cf5eb4166d96c77ad04d0defef821df4))
+
+
+### Bug Fixes
+
+* **proximity:** §8 instrument honesty — the harness stops trusting itself ([#858](https://github.com/iamez/slomix/issues/858)) ([f88437b](https://github.com/iamez/slomix/commit/f88437b9ad396a6869d68dde93ae60c02ef871e1))
+* **proximity:** §8 round three — rounds are the cohort, and the discovery half freezes too ([#868](https://github.com/iamez/slomix/issues/868)) ([8c38d3f](https://github.com/iamez/slomix/commit/8c38d3f7cefd506ddde883966d5123cd9711ca27))
+* **proximity:** §8 round two — the cohort freezes with the manifest, and digit shapes are not ranges ([#866](https://github.com/iamez/slomix/issues/866)) ([9c79322](https://github.com/iamez/slomix/commit/9c79322aacbeae90bf0c1ab74ecb7de4d50e243d))
+* **website:** an outage stops reading as ok — fifteen endpoints, three states, both frontends ([#862](https://github.com/iamez/slomix/issues/862)) ([d1f0190](https://github.com/iamez/slomix/commit/d1f0190f451a59625ddfbd2a8b08b1ce6028b844))
+* **website:** the rounds list orders by play time — the SELECT knew, the ORDER BY did not ([#871](https://github.com/iamez/slomix/issues/871)) ([140d17e](https://github.com/iamez/slomix/commit/140d17e7e38f9e34c5129aebe0a9494fca25ea7f))
+* **website:** the season surfaces speak the canonical round gate — 6,614 uncounted kills stop counting ([#865](https://github.com/iamez/slomix/issues/865)) ([ae2cf37](https://github.com/iamez/slomix/commit/ae2cf370088e492e63b63e93b3f3fd1d8050598f))
+
 ## [1.42.0](https://github.com/iamez/slomix/compare/v1.41.0...v1.42.0) (2026-08-31)
 
 
