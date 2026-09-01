@@ -439,7 +439,10 @@ function RatingComponents({ playerId }: { playerId: string }) {
         <div style={{ marginTop: 'var(--space-2)' }}>
           <Meta style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
             et rating {skill.data.player.et_rating.toFixed(3)} · rank {skill.data.player.rank} of {skill.data.player.total_rated}
-            {' · '}{skill.data.player.games_rated} games rated
+            {/* games_rated STORES rounds (skill_rating_service writes the
+              * aggregate's rounds into this column; the skill page labels
+              * it rounds) — "games" would overstate the sample ~2x. */}
+            {' · '}{skill.data.player.games_rated} rounds rated
             {skill.data.player.confidence != null && <> · confidence {skill.data.player.confidence.toFixed(2)}</>}
           </Meta>
           <div style={{ overflowX: 'auto' }}>
@@ -548,8 +551,12 @@ function RecentDetail({ playerId }: { playerId: string }) {
                       * round does not render like a counted one — it is
                       * absent from every total, and a row with kills but no
                       * explanation reads as a bug (Codex on #855). */}
-                    {r.round_status != null && !['completed', 'substitution'].includes(r.round_status) && (
-                      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-accent-warm)' }}> · {r.round_status} — not counted</span>
+                    {/* Both halves of "uncounted": a bad status, OR
+                      * is_valid FALSE under a completed status — the second
+                      * is real (sessions 151/147/146/128/127) and rendered
+                      * identically to counted rows until round six. */}
+                    {(r.is_valid === false || (r.round_status != null && !['completed', 'substitution'].includes(r.round_status))) && (
+                      <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-accent-warm)' }}> · {r.is_valid === false ? 'invalid' : r.round_status} — not counted</span>
                     )}
                   </td>
                   <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{r.round_number}</td>

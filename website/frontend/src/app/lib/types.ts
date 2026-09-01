@@ -2274,4 +2274,7 @@ export interface PlayerMatchRound {
   revives_given: number;
   round_status: string | null;
   gaming_session_id: number | null;
+  /** FALSE with a completed status is a real state — the uncounted mark
+   *  needs BOTH signals (Codex on #855, round six). */
+  is_valid: boolean | null;
 }

@@ -18,7 +18,8 @@
   "headshot_kills": 7,
   "revives_given": 2,
   "round_status": "completed",
-  "gaming_session_id": 101
+  "gaming_session_id": 101,
+  "is_valid": false
  },
  {
   "round_id": 10206,
@@ -39,7 +40,8 @@
   "headshot_kills": 6,
   "revives_given": 2,
   "round_status": "completed",
-  "gaming_session_id": 101
+  "gaming_session_id": 101,
+  "is_valid": false
  },
  {
   "round_id": 9838,
@@ -60,7 +62,8 @@
   "headshot_kills": 5,
   "revives_given": 3,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9837,
@@ -81,7 +84,8 @@
   "headshot_kills": 10,
   "revives_given": 2,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9836,
@@ -102,7 +106,8 @@
   "headshot_kills": 4,
   "revives_given": 1,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9835,
@@ -123,7 +128,8 @@
   "headshot_kills": 3,
   "revives_given": 5,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9833,
@@ -144,7 +150,8 @@
   "headshot_kills": 0,
   "revives_given": 0,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9832,
@@ -165,7 +172,8 @@
   "headshot_kills": 3,
   "revives_given": 4,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9831,
@@ -186,7 +194,8 @@
   "headshot_kills": 1,
   "revives_given": 0,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  },
  {
   "round_id": 9830,
@@ -207,6 +216,7 @@
   "headshot_kills": 2,
   "revives_given": 0,
   "round_status": "completed",
-  "gaming_session_id": 88
+  "gaming_session_id": 88,
+  "is_valid": true
  }
 ]

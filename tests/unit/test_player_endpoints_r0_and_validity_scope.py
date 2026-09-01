@@ -66,6 +66,10 @@ async def test_live_session_clock_is_a_timestamp_not_a_date():
     await _run(players_router.get_live_session(db=db))
     q = db.queries[0]
     assert "created_at >= NOW() - INTERVAL '30 minutes'" in q
+    assert q.count("is_bot_round IS DISTINCT FROM TRUE") >= 2, (
+        "both the window and the latest-round roster must drop bot rounds — "
+        "a bot test import must not announce a live evening"
+    )
     assert "round_date::timestamp" not in q, "round_date is date-only text; casting it compares against midnight"
     assert "round_number IN (1, 2)" in q
 
@@ -80,6 +84,7 @@ async def test_player_matches_excludes_r0_and_orders_monotonically():
     assert hits, f"matches query not seen; recorded: {db.queries}"
     q = hits[0]
     assert "round_number IN (1, 2)" in q, "R0 aggregates rendered as rounds"
+    assert "r.is_valid" in q, "the caller cannot mark uncounted rows it cannot see"
     assert "ORDER BY pcs.round_id DESC" in q, (
         "date-only ordering groups R2s ahead of R1s and can drop the newest rounds"
     )
@@ -202,3 +207,23 @@ async def test_zero_kill_player_with_rounds_is_not_a_404():
     # And the zero DPM extreme is a VALUE, not "no qualifying round".
     assert out["stats"]["highest_dpm"] == 0
     assert out["stats"]["lowest_dpm"] == 0
+
+
+@pytest.mark.asyncio
+async def test_session_detail_rounds_carry_the_same_trio_as_the_list():
+    """Round six: the detail endpoint carried only the status gate, so its
+    totals disagreed with the sessions LIST and with the weapons expansion
+    that promised to match it — sessions 151, 147, 146, 128 and 127 hold
+    completed-but-invalid rounds the list excluded and the detail counted."""
+    from website.backend.routers import sessions_router
+
+    db = _Recorder()
+    with pytest.raises(HTTPException):  # empty db -> 404, after the query ran
+        await sessions_router.get_stats_session_detail(154, db=db)
+    q = next(x for x in db.queries if "FROM rounds r" in x and "gaming_session_id = $1" in x)
+    assert "is_valid IS DISTINCT FROM FALSE" in q
+    assert "is_bot_round IS DISTINCT FROM TRUE" in q
+    assert (
+        "round_status IN ('completed', 'substitution') OR r.round_status IS NULL" in q
+        or "r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL" in q
+    )

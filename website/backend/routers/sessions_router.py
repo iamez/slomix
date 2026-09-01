@@ -1901,6 +1901,13 @@ async def get_stats_session_detail(
         FROM rounds r
         WHERE r.gaming_session_id = $1
           AND r.round_number IN (1, 2)
+          -- The SAME trio as the sessions list and the weapons expansion
+          -- (Codex on #855, round six): the detail carried only the status
+          -- gate, so its totals disagreed with both — sessions 151, 147,
+          -- 146, 128 and 127 hold completed-but-invalid rounds that the
+          -- list excluded and this endpoint counted.
+          AND r.is_valid IS DISTINCT FROM FALSE
+          AND r.is_bot_round IS DISTINCT FROM TRUE
           AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
         ORDER BY r.round_date, CAST(REPLACE(r.round_time, ':', '') AS INTEGER)
     """
