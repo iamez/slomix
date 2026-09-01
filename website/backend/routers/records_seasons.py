@@ -120,6 +120,21 @@ class SeasonSummary(BaseModel):
     end_date: str
     totals: SeasonTotals
     top_map: SeasonTopMap
+    #: ⛔ DECLARED HERE OR DROPPED THERE. Every query in this handler goes
+    #: through a helper that swallows its exception and returns 0/None, so with
+    #: the database down the totals below were all zero and nothing said so —
+    #: byte-identical to a season nobody has played yet. These three fields are
+    #: how it says so, and `response_model` removes any key the model omits, so
+    #: the first attempt at this fix on `/api/stats/overview` was eaten by its
+    #: own model. "ok" when every query answered, "partial" when one did not.
+    #: ⛔ REQUIRED, no default. A default would let `response_model` INVENT
+    #: `status: "ok"` for a handler path that forgot to answer the question —
+    #: the model quietly asserting success on the endpoint's behalf, which is
+    #: the exact failure this field exists to end. Required means a path that
+    #: forgets fails loudly instead.
+    status: str
+    note: str | None
+    failed_metrics: list[str]
 
 
 @router.get("/seasons/current/summary", response_model=SeasonSummary)
@@ -133,18 +148,27 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
     start_str = start_date.strftime("%Y-%m-%d")
     end_str = end_date.strftime("%Y-%m-%d")
 
-    async def safe_val(query: str, params: tuple | None = None, default=0):
+    # ⛔ A SWALLOWED FAILURE HAS TO LEAVE A MARK ON THE ANSWER, not only in the
+    # log. Every one of these defaults (0, None) is a value the caller cannot
+    # tell from a real measurement, so without this list the endpoint answers
+    # 200 with a blank season during a total outage.
+    failures: list[str] = []
+
+    async def safe_val(query: str, params: tuple | None = None, default=0,
+                       metric: str = ""):
         try:
             return await db.fetch_val(query, params)
         except Exception as e:
-            logger.error(f"[season_summary] query failed: {e}")
+            logger.error(f"[season_summary] query failed ({metric or '?'}): {e}")
+            failures.append(metric or "unknown")
             return default
 
-    async def safe_one(query: str, params: tuple | None = None):
+    async def safe_one(query: str, params: tuple | None = None, metric: str = ""):
         try:
             return await db.fetch_one(query, params)
         except Exception as e:
-            logger.error(f"[season_summary] query failed: {e}")
+            logger.error(f"[season_summary] query failed ({metric or '?'}): {e}")
+            failures.append(metric or "unknown")
             return None
 
     round_status_clause = "AND (round_status IN ('completed', 'substitution') OR round_status IS NULL)"
@@ -233,6 +257,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """,
             (start_str, end_str),
             default=None,
+            metric="rounds_count"
         )
         sessions_count = await safe_val(
             """
@@ -243,6 +268,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """,
             (start_str, end_str),
             default=None,
+            metric="sessions_count"
         )
         maps_count = await safe_val(
             """
@@ -253,6 +279,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """,
             (start_str, end_str),
             default=None,
+            metric="maps_count"
         )
         # Same shape as the primary variant: rounds has no player columns,
         # so the bot filter never belonged on this query.
@@ -264,6 +291,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             """,
             (start_str, end_str),
             default=None,
+            metric="active_days"
         )
         top_map_row = await safe_one(
             """
@@ -276,6 +304,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             LIMIT 1
             """,
             (start_str, end_str),
+            metric="top_map_row"
         )
         players_count = await safe_val(
             """
@@ -284,6 +313,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
             """,
             (start_str, end_str),
+            metric="players_count"
         )
         kills_total = await safe_val(
             """
@@ -292,6 +322,7 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             WHERE round_number IN (1, 2) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) >= CAST($1 AS TEXT) AND SUBSTR(CAST(round_date AS TEXT), 1, 10) <= CAST($2 AS TEXT) AND player_name NOT LIKE '[BOT]%' AND (player_guid IS NULL OR player_guid NOT LIKE 'OMNIBOT%') AND NOT EXISTS (SELECT 1 FROM rounds _vr WHERE _vr.id = player_comprehensive_stats.round_id AND (_vr.is_valid IS FALSE OR _vr.is_bot_round IS TRUE OR (_vr.round_status IS NOT NULL AND _vr.round_status NOT IN ('completed', 'substitution'))))
             """,
             (start_str, end_str),
+            metric="kills_total"
         )
 
         # Legacy SQLite fallback removed — PostgreSQL-only (sessions table does not exist)
@@ -316,6 +347,17 @@ async def get_current_season_summary(db: DatabaseAdapter = Depends(get_db)):
             "avg_rounds_per_day": avg_rounds,
         },
         "top_map": {"name": top_map, "plays": top_map_plays},
+        # ⛔ ZEROS THAT ARE MISSING, NOT MEASURED. Every figure above comes back
+        # 0 when its query raised, and 0 is a perfectly ordinary season total —
+        # so without these the reader cannot tell a dead database from a quiet
+        # quarter. Derived from the failure LIST, never from the values: reading
+        # it off the zeros would be circular, because a genuinely empty season
+        # produces the same zeros.
+        "status": "ok" if not failures else "partial",
+        "note": None if not failures else (
+            f"{len(failures)} of the season queries failed; the figures they "
+            f"feed are missing, not zero"),
+        "failed_metrics": failures,
     }
 
 
@@ -389,6 +431,18 @@ class SeasonLeadersResponse(BaseModel):
     start_date: str
     end_date: str
     leaders: SeasonLeaders
+    #: Same contract as SeasonSummary. Thirteen separate lookups here, each
+    #: swallowing its own exception and returning None — and a `null` leader is
+    #: exactly what a category with no data looks like, so an outage produced
+    #: thirteen plausible nulls and no sign at all.
+    #: ⛔ REQUIRED, no default. A default would let `response_model` INVENT
+    #: `status: "ok"` for a handler path that forgot to answer the question —
+    #: the model quietly asserting success on the endpoint's behalf, which is
+    #: the exact failure this field exists to end. Required means a path that
+    #: forgets fails loudly instead.
+    status: str
+    note: str | None
+    failed_metrics: list[str]
 
 
 @router.get("/seasons/current/leaders", response_model=SeasonLeadersResponse)
@@ -560,37 +614,76 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
     def _swap_date_field(query: str, date_field: str) -> str:
         return query.replace("round_date", date_field)
 
-    async def _fetch_one_with_field(query: str, date_field: str):
+    # Same contract as the summary endpoint above: a `null` leader is what a
+    # category with no data looks like, so a failure has to be recorded or it
+    # arrives as a plausible answer.
+    leader_failures: list[str] = []
+
+    async def _fetch_one_with_field(query: str, date_field: str,
+                                    metric: str = ""):
         try:
             return await db.fetch_one(
                 _swap_date_field(query, date_field),
                 (start_date_str, end_date_str),
             )
         except Exception:
-            logger.debug("DB query failed for date_field=%s", date_field, exc_info=True)
+            # ⚠️ WARNING, not debug. At debug level a production outage here
+            # left no trace at all: thirteen nulls in the response and nothing
+            # in the log to say why.
+            logger.warning("DB query failed for %s (date_field=%s)",
+                           metric or "?", date_field, exc_info=True)
+            # ⚠️ The CATEGORY, not the date column. All thirteen lookups use the
+            # same `round_date`, so recording the column collapsed thirteen
+            # failures into one entry and the note then said "1 leader queries
+            # failed" during a total outage — an undercount that reads as a
+            # single missing category.
+            leader_failures.append(metric or "unknown")
             return None
 
-    async def _fetch_one_with_fallback(query: str):
-        return await _fetch_one_with_field(query, "round_date")
+    def _forget_failure(metric: str) -> None:
+        """Undo one recorded failure after a retry answered.
+
+        Removes a single occurrence rather than every one: if the same category
+        failed twice for different reasons, only the attempt that was recovered
+        is forgotten.
+        """
+        if metric in leader_failures:
+            leader_failures.remove(metric)
+
+    async def _fetch_one_with_fallback(query: str, metric: str = ""):
+        return await _fetch_one_with_field(query, "round_date", metric)
 
     async def fetch_leaders():
-        dmg_given = await _fetch_one_with_fallback(dmg_given_query)
-        dmg_recv = await _fetch_one_with_fallback(dmg_recv_query)
-        team_dmg = await _fetch_one_with_fallback(team_dmg_query)
-        revives = await _fetch_one_with_fallback(revives_query)
-        deaths = await _fetch_one_with_fallback(deaths_query)
-        gibs = await _fetch_one_with_fallback(gibs_query)
-        objectives = await _fetch_one_with_fallback(objectives_query)
-        xp = await _fetch_one_with_fallback(xp_query)
-        kills = await _fetch_one_with_fallback(kills_query)
-        dpm = await _fetch_one_with_fallback(dpm_query)
-        time_alive = await _fetch_one_with_fallback(time_alive_query)
+        dmg_given = await _fetch_one_with_fallback(dmg_given_query, "dmg_given")
+        dmg_recv = await _fetch_one_with_fallback(dmg_recv_query, "dmg_recv")
+        team_dmg = await _fetch_one_with_fallback(team_dmg_query, "team_dmg")
+        revives = await _fetch_one_with_fallback(revives_query, "revives")
+        deaths = await _fetch_one_with_fallback(deaths_query, "deaths")
+        gibs = await _fetch_one_with_fallback(gibs_query, "gibs")
+        objectives = await _fetch_one_with_fallback(objectives_query, "objectives")
+        xp = await _fetch_one_with_fallback(xp_query, "xp")
+        kills = await _fetch_one_with_fallback(kills_query, "kills")
+        dpm = await _fetch_one_with_fallback(dpm_query, "dpm")
+        # ⛔ A RECOVERED VALUE IS NOT A FAILURE. The primary query raising and the
+        # compatibility fallback succeeding is the schema-drift path working as
+        # designed — but the first attempt had already named the category in
+        # `leader_failures`, so the response carried usable data AND told every
+        # consumer to suppress it. The marker is dropped when the retry answers.
+        time_alive = await _fetch_one_with_fallback(time_alive_query, "time_alive")
         if time_alive is None:
-            time_alive = await _fetch_one_with_fallback(fallback_time_alive)
-        time_dead = await _fetch_one_with_fallback(time_dead_query)
+            time_alive = await _fetch_one_with_fallback(fallback_time_alive, "time_alive")
+            if time_alive is not None:
+                _forget_failure("time_alive")
+        time_dead = await _fetch_one_with_fallback(time_dead_query, "time_dead")
         if time_dead is None:
-            time_dead = await _fetch_one_with_fallback(fallback_time_dead)
-        session = await _fetch_one_with_field(session_query, "round_date")
+            time_dead = await _fetch_one_with_fallback(fallback_time_dead, "time_dead")
+            if time_dead is not None:
+                _forget_failure("time_dead")
+        # ⚠️ `metric=` was missing here, so a longest-session failure was
+        # recorded as "unknown" — the response said "partial" and refused to say
+        # WHICH leader was gone, which is the one thing the field is for.
+        session = await _fetch_one_with_field(session_query, "round_date",
+                                              "longest_session")
         return {
             "damage_given": dmg_given,
             "damage_received": dmg_recv,
@@ -629,6 +722,17 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
         display_name = await resolve_display_name(db, row[0], row[1] or "Unknown")
         return {"player": display_name, "value": cast_fn(row[2])}
 
+    def _leaders_status() -> dict:
+        # Built after the leaders are resolved, because `leader_failures` is
+        # appended to while they are being fetched.
+        return {
+            "status": "ok" if not leader_failures else "partial",
+            "note": None if not leader_failures else (
+                f"{len(leader_failures)} leader queries failed; the missing "
+                f"categories are unknown, not empty"),
+            "failed_metrics": leader_failures,
+        }
+
     return {
         "start_date": str(start_date),
         "end_date": str(end_date),
@@ -649,5 +753,10 @@ async def get_season_leaders(db: DatabaseAdapter = Depends(get_db)):
                 "rounds": int(session[1]) if session else 0,
                 "date": str(session[2]) if session else None
             } if session else None
-        }
+        },
+        # ⚠️ EVALUATED AFTER the dict above, which is the point: dict literals
+        # are built left to right, and `leader_failures` is appended to while
+        # those thirteen lookups run. Put this first and it would report the
+        # failures of the PREVIOUS request — always "ok".
+        **_leaders_status(),
     }

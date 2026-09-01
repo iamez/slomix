@@ -4254,18 +4254,43 @@
       "title": "End Date",
       "type": "string"
      },
+     "failed_metrics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Metrics",
+      "type": "array"
+     },
      "leaders": {
       "$ref": "#/components/schemas/SeasonLeaders"
      },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
      "start_date": {
       "title": "Start Date",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
       "type": "string"
      }
     },
     "required": [
      "start_date",
      "end_date",
-     "leaders"
+     "leaders",
+     "status",
+     "note",
+     "failed_metrics"
     ],
     "title": "SeasonLeadersResponse",
     "type": "object"
@@ -4277,12 +4302,34 @@
       "title": "End Date",
       "type": "string"
      },
+     "failed_metrics": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Failed Metrics",
+      "type": "array"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
      "season_id": {
       "title": "Season Id",
       "type": "string"
      },
      "start_date": {
       "title": "Start Date",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
       "type": "string"
      },
      "top_map": {
@@ -4297,7 +4344,10 @@
      "start_date",
      "end_date",
      "totals",
-     "top_map"
+     "top_map",
+     "status",
+     "note",
+     "failed_metrics"
     ],
     "title": "SeasonSummary",
     "type": "object"
