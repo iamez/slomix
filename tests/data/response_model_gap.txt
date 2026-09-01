@@ -6,224 +6,225 @@
 # Deleting a line is how coverage advances: type the route, delete its line, in
 # the SAME commit. Adding a line needs a reason on the line.
 #
-# Seeded 2026-09-01 from origin/main: 220 of 263 routes.
-auth.py::callback
-auth.py::get_current_user
-auth.py::get_link_status
-auth.py::get_my_aliases
-auth.py::link_player
-auth.py::login
-auth.py::logout
-auth.py::search_players
-auth.py::set_my_display_name
-auth.py::start_link_flow
-auth.py::suggested_players_for_me
-auth.py::unlink_discord_account
-auth.py::unlink_player
-availability.py::confirm_link_token
-availability.py::create_link_token
-availability.py::create_promotion_campaign
-availability.py::delete_subscription_channel
-availability.py::get_availability_access
-availability.py::get_my_availability
-availability.py::get_preferences
-availability.py::get_promotion_preferences
-availability.py::get_settings
-availability.py::get_subscriptions
-availability.py::get_today_promotion_campaign
-availability.py::preview_promotion_campaign
-availability.py::update_preferences
-availability.py::upsert_availability_entry
-availability.py::upsert_promotion_preferences
-availability.py::upsert_settings
-availability.py::upsert_subscription
-bets_router.py::get_bets_leaderboard
-bets_router.py::get_current_market
-bets_router.py::get_wallet
-bets_router.py::open_market
-bets_router.py::place_bet
-bets_router.py::settle_market
-challenges_router.py::list_challenges
-challenges_router.py::upsert_challenge
-client_error_router.py::report_client_error
-diagnostics_router.py::get_diagnostics
-diagnostics_router.py::get_kis_shadow_audit
-diagnostics_router.py::get_live_status
-diagnostics_router.py::get_lua_webhook_diagnostics
-diagnostics_router.py::get_monitoring_status
-diagnostics_router.py::get_round_linkage_diagnostics
-diagnostics_router.py::get_server_activity_history
-diagnostics_router.py::get_spawn_audit
-diagnostics_router.py::get_status
-diagnostics_router.py::get_time_audit
-diagnostics_router.py::get_voice_activity_history
-diagnostics_router.py::list_formulas
-greatshot.py::download_highlight_clip
-greatshot.py::download_render_video
-greatshot.py::download_report_json
-greatshot.py::download_report_txt
-greatshot.py::get_crossref
-greatshot.py::get_greatshot_detail
-greatshot.py::get_greatshot_status
-greatshot.py::list_greatshot
-greatshot.py::queue_highlight_render
-greatshot.py::upload_greatshot
-greatshot_topshots.py::get_top_accuracy
-greatshot_topshots.py::get_top_damage
-greatshot_topshots.py::get_top_kills
-greatshot_topshots.py::get_top_multikills
-greatshot_topshots.py::get_top_players
-live.py::feed
-live.py::ingest_events
-live.py::state
-live.py::status
-planning.py::add_planning_name_suggestion
-planning.py::create_today_planning_room
-planning.py::get_today_planning_room
-planning.py::join_today_planning_room
-planning.py::ping_need_more
-planning.py::save_planning_teams
-planning.py::suggest_balanced_teams
-planning.py::vote_planning_name
-players_profile_router.py::get_player_awards
-players_profile_router.py::get_player_card
-players_profile_router.py::get_player_memory_card
-players_profile_router.py::get_player_profile
-players_profile_router.py::get_player_wrapped
-players_router.py::compare_players
-players_router.py::get_hold_probability
-players_router.py::get_live_session
-players_router.py::get_player_form
-players_router.py::get_player_matches
-players_router.py::get_player_round_details
-players_router.py::get_player_rounds
-players_router.py::get_player_stats
-players_router.py::link_player
-predictions.py::get_recent_predictions
-proximity_combat.py::get_proximity_classes
-proximity_combat.py::get_proximity_duos
-proximity_combat.py::get_proximity_engagements
-proximity_competitive.py::get_clutches
-proximity_competitive.py::get_first_blood_conversion
-proximity_competitive.py::get_man_advantage
-proximity_competitive.py::get_personal_bests
-proximity_competitive.py::get_player_card
-proximity_competitive.py::get_side_splits
-proximity_competitive.py::get_stagger_index
-proximity_competitive.py::get_v7_status
-proximity_competitive.py::get_wave_cycles
-proximity_dashboard.py::get_proximity_dashboard
-proximity_dashboard.py::get_proximity_kill_outcomes
-proximity_dashboard.py::get_proximity_kill_outcomes_player_stats
-proximity_dashboard.py::get_proximity_scopes
-proximity_dashboard.py::get_proximity_summary
-proximity_events.py::get_proximity_event
-proximity_events.py::get_proximity_events
-proximity_journey.py::get_player_journey
-proximity_movement.py::get_proximity_movers
-proximity_movement.py::get_proximity_reactions
-proximity_objectives.py::get_proximity_carrier_events
-proximity_objectives.py::get_proximity_carrier_kills
-proximity_objectives.py::get_proximity_carrier_returns
-proximity_objectives.py::get_proximity_construction_events
-proximity_objectives.py::get_proximity_escort_credits
-proximity_objectives.py::get_proximity_objective_focus
-proximity_objectives.py::get_proximity_objective_pressure
-proximity_objectives.py::get_proximity_objective_runs
-proximity_objectives.py::get_proximity_vehicle_progress
-proximity_player.py::get_proximity_player_profile
-proximity_player.py::get_proximity_player_radar
-proximity_positions.py::get_proximity_combat_position_stats
-proximity_positions.py::get_proximity_combat_positions_danger_zones
-proximity_positions.py::get_proximity_combat_positions_heatmap
-proximity_positions.py::get_proximity_combat_positions_kill_lines
-proximity_positions.py::get_proximity_hit_regions_by_weapon
-proximity_positions.py::get_proximity_hit_regions_headshot_rates
-proximity_positions.py::get_proximity_push_deaths_heatmap
-proximity_quality.py::get_proximity_quality
-proximity_round.py::get_proximity_round_team_comparison
-proximity_round.py::get_proximity_round_timeline
-proximity_round.py::get_proximity_round_tracks
-proximity_scoring.py::get_proximity_leaderboards
-proximity_scoring.py::get_proximity_revives
-proximity_scoring.py::get_proximity_weapon_accuracy
-proximity_support.py::get_proximity_movement_stats
-proximity_support.py::get_proximity_support_summary
-proximity_teamplay.py::get_proximity_aim_lock
-proximity_teamplay.py::get_proximity_cohesion
-proximity_teamplay.py::get_proximity_crossfire_angles
-proximity_teamplay.py::get_proximity_focus_fire
-proximity_teamplay.py::get_proximity_lua_trades
-proximity_teamplay.py::get_proximity_pushes
-proximity_teamplay.py::get_proximity_spawn_timing
-proximity_teamplay.py::get_proximity_teamplay
-proximity_trades.py::get_proximity_trade_events
-proximity_trades.py::get_proximity_trades_player_stats
-proximity_trades.py::get_proximity_trades_summary
-records_awards.py::get_player_awards
-records_matches.py::get_match_details
-records_matches.py::get_round_vs_stats
-records_player.py::get_player_vs_stats
-records_trends.py::get_retro_viz_gallery
-replay_router.py::get_player_paths
-replay_router.py::get_player_positions
-replay_router.py::get_round_timeline
-replay_router.py::get_round_web
-rivalries_router.py::get_head_to_head
-rivalries_router.py::get_player_rivalries
-rivalries_router.py::get_rivalry_leaderboard
-season_awards_router.py::add_manual_award
-season_awards_router.py::recompute_season_awards
-sessions_router.py::get_matches
-sessions_router.py::get_session_details
-sessions_router.py::get_session_good_night
-sessions_router.py::get_session_graph_stats
-sessions_router.py::get_session_mvp
-sessions_router.py::get_session_score
-sessions_router.py::get_session_verdicts
-sessions_router.py::get_stats_session_detail
-sessions_router.py::get_stats_sessions
-sessions_router.py::post_session_mvp
-skill_router.py::get_adjusted_lifetime
-skill_router.py::get_composite_stats
-skill_router.py::get_et_performance_v3_shadow
-skill_router.py::get_movers
-skill_router.py::get_player_form
-skill_router.py::get_player_skill
-skill_router.py::get_player_skill_history
-skill_router.py::get_s_effort
-skill_router.py::get_skill_formula
-skill_router.py::get_skill_leaderboard
-skill_router.py::get_ssr
-storytelling_router.py::get_best_lives
-storytelling_router.py::get_box_score
-storytelling_router.py::get_enabler
-storytelling_router.py::get_gravity
-storytelling_router.py::get_kill_impact_details
-storytelling_router.py::get_kill_impact_leaderboard
-storytelling_router.py::get_kill_matrix
-storytelling_router.py::get_kis_formula
-storytelling_router.py::get_lurker_profile
-storytelling_router.py::get_moments
-storytelling_router.py::get_momentum
-storytelling_router.py::get_momentum_session
-storytelling_router.py::get_movement
-storytelling_router.py::get_narrative
-storytelling_router.py::get_player_narratives
-storytelling_router.py::get_pwc_formula
-storytelling_router.py::get_space_created
-storytelling_router.py::get_storytelling_scopes
-storytelling_router.py::get_team_synergy
-storytelling_router.py::get_useless_defense_deaths
-storytelling_router.py::get_win_contribution
-uploads.py::abort_resumable_upload
-uploads.py::delete_upload
-uploads.py::download_upload
-uploads.py::finalize_resumable_upload
-uploads.py::get_upload_poster
-uploads.py::init_resumable_upload
-uploads.py::popular_tags
-uploads.py::resumable_offset
-uploads.py::resumable_patch
-uploads.py::sweep_expired_uploads
-uploads.py::upload_file
+# Keyed by ROUTE (module::METHOD path), not by handler: one handler can carry
+# several decorators. Seeded 2026-09-01 from origin/main: 220 of 263 routes.
+auth.py::DELETE /link
+auth.py::GET /account/aliases
+auth.py::GET /callback
+auth.py::GET /link/start
+auth.py::GET /link/status
+auth.py::GET /login
+auth.py::GET /me
+auth.py::GET /players/search
+auth.py::GET /players/suggestions
+auth.py::POST /account/display-name
+auth.py::POST /discord/unlink
+auth.py::POST /link
+auth.py::POST /logout
+availability.py::DELETE /subscriptions/{channel_type}
+availability.py::GET /access
+availability.py::GET /me
+availability.py::GET /preferences
+availability.py::GET /promotion-preferences
+availability.py::GET /promotions/campaign
+availability.py::GET /promotions/preview
+availability.py::GET /settings
+availability.py::GET /subscriptions
+availability.py::POST (router root)
+availability.py::POST /link-confirm
+availability.py::POST /link-token
+availability.py::POST /preferences
+availability.py::POST /promotion-preferences
+availability.py::POST /promotions/campaigns
+availability.py::POST /settings
+availability.py::POST /subscriptions
+bets_router.py::GET /leaderboard
+bets_router.py::GET /market/current
+bets_router.py::GET /wallet
+bets_router.py::POST /market
+bets_router.py::POST /market/{market_id}/bet
+bets_router.py::POST /market/{market_id}/settle
+challenges_router.py::GET /challenges
+challenges_router.py::POST /challenges
+client_error_router.py::POST /client-error
+diagnostics_router.py::GET /diagnostics
+diagnostics_router.py::GET /diagnostics/kis-shadow-audit
+diagnostics_router.py::GET /diagnostics/lua-webhook
+diagnostics_router.py::GET /diagnostics/round-linkage
+diagnostics_router.py::GET /diagnostics/spawn-audit
+diagnostics_router.py::GET /diagnostics/time-audit
+diagnostics_router.py::GET /formulas
+diagnostics_router.py::GET /live-status
+diagnostics_router.py::GET /monitoring/status
+diagnostics_router.py::GET /server-activity/history
+diagnostics_router.py::GET /status
+diagnostics_router.py::GET /voice-activity/history
+greatshot.py::GET /greatshot
+greatshot.py::GET /greatshot/{demo_id}
+greatshot.py::GET /greatshot/{demo_id}/crossref
+greatshot.py::GET /greatshot/{demo_id}/highlights/{highlight_id}/clip
+greatshot.py::GET /greatshot/{demo_id}/renders/{render_id}/video
+greatshot.py::GET /greatshot/{demo_id}/report.json
+greatshot.py::GET /greatshot/{demo_id}/report.txt
+greatshot.py::GET /greatshot/{demo_id}/status
+greatshot.py::POST /greatshot/upload
+greatshot.py::POST /greatshot/{demo_id}/highlights/render
+greatshot_topshots.py::GET /greatshot/topshots/accuracy
+greatshot_topshots.py::GET /greatshot/topshots/damage
+greatshot_topshots.py::GET /greatshot/topshots/kills
+greatshot_topshots.py::GET /greatshot/topshots/multikills
+greatshot_topshots.py::GET /greatshot/topshots/players
+live.py::GET /feed
+live.py::GET /state
+live.py::GET /status
+live.py::POST /events
+planning.py::GET /today
+planning.py::POST /today/balanced-teams
+planning.py::POST /today/create
+planning.py::POST /today/join
+planning.py::POST /today/ping
+planning.py::POST /today/suggestions
+planning.py::POST /today/teams
+planning.py::POST /today/vote
+players_profile_router.py::GET /players/{identifier}/awards
+players_profile_router.py::GET /players/{identifier}/card
+players_profile_router.py::GET /players/{identifier}/memory-card
+players_profile_router.py::GET /players/{identifier}/profile
+players_profile_router.py::GET /players/{identifier}/wrapped
+players_router.py::GET /player/{player_name}/matches
+players_router.py::GET /rounds/{round_id}/player/{player_guid}/details
+players_router.py::GET /stats/compare
+players_router.py::GET /stats/hold-probability
+players_router.py::GET /stats/live-session
+players_router.py::GET /stats/player/{player_name}
+players_router.py::GET /stats/player/{player_name}/form
+players_router.py::GET /stats/player/{player_name}/rounds
+players_router.py::POST /player/link
+predictions.py::GET /recent
+proximity_combat.py::GET /proximity/classes
+proximity_combat.py::GET /proximity/duos
+proximity_combat.py::GET /proximity/engagements
+proximity_competitive.py::GET /proximity/competitive/clutch
+proximity_competitive.py::GET /proximity/competitive/first-blood
+proximity_competitive.py::GET /proximity/competitive/man-advantage
+proximity_competitive.py::GET /proximity/competitive/personal-bests
+proximity_competitive.py::GET /proximity/competitive/player-card
+proximity_competitive.py::GET /proximity/competitive/side-splits
+proximity_competitive.py::GET /proximity/competitive/stagger
+proximity_competitive.py::GET /proximity/competitive/wave-cycles
+proximity_competitive.py::GET /proximity/v7-status
+proximity_dashboard.py::GET /proximity/dashboard
+proximity_dashboard.py::GET /proximity/kill-outcomes
+proximity_dashboard.py::GET /proximity/kill-outcomes/player-stats
+proximity_dashboard.py::GET /proximity/scopes
+proximity_dashboard.py::GET /proximity/summary
+proximity_events.py::GET /proximity/event/{event_id}
+proximity_events.py::GET /proximity/events
+proximity_journey.py::GET /proximity/player-journey
+proximity_movement.py::GET /proximity/movers
+proximity_movement.py::GET /proximity/reactions
+proximity_objectives.py::GET /proximity/carrier-events
+proximity_objectives.py::GET /proximity/carrier-kills
+proximity_objectives.py::GET /proximity/carrier-returns
+proximity_objectives.py::GET /proximity/construction-events
+proximity_objectives.py::GET /proximity/escort-credits
+proximity_objectives.py::GET /proximity/objective-focus
+proximity_objectives.py::GET /proximity/objective-pressure
+proximity_objectives.py::GET /proximity/objective-runs
+proximity_objectives.py::GET /proximity/vehicle-progress
+proximity_player.py::GET /proximity/player/{guid}/profile
+proximity_player.py::GET /proximity/player/{guid}/radar
+proximity_positions.py::GET /proximity/combat-position-stats
+proximity_positions.py::GET /proximity/combat-positions/danger-zones
+proximity_positions.py::GET /proximity/combat-positions/heatmap
+proximity_positions.py::GET /proximity/combat-positions/kill-lines
+proximity_positions.py::GET /proximity/hit-regions/by-weapon
+proximity_positions.py::GET /proximity/hit-regions/headshot-rates
+proximity_positions.py::GET /proximity/push-deaths/heatmap
+proximity_quality.py::GET /proximity/quality
+proximity_round.py::GET /proximity/round/{round_id}/team-comparison
+proximity_round.py::GET /proximity/round/{round_id}/timeline
+proximity_round.py::GET /proximity/round/{round_id}/tracks
+proximity_scoring.py::GET /proximity/leaderboards
+proximity_scoring.py::GET /proximity/revives
+proximity_scoring.py::GET /proximity/weapon-accuracy
+proximity_support.py::GET /proximity/movement-stats
+proximity_support.py::GET /proximity/support-summary
+proximity_teamplay.py::GET /proximity/aim-lock
+proximity_teamplay.py::GET /proximity/cohesion
+proximity_teamplay.py::GET /proximity/crossfire-angles
+proximity_teamplay.py::GET /proximity/focus-fire
+proximity_teamplay.py::GET /proximity/lua-trades
+proximity_teamplay.py::GET /proximity/pushes
+proximity_teamplay.py::GET /proximity/spawn-timing
+proximity_teamplay.py::GET /proximity/teamplay
+proximity_trades.py::GET /proximity/trades/events
+proximity_trades.py::GET /proximity/trades/player-stats
+proximity_trades.py::GET /proximity/trades/summary
+records_awards.py::GET /players/{identifier}/awards
+records_matches.py::GET /rounds/{round_id}/vs-stats
+records_matches.py::GET /stats/matches/{match_id}
+records_player.py::GET /player/{guid}/vs-stats
+records_trends.py::GET /retro-viz/gallery
+replay_router.py::GET /replay/round/{round_id}/paths
+replay_router.py::GET /replay/round/{round_id}/positions
+replay_router.py::GET /replay/round/{round_id}/timeline
+replay_router.py::GET /replay/round/{round_id}/web
+rivalries_router.py::GET /rivalries/h2h/{guid1}/{guid2}
+rivalries_router.py::GET /rivalries/leaderboard
+rivalries_router.py::GET /rivalries/player/{guid}
+season_awards_router.py::POST /seasons/awards
+season_awards_router.py::POST /seasons/awards/recompute
+sessions_router.py::GET /sessions/{date}
+sessions_router.py::GET /sessions/{date}/graphs
+sessions_router.py::GET /stats/matches
+sessions_router.py::GET /stats/session-score/{date}
+sessions_router.py::GET /stats/session/{gaming_session_id}/detail
+sessions_router.py::GET /stats/session/{gaming_session_id}/good-night
+sessions_router.py::GET /stats/session/{gaming_session_id}/mvp
+sessions_router.py::GET /stats/session/{gaming_session_id}/verdicts
+sessions_router.py::GET /stats/sessions
+sessions_router.py::POST /stats/session/{gaming_session_id}/mvp
+skill_router.py::GET /skill/adjusted-lifetime
+skill_router.py::GET /skill/composite
+skill_router.py::GET /skill/formula
+skill_router.py::GET /skill/leaderboard
+skill_router.py::GET /skill/movers
+skill_router.py::GET /skill/player/{identifier}
+skill_router.py::GET /skill/player/{identifier}/form
+skill_router.py::GET /skill/player/{identifier}/history
+skill_router.py::GET /skill/s-effort
+skill_router.py::GET /skill/ssr
+skill_router.py::GET /skill/v3-shadow
+storytelling_router.py::GET /storytelling/best-lives
+storytelling_router.py::GET /storytelling/box-score
+storytelling_router.py::GET /storytelling/enabler
+storytelling_router.py::GET /storytelling/formula
+storytelling_router.py::GET /storytelling/gravity
+storytelling_router.py::GET /storytelling/kill-impact
+storytelling_router.py::GET /storytelling/kill-impact/details
+storytelling_router.py::GET /storytelling/kill-matrix
+storytelling_router.py::GET /storytelling/lurker-profile
+storytelling_router.py::GET /storytelling/moments
+storytelling_router.py::GET /storytelling/momentum
+storytelling_router.py::GET /storytelling/momentum-session
+storytelling_router.py::GET /storytelling/movement
+storytelling_router.py::GET /storytelling/narrative
+storytelling_router.py::GET /storytelling/player-narratives
+storytelling_router.py::GET /storytelling/scopes
+storytelling_router.py::GET /storytelling/space-created
+storytelling_router.py::GET /storytelling/synergy
+storytelling_router.py::GET /storytelling/useless-defense-deaths
+storytelling_router.py::GET /storytelling/win-contribution
+storytelling_router.py::GET /storytelling/win-contribution/formula
+uploads.py::DELETE /resumable/{session_id}
+uploads.py::DELETE /{upload_id}
+uploads.py::GET /tags/popular
+uploads.py::GET /{upload_id}/download
+uploads.py::GET /{upload_id}/poster
+uploads.py::HEAD /resumable/{session_id}
+uploads.py::PATCH /resumable/{session_id}
+uploads.py::POST (router root)
+uploads.py::POST /resumable
+uploads.py::POST /resumable/{session_id}/finalize
+uploads.py::POST /sweep-expired

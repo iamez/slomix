@@ -59,12 +59,32 @@ def _routes() -> list[tuple[str, str, str, str, bool]]:
     return out
 
 
+def _key(mod: str, method: str, path: str) -> str:
+    """⚠️ `(router root)` rather than an empty path. Two routes are declared as
+    `@router.post("")` — the router's own prefix — and rendering that as
+    `availability.py::POST ` puts a TRAILING SPACE in the record, which the
+    file reader then strips. The set built from the code and the set read back
+    from the file disagreed by exactly those two lines, in both directions at
+    once. A key must survive a round trip through a text file."""
+    return f"{mod}::{method} {path or '(router root)'}"
+
+
 def _untyped_keys() -> set[str]:
-    return {f"{mod}::{fn}" for mod, fn, _, _, typed in _routes() if not typed}
+    """Keyed by ROUTE, not by handler.
+
+    ⛔ One handler can carry several decorators. `records_weapons.get_weapon_stats_by_player`
+    already does — `/stats/weapons/by-player` and `/stats/weapons/by_player`,
+    an alias pair — and it happens to be typed today, so keying by handler
+    collapsed two routes into one entry without changing a number. The day such
+    a handler is untyped, the file and the code would disagree by a line that
+    nothing reports. Codex on #860.
+    """
+    return {_key(mod, method, path)
+            for mod, fn, method, path, typed in _routes() if not typed}
 
 
 def _recorded() -> set[str]:
-    return {ln.split("#")[0].strip() for ln in GAP_FILE.read_text().splitlines()
+    return {ln.split("#")[0].strip() for ln in GAP_FILE.read_text(encoding="utf-8").splitlines()
             if ln.strip() and not ln.lstrip().startswith("#")}
 
 
@@ -78,12 +98,17 @@ def test_the_extractor_sees_both_kinds():
     """
     routes = _routes()
     assert len(routes) > 200, f"only {len(routes)} routes parsed"
-    typed = {f"{m}::{h}" for m, h, _, _, t in routes if t}
-    untyped = {f"{m}::{h}" for m, h, _, _, t in routes if not t}
+    typed = {_key(m, meth, path) for m, h, meth, path, t in routes if t}
+    untyped = {_key(m, meth, path) for m, h, meth, path, t in routes if not t}
     assert typed and untyped, "the extractor put every route in one bucket"
-    assert "records_awards.py::get_records" in typed
-    assert "proximity_combat.py::get_proximity_duos" in untyped
+    assert "records_awards.py::GET /stats/records" in typed
+    assert "proximity_combat.py::GET /proximity/duos" in untyped
     assert not (typed & untyped)
+    # ⚠️ The alias pair that made keying by handler wrong: one function, two
+    # routes. Both must be present as separate keys, or the collapse this key
+    # was changed to prevent is back without a number moving.
+    aliases = {k for k in typed | untyped if "weapons/by" in k}
+    assert len(aliases) == 2, aliases
 
 
 def test_no_new_route_ships_without_a_response_model():

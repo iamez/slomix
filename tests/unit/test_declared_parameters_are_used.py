@@ -57,16 +57,49 @@ def _annotation_name(node: ast.expr | None) -> str:
 
 
 def _names_used(fn: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
-    """Every identifier mentioned in the body, including inside f-strings."""
+    """Every identifier the handler's OWN scope reads, f-strings included.
+
+    ⛔ Reads only, and scope-aware. Three things are NOT reads of a handler
+    parameter, and the first version counted all three:
+
+      * a nested function's or lambda's own parameter list (`ast.arg`)
+      * the NAME of a keyword argument at a call site (`ast.keyword`)
+      * a name read INSIDE a nested scope that rebinds it as its own parameter
+
+    The third is the subtle one and only a scope walk finds it:
+    `def inner(session_date): return session_date` reads a name spelled the
+    same as the handler's parameter while nothing ever looks at the handler's.
+    Passing a parameter through to a helper is still an `ast.Name` load in the
+    handler's own scope, so that case remains covered. Codex on #860.
+    """
     used: set[str] = set()
-    for stmt in fn.body:
-        for node in ast.walk(stmt):
-            if isinstance(node, ast.Name):
+
+    def walk(node: ast.AST, shadowed: frozenset[str]) -> None:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+            a = node.args
+            own = {x.arg for x in
+                   list(a.posonlyargs) + list(a.args) + list(a.kwonlyargs)}
+            if a.vararg:
+                own.add(a.vararg.arg)
+            if a.kwarg:
+                own.add(a.kwarg.arg)
+            # ⚠️ Defaults are evaluated in the ENCLOSING scope, so they still
+            # count as reads: `def inner(x=session_date)` does read it.
+            for d in list(a.defaults) + [d for d in a.kw_defaults if d]:
+                walk(d, shadowed)
+            body = node.body if isinstance(node.body, list) else [node.body]
+            for stmt in body:
+                walk(stmt, shadowed | own)
+            return
+        if isinstance(node, ast.Name):
+            if node.id not in shadowed:
                 used.add(node.id)
-            elif isinstance(node, ast.arg):          # nested defs / lambdas
-                used.add(node.arg)
-            elif isinstance(node, ast.keyword) and node.arg:
-                used.add(node.arg)
+            return
+        for child in ast.iter_child_nodes(node):
+            walk(child, shadowed)
+
+    for stmt in fn.body:
+        walk(stmt, frozenset())
     return used
 
 
@@ -106,14 +139,24 @@ def test_the_scanner_can_actually_find_one():
     src = (
         "@router.get('/x')\n"
         "async def h(used: int = 1, ignored: str | None = None,\n"
+        "            shadowed: str | None = None, kw: int = 0,\n"
         "            db: DatabaseAdapter = Depends(get_db)):\n"
+        "    def inner(shadowed):\n"
+        "        return shadowed\n"
+        "    helper(kw=1)\n"
         "    return {'v': used}\n"
     )
     tree = ast.parse(src)
     fn = tree.body[0]
     used = _names_used(fn)
-    assert "used" in used and "ignored" not in used, (
-        "the body scan cannot tell a read parameter from an unread one")
+    assert "used" in used, "a plainly read parameter was not seen as read"
+    assert "ignored" not in used, "an unread parameter was counted as read"
+    # ⛔ The two that the first version got wrong, and neither is a read:
+    assert "shadowed" not in used, (
+        "a NESTED function's own parameter list was counted as a read of the "
+        "outer parameter of the same name")
+    assert "kw" not in used, (
+        "the NAME of a keyword argument at a call site was counted as a read")
 
 
 def test_the_scanner_reaches_the_real_routers():

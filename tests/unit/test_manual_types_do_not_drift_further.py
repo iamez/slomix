@@ -35,12 +35,34 @@ def _report() -> dict:
 
 
 def _recorded() -> set[str]:
-    return {ln.strip() for ln in BASELINE.read_text().splitlines()
+    return {ln.strip() for ln in BASELINE.read_text(encoding="utf-8").splitlines()
             if ln.strip() and not ln.lstrip().startswith("#")}
 
 
 def _measured(report: dict) -> set[str]:
     return {f"{f['schema']}.{f['field']}: {f['why']}" for f in report["findings"]}
+
+
+COMPARED_FLOOR = 36
+
+
+def test_the_set_of_compared_schemas_does_not_shrink():
+    """⛔ A SHRINKING COMPARISON LOOKS EXACTLY LIKE A CLEANER ONE.
+
+    `compared > 20` only rules out the empty case. If a hand-written interface
+    is renamed, or turned into a `type X = …` alias — which this parser cannot
+    read at all — it silently leaves the comparison and every finding about it
+    disappears with it. The count that mattered would fall while the ratchet
+    reported peace. Codex on #860.
+
+    ⚠️ Raise this only in a commit that explains what was added, and never to
+    make a red run go green.
+    """
+    report = _report()
+    assert report["compared"] >= COMPARED_FLOOR, (
+        f"only {report['compared']} schemas compared, down from {COMPARED_FLOOR} "
+        f"— a schema left the comparison, so any finding about it vanished "
+        f"rather than being fixed. Not compared: {report['not_compared']}")
 
 
 def test_the_checker_actually_compared_something():

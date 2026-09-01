@@ -428,6 +428,23 @@ async def _load_scoped_guid_name_map(
         return {}
 
 
+def _guid_key(guid: object) -> str:
+    """The 8-character upper-case prefix — the only form both sides share.
+
+    ⛔ THE SAME PLAYER HAS TWO GUID LENGTHS IN THIS DATABASE. Measured:
+    `player_comprehensive_stats.player_guid` is 8 characters on 19,845 rows and
+    32 on 929, while the proximity tables store the 32-character form. Of 32
+    distinct long GUIDs sampled from `combat_engagement`, 28 have their 8-char
+    prefix present in `pcs` and ZERO match a full 32-char `pcs` guid.
+
+    So the site hands out the short form and these tables hold the long one, and
+    a raw string comparison silently matches nothing. `_resolve_name_for_guid`
+    already knew this and folded to `token[:8]`; the membership checks did not.
+    Codex on #860.
+    """
+    return str(guid or "").strip().upper()[:8]
+
+
 def _compute_scoped_duos(
     engagement_rows: list[Any],
     limit: int,
@@ -484,11 +501,17 @@ def _compute_scoped_duos(
         if len(names) < 2 and len(participant_guids) >= 2:
             names = [_resolve_name_for_guid(guid, guid_name_map, guid_to_name) for guid in participant_guids]
 
-        wanted = (player_guid or "").strip()
-        if wanted and wanted not in participant_guids and wanted not in guid_to_name:
+        wanted = _guid_key(player_guid)
+        matched = next((g for g in list(participant_guids) + list(guid_to_name)
+                        if _guid_key(g) == wanted), None) if wanted else None
+        if wanted and matched is None:
             continue
-        wanted_name = (_resolve_name_for_guid(wanted, guid_name_map, guid_to_name)
-                       if wanted else "")
+        # ⚠️ Resolved from the GUID THIS ENGAGEMENT CARRIES, not from the string
+        # the caller sent. `_resolve_name_for_guid` folds to `token[:8]` but does
+        # not fold case, so a lower-case request resolved to "unknown" and then
+        # matched no pair — membership succeeded and the answer was still empty.
+        wanted_name = (_resolve_name_for_guid(matched, guid_name_map, guid_to_name)
+                       if matched else "")
 
         unique_names = sorted({name for name in names if name})
         if len(unique_names) < 2:

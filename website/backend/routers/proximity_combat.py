@@ -8,6 +8,7 @@ from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.proximity_helpers import (
     _build_proximity_where_clause,
     _compute_scoped_duos,
+    _guid_key,
     _load_scoped_guid_name_map,
     _proximity_stub_meta,
     logger,
@@ -278,15 +279,34 @@ async def get_proximity_duos(
     )
     query_params = tuple(params)
 
+    # ⛔ THE PLAYER FILTER HAS TO REACH THE QUERY, NOT ONLY THE PYTHON AFTER IT.
+    # The row cap below is 5,000 newest engagements; filtering only afterwards
+    # means a player whose games fall outside that window answers "no duos" on a
+    # busy scope — the same class as applying a LIMIT before a filter, one layer
+    # further out. `crossfire_participants` is a JSON array, so this is a
+    # deliberately LOOSE narrowing on its text: a false positive costs one row
+    # that `_compute_scoped_duos` then rejects exactly, while a false negative
+    # would be another silently empty answer. `CAST(... AS TEXT)` rather than
+    # `::text` because the adapter also has a SQLite path.
+    guid_key = _guid_key(player_guid)
+    player_sql, player_params = "", ()
+    if guid_key:
+        player_sql = (f" AND UPPER(CAST(crossfire_participants AS TEXT)) "
+                      f"LIKE ${len(params) + 1}")
+        player_params = (f"%{guid_key}%",)
+    scope["player_guid"] = guid_key or None
+    fetch_params = query_params + player_params
+
     try:
         guid_name_map = await _load_scoped_guid_name_map(db, where_sql, query_params)
         rows = await db.fetch_all(
             "SELECT attackers, crossfire_participants, crossfire_delay_ms, outcome "
             f"FROM combat_engagement {where_sql} "
             "AND is_crossfire = TRUE "
+            f"{player_sql} "
             "ORDER BY session_date DESC, round_start_unix DESC, start_time_ms DESC "
             "LIMIT 5000",
-            query_params,
+            fetch_params,
         )
         duos = _compute_scoped_duos(rows, safe_limit,
                                     guid_name_map=guid_name_map,
