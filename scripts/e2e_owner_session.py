@@ -34,19 +34,19 @@ REPO = Path(__file__).resolve().parents[1]
 
 def _load_env() -> None:
     # SESSION_SECRET lives in website/.env (the backend's own env file);
-    # the repo-root .env holds the bot's. Read both, backend first.
+    # the repo-root .env holds the bot's. Read both, backend first — and
+    # with the SAME loader the backend uses: a hand parser kept quotes,
+    # `export` prefixes and inline comments in the value, so the cookie
+    # was signed with a different secret and /auth/me answered 401
+    # (Codex on #855, round four).
+    from dotenv import dotenv_values
+
     for env in (REPO / "website" / ".env", REPO / ".env"):
-        if env.exists():
-            _load_env_file(env)
-
-
-def _load_env_file(env: Path) -> None:
-    for line in env.read_text(encoding="utf-8").splitlines():
-        line = line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+        if not env.exists():
             continue
-        key, _, value = line.partition("=")
-        os.environ.setdefault(key.strip(), value.strip())
+        for key, value in dotenv_values(env).items():
+            if value is not None:
+                os.environ.setdefault(key, value)
 
 
 def main() -> int:

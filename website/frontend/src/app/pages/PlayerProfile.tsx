@@ -374,10 +374,15 @@ function Maps({ rows, available }: { rows: ProfileMapRow[] | undefined; availabl
       <SectionBody available={available} empty={top.length === 0} what="map history">
         <div style={{ marginTop: 'var(--space-2)' }}>
           {top.map((m) => (
-            <div key={m.map} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
+            <div key={m.map} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{mapLabel(m.map)}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.rounds} rd</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{pct(m.win_rate)}</span>
+              {/* kd was on the wire and off the panel — the legacy profile's
+                * map table carries all five columns, and the keymap can only
+                * point here once this one does too (Codex on #855, round
+                * four). */}
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.kd == null ? '—' : m.kd.toFixed(2)} kd</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)' }}>{m.dpm == null ? '—' : m.dpm.toFixed(0)} dpm</span>
             </div>
           ))}

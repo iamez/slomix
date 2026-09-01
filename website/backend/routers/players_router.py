@@ -177,13 +177,22 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
     # play, which is exactly the claim the UI makes ("imported in the last
     # half hour"). A historical backfill would read as live for its half
     # hour; that is the honest trade for having a working clock at all.
+    # current_players comes from the LATEST round, not the window union:
+    # a substitution mid-window would otherwise count both the leaver and
+    # the joiner as "current" (Codex on #855, round four).
     query = """
         SELECT
             MAX(r.created_at) as last_round,
             COUNT(DISTINCT r.id) as rounds,
-            COUNT(DISTINCT p.player_guid) as players
+            (SELECT COUNT(DISTINCT p.player_guid)
+               FROM player_comprehensive_stats p
+              WHERE p.round_id = (
+                    SELECT r2.id FROM rounds r2
+                     WHERE r2.round_number IN (1, 2)
+                       AND r2.created_at >= NOW() - INTERVAL '30 minutes'
+                     ORDER BY r2.created_at DESC LIMIT 1
+              )) as players
         FROM rounds r
-        JOIN player_comprehensive_stats p ON p.round_id = r.id
         WHERE r.round_number IN (1, 2)
             AND r.created_at >= NOW() - INTERVAL '30 minutes'
     """

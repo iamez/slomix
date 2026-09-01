@@ -537,8 +537,14 @@ function PredictionLine({ row }: { row: RecentPrediction }) {
       <span style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', flex: 1 }}>{row.insight}</span>
       <Meta>{row.format} · {row.confidence}</Meta>
       {/* Verdict only once one EXISTS — is_correct is null until the match
-        * resolves, and null is "not settled", never "wrong". */}
-      {row.is_correct != null && (
+        * resolves, and null is "not settled", never "wrong". And a DRAW is
+        * neither: actual_winner 0 is the backend's draw/cancelled value,
+        * excluded from binary calibration, yet prediction_correct is still
+        * populated on those rows — scoring one would mark a toss-up as a
+        * hit (Codex on #855, round four). */}
+      {row.actual_winner === 0 ? (
+        <Meta>void</Meta>
+      ) : row.is_correct != null && (
         <span className="m" style={{ fontSize: 'var(--fs-small)', color: row.is_correct ? 'var(--color-pos)' : 'var(--color-neg)' }}>
           {row.is_correct ? 'hit' : 'miss'}
         </span>
