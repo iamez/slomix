@@ -38,6 +38,7 @@ from validation_family import (  # noqa: E402 - path set above
     block_draws,
     boot_p_value,
     chronological_split,
+    cohort_digest,
     detectable_effect,
     holm,
     instrument_check,
@@ -674,9 +675,29 @@ class TestThePreregistrationIsAnArtifactNotAPromise:
 
     def test_the_preregistered_hash_is_the_one_the_rerun_will_compute(self):
         proposed = "2026-08-26 21:00:00"
-        pre = preregister(self._family(), proposed)
-        rerun = self._family(frozen_cutoff=proposed)
+        blocks = ["b1", "b2", "b3"]
+        pre = preregister(self._family(), proposed, blocks)
+        # ⚠️ The rerun has to supply the COHORT as well as the cutoff. This test
+        # rebuilt the family from the cutoff alone until the holdout stopped
+        # being a lower bound — and it was right to start failing: a rerun that
+        # can reproduce the digest without naming the cohort is a rerun that can
+        # analyse a different one.
+        rerun = self._family(frozen_cutoff=proposed,
+                             frozen_cohort=cohort_digest(blocks))
         assert pre["manifest_sha256"] == rerun.manifest_hash()
+
+    def test_a_rerun_that_forgets_the_cohort_does_not_reproduce_the_digest(self):
+        proposed = "2026-08-26 21:00:00"
+        pre = preregister(self._family(), proposed, ["b1", "b2"])
+        assert pre["manifest_sha256"] != self._family(
+            frozen_cutoff=proposed).manifest_hash()
+
+    def test_a_grown_holdout_does_not_reproduce_the_digest(self):
+        proposed = "2026-08-26 21:00:00"
+        pre = preregister(self._family(), proposed, ["b1", "b2"])
+        assert pre["manifest_sha256"] != self._family(
+            frozen_cutoff=proposed,
+            frozen_cohort=cohort_digest(["b1", "b2", "b3"])).manifest_hash()
 
     def test_the_artifact_carries_the_terms_not_only_the_digest(self):
         # §8.5: a one-way digest nobody can expand is not a published manifest.
@@ -778,7 +799,26 @@ class TestTheSplitRunsOnMatchTime:
         assert "r.round_time ~ '^[0-9]{1,6}$'" in sql
         # Both supported shapes are admitted; the importer accepts each, so
         # excluding one would silently shrink the universe instead of ordering it.
-        assert "r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$'" in sql
+        assert "r.round_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$'" in sql
+
+    def test_an_impossible_clock_is_excluded_rather_than_normalised(self):
+        """⛔ DIGIT LAYOUT IS NOT A RANGE, and the failure is silent.
+
+        Measured against Postgres: `250000` does not raise, it becomes the NEXT
+        DAY at 01:00:00; `006000` becomes 01:00:00; `129999` becomes 13:40:39.
+        On a chronological split that is a round moved across a day boundary
+        with nothing to show for it — quieter than the abort that was reported,
+        and the same shape as the leading-zero bug. Codex on #858.
+        """
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "^([01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]$" in sql
+
+    def test_the_date_column_is_checked_too(self):
+        """`round_date` is unconstrained TEXT, and a malformed one ABORTS the
+        whole query rather than misordering one row — the loud half of the same
+        omission."""
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "r.round_date ~ '^[0-9]{4}-(0[1-9]|1[0-2])-" in sql
 
     def test_the_pairing_cte_carries_the_same_round_gate(self):
         """⛔ Gating only the outer SELECT removes a cancelled round's PLAYER
@@ -948,3 +988,70 @@ class TestTheInstrumentSaysWHICHWayItIsBroken:
                                   _row("null", "SHIPS", 0.2, 0.4)])
         assert "NOISE SHIPPED" in out
         assert "ABSENT" not in out
+
+
+class TestTheHoldoutIsAFIXEDCOHORTNotJustALowerBound:
+    """⛔ THE FREEZE RECORDED WHERE THE HOLDOUT STARTS AND NOT WHAT IS IN IT.
+
+    `chronological_split()` puts every block at or after `frozen_cutoff` into
+    confirmation. The manifest recorded the cutoff and nothing else — no upper
+    endpoint, no cohort identity — so as new matches arrive the confirmation set
+    GROWS while the same digest keeps passing.
+
+    That is optional stopping with a compliance stamp on it: run again next
+    week, get more blocks, and keep running until a verdict appears. It defeats
+    the run-once-on-an-untouched-holdout guarantee that the manifest gate was
+    built to protect, from the other side. Codex on #858, after that gate landed.
+    """
+
+    def test_the_same_blocks_hash_the_same_in_any_order(self):
+        assert cohort_digest({"c", "a", "b"}) == cohort_digest(["b", "c", "a"])
+
+    def test_one_extra_block_is_a_different_cohort(self):
+        """The whole point: a holdout that grew is not the holdout that was
+        registered, however innocent the growth."""
+        assert cohort_digest({"a", "b"}) != cohort_digest({"a", "b", "c"})
+
+    def test_a_missing_block_is_also_a_different_cohort(self):
+        assert cohort_digest({"a", "b", "c"}) != cohort_digest({"a", "b"})
+
+    def test_the_separator_cannot_be_forged_by_an_id_that_contains_it(self):
+        """⚠️ FOUND BY A SURVIVING MUTATION, and the first reason I wrote down
+        for it was WRONG.
+
+        Dropping the length prefix left every test green. I explained that by
+        saying `gaming_session_id` is TEXT and could contain the separator —
+        then measured it: the column is **integer**, so `["a|b"]` cannot come
+        out of this database and the collision is not reachable through the
+        caller that exists today.
+
+        The prefix still earns its place, but for the honest reason: this is a
+        general helper that stringifies whatever it is given, and `["a|b"]`
+        against `["a", "b"]` are two different cohorts that would share one
+        digest without it. Pinned here so the property is checked rather than
+        assumed — and so the next reader is not told a false fact about the
+        schema to justify a true line of code.
+        """
+        assert cohort_digest(["a|b"]) != cohort_digest(["a", "b"])
+
+    def test_the_count_is_part_of_the_identity(self):
+        # CONTROL: a digest over ids alone would be fooled by a rename; a digest
+        # that ignored ids would be fooled by a swap. Both halves are asserted
+        # by the two tests above — this one pins that the digest is not simply
+        # a length.
+        assert cohort_digest({"a", "b"}) != cohort_digest({"c", "d"})
+
+    def test_an_empty_cohort_has_its_own_digest(self):
+        assert cohort_digest([]) and cohort_digest([]) != cohort_digest(["a"])
+
+    def test_the_cohort_travels_inside_the_frozen_manifest(self):
+        """⭐ It rides in the manifest hash rather than beside it, so the gate
+        already written for the digest refuses a changed cohort too — one
+        mechanism, not two that can disagree."""
+        cands = [Candidate("x", "d", "higher_is_better", _metric)]
+        a = Family(name="t", candidates=cands, filters="f",
+                   frozen_cutoff="2026-07-15", frozen_cohort=cohort_digest(["b1"]))
+        b = Family(name="t", candidates=cands, filters="f",
+                   frozen_cutoff="2026-07-15", frozen_cohort=cohort_digest(["b1", "b2"]))
+        assert a.manifest_hash() != b.manifest_hash()
+        assert a.frozen()["frozen_cohort"] == cohort_digest(["b1"])

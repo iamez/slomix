@@ -210,8 +210,19 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- different hat. Measured: 3209 of 3209 rounds are six digits today, so this
   -- excludes nothing — it stops `lpad` from turning malformed text into a
   -- plausible time (`049180` reads as 05:32:20).
-  AND (r.round_time ~ '^[0-9]{1,6}$'
-       OR r.round_time ~ '^[0-9]{2}:[0-9]{2}:[0-9]{2}$')
+  -- ⛔ RANGES, NOT JUST DIGIT LAYOUT. A shape-valid but impossible clock does
+  -- NOT abort — it normalises, silently: measured against Postgres, `250000`
+  -- becomes 2026-06-12 01:00:00 (the NEXT DAY), `006000` becomes 01:00:00 and
+  -- `129999` becomes 13:40:39. On a chronological split that is a round moved
+  -- across a day boundary with nothing to show for it, which is the same shape
+  -- as the leading-zero bug and quieter than the abort that was reported.
+  -- `round_date` is unconstrained TEXT too, and a malformed one DOES abort the
+  -- whole query. Both columns are checked here so an unreadable row leaves the
+  -- universe instead of reordering it. Codex on #858.
+  AND r.round_date ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+  AND ((r.round_time ~ '^[0-9]{1,6}$'
+        AND lpad(r.round_time, 6, '0') ~ '^([01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]$')
+       OR r.round_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$')
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
@@ -300,6 +311,14 @@ class Family:
     filters: str
     outcome: str = "win"          # §8.3: the outcome definition is frozen too
     frozen_cutoff: str | None = None   # absolute; set once, never recomputed
+    # ⛔ THE CUTOFF IS A LOWER BOUND, AND A LOWER BOUND IS NOT A HOLDOUT.
+    # `chronological_split()` puts every block at or after `frozen_cutoff` into
+    # confirmation, so as new matches arrive the confirmation set GROWS while
+    # the same manifest digest keeps passing — optional stopping with a
+    # compliance stamp on it. This pins WHICH blocks the holdout was, and it
+    # rides inside the manifest hash so the gate already written for the digest
+    # refuses a changed cohort too. Codex on #858.
+    frozen_cohort: str | None = None
     split_fraction: float = DISCOVERY_FRACTION
     resamples: int = RESAMPLES
     seed: int = SEED
@@ -330,6 +349,7 @@ class Family:
             "filters": self.filters,
             "outcome": self.outcome,
             "frozen_cutoff": self.frozen_cutoff,
+            "frozen_cohort": self.frozen_cohort,
             "split_fraction": self.split_fraction,
             "resamples": self.resamples,
             "seed": self.seed,
@@ -994,7 +1014,22 @@ def manifest_gate(expected: str | None, computed: str,
     return None
 
 
-def preregister(family: Family, proposed_cutoff: str) -> dict:
+def cohort_digest(blocks) -> str:
+    """Which blocks the holdout WAS, as one short string.
+
+    Sorted so the digest does not depend on iteration order, and the COUNT is
+    included so that a set of the same size with different members and a set of
+    different size are both distinguishable. Truncated to 16 hex characters for
+    a manifest a person has to copy by hand — the artifact is protection against
+    drift, not against an adversary.
+    """
+    ids = sorted(str(b) for b in blocks)
+    blob = f"{len(ids)}:" + "|".join(ids)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+def preregister(family: Family, proposed_cutoff: str,
+                confirmation_blocks=()) -> dict:
     """The artifact §8.5 requires, produced BEFORE the holdout is opened.
 
     ⛔ The no-cutoff branch was right to stop — a holdout that has been looked
@@ -1009,7 +1044,8 @@ def preregister(family: Family, proposed_cutoff: str) -> dict:
     point is that the rerun recomputes the SAME hash from `--cutoff <proposed>`.
     A digest that does not match the rerun commits to nothing.
     """
-    frozen = replace(family, frozen_cutoff=proposed_cutoff)
+    frozen = replace(family, frozen_cutoff=proposed_cutoff,
+                     frozen_cohort=cohort_digest(confirmation_blocks))
     return {"manifest": frozen.frozen(), "manifest_sha256": frozen.manifest_hash()}
 
 
@@ -1135,6 +1171,12 @@ async def main() -> int:
     ap.add_argument("--seed", type=int, default=SEED,
                     help="published seed; changing it changes the manifest hash")
     ap.add_argument(
+        "--cohort", metavar="DIGEST",
+        help="the confirmation-cohort digest printed by the preregistration "
+             "run. ⛔ REQUIRED with --cutoff: the cutoff is a LOWER BOUND, so "
+             "without this the holdout silently grows as new matches arrive and "
+             "the same manifest keeps passing.")
+    ap.add_argument(
         "--expect-manifest", metavar="SHA256",
         help="the sha256 printed by the preregistration run. ⛔ REQUIRED with "
              "--cutoff: without it the freeze is a promise, because nothing "
@@ -1163,6 +1205,7 @@ async def main() -> int:
         seed=args.seed,
         outcome=args.outcome,
         frozen_cutoff=args.cutoff,
+        frozen_cohort=args.cohort,
     )
 
     disc_b, conf_b, ordered, cut = chronological_split(
@@ -1173,7 +1216,7 @@ async def main() -> int:
         # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
         # verdicts on it; re-running later with the printed flag cannot make
         # that holdout untouched again. The proposal is the whole output.
-        pre = preregister(family, cutoff)
+        pre = preregister(family, cutoff, conf_b)
         print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
               f"   Confirmation data stays unopened until the boundary is fixed,\n"
               f"   because a holdout that has been looked at is not a holdout:\n\n"
@@ -1184,7 +1227,10 @@ async def main() -> int:
         # and the confirmation is not confirming what was registered.
         print(f"preregistered manifest sha256 : {pre['manifest_sha256']}")
         print(f"     rerun with: --cutoff '{cutoff}' "
+              f"--cohort {pre['manifest']['frozen_cohort']} "
               f"--expect-manifest {pre['manifest_sha256']}")
+        print(f"     confirmation cohort: {len(conf_b)} blocks, "
+              f"digest {pre['manifest']['frozen_cohort']}")
         print("frozen family manifest (record this BEFORE re-running):")
         for line in json.dumps(pre["manifest"], indent=2,
                                sort_keys=True).splitlines():
@@ -1232,6 +1278,29 @@ async def main() -> int:
     # visible only to an operator comparing two hex strings by eye. Refused
     # BEFORE `analyse()`, because after it the holdout has been opened.
     # Codex on #818.
+    # ⛔ THE COHORT BEFORE THE DIGEST, because it produces the better message.
+    # A grown holdout also moves the manifest hash (the cohort rides inside it),
+    # so the gate below would refuse anyway — but it would say "something moved",
+    # and the reader would go looking for an edited formula instead of the four
+    # new sessions that arrived since Tuesday.
+    actual_cohort = cohort_digest(conf_b)
+    if not args.cohort:
+        print(f"⛔ NO REGISTERED COHORT. `--cutoff` is a LOWER bound, so without "
+              f"this the holdout\n   grows as matches arrive and the same "
+              f"manifest keeps passing — optional stopping\n   with a compliance "
+              f"stamp on it. This run's confirmation half is {len(conf_b)} "
+              f"blocks:\n\n     --cohort {actual_cohort}\n")
+        return 7
+    if args.cohort.strip().lower() != actual_cohort:
+        print(f"⛔ COHORT CHANGED — refusing to open the confirmation half.\n"
+              f"   registered : {args.cohort.strip().lower()}\n"
+              f"   this run   : {actual_cohort}  ({len(conf_b)} blocks)\n\n"
+              f"   The holdout is not the one that was registered. If matches "
+              f"arrived since, that is\n   a NEW experiment and needs a new "
+              f"preregistration — analysing this one would be\n   optional "
+              f"stopping.\n")
+        return 8
+
     computed = family.manifest_hash()
     gate = manifest_gate(args.expect_manifest, computed, cutoff)
     if gate:
