@@ -524,10 +524,17 @@ async def get_composite_stats(
         # flagged is_valid = FALSE, and its 53 kills were inflating the
         # composite by 8-16 % for the four players in it (SuperBoyy 147 -> 135,
         # qmr 128 -> 108) — invisible, because the players are real.
+        # Status gate added with the other two (Codex on #855, round two):
+        # the story endpoints around this panel exclude cancelled rounds, and
+        # a composite computed WITH one disagreed with the same story's
+        # scoreboard. Measured: sessions 153, 84, 83, 80… carry rounds that
+        # pass the validity+bot gates and fail this one.
         pcs_where = (
             "WHERE r.gaming_session_id = $1 AND r.round_number > 0 "
             "AND r.is_valid IS DISTINCT FROM FALSE "
             "AND r.is_bot_round IS DISTINCT FROM TRUE "
+            "AND (r.round_status IN ('completed', 'substitution') "
+            "     OR r.round_status IS NULL) "
             "AND p.player_guid NOT LIKE 'OMNIBOT%' "
             "AND p.player_name NOT LIKE '[BOT]%'"
         )
@@ -538,7 +545,9 @@ async def get_composite_stats(
             "round_id IN (SELECT id FROM rounds "
             "WHERE gaming_session_id = $1 "
             "  AND is_valid IS DISTINCT FROM FALSE "
-            "  AND is_bot_round IS DISTINCT FROM TRUE)"
+            "  AND is_bot_round IS DISTINCT FROM TRUE "
+            "  AND (round_status IN ('completed', 'substitution') "
+            "       OR round_status IS NULL))"
         )
     else:
         if not session_date:

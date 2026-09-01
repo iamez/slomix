@@ -1,10 +1,11 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import {
-  useSessionDetail, useSessionGoodNight, useSessionMvp, useSessionRounds,
+  useSessionDetail, useSessionGoodNight, useSessionLeaderboard, useSessionMvp,
+  useSessionPlayerWeapons, useSessionRounds,
   useSessionVerdicts, useSessions, useStoryBestLives,
 } from '../lib/queries';
 import type {
@@ -288,6 +289,40 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
   );
 }
 
+/** Top DPM of THIS session, by id — a computation off the round totals,
+ * deliberately adjacent to the ballot below so the two kinds of MVP stay
+ * distinguishable: this one nobody voted for. Legacy called the same
+ * endpoint without session_id and so always showed the LATEST session's
+ * leader, whatever session the reader had open; passing the id is the fix,
+ * not a nicety. */
+function TopDpm({ sessionId }: { sessionId: number }) {
+  const board = useSessionLeaderboard(sessionId, 3);
+  return (
+    <Stack gap={2} parity="session.top-dpm">
+      <SectionHead label="top dpm" aside={<span className="lbl">computed, not voted</span>} />
+      {board.isPending && <Pending label="top dpm" />}
+      {board.isError && <Unavailable what="top dpm" />}
+      {board.data && (board.data.length === 0 ? (
+        <Absent reason="no counted rounds carry damage for this session, so there is no dpm to rank" />
+      ) : (
+        <Stack gap={1} className="rows">
+          {board.data.map((row) => (
+            <Cluster key={row.rank} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
+              <span style={{ fontSize: 'var(--fs-row)' }}>{row.name}</span>
+              <Cluster gap={3} align="baseline">
+                <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{figure(row.dpm)} dpm</span>
+                <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 84, textAlign: 'right' }}>
+                  {row.kills != null && row.deaths != null ? `${figure(row.kills)} / ${figure(row.deaths)}` : '—'}
+                </span>
+              </Cluster>
+            </Cluster>
+          ))}
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
 /** Accessors, not key strings: a column that reads `player[col.key]` is an
  * object indexed by a value, which every scanner in this CI treats as an
  * injection sink — and the accessor also lets the compiler check that the
@@ -306,7 +341,40 @@ const PLAYER_COLUMNS: readonly {
   { label: 'acc', read: (p) => p.accuracy, digits: 1 },
 ];
 
-function PlayerTable({ players }: { players: SessionPlayerTotals[] }) {
+/** One player's weapons within THIS session — the session-scoped call
+ * legacy session-detail.js made, via the hyphen spelling (see
+ * useSessionPlayerWeapons). Opened one row at a time: the response is per
+ * player and two open rows would be two fetches for a comparison this
+ * table does not draw (same rule as the story page's KIS detail). */
+function PlayerWeaponsRow({ sessionId, guid }: { sessionId: number; guid: string }) {
+  const weapons = useSessionPlayerWeapons(sessionId, guid);
+  const player = weapons.data?.players[0];
+  return (
+    <div style={{ padding: 'var(--space-2) 0 var(--space-3) var(--space-5)' }}>
+      {weapons.isPending && <Pending label="weapons" />}
+      {weapons.isError && <Unavailable what="weapons" />}
+      {weapons.data && (!player || player.weapons.length === 0 ? (
+        <Absent reason="no weapon rows recorded for this player in this session" />
+      ) : (
+        <Cluster gap={4} style={{ flexWrap: 'wrap' }}>
+          {player.weapons.map((w) => (
+            <span key={w.weapon_key} className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
+              {w.name} · {figure(w.kills)}k
+              {w.shots > 0 && <> · {w.accuracy.toFixed(1)}%</>}
+              {/* head HITS (SUM(headshots)), not headshot kills — the parent
+                * row's hs column counts kills, and one shared abbreviation
+                * would invite comparing the two (Codex on #855). */}
+              {w.headshots > 0 && <> · {figure(w.headshots)} head hits</>}
+            </span>
+          ))}
+        </Cluster>
+      ))}
+    </div>
+  );
+}
+
+function PlayerTable({ players, sessionId }: { players: SessionPlayerTotals[]; sessionId: number }) {
+  const [openGuid, setOpenGuid] = useState<string | null>(null);
   const sorted = useMemo(
     () => [...players].sort((a, b) => b.damage_given - a.damage_given),
     [players],
@@ -320,21 +388,34 @@ function PlayerTable({ players }: { players: SessionPlayerTotals[] }) {
       <div style={{ overflowX: 'auto' }}>
         <Stack gap={1} className="rows" style={{ minWidth: 640 }}>
           {sorted.map((p) => (
-            <Cluster key={p.player_guid} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
-              <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)', minWidth: 140 }}>
-                {p.player_name}
-              </Link>
-              <Cluster gap={3} align="baseline">
-                {PLAYER_COLUMNS.map((col) => {
-                  const value = col.read(p);
-                  return (
-                    <span key={col.label} className="m" style={{ fontSize: 'var(--fs-small)', width: 62, textAlign: 'right' }}>
-                      {col.digits == null ? figure(value) : value.toFixed(col.digits)}
-                    </span>
-                  );
-                })}
+            <div key={p.player_guid}>
+              <Cluster gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
+                <Cluster gap={2} align="baseline" style={{ minWidth: 140 }}>
+                  <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
+                    {p.player_name}
+                  </Link>
+                  <button
+                    type="button"
+                    onClick={() => setOpenGuid(openGuid === p.player_guid ? null : p.player_guid)}
+                    className="m"
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-400)', fontSize: 'var(--fs-caption)', padding: 0 }}
+                  >
+                    {openGuid === p.player_guid ? 'weapons ▾' : 'weapons ▸'}
+                  </button>
+                </Cluster>
+                <Cluster gap={3} align="baseline">
+                  {PLAYER_COLUMNS.map((col) => {
+                    const value = col.read(p);
+                    return (
+                      <span key={col.label} className="m" style={{ fontSize: 'var(--fs-small)', width: 62, textAlign: 'right' }}>
+                        {col.digits == null ? figure(value) : value.toFixed(col.digits)}
+                      </span>
+                    );
+                  })}
+                </Cluster>
               </Cluster>
-            </Cluster>
+              {openGuid === p.player_guid && <PlayerWeaponsRow sessionId={sessionId} guid={p.player_guid} />}
+            </div>
           ))}
         </Stack>
       </div>
@@ -477,6 +558,7 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
       {verdicts.isPending && <Pending label="form" />}
       {verdicts.isError && <Unavailable what="form" />}
       {verdicts.data && <Verdicts data={verdicts.data} />}
+      <TopDpm sessionId={sessionId} />
       <MvpVotes sessionId={sessionId} />
     </Stack>
   );
@@ -587,7 +669,7 @@ export function SessionDetail() {
           )}
           {detail.data && current === 'players' && (
             <div style={{ paddingTop: 'var(--space-5)' }}>
-              <PlayerTable players={detail.data.players} />
+              <PlayerTable players={detail.data.players} sessionId={sessionId} />
             </div>
           )}
           {current === 'rounds' && (

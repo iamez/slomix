@@ -1,0 +1,106 @@
+{
+ "status": "ok",
+ "player": {
+  "player_guid": "E587CA5F",
+  "display_name": "Zlatorog",
+  "et_rating": 0.5666999816894531,
+  "games_rated": 54,
+  "last_rated_at": "2026-08-30 13:34:01.156319+00:00",
+  "rank": 19,
+  "total_rated": 28,
+  "components": {
+   "dpm": {
+    "raw": 284.669,
+    "weight": 0.12,
+    "percentile": 0.661,
+    "contribution": 0.0793
+   },
+   "dpr": {
+    "raw": 9.648,
+    "weight": -0.08,
+    "percentile": 0.482,
+    "contribution": -0.0386
+   },
+   "kpr": {
+    "raw": 8.407,
+    "weight": 0.1,
+    "percentile": 0.518,
+    "contribution": 0.0518
+   },
+   "accuracy": {
+    "raw": 36.047,
+    "weight": 0.04,
+    "percentile": 0.589,
+    "contribution": 0.0236
+   },
+   "trade_rate": {
+    "raw": 0.009,
+    "weight": 0.06,
+    "percentile": 0.375,
+    "contribution": 0.0225
+   },
+   "revive_rate": {
+    "raw": 0.611,
+    "weight": 0.07,
+    "percentile": 0.232,
+    "contribution": 0.0163
+   },
+   "kill_quality": {
+    "raw": 0.917,
+    "weight": 0.1,
+    "percentile": 0.554,
+    "contribution": 0.0554
+   },
+   "clutch_factor": {
+    "raw": 0.0,
+    "weight": 0.05,
+    "percentile": 0.214,
+    "contribution": 0.0107
+   },
+   "survival_rate": {
+    "raw": 0.467,
+    "weight": 0.07,
+    "percentile": 0.196,
+    "contribution": 0.0138
+   },
+   "crossfire_rate": {
+    "raw": 0.225,
+    "weight": 0.06,
+    "percentile": 0.625,
+    "contribution": 0.0375
+   },
+   "objective_rate": {
+    "raw": 0.259,
+    "weight": 0.06,
+    "percentile": 0.839,
+    "contribution": 0.0504
+   },
+   "kill_permanence": {
+    "raw": 0.0,
+    "weight": 0.05,
+    "percentile": 0.214,
+    "contribution": 0.0107
+   },
+   "spawn_timing_eff": {
+    "raw": 0.605,
+    "weight": 0.04,
+    "percentile": 0.982,
+    "contribution": 0.0393
+   },
+   "useful_kill_rate": {
+    "raw": 0.363,
+    "weight": 0.06,
+    "percentile": 0.554,
+    "contribution": 0.0332
+   },
+   "denied_playtime_pm": {
+    "raw": 0.0,
+    "weight": 0.04,
+    "percentile": 0.214,
+    "contribution": 0.0086
+   }
+  },
+  "confidence": 1.0,
+  "tier": "experienced"
+ }
+}

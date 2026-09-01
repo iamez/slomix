@@ -165,16 +165,42 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
     """
     Get current live session status.
     """
-    # Check if session is active (last activity within 30 minutes)
-    # Postgres specific query
+    # Check if session is active (last activity within 30 minutes).
+    #
+    # ⛔ Codex on #855, confirmed live: pcs.round_date is a DATE-ONLY text
+    # ('YYYY-MM-DD'), so the old `round_date::timestamp >= NOW() - 30 min`
+    # compared against MIDNIGHT — after 00:30 the endpoint answered
+    # {active: false} for the rest of the day (measured at 22:26 during an
+    # evening with 12 rounds imported in the prior two hours), and
+    # COUNT(DISTINCT round_date) collapsed every same-day round to 1.
+    # rounds.created_at is the import timestamp — about a minute behind
+    # play, which is exactly the claim the UI makes ("imported in the last
+    # half hour"). A historical backfill would read as live for its half
+    # hour; that is the honest trade for having a working clock at all.
+    # current_players comes from the LATEST round, not the window union:
+    # a substitution mid-window would otherwise count both the leaver and
+    # the joiner as "current" (Codex on #855, round four).
     query = """
         SELECT
-            MAX(round_date) as last_round,
-            COUNT(DISTINCT round_date) as rounds,
-            COUNT(DISTINCT player_guid) as players
-        FROM player_comprehensive_stats
-        WHERE round_date::timestamp >= CURRENT_DATE
-            AND round_date::timestamp >= NOW() - INTERVAL '30 minutes'
+            MAX(r.created_at) as last_round,
+            COUNT(DISTINCT r.id) as rounds,
+            (SELECT COUNT(DISTINCT p.player_guid)
+               FROM player_comprehensive_stats p
+              WHERE p.round_id = (
+                    SELECT r2.id FROM rounds r2
+                     WHERE r2.round_number IN (1, 2)
+                       AND r2.is_bot_round IS DISTINCT FROM TRUE
+                       AND r2.created_at >= NOW() - INTERVAL '30 minutes'
+                     ORDER BY r2.created_at DESC LIMIT 1
+              )) as players
+        FROM rounds r
+        WHERE r.round_number IN (1, 2)
+            -- A bot test round imported in the window must not announce a
+            -- live evening on the public home page — /api/stats/tonight
+            -- already drops bot-only evenings for exactly this distinction
+            -- (Codex on #855, round six).
+            AND r.is_bot_round IS DISTINCT FROM TRUE
+            AND r.created_at >= NOW() - INTERVAL '30 minutes'
     """
     try:
         result = await db.fetch_one(query)
@@ -187,14 +213,14 @@ async def get_live_session(db: DatabaseAdapter = Depends(get_db)):
 
     # Get latest round details (actual_duration_seconds lives on rounds table)
     latest_query = """
-        SELECT DISTINCT ON (p.round_date)
-            p.map_name,
-            p.round_date,
+        SELECT
+            r.map_name,
+            r.created_at,
             r.actual_duration_seconds
-        FROM player_comprehensive_stats p
-        LEFT JOIN rounds r ON r.id = p.round_id
-        WHERE p.round_date::timestamp >= CURRENT_DATE
-        ORDER BY p.round_date DESC
+        FROM rounds r
+        WHERE r.round_number IN (1, 2)
+          AND r.is_bot_round IS DISTINCT FROM TRUE
+        ORDER BY r.created_at DESC
         LIMIT 1
     """
     try:
@@ -817,6 +843,12 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         LEFT JOIN rounds r ON r.id = p.round_id
         WHERE p.player_guid = $1
           AND p.round_number IN (1, 2)
+          -- Codex on #855: the profile's lifetime numbers carry this gate
+          -- (players_profile_router), so the milestones computed here must
+          -- count the same rounds — measured 490 vs 454 kills for one guid
+          -- without it. IS DISTINCT FROM keeps LEFT-JOIN NULLs, the same
+          -- reading as everywhere else.
+          AND r.is_valid IS DISTINCT FROM FALSE
     """
     if not use_guid:
         query = query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
@@ -827,7 +859,12 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         logger.error(f"Error fetching player stats: {e}")
         raise HTTPException(status_code=500, detail="Database error")
 
-    if not row or not row[0]:  # No kills usually means no stats found
+    # "Not found" is COUNT(round_id) == 0, never SUM(kills) == 0: a support
+    # player or newcomer with counted rounds and zero kills exists, and the
+    # milestones panel must show their zero progress rather than a 404
+    # (Codex on #855). The aggregate always returns one row; games is the
+    # existence signal.
+    if not row or not row[4]:
         raise HTTPException(status_code=404, detail="Player not found")
 
     (kills, deaths, damage, time, games, xp, wins, last_seen) = row
@@ -893,19 +930,28 @@ async def get_player_stats(player_name: str, db: DatabaseAdapter = Depends(get_d
         favorite_map = None
 
     # Get highest and lowest DPM (single round)
+    # ⛔ R0 rows carry CUMULATIVE damage over NON-cumulative playtime
+    # (CLAUDE.md), so without the round filter the "highest dpm" is the R0
+    # artifact almost by construction — measured 790 vs a real 403 for one
+    # guid. Same validity gate as the aggregate above.
     dpm_query = """
         SELECT
-            MAX(CASE WHEN time_played_seconds > 60 THEN damage_given * 60.0 / time_played_seconds END) as max_dpm,
-            MIN(CASE WHEN time_played_seconds > 60 THEN damage_given * 60.0 / time_played_seconds END) as min_dpm
-        FROM player_comprehensive_stats
-        WHERE player_guid = $1 AND time_played_seconds > 60
+            MAX(CASE WHEN p.time_played_seconds > 60 THEN p.damage_given * 60.0 / p.time_played_seconds END) as max_dpm,
+            MIN(CASE WHEN p.time_played_seconds > 60 THEN p.damage_given * 60.0 / p.time_played_seconds END) as min_dpm
+        FROM player_comprehensive_stats p
+        LEFT JOIN rounds r ON r.id = p.round_id
+        WHERE p.player_guid = $1 AND p.time_played_seconds > 60
+          AND p.round_number IN (1, 2)
+          AND r.is_valid IS DISTINCT FROM FALSE
     """
     if not use_guid:
-        dpm_query = dpm_query.replace("player_guid = $1", "player_name ILIKE $1")
+        dpm_query = dpm_query.replace("p.player_guid = $1", "p.player_name ILIKE $1")
     try:
         dpm_row = await db.fetch_one(dpm_query, (identifier,))
-        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] else None
-        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] else None
+        # `is not None`, not truthiness: a genuine 0-dpm record is a value,
+        # and SQL NULL is the only "no qualifying round" (Codex on #855).
+        highest_dpm = int(dpm_row[0]) if dpm_row and dpm_row[0] is not None else None
+        lowest_dpm = int(dpm_row[1]) if dpm_row and dpm_row[1] is not None else None
     except Exception as e:
         logger.error(f"Error fetching DPM records for {player_name}: {e}")
         highest_dpm = None
@@ -1720,11 +1766,19 @@ async def get_player_matches(
             pcs.headshot_kills,
             pcs.revives_given,
             r.round_status,
-            r.gaming_session_id
+            r.gaming_session_id,
+            r.is_valid
         FROM player_comprehensive_stats pcs
         LEFT JOIN rounds r ON r.id = pcs.round_id
         WHERE pcs.player_guid = $1
-        ORDER BY pcs.round_date DESC, pcs.round_number DESC
+          -- Codex on #855, twice over: without the round filter the R0
+          -- match-summary aggregates render as if they were rounds (the
+          -- recorded fixture carried round 10208 with round_number 0), and
+          -- ordering by the date-only round_date groups every R2 ahead of
+          -- every R1 within a day, so LIMIT could drop the newest rounds.
+          -- round_id is monotonic — the same ordering the profile uses.
+          AND pcs.round_number IN (1, 2)
+        ORDER BY pcs.round_id DESC
         LIMIT $2
     """
     if not use_guid:
@@ -1768,6 +1822,11 @@ async def get_player_matches(
                 #: decides whether to count them, but must be able to SEE them.
                 "round_status": row[15],
                 "gaming_session_id": row[16],
+                #: is_valid FALSE with a completed status is a real state
+                #: (sessions 151/147/146/128/127) — without the flag the
+                #: caller cannot mark those rows uncounted (Codex on #855,
+                #: round six).
+                "is_valid": row[17],
             }
         )
 

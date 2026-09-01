@@ -68,6 +68,13 @@ import type {
   WeaponRow,
   WeaponsByPlayer,
   WeaponsHallOfFame,
+  CompositeStats,
+  LiveSession,
+  PlayerIdentity,
+  PlayerMatchRound,
+  RecentPrediction,
+  SessionLeaderRow,
+  SkillPlayer,
 } from './types';
 
 /**
@@ -799,5 +806,123 @@ export function useSessionMvp(sessionId: number | null) {
       apiGet('/api/stats/session/{gaming_session_id}/mvp', {
         pathParams: { gaming_session_id: sessionId! },
       }) as Promise<SessionMvp>,
+  });
+}
+
+
+// ---------------------------------------------------------------------------
+// The backwards-debt eight (docs/design plan §2a): hooks for paths only the
+// legacy frontend called until now.
+
+/** Rounds in the LAST 30 MINUTES — a stricter liveness than /api/stats/tonight
+ *  (which answers "was there anything today"). no-store for the same reason
+ *  as useTonight: an evening in progress must appear without a reload. */
+export function useLiveSession() {
+  return useQuery({
+    queryKey: ['live-session'],
+    queryFn: () => apiGet('/api/stats/live-session', { cache: 'no-store' }) as Promise<LiveSession>,
+    refetchInterval: 60 * 1000,
+  });
+}
+
+/** Published match predictions only (shadow program AUD-006) — the dev
+ *  database has zero published rows, so [] is this hook's normal answer,
+ *  not its failure. */
+export function useRecentPredictions(limit: number) {
+  return useQuery({
+    queryKey: ['predictions-recent', limit],
+    queryFn: () =>
+      apiGet('/api/predictions/recent', { query: { limit } }) as Promise<RecentPrediction[]>,
+  });
+}
+
+/** Top DPM rows of one session (or the latest, when sessionId is null —
+ *  the endpoint's own default; the page passes the id so the claim is
+ *  scoped, never "whatever was latest at fetch time"). */
+export function useSessionLeaderboard(sessionId: number | null, limit: number) {
+  return useQuery({
+    queryKey: ['session-leaderboard', sessionId, limit],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session-leaderboard', {
+        query: { session_id: sessionId!, limit },
+      }) as Promise<SessionLeaderRow[]>,
+  });
+}
+
+/** One player's weapons within ONE session — the hyphen spelling, on
+ *  purpose: this is the session-scoped call legacy session-detail.js made,
+ *  and both spellings are one handler since #848. WeaponsPage keeps the
+ *  underscore for its period-scoped grid; neither is a fallback of the
+ *  other. */
+export function useSessionPlayerWeapons(sessionId: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['session-player-weapons', sessionId, playerGuid],
+    enabled: sessionId != null && !!playerGuid,
+    queryFn: () =>
+      apiGet('/api/stats/weapons/by-player', {
+        query: {
+          period: 'session',
+          gaming_session_id: sessionId!,
+          player_guid: playerGuid!,
+          player_limit: 1,
+          weapon_limit: 8,
+        },
+      }) as Promise<WeaponsByPlayer>,
+  });
+}
+
+/** The composite five (tir/ci/kpi/sds/cp) with #848's coverage block —
+ *  the first page anywhere to RENDER unmeasured_metrics instead of
+ *  presenting an unmeasured zero as a score. */
+export function useComposite(sessionId: number | null, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['skill-composite', sessionId, sessionDate],
+    enabled: sessionId != null || sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/skill/composite', {
+        query: sessionId != null ? { gaming_session_id: sessionId } : { session_date: sessionDate! },
+      }) as Promise<CompositeStats>,
+  });
+}
+
+/** ET Rating v2.1 for one player — 200-with-status: "not rated yet (need
+ *  5+ rounds)" arrives as {status:'error'}, which the panel renders as a
+ *  fact about the player, not as a failure. */
+export function useSkillPlayer(identifier: string | null) {
+  return useQuery({
+    queryKey: ['skill-player', identifier],
+    enabled: !!identifier,
+    queryFn: () =>
+      apiGet('/api/skill/player/{identifier}', {
+        pathParams: { identifier: identifier! },
+      }) as Promise<SkillPlayer>,
+  });
+}
+
+/** The identity card: aliases, Discord link, sick-leave attribution,
+ *  achievement milestones. 404 on an unknown player — a real one. */
+export function usePlayerIdentity(identifier: string | null) {
+  return useQuery({
+    queryKey: ['player-identity', identifier],
+    enabled: !!identifier,
+    queryFn: () =>
+      apiGet('/api/stats/player/{player_name}', {
+        pathParams: { player_name: identifier! },
+      }) as Promise<PlayerIdentity>,
+  });
+}
+
+/** Round-level recent rows, richer than the profile's recent_matches:
+ *  gibs, damage received, headshot kills, revives. */
+export function usePlayerMatchRounds(identifier: string | null, limit: number) {
+  return useQuery({
+    queryKey: ['player-match-rounds', identifier, limit],
+    enabled: !!identifier,
+    queryFn: () =>
+      apiGet('/api/player/{player_name}/matches', {
+        pathParams: { player_name: identifier! },
+        query: { limit },
+      }) as Promise<PlayerMatchRound[]>,
   });
 }

@@ -903,3 +903,6 @@ tools/pipeline_health_report.py
 # the frontend compiles against come from the committed schema, which
 # tests/integration/test_openapi_snapshot.py ties to the running app.
 website/frontend/src/api/generated/openapi.d.ts
+
+# Playwright owner storage state — embeds a signed session cookie
+website/frontend/e2e/.auth/
