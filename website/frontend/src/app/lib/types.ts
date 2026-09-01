@@ -3008,7 +3008,11 @@ export interface ProxEventAttacker {
   got_kill?: boolean;
   first_hit_ms?: number | null;
   last_hit_ms?: number | null;
-  weapons: Record<string, number>;
+  /** weaponId -> hits. Values are always numbers on the wire; undefined is
+   *  in the type because a lookup of an absent weapon is undefined (and it
+   *  lets the recorded two-attacker fixture, whose weapon keys differ,
+   *  satisfy the type). */
+  weapons: Record<string, number | undefined>;
 }
 
 export interface ProxStrafeMetrics {
