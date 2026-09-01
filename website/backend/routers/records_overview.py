@@ -97,8 +97,10 @@ _OVERVIEW_FAILURES: ContextVar[list[str] | None] = ContextVar(
 #:
 #: `*_recent` labels stay as they are: they feed `rounds_14d` / `sessions_14d`,
 #: which no cell renders today. `test_the_homepage_asks_about_labels_the_api_emits`
-#: is what keeps the two lists from drifting apart again.
-_RENDERED_METRICS = ("rounds", "sessions", "total_kills", "players_all_time")
+#: is what keeps the two lists from drifting apart again — and it reads both
+#: sides from source, so there is deliberately NO list of rendered metrics
+#: mirrored here. A constant nobody reads is the defect this whole change is
+#: about, one level down; CodeQL caught me writing one as documentation.
 
 
 def _note_failure(metric: str) -> None:
