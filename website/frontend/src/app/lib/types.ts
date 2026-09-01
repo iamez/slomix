@@ -2455,6 +2455,14 @@ export interface ProxScopes {
     engagements: number;
     map_count: number;
     round_count: number;
+    /** The full hierarchy — slice 5's map and round chips read it; slice 2
+     *  only needed the dates and typed these away until the picker did. */
+    maps: {
+      map_name: string;
+      engagements: number;
+      round_count: number;
+      rounds: { round_number: number; round_start_unix: number | null }[];
+    }[];
   }[];
 }
 
@@ -2832,5 +2840,123 @@ export interface ObjectiveFocus {
   objectives: {
     objective: string; map_name: string; players: number;
     avg_time_s: number; avg_dist: number;
+  }[];
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5, slice 5 — the round scope and its canvases (07 §B.2: player
+// journey, push-death heatmap, wave ledger). These instruments REQUIRE a
+// map (heatmap) or map+round (journey, wave cycles) — the 422 is the wire
+// saying "scope me", not an error state the page can reach once the picker
+// gates the calls.
+
+/** GET /api/proximity/players?session_date= — the backbone, called ONLY
+ *  with a scope (measured 232 ms scoped vs 12.7 s unbounded — the page
+ *  never issues the unbounded form). */
+export interface ProxPlayers {
+  status: string;
+  scope: ProxScope;
+  players: { guid: string; name: string | null }[];
+}
+
+export interface JourneyPathPoint {
+  t: number;
+  x: number;
+  y: number;
+  z: number;
+  health: number;
+  speed: number;
+  stance: number;
+  sprint: number;
+  event: string | null;
+}
+
+export interface JourneyLife {
+  life_index: number;
+  player_class: string;
+  spawn_time_ms: number;
+  death_time_ms: number | null;
+  duration_ms: number;
+  total_distance: number;
+  sprint_pct: number | null;
+  death_type: string | null;
+  path: JourneyPathPoint[];
+  /** NO coordinates on the wire — kill and death records carry `time` and
+   *  names/outcomes only (the first type GUESSED x/y and every marker was
+   *  silently skipped by its own finite filter; both reviewers read the
+   *  fixture and said so). Marker positions are DERIVED from the nearest
+   *  path point by timestamp. */
+  kills: {
+    time: number; victim_name: string | null; outcome: string | null;
+    denied_ms: number | null; spawn_timing_score: number | null;
+    time_to_next_spawn: number | null;
+  }[];
+  death: {
+    time: number; killer_name: string | null; outcome: string | null;
+    reviver_name: string | null; gibber_name: string | null;
+    victim_wait_ms: number | null;
+  } | null;
+  proximity_series: {
+    t: number; nearest_teammate: number | null; nearest_enemy: number | null;
+    teammates_500u: number; enemies_500u: number;
+  }[];
+  solo_pct: number | null;
+  objective_events: { t: number; kind: string | null }[];
+  narrative: string;
+}
+
+export interface PlayerJourney {
+  status: string;
+  scope: ProxScope;
+  player: { guid: string; name: string | null; team: string } | null;
+  lives: JourneyLife[];
+  summary: { lives?: number };
+  message?: string | null;
+}
+
+export interface PushHeatmap {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  perspective: string;
+  scope: ProxScope;
+  push_deaths: number;
+  carrier_deaths: number;
+  unique_deaths: number;
+  hotzones: { x: number; y: number; count: number }[];
+}
+
+/** The wave ledger — clock_validation per team carries the FIVE states
+ *  (validated / unvalidated / failed / inconsistent / unavailable; design
+ *  17 §4 explicitly says take five, not the contract's four). */
+export interface WaveClockValidation {
+  status: string;
+  interval_ms: number | null;
+  offset_ms: number | null;
+  timing_observations: number;
+  landing_clusters: number;
+  spawn_callbacks: number;
+  post_revive_spawn_callbacks: number;
+  passing_landing_clusters: number;
+  /** Always read with its numerator/denominator neighbours — a bare ratio
+   *  hides how little it stands on. */
+  pass_ratio: number | null;
+}
+
+export interface WaveCycles {
+  status: string;
+  scope: ProxScope;
+  clock_protocol: string;
+  clock_validation: Record<string, WaveClockValidation>;
+  excluded_unlinked_kills: number;
+  excluded_ineligible_linked_kills: number;
+  round_len_ms: number;
+  clocks: Record<string, { offset_ms: number | null; interval_ms: number | null }>;
+  summary: { cycles?: number; axis_won?: number; allies_won?: number; contested?: number };
+  cycles: {
+    start_ms: number; end_ms: number; wave: number | null;
+    kills_axis: number; kills_allies: number;
+    denied_axis_s: number; denied_allies_s: number;
+    first_blood: string | null; winner: string | null;
   }[];
 }
