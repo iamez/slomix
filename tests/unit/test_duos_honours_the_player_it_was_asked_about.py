@@ -214,3 +214,59 @@ class TestTheFilterReachesTheQueryNotOnlyThePythonAfterIt:
     def test_an_absent_guid_is_reported_absent(self):
         _, payload = self._call(None)
         assert payload["scope"]["player_guid"] is None
+
+
+class TestTheAttackerFallbackSurvivesTheSqlNarrowing:
+    """⛔ THE PRE-FILTER LOOKED AT ONE COLUMN AND THE PYTHON LOOKS AT TWO.
+
+    `_compute_scoped_duos` deliberately falls back to `attackers` when
+    `crossfire_participants` is empty, and even searches `guid_to_name` — built
+    from attackers — when applying the exact player filter. Narrowing the query
+    on participants alone therefore discarded rows the UNFILTERED endpoint can
+    still aggregate: a filtered request answering with LESS than the data
+    supports, which is the failure the narrowing was added to prevent, inverted.
+
+    ⚠️ Measured: 0 such rows in the live table today. The fallback exists
+    because they are expected, so this is latent rather than hypothetical.
+    Codex on #860.
+    """
+
+    @staticmethod
+    def _capture():
+        seen = {}
+
+        class _Db:
+            async def fetch_all(self, query, params=None):
+                seen.setdefault("q", []).append((query, params))
+                return []
+            async def fetch_one(self, *a, **k): return None
+            async def fetch_val(self, *a, **k): return 0
+
+        return seen, _Db
+
+    def test_the_narrowing_accepts_either_column(self):
+        import asyncio
+
+        from website.backend.routers.proximity_combat import get_proximity_duos
+        seen, Db = self._capture()
+        asyncio.run(get_proximity_duos(player_guid="AAAA1111", db=Db()))
+        q = [x for x in seen["q"] if "crossfire_participants" in x[0]][-1][0].upper()
+        # ⚠️ THE FILTER FRAGMENT, NOT THE WHOLE QUERY. `attackers` is in the
+        # SELECT list too, so `"ATTACKERS" in q` was true whether the narrowing
+        # mentioned it or not — a guard passing on a different occurrence of the
+        # word it was looking for. Found by a mutation that removed the column
+        # from the filter and changed nothing.
+        i = q.index("AND (UPPER(CAST(CROSSFIRE_PARTICIPANTS")
+        fragment = q[i:q.index("ORDER BY", i)]
+        assert "ATTACKERS" in fragment, (
+            f"the pre-filter reads only one of the two columns the Python "
+            f"fallback reads: {fragment}")
+
+    def test_a_row_with_only_attackers_still_produces_its_pair(self):
+        """The behaviour the SQL must not cut off, proven in the helper."""
+        att = [{"guid": "AAAA1111" + "0" * 24, "name": "alpha"},
+               {"guid": "BBBB2222" + "0" * 24, "name": "bravo"}]
+        rows = [(json.dumps(att), json.dumps([]), 100, "killed")]
+        duos = _compute_scoped_duos(rows, 10, guid_name_map=NAMES,
+                                    player_guid="AAAA1111")
+        assert _pairs(duos) == {("alpha", "bravo")}
