@@ -94,7 +94,34 @@ _Z_POWER = 0.841621234      # one-sided 80%
 # round_number IN (1,2): R0 rows are the importer's summary copy and are NOT a
 # data source (contract in docs/CLAUDE.md). Bot rounds and unresolved winners
 # cannot answer "did this side win", so they are excluded rather than assumed.
-ROWS_SQL = """
+#: ⛔ ONE DEFINITION, THREE CALL SITES. The gate has to hold in the outer
+#: filter AND on both aliases inside the pairing CTE. Pasting it three times is
+#: how a guard ends up agreeing with a copy it was not testing — measured: a
+#: mutation that broke ONE copy left the source test green, because the phrase
+#: it grepped still existed in the other two. Built from a single template, so
+#: the three cannot drift and a test that breaks the template breaks all of
+#: them. `@A@` rather than `{a}` because this string is full of SQL braces.
+#: Codex on #866.
+_CALENDAR_GATE = """(CASE WHEN @A@.round_date ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
+             AND (@A@.round_time ~ '^[0-9]{1,6}$'
+                  AND lpad(@A@.round_time, 6, '0') ~ '^([01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]$'
+                  OR @A@.round_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$')
+        THEN substr(@A@.round_date, 9, 2)::int <= CASE substr(@A@.round_date, 6, 2)
+               WHEN '02' THEN CASE WHEN (substr(@A@.round_date, 1, 4)::int % 4 = 0
+                                         AND (substr(@A@.round_date, 1, 4)::int % 100 <> 0
+                                              OR substr(@A@.round_date, 1, 4)::int % 400 = 0))
+                                   THEN 29 ELSE 28 END
+               WHEN '04' THEN 30 WHEN '06' THEN 30
+               WHEN '09' THEN 30 WHEN '11' THEN 30
+               ELSE 31 END
+        ELSE FALSE END)"""
+
+
+def _calendar_gate(alias: str) -> str:
+    return _CALENDAR_GATE.replace("@A@", alias)
+
+
+_ROWS_SQL_TEMPLATE = """
 WITH candidate_pairs AS (
   -- The R1/R2 window is many-to-many: the same map replayed inside a session
   -- gives one R1 several candidate R2s, and an abandoned R1 followed by a real
@@ -121,6 +148,13 @@ WITH candidate_pairs AS (
          OR r1.round_status IS NULL)
     AND (r2.round_status IN ('completed', 'substitution')
          OR r2.round_status IS NULL)
+    -- ⛔ AND THE CLOCK GATE HOLDS HERE TOO, for the same reason the status gate
+    -- had to: rejecting a malformed half in the outer filter removes only its
+    -- PLAYER rows, while this CTE still lets it pair — its duration and R2
+    -- winner then ride onto the retained half through `pair_margin`, and it can
+    -- displace a valid pairing in the mutual-choice matching. Codex on #866.
+    AND @GATE_r1@
+    AND @GATE_r2@
     AND r1.actual_duration_seconds IS NOT NULL
     AND r2.actual_duration_seconds IS NOT NULL
 ), r1_choice AS (
@@ -244,10 +278,15 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- `round_date` is unconstrained TEXT too, and a malformed one DOES abort the
   -- whole query. Both columns are checked here so an unreadable row leaves the
   -- universe instead of reordering it. Codex on #858.
-  AND r.round_date ~ '^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$'
-  AND ((r.round_time ~ '^[0-9]{1,6}$'
-        AND lpad(r.round_time, 6, '0') ~ '^([01][0-9]|2[0-3])[0-5][0-9][0-5][0-9]$')
-       OR r.round_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$')
+  -- ⛔ MONTH AND DAY RANGES ARE NOT A CALENDAR. The independent ranges above
+  -- admit 2026-02-31, 2026-04-31 and non-leap 2025-02-29, and the cast then
+  -- raises "date/time field value out of range" — aborting the whole query in
+  -- exactly the malformed-date case the guard exists to exclude. `to_date` is
+  -- no help: it raises too, so it cannot BE the guard. Checked arithmetically
+  -- instead, inside ONE `CASE` so the shape test is guaranteed to run before
+  -- the `::int` casts — PostgreSQL does not promise an evaluation order for
+  -- separate `AND` operands. Codex on #866.
+  AND @GATE_r@
   AND r.gaming_session_id IS NOT NULL
   AND pcs.round_number IN (1, 2)
   AND pcs.team IN (1, 2)
@@ -290,6 +329,11 @@ WHERE r.is_valid AND NOT COALESCE(r.is_bot_round, FALSE)
   -- constant, which is both what the SQL-injection scanners want to see and
   -- what stops a future filter from being pasted in by hand.
 """
+
+ROWS_SQL = (_ROWS_SQL_TEMPLATE
+            .replace("@GATE_r1@", _calendar_gate("r1"))
+            .replace("@GATE_r2@", _calendar_gate("r2"))
+            .replace("@GATE_r@", _calendar_gate("r")))
 
 
 @dataclass(frozen=True)
@@ -369,6 +413,9 @@ class Family:
     # rides inside the manifest hash so the gate already written for the digest
     # refuses a changed cohort too. Codex on #858.
     frozen_cohort: str | None = None
+    #: The discovery half's round membership, frozen for the same reason: a
+    #: verdict depends on BOTH halves, so binding one binds half the experiment.
+    frozen_discovery: str | None = None
     split_fraction: float = DISCOVERY_FRACTION
     resamples: int = RESAMPLES
     seed: int = SEED
@@ -400,6 +447,7 @@ class Family:
             "outcome": self.outcome,
             "frozen_cutoff": self.frozen_cutoff,
             "frozen_cohort": self.frozen_cohort,
+            "frozen_discovery": self.frozen_discovery,
             "split_fraction": self.split_fraction,
             "resamples": self.resamples,
             "seed": self.seed,
@@ -494,7 +542,8 @@ OUTCOMES = {"win": outcome_win, "seconds": outcome_seconds}
 
 
 def within_round_spread(rows_by_round: dict, metric: Callable,
-                        outcome: Callable = outcome_win) -> float | None:
+                        outcome: Callable = outcome_win,
+                        contributed: list | None = None) -> float | None:
     """§8.6 reference implementation, kept within round (§8.1).
 
     Per round: rank that round's players by the metric, split at the median,
@@ -506,7 +555,7 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
     is exactly how `distance_per_life` and `denied_time` fooled the #556 pass.
     """
     diffs = []
-    for players in rows_by_round.values():
+    for rid, players in rows_by_round.items():
         vals = [(metric(p), p) for p in players]
         vals = [(v, p) for v, p in vals if v is not None]
         if len(vals) < MIN_PLAYERS_PER_ROUND:
@@ -549,13 +598,16 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
         lo_mean = sum(outcome(p) for _, p in lo) / len(lo)
         hi_mean = sum(outcome(p) for _, p in hi) / len(hi)
         diffs.append(hi_mean - lo_mean)
+        if contributed is not None:
+            contributed.append(rid)
     if len(diffs) < 2:
         return None
     return statistics.mean(diffs)
 
 
 def within_round_point_biserial(rows_by_round: dict, metric: Callable,
-                                outcome: Callable = outcome_win) -> float | None:
+                                outcome: Callable = outcome_win,
+                                contributed: list | None = None) -> float | None:
     """Same question as §8.6, without throwing the magnitudes away.
 
     §8.6's median split reduces each player to above/below and each round to a
@@ -692,15 +744,31 @@ def _as_instant(value) -> datetime:
     """
     if isinstance(value, datetime):
         return value
-    text = str(value).strip().replace("Z", "+00:00")
+    text = str(value).strip()
     try:
+        # `fromisoformat` reads a trailing `Z` natively from 3.11 onward, which
+        # is the oldest interpreter CI runs — the manual substitution ruff
+        # flagged (FURB162) was doing nothing.
         parsed = datetime.fromisoformat(text)
     except ValueError as exc:
         raise ValueError(
             f"cutoff is not a timestamp: {value!r} — the frozen boundary has to "
             f"be an instant, not a string that happens to sort"
         ) from exc
-    return parsed.replace(tzinfo=None) if parsed.tzinfo else parsed
+    if parsed.tzinfo is not None:
+        # ⛔ REFUSED, NOT REINTERPRETED. `replace(tzinfo=None)` DISCARDS the
+        # offset rather than converting it, so `2026-07-13T19:00:00Z` and
+        # `2026-07-13T21:00:00+02:00` — the same instant — would select
+        # different cohorts. The database clock is naive, so there is no correct
+        # zone to convert INTO either; the honest answer is to say so rather
+        # than pick one silently. Codex on #866.
+        raise ValueError(
+            f"cutoff carries a UTC offset: {value!r}. The round clock in this "
+            f"database is naive (timestamp WITHOUT time zone), so an offset "
+            f"cannot be converted, only dropped — and dropping it would make "
+            f"two spellings of one instant choose different holdouts. Pass the "
+            f"local wall-clock form, e.g. '2026-07-13 21:00:00'.")
+    return parsed
 
 
 def chronological_split(block_times: dict, fraction: float,
@@ -741,6 +809,12 @@ def chronological_split(block_times: dict, fraction: float,
 
 # --- §8.4: family-wise error ---------------------------------------------------
 MIN_USABLE_REPLICATES = 100
+
+#: ⛔ The floor a FINAL run has to clear, distinct from the one above: that one
+#: is "an interval exists at all", this one is "the max-T tail is stable enough
+#: to retire a candidate". §8.4 of the spec calls 1,000 exploratory, so the
+#: default of 2,000 is the smallest number the protocol treats as a result.
+PROTOCOL_RESAMPLE_FLOOR = RESAMPLES
 MARGIN_AGREEMENT_FLOOR = 90.0  # percent; below this an outcome is not itself
 # #556 measured kpr's within-round spread near +0.028. Calibration asks whether
 # this implementation reproduces that MAGNITUDE, not whether it repeats that
@@ -861,7 +935,24 @@ _MEDIAN_SPLIT_FAMILY = [
               "higher_is_better", _null_value),
     Candidate("kd_ratio", "kills / max(deaths,1)", "higher_is_better",
               lambda p: float(p["kills"] or 0) / max(float(p["deaths"] or 0), 1.0)),
-    Candidate("dpm", "damage given per minute played", "higher_is_better",
+    # ⚠️ NAMED IN THE DESCRIPTION, WHICH MEANS IT RIDES INTO THE MANIFEST.
+    # `time_played_seconds` is not always a measurement: the parser sets it to
+    # the whole round duration and only overrides it when the Lua TAB[22] field
+    # is present (community_stats_parser.py:1116). For stopwatch that default is
+    # deliberate — teams are locked, so everyone does play the full round — but
+    # it does not cover late joiners or early disconnects, whose per-player DPM
+    # is then understated and whose within-round rank can move.
+    # ⛔ The two cases are INDISTINGUISHABLE from the database: 1,326 of 6,288
+    # eligible player rows have `time_played_seconds` exactly equal to the round
+    # duration, and no column says which of them was filled in. Filtering them
+    # would discard as many genuine full-round players as substituted ones, so
+    # this is recorded as a known input limitation of the candidate rather than
+    # pretended away. Codex on #818.
+    Candidate("dpm",
+              "damage given per minute played — ⚠️ per-player minutes fall back "
+              "to the full round duration when Lua TAB[22] is absent, which "
+              "understates late joiners and early disconnects",
+              "higher_is_better",
               lambda p: float(p["dg"] or 0) / _minutes(p)),
     # ⛔ This used to divide by `deaths * 100` while calling itself a damage
     # RATIO, and `damage_received` was not even loaded. The manifest hashed the
@@ -948,18 +1039,30 @@ def analyse(blocks: dict, keep: set, family: Family) -> dict:
     # the covariance that makes the interval family-wise.
     draws = block_draws(sub, family.resamples, family.seed)
     point, boot = {}, {}
+    # ⛔ COUNT THE ROUNDS THAT ACTUALLY FED THE ESTIMATE. `_counts()` reports
+    # every round loaded in the selected blocks, but the estimators skip rounds
+    # they cannot measure — unresolved pairs under `--outcome seconds`, rounds
+    # with no outcome variation, rounds too small to split. The printed sample
+    # size and the floor's "at N rounds" statement therefore overstated the
+    # evidence, potentially by a lot given the documented pairing coverage.
+    # Collected FROM the estimator rather than recomputed beside it, so the
+    # count cannot drift from the filter it is counting. Codex on #818.
+    contributing: dict[str, int] = {}
     for c in family.candidates:
         # ⛔ THE CANDIDATE'S OWN ESTIMATOR, on both halves of its evidence.
         # `block_bootstrap()` has taken an `estimator` argument all along and
         # nothing ever passed one, so every declared variant was silently
         # evaluated through the median split — a mechanism with no caller.
         est = ESTIMATORS[c.estimator]
-        pt = est(flat, c.fn, oc)
+        fed: list = []
+        pt = est(flat, c.fn, oc, fed)
         if pt is None:
             continue
         point[c.cid] = pt
+        contributing[c.cid] = len(fed)
         boot[c.cid] = block_bootstrap(sub, c.fn, draws, estimator=est, outcome=oc)
-    return {"point": point, "boot": boot, "rounds": len(flat)}
+    return {"point": point, "boot": boot, "rounds": len(flat),
+            "contributing": contributing}
 
 
 def report(family: Family, disc: dict, conf: dict,
@@ -983,7 +1086,17 @@ def report(family: Family, disc: dict, conf: dict,
              else "  (signed stopwatch margin, seconds)"))
     print(f"resamples       : {family.resamples} block resamples, seed {family.seed}")
     print(f"split           : {d_counts[0]} discovery blocks / {c_counts[0]} confirmation blocks")
-    print(f"                  {d_counts[1]} rounds / {c_counts[1]} rounds")
+    print(f"                  {d_counts[1]} rounds / {c_counts[1]} rounds LOADED")
+    # ⚠️ LOADED is not MEASURED. The estimators skip rounds they cannot measure,
+    # so the line above is an upper bound on the evidence and the line below is
+    # the evidence. Printing only the first is what made the sample look larger
+    # than it was (Codex on #818).
+    _contrib = conf.get("contributing") or {}
+    if _contrib:
+        lo_n, hi_n = min(_contrib.values()), max(_contrib.values())
+        span = f"{lo_n}" if lo_n == hi_n else f"{lo_n}-{hi_n}"
+        print(f"                  {span} of those confirmation rounds actually fed "
+              f"an estimate")
     print(f"cutoff          : {cutoff}")
     print(f"max-T crit      : {crit:.3f}  (family-wise {int((1-family.alpha)*100)}%)")
     print("=" * 108)
@@ -1008,6 +1121,19 @@ def report(family: Family, disc: dict, conf: dict,
         d = disc["point"].get(cid, float("nan"))
         k = conf["point"][cid]
         want_pos = c.direction == "higher_is_better"
+        # ⛔ AN ABSENT DISCOVERY MEASUREMENT IS NOT A FLIPPED DIRECTION.
+        # A candidate measurable in confirmation but not in discovery — a sparse
+        # metric whose coverage improves in later blocks — got `d = nan`, and
+        # `nan > 0` is False, so `dir_ok` came out False and the run printed
+        # "FAILS — direction flipped". That RETIRES the candidate on the strength
+        # of a measurement nobody took, and the protocol requires an observed
+        # discovery direction rather than an assumed one. Codex on #818.
+        if math.isnan(d):
+            print(f"{cid:<12}{'—':>9}{k:>+9.3f}  excluded: no discovery estimate "
+                  f"— unmeasured in the discovery half, not contradicted by it")
+            results.append({"id": cid, "verdict": "EXCLUDED",
+                            "why": "no discovery estimate"})
+            continue
         dir_ok = (d > 0 and k > 0) if want_pos else (d < 0 and k < 0)
         if cid not in intervals:
             # no usable bootstrap spread: unmeasured, which is not the same as
@@ -1036,8 +1162,14 @@ def report(family: Family, disc: dict, conf: dict,
               f"{f'[{lo:+.3f}, {hi:+.3f}]':>22}{margin:>8.2f}{hp[cid]:>9.3f}"
               f"{'+' if want_pos else '-':>5}  {verdict}"
               + (f" — {why}" if why else ""))
+        # ⚠️ The RAW p-value travels beside the Holm-adjusted one. Publishing
+        # only the adjusted figure hides how much of a verdict comes from the
+        # family-wise correction rather than from the data — §8.5 asks for the
+        # inference to be auditable, and "0.040 after Holm" says nothing about
+        # whether the raw value was 0.039 or 0.004.
         results.append({"id": cid, "discovery": d, "confirmation": k,
                         "interval": [lo, hi], "margin_sd": margin,
+                        "raw_p": pvals.get(cid, float("nan")),
                         "holm_p": hp[cid], "verdict": verdict})
     print("-" * 108)
 
@@ -1070,6 +1202,39 @@ def report(family: Family, disc: dict, conf: dict,
                   f"({len(by_estimator[est])} candidates, "
                   f"{int(POWER_TARGET * 100)}% power)")
     return results
+
+
+def resample_gate(resamples: int) -> tuple[int, str] | None:
+    """Refuse a run whose resample count cannot support what it would claim.
+
+    Returns `(exit_code, message)` to refuse, or None to proceed.
+
+    ⛔ TWO DIFFERENT FLOORS, AND ONLY THE LOWER ONE WAS ENFORCED.
+    `MIN_USABLE_REPLICATES` is the point below which no interval exists at all.
+    The PROTOCOL floor is higher: §8.4 says even 1,000 resamples are exploratory
+    rather than a final multiplicity-adjusted result, because a family-wise claim
+    rests on the max-T TAIL and a tail estimated from that few draws is not
+    stable. Anything between the two produced verdicts and exited 0.
+
+    A separate function so a test can drive it — the check itself lives in
+    `main()` before any data is loaded. Codex on #818.
+    """
+    if resamples < MIN_USABLE_REPLICATES:
+        return (5, f"⛔ --resamples {resamples} is below the "
+                   f"{MIN_USABLE_REPLICATES} needed for any usable interval.\n"
+                   f"   Such a run produces no inference at all, yet every "
+                   f"candidate would read FAILS and\n   both controls would look "
+                   f"correct — a family retired by an instrument that never "
+                   f"measured it.")
+    if resamples < PROTOCOL_RESAMPLE_FLOOR:
+        return (9, f"⛔ --resamples {resamples} is below the protocol floor of "
+                   f"{PROTOCOL_RESAMPLE_FLOOR}.\n"
+                   f"   §8.4 calls 1,000 exploratory; a family-wise claim rests "
+                   f"on the max-T TAIL, and a tail\n   estimated from that few "
+                   f"draws is not stable enough to retire anything. Re-run with "
+                   f"at least\n   {PROTOCOL_RESAMPLE_FLOOR}, or say out loud that "
+                   f"the output is exploration rather than a result.")
+    return None
 
 
 def manifest_gate(expected: str | None, computed: str,
@@ -1112,22 +1277,51 @@ def manifest_gate(expected: str | None, computed: str,
     return None
 
 
-def cohort_digest(blocks) -> str:
-    """Which blocks the holdout WAS, as one short string.
+def normalise_digest(value: object) -> str | None:
+    """One spelling of a pasted digest, used everywhere it is compared OR stored.
+
+    ⛔ The gates normalised (`strip().lower()`) while the family stored the RAW
+    string — and the manifest hashes what is STORED. So a digest pasted in upper
+    case or with a trailing newline passed the cohort gate and then failed the
+    manifest gate, reporting "something moved" about an experiment that had not
+    changed at all. Codex on #866.
+    """
+    text = str(value or "").strip().lower()
+    return text or None
+
+
+def cohort_digest(blocks, keep=None) -> str:
+    """Which ROUNDS the half WAS, as one short string.
+
+    ⛔ BLOCK IDS ARE NOT ENOUGH, and the reason is specific to this schema.
+    `_calculate_gaming_session_id()` CONTINUES the preceding session for any gap
+    inside the configured limit — so rounds played after a preregistration land
+    under the SAME `gaming_session_id`. `load()` adds them beneath the existing
+    block and `analyse()` consumes them, and a digest over block ids alone does
+    not move. The holdout grows while both gates report that nothing changed:
+    the freeze defeated from inside a block instead of by adding one.
+    Codex on #866, after the block-level cohort landed.
 
     Sorted so the digest does not depend on iteration order, and the COUNT is
-    included so that a set of the same size with different members and a set of
+    included so a set of the same size with different members and a set of
     different size are both distinguishable. Truncated to 16 hex characters for
-    a manifest a person has to copy by hand — the artifact is protection against
-    drift, not against an adversary.
+    a manifest a person copies by hand — protection against drift, not against
+    an adversary.
+
+    `keep` selects which blocks to read from a `blocks` mapping; without it,
+    `blocks` is taken as the identities themselves (used by the tests).
     """
-    ids = sorted(str(b) for b in blocks)
+    if keep is None:
+        ids = sorted(str(b) for b in blocks)
+    else:
+        ids = sorted(str(rid) for b in keep for rid in blocks.get(b, {}))
     blob = f"{len(ids)}:" + "|".join(ids)
     return hashlib.sha256(blob.encode()).hexdigest()[:16]
 
 
 def preregister(family: Family, proposed_cutoff: str,
-                confirmation_blocks=()) -> dict:
+                confirmation_blocks=(), blocks=None,
+                discovery_blocks=()) -> dict:
     """The artifact §8.5 requires, produced BEFORE the holdout is opened.
 
     ⛔ The no-cutoff branch was right to stop — a holdout that has been looked
@@ -1142,8 +1336,20 @@ def preregister(family: Family, proposed_cutoff: str,
     point is that the rerun recomputes the SAME hash from `--cutoff <proposed>`.
     A digest that does not match the rerun commits to nothing.
     """
-    frozen = replace(family, frozen_cutoff=proposed_cutoff,
-                     frozen_cohort=cohort_digest(confirmation_blocks))
+    frozen = replace(
+        family, frozen_cutoff=proposed_cutoff,
+        frozen_cohort=cohort_digest(blocks if blocks is not None
+                                    else confirmation_blocks,
+                                    confirmation_blocks if blocks is not None else None),
+        # ⛔ THE DISCOVERY HALF IS FROZEN TOO. A historical match imported with a
+        # timestamp BEFORE the cutoff leaves the confirmation cohort untouched,
+        # so both gates pass — but `report()` requires the discovery estimate to
+        # have the expected direction before it will say SHIPS, so the published
+        # verdict can change under the same artifact. Freezing one half binds
+        # half the experiment. Codex on #866.
+        frozen_discovery=cohort_digest(blocks if blocks is not None
+                                       else discovery_blocks,
+                                       discovery_blocks if blocks is not None else None))
     return {"manifest": frozen.frozen(), "manifest_sha256": frozen.manifest_hash()}
 
 
@@ -1269,6 +1475,11 @@ async def main() -> int:
     ap.add_argument("--seed", type=int, default=SEED,
                     help="published seed; changing it changes the manifest hash")
     ap.add_argument(
+        "--discovery", metavar="DIGEST",
+        help="the discovery-cohort digest printed by the preregistration run. "
+             "⛔ REQUIRED with --cutoff: a verdict depends on BOTH halves, so "
+             "freezing only the holdout binds only half the experiment.")
+    ap.add_argument(
         "--cohort", metavar="DIGEST",
         help="the confirmation-cohort digest printed by the preregistration "
              "run. ⛔ REQUIRED with --cutoff: the cutoff is a LOWER BOUND, so "
@@ -1281,13 +1492,10 @@ async def main() -> int:
              "compares what is about to be analysed against what was registered.")
     args = ap.parse_args()
 
-    if args.resamples < MIN_USABLE_REPLICATES:
-        print(f"⛔ --resamples {args.resamples} is below the {MIN_USABLE_REPLICATES} "
-              f"needed for any usable interval.\n"
-              f"   Such a run produces no inference at all, yet every candidate "
-              f"would read FAILS and\n   both controls would look correct — a "
-              f"family retired by an instrument that never measured it.")
-        return 5
+    gate = resample_gate(args.resamples)
+    if gate:
+        print(gate[1])
+        return gate[0]
 
     blocks, times = await load(args.spatial)
     if not blocks:
@@ -1303,7 +1511,13 @@ async def main() -> int:
         seed=args.seed,
         outcome=args.outcome,
         frozen_cutoff=args.cutoff,
-        frozen_cohort=args.cohort,
+        # ⚠️ NORMALISED ONCE, USED EVERYWHERE. The cohort gate compared
+        # `strip().lower()` while the family stored the RAW string — so a digest
+        # pasted in upper case passed the cohort check and then failed the
+        # manifest check, because the manifest hashes what is stored. One value,
+        # one spelling. Codex on #866.
+        frozen_cohort=normalise_digest(args.cohort),
+        frozen_discovery=normalise_digest(args.discovery),
     )
 
     disc_b, conf_b, ordered, cut = chronological_split(
@@ -1314,7 +1528,7 @@ async def main() -> int:
         # ⛔ STOP. Warning and continuing would expose the latest 30% and issue
         # verdicts on it; re-running later with the printed flag cannot make
         # that holdout untouched again. The proposal is the whole output.
-        pre = preregister(family, cutoff, conf_b)
+        pre = preregister(family, cutoff, conf_b, blocks, disc_b)
         print(f"⛔ NO FROZEN CUTOFF. This run proposes {cutoff} and stops there.\n"
               f"   Confirmation data stays unopened until the boundary is fixed,\n"
               f"   because a holdout that has been looked at is not a holdout:\n\n"
@@ -1326,9 +1540,12 @@ async def main() -> int:
         print(f"preregistered manifest sha256 : {pre['manifest_sha256']}")
         print(f"     rerun with: --cutoff '{cutoff}' "
               f"--cohort {pre['manifest']['frozen_cohort']} "
+              f"--discovery {pre['manifest']['frozen_discovery']} "
               f"--expect-manifest {pre['manifest_sha256']}")
         print(f"     confirmation cohort: {len(conf_b)} blocks, "
               f"digest {pre['manifest']['frozen_cohort']}")
+        print(f"     discovery cohort   : {len(disc_b)} blocks, "
+              f"digest {pre['manifest']['frozen_discovery']}")
         print("frozen family manifest (record this BEFORE re-running):")
         for line in json.dumps(pre["manifest"], indent=2,
                                sort_keys=True).splitlines():
@@ -1381,7 +1598,8 @@ async def main() -> int:
     # so the gate below would refuse anyway — but it would say "something moved",
     # and the reader would go looking for an edited formula instead of the four
     # new sessions that arrived since Tuesday.
-    actual_cohort = cohort_digest(conf_b)
+    actual_cohort = cohort_digest(blocks, conf_b)
+    actual_discovery = cohort_digest(blocks, disc_b)
     if not args.cohort:
         print(f"⛔ NO REGISTERED COHORT. `--cutoff` is a LOWER bound, so without "
               f"this the holdout\n   grows as matches arrive and the same "
@@ -1389,9 +1607,24 @@ async def main() -> int:
               f"stamp on it. This run's confirmation half is {len(conf_b)} "
               f"blocks:\n\n     --cohort {actual_cohort}\n")
         return 7
-    if args.cohort.strip().lower() != actual_cohort:
+    if not args.discovery:
+        print(f"⛔ NO REGISTERED DISCOVERY COHORT. A verdict needs the discovery "
+              f"direction as well as\n   the confirmation interval, so freezing "
+              f"only the holdout binds half the experiment.\n   This run's "
+              f"discovery half is {len(disc_b)} blocks:\n\n"
+              f"     --discovery {actual_discovery}\n")
+        return 10
+    if normalise_digest(args.discovery) != actual_discovery:
+        print(f"⛔ DISCOVERY COHORT CHANGED — refusing to open the confirmation "
+              f"half.\n   registered : {normalise_digest(args.discovery)}\n"
+              f"   this run   : {actual_discovery}  ({len(disc_b)} blocks)\n\n"
+              f"   A match imported below the cutoff changes the discovery "
+              f"estimate, and `report()`\n   requires its direction before it "
+              f"will say SHIPS. Same artifact, different verdict.\n")
+        return 11
+    if normalise_digest(args.cohort) != actual_cohort:
         print(f"⛔ COHORT CHANGED — refusing to open the confirmation half.\n"
-              f"   registered : {args.cohort.strip().lower()}\n"
+              f"   registered : {normalise_digest(args.cohort)}\n"
               f"   this run   : {actual_cohort}  ({len(conf_b)} blocks)\n\n"
               f"   The holdout is not the one that was registered. If matches "
               f"arrived since, that is\n   a NEW experiment and needs a new "

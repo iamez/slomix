@@ -46,9 +46,12 @@ from validation_family import (  # noqa: E402 - path set above
     manifest_gate,
     margin_agreement,
     max_t_intervals,
+    normalise_digest,
     outcome_seconds,
     outcome_win,
     preregister,
+    report,
+    resample_gate,
     within_round_point_biserial,
     within_round_spread,
 )
@@ -76,14 +79,31 @@ class TestTheResamplerIsNotDegenerate:
         assert len(set(draws)) > 1
 
     def test_same_seed_reproduces_the_published_table(self):
-        a = [_Rng(7).next_below(16) for _ in range(50)]
-        b = [_Rng(7).next_below(16) for _ in range(50)]
+        """⛔ ONE GENERATOR PER SEQUENCE, NOT ONE PER DRAW.
+
+        This built a FRESH `_Rng(7)` inside each comprehension element, so both
+        lists were fifty copies of the generator's first output. It compared a
+        constant against itself: state advancement could have stopped working
+        entirely and this would still have passed, under the name
+        "a published seed must reproduce the published result".
+
+        A control that cannot fail is the defect this whole module exists to
+        catch, sitting in the module's own tests. Codex on #818.
+        """
+        ra, rb = _Rng(7), _Rng(7)
+        a = [ra.next_below(16) for _ in range(50)]
+        b = [rb.next_below(16) for _ in range(50)]
         assert a == b, "a published seed must reproduce the published result"
+        assert len(set(a)) > 1, (
+            "the sequence never advanced — fifty identical draws is what the "
+            "old fixture was silently asserting")
 
     def test_different_seeds_disagree(self):
-        a = [_Rng(1).next_below(16) for _ in range(50)]
-        b = [_Rng(2).next_below(16) for _ in range(50)]
+        ra, rb = _Rng(1), _Rng(2)
+        a = [ra.next_below(16) for _ in range(50)]
+        b = [rb.next_below(16) for _ in range(50)]
         assert a != b
+        assert len(set(a)) > 1 and len(set(b)) > 1
 
     def test_bootstrap_of_varied_blocks_has_nonzero_spread(self):
         """End-to-end version of the bug: 16 blocks, real spread expected."""
@@ -684,7 +704,8 @@ class TestThePreregistrationIsAnArtifactNotAPromise:
         # can reproduce the digest without naming the cohort is a rerun that can
         # analyse a different one.
         rerun = self._family(frozen_cutoff=proposed,
-                             frozen_cohort=cohort_digest(blocks))
+                             frozen_cohort=cohort_digest(blocks),
+                             frozen_discovery=cohort_digest([]))
         assert pre["manifest_sha256"] == rerun.manifest_hash()
 
     def test_a_rerun_that_forgets_the_cohort_does_not_reproduce_the_digest(self):
@@ -1233,3 +1254,275 @@ class TestTheSpatialUniverseUsesTheCanonicalTrackLink:
         full universe silently becomes the Layer 4 one."""
         sql = _sql_without_comments(ROWS_SQL)
         assert "NOT $1::boolean OR r.id IN (SELECT id FROM tracked_rounds)" in sql
+
+
+def _one_candidate_family():
+    """Module level so both classes below can use it — reaching into another
+    test class's private helpers is what ruff's SLF001 was pointing at."""
+    return Family(name="t", filters="f", resamples=120, seed=5, candidates=[
+        Candidate("x", "d", "higher_is_better", _metric)])
+
+
+def _varied_blocks(n):
+    return {b: {b: _round([(9, 1), (8, 1), (2, 2), (1, 2)], 1 if b % 3 else 2)}
+            for b in range(n)}
+
+
+class TestAnAbsentDiscoveryEstimateIsNotAContradictedOne:
+    """⛔ `nan > 0` IS FALSE, AND THAT RETIRED CANDIDATES.
+
+    A candidate measurable in confirmation but not in discovery — a sparse
+    metric whose coverage improves in later blocks — got `d = nan`, so `dir_ok`
+    came out False and the table printed `FAILS — direction flipped`. An absent
+    measurement was converted into a NEGATIVE experimental verdict, which is the
+    strongest thing this harness can say. Codex on #818.
+    """
+
+    def test_a_candidate_without_a_discovery_estimate_is_excluded(self, capsys):
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        disc = {"point": {}, "boot": {}, "rounds": 0, "contributing": {}}
+        rows = report(fam, disc, conf, (0, 0), (12, 12), "2026-07-15")
+        out = capsys.readouterr().out
+        by = {r["id"]: r for r in rows}
+        assert by["x"]["verdict"] == "EXCLUDED", by["x"]
+        assert "direction flipped" not in out, (
+            "an unmeasured discovery half was reported as a contradicted one")
+        assert "no discovery estimate" in out
+
+    def test_a_measured_candidate_is_still_judged(self, capsys):
+        # CONTROL: excluding too eagerly would empty the table.
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        rows = report(fam, conf, conf, (12, 12), (12, 12), "2026-07-15")
+        assert {r["id"] for r in rows} == {"x"}
+        assert rows[0]["verdict"] != "EXCLUDED", rows[0]
+
+
+class TestTheReportPublishesWhatTheProtocolAsksFor:
+    def test_the_raw_p_value_travels_beside_the_adjusted_one(self):
+        """§8.5 asks for auditable inference. "0.040 after Holm" says nothing
+        about whether the raw value was 0.039 or 0.004 — that difference is the
+        whole weight of the family-wise correction."""
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        rows = report(fam, conf, conf, (12, 12), (12, 12), "2026-07-15")
+        assert "raw_p" in rows[0], rows[0].keys()
+        assert rows[0]["raw_p"] <= rows[0]["holm_p"] + 1e-9, (
+            "the Holm-adjusted value can only be larger than the raw one")
+
+    def test_the_printed_sample_size_says_LOADED_and_MEASURED(self, capsys):
+        """⛔ `_counts()` reports every round loaded in the selected blocks, and
+        the estimators skip the ones they cannot measure. Printing only the
+        first overstated the evidence."""
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        report(fam, conf, conf, (12, 12), (12, 99), "2026-07-15")
+        out = capsys.readouterr().out
+        assert "LOADED" in out
+        assert "actually fed an estimate" in out
+        assert conf["contributing"]["x"] == 12, conf["contributing"]
+
+
+class TestTheProtocolResampleFloorIsSeparateFromTheUsableOne:
+    def test_a_run_below_the_usable_floor_is_refused(self):
+        gate = resample_gate(50)
+        assert gate and gate[0] == 5 and "usable interval" in gate[1]
+
+    def test_a_run_between_the_two_floors_is_ALSO_refused(self):
+        """⛔ The gap nobody guarded: enough replicates for an interval to
+        exist, not enough for the max-T tail to be worth a verdict."""
+        from validation_family import MIN_USABLE_REPLICATES
+        gate = resample_gate(MIN_USABLE_REPLICATES + 1)
+        assert gate is not None, "a run between the two floors was allowed"
+        assert gate[0] == 9
+        assert "exploratory" in gate[1]
+
+    def test_the_protocol_floor_itself_proceeds(self):
+        # CONTROL: refusing everything would stop the harness entirely.
+        from validation_family import PROTOCOL_RESAMPLE_FLOOR
+        assert resample_gate(PROTOCOL_RESAMPLE_FLOOR) is None
+        assert resample_gate(PROTOCOL_RESAMPLE_FLOOR * 2) is None
+
+    def test_the_two_floors_are_different_numbers(self):
+        """⛔ Only the lower one was enforced. `MIN_USABLE_REPLICATES` is "an
+        interval exists at all"; the protocol floor is "the max-T tail is stable
+        enough to retire a candidate", and §8.4 calls 1,000 exploratory."""
+        from validation_family import MIN_USABLE_REPLICATES, PROTOCOL_RESAMPLE_FLOOR
+        assert PROTOCOL_RESAMPLE_FLOOR > MIN_USABLE_REPLICATES
+        assert PROTOCOL_RESAMPLE_FLOOR >= 2000
+
+
+class TestTheCohortIsRoundsNotBlocks:
+    """⛔ THE FREEZE WAS DEFEATED FROM INSIDE A BLOCK.
+
+    `_calculate_gaming_session_id()` CONTINUES the preceding session for any gap
+    inside the configured limit, so rounds played after a preregistration land
+    under the SAME `gaming_session_id`. `load()` adds them beneath the existing
+    block and `analyse()` consumes them — and a digest over block ids alone does
+    not move. The holdout grows while both gates report that nothing changed.
+
+    Codex on #866, immediately after the block-level cohort landed: the same
+    optional-stopping hole, entered through a different door.
+    """
+
+    BLOCKS = {"s1": {101: [], 102: []}, "s2": {201: []}}
+
+    def test_a_round_added_to_an_existing_block_moves_the_digest(self):
+        grown = {"s1": {101: [], 102: [], 103: []}, "s2": {201: []}}
+        assert cohort_digest(self.BLOCKS, {"s1", "s2"}) != cohort_digest(grown, {"s1", "s2"})
+
+    def test_the_same_rounds_hash_the_same_whatever_the_order(self):
+        same = {"s2": {201: []}, "s1": {102: [], 101: []}}
+        assert cohort_digest(self.BLOCKS, {"s1", "s2"}) == cohort_digest(same, {"s1", "s2"})
+
+    def test_a_block_left_out_is_a_different_cohort(self):
+        # CONTROL: the block selection still matters, it is just not the whole
+        # identity any more.
+        assert cohort_digest(self.BLOCKS, {"s1"}) != cohort_digest(self.BLOCKS, {"s1", "s2"})
+
+    def test_block_level_hashing_would_NOT_have_caught_it(self):
+        """The measurement that makes the previous fix insufficient, stated as a
+        test: hashing block ids gives the same answer before and after growth."""
+        grown = {"s1": {101: [], 102: [], 103: []}, "s2": {201: []}}
+        assert cohort_digest(sorted(self.BLOCKS)) == cohort_digest(sorted(grown))
+
+
+class TestBothHalvesAreFrozen:
+    """⛔ FREEZING ONE HALF BINDS HALF THE EXPERIMENT.
+
+    A historical match imported with a timestamp BELOW the cutoff leaves the
+    confirmation cohort untouched, so both gates pass — but `report()` requires
+    the discovery estimate to have the expected direction before it will say
+    SHIPS. The published verdict can therefore change under the same
+    preregistered artifact. Codex on #866.
+    """
+
+    def _family(self, **kw):
+        return Family(name="t", filters="f", candidates=[
+            Candidate("x", "d", "higher_is_better", _metric)], **kw)
+
+    def test_the_discovery_digest_is_in_the_frozen_terms(self):
+        a = self._family(frozen_cutoff="c", frozen_cohort="aa", frozen_discovery="d1")
+        b = self._family(frozen_cutoff="c", frozen_cohort="aa", frozen_discovery="d2")
+        assert a.manifest_hash() != b.manifest_hash()
+        assert a.frozen()["frozen_discovery"] == "d1"
+
+    def test_preregistration_publishes_both(self):
+        blocks = {"s1": {1: []}, "s2": {2: []}}
+        pre = preregister(self._family(), "2026-07-15", {"s2"}, blocks, {"s1"})
+        assert pre["manifest"]["frozen_cohort"] == cohort_digest(blocks, {"s2"})
+        assert pre["manifest"]["frozen_discovery"] == cohort_digest(blocks, {"s1"})
+        assert pre["manifest"]["frozen_cohort"] != pre["manifest"]["frozen_discovery"]
+
+
+class TestADateThatIsNotOnTheCalendar:
+    """⛔ MONTH AND DAY RANGES ARE NOT A CALENDAR.
+
+    Independent ranges admit `2026-02-31`, `2026-04-31` and non-leap
+    `2025-02-29`; the cast then raises "date/time field value out of range" and
+    aborts the WHOLE query — exactly the malformed-date case the guard was added
+    to exclude. `to_date` cannot be the guard either: it raises too.
+
+    Checked arithmetically inside ONE `CASE`, because PostgreSQL does not
+    promise an evaluation order for separate `AND` operands and the `::int`
+    casts must not run before the shape test. Codex on #866.
+    """
+
+    def test_the_day_count_depends_on_the_month(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "WHEN '04' THEN 30" in sql and "WHEN '11' THEN 30" in sql
+
+    def test_all_three_call_sites_carry_the_SAME_gate(self):
+        """⛔ FOUND BY A SURVIVING MUTATION. Breaking ONE of the three pasted
+        copies left this file green, because the phrase the source test grepped
+        still existed in the other two — a guard agreeing with a copy it was not
+        testing. The gate is built from one template now, and this counts."""
+        sql = _sql_without_comments(ROWS_SQL)
+        assert sql.count("WHEN '04' THEN 30") == 3, (
+            "the calendar gate is not on all three call sites")
+        assert sql.count("% 400 = 0") == 3
+
+    def test_the_template_is_the_single_source(self):
+        from validation_family import _calendar_gate
+        for alias in ("r", "r1", "r2"):
+            assert _calendar_gate(alias) in _sql_without_comments(
+                ROWS_SQL).replace("  ", " ") or _calendar_gate(alias)[:40] in ROWS_SQL
+        assert "@A@" not in ROWS_SQL, "a placeholder survived into the query"
+
+    def test_february_knows_about_leap_years(self):
+        sql = _sql_without_comments(ROWS_SQL)
+        assert "% 4 = 0" in sql and "% 100 <> 0" in sql and "% 400 = 0" in sql
+
+    def test_the_shape_test_guards_the_casts(self):
+        """CASE, not a bare AND: the `::int` on a non-numeric date would raise
+        the very error being prevented."""
+        sql = _sql_without_comments(ROWS_SQL)
+        i = sql.index("substr(r.round_date, 9, 2)::int")
+        assert "CASE WHEN r.round_date ~" in sql[:i]
+
+    def test_the_pairing_cte_carries_the_clock_gate_too(self):
+        """Rejecting a malformed half in the outer filter removes only its
+        PLAYER rows; this CTE would still let it pair and ride its duration onto
+        the retained half."""
+        sql = _sql_without_comments(ROWS_SQL)
+        for alias in ("r1", "r2"):
+            assert f"CASE WHEN {alias}.round_date ~" in sql, alias
+
+
+class TestAnOffsetBearingCutoffIsRefused:
+    """⛔ DISCARDING AN OFFSET IS NOT READING IT.
+
+    `replace(tzinfo=None)` dropped the offset rather than converting, so
+    `2026-07-13T19:00:00Z` and `2026-07-13T21:00:00+02:00` — one instant, two
+    spellings — selected different confirmation cohorts. The database clock is
+    naive, so there is no correct zone to convert INTO either; saying so beats
+    picking one silently. Codex on #866.
+    """
+
+    TIMES = {"a": datetime(2026, 7, 13, 20, 0, 0),  # noqa: DTZ001 - naive column
+             "b": datetime(2026, 7, 13, 22, 0, 0)}  # noqa: DTZ001
+
+    @pytest.mark.parametrize("cutoff", ["2026-07-13T19:00:00Z",
+                                        "2026-07-13T21:00:00+02:00",
+                                        "2026-07-13 21:00:00-05:00"])
+    def test_an_offset_is_refused_not_silently_dropped(self, cutoff):
+        with pytest.raises(ValueError, match="offset"):
+            chronological_split(self.TIMES, 0.7, cutoff)
+
+    def test_the_naive_forms_still_work(self):
+        # CONTROL: refusing offsets must not refuse the form the database uses.
+        for cutoff in ("2026-07-13 21:00:00", "2026-07-13T21:00:00"):
+            disc, conf, _, _ = chronological_split(self.TIMES, 0.7, cutoff)
+            assert disc == {"a"} and conf == {"b"}, cutoff
+
+
+class TestADigestHasOneSpelling:
+    """⛔ THE GATES NORMALISED AND THE MANIFEST DID NOT.
+
+    The cohort comparison used `strip().lower()` while `Family.frozen_cohort`
+    stored the raw string — and the manifest hashes what is STORED. A digest
+    pasted in upper case therefore passed the cohort gate and then failed the
+    manifest gate, reporting "something moved" about an experiment that had not
+    changed. Codex on #866.
+    """
+
+    H = "8d29cb96d9dbe7b0"
+
+    @pytest.mark.parametrize("raw", ["8D29CB96D9DBE7B0", "  8d29cb96d9dbe7b0\n",
+                                     "\t8D29Cb96D9dBe7B0 "])
+    def test_every_spelling_folds_to_one(self, raw):
+        assert normalise_digest(raw) == self.H
+
+    def test_nothing_stays_nothing(self):
+        # CONTROL: "" and "   " must remain absent, not become a digest — the
+        # gates tell "nothing was registered" apart from "something moved".
+        for empty in (None, "", "   "):
+            assert normalise_digest(empty) is None, empty
+
+    def test_a_different_digest_is_still_different(self):
+        assert normalise_digest("AAAA") != normalise_digest("BBBB")
