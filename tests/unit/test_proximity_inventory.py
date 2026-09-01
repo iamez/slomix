@@ -37,9 +37,11 @@ from tests.integration.test_endpoint_gap import (  # noqa: E402
 
 INVENTORY = REPO / "docs" / "parity" / "proximity_inventory.json"
 
-# Phase 5's remaining surface. Started at 67 on 2026-08-31 (61 proximity +
-# 5 replay/spider-web + 1 storytelling trades detail); every page PR that
-# adopts paths lowers it together with the flipped dispositions.
+# Phase 5's remaining surface. Started at 67 on 2026-08-31; now 65
+# proximity rows (trades/player-stats among them) + 1 replay row (the
+# spider-web /web path — the other three replay rows are dropped, and
+# every storytelling row is covered). Every page PR that adopts paths
+# lowers it together with the flipped dispositions.
 PENDING_BUDGET = 66
 
 O9_DROPPED = {

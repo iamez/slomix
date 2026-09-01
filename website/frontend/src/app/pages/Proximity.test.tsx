@@ -4,7 +4,13 @@ import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { Proximity } from './Proximity';
-import board from './__fixtures__/api_proximity_leaderboards.json';
+import type { ProximityLeaderboard } from '../lib/types';
+import boardJson from './__fixtures__/api_proximity_leaderboards.json';
+
+// `satisfies` makes the compiler hold the RECORDED fixture against the
+// declared wire type — this is what caught attribution.mode being a string
+// while the type only allowed numeric extensions (CodeRabbit on #856).
+const board = boardJson satisfies ProximityLeaderboard;
 
 /** Rendered against the RECORDED power board (10 entries, attribution
  * block, formula_version) — every asserted string is something the backend

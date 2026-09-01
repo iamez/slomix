@@ -304,7 +304,7 @@
           "note": "legacy engagement/teamplay panel — a later slice of the proximity page; pinned as pending in proximity_inventory.json"
         }
       },
-      "note": "first slice built 31. 8. (the ten-tab leaderboard section, parity proximity.leaderboards/lb-tabs); the six legacy panels captured by the inventory freeze are later slices"
+      "note": "first slice built 31. 8. (the ten-tab leaderboard section, parity proximity.leaderboards/lb-tabs); the six legacy panels plus the table-0 key captured by the inventory freeze — seven entries — are later slices"
     },
     "proximity-player": {
       "status": "phase-5",

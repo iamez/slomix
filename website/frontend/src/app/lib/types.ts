@@ -2349,8 +2349,12 @@ export interface ProximityLeaderboard {
   attribution?: {
     total_rows: number;
     linked_valid: number;
-    linked_invalid?: number;
-    [k: string]: number | undefined;
+    linked_invalid_excluded?: number;
+    unlinked_accepted?: number;
+    attributable_coverage?: number;
+    /** "compatibility" on the recorded fixture — a LABEL, not a count; the
+     *  loose numeric index this block first had would have typed it away. */
+    mode?: string;
   };
   entries: (LbEntryBase & Partial<LbPowerEntry & LbSpawnEntry & LbCrossfireEntry &
     LbTradesEntry & LbReactionsEntry & LbSurvivorsEntry & LbMovementEntry &

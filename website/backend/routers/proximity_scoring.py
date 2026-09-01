@@ -112,6 +112,21 @@ async def get_proximity_leaderboards(
         clauses.append(_round_quality_gate_sql(prefix))
         return " AND ".join(clauses), tuple(params), idx
 
+    def _no_bots(guid_col: str, name_col: str | None = None) -> str:
+        """Player-level bot exclusion, one spelling for every board.
+
+        The S6 gate excludes bot ROUNDS; OMNIBOT players in mixed human
+        rounds pass it, and measured on 31. 8. they held 7/10 spawn, 6/10
+        reactions and 7/10 focus-fire seats — a leaderboard mostly made of
+        bots. KROGT already carried this filter; the rest now speak it too.
+        Power needs it only on its seed query: every component map filters
+        by the seed's guid_set, so the percentile pools inherit the
+        exclusion from that one place."""
+        sql = f"{guid_col} NOT LIKE 'OMNIBOT%'"
+        if name_col:
+            sql += f" AND COALESCE({name_col}, '') NOT LIKE '%[BOT]%'"
+        return sql
+
     try:
         if category == "power":
             scope_where, scope_params, _ = _lb_scope(has_round_number=True)
@@ -123,7 +138,8 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
                 FROM combat_engagement
-                WHERE killer_guid IS DISTINCT FROM target_guid AND {scope_where}
+                WHERE killer_guid IS DISTINCT FROM target_guid
+                  AND {_no_bots('target_guid', 'target_name')} AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
@@ -405,7 +421,7 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
                 FROM proximity_spawn_timing
-                WHERE {scope_where}
+                WHERE {_no_bots('killer_guid', 'killer_name')} AND {scope_where}
                 GROUP BY killer_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_score DESC
@@ -446,13 +462,13 @@ async def get_proximity_leaderboards(
                     SELECT c.teammate1_guid AS guid,
                            COUNT(*) AS cnt, SUM(c.angular_separation) AS sum_angle
                     FROM proximity_crossfire_opportunity c
-                    WHERE c.was_executed = true AND {scope_where}
+                    WHERE c.was_executed = true AND {_no_bots('c.teammate1_guid')} AND {scope_where}
                     GROUP BY c.teammate1_guid
                     UNION ALL
                     SELECT c.teammate2_guid AS guid,
                            COUNT(*) AS cnt, SUM(c.angular_separation) AS sum_angle
                     FROM proximity_crossfire_opportunity c
-                    WHERE c.was_executed = true AND {scope_where}
+                    WHERE c.was_executed = true AND {_no_bots('c.teammate2_guid')} AND {scope_where}
                     GROUP BY c.teammate2_guid
                 ) sub GROUP BY guid
                 ORDER BY total DESC
@@ -488,7 +504,7 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS trades,
                        ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction
                 FROM proximity_lua_trade_kill
-                WHERE {scope_where}
+                WHERE {_no_bots('trader_guid', 'trader_name')} AND {scope_where}
                 GROUP BY trader_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY trades DESC
@@ -513,7 +529,8 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf,
                        COUNT(*) AS samples
                 FROM proximity_reaction_metric
-                WHERE return_fire_ms IS NOT NULL AND {scope_where}
+                WHERE return_fire_ms IS NOT NULL
+                  AND {_no_bots('target_guid', 'target_name')} AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_rf ASC
@@ -542,7 +559,8 @@ async def get_proximity_leaderboards(
                 FROM combat_engagement
                 -- self-rows (world/self-kill artifacts, ~12% of the table)
                 -- are not real engagements and deflated every rate (S14)
-                WHERE killer_guid IS DISTINCT FROM target_guid AND {scope_where}
+                WHERE killer_guid IS DISTINCT FROM target_guid
+                  AND {_no_bots('target_guid', 'target_name')} AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY escape_pct DESC
@@ -569,7 +587,7 @@ async def get_proximity_leaderboards(
                        SUM(total_distance)::int AS total_distance,
                        COUNT(*) AS tracks
                 FROM player_track
-                WHERE {scope_where}
+                WHERE {_no_bots('player_guid', 'player_name')} AND {scope_where}
                 GROUP BY player_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_speed DESC
@@ -597,7 +615,7 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(attacker_count)::numeric, 1) AS avg_attackers,
                        ROUND(AVG(total_damage)::numeric, 0) AS avg_damage
                 FROM proximity_focus_fire
-                WHERE {scope_where}
+                WHERE {_no_bots('target_guid', 'target_name')} AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY avg_score DESC
