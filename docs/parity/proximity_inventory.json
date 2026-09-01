@@ -59,7 +59,8 @@
         "bytes": 7805,
         "file": "api_proximity_carrier_events.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/carrier-events"
     },
     {
       "path": "/api/proximity/carrier-kills",
@@ -75,7 +76,8 @@
         "bytes": 1159,
         "file": "api_proximity_carrier_kills.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/carrier-kills"
     },
     {
       "path": "/api/proximity/carrier-returns",
@@ -91,7 +93,8 @@
         "bytes": 3634,
         "file": "api_proximity_carrier_returns.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/carrier-returns"
     },
     {
       "path": "/api/proximity/classes",
@@ -346,7 +349,8 @@
         "bytes": 5565,
         "file": "api_proximity_construction_events.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/construction-events"
     },
     {
       "path": "/api/proximity/crossfire-angles",
@@ -428,7 +432,8 @@
         "bytes": 2000,
         "file": "api_proximity_escort_credits.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/escort-credits"
     },
     {
       "path": "/api/proximity/event/{event_id}",
@@ -669,7 +674,8 @@
         "bytes": 5630,
         "file": "api_proximity_objective_focus.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/objective-focus"
     },
     {
       "path": "/api/proximity/objective-pressure",
@@ -701,7 +707,8 @@
         "bytes": 12315,
         "file": "api_proximity_objective_runs.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/objective-runs"
     },
     {
       "path": "/api/proximity/player-aim",
@@ -1155,7 +1162,8 @@
         "bytes": 14062,
         "file": "api_proximity_vehicle_progress.json"
       },
-      "disposition": "pending"
+      "disposition": "covered",
+      "covered_by_call": "/api/proximity/vehicle-progress"
     },
     {
       "path": "/api/proximity/weapon-accuracy",

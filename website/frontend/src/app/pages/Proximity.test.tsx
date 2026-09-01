@@ -27,6 +27,14 @@ import compAdvantage from './__fixtures__/api_proximity_competitive_man_advantag
 import compClutch from './__fixtures__/api_proximity_competitive_clutch.json';
 import compSplits from './__fixtures__/api_proximity_competitive_side_splits.json';
 import v7Status from './__fixtures__/api_proximity_v7_status.json';
+import carrierEvents from './__fixtures__/api_proximity_carrier_events.json';
+import carrierKills from './__fixtures__/api_proximity_carrier_kills.json';
+import carrierReturns from './__fixtures__/api_proximity_carrier_returns.json';
+import vehicleProgress from './__fixtures__/api_proximity_vehicle_progress.json';
+import escortCredits from './__fixtures__/api_proximity_escort_credits.json';
+import constructionEvents from './__fixtures__/api_proximity_construction_events.json';
+import objectiveRuns from './__fixtures__/api_proximity_objective_runs.json';
+import objectiveFocus from './__fixtures__/api_proximity_objective_focus.json';
 
 const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/scopes', scopes],
@@ -50,6 +58,14 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/competitive/clutch', compClutch],
   ['/api/proximity/competitive/side-splits', compSplits],
   ['/api/proximity/v7-status', v7Status],
+  ['/api/proximity/carrier-events', carrierEvents],
+  ['/api/proximity/carrier-kills', carrierKills],
+  ['/api/proximity/carrier-returns', carrierReturns],
+  ['/api/proximity/vehicle-progress', vehicleProgress],
+  ['/api/proximity/escort-credits', escortCredits],
+  ['/api/proximity/construction-events', constructionEvents],
+  ['/api/proximity/objective-runs', objectiveRuns],
+  ['/api/proximity/objective-focus', objectiveFocus],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the
