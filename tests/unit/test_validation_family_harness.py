@@ -49,6 +49,8 @@ from validation_family import (  # noqa: E402 - path set above
     outcome_seconds,
     outcome_win,
     preregister,
+    report,
+    resample_gate,
     within_round_point_biserial,
     within_round_spread,
 )
@@ -76,14 +78,31 @@ class TestTheResamplerIsNotDegenerate:
         assert len(set(draws)) > 1
 
     def test_same_seed_reproduces_the_published_table(self):
-        a = [_Rng(7).next_below(16) for _ in range(50)]
-        b = [_Rng(7).next_below(16) for _ in range(50)]
+        """⛔ ONE GENERATOR PER SEQUENCE, NOT ONE PER DRAW.
+
+        This built a FRESH `_Rng(7)` inside each comprehension element, so both
+        lists were fifty copies of the generator's first output. It compared a
+        constant against itself: state advancement could have stopped working
+        entirely and this would still have passed, under the name
+        "a published seed must reproduce the published result".
+
+        A control that cannot fail is the defect this whole module exists to
+        catch, sitting in the module's own tests. Codex on #818.
+        """
+        ra, rb = _Rng(7), _Rng(7)
+        a = [ra.next_below(16) for _ in range(50)]
+        b = [rb.next_below(16) for _ in range(50)]
         assert a == b, "a published seed must reproduce the published result"
+        assert len(set(a)) > 1, (
+            "the sequence never advanced — fifty identical draws is what the "
+            "old fixture was silently asserting")
 
     def test_different_seeds_disagree(self):
-        a = [_Rng(1).next_below(16) for _ in range(50)]
-        b = [_Rng(2).next_below(16) for _ in range(50)]
+        ra, rb = _Rng(1), _Rng(2)
+        a = [ra.next_below(16) for _ in range(50)]
+        b = [rb.next_below(16) for _ in range(50)]
         assert a != b
+        assert len(set(a)) > 1 and len(set(b)) > 1
 
     def test_bootstrap_of_varied_blocks_has_nonzero_spread(self):
         """End-to-end version of the bug: 16 blocks, real spread expected."""
@@ -1233,3 +1252,104 @@ class TestTheSpatialUniverseUsesTheCanonicalTrackLink:
         full universe silently becomes the Layer 4 one."""
         sql = _sql_without_comments(ROWS_SQL)
         assert "NOT $1::boolean OR r.id IN (SELECT id FROM tracked_rounds)" in sql
+
+
+def _one_candidate_family():
+    """Module level so both classes below can use it — reaching into another
+    test class's private helpers is what ruff's SLF001 was pointing at."""
+    return Family(name="t", filters="f", resamples=120, seed=5, candidates=[
+        Candidate("x", "d", "higher_is_better", _metric)])
+
+
+def _varied_blocks(n):
+    return {b: {b: _round([(9, 1), (8, 1), (2, 2), (1, 2)], 1 if b % 3 else 2)}
+            for b in range(n)}
+
+
+class TestAnAbsentDiscoveryEstimateIsNotAContradictedOne:
+    """⛔ `nan > 0` IS FALSE, AND THAT RETIRED CANDIDATES.
+
+    A candidate measurable in confirmation but not in discovery — a sparse
+    metric whose coverage improves in later blocks — got `d = nan`, so `dir_ok`
+    came out False and the table printed `FAILS — direction flipped`. An absent
+    measurement was converted into a NEGATIVE experimental verdict, which is the
+    strongest thing this harness can say. Codex on #818.
+    """
+
+    def test_a_candidate_without_a_discovery_estimate_is_excluded(self, capsys):
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        disc = {"point": {}, "boot": {}, "rounds": 0, "contributing": {}}
+        rows = report(fam, disc, conf, (0, 0), (12, 12), "2026-07-15")
+        out = capsys.readouterr().out
+        by = {r["id"]: r for r in rows}
+        assert by["x"]["verdict"] == "EXCLUDED", by["x"]
+        assert "direction flipped" not in out, (
+            "an unmeasured discovery half was reported as a contradicted one")
+        assert "no discovery estimate" in out
+
+    def test_a_measured_candidate_is_still_judged(self, capsys):
+        # CONTROL: excluding too eagerly would empty the table.
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        rows = report(fam, conf, conf, (12, 12), (12, 12), "2026-07-15")
+        assert {r["id"] for r in rows} == {"x"}
+        assert rows[0]["verdict"] != "EXCLUDED", rows[0]
+
+
+class TestTheReportPublishesWhatTheProtocolAsksFor:
+    def test_the_raw_p_value_travels_beside_the_adjusted_one(self):
+        """§8.5 asks for auditable inference. "0.040 after Holm" says nothing
+        about whether the raw value was 0.039 or 0.004 — that difference is the
+        whole weight of the family-wise correction."""
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        rows = report(fam, conf, conf, (12, 12), (12, 12), "2026-07-15")
+        assert "raw_p" in rows[0], rows[0].keys()
+        assert rows[0]["raw_p"] <= rows[0]["holm_p"] + 1e-9, (
+            "the Holm-adjusted value can only be larger than the raw one")
+
+    def test_the_printed_sample_size_says_LOADED_and_MEASURED(self, capsys):
+        """⛔ `_counts()` reports every round loaded in the selected blocks, and
+        the estimators skip the ones they cannot measure. Printing only the
+        first overstated the evidence."""
+        blocks = _varied_blocks(12)
+        fam = _one_candidate_family()
+        conf = analyse(blocks, set(blocks), fam)
+        report(fam, conf, conf, (12, 12), (12, 99), "2026-07-15")
+        out = capsys.readouterr().out
+        assert "LOADED" in out
+        assert "actually fed an estimate" in out
+        assert conf["contributing"]["x"] == 12, conf["contributing"]
+
+
+class TestTheProtocolResampleFloorIsSeparateFromTheUsableOne:
+    def test_a_run_below_the_usable_floor_is_refused(self):
+        gate = resample_gate(50)
+        assert gate and gate[0] == 5 and "usable interval" in gate[1]
+
+    def test_a_run_between_the_two_floors_is_ALSO_refused(self):
+        """⛔ The gap nobody guarded: enough replicates for an interval to
+        exist, not enough for the max-T tail to be worth a verdict."""
+        from validation_family import MIN_USABLE_REPLICATES
+        gate = resample_gate(MIN_USABLE_REPLICATES + 1)
+        assert gate is not None, "a run between the two floors was allowed"
+        assert gate[0] == 9
+        assert "exploratory" in gate[1]
+
+    def test_the_protocol_floor_itself_proceeds(self):
+        # CONTROL: refusing everything would stop the harness entirely.
+        from validation_family import PROTOCOL_RESAMPLE_FLOOR
+        assert resample_gate(PROTOCOL_RESAMPLE_FLOOR) is None
+        assert resample_gate(PROTOCOL_RESAMPLE_FLOOR * 2) is None
+
+    def test_the_two_floors_are_different_numbers(self):
+        """⛔ Only the lower one was enforced. `MIN_USABLE_REPLICATES` is "an
+        interval exists at all"; the protocol floor is "the max-T tail is stable
+        enough to retire a candidate", and §8.4 calls 1,000 exploratory."""
+        from validation_family import MIN_USABLE_REPLICATES, PROTOCOL_RESAMPLE_FLOOR
+        assert PROTOCOL_RESAMPLE_FLOOR > MIN_USABLE_REPLICATES
+        assert PROTOCOL_RESAMPLE_FLOOR >= 2000

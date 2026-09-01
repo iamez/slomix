@@ -494,7 +494,8 @@ OUTCOMES = {"win": outcome_win, "seconds": outcome_seconds}
 
 
 def within_round_spread(rows_by_round: dict, metric: Callable,
-                        outcome: Callable = outcome_win) -> float | None:
+                        outcome: Callable = outcome_win,
+                        contributed: list | None = None) -> float | None:
     """§8.6 reference implementation, kept within round (§8.1).
 
     Per round: rank that round's players by the metric, split at the median,
@@ -506,7 +507,7 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
     is exactly how `distance_per_life` and `denied_time` fooled the #556 pass.
     """
     diffs = []
-    for players in rows_by_round.values():
+    for rid, players in rows_by_round.items():
         vals = [(metric(p), p) for p in players]
         vals = [(v, p) for v, p in vals if v is not None]
         if len(vals) < MIN_PLAYERS_PER_ROUND:
@@ -549,13 +550,16 @@ def within_round_spread(rows_by_round: dict, metric: Callable,
         lo_mean = sum(outcome(p) for _, p in lo) / len(lo)
         hi_mean = sum(outcome(p) for _, p in hi) / len(hi)
         diffs.append(hi_mean - lo_mean)
+        if contributed is not None:
+            contributed.append(rid)
     if len(diffs) < 2:
         return None
     return statistics.mean(diffs)
 
 
 def within_round_point_biserial(rows_by_round: dict, metric: Callable,
-                                outcome: Callable = outcome_win) -> float | None:
+                                outcome: Callable = outcome_win,
+                                contributed: list | None = None) -> float | None:
     """Same question as §8.6, without throwing the magnitudes away.
 
     §8.6's median split reduces each player to above/below and each round to a
@@ -741,6 +745,12 @@ def chronological_split(block_times: dict, fraction: float,
 
 # --- §8.4: family-wise error ---------------------------------------------------
 MIN_USABLE_REPLICATES = 100
+
+#: ⛔ The floor a FINAL run has to clear, distinct from the one above: that one
+#: is "an interval exists at all", this one is "the max-T tail is stable enough
+#: to retire a candidate". §8.4 of the spec calls 1,000 exploratory, so the
+#: default of 2,000 is the smallest number the protocol treats as a result.
+PROTOCOL_RESAMPLE_FLOOR = RESAMPLES
 MARGIN_AGREEMENT_FLOOR = 90.0  # percent; below this an outcome is not itself
 # #556 measured kpr's within-round spread near +0.028. Calibration asks whether
 # this implementation reproduces that MAGNITUDE, not whether it repeats that
@@ -861,7 +871,24 @@ _MEDIAN_SPLIT_FAMILY = [
               "higher_is_better", _null_value),
     Candidate("kd_ratio", "kills / max(deaths,1)", "higher_is_better",
               lambda p: float(p["kills"] or 0) / max(float(p["deaths"] or 0), 1.0)),
-    Candidate("dpm", "damage given per minute played", "higher_is_better",
+    # ⚠️ NAMED IN THE DESCRIPTION, WHICH MEANS IT RIDES INTO THE MANIFEST.
+    # `time_played_seconds` is not always a measurement: the parser sets it to
+    # the whole round duration and only overrides it when the Lua TAB[22] field
+    # is present (community_stats_parser.py:1116). For stopwatch that default is
+    # deliberate — teams are locked, so everyone does play the full round — but
+    # it does not cover late joiners or early disconnects, whose per-player DPM
+    # is then understated and whose within-round rank can move.
+    # ⛔ The two cases are INDISTINGUISHABLE from the database: 1,326 of 6,288
+    # eligible player rows have `time_played_seconds` exactly equal to the round
+    # duration, and no column says which of them was filled in. Filtering them
+    # would discard as many genuine full-round players as substituted ones, so
+    # this is recorded as a known input limitation of the candidate rather than
+    # pretended away. Codex on #818.
+    Candidate("dpm",
+              "damage given per minute played — ⚠️ per-player minutes fall back "
+              "to the full round duration when Lua TAB[22] is absent, which "
+              "understates late joiners and early disconnects",
+              "higher_is_better",
               lambda p: float(p["dg"] or 0) / _minutes(p)),
     # ⛔ This used to divide by `deaths * 100` while calling itself a damage
     # RATIO, and `damage_received` was not even loaded. The manifest hashed the
@@ -948,18 +975,30 @@ def analyse(blocks: dict, keep: set, family: Family) -> dict:
     # the covariance that makes the interval family-wise.
     draws = block_draws(sub, family.resamples, family.seed)
     point, boot = {}, {}
+    # ⛔ COUNT THE ROUNDS THAT ACTUALLY FED THE ESTIMATE. `_counts()` reports
+    # every round loaded in the selected blocks, but the estimators skip rounds
+    # they cannot measure — unresolved pairs under `--outcome seconds`, rounds
+    # with no outcome variation, rounds too small to split. The printed sample
+    # size and the floor's "at N rounds" statement therefore overstated the
+    # evidence, potentially by a lot given the documented pairing coverage.
+    # Collected FROM the estimator rather than recomputed beside it, so the
+    # count cannot drift from the filter it is counting. Codex on #818.
+    contributing: dict[str, int] = {}
     for c in family.candidates:
         # ⛔ THE CANDIDATE'S OWN ESTIMATOR, on both halves of its evidence.
         # `block_bootstrap()` has taken an `estimator` argument all along and
         # nothing ever passed one, so every declared variant was silently
         # evaluated through the median split — a mechanism with no caller.
         est = ESTIMATORS[c.estimator]
-        pt = est(flat, c.fn, oc)
+        fed: list = []
+        pt = est(flat, c.fn, oc, fed)
         if pt is None:
             continue
         point[c.cid] = pt
+        contributing[c.cid] = len(fed)
         boot[c.cid] = block_bootstrap(sub, c.fn, draws, estimator=est, outcome=oc)
-    return {"point": point, "boot": boot, "rounds": len(flat)}
+    return {"point": point, "boot": boot, "rounds": len(flat),
+            "contributing": contributing}
 
 
 def report(family: Family, disc: dict, conf: dict,
@@ -983,7 +1022,17 @@ def report(family: Family, disc: dict, conf: dict,
              else "  (signed stopwatch margin, seconds)"))
     print(f"resamples       : {family.resamples} block resamples, seed {family.seed}")
     print(f"split           : {d_counts[0]} discovery blocks / {c_counts[0]} confirmation blocks")
-    print(f"                  {d_counts[1]} rounds / {c_counts[1]} rounds")
+    print(f"                  {d_counts[1]} rounds / {c_counts[1]} rounds LOADED")
+    # ⚠️ LOADED is not MEASURED. The estimators skip rounds they cannot measure,
+    # so the line above is an upper bound on the evidence and the line below is
+    # the evidence. Printing only the first is what made the sample look larger
+    # than it was (Codex on #818).
+    _contrib = conf.get("contributing") or {}
+    if _contrib:
+        lo_n, hi_n = min(_contrib.values()), max(_contrib.values())
+        span = f"{lo_n}" if lo_n == hi_n else f"{lo_n}-{hi_n}"
+        print(f"                  {span} of those confirmation rounds actually fed "
+              f"an estimate")
     print(f"cutoff          : {cutoff}")
     print(f"max-T crit      : {crit:.3f}  (family-wise {int((1-family.alpha)*100)}%)")
     print("=" * 108)
@@ -1008,6 +1057,19 @@ def report(family: Family, disc: dict, conf: dict,
         d = disc["point"].get(cid, float("nan"))
         k = conf["point"][cid]
         want_pos = c.direction == "higher_is_better"
+        # ⛔ AN ABSENT DISCOVERY MEASUREMENT IS NOT A FLIPPED DIRECTION.
+        # A candidate measurable in confirmation but not in discovery — a sparse
+        # metric whose coverage improves in later blocks — got `d = nan`, and
+        # `nan > 0` is False, so `dir_ok` came out False and the run printed
+        # "FAILS — direction flipped". That RETIRES the candidate on the strength
+        # of a measurement nobody took, and the protocol requires an observed
+        # discovery direction rather than an assumed one. Codex on #818.
+        if math.isnan(d):
+            print(f"{cid:<12}{'—':>9}{k:>+9.3f}  excluded: no discovery estimate "
+                  f"— unmeasured in the discovery half, not contradicted by it")
+            results.append({"id": cid, "verdict": "EXCLUDED",
+                            "why": "no discovery estimate"})
+            continue
         dir_ok = (d > 0 and k > 0) if want_pos else (d < 0 and k < 0)
         if cid not in intervals:
             # no usable bootstrap spread: unmeasured, which is not the same as
@@ -1036,8 +1098,14 @@ def report(family: Family, disc: dict, conf: dict,
               f"{f'[{lo:+.3f}, {hi:+.3f}]':>22}{margin:>8.2f}{hp[cid]:>9.3f}"
               f"{'+' if want_pos else '-':>5}  {verdict}"
               + (f" — {why}" if why else ""))
+        # ⚠️ The RAW p-value travels beside the Holm-adjusted one. Publishing
+        # only the adjusted figure hides how much of a verdict comes from the
+        # family-wise correction rather than from the data — §8.5 asks for the
+        # inference to be auditable, and "0.040 after Holm" says nothing about
+        # whether the raw value was 0.039 or 0.004.
         results.append({"id": cid, "discovery": d, "confirmation": k,
                         "interval": [lo, hi], "margin_sd": margin,
+                        "raw_p": pvals.get(cid, float("nan")),
                         "holm_p": hp[cid], "verdict": verdict})
     print("-" * 108)
 
@@ -1070,6 +1138,39 @@ def report(family: Family, disc: dict, conf: dict,
                   f"({len(by_estimator[est])} candidates, "
                   f"{int(POWER_TARGET * 100)}% power)")
     return results
+
+
+def resample_gate(resamples: int) -> tuple[int, str] | None:
+    """Refuse a run whose resample count cannot support what it would claim.
+
+    Returns `(exit_code, message)` to refuse, or None to proceed.
+
+    ⛔ TWO DIFFERENT FLOORS, AND ONLY THE LOWER ONE WAS ENFORCED.
+    `MIN_USABLE_REPLICATES` is the point below which no interval exists at all.
+    The PROTOCOL floor is higher: §8.4 says even 1,000 resamples are exploratory
+    rather than a final multiplicity-adjusted result, because a family-wise claim
+    rests on the max-T TAIL and a tail estimated from that few draws is not
+    stable. Anything between the two produced verdicts and exited 0.
+
+    A separate function so a test can drive it — the check itself lives in
+    `main()` before any data is loaded. Codex on #818.
+    """
+    if resamples < MIN_USABLE_REPLICATES:
+        return (5, f"⛔ --resamples {resamples} is below the "
+                   f"{MIN_USABLE_REPLICATES} needed for any usable interval.\n"
+                   f"   Such a run produces no inference at all, yet every "
+                   f"candidate would read FAILS and\n   both controls would look "
+                   f"correct — a family retired by an instrument that never "
+                   f"measured it.")
+    if resamples < PROTOCOL_RESAMPLE_FLOOR:
+        return (9, f"⛔ --resamples {resamples} is below the protocol floor of "
+                   f"{PROTOCOL_RESAMPLE_FLOOR}.\n"
+                   f"   §8.4 calls 1,000 exploratory; a family-wise claim rests "
+                   f"on the max-T TAIL, and a tail\n   estimated from that few "
+                   f"draws is not stable enough to retire anything. Re-run with "
+                   f"at least\n   {PROTOCOL_RESAMPLE_FLOOR}, or say out loud that "
+                   f"the output is exploration rather than a result.")
+    return None
 
 
 def manifest_gate(expected: str | None, computed: str,
@@ -1281,13 +1382,10 @@ async def main() -> int:
              "compares what is about to be analysed against what was registered.")
     args = ap.parse_args()
 
-    if args.resamples < MIN_USABLE_REPLICATES:
-        print(f"⛔ --resamples {args.resamples} is below the {MIN_USABLE_REPLICATES} "
-              f"needed for any usable interval.\n"
-              f"   Such a run produces no inference at all, yet every candidate "
-              f"would read FAILS and\n   both controls would look correct — a "
-              f"family retired by an instrument that never measured it.")
-        return 5
+    gate = resample_gate(args.resamples)
+    if gate:
+        print(gate[1])
+        return gate[0]
 
     blocks, times = await load(args.spatial)
     if not blocks:
