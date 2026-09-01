@@ -72,6 +72,12 @@ import type {
   LiveSession,
   PlayerIdentity,
   PlayerMatchRound,
+  CompClutch,
+  CompFirstBlood,
+  CompManAdvantage,
+  CompPersonalBests,
+  CompSideSplits,
+  CompStagger,
   ProxAimLock,
   ProxClasses,
   ProxCohesion,
@@ -87,6 +93,7 @@ import type {
   ProxRevives,
   ProxSpawnTiming,
   ProxSupportSummary,
+  V7Status,
   RecentPrediction,
   SessionLeaderRow,
   SkillPlayer,
@@ -1017,6 +1024,47 @@ export function useProxScopes() {
   return useQuery({
     queryKey: ['prox-scopes'],
     queryFn: () => apiGet('/api/proximity/scopes') as Promise<ProxScopes>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5, slice 3 — the competitive section (same scope contract as the
+// instruments: a date or the explicit window, never an implicit unscoped
+// first paint).
+
+type CompPath =
+  | '/api/proximity/competitive/stagger'
+  | '/api/proximity/competitive/first-blood'
+  | '/api/proximity/competitive/personal-bests'
+  | '/api/proximity/competitive/man-advantage'
+  | '/api/proximity/competitive/clutch'
+  | '/api/proximity/competitive/side-splits';
+
+function useCompetitive<T>(path: CompPath, sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-competitive', path, sessionDate],
+    queryFn: () =>
+      apiGet(path, {
+        query: sessionDate != null ? { session_date: sessionDate } : {},
+      }) as Promise<T>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export const useCompStagger = (d: string | null) => useCompetitive<CompStagger>('/api/proximity/competitive/stagger', d);
+export const useCompFirstBlood = (d: string | null) => useCompetitive<CompFirstBlood>('/api/proximity/competitive/first-blood', d);
+export const useCompPersonalBests = (d: string | null) => useCompetitive<CompPersonalBests>('/api/proximity/competitive/personal-bests', d);
+export const useCompManAdvantage = (d: string | null) => useCompetitive<CompManAdvantage>('/api/proximity/competitive/man-advantage', d);
+export const useCompClutch = (d: string | null) => useCompetitive<CompClutch>('/api/proximity/competitive/clutch', d);
+export const useCompSideSplits = (d: string | null) => useCompetitive<CompSideSplits>('/api/proximity/competitive/side-splits', d);
+
+/** The v7 capture roadmap — which Lua capabilities are live and how many
+ *  rows each has produced. Global, no scope. */
+export function useV7Status() {
+  return useQuery({
+    queryKey: ['prox-v7-status'],
+    queryFn: () => apiGet('/api/proximity/v7-status') as Promise<V7Status>,
     staleTime: 5 * 60 * 1000,
   });
 }

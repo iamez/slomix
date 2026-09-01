@@ -1,0 +1,21 @@
+{
+ "status": "ok",
+ "session_date": "2026-08-31",
+ "description": "New personal records set this session (players with prior history only).",
+ "cards": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "kanii",
+   "metric": "best_denial_s",
+   "label": "Single biggest spawn denial (s)",
+   "value": 30.0,
+   "prev_best": 29.9,
+   "prev_best_date": "2026-05-27",
+   "sessions_played": 29
+  }
+ ],
+ "scope_applied": {
+  "session_date": "2026-08-31"
+ },
+ "scope_note": "session-vs-history comparison; map/round filters are not applied"
+}

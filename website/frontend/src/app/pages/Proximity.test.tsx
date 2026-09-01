@@ -20,6 +20,13 @@ import supportSummary from './__fixtures__/api_proximity_support_summary.json';
 import combatPositions from './__fixtures__/api_proximity_combat_position_stats.json';
 import classes from './__fixtures__/api_proximity_classes.json';
 import reactions from './__fixtures__/api_proximity_reactions.json';
+import compStagger from './__fixtures__/api_proximity_competitive_stagger.json';
+import compFirstBlood from './__fixtures__/api_proximity_competitive_first_blood.json';
+import compBests from './__fixtures__/api_proximity_competitive_personal_bests.json';
+import compAdvantage from './__fixtures__/api_proximity_competitive_man_advantage.json';
+import compClutch from './__fixtures__/api_proximity_competitive_clutch.json';
+import compSplits from './__fixtures__/api_proximity_competitive_side_splits.json';
+import v7Status from './__fixtures__/api_proximity_v7_status.json';
 
 const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/scopes', scopes],
@@ -36,6 +43,13 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/combat-position-stats', combatPositions],
   ['/api/proximity/classes', classes],
   ['/api/proximity/reactions', reactions],
+  ['/api/proximity/competitive/stagger', compStagger],
+  ['/api/proximity/competitive/first-blood', compFirstBlood],
+  ['/api/proximity/competitive/personal-bests', compBests],
+  ['/api/proximity/competitive/man-advantage', compAdvantage],
+  ['/api/proximity/competitive/clutch', compClutch],
+  ['/api/proximity/competitive/side-splits', compSplits],
+  ['/api/proximity/v7-status', v7Status],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the
@@ -135,7 +149,9 @@ describe('Proximity', () => {
     const newest = (scopes as { sessions: { session_date: string }[] }).sessions[0].session_date;
     const instrumentCalls = fetchSpy.mock.calls
       .map((c) => String(c[0]))
-      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes'));
+      // v7-status is the ONE deliberate exemption: the capture roadmap is
+      // global by design (no scope parameter exists on it).
+      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes') && !u.includes('v7-status'));
     expect(instrumentCalls.length).toBeGreaterThan(0);
     for (const u of instrumentCalls) {
       // ⛔ Unscoped instruments measured up to 1.9 s cold — the first
@@ -161,7 +177,9 @@ describe('Proximity', () => {
     await waitFor(() => expect(screen.getByText(/capture dates: unavailable/)).toBeInTheDocument());
     const instrumentCalls = fetchSpy.mock.calls
       .map((c) => String(c[0]))
-      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes'));
+      // v7-status is the ONE deliberate exemption: the capture roadmap is
+      // global by design (no scope parameter exists on it).
+      .filter((u) => u.includes('/api/proximity/') && !u.includes('leaderboards') && !u.includes('scopes') && !u.includes('v7-status'));
     expect(instrumentCalls).toEqual([]);
   });
 
