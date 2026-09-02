@@ -5,7 +5,7 @@
  * server and voice activity as sparklines, and the monitoring panel that
  * says out loud when its own data is stale.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
@@ -51,8 +51,24 @@ function RosterSide({ side, members }: { side: string; members: LiveRosterMember
 
 export function LivePage() {
   const state = useLiveState();
-  const [since] = useState(0);
+  // The feed cursor ADVANCES: since=0 fetches the newest ring page, every
+  // later poll asks only for seq > since, per the /api/live/feed contract.
+  // Events accumulate here because a cursor poll returns only the new ones.
+  const [since, setSince] = useState(0);
+  const [log, setLog] = useState<{ seq: number; type: string }[]>([]);
+  const [gapNote, setGapNote] = useState<string | null>(null);
   const feed = useLiveFeed(since);
+  const feedData = feed.data;
+  useEffect(() => {
+    if (feedData == null) return;
+    if (since > 0 && feedData.oldest_seq != null && feedData.oldest_seq > since + 1) {
+      setGapNote(`ring overwrote ${figure(feedData.oldest_seq - since - 1)} events between polls`);
+    }
+    if (feedData.events.length > 0) {
+      setLog((prev) => [...prev, ...feedData.events.filter((e) => !prev.some((p) => p.seq === e.seq))].slice(-200));
+    }
+    if (feedData.last_seq > since) setSince(feedData.last_seq);
+  }, [feedData, since]);
   const server = useServerActivityHistory(24);
   const voice = useVoiceActivityHistory(24);
   const monitoring = useMonitoringStatus();
@@ -94,19 +110,21 @@ export function LivePage() {
 
       <div data-parity="live.feed">
         <SectionHead label="the ticker" aside={feed.data ? `seq ${figure(feed.data.last_seq)}` : undefined} />
-        {feed.isPending && <Pending label="feed" />}
+        {feed.isPending && log.length === 0 && <Pending label="feed" />}
         {feed.isError && <Unavailable what="feed" />}
-        {feed.data && (feed.data.events.length === 0 ? (
+        {gapNote != null && <Meta>{gapNote}</Meta>}
+        {feed.data && log.length === 0 && (
           <div style={{ marginTop: 'var(--space-2)' }}>
             <Absent reason="quiet — no renderable events since this page loaded" />
           </div>
-        ) : (
+        )}
+        {log.length > 0 && (
           <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)', maxHeight: 260, overflowY: 'auto' }}>
-            {feed.data.events.slice(-30).reverse().map((e) => (
+            {log.slice(-30).reverse().map((e) => (
               <Meta key={e.seq}>#{figure(e.seq)} · {e.type.toLowerCase().replace(/_/g, ' ')}</Meta>
             ))}
           </Stack>
-        ))}
+        )}
       </div>
 
       <div data-parity="live.server-activity">

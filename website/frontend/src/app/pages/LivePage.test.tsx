@@ -39,6 +39,45 @@ function stub() {
 
 afterEach(() => vi.unstubAllGlobals());
 
+// The recorded quiet feed carries last_seq 0, which can never exercise the
+// cursor — a fixture cannot fail on a value it lacks — so the advance is
+// pinned with a synthetic two-event page (contract: seq > since).
+it('the feed cursor advances to last_seq and the next poll asks from there', async () => {
+  const urls: string[] = [];
+  vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+    const url = String(input);
+    const pathname = url.split('?')[0];
+    if (pathname === '/api/live/feed') {
+      urls.push(url);
+      const since = Number(new URL(url, 'http://x').searchParams.get('since'));
+      const events = since === 0
+        ? [{ seq: 5, type: 'ROUND_START' }, { seq: 6, type: 'PLAYER_JOIN' }]
+        : [];
+      const body: LiveFeed = { status: 'ok', events, oldest_seq: 5, last_seq: 6, server_time: 0 };
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    }
+    const body = {
+      '/api/live/state': liveState,
+      '/api/server-activity/history': serverHist,
+      '/api/voice-activity/history': voiceHist,
+      '/api/monitoring/status': monitoring,
+      '/api/status': health,
+    }[pathname];
+    if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+  }));
+  render(
+    <QueryClientProvider client={makeQueryClient()}>
+      <MemoryRouter><LivePage /></MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await waitFor(() => expect(screen.getByText(/round start/)).toBeInTheDocument());
+  // Advancing since changes the query key, so React Query fetches again at once.
+  await waitFor(() => expect(urls.some((u) => u.includes('since=6'))).toBe(true));
+  // The two accumulated events stay rendered even though the since=6 page is empty.
+  expect(screen.getByText(/player join/)).toBeInTheDocument();
+});
+
 describe('LivePage', () => {
   it('renders the recorded quiet server honestly, with fresh monitoring and real history', async () => {
     stub();

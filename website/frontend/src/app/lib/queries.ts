@@ -1849,6 +1849,7 @@ export function useServerActivityHistory(hours: number) {
     queryKey: ['server-activity', hours],
     queryFn: () =>
       apiGet('/api/server-activity/history', { query: { hours } }) as Promise<ActivityHistory>,
+    refetchInterval: 60 * 1000,
     staleTime: 60 * 1000,
   });
 }
@@ -1858,6 +1859,7 @@ export function useVoiceActivityHistory(hours: number) {
     queryKey: ['voice-activity', hours],
     queryFn: () =>
       apiGet('/api/voice-activity/history', { query: { hours } }) as Promise<VoiceHistory>,
+    refetchInterval: 60 * 1000,
     staleTime: 60 * 1000,
   });
 }
@@ -1866,6 +1868,7 @@ export function useMonitoringStatus() {
   return useQuery({
     queryKey: ['monitoring-status'],
     queryFn: () => apiGet('/api/monitoring/status') as Promise<MonitoringStatus>,
+    refetchInterval: 60 * 1000,
     staleTime: 60 * 1000,
   });
 }
@@ -1874,6 +1877,7 @@ export function useApiHealth() {
   return useQuery({
     queryKey: ['api-health'],
     queryFn: () => apiGet('/api/status') as Promise<ApiHealth>,
+    refetchInterval: 60 * 1000,
     staleTime: 60 * 1000,
   });
 }
