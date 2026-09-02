@@ -3079,3 +3079,130 @@ export interface ProxEngagements {
   scope: ProxScope & { range_days?: number };
   buckets: { date: string; engagements: number; crossfires: number }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the proximity player profile (class B routes: the old React tree
+// was their only consumer). Shapes read from proximity_player.py /
+// proximity_scoring.py / proximity_combat.py and recorded wire samples.
+
+export interface ProxPlayerProfile {
+  player_name: string;
+  guid: string;
+  /** ⚠️ An unknown guid answers 200 with every number 0 and player_name
+   *  echoing the guid — 0 engagements means "nothing captured", never a
+   *  real profile of zeros. */
+  total_engagements: number;
+  escapes: number;
+  deaths: number;
+  escape_rate: number;
+  avg_duration_ms: number;
+  total_kills: number;
+  crossfire_count: number;
+  avg_speed: number;
+  sprint_pct: number;
+  avg_distance_per_life: number;
+  avg_return_fire_ms: number;
+  avg_dodge_ms: number;
+  avg_support_reaction_ms: number;
+  spawn_avg_score: number;
+  timed_kills: number;
+  avg_denial_ms: number;
+  trades_made: number;
+}
+
+export interface ProxPlayerRadar {
+  axes: { label: string; value: number }[];
+  /** All three are null on the degraded form (recorded live). */
+  unscored: {
+    mechanical: number | null;
+    avg_return_fire_ms: number | null;
+    avg_dodge_reaction_ms: number | null;
+  };
+  formula_version: string;
+  axis_definitions_from: string;
+  composite: number;
+  teamplay_source: string;
+  teamplay_observation_window_days: number;
+  teamplay_formula_version: string | null;
+  teamplay_degraded: boolean;
+  // Present only on the degraded/fallback form (recorded both ways):
+  teamplay_sample_count?: number;
+  teamplay_fallback_reason?: string | null;
+}
+
+export interface ProxScoreRow {
+  guid: string;
+  name: string | null;
+  rank: number;
+  engagements: number;
+  tracks: number;
+  prox_combat: number;
+  prox_team: number;
+  prox_gamesense: number;
+  prox_overall: number;
+  prox_radar: { label: string; value: number }[];
+}
+
+export interface ProxScores {
+  status: string;
+  version: string;
+  formula_version: string;
+  quality: {
+    ranking_available: boolean;
+    successful_sources: number;
+    total_sources: number;
+    failed_sources: string[];
+    metric_weight_coverage: number;
+    below_coverage_dropped: number;
+  };
+  range_days: number;
+  scope: ProxScope;
+  player_count: number;
+  players: ProxScoreRow[];
+}
+
+export interface ProxKillOutcomePlayerStats {
+  status: string;
+  scope: ProxScope;
+  kill_permanence_leaders: {
+    guid: string; name: string | null; total_kills: number; gibs: number;
+    revives_against: number; tapouts: number; kpr: number; avg_denied_ms: number;
+  }[];
+  revive_rate_leaders: {
+    guid: string; name: string | null; times_killed: number; times_gibbed: number;
+    times_revived: number; times_tapped: number; revive_rate: number;
+    gib_rate: number; avg_wait_ms: number;
+  }[];
+}
+
+export interface ProxHitRegions {
+  status: string;
+  scope: ProxScope;
+  players: {
+    guid: string; name: string | null; head: number; body: number;
+    arms: number; legs: number; total_hits: number; total_damage: number;
+    head_pct: number;
+  }[];
+}
+
+export interface ProxHitRegionsByWeapon {
+  status: string;
+  scope: ProxScope;
+  weapons: {
+    weapon_id: number; head: number; body: number; arms: number; legs: number;
+    total: number; headshot_pct: number; total_damage: number;
+  }[];
+}
+
+export interface ProxMovementStats {
+  status: string;
+  scope: ProxScope;
+  players: {
+    guid: string; name: string | null; tracks: number; alive_sec: number;
+    avg_peak_speed: number; max_peak_speed: number; avg_speed: number;
+    total_distance: number; standing_sec: number; crouching_sec: number;
+    prone_sec: number; standing_pct: number; crouching_pct: number;
+    prone_pct: number; sprint_sec: number; avg_sprint_pct: number;
+    avg_post_spawn_dist: number; avg_distance_per_sec: number;
+  }[];
+}

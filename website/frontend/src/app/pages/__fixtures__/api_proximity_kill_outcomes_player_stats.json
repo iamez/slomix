@@ -1,0 +1,35 @@
+{
+    "status": "ok",
+    "scope": {
+        "session_date": null,
+        "map_name": null,
+        "round_number": null,
+        "round_start_unix": null,
+        "player_guid": null
+    },
+    "kill_permanence_leaders": [
+        {
+            "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+            "name": "^7low^8.^7kanii^7",
+            "total_kills": 2032,
+            "gibs": 40,
+            "revives_against": 399,
+            "tapouts": 1529,
+            "kpr": 0.091,
+            "avg_denied_ms": 8179
+        }
+    ],
+    "revive_rate_leaders": [
+        {
+            "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+            "name": "^7low^8.^7kanii^7",
+            "times_killed": 3304,
+            "times_gibbed": 75,
+            "times_revived": 717,
+            "times_tapped": 2392,
+            "revive_rate": 0.217,
+            "gib_rate": 0.023,
+            "avg_wait_ms": 9913
+        }
+    ]
+}

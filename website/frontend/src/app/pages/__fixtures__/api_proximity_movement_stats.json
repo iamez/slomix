@@ -1,0 +1,32 @@
+{
+    "status": "ok",
+    "scope": {
+        "session_date": null,
+        "map_name": null,
+        "player_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+        "round_number": null,
+        "round_start_unix": null
+    },
+    "players": [
+        {
+            "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+            "name": "^7low^8.^7kanii^7",
+            "tracks": 3700,
+            "alive_sec": 95803.4,
+            "avg_peak_speed": 488.1,
+            "max_peak_speed": 873.3,
+            "avg_speed": 250.5,
+            "total_distance": 20703600.0,
+            "standing_sec": 67794.0,
+            "crouching_sec": 27793.8,
+            "prone_sec": 507.0,
+            "standing_pct": 70.5,
+            "crouching_pct": 28.9,
+            "prone_pct": 0.5,
+            "sprint_sec": 18521.2,
+            "avg_sprint_pct": 23.0,
+            "avg_post_spawn_dist": 797.0,
+            "avg_distance_per_sec": 334.3
+        }
+    ]
+}

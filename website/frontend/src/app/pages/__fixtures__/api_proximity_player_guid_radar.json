@@ -1,0 +1,32 @@
+{
+    "axes": [
+        {
+            "label": "Aggression",
+            "value": 47.2
+        },
+        {
+            "label": "Awareness",
+            "value": 45.9
+        },
+        {
+            "label": "Teamplay",
+            "value": 27.6
+        },
+        {
+            "label": "Timing",
+            "value": 40.3
+        }
+    ],
+    "unscored": {
+        "mechanical": 76.9,
+        "avg_return_fire_ms": 693,
+        "avg_dodge_reaction_ms": 1431
+    },
+    "formula_version": "player-radar-v2",
+    "axis_definitions_from": "power-v2",
+    "composite": 40.2,
+    "teamplay_source": "prox_team",
+    "teamplay_observation_window_days": 90,
+    "teamplay_formula_version": "prox-web-v3.0",
+    "teamplay_degraded": false
+}

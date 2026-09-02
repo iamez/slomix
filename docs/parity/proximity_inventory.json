@@ -501,9 +501,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 3424,
-        "file": "api_proximity_hit_regions.json"
+        "file": "api_proximity_hit_regions.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/hit-regions/by-weapon",
@@ -517,9 +518,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 53,
-        "file": "api_proximity_hit_regions_by_weapon.json"
+        "file": "api_proximity_hit_regions_by_weapon.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/hit-regions/headshot-rates",
@@ -587,9 +589,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 7261,
-        "file": "api_proximity_kill_outcomes_player_stats.json"
+        "file": "api_proximity_kill_outcomes_player_stats.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/leaderboards",
@@ -641,9 +644,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 8242,
-        "file": "api_proximity_movement_stats.json"
+        "file": "api_proximity_movement_stats.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/movers",
@@ -780,9 +784,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 362,
-        "file": "api_proximity_player_guid_profile.json"
+        "file": "api_proximity_player_guid_profile.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/player/{guid}/radar",
@@ -796,9 +801,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 520,
-        "file": "api_proximity_player_guid_radar.json"
+        "file": "api_proximity_player_guid_radar.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/players",
@@ -836,9 +842,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 42054,
-        "file": "api_proximity_prox_scores.json"
+        "file": "api_proximity_prox_scores.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player profil)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/prox-scores/formula",

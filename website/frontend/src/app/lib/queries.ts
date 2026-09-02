@@ -90,6 +90,13 @@ import type {
   ProxEngagements,
   ProxEventDetail,
   ProxEvents,
+  ProxHitRegions,
+  ProxHitRegionsByWeapon,
+  ProxKillOutcomePlayerStats,
+  ProxMovementStats,
+  ProxPlayerProfile,
+  ProxPlayerRadar,
+  ProxScores,
   ProxFocusFire,
   ProximityLeaderboard,
   ProxLuaTrades,
@@ -1237,6 +1244,96 @@ export function useProxEngagements(sessionDate: string | null, mapName: string |
           ...(roundStartUnix != null ? { round_start_unix: roundStartUnix } : {}),
         },
       }) as Promise<ProxEngagements>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5 — the proximity player profile. All hooks fail closed on a
+// missing guid, and every window is a named parameter the page must show.
+
+export function useProxPlayerProfile(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-player-profile', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/player/{guid}/profile', {
+        pathParams: { guid: guid! },
+        query: { range_days: rangeDays },
+      }) as Promise<ProxPlayerProfile>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxPlayerRadar(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-player-radar', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/player/{guid}/radar', {
+        pathParams: { guid: guid! },
+        query: { range_days: rangeDays },
+      }) as Promise<ProxPlayerRadar>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxScoresForPlayer(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-scores', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/prox-scores', {
+        query: { range_days: rangeDays, player_guid: guid!, min_rounds: 1 },
+      }) as Promise<ProxScores>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxKillOutcomePlayerStats(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-kill-outcome-player-stats', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/kill-outcomes/player-stats', {
+        query: { range_days: rangeDays, player_guid: guid! },
+      }) as Promise<ProxKillOutcomePlayerStats>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxHitRegions(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-hit-regions', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/hit-regions', {
+        query: { range_days: rangeDays, player_guid: guid! },
+      }) as Promise<ProxHitRegions>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxHitRegionsByWeapon(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-hit-regions-by-weapon', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/hit-regions/by-weapon', {
+        query: { player_guid: guid!, range_days: rangeDays },
+      }) as Promise<ProxHitRegionsByWeapon>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxMovementStats(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-movement-stats', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/movement-stats', {
+        query: { range_days: rangeDays, player_guid: guid! },
+      }) as Promise<ProxMovementStats>,
     staleTime: 5 * 60 * 1000,
   });
 }

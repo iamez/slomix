@@ -1,0 +1,166 @@
+{
+    "status": "ok",
+    "scope": {
+        "session_date": null,
+        "map_name": null,
+        "round_number": null,
+        "round_start_unix": null,
+        "player_guid": "1EDBF3002CE66FE4DFA626D92130E561"
+    },
+    "players": [
+        {
+            "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+            "name": "^7low^8.^7kanii^7",
+            "head": 2584,
+            "arms": 7932,
+            "body": 8029,
+            "legs": 1745,
+            "head_pct": 12.7,
+            "total_hits": 20290,
+            "total_damage": 421902
+        },
+        {
+            "guid": "5D9891600C7948FF85709360E669D5A4",
+            "name": "^1.^7olz",
+            "head": 642,
+            "arms": 2083,
+            "body": 2598,
+            "legs": 540,
+            "head_pct": 11.0,
+            "total_hits": 5863,
+            "total_damage": 119375
+        },
+        {
+            "guid": "1C747DF1A037D2AFECCB6ED063DF44E7",
+            "name": "^e.^7lgz",
+            "head": 735,
+            "arms": 2139,
+            "body": 2341,
+            "legs": 583,
+            "head_pct": 12.7,
+            "total_hits": 5798,
+            "total_damage": 122556
+        },
+        {
+            "guid": "FDA127DF5246F28D7355490F749DD894",
+            "name": "^3w^7ise^3B^7oy",
+            "head": 430,
+            "arms": 1242,
+            "body": 1575,
+            "legs": 423,
+            "head_pct": 11.7,
+            "total_hits": 3670,
+            "total_damage": 75439
+        },
+        {
+            "guid": "652EB4A6311DBD8BD18E14CE9840EB1E",
+            "name": "^3qmr",
+            "head": 307,
+            "arms": 850,
+            "body": 1094,
+            "legs": 252,
+            "head_pct": 12.3,
+            "total_hits": 2503,
+            "total_damage": 52800
+        },
+        {
+            "guid": "DB00AA454019890392D8DBFF5704C999",
+            "name": "Cru^53^7lzor^5.",
+            "head": 238,
+            "arms": 703,
+            "body": 863,
+            "legs": 275,
+            "head_pct": 11.4,
+            "total_hits": 2079,
+            "total_damage": 42221
+        },
+        {
+            "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+            "name": "^6S^2uper^6B^2oyy",
+            "head": 169,
+            "arms": 488,
+            "body": 577,
+            "legs": 166,
+            "head_pct": 12.1,
+            "total_hits": 1400,
+            "total_damage": 29747
+        },
+        {
+            "guid": "7B84BE88766731A4C985941B8814933C",
+            "name": "^7endekk",
+            "head": 136,
+            "arms": 291,
+            "body": 342,
+            "legs": 81,
+            "head_pct": 16.0,
+            "total_hits": 850,
+            "total_damage": 18511
+        },
+        {
+            "guid": "EF561EAA92BE11A8E562A904A262C4C6",
+            "name": "ownator",
+            "head": 123,
+            "arms": 322,
+            "body": 304,
+            "legs": 65,
+            "head_pct": 15.1,
+            "total_hits": 814,
+            "total_damage": 17638
+        },
+        {
+            "guid": "FB0EC84076637A9F55D579085A3225C4",
+            "name": "ownator",
+            "head": 113,
+            "arms": 272,
+            "body": 303,
+            "legs": 66,
+            "head_pct": 15.0,
+            "total_hits": 754,
+            "total_damage": 16272
+        },
+        {
+            "guid": "2B5938F5C5EA384863A3B2862DC61778",
+            "name": "bronze",
+            "head": 91,
+            "arms": 192,
+            "body": 262,
+            "legs": 93,
+            "head_pct": 14.3,
+            "total_hits": 638,
+            "total_damage": 13234
+        },
+        {
+            "guid": "D8423F90F045D9D3E2C0550811C5A899",
+            "name": "^pvid",
+            "head": 75,
+            "arms": 182,
+            "body": 225,
+            "legs": 63,
+            "head_pct": 13.8,
+            "total_hits": 545,
+            "total_damage": 11404
+        },
+        {
+            "guid": "42E142B3ACC3A75AE3137DC0B2240D10",
+            "name": "^8i^7mmoo^0{",
+            "head": 66,
+            "arms": 138,
+            "body": 223,
+            "legs": 32,
+            "head_pct": 14.4,
+            "total_hits": 459,
+            "total_damage": 9808
+        },
+        {
+            "guid": "9F2B3930797D7D142795B1B6EE194722",
+            "name": "^6[^2T^6W^2K^6]^2I^6mb3ci^2L",
+            "head": 38,
+            "arms": 108,
+            "body": 115,
+            "legs": 20,
+            "head_pct": 13.5,
+            "total_hits": 281,
+            "total_damage": 5933
+        }
+    ]
+}

@@ -1,0 +1,21 @@
+{
+    "player_name": "^7kan^6i^7i",
+    "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+    "total_engagements": 8054,
+    "escapes": 3695,
+    "deaths": 4216,
+    "escape_rate": 45.9,
+    "avg_duration_ms": 4546,
+    "total_kills": 2046,
+    "crossfire_count": 846,
+    "avg_speed": 250.5,
+    "sprint_pct": 23.0,
+    "avg_distance_per_life": 5596,
+    "avg_return_fire_ms": 693,
+    "avg_dodge_ms": 1431,
+    "avg_support_reaction_ms": 1683,
+    "spawn_avg_score": 0.403,
+    "timed_kills": 2032,
+    "avg_denial_ms": 9854,
+    "trades_made": 301
+}
