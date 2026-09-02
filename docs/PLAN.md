@@ -40,7 +40,9 @@ Nova SPA (website/frontend/src/app) — faza 5 (proximity telemetrija) je
 Watcher v6.12 ŽIV na puranu (deployan + dokazan 2. 9.). Naslednji večer
 igre = meritev (`~/.etlegacy/legacy/proximity/frame_health.log`; zbiralnik
 vleče na sambo). Delitev populacij (sestrska seja): A = round-end burst
-(naš), B = med pavzo (kaže na host/LXC). Optimizacija bursta: batch write,
+(naš), B = med pavzo — ⚠️ »ne more biti naša« pokriva SAMO tracker
+(levelTime med pavzo zamrzne); webhookov io.popen sweep teče po os.time()
+tudi med pavzo in NI izključen. Razsodi meritev prek `self`. Optimizacija bursta: batch write,
 šele PO enem večeru self meritev. Sestrska seja koordinira optimizacijo Lua.
 
 ## Odprte ownerjeve odločitve
