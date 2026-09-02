@@ -1,0 +1,16 @@
+{
+    "server": {
+        "count": 8851,
+        "last_recorded_at": "2026-09-02T11:45:40.606747Z",
+        "age_seconds": 211,
+        "is_stale": false,
+        "stale_threshold_seconds": 300
+    },
+    "voice": {
+        "count": 43967,
+        "last_recorded_at": "2026-09-02T11:48:29.443647Z",
+        "age_seconds": 42,
+        "is_stale": false,
+        "stale_threshold_seconds": 300
+    }
+}

@@ -7,6 +7,17 @@
  */
 
 /** GET /api/live/state — corpus: api_live_state.json */
+export interface LiveRosterMember {
+  slot: number;
+  name: string;
+  on_server_seconds: number;
+  on_side_seconds: number;
+  live?: {
+    kills: number; deaths: number; damage: number;
+    dpm: number | null; alive: boolean;
+  };
+}
+
 export interface LiveState {
   status: string;
   is_live: boolean;
@@ -21,9 +32,9 @@ export interface LiveState {
   round_number: number | null;
   round_elapsed_seconds: number | null;
   roster: {
-    axis: unknown[];
-    allies: unknown[];
-    spectators: unknown[];
+    axis: LiveRosterMember[];
+    allies: LiveRosterMember[];
+    spectators: LiveRosterMember[];
     player_count: number;
     /** Age of the retained roster: the reducer flips is_live off after 180 s
      * but keeps the lineup up to 600 s for clients to QUALIFY, not present
@@ -3823,4 +3834,42 @@ export interface UploadDetail {
   download_url: string;
   share_url: string;
   can_delete: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 6 — the live surface (legacy live-state/status/ticker). The roster
+// LINGERS through delivery gaps with roster_age_seconds so the UI can dim
+// it instead of oscillating full↔empty (live_state.py's own contract).
+
+export interface LiveFeed {
+  status: string;
+  /** Typed loosely on purpose: each event is {seq, type, received_at, …}
+   *  with per-type payloads; the recorded quiet-server form has none, so
+   *  renderable richness waits for a recording that carries them. */
+  events: { seq: number; type: string; [k: string]: unknown }[];
+  oldest_seq: number | null;
+  last_seq: number;
+  server_time: number;
+}
+
+export interface ActivityHistory {
+  data_points: { timestamp: string; player_count: number; max_players: number; map: string | null; online: boolean }[];
+  summary: { peak_players: number; peak_time: string | null; avg_players: number; uptime_percent: number; total_records: number };
+}
+
+export interface VoiceHistory {
+  /** members is a JSON STRING inside the JSON (the position_path class). */
+  data_points: { timestamp: string; member_count: number; channel_name: string | null; members: string }[];
+  summary: { peak_members: number; peak_time: string | null; avg_members: number; total_sessions: number; total_records: number };
+}
+
+export interface MonitoringStatus {
+  server: { count: number; last_recorded_at: string | null; age_seconds: number | null; is_stale: boolean; stale_threshold_seconds: number };
+  voice: { count: number; last_recorded_at: string | null; age_seconds: number | null; is_stale: boolean; stale_threshold_seconds: number };
+}
+
+export interface ApiHealth {
+  status: string;
+  service: string;
+  database: string;
 }

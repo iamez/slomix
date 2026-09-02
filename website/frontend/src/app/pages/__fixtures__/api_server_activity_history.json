@@ -1,0 +1,515 @@
+{
+    "data_points": [
+        {
+            "timestamp": "2026-09-02T05:54:48.630045+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T05:59:48.695594+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:04:48.768206+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:09:48.836503+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:14:48.913287+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:19:48.979805+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:24:49.048791+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:29:49.114795+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:34:49.191178+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:39:49.266277+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:44:52.105704+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:49:56.077111+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:54:58.477657+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T06:59:58.654714+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:04:58.729379+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:09:59.858452+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:15:06.677350+00:00",
+            "player_count": 0,
+            "max_players": 0,
+            "map": null,
+            "online": false
+        },
+        {
+            "timestamp": "2026-09-02T07:20:13.080285+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:25:13.240174+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:30:13.261907+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:35:13.273438+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:40:20.036740+00:00",
+            "player_count": 0,
+            "max_players": 0,
+            "map": null,
+            "online": false
+        },
+        {
+            "timestamp": "2026-09-02T07:45:24.602852+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:50:24.618275+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T07:55:24.688567+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:00:24.752931+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:05:24.820284+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:10:24.898442+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:15:24.961949+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:20:25.032381+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:25:25.104049+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:30:25.184435+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:35:25.271971+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:40:25.335568+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:45:29.128574+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:50:29.880184+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T08:55:29.983963+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:00:30.061212+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:05:30.149919+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:10:30.213228+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:15:30.287179+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:20:30.353416+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:25:30.434878+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:30:30.521193+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:35:30.623646+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:40:30.687181+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:45:30.801145+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:50:33.279438+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T09:55:33.386150+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:00:33.495617+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:05:33.565581+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:10:33.632826+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:15:33.704619+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:20:33.788500+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:25:33.861723+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:30:39.450865+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:35:39.517184+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:40:39.593309+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:45:39.694060+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:50:39.778838+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T10:55:39.850531+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:00:39.940460+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:05:40.012005+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:10:40.080080+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:15:40.157439+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:20:40.233862+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:25:40.310869+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:30:40.371961+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:35:40.448010+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:40:40.522801+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:45:40.606747+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        },
+        {
+            "timestamp": "2026-09-02T11:50:40.674193+00:00",
+            "player_count": 0,
+            "max_players": 16,
+            "map": "supply",
+            "online": true
+        }
+    ],
+    "summary": {
+        "peak_players": 0,
+        "peak_time": null,
+        "avg_players": 0.0,
+        "uptime_percent": 97.2,
+        "total_records": 72
+    }
+}
