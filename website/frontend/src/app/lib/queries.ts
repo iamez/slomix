@@ -1,164 +1,173 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import type { paths } from '../../api/generated/openapi.d';
-import { ApiError, apiGet, apiPost, apiUpload } from './api';
+import { ApiError, apiDelete, apiGet, apiPost, apiUpload } from './api';
 import type {
-  AdjustedLifetime,
   ActivityCalendar,
+  ActivityHistory,
+  AdjustedLifetime,
+  ApiHealth,
+  AvailabilityAccess,
   AvailabilityOverview,
+  AvailabilitySettings,
+  AvailabilityStatus,
+  AvailabilitySubscriptions,
   AwardsLeaderboard,
   AwardsPage,
+  BetPlaceResponse,
+  BetsMarketCurrent,
+  BetsWallet,
   BuildInfo,
+  CampaignCreateResponse,
+  CarrierEvents,
+  CarrierKills,
+  CarrierReturns,
   ChallengeCurrent,
+  CompClutch,
+  CompFirstBlood,
+  CompManAdvantage,
+  CompositeStats,
+  CompPersonalBests,
+  CompSideSplits,
+  CompStagger,
+  ConstructionEvents,
+  EscortCredits,
+  GreatshotDetail,
+  GreatshotList,
+  GreatshotStatus,
   HallOfFame,
+  HeadToHead,
   LastSession,
   LeaderboardRow,
+  LinkTokenResponse,
+  LiveFeed,
+  LiveSession,
   LiveState,
   LiveStatus,
+  MapMesh,
   MapRow,
   MapSegments,
   MapStatsRow,
   MatchRow,
+  MonitoringStatus,
+  ObjectiveFocus,
+  ObjectiveRuns,
+  PlanningToday,
+  PlayerIdentity,
+  PlayerJourney,
+  PlayerMatchRound,
   PlayerProfile,
   PlayerRivalries,
+  PromotionCampaign,
+  PromotionPreferences,
+  PromotionPreview,
+  ProxAimLock,
+  ProxClasses,
+  ProxCohesion,
+  ProxCombatHeatmap,
+  ProxCombatPositions,
+  ProxCrossfireAngles,
+  ProxDangerZones,
+  ProxDuos,
+  ProxEngagements,
+  ProxEventDetail,
+  ProxEvents,
+  ProxFocusFire,
+  ProxHeadshotRates,
+  ProxHitRegions,
+  ProxHitRegionsByWeapon,
+  ProxHotzones,
+  ProximityLeaderboard,
+  ProxKillLines,
+  ProxKillOutcomePlayerStats,
+  ProxKillOutcomes,
+  ProxLuaTrades,
+  ProxMovementStats,
+  ProxMovers,
+  ProxObjectivePressure,
+  ProxPlayerAim,
+  ProxPlayerCard,
+  ProxPlayerHeatmap,
+  ProxPlayerProfile,
+  ProxPlayerRadar,
+  ProxPlayers,
+  ProxPushes,
+  ProxQuality,
+  ProxReactions,
+  ProxRevives,
+  ProxRoundTimeline,
+  ProxRoundTracks,
+  ProxScopes,
+  ProxScores,
+  ProxScoresFormula,
+  ProxSpawnTiming,
+  ProxSummary,
+  ProxSupportSummary,
+  ProxTeamComparison,
+  ProxTeamplay,
+  ProxTradesEvents,
+  ProxTradesPlayerStats,
+  ProxTradesSummary,
+  ProxWeaponAccuracy,
+  PushHeatmap,
   QuickLeaders,
+  RecentPrediction,
   RecentRound,
   RivalryLeaderboard,
-  HeadToHead,
+  RoundViz,
+  SeasonAwards,
+  SeasonCurrent,
+  SeasonLeaders,
+  SeasonSummary,
+  SessionDetail,
+  SessionGoodNight,
+  SessionLeaderRow,
+  SessionLineups,
+  SessionMvp,
+  SessionRounds,
+  SessionSummary,
+  SessionVerdicts,
+  SkillFormula,
+  SkillLeaderboard,
+  SkillMovers,
+  SkillPlayer,
+  SpiderWebSnapshot,
+  SsrBoard,
+  StatsOverview,
+  StatsRecords,
+  StatsTrends,
   StoryBestLives,
   StoryBoxScore,
   StoryKillImpact,
   StoryKillMatrix,
   StoryKisDetails,
   StoryKisFormula,
+  StoryMoments,
+  StoryMomentum,
   StoryMomentumSession,
   StoryMovement,
-  StoryPwcFormula,
-  StoryUselessDefense,
-  StoryMomentum,
-  StoryMoments,
   StoryNarrative,
   StoryPlayerNarratives,
+  StoryPwcFormula,
   StoryRoleBoard,
   StoryScopes,
   StorySynergy,
-  StoryWinContribution,
-  RoundViz,
-  SeasonAwards,
-  SeasonCurrent,
-  SeasonLeaders,
-  SeasonSummary,
-  SessionLineups,
-  SessionRounds,
-  SessionDetail,
-  SessionGoodNight,
-  SessionMvp,
-  SessionVerdicts,
-  SessionSummary,
-  SkillFormula,
-  SkillLeaderboard,
-  SkillMovers,
-  SsrBoard,
-  StatsOverview,
-  StatsRecords,
-  StatsTrends,
   StorytellingCompleteness,
+  StoryUselessDefense,
+  StoryWinContribution,
+  SubscriptionUnlinkResponse,
+  SubscriptionWriteResponse,
   SystemOverview,
   TonightStatus,
+  UploadDetail,
+  UploadsList,
+  V7Status,
+  VehicleProgress,
   VoiceCurrent,
+  VoiceHistory,
+  WaveCycles,
   WeaponRow,
   WeaponsByPlayer,
   WeaponsHallOfFame,
-  CompositeStats,
-  LiveSession,
-  PlayerIdentity,
-  PlayerMatchRound,
-  CarrierEvents,
-  CarrierKills,
-  CarrierReturns,
-  CompClutch,
-  CompFirstBlood,
-  CompManAdvantage,
-  CompPersonalBests,
-  CompSideSplits,
-  CompStagger,
-  PlayerJourney,
-  ProxAimLock,
-  ProxClasses,
-  ProxCohesion,
-  ProxCombatPositions,
-  ProxCrossfireAngles,
-  ProxCombatHeatmap,
-  ProxDangerZones,
-  ProxDuos,
-  ProxEngagements,
-  ProxEventDetail,
-  ProxEvents,
-  ProxHeadshotRates,
-  ProxHitRegions,
-  ProxHotzones,
-  ProxKillLines,
-  ProxHitRegionsByWeapon,
-  ProxKillOutcomePlayerStats,
-  ProxKillOutcomes,
-  ProxObjectivePressure,
-  ProxMovementStats,
-  ProxMovers,
-  ProxPlayerAim,
-  ProxPlayerCard,
-  ProxPlayerHeatmap,
-  ProxPlayerProfile,
-  ProxPlayerRadar,
-  ProxScores,
-  ProxScoresFormula,
-  ProxSummary,
-  ProxTeamplay,
-  ProxTradesEvents,
-  ProxTradesPlayerStats,
-  ProxTradesSummary,
-  ProxWeaponAccuracy,
-  ActivityHistory,
-  ApiHealth,
-  AvailabilityAccess,
-  AvailabilityStatus,
-  BetsMarketCurrent,
-  GreatshotDetail,
-  GreatshotList,
-  GreatshotStatus,
-  LiveFeed,
-  MapMesh,
-  MonitoringStatus,
-  PlanningToday,
-  PromotionCampaign,
-  PromotionPreferences,
-  UploadDetail,
-  VoiceHistory,
-  UploadsList,
-  ProxRoundTimeline,
-  ProxRoundTracks,
-  ProxTeamComparison,
-  SpiderWebSnapshot,
-  ProxFocusFire,
-  ProximityLeaderboard,
-  ProxLuaTrades,
-  ProxPushes,
-  ProxQuality,
-  ProxReactions,
-  ProxScopes,
-  ProxRevives,
-  ConstructionEvents,
-  EscortCredits,
-  ObjectiveFocus,
-  ObjectiveRuns,
-  ProxPlayers,
-  ProxSpawnTiming,
-  ProxSupportSummary,
-  PushHeatmap,
-  V7Status,
-  VehicleProgress,
-  WaveCycles,
-  RecentPrediction,
-  SessionLeaderRow,
-  SkillPlayer,
 } from './types';
 
 /**
@@ -1748,7 +1757,7 @@ export function useBetsWallet(enabled: boolean) {
   return useQuery({
     queryKey: ['bets-wallet'],
     enabled,
-    queryFn: () => apiGet('/api/bets/wallet') as Promise<unknown>,
+    queryFn: () => apiGet('/api/bets/wallet') as Promise<BetsWallet>,
     staleTime: 30 * 1000,
   });
 }
@@ -1771,30 +1780,93 @@ export function usePromotionPreferences(enabled: boolean) {
   });
 }
 
-/** settings/subscriptions exist in slice 1 ONLY for their auth-tier
- *  answer (401/403/200) — the linked forms are slice 2. */
-export function useAvailabilitySettingsProbe(enabled: boolean) {
+/** Slice 2: the linked forms. 401/403 are the auth tier's answer, so no
+ *  retry; both are `enabled` only for an authenticated viewer — the
+ *  anonymous page never calls them (asserted by the page test). */
+export function useAvailabilitySettings(enabled: boolean) {
   return useQuery({
     queryKey: ['availability-settings'],
     enabled,
     retry: false,
-    queryFn: () => apiGet('/api/availability/settings') as Promise<unknown>,
+    queryFn: () => apiGet('/api/availability/settings') as Promise<AvailabilitySettings>,
     staleTime: 60 * 1000,
   });
 }
 
-export function useAvailabilitySubscriptionsProbe(enabled: boolean) {
+export function useAvailabilitySubscriptions(enabled: boolean) {
   return useQuery({
     queryKey: ['availability-subscriptions'],
     enabled,
     retry: false,
-    queryFn: () => apiGet('/api/availability/subscriptions') as Promise<unknown>,
+    queryFn: () => apiGet('/api/availability/subscriptions') as Promise<AvailabilitySubscriptions>,
     staleTime: 60 * 1000,
+  });
+}
+
+/** Promoter-only (403 "Promoter permission required" otherwise): the page
+ *  enables it from access.can_promote and never probes. */
+export function usePromotionPreview(
+  enabled: boolean,
+  flags: { include_available: boolean; include_maybe: boolean },
+) {
+  return useQuery({
+    queryKey: ['promotion-preview', flags.include_available, flags.include_maybe],
+    enabled,
+    retry: false,
+    queryFn: () =>
+      apiGet('/api/availability/promotions/preview', { query: flags }) as Promise<PromotionPreview>,
+    staleTime: 30 * 1000,
   });
 }
 
 export async function postMyAvailability(dateIso: string, status: AvailabilityStatus) {
   return apiPost('/api/availability', { date: dateIso, status });
+}
+
+// Slice 2 writes — bare async functions like postMyAvailability (the house
+// pattern: no useMutation; the caller owns pending/error state and
+// invalidates what the write changed).
+
+export type AvailabilitySettingsWrite = {
+  sound_enabled: boolean;
+  availability_reminders_enabled: boolean;
+  sound_cooldown_seconds: number;
+  timezone: string;
+  discord_notify: boolean;
+  telegram_notify: boolean;
+  signal_notify: boolean;
+};
+
+export async function postAvailabilitySettings(body: AvailabilitySettingsWrite) {
+  return apiPost('/api/availability/settings', body) as Promise<AvailabilitySettings>;
+}
+
+export async function postSubscription(channel: 'telegram' | 'signal', enabled: boolean) {
+  return apiPost('/api/availability/subscriptions', {
+    channel_type: channel, enabled, preferences: {},
+  }) as Promise<SubscriptionWriteResponse>;
+}
+
+export async function deleteSubscription(channel: 'telegram' | 'signal') {
+  return apiDelete('/api/availability/subscriptions/{channel_type}', {
+    pathParams: { channel_type: channel },
+  }) as Promise<SubscriptionUnlinkResponse>;
+}
+
+export async function postLinkToken(channel: 'telegram' | 'signal') {
+  return apiPost('/api/availability/link-token', {
+    channel_type: channel, ttl_minutes: 30,
+  }) as Promise<LinkTokenResponse>;
+}
+
+export async function postCampaign(flags: { include_available: boolean; include_maybe: boolean; dry_run: boolean }) {
+  return apiPost('/api/availability/promotions/campaigns', flags) as Promise<CampaignCreateResponse>;
+}
+
+export async function postBet(marketId: number, choice: 'team_a' | 'team_b', amount: number) {
+  return apiPost('/api/bets/market/{market_id}/bet', { choice, amount }, {
+    pathParams: { market_id: marketId },
+  }) as Promise<BetPlaceResponse>;
 }
 
 

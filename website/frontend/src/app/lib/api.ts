@@ -198,6 +198,31 @@ async function apiErrorFrom(res: Response, url: string): Promise<ApiError> {
 }
 
 
+/** DELETE — the availability channel unlink is the first DELETE the app
+ *  makes (`/api/availability/subscriptions/{channel_type}`, slice 2). Same
+ *  contract as apiPost: compile-time path literal, `X-Requested-With` for
+ *  the backend's CSRF gate, ApiError-with-detail on non-2xx. */
+type DeleteOperation = { responses: unknown };
+export type DeletePath = {
+  [P in keyof paths]: paths[P] extends { delete: DeleteOperation } ? P : never;
+}[keyof paths];
+
+export async function apiDelete<P extends DeletePath>(
+  path: P,
+  options?: { pathParams?: Record<string, string | number> },
+): Promise<unknown> {
+  const url = fillPath(path, options?.pathParams);
+  // nosemgrep
+  const res = await fetch(url, {
+    method: 'DELETE',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+  });
+  if (!res.ok) throw await apiErrorFrom(res, url);
+  return res.json();
+}
+
+
 /** Multipart upload — the browser sets the boundary Content-Type itself
  *  and sends Origin on its own; setting Content-Type manually breaks the
  *  boundary. Same ApiError-with-detail contract as apiPost. */

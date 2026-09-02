@@ -3758,13 +3758,172 @@ export interface PlanningToday {
   is_mock?: boolean;
 }
 
+// Slice 2 — the shapes below are read off the HANDLERS (no response_model
+// on any availability/bets route: openapi has no schema to pin them, so
+// tests/unit/test_availability_slice2_fixtures.py replays each handler in
+// its harness and diffs the committed fixture against what it returns).
+
+/** bets_router._pool_split + _market_dict (bets_router.py:130-165). */
+export interface BetsPoolSide { pool: number; bets: number }
+export interface BetsPool { team_a: BetsPoolSide; team_b: BetsPoolSide; total_pool: number }
+export interface BetsMyBet {
+  /** 'team_a' | 'team_b' — a string on the wire (JSON fixtures infer string;
+   *  the page narrows by comparison, never by cast). */
+  choice: string;
+  amount: number;
+  /** NOT NULL DEFAULT 0 in parimutuel_bets — 0 until settlement pays. */
+  payout: number;
+  /** 'open' while the bet stands; 'won' | 'lost' | 'refunded' after settlement. */
+  status: string;
+}
+export interface BetsMarket {
+  id: number;
+  gaming_session_id: number | null;
+  session_date: string | null;
+  team_a_label: string;
+  team_b_label: string;
+  /** 'open' accepts bets; 'closed' is locked; 'settled' carries `outcome`. */
+  status: string;
+  /** 'team_a' | 'team_b' | 'void' once settled; null before. */
+  outcome: string | null;
+  pool: BetsPool;
+  /** null when the viewer is anonymous or has not bet on this market. */
+  my_bet: BetsMyBet | null;
+}
+
 export interface BetsMarketCurrent {
   status: string;
-  market: unknown | null;
+  market: BetsMarket | null;
+}
+
+/** GET /api/bets/wallet (bets_router.py:166-174); 401 anonymous. */
+export interface BetsWallet { status: string; balance: number; lifetime_earned: number }
+
+/** POST /api/bets/market/{market_id}/bet (bets_router.py:320). */
+export interface BetPlaceResponse {
+  status: string;
+  balance: number;
+  choice: string;
+  amount: number;
+  pool: BetsPool;
+}
+
+/** availability.py:_campaign_payload (:1367-1435) — aggregate-only campaign
+ *  metadata; the recipient snapshot never leaves the server. */
+export interface PromotionCampaignJob {
+  id: number;
+  job_type: string;
+  run_at: string | null;
+  status: string;
+  attempts: number;
+  max_attempts: number;
+  last_error: string | null;
+  sent_at: string | null;
+}
+export interface PromotionCampaignPayload {
+  id: number;
+  campaign_date: string;
+  target_timezone: string;
+  target_start_time: string;
+  initiated_by_user_id: number;
+  initiated_by_discord_id: number;
+  include_maybe: boolean;
+  include_available: boolean;
+  dry_run: boolean;
+  status: string;
+  recipient_count: number;
+  channels_summary: Record<string, number>;
+  created_at: string | null;
+  updated_at: string | null;
+  jobs: PromotionCampaignJob[];
 }
 
 export interface PromotionCampaign {
-  campaign: unknown | null;
+  campaign: PromotionCampaignPayload | null;
+}
+
+/** GET /api/availability/promotions/preview (availability.py:1547-1575);
+ *  401 anonymous, 403 unlinked / not a promoter, each with its own words. */
+export interface PromotionPreview {
+  campaign_date: string;
+  target_time_cet: string;
+  reminder_time_cet: string;
+  recipient_count: number;
+  channels_summary: Record<string, number>;
+  /** _public_campaign_recipients (:309): name, status, routed channel —
+   *  the legacy modal threw this list away. */
+  recipients_preview: { display_name: string; status: string; selected_channel: string }[];
+}
+
+/** POST /api/availability/promotions/campaigns (availability.py:1726-1741);
+ *  409 when today's campaign already exists, with the backend's sentence. */
+export interface CampaignCreateResponse {
+  success: boolean;
+  campaign_id: number;
+  campaign_date: string;
+  status: string;
+  recipient_count: number;
+  channels_summary: Record<string, number>;
+  scheduled_times: { reminder_2045_cet: string; start_2100_cet: string; voice_check_after_start: string };
+  dry_run: boolean;
+}
+
+/** availability.py:_fetch_subscriptions_map (:330-375): one row per channel
+ *  in CHANNEL_TYPES order (discord, telegram, signal). Discord is always
+ *  enabled+verified (it IS the identity); telegram/signal are verified only
+ *  after the link-token round trip. */
+export type AvailabilityChannel = 'discord' | 'telegram' | 'signal';
+export interface AvailabilitySubscription {
+  /** One of AvailabilityChannel; string on the wire. */
+  channel_type: string;
+  enabled: boolean;
+  channel_address: string | null;
+  verified: boolean;
+  preferences: Record<string, unknown>;
+}
+export interface AvailabilitySubscriptions { user_id: number; subscriptions: AvailabilitySubscription[] }
+
+/** availability.py:_settings_payload (:378-412). `get_ready_sound` mirrors
+ *  `sound_enabled` (legacy field name kept on the wire). */
+export interface AvailabilitySettings {
+  user_id: number;
+  sound_enabled: boolean;
+  get_ready_sound: boolean;
+  sound_cooldown_seconds: number;
+  availability_reminders_enabled: boolean;
+  timezone: string;
+  discord_notify: boolean;
+  telegram_notify: boolean;
+  signal_notify: boolean;
+  subscriptions: AvailabilitySubscription[];
+}
+
+/** POST /api/availability/link-token (availability.py:1044-1108); 429 with
+ *  "Link token was generated recently. Try again in Ns" inside the
+ *  per-channel minimum interval. */
+export interface LinkTokenResponse {
+  success: boolean;
+  channel_type: string;
+  token: string;
+  expires_at: string;
+}
+
+/** POST /api/availability/subscriptions (availability.py:923-994). */
+export interface SubscriptionWriteResponse {
+  success: boolean;
+  user_id: number;
+  channel_type: string;
+  enabled: boolean;
+  channel_address: string | null;
+  preferences: Record<string, unknown>;
+}
+
+/** DELETE /api/availability/subscriptions/{channel_type} (:996-1042). */
+export interface SubscriptionUnlinkResponse {
+  success: boolean;
+  user_id: number;
+  channel_type: string;
+  unlinked: boolean;
 }
 
 export interface PromotionPreferences {

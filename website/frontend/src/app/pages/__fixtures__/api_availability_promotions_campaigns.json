@@ -1,0 +1,1 @@
+{"success":true,"campaign_id":1,"campaign_date":"2026-02-19","status":"scheduled","recipient_count":2,"channels_summary":{"discord":2,"telegram":0,"signal":0},"scheduled_times":{"reminder_2045_cet":"2026-02-19T19:45:00+00:00","start_2100_cet":"2026-02-19T20:00:00+00:00","voice_check_after_start":"2026-02-19T20:05:00+00:00"},"dry_run":false}

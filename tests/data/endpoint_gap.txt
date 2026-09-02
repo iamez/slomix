@@ -18,9 +18,16 @@
 # true and should stay visible; it closes when legacy sessions.js/sessions2.js
 # are retired, not before. Do not delete it to make the number smaller — the
 # test recomputes the set and would fail anyway, which is the ratchet working.
-/api/availability/link-token
-/api/availability/promotions/campaigns
-/api/availability/promotions/preview
+#
+# 2026-09-02, /api/bets and /api/bets/market: availability slice 2 built the
+# BETTOR surface (wallet, pools, my bet, the stake POST on
+# /api/bets/market/{market_id}/bet). Neither line closes by that:
+# /api/bets is legacy bets.js's `${API_BASE}/bets` base string — no such
+# endpoint exists (docs/design/07 §C.1 calls it an abbreviation), so it goes
+# when bets.js retires; /api/bets/market is the ADMIN market-open POST, which
+# the owner kept out of slice 2 (open/settle stay in legacy availability.js).
+# The templated bet call must NOT clear it — test_templated_write_does_not_
+# register_its_truncated_prefix pins that. Both close in a later slice.
 /api/bets
 /api/bets/market
 /api/diagnostics
