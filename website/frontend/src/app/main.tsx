@@ -32,6 +32,7 @@ import { ProximityReplayPage } from './pages/ProximityReplayPage';
 import { SpiderWebPage } from './pages/SpiderWebPage';
 import { AvailabilityPage } from './pages/AvailabilityPage';
 import { UploadsPage, UploadDetailPage } from './pages/UploadsPage';
+import { GreatshotPage, GreatshotDemoPage } from './pages/GreatshotPage';
 import { LivePage } from './pages/LivePage';
 import { SkillRating } from './pages/SkillRating';
 import { RoundsPage } from './pages/RoundsPage';
@@ -108,6 +109,8 @@ const PAGES: Record<string, React.ReactElement> = {
   'proximity-player': <ProximityPlayerPage />,
   'proximity-replay': <ProximityReplayPage />,
   availability: <AvailabilityPage />,
+  greatshot: <GreatshotPage />,
+  'greatshot-demo': <GreatshotDemoPage />,
   live: <LivePage />,
   uploads: <UploadsPage />,
   'upload-detail': <UploadDetailPage />,

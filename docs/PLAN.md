@@ -22,24 +22,24 @@
 
 ### Kje smo
 
-Nova SPA (website/frontend/src/app) — faza 5 (proximity telemetrija) je
-**skoraj zaključena**. Prod ZAMRZNJEN na v1.39.0 (ownerjeva odločitev
-2026-08-28); dev soaka; deploy NI naloga.
+Nova SPA (website/frontend/src/app) — faza 5 ZAKLJUČENA, faza 6 v teku.
+Prod ZAMRZNJEN na v1.39.0 (ownerjeva odločitev 2026-08-28); dev soaka;
+deploy NI naloga.
 
 | stanje | vrednost |
 |---|---|
-| izdana verzija (dev) | v1.44.0 (2026-09-02) |
-| endpoint gap (H1) | 57 (`tests/data/endpoint_gap.txt`) |
-| proximity inventory pending | 11 (`tests/unit/test_proximity_inventory.py` PENDING_BUDGET) |
-| zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov, #881 mergan), player profil, team comparison, replay, spider-web SW-1 |
+| izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
+| endpoint gap (H1) | 13 na tej veji; 8, ko sta #889 (−5) in #890 (−2) oba na mainu |
+| proximity inventory pending | **0** (#884) |
+| zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
+| zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
 
 ## Naslednji koraki (vrstni red)
 
-1. **Faza 6 — availability rezina 1** (v delu, veja feat/phase6-availability):
-   dostopne stopnje (401/403/200), tedenski grid + moj status (POST),
-   planning today, market/wallet, promo povzetki. Rezina 2: linked formi
-   (settings/subscriptions/link-token/preview/campaigns), betting UI.
-2. **Faza 6 — uploads, greatshot, live** strani.
+1. **Faza 6 — preostanek**: availability rezina 2 (linked formi:
+   settings/subscriptions/link-token/preview/campaigns, betting UI),
+   uploads rezina 2 (resumable upload, delete), diagnostics/stats/sessions
+   posamični endpointi iz gap seznama (8 poti po mergu #889+#890).
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
@@ -49,7 +49,7 @@ Nova SPA (website/frontend/src/app) — faza 5 (proximity telemetrija) je
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | 41 po tej rezini (74 ob začetku 1. 9.) |
+| endpoint gap | 13 na tej veji → 8 po mergu #889+#890 (74 ob začetku 1. 9.) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: lag na puranu + Lua optimizacija (sestrska seja)

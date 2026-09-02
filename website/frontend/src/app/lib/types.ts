@@ -3837,6 +3837,69 @@ export interface UploadDetail {
 }
 
 // ---------------------------------------------------------------------------
+// Phase 6 — greatshot (legacy greatshot.js): per-user demo analysis. The
+// whole surface is auth-gated (401 anonymous = a state). Shapes from a
+// LIVE recording: a real demo uploaded and analyzed on this branch.
+
+export interface GreatshotItem {
+  id: string;
+  filename: string;
+  status: string;
+  error: string | null;
+  created_at: string | null;
+  processing_started_at: string | null;
+  processing_finished_at: string | null;
+  map: string | null;
+  duration_ms: number | null;
+  mod: string | null;
+  warnings: string[];
+  highlight_count: number;
+  render_job_count: number;
+  rendered_count: number;
+}
+
+export interface GreatshotList { items: GreatshotItem[] }
+
+export interface GreatshotStatus {
+  status: string;
+  error: string | null;
+  processing_started_at: string | null;
+  processing_finished_at: string | null;
+  highlight_count: number;
+  map: string | null;
+}
+
+export interface GreatshotHighlight {
+  id: string;
+  type: string;
+  player: string | null;
+  start_ms: number;
+  end_ms: number;
+  score: number | null;
+  meta: Record<string, unknown>;
+  explanation: string | null;
+  clip_demo_path: string | null;
+  clip_download: string | null;
+  created_at: string | null;
+}
+
+export interface GreatshotDetail {
+  id: string;
+  filename: string;
+  status: string;
+  error: string | null;
+  created_at: string | null;
+  processing_started_at: string | null;
+  processing_finished_at: string | null;
+  warnings: string[];
+  metadata: Record<string, unknown>;
+  analysis: Record<string, unknown> | null;
+  player_stats: Record<string, unknown>;
+  highlights: GreatshotHighlight[];
+  renders: unknown[];
+  downloads: { json: string; txt: string };
+}
+
 // Phase 6 — the live surface (legacy live-state/status/ticker). The roster
 // LINGERS through delivery gaps with roster_age_seconds so the UI can dim
 // it instead of oscillating full↔empty (live_state.py's own contract).

@@ -69,3 +69,33 @@ async def test_upload_accepts_valid_dm84(tmp_path: Path):
     stored_path = Path(saved.stored_path)
     assert stored_path.exists()
     assert stored_path.suffix == ".dm_84"
+
+
+@pytest.mark.asyncio
+async def test_unsupported_demo_is_a_400_and_leaves_no_trace(tmp_path: Path):
+    """UnsupportedDemoError is not a ValueError, so before #890 it escaped
+    save_upload as a 500 AND the junk file stayed on disk. The rejection is
+    the scanner speaking: 400, its words verbatim, and NOTHING left behind —
+    not the file, not the per-demo directory tree."""
+    service = GreatshotStorageService(project_root=tmp_path)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await service.save_upload(_upload("junk.dm_84", b"this is not a demo, honest"))
+
+    assert exc_info.value.status_code == 400
+    # The scanner's own message, no wrapper prefix.
+    assert "Invalid first message size" in str(exc_info.value.detail)
+    leftovers = [p for p in service.root.rglob("*")]
+    assert leftovers == [], f"rejected upload left {leftovers}"
+
+
+@pytest.mark.asyncio
+async def test_oversize_rejection_leaves_no_trace(tmp_path: Path):
+    service = GreatshotStorageService(project_root=tmp_path)
+    service.max_upload_bytes = 64
+
+    with pytest.raises(HTTPException):
+        await service.save_upload(_upload("big.dm_84", _valid_demo_bytes()))
+
+    leftovers = [p for p in service.root.rglob("*")]
+    assert leftovers == [], f"rejected upload left {leftovers}"

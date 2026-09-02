@@ -24,7 +24,5 @@
 /api/bets
 /api/bets/market
 /api/diagnostics
-/api/greatshot
-/api/greatshot/upload
 /api/stats/sessions
 /api/uploads/resumable

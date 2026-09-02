@@ -1,0 +1,2373 @@
+{
+    "id": "44f0543a5f8244e5b9e773c64b453d43",
+    "filename": "2026-02-03-220741-etl_adlernest.dm_84",
+    "status": "analyzed",
+    "error": null,
+    "created_at": "2026-09-02 12:19:59.352466",
+    "processing_started_at": "2026-09-02 12:19:59.366721",
+    "processing_finished_at": "2026-09-02 12:19:59.660632",
+    "metadata": {
+        "map": "etl_adlernest",
+        "mod": "Legacy",
+        "end_ms": 8207300,
+        "header": {
+            "sequence": 9716,
+            "first_message_size": 10289
+        },
+        "rounds": [
+            {
+                "end_ms": 7901750,
+                "winner": "allies",
+                "start_ms": 7620350,
+                "duration_ms": 281400,
+                "first_place_score": 126,
+                "second_place_score": 126
+            }
+        ],
+        "profile": "etlegacy_main",
+        "filename": "original.dm_84",
+        "gametype": "Stopwatch",
+        "start_ms": 7604400,
+        "extension": ".dm_84",
+        "duration_ms": 281400,
+        "mod_version": "v2.83.1-34-ga127043",
+        "profile_name": "ET:Legacy Main",
+        "gametype_short": "SW",
+        "file_size_bytes": 3965532,
+        "matched_round_id": 11274,
+        "crossref_confidence": 80.0,
+        "crossref_match_details": [
+            "map",
+            "duration (diff=23.4s)",
+            "winner"
+        ]
+    },
+    "warnings": [],
+    "analysis": {
+        "metadata": {
+            "map": "etl_adlernest",
+            "mod": "Legacy",
+            "end_ms": 8207300,
+            "header": {
+                "sequence": 9716,
+                "first_message_size": 10289
+            },
+            "rounds": [
+                {
+                    "end_ms": 7901750,
+                    "winner": "allies",
+                    "start_ms": 7620350,
+                    "duration_ms": 281400,
+                    "first_place_score": 126,
+                    "second_place_score": 126
+                }
+            ],
+            "profile": "etlegacy_main",
+            "filename": "original.dm_84",
+            "gametype": "Stopwatch",
+            "start_ms": 7604400,
+            "extension": ".dm_84",
+            "duration_ms": 281400,
+            "mod_version": "v2.83.1-34-ga127043",
+            "profile_name": "ET:Legacy Main",
+            "gametype_short": "SW",
+            "file_size_bytes": 3965532
+        },
+        "stats": {
+            "chat_count": 1,
+            "kill_count": 118,
+            "event_count": 119,
+            "top_killers": [
+                {
+                    "kills": 27,
+                    "player": "vid"
+                },
+                {
+                    "kills": 25,
+                    "player": "carniee"
+                },
+                {
+                    "kills": 21,
+                    "player": "SuperBoyy"
+                },
+                {
+                    "kills": 16,
+                    "player": "fl0w3r"
+                },
+                {
+                    "kills": 15,
+                    "player": ".olz"
+                },
+                {
+                    "kills": 14,
+                    "player": "Proner2026"
+                }
+            ],
+            "player_count": 6,
+            "headshot_count": 1
+        },
+        "events": [
+            {
+                "meta": {
+                    "team_chat": false
+                },
+                "t_ms": 7605725,
+                "type": "chat",
+                "message": "voice teams",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7606650,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7608425,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "suicide",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7608675,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "thompson",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7609850,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "suicide",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7611775,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "suicide",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7613625,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7614350,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "grenade launcher",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7627375,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "grenade_launcher",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7632100,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "thompson",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7637925,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "suicide",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7640675,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "thompson",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7645725,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7646700,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": ".45ACP 1911",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7649875,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": ".45acp_1911",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7677100,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7683300,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7691175,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7704275,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7707175,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": ".45ACP 1911",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7710500,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": ".45acp_1911",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7721925,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7723350,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "thompson",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7726200,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "suicide",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7726250,
+                "team": "allies",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 7735375,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "mp40",
+                "attacker": "fl0w3r",
+                "hit_region": "arm"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7741850,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7745075,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "luger 9mm",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7754900,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "luger_9mm",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7756350,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "suicide",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7757300,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "suicide",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7758150,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "suicide",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7763625,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "grenade launcher",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7764250,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "grenade_launcher",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7767300,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7777525,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7783100,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "thompson",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7787750,
+                "team": "allies",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 7798500,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "mp40",
+                "attacker": "fl0w3r",
+                "hit_region": "leg"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7800425,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 7806850,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "mp40",
+                "attacker": "fl0w3r",
+                "hit_region": "body"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7817825,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "thompson",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "grenade launcher",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7823800,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "grenade_launcher",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7824050,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7826600,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "thompson",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7848000,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "suicide",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7860750,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7862475,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "thompson",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7866850,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7877300,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "thompson",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7881000,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "thompson",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7882400,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "thompson",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7912000,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7912025,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "suicide",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7914625,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7921525,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7925775,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7926425,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7927850,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7930025,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7935275,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7936700,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7940500,
+                "team": "allies",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "mp40",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7942325,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7950150,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7950500,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7950575,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "grenade launcher",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7961425,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "grenade_launcher",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7971000,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7972300,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7973800,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7977750,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7978900,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7979100,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "suicide",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 7994900,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7998500,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "suicide",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 7999975,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "suicide",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "luger 9mm",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8001050,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "luger_9mm",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 8004800,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "thompson",
+                "attacker": "fl0w3r",
+                "hit_region": "arm"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8006750,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "suicide",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8009200,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8020075,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "suicide",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8024400,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8024975,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8036675,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8039225,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8039600,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8048900,
+                "team": "allies",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "thompson",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 8055950,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "thompson",
+                "attacker": "fl0w3r",
+                "hit_region": "arm"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8059600,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "suicide",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8060425,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8071275,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8084750,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "mp40",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8090900,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8091175,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 8091875,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "thompson",
+                "attacker": "fl0w3r",
+                "hit_region": "arm"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8094325,
+                "team": "allies",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "mp40",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8099225,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "suicide",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8118550,
+                "team": "allies",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "suicide",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8118950,
+                "team": "allies",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "suicide",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 8120400,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": "fl0w3r",
+                "hit_region": "body"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8126200,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8128775,
+                "team": "allies",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "thompson",
+                "attacker": ".olz"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies",
+                    "hit_region_source": "xpgain"
+                },
+                "t_ms": 8129150,
+                "team": "allies",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "thompson",
+                "attacker": "fl0w3r",
+                "hit_region": "head"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8139375,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8145075,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8148650,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "allies",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8154350,
+                "team": "allies",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "suicide",
+                "attacker": "fl0w3r"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8159150,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8159325,
+                "team": "axis",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "suicide",
+                "attacker": "Proner2026"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8159750,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8175650,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8178750,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8185000,
+                "team": "axis",
+                "type": "kill",
+                "victim": ".olz",
+                "weapon": "mp40",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "thompson",
+                    "victim_team": "axis",
+                    "attacker_team": "allies"
+                },
+                "t_ms": 8186575,
+                "team": "allies",
+                "type": "kill",
+                "victim": "Proner2026",
+                "weapon": "thompson",
+                "attacker": "SuperBoyy"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8189075,
+                "team": "axis",
+                "type": "kill",
+                "victim": "vid",
+                "weapon": "suicide",
+                "attacker": "vid"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8189575,
+                "team": "axis",
+                "type": "kill",
+                "victim": "fl0w3r",
+                "weapon": "mp40",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "suicide",
+                    "victim_team": "axis",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8189675,
+                "team": "axis",
+                "type": "kill",
+                "victim": "carniee",
+                "weapon": "suicide",
+                "attacker": "carniee"
+            },
+            {
+                "meta": {
+                    "raw_weapon": "MP40",
+                    "victim_team": "allies",
+                    "attacker_team": "axis"
+                },
+                "t_ms": 8196825,
+                "team": "axis",
+                "type": "kill",
+                "victim": "SuperBoyy",
+                "weapon": "mp40",
+                "attacker": "vid"
+            }
+        ],
+        "events_total": 119,
+        "created_at": "2026-09-02 12:19:59.603849"
+    },
+    "highlights": [
+        {
+            "id": "3d0adf2a049042f8bed0445e7479ba51",
+            "type": "spree",
+            "player": "vid",
+            "start_ms": 7640675,
+            "end_ms": 7726250,
+            "score": 42.0,
+            "meta": {
+                "victims": [
+                    "fl0w3r",
+                    "SuperBoyy",
+                    ".olz",
+                    ".olz",
+                    "SuperBoyy",
+                    "vid"
+                ],
+                "explanation": "6 kills without dying",
+                "kill_gaps_ms": [
+                    9200,
+                    41300,
+                    13100,
+                    17650,
+                    4325
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "suicide": 1,
+                    "thompson": 1,
+                    ".45acp_1911": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 7640675,
+                        "victim": "fl0w3r",
+                        "weapon": "thompson",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7649875,
+                        "victim": "SuperBoyy",
+                        "weapon": ".45acp_1911",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7691175,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7704275,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7721925,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7726250,
+                        "victim": "vid",
+                        "weapon": "suicide",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 1.75,
+                    "kills": 7,
+                    "deaths": 4,
+                    "accuracy": null,
+                    "damage_given": 1635
+                },
+                "avg_kill_gap_ms": 17115,
+                "fastest_kill_gap_ms": 4325,
+                "kills_without_death": 6
+            },
+            "explanation": "6 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "b27417cd5c484969980f83235af99d7c",
+            "type": "spree",
+            "player": "vid",
+            "start_ms": 7640675,
+            "end_ms": 7721925,
+            "score": 35.0,
+            "meta": {
+                "victims": [
+                    "fl0w3r",
+                    "SuperBoyy",
+                    ".olz",
+                    ".olz",
+                    "SuperBoyy"
+                ],
+                "explanation": "5 kills without dying",
+                "kill_gaps_ms": [
+                    9200,
+                    41300,
+                    13100,
+                    17650
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "thompson": 1,
+                    ".45acp_1911": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 7640675,
+                        "victim": "fl0w3r",
+                        "weapon": "thompson",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7649875,
+                        "victim": "SuperBoyy",
+                        "weapon": ".45acp_1911",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7691175,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7704275,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7721925,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 1.75,
+                    "kills": 7,
+                    "deaths": 4,
+                    "accuracy": null,
+                    "damage_given": 1635
+                },
+                "avg_kill_gap_ms": 20312,
+                "fastest_kill_gap_ms": 9200,
+                "kills_without_death": 5
+            },
+            "explanation": "5 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "df2ca2efad724b128d73deecf01f0454",
+            "type": "spree",
+            "player": ".olz",
+            "start_ms": 8060425,
+            "end_ms": 8118950,
+            "score": 35.0,
+            "meta": {
+                "victims": [
+                    "Proner2026",
+                    "SuperBoyy",
+                    "Proner2026",
+                    "vid",
+                    ".olz"
+                ],
+                "explanation": "5 kills without dying",
+                "kill_gaps_ms": [
+                    10850,
+                    13475,
+                    9575,
+                    24625
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "suicide": 1,
+                    "thompson": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 8060425,
+                        "victim": "Proner2026",
+                        "weapon": "thompson",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8071275,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8084750,
+                        "victim": "Proner2026",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8094325,
+                        "victim": "vid",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8118950,
+                        "victim": ".olz",
+                        "weapon": "suicide",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 0.94,
+                    "kills": 15,
+                    "deaths": 16,
+                    "accuracy": null,
+                    "damage_given": 0
+                },
+                "avg_kill_gap_ms": 14631,
+                "fastest_kill_gap_ms": 9575,
+                "kills_without_death": 5
+            },
+            "explanation": "5 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "7003ddf59dae4d1a8e3bd27d6b9d55d5",
+            "type": "burst_multi_kill",
+            "player": "SuperBoyy",
+            "start_ms": 7608425,
+            "end_ms": 7613625,
+            "score": 30.0,
+            "meta": {
+                "victims": [
+                    "SuperBoyy",
+                    "SuperBoyy",
+                    "vid"
+                ],
+                "headshots": 0,
+                "window_ms": 8000,
+                "kill_count": 3,
+                "explanation": "3 kills in 5.20s",
+                "kill_gaps_ms": [
+                    1425,
+                    3775
+                ],
+                "weapons_used": {
+                    "mp40": 1,
+                    "suicide": 2
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 7608425,
+                        "victim": "SuperBoyy",
+                        "weapon": "suicide",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7609850,
+                        "victim": "SuperBoyy",
+                        "weapon": "suicide",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7613625,
+                        "victim": "vid",
+                        "weapon": "mp40",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 1.6,
+                    "kills": 8,
+                    "deaths": 5,
+                    "accuracy": null,
+                    "damage_given": 1738
+                },
+                "avg_kill_gap_ms": 2600,
+                "fastest_kill_gap_ms": 1425
+            },
+            "explanation": "3 kills in 5.20s",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "6e2af4ee1b0d4157a75d24b31912b414",
+            "type": "spree",
+            "player": "vid",
+            "start_ms": 7640675,
+            "end_ms": 7704275,
+            "score": 28.0,
+            "meta": {
+                "victims": [
+                    "fl0w3r",
+                    "SuperBoyy",
+                    ".olz",
+                    ".olz"
+                ],
+                "explanation": "4 kills without dying",
+                "kill_gaps_ms": [
+                    9200,
+                    41300,
+                    13100
+                ],
+                "weapons_used": {
+                    "mp40": 2,
+                    "thompson": 1,
+                    ".45acp_1911": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 7640675,
+                        "victim": "fl0w3r",
+                        "weapon": "thompson",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7649875,
+                        "victim": "SuperBoyy",
+                        "weapon": ".45acp_1911",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7691175,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7704275,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 1.75,
+                    "kills": 7,
+                    "deaths": 4,
+                    "accuracy": null,
+                    "damage_given": 1635
+                },
+                "avg_kill_gap_ms": 21200,
+                "fastest_kill_gap_ms": 9200,
+                "kills_without_death": 4
+            },
+            "explanation": "4 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "a68411f02cab46f28fac3b4244dae5e3",
+            "type": "spree",
+            "player": "SuperBoyy",
+            "start_ms": 7823800,
+            "end_ms": 7866850,
+            "score": 28.0,
+            "meta": {
+                "victims": [
+                    "vid",
+                    "carniee",
+                    "Proner2026",
+                    "carniee"
+                ],
+                "explanation": "4 kills without dying",
+                "kill_gaps_ms": [
+                    250,
+                    36700,
+                    6100
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "grenade_launcher": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 7823800,
+                        "victim": "vid",
+                        "weapon": "grenade_launcher",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7824050,
+                        "victim": "carniee",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7860750,
+                        "victim": "Proner2026",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7866850,
+                        "victim": "carniee",
+                        "weapon": "mp40",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 1.6,
+                    "kills": 8,
+                    "deaths": 5,
+                    "accuracy": null,
+                    "damage_given": 1738
+                },
+                "avg_kill_gap_ms": 14350,
+                "fastest_kill_gap_ms": 250,
+                "kills_without_death": 4
+            },
+            "explanation": "4 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "c8ea27b93c6b4afc8a59b5fe53dcf1b3",
+            "type": "spree",
+            "player": "Proner2026",
+            "start_ms": 7942325,
+            "end_ms": 7979100,
+            "score": 28.0,
+            "meta": {
+                "victims": [
+                    "SuperBoyy",
+                    "SuperBoyy",
+                    "SuperBoyy",
+                    "Proner2026"
+                ],
+                "explanation": "4 kills without dying",
+                "kill_gaps_ms": [
+                    8175,
+                    21800,
+                    6800
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "suicide": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 7942325,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7950500,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7972300,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 7979100,
+                        "victim": "Proner2026",
+                        "weapon": "suicide",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 0.74,
+                    "kills": 14,
+                    "deaths": 19,
+                    "accuracy": null,
+                    "damage_given": 0
+                },
+                "avg_kill_gap_ms": 12258,
+                "fastest_kill_gap_ms": 6800,
+                "kills_without_death": 4
+            },
+            "explanation": "4 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "a7b2e9420233411fbbbda6f87c64d0ec",
+            "type": "spree",
+            "player": ".olz",
+            "start_ms": 8060425,
+            "end_ms": 8094325,
+            "score": 28.0,
+            "meta": {
+                "victims": [
+                    "Proner2026",
+                    "SuperBoyy",
+                    "Proner2026",
+                    "vid"
+                ],
+                "explanation": "4 kills without dying",
+                "kill_gaps_ms": [
+                    10850,
+                    13475,
+                    9575
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "thompson": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 8060425,
+                        "victim": "Proner2026",
+                        "weapon": "thompson",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8071275,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8084750,
+                        "victim": "Proner2026",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8094325,
+                        "victim": "vid",
+                        "weapon": "mp40",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 0.94,
+                    "kills": 15,
+                    "deaths": 16,
+                    "accuracy": null,
+                    "damage_given": 0
+                },
+                "avg_kill_gap_ms": 11300,
+                "fastest_kill_gap_ms": 9575,
+                "kills_without_death": 4
+            },
+            "explanation": "4 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        },
+        {
+            "id": "28784d45b99347038a1fa70205a1e94b",
+            "type": "spree",
+            "player": "vid",
+            "start_ms": 8175650,
+            "end_ms": 8189075,
+            "score": 28.0,
+            "meta": {
+                "victims": [
+                    "fl0w3r",
+                    "SuperBoyy",
+                    ".olz",
+                    "vid"
+                ],
+                "explanation": "4 kills without dying",
+                "kill_gaps_ms": [
+                    3100,
+                    6250,
+                    4075
+                ],
+                "weapons_used": {
+                    "mp40": 3,
+                    "suicide": 1
+                },
+                "kill_sequence": [
+                    {
+                        "t_ms": 8175650,
+                        "victim": "fl0w3r",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8178750,
+                        "victim": "SuperBoyy",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8185000,
+                        "victim": ".olz",
+                        "weapon": "mp40",
+                        "headshot": false
+                    },
+                    {
+                        "t_ms": 8189075,
+                        "victim": "vid",
+                        "weapon": "suicide",
+                        "headshot": false
+                    }
+                ],
+                "attacker_stats": {
+                    "kdr": 1.75,
+                    "kills": 7,
+                    "deaths": 4,
+                    "accuracy": null,
+                    "damage_given": 1635
+                },
+                "avg_kill_gap_ms": 4475,
+                "fastest_kill_gap_ms": 3100,
+                "kills_without_death": 4
+            },
+            "explanation": "4 kills without dying",
+            "clip_demo_path": null,
+            "clip_download": null,
+            "created_at": "2026-09-02 12:19:59.643355"
+        }
+    ],
+    "renders": [],
+    "player_stats": {
+        ".olz": {
+            "accuracy": null,
+            "damage_given": 0,
+            "damage_received": 0,
+            "deaths": 16,
+            "headshots": 0,
+            "kills": 15,
+            "time_played_minutes": null,
+            "time_played_seconds": null,
+            "tpm": null
+        },
+        "Proner2026": {
+            "accuracy": null,
+            "damage_given": 0,
+            "damage_received": 0,
+            "deaths": 19,
+            "headshots": 0,
+            "kills": 14,
+            "time_played_minutes": null,
+            "time_played_seconds": null,
+            "tpm": null
+        },
+        "SuperBoyy": {
+            "accuracy": null,
+            "damage_given": 1738,
+            "damage_received": 1477,
+            "deaths": 5,
+            "headshots": 0,
+            "kills": 8,
+            "time_played_minutes": null,
+            "time_played_seconds": null,
+            "tpm": null
+        },
+        "carniee": {
+            "accuracy": null,
+            "damage_given": 816,
+            "damage_received": 1361,
+            "deaths": 6,
+            "headshots": 0,
+            "kills": 5,
+            "time_played_minutes": null,
+            "time_played_seconds": null,
+            "tpm": null
+        },
+        "fl0w3r": {
+            "accuracy": null,
+            "damage_given": 1199,
+            "damage_received": 1413,
+            "deaths": 5,
+            "headshots": 1,
+            "kills": 3,
+            "time_played_minutes": null,
+            "time_played_seconds": null,
+            "tpm": null
+        },
+        "vid": {
+            "accuracy": null,
+            "damage_given": 1635,
+            "damage_received": 1271,
+            "deaths": 4,
+            "headshots": 0,
+            "kills": 7,
+            "time_played_minutes": null,
+            "time_played_seconds": null,
+            "tpm": null
+        }
+    },
+    "downloads": {
+        "json": "/api/greatshot/44f0543a5f8244e5b9e773c64b453d43/report.json",
+        "txt": "/api/greatshot/44f0543a5f8244e5b9e773c64b453d43/report.txt"
+    }
+}
