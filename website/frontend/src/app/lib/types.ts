@@ -3214,3 +3214,33 @@ export interface ProxMovementStats {
     avg_post_spawn_dist: number; avg_distance_per_sec: number;
   }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the round team comparison (class B: the old React tree was its
+// only consumer). ⚠️ Every cohesion/pushes number is nullable — the wire
+// CANNOT tell an uncaptured round from a nonexistent one: both answer 200
+// with those all null (measured live on rounds 10472 and 99999999). The
+// crossfire list is different: its rows are aggregates that exist only
+// when counted, so absence is an EMPTY LIST and the members stay
+// non-nullable.
+
+export interface ProxTeamComparisonSide {
+  avg_dispersion: number | null;
+  avg_max_spread: number | null;
+  avg_stragglers: number | null;
+  samples: number | null;
+}
+
+export interface ProxTeamComparison {
+  cohesion: { axis: ProxTeamComparisonSide; allies: ProxTeamComparisonSide };
+  pushes: {
+    axis: { push_count: number | null; avg_quality: number | null; avg_alignment: number | null };
+    allies: { push_count: number | null; avg_quality: number | null; avg_alignment: number | null };
+  };
+  crossfire: {
+    target_team: string;
+    total_opportunities: number;
+    executed: number;
+    execution_rate: number;
+  }[];
+}

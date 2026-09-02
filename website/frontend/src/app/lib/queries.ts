@@ -97,6 +97,7 @@ import type {
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
+  ProxTeamComparison,
   ProxFocusFire,
   ProximityLeaderboard,
   ProxLuaTrades,
@@ -1337,6 +1338,21 @@ export function useProxMovementStats(guid: string | null, rangeDays: number) {
       apiGet('/api/proximity/movement-stats', {
         query: { range_days: rangeDays, player_guid: guid! },
       }) as Promise<ProxMovementStats>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+/** The round team comparison — the null-form (uncaptured OR nonexistent
+ *  round, indistinguishable on this wire) is the caller's to name. */
+export function useProxTeamComparison(roundId: number | null) {
+  return useQuery({
+    queryKey: ['prox-team-comparison', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/proximity/round/{round_id}/team-comparison', {
+        pathParams: { round_id: roundId! },
+      }) as Promise<ProxTeamComparison>,
     staleTime: 5 * 60 * 1000,
   });
 }

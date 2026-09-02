@@ -964,9 +964,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 534,
-        "file": "api_proximity_round_round_id_team_comparison.json"
+        "file": "api_proximity_round_round_id_team_comparison.json",
+        "covered_by": "ProximityTeamsPage.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/round/{round_id}/timeline",

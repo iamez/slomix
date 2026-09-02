@@ -50,7 +50,6 @@
 /api/proximity/player-aim
 /api/proximity/player-heatmap
 /api/proximity/prox-scores/formula
-/api/proximity/round
 /api/proximity/summary
 /api/proximity/teamplay
 /api/proximity/trades/events

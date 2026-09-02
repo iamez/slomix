@@ -213,7 +213,8 @@
     "path": "/proximity/round/:roundId/teams",
     "label": "Team Comparison",
     "nav": "hidden",
-    "phase": 5
+    "phase": 5,
+    "built": true
   },
   {
     "key": "spider-web",
