@@ -49,7 +49,14 @@ local function frame(advance)
     pcall(et_RunFrame, now_ms)
 end
 
--- 1) normal frames (25 ms apart) -> nothing is written
+-- 0) the very first frame writes the INIT line -- the positive proof that
+--    the write path works (an empty log is otherwise ambiguous).
+frame(25)
+assert(#writes == 1, "FAIL(0): no INIT line on first frame")
+assert(writes[1]:find("FH init "), "FAIL(0): not an init line: " .. writes[1])
+table.remove(writes, 1)
+
+-- 1) normal frames (25 ms apart) -> nothing further is written
 for _ = 1, 10 do frame(25) end
 assert(#writes == 0, "FAIL(1): wrote during normal frames")
 
@@ -82,6 +89,14 @@ throw_on_maxclients = false
 frame(1200)
 last = writes[#writes]
 assert(last:find("self=%-1 "), "FAIL(4): aborted frame must report self=-1: " .. last)
+
+-- 5) map_restart keeps the lua VM alive; et_InitGame must reset the
+--    cadence so the INIT proof fires on restarts too (review on #876).
+et_InitGame(0, 0, 1)
+frame(25)
+assert(writes[#writes]:find("FH init "), "FAIL(5): no INIT line after map_restart: " .. writes[#writes])
+frame(25)  -- and the very next frame must NOT log a bogus gap
+assert(writes[#writes]:find("FH init "), "FAIL(5b): spurious line right after restart: " .. writes[#writes])
 
 print(string.format("HARNESS OK (%d lines): %s", #writes,
     table.concat(writes, ""):gsub("\n", " | ")))
