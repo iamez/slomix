@@ -110,9 +110,13 @@ async def test_get_proximity_player_profile_counts_only_real_final_blows():
     payload = await api_router.get_proximity_player_profile("ATTACKER1", range_days=30, db=db)
 
     normalized_query = _normalize_sql(db.kill_query)
-    assert "jsonb_array_elements" in normalized_query
-    assert "attacker->>'guid' = $1" in normalized_query
-    assert "got_kill" in normalized_query
+    # The containment form (migration 080's GIN index answers @>). The
+    # load-bearing property is unchanged: guid and got_kill must sit in the
+    # SAME array element -- a query that finds the guid in one element and
+    # a true got_kill in another would credit assists as kills.
+    assert "@>" in normalized_query
+    assert "jsonb_build_object('guid', $1::text, 'got_kill', true)" in normalized_query
+    assert "jsonb_build_array" in normalized_query
     assert "attackers::text like" not in normalized_query
     assert payload["player_name"] == "Alpha"
     assert payload["total_kills"] == 5
