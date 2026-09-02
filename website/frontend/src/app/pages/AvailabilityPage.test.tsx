@@ -90,8 +90,8 @@ function renderPage() {
 
 function bodyOf(spy: ReturnType<typeof stub>, method: string, path: string): unknown {
   const call = spy.mock.calls.find((c) => String(c[0]).split('?')[0] === path && c[1]?.method === method);
-  expect(call, `${method} ${path} was called`).toBeDefined();
-  return JSON.parse(String(call![1]!.body));
+  if (!call || !call[1]) throw new Error(`${method} ${path} was not called`);
+  return JSON.parse(String(call[1].body));
 }
 
 const LINKED_BASE = {
@@ -265,9 +265,9 @@ describe('AvailabilityPage', () => {
     expect(screen.getByText('1.67×')).toBeInTheDocument();
     expect(screen.getByText(/your bet: 20 on Axis side · change any time before lock/)).toBeInTheDocument();
     expect(screen.getByText(/balance 100 · lifetime earned 0/)).toBeInTheDocument();
-    const stake = screen.getByLabelText('stake') as HTMLInputElement;
-    expect(stake.value).toBe('20'); // seeded from my_bet
-    fireEvent.change(stake, { target: { value: '35' } });
+    const stakeInput = screen.getByLabelText('stake') as HTMLInputElement;
+    expect(stakeInput.value).toBe('20'); // seeded from my_bet
+    fireEvent.change(stakeInput, { target: { value: '35' } });
     fireEvent.click(screen.getByRole('button', { name: 'bet on Allied side' }));
     await waitFor(() => expect(screen.getByText(/bet placed — 35 on Allied side/)).toBeInTheDocument());
     expect(bodyOf(spy, 'POST', '/api/bets/market/7/bet')).toEqual({ choice: 'team_b', amount: 35 });
@@ -281,9 +281,9 @@ describe('AvailabilityPage', () => {
       '/api/availability/promotions/preview': { body: preview },
     });
     renderPage();
-    const stake = await screen.findByLabelText('stake') as HTMLInputElement;
-    expect(stake.value).toBe('10'); // no bet yet: the legacy default
-    fireEvent.change(stake, { target: { value: '500' } });
+    const stakeInput = await screen.findByLabelText('stake') as HTMLInputElement;
+    expect(stakeInput.value).toBe('10'); // no bet yet: the legacy default
+    fireEvent.change(stakeInput, { target: { value: '500' } });
     fireEvent.click(screen.getByRole('button', { name: 'bet on Axis side' }));
     await waitFor(() => expect(screen.getByText(/Insufficient points \(have 100\)/)).toBeInTheDocument());
     vi.unstubAllGlobals();
@@ -300,6 +300,109 @@ describe('AvailabilityPage', () => {
     await waitFor(() => expect(screen.getByText(/sign in with CONNECT ID to place a bet/)).toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /bet on/ })).toBeNull();
     expect(spy.mock.calls.some((c) => String(c[0]).includes('/bets/wallet'))).toBe(false);
+  });
+
+  it('open market: a non-integer stake is refused before any POST, and a new market reseeds the stake', async () => {
+    const spy = stub({
+      ...LINKED_BASE,
+      '/api/bets/market/current': { body: openMarket },
+      'POST /api/bets/market/7/bet': { body: placed },
+      '/api/availability/promotions/preview': { body: preview },
+    });
+    renderPage();
+    const stakeInput = await screen.findByLabelText('stake') as HTMLInputElement;
+    for (const bad of ['2.5', '0', '-3', '']) {
+      fireEvent.change(stakeInput, { target: { value: bad } });
+      fireEvent.click(screen.getByRole('button', { name: 'bet on Axis side' }));
+      await waitFor(() => expect(screen.getByText(/enter a whole positive stake/)).toBeInTheDocument());
+    }
+    expect(spy.mock.calls.some((c) => c[1]?.method === 'POST' && String(c[0]).includes('/bet'))).toBe(false);
+    // '1e2' IS a whole number — 100, not parseInt's 1 (Copilot on #894).
+    fireEvent.change(stakeInput, { target: { value: '1e2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'bet on Axis side' }));
+    await waitFor(() => expect(screen.getByText(/bet placed — 100 on Axis side/)).toBeInTheDocument());
+    expect(bodyOf(spy, 'POST', '/api/bets/market/7/bet')).toEqual({ choice: 'team_a', amount: 100 });
+
+    // The server swaps in a different market underneath the placed bet: the
+    // invalidation refetch brings market 8 with my_bet 60, and — the edit
+    // having been submitted (dirty cleared) — the stake reseeds from it.
+    const other = { ...openMarket, market: { ...openMarket.market, id: 8, my_bet: { ...openMarket.market.my_bet, amount: 60 } } };
+    spy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input).split('?')[0];
+      const body = init?.method === 'POST' ? placed
+        : path === '/api/bets/market/current' ? other
+        : path === '/api/bets/wallet' ? wallet
+        : path === '/api/availability/settings' ? settings
+        : path === '/api/availability/subscriptions' ? subs
+        : path === '/api/availability/promotions/campaign' ? campaign
+        : path === '/api/availability/promotion-preferences' ? prefs
+        : path === '/api/availability/promotions/preview' ? preview
+        : path === '/api/availability/access' ? linkedAccess
+        : path === '/api/availability' ? authedWeek
+        : path === '/api/planning/today' ? planning : {};
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    });
+    fireEvent.change(stakeInput, { target: { value: '15' } });
+    fireEvent.click(screen.getByRole('button', { name: 'bet on Axis side' }));
+    await waitFor(() => expect(screen.getByText(/bet placed — 15 on Axis side/)).toBeInTheDocument());
+    await waitFor(() => expect((screen.getByLabelText('stake') as HTMLInputElement).value).toBe('60'));
+  });
+
+  it('linked: a background refetch does not clobber unsaved toggles, and save sends dry_run-free settings', async () => {
+    const spy = stub({
+      ...LINKED_BASE,
+      'POST /api/availability/settings': { body: { ...settings, sound_enabled: false } },
+      '/api/availability/promotions/preview': { body: preview },
+    });
+    renderPage();
+    const sound = await screen.findByRole('button', { name: 'get-ready sound' });
+    expect(sound).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(sound);
+    expect(sound).toHaveAttribute('aria-pressed', 'false');
+    // The server now answers with a CHANGED settings body (someone linked a
+    // channel from the bot side) while the toggle is unsaved.
+    spy.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input).split('?')[0];
+      if (path === '/api/availability/settings' && init?.method === 'POST') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ...settings, sound_enabled: false, telegram_notify: true }) } as Response);
+      }
+      const body = path === '/api/availability/settings' ? { ...settings, telegram_notify: true }
+        : path === '/api/availability/subscriptions' ? subs
+        : path === '/api/bets/wallet' ? wallet
+        : path === '/api/availability/promotions/campaign' ? campaign
+        : path === '/api/availability/promotion-preferences' ? prefs
+        : path === '/api/availability/promotions/preview' ? preview
+        : path === '/api/availability/access' ? linkedAccess
+        : path === '/api/availability' ? authedWeek
+        : path === '/api/planning/today' ? planning
+        : path === '/api/bets/market/current' ? market : {};
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    });
+    // Force the settings query to refetch with the new answer.
+    fireEvent(window, new Event('focus'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.getByRole('button', { name: 'get-ready sound' })).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'save' }));
+    await waitFor(() => expect(screen.getByText(/settings saved/)).toBeInTheDocument());
+    expect(bodyOf(spy, 'POST', '/api/availability/settings')).toMatchObject({ sound_enabled: false });
+    // After the save cleared `dirty`, the server's answer seeds the chips.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'telegram' })).toHaveAttribute('aria-pressed', 'true'));
+  });
+
+  it('promoter: the dry-run chip travels in the POST body', async () => {
+    const spy = stub({
+      ...LINKED_BASE,
+      '/api/availability/promotions/preview': { body: preview },
+      'POST /api/availability/promotions/campaigns': { body: { ...created, dry_run: true } },
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'dry run' }));
+    fireEvent.click(screen.getByRole('button', { name: 'include maybe' }));
+    fireEvent.click(screen.getByRole('button', { name: 'schedule' }));
+    await waitFor(() => expect(screen.getByText(/· dry run$/)).toBeInTheDocument());
+    expect(bodyOf(spy, 'POST', '/api/availability/promotions/campaigns')).toEqual({
+      include_available: true, include_maybe: true, dry_run: true,
+    });
   });
 
   it('settled market: the result and my outcome, no stake', async () => {

@@ -21,10 +21,10 @@ from __future__ import annotations
 
 import argparse
 import base64
+import importlib.util
 import json
 import os
 import re
-import subprocess
 import sys
 import time
 import urllib.error
@@ -87,19 +87,21 @@ def mint_owner_cookie() -> str:
 
 
 def mint_sentinel_cookie() -> str:
-    """The Playwright owner rig's cookie, byte-for-byte: same script, same
-    env (E2E_OWNER_*), so a fixture recorded here and the page under e2e
-    see the SAME identity. Captured from the script's stdout because it
-    prints the cookie value and nothing else."""
-    result = subprocess.run(  # noqa: S603 — fixed argv, our own script
-        [sys.executable, str(REPO_ROOT / "scripts" / "e2e_owner_session.py")],
-        capture_output=True,
-        text=True,
-        check=False,
+    """The Playwright owner rig's cookie, byte-for-byte: the SAME function
+    (scripts/e2e_owner_session.py:mint_session_cookie, loaded by path — the
+    scripts directory is not a package), same env (E2E_OWNER_*), so a
+    fixture recorded here and the page under e2e see one identity."""
+    spec = importlib.util.spec_from_file_location(
+        "e2e_owner_session", REPO_ROOT / "scripts" / "e2e_owner_session.py"
     )
-    if result.returncode != 0:
-        raise SystemExit(f"e2e_owner_session.py failed: {result.stderr.strip()}")
-    return result.stdout.strip()
+    if spec is None or spec.loader is None:
+        raise SystemExit("scripts/e2e_owner_session.py not importable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    cookie = module.mint_session_cookie()
+    if not cookie:
+        raise SystemExit("e2e_owner_session.mint_session_cookie() returned nothing (SESSION_SECRET?)")
+    return cookie
 
 
 class _NoRedirect(urllib.request.HTTPRedirectHandler):

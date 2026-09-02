@@ -3872,9 +3872,8 @@ export interface CampaignCreateResponse {
  *  in CHANNEL_TYPES order (discord, telegram, signal). Discord is always
  *  enabled+verified (it IS the identity); telegram/signal are verified only
  *  after the link-token round trip. */
-export type AvailabilityChannel = 'discord' | 'telegram' | 'signal';
 export interface AvailabilitySubscription {
-  /** One of AvailabilityChannel; string on the wire. */
+  /** 'discord' | 'telegram' | 'signal' (CHANNEL_TYPES); string on the wire. */
   channel_type: string;
   enabled: boolean;
   channel_address: string | null;

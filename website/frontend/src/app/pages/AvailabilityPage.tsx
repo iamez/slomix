@@ -108,20 +108,32 @@ function MarketPanel({ market, wallet, authed, onBet }: {
   authed: boolean;
   onBet: (choice: 'team_a' | 'team_b', amount: number) => Promise<void>;
 }) {
-  const [amount, setAmount] = useState<string>(String(market.my_bet?.amount ?? 10));
+  const seed = String(market.my_bet?.amount ?? 10);
+  const [amount, setAmount] = useState<string>(seed);
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  // A different market, or my bet changed on the server: reseed the stake —
+  // unless the viewer is mid-edit, whose typing a refetch must not clobber
+  // (the legacy bets.js typing guard, kept) (Copilot on #894).
+  useEffect(() => {
+    if (!dirty) setAmount(seed);
+  }, [market.id, seed, dirty]);
   const pool = market.pool;
   const total = pool.total_pool;
   const label = (side: string) => (side === 'team_a' ? market.team_a_label : market.team_b_label);
+  const sideOf = (side: 'team_a' | 'team_b') => (side === 'team_a' ? pool.team_a : pool.team_b);
   const canBet = authed && market.status === 'open';
 
   const place = async (choice: 'team_a' | 'team_b') => {
-    const stake = Number.parseInt(amount, 10);
-    if (!Number.isFinite(stake) || stake <= 0) { setNote('enter a positive stake'); return; }
+    // The backend takes an integer; Number() + isInteger rejects '1e2' and
+    // '2.5' instead of quietly betting 1 or 2 (Copilot on #894).
+    const stake = amount.trim() === '' ? Number.NaN : Number(amount);
+    if (!Number.isInteger(stake) || stake <= 0) { setNote('enter a whole positive stake'); return; }
     setBusy(true); setNote(null);
     try {
       await onBet(choice, stake);
+      setDirty(false);
       setNote(`bet placed — ${figure(stake)} on ${label(choice)}`);
     } catch (e) {
       setNote(wordsOf(e, 'the server did not accept the bet'));
@@ -140,12 +152,12 @@ function MarketPanel({ market, wallet, authed, onBet }: {
         <Cluster key={side} gap={4} align="baseline" justify="between" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
           <span className="m" style={{ fontSize: 'var(--fs-row)', minWidth: 140 }}>{label(side)}</span>
           <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
-            <Lbl>pool {figure(pool[side].pool)} · bets {figure(pool[side].bets)}</Lbl>
-            <Lbl>{total > 0 ? `${Math.round((pool[side].pool / total) * 100)}%` : '0%'}</Lbl>
-            <Lbl>{multiplier(total, pool[side].pool)}</Lbl>
+            <Lbl>pool {figure(sideOf(side).pool)} · bets {figure(sideOf(side).bets)}</Lbl>
+            <Lbl>{total > 0 ? `${Math.round((sideOf(side).pool / total) * 100)}%` : '0%'}</Lbl>
+            <Lbl>{multiplier(total, sideOf(side).pool)}</Lbl>
           </Cluster>
           {canBet && (
-            <button type="button" style={actionStyle} disabled={busy} onClick={() => place(side)} aria-label={`bet on ${label(side)}`} title={`bet on ${label(side)}`}>
+            <button type="button" style={actionStyle} disabled={busy} onClick={() => { void place(side); }} aria-label={`bet on ${label(side)}`} title={`bet on ${label(side)}`}>
               bet {label(side)}
             </button>
           )}
@@ -163,8 +175,8 @@ function MarketPanel({ market, wallet, authed, onBet }: {
       {canBet && (
         <Cluster gap={3} align="baseline">
           <Lbl>stake</Lbl>
-          <input aria-label="stake" type="number" min={1} value={amount} style={inputStyle}
-            onChange={(e) => setAmount(e.target.value)} />
+          <input aria-label="stake" type="number" min={1} step={1} value={amount} style={inputStyle}
+            onChange={(e) => { setDirty(true); setAmount(e.target.value); }} />
         </Cluster>
       )}
       {!authed && <Absent reason="sign in with CONNECT ID to place a bet" />}
@@ -204,16 +216,23 @@ function SettingsForm({ settings, onSave }: {
   onSave: (body: AvailabilitySettingsWrite) => Promise<void>;
 }) {
   const [form, setForm] = useState<AvailabilitySettingsWrite>(() => writeOf(settings));
+  const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
-  // A refetch (after a link/unlink) re-seeds the form: the server's answer
-  // wins over a stale local copy.
-  useEffect(() => { setForm(writeOf(settings)); }, [settings]);
+  // A refetch (after a link/unlink, or a background revalidation) re-seeds
+  // the form from the server — but never over unsaved toggles: a
+  // window-focus refetch must not clobber what the viewer is editing (the
+  // legacy bets.js typing guard, applied here). Save clears `dirty`, so the
+  // next server answer seeds again.
+  useEffect(() => {
+    if (!dirty) setForm(writeOf(settings));
+  }, [settings, dirty]);
 
   const save = async () => {
     setBusy(true); setNote(null);
     try {
       await onSave(form);
+      setDirty(false);
       setNote('settings saved');
     } catch (e) {
       setNote(wordsOf(e, 'saving failed — the server did not accept the change'));
@@ -227,12 +246,12 @@ function SettingsForm({ settings, onSave }: {
       <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
         {TOGGLES.map((t) => (
           <Chip key={t.key} active={form[t.key]} label={t.label} title={`toggle ${t.label}`}
-            onClick={() => setForm((f) => ({ ...f, [t.key]: !f[t.key] }))} />
+            onClick={() => { setDirty(true); setForm((f) => ({ ...f, [t.key]: !f[t.key] })); }} />
         ))}
       </Cluster>
       <Cluster gap={4} align="baseline">
         <Meta>timezone {form.timezone} · sound cooldown {figure(form.sound_cooldown_seconds)} s</Meta>
-        <button type="button" style={actionStyle} disabled={busy} onClick={save} title="save settings">save</button>
+        <button type="button" style={actionStyle} disabled={busy} onClick={() => { void save(); }} title="save settings">save</button>
       </Cluster>
       {note && <Absent reason={note} />}
     </Stack>
@@ -259,10 +278,10 @@ function ChannelRow({ sub, token, onLink, onUnlink }: {
         <Lbl>{state}{sub.channel_address ? ` · ${sub.channel_address}` : ''}{sub.enabled ? ' · on' : ' · off'}</Lbl>
         <Cluster gap={2}>
           {!sub.verified && (
-            <button type="button" style={actionStyle} disabled={busy} onClick={() => run(onLink)} aria-label={`link ${sub.channel_type}`} title={`link ${sub.channel_type}`}>link</button>
+            <button type="button" style={actionStyle} disabled={busy} onClick={() => { void run(onLink); }} aria-label={`link ${sub.channel_type}`} title={`link ${sub.channel_type}`}>link</button>
           )}
           {(sub.verified || sub.channel_address || token) && (
-            <button type="button" style={actionStyle} disabled={busy} onClick={() => run(onUnlink)} aria-label={`unlink ${sub.channel_type}`} title={`unlink ${sub.channel_type}`}>unlink</button>
+            <button type="button" style={actionStyle} disabled={busy} onClick={() => { void run(onUnlink); }} aria-label={`unlink ${sub.channel_type}`} title={`unlink ${sub.channel_type}`}>unlink</button>
           )}
         </Cluster>
       </Cluster>
@@ -327,11 +346,11 @@ function PromoterPanel({ onSchedule }: {
     <Stack gap={2} parity="availability.promote">
       <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
         <Chip active={flags.include_available} label="include available" title="include AVAILABLE players"
-          onClick={() => setFlags((f) => ({ ...f, include_available: !f.include_available }))} />
+          onClick={() => { setFlags((f) => ({ ...f, include_available: !f.include_available })); }} />
         <Chip active={flags.include_maybe} label="include maybe" title="include MAYBE players"
-          onClick={() => setFlags((f) => ({ ...f, include_maybe: !f.include_maybe }))} />
-        <Chip active={dryRun} label="dry run" title="send only to yourself" onClick={() => setDryRun((d) => !d)} />
-        <button type="button" style={actionStyle} disabled={busy} onClick={schedule} title="schedule tonight's campaign">schedule</button>
+          onClick={() => { setFlags((f) => ({ ...f, include_maybe: !f.include_maybe })); }} />
+        <Chip active={dryRun} label="dry run" title="send only to yourself" onClick={() => { setDryRun((d) => !d); }} />
+        <button type="button" style={actionStyle} disabled={busy} onClick={() => { void schedule(); }} title="schedule tonight's campaign">schedule</button>
       </Cluster>
       {preview.isPending && <Pending label="preview" />}
       {preview.isError && <Absent reason={`preview: ${wordsOf(preview.error, 'unavailable')}`} />}

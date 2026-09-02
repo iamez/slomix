@@ -85,9 +85,19 @@ def _dsn() -> dict:
 
 
 def counts(cur) -> dict[str, int]:
+    from psycopg2 import sql as pgsql
+
     out: dict[str, int] = {}
     for table, column in SENTINEL_TABLES:
-        cur.execute(f"SELECT count(*) FROM {table} WHERE {column} = %s", (SENTINEL_ID,))  # noqa: S608 — table/column from the constant tuple above
+        # Identifiers composed, never formatted into the string: the table
+        # and column come from the constant tuple above, but the driver's
+        # own quoting is the form that cannot be misread later.
+        cur.execute(
+            pgsql.SQL("SELECT count(*) FROM {} WHERE {} = %s").format(
+                pgsql.Identifier(table), pgsql.Identifier(column)
+            ),
+            (SENTINEL_ID,),
+        )
         out[table] = int(cur.fetchone()[0])
     return out
 
@@ -112,18 +122,25 @@ def main(argv: list[str] | None = None) -> int:
             before = counts(cur)
             print("sentinel rows before:", {k: v for k, v in before.items() if v})
             if args.apply:
-                for table, sql, params in INSERTS:
-                    cur.execute(sql, params)
+                for table, statement, params in INSERTS:
+                    cur.execute(statement, params)
                     print(f"  {table}: {'inserted' if cur.rowcount else 'already present'}")
             elif args.remove:
+                from psycopg2 import sql as pgsql
+
                 for table, column in SENTINEL_TABLES:
-                    cur.execute(f"DELETE FROM {table} WHERE {column} = %s", (SENTINEL_ID,))  # noqa: S608 — see counts()
+                    cur.execute(
+                        pgsql.SQL("DELETE FROM {} WHERE {} = %s").format(
+                            pgsql.Identifier(table), pgsql.Identifier(column)
+                        ),
+                        (SENTINEL_ID,),
+                    )
                     if cur.rowcount:
                         print(f"  {table}: deleted {cur.rowcount}")
             else:
                 print("dry run — would execute with --apply:")
-                for _table, sql, params in INSERTS:
-                    print("  ", sql % tuple(repr(p) for p in params))
+                for _table, statement, params in INSERTS:
+                    print("  ", statement % tuple(repr(p) for p in params))
                 print("would execute with --remove:")
                 for table, column in SENTINEL_TABLES:
                     print(f"   DELETE FROM {table} WHERE {column} = {SENTINEL_ID}")

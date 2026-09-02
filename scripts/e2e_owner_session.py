@@ -49,12 +49,16 @@ def _load_env() -> None:
                 os.environ.setdefault(key, value)
 
 
-def main() -> int:
+def mint_session_cookie() -> str:
+    """The signed cookie VALUE for the sentinel identity (E2E_OWNER_* env),
+    or '' with the reason on stderr. Importable: scripts/record_api_corpus.py
+    --sentinel calls this instead of spawning the script, so the recorder
+    and the Playwright rig cannot drift apart on how the cookie is minted."""
     _load_env()
     secret = os.getenv("SESSION_SECRET")
     if not secret or secret == "super-secret-key-change-me":  # noqa: S105 — the known placeholder, not a credential (same check as main.py)
         print("SESSION_SECRET is not configured; cannot mint a session", file=sys.stderr)
-        return 1
+        return ""
 
     import itsdangerous
 
@@ -79,7 +83,14 @@ def main() -> int:
     }
     payload = base64.b64encode(json.dumps({"user": user}).encode("utf-8"))
     signer = itsdangerous.TimestampSigner(secret)
-    sys.stdout.write(signer.sign(payload).decode("utf-8"))
+    return signer.sign(payload).decode("utf-8")
+
+
+def main() -> int:
+    cookie = mint_session_cookie()
+    if not cookie:
+        return 1
+    sys.stdout.write(cookie)
     return 0
 
 

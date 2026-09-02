@@ -46,13 +46,14 @@ def test_remove_order_deletes_fk_dependents_before_website_users():
         assert table in tables
 
 
-def test_statements_bind_the_id_never_inline_it():
-    """Both the count and the delete loops bind %s; the only literal number
-    in the SQL surface is the sentinel constant itself."""
+def test_statements_bind_the_id_and_compose_identifiers():
+    """The count and delete loops bind the id with %s and build the table and
+    column with sql.Identifier — no f-string SQL anywhere in the file."""
     text = SCRIPT.read_text(encoding="utf-8")
-    for stmt in re.findall(r'cur\.execute\((f?"[^"]+")', text):
-        assert "%s" in stmt, stmt
-        assert not re.search(r"= -?\d", stmt), f"inlined id in {stmt}"
+    assert not re.search(r'cur\.execute\(\s*f"', text), "f-string SQL crept back in"
+    assert text.count("pgsql.Identifier(table), pgsql.Identifier(column)") == 2
+    assert text.count('= %s").format(') == 2
+    assert "(SENTINEL_ID,)" in text
 
 
 def test_production_guard_present():
