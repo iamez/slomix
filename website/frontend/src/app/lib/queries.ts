@@ -87,6 +87,7 @@ import type {
   ProxCohesion,
   ProxCombatPositions,
   ProxCrossfireAngles,
+  ProxDuos,
   ProxEngagements,
   ProxEventDetail,
   ProxEvents,
@@ -97,12 +98,15 @@ import type {
   ProxKillOutcomes,
   ProxObjectivePressure,
   ProxMovementStats,
+  ProxPlayerCard,
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
+  ProxScoresFormula,
   ProxSummary,
   ProxTeamplay,
   ProxTradesEvents,
+  ProxTradesPlayerStats,
   ProxTradesSummary,
   ProxWeaponAccuracy,
   MapMesh,
@@ -1531,5 +1535,58 @@ export function useProxSummary(sessionDate: string | null) {
         query: { session_date: sessionDate! },
       }) as Promise<ProxSummary>,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5 — the player page additions.
+
+export function useProxPlayerCard(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-player-card', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/competitive/player-card', {
+        query: { player_guid: guid!, range_days: rangeDays },
+      }) as Promise<ProxPlayerCard>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxDuos(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-duos', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/duos', {
+        query: { range_days: rangeDays, player_guid: guid! },
+      }) as Promise<ProxDuos>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxTradesPlayerStats(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-trades-player-stats', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      // No player_guid here: the endpoint does not declare one and FastAPI
+      // drops undeclared params silently — measured byte-identical with and
+      // without (generated_at excluded). The page picks its own row from
+      // players[] client-side; the typed apiGet is what caught the dead
+      // parameter.
+      apiGet('/api/proximity/trades/player-stats', {
+        query: { range_days: rangeDays },
+      }) as Promise<ProxTradesPlayerStats>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxScoresFormula() {
+  return useQuery({
+    queryKey: ['prox-scores-formula'],
+    queryFn: () =>
+      apiGet('/api/proximity/prox-scores/formula') as Promise<ProxScoresFormula>,
+    staleTime: Infinity,
   });
 }

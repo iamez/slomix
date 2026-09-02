@@ -3565,3 +3565,69 @@ export interface ProxSummary {
   escape_rate_pct: number;
   kill_rate_pct: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the player page additions (four paths). Shapes from
+// proximity_competitive.py / proximity_combat.py / proximity_scoring.py.
+
+export interface ProxPlayerCard {
+  status: string;
+  scope: ProxScope;
+  player: { guid: string; name: string | null };
+  range_days: number;
+  timeline_range_days: number;
+  stagger: { kills: number; stagger_kills: number; stagger_rate: number; denied_s: number; avg_score: number };
+  sides: {
+    attack: { kills: number; denied_s: number };
+    defense: { kills: number; denied_s: number };
+  };
+  clutch: {
+    situations: number;
+    wins: number;
+    best: { enemies: number; kills: number; survived: boolean } | null;
+    win_pct: number;
+  };
+  man_advantage: { conversions: number };
+}
+
+export interface ProxDuos {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  /** ⚠️ scope.player_guid comes back TRUNCATED to 8 chars (the guid[:8]
+   *  family) — display-only; the filter itself accepts the full guid. */
+  scope: ProxScope;
+  limit: number;
+  duos: { player1: string | null; player2: string | null; crossfire_kills: number; crossfire_count: number; avg_delay_ms: number }[];
+}
+
+export interface ProxTradesPlayerStats {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  players: {
+    /** ⚠️ EIGHT-char guid on this wire (the guid[:8] family) — match by
+     *  prefix, never by full-guid equality. */
+    guid: string; name: string | null; trade_opps: number; trade_attempts: number;
+    trade_success: number; trade_missed: number; isolation_deaths: number;
+    avenged_count: number; avenger_attempt_events: number; avenger_attempt_damage: number;
+  }[];
+}
+
+export interface ProxScoresFormula {
+  status: string;
+  version: string;
+  min_engagements: number;
+  category_weights: Record<string, number>;
+  categories: Record<string, {
+    label: string;
+    description: string;
+    weight_in_overall: number;
+    metrics: Record<string, { label: string; weight: number; invert: boolean }>;
+  }>;
+}

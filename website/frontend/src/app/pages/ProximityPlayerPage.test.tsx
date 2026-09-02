@@ -5,8 +5,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { ProximityPlayerPage } from './ProximityPlayerPage';
 import type {
-  ProxHitRegions, ProxHitRegionsByWeapon, ProxKillOutcomePlayerStats,
-  ProxMovementStats, ProxPlayerProfile, ProxPlayerRadar, ProxScores,
+  ProxDuos, ProxHitRegions, ProxHitRegionsByWeapon,
+  ProxKillOutcomePlayerStats, ProxMovementStats, ProxPlayerCard,
+  ProxPlayerProfile, ProxPlayerRadar, ProxScores, ProxScoresFormula,
+  ProxTradesPlayerStats,
 } from '../lib/types';
 import profileJson from './__fixtures__/api_proximity_player_guid_profile.json';
 import radarJson from './__fixtures__/api_proximity_player_guid_radar.json';
@@ -16,6 +18,10 @@ import outcomesJson from './__fixtures__/api_proximity_kill_outcomes_player_stat
 import hitRegionsJson from './__fixtures__/api_proximity_hit_regions.json';
 import byWeaponJson from './__fixtures__/api_proximity_hit_regions_by_weapon.json';
 import movementJson from './__fixtures__/api_proximity_movement_stats.json';
+import cardJson from './__fixtures__/api_proximity_competitive_player_card.json';
+import duosJson from './__fixtures__/api_proximity_duos.json';
+import tradesPsJson from './__fixtures__/api_proximity_trades_player_stats.json';
+import formulaJson from './__fixtures__/api_proximity_prox_scores_formula.json';
 
 // `satisfies` holds every RECORDED fixture against its wire type. The radar
 // has TWO recorded forms: the scored one (no fallback keys) and the
@@ -28,6 +34,10 @@ const outcomes = outcomesJson satisfies ProxKillOutcomePlayerStats;
 const hitRegions = hitRegionsJson satisfies ProxHitRegions;
 const byWeapon = byWeaponJson satisfies ProxHitRegionsByWeapon;
 const movement = movementJson satisfies ProxMovementStats;
+const card = cardJson satisfies ProxPlayerCard;
+const duos = duosJson satisfies ProxDuos;
+const tradesPs = tradesPsJson satisfies ProxTradesPlayerStats;
+const formula = formulaJson satisfies ProxScoresFormula;
 
 const GUID = '1EDBF3002CE66FE4DFA626D92130E561';
 
@@ -39,6 +49,10 @@ const BODIES = new Map<string, unknown>([
   ['/api/proximity/hit-regions', hitRegions],
   ['/api/proximity/hit-regions/by-weapon', byWeapon],
   ['/api/proximity/movement-stats', movement],
+  ['/api/proximity/competitive/player-card', card],
+  ['/api/proximity/duos', duos],
+  ['/api/proximity/trades/player-stats', tradesPs],
+  ['/api/proximity/prox-scores/formula', formula],
 ]);
 
 function fetchFor(overrides?: Map<string, unknown>) {
@@ -89,6 +103,18 @@ describe('ProximityPlayerPage', () => {
     expect(screen.getByText('MP40')).toBeInTheDocument();
     // Movement: standing share from the recorded row.
     expect(screen.getByText(/stand 70.5%/)).toBeInTheDocument();
+    // The competitive card: 203 stagger kills of 2,032 -> 10%.
+    expect(screen.getByText(/203 of 2,032 kills/)).toBeInTheDocument();
+    expect(screen.getByText(/27 of 149 situations/)).toBeInTheDocument();
+    // Crossfire partners: recorded top duo kanii+vid, 227 kills.
+    expect(screen.getByText(/KaNii \+ vid/)).toBeInTheDocument();
+    expect(screen.getByText('227 kills')).toBeInTheDocument();
+    // The trade economy row — the wire's guid is EIGHT chars, so this
+    // assertion is what catches a full-guid equality match rendering
+    // absence over real data (it did, live, before this line existed).
+    expect(screen.getByText(/deaths avenged by team/)).toBeInTheDocument();
+    // Formula note from the recorded wire.
+    expect(screen.getByText(/how it is scored \(3\.0\)/)).toBeInTheDocument();
     // Every panel names its window.
     expect(screen.getAllByText(/90d/).length).toBeGreaterThan(2);
     expect(screen.getByText(/30d window/)).toBeInTheDocument();
@@ -116,6 +142,15 @@ describe('ProximityPlayerPage', () => {
     const calls = fetchSpy.mock.calls.map((c) => String(c[0]));
     expect(calls.length).toBeGreaterThanOrEqual(7);
     for (const u of calls) {
+      // Two deliberate exemptions: the formula is global (no player, no
+      // window), and trades/player-stats has NO server-side player filter
+      // (an undeclared param is silently dropped — measured identical) so
+      // the page picks its own row from players[] instead of pretending.
+      if (u.includes('/prox-scores/formula')) continue;
+      if (u.includes('/trades/player-stats')) {
+        expect(u, `unscoped call: ${u}`).toMatch(/range_days=\d+/);
+        continue;
+      }
       expect(u, `unscoped call: ${u}`).toMatch(/range_days=\d+/);
       expect(u, `call without the player: ${u}`).toMatch(new RegExp(`player_guid=${GUID}|/player/${GUID}/`));
     }
