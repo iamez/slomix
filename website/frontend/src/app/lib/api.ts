@@ -204,8 +204,9 @@ async function apiErrorFrom(res: Response, url: string): Promise<ApiError> {
 export async function apiUpload<P extends PostPath>(
   path: P,
   form: FormData,
+  options?: { pathParams?: Record<string, string | number> },
 ): Promise<unknown> {
-  const url = fillPath(path, undefined);
+  const url = fillPath(path, options?.pathParams);
   // nosemgrep
   const res = await fetch(url, {
     method: 'POST',

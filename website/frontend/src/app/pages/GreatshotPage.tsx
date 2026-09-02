@@ -6,7 +6,7 @@
  * fixed on this branch and proven live with a junk file), and an accepted
  * one polls its status until the analysis lands.
  */
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cluster, Stack } from '../components/layout';
@@ -29,11 +29,16 @@ export function GreatshotPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [pollingId, setPollingId] = useState<string | null>(null);
   const status = useGreatshotStatus(pollingId, pollingId != null);
+  const statusData = status.data;
 
-  if (status.data && pollingId != null && !['uploaded', 'processing'].includes(status.data.status)) {
-    setPollingId(null);
-    void qc.invalidateQueries({ queryKey: ['greatshot-list'] });
-  }
+  // A state transition is a commit-time event, not a render computation —
+  // setState during render loops under StrictMode.
+  useEffect(() => {
+    if (statusData && pollingId != null && !['uploaded', 'processing'].includes(statusData.status)) {
+      setPollingId(null);
+      void qc.invalidateQueries({ queryKey: ['greatshot-list'] });
+    }
+  }, [statusData, pollingId, qc]);
 
   const anonymous = list.error instanceof ApiError && list.error.status === 401;
 
