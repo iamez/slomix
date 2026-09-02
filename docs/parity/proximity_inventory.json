@@ -983,9 +983,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 147663,
-        "file": "api_proximity_round_round_id_timeline.json"
+        "file": "api_proximity_round_round_id_timeline.json",
+        "covered_by": "ProximityReplayPage.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/round/{round_id}/tracks",
@@ -1001,9 +1002,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2955991,
-        "file": "api_proximity_round_round_id_tracks.json"
+        "file": "api_proximity_round_round_id_tracks.json",
+        "covered_by": "ProximityReplayPage.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/scopes",

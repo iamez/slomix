@@ -194,6 +194,9 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
           const rid = events.data?.events.find((e) => e.round_id != null)?.round_id ?? null;
           return rid != null ? (
             <div style={{ marginBottom: 'var(--space-2)' }}>
+              <Link to={`/proximity/round/${rid}`} className="lbl" style={{ color: 'var(--color-accent)', textDecoration: 'none', marginRight: 'var(--space-4)' }}>
+                round replay →
+              </Link>
               <Link to={`/proximity/round/${rid}/teams`} className="lbl" style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
                 team comparison for this round →
               </Link>

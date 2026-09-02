@@ -28,6 +28,7 @@ import { Story } from './pages/Story';
 import { Proximity } from './pages/Proximity';
 import { ProximityPlayerPage } from './pages/ProximityPlayerPage';
 import { ProximityTeamsPage } from './pages/ProximityTeamsPage';
+import { ProximityReplayPage } from './pages/ProximityReplayPage';
 import { SkillRating } from './pages/SkillRating';
 import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
@@ -101,6 +102,7 @@ const PAGES: Record<string, React.ReactElement> = {
   'story-date': <Story />,
   proximity: <Proximity />,
   'proximity-player': <ProximityPlayerPage />,
+  'proximity-replay': <ProximityReplayPage />,
   'proximity-teams': <ProximityTeamsPage />,
   'session-detail': <SessionDetail />,
   'session-detail-date': <SessionDetail />,
