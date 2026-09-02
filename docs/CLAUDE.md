@@ -212,6 +212,24 @@ verbatim.
 
 ## Workflow Rules
 
+### Plan discipline (velja za VSE agente)
+
+- **`docs/PLAN.md` je edini vir resnice za tekoči načrt.** Ob vsakem
+  koraku ga posodobi. Nič se ne »dogovori« samo v pogovoru.
+  ⚠️ Plan-mode datoteke (`~/.claude/plans/*.md`) so začasne in si jih seje
+  delijo — trajni izid ob ExitPlanMode prepiši v `docs/PLAN.md` (svoj
+  razdelek proge; ureja se prek veje+PR, da je sočasni prepis git konflikt,
+  ne tiha izguba).
+- **Pravilo za skoke:** ko uporabnik vpraša nekaj izven trenutnega taska,
+  PREJ zapiši v `docs/BACKLOG.md`, kje si ostal, potem šele skoči. Po
+  fixu se vrni in vpiši, kaj si spremenil — tudi če si kaj pokvaril.
+- **Commit po vsakem zaključenem koraku**, ne na koncu dneva (izpad
+  potem stane največ 20 minut). Vedno prek feature veje in PR.
+- Ob predaji na drug model: napiši `docs/HANDOFF-<model>.md` (plan+pozicija;
+  narejeno verificirano/neverificirano; odprte odločitve; nezapisane ideje;
+  ad hoc spremembe) in commitaj.
+
+
 - Use [Conventional Commits](https://www.conventionalcommits.org/): `<type>(<scope>): <description>`
 - Types: feat, fix, docs, chore, refactor, test, security, perf
 - Scopes: bot, website, proximity, greatshot, ci, db, lua
