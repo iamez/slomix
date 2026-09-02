@@ -16,7 +16,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-02 (Fable, po v1.44.0)
+**Zadnja posodobitev:** 2026-09-02 popoldne (Fable, po #884 — faza 5 endpoint-kompletna)
 
 ## Proga: nova stran (Fable)
 
@@ -35,18 +35,22 @@ Nova SPA (website/frontend/src/app) — faza 5 (proximity telemetrija) je
 
 ## Naslednji koraki (vrstni red)
 
-1. **Faza 5, rezina »player dodatki«** (4 poti): `competitive/player-card`,
-   `duos`, `trades/player-stats`, `prox-scores/formula` → ProximityPlayerPage.
-   Oblike že vzorčene (2. 9.).
-2. **Faza 5, rezina »map overlayi«** (7 poti): `combat-positions/{danger-zones,
-   heatmap,kill-lines}`, `hotzones`, `player-heatmap`, `movers`, `player-aim`
-   (⚠️ player-aim ZAHTEVA map_name — 400 brez njega).
-3. **Spider-web follow-upi** (imenovani na strani): 3D kamera, belief
-   regions, label placement; W6 validacija proste poti.
-4. **Faza 6**: availability/bets, uploads, greatshot, live.
-5. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
-6. **Ultra pregled** (owner-triggered, `/code-review ultra`) → 1–2 tedna
-   teka na dev → šele nato pogovor o produkciji.
+1. **Faza 6 — availability rezina 1** (v delu, veja feat/phase6-availability):
+   dostopne stopnje (401/403/200), tedenski grid + moj status (POST),
+   planning today, market/wallet, promo povzetki. Rezina 2: linked formi
+   (settings/subscriptions/link-token/preview/campaigns), betting UI.
+2. **Faza 6 — uploads, greatshot, live** strani.
+3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
+   W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
+   (razlog zapisan 2. 9.).
+4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
+5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
+   produkciji.
+
+| ratchet | stanje |
+|---|---|
+| endpoint gap | 41 po tej rezini (74 ob začetku 1. 9.) |
+| proximity inventory pending | **0** (#884) |
 
 ## Proga: lag na puranu + Lua optimizacija (sestrska seja)
 

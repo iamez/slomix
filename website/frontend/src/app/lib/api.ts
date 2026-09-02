@@ -150,3 +150,31 @@ export async function apiGet<P extends GetPath>(
   );
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// POST — same discipline as apiGet: paths are compile-time literals from the
+// generated map, the body is JSON, and a non-2xx throws ApiError so callers
+// branch on status (401 anonymous / 403 unlinked are STATES, not failures,
+// on the availability surface).
+
+type PostOperation = { requestBody?: unknown; responses: unknown };
+export type PostPath = {
+  [P in keyof paths]: paths[P] extends { post: PostOperation } ? P : never;
+}[keyof paths];
+
+export async function apiPost<P extends PostPath>(
+  path: P,
+  body: unknown,
+  options?: { pathParams?: Record<string, string | number> },
+): Promise<unknown> {
+  const url = fillPath(path, options?.pathParams);
+  // nosemgrep
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(res.status, url);
+  return res.json();
+}

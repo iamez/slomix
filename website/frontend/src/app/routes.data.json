@@ -259,7 +259,8 @@
     "path": "/availability",
     "label": "#ETL",
     "nav": "primary",
-    "phase": 6
+    "phase": 6,
+    "built": true
   },
   {
     "key": "admin",

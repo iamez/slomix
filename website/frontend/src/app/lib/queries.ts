@@ -1,6 +1,6 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import type { paths } from '../../api/generated/openapi.d';
-import { ApiError, apiGet } from './api';
+import { ApiError, apiGet, apiPost } from './api';
 import type {
   AdjustedLifetime,
   ActivityCalendar,
@@ -116,7 +116,12 @@ import type {
   ProxTradesPlayerStats,
   ProxTradesSummary,
   ProxWeaponAccuracy,
+  AvailabilityAccess,
+  BetsMarketCurrent,
   MapMesh,
+  PlanningToday,
+  PromotionCampaign,
+  PromotionPreferences,
   ProxRoundTimeline,
   ProxRoundTracks,
   ProxTeamComparison,
@@ -1686,4 +1691,97 @@ export function useProxPlayerAim(sessionDate: string | null, mapName: string | n
       }) as Promise<ProxPlayerAim>,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+
+// Phase 6 — availability. 401/403 are auth-tier STATES: retry would be
+// noise, so these queries never retry on them (the global retry already
+// stops below 500).
+
+export function useAvailabilityAccess() {
+  return useQuery({
+    queryKey: ['availability-access'],
+    queryFn: () => apiGet('/api/availability/access') as Promise<AvailabilityAccess>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useAvailabilityWeek(fromIso: string, toIso: string, includeUsers: boolean) {
+  return useQuery({
+    queryKey: ['availability-week', fromIso, toIso, includeUsers],
+    queryFn: () =>
+      apiGet('/api/availability', {
+        query: { from: fromIso, to: toIso, include_users: includeUsers },
+      }) as Promise<AvailabilityOverview>,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function usePlanningToday() {
+  return useQuery({
+    queryKey: ['planning-today'],
+    queryFn: () => apiGet('/api/planning/today') as Promise<PlanningToday>,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBetsMarketCurrent() {
+  return useQuery({
+    queryKey: ['bets-market-current'],
+    queryFn: () => apiGet('/api/bets/market/current') as Promise<BetsMarketCurrent>,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useBetsWallet(enabled: boolean) {
+  return useQuery({
+    queryKey: ['bets-wallet'],
+    enabled,
+    queryFn: () => apiGet('/api/bets/wallet') as Promise<unknown>,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function usePromotionCampaign(enabled: boolean) {
+  return useQuery({
+    queryKey: ['promotion-campaign'],
+    enabled,
+    queryFn: () => apiGet('/api/availability/promotions/campaign') as Promise<PromotionCampaign>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function usePromotionPreferences(enabled: boolean) {
+  return useQuery({
+    queryKey: ['promotion-preferences'],
+    enabled,
+    queryFn: () => apiGet('/api/availability/promotion-preferences') as Promise<PromotionPreferences>,
+    staleTime: 60 * 1000,
+  });
+}
+
+/** settings/subscriptions exist in slice 1 ONLY for their auth-tier
+ *  answer (401/403/200) — the linked forms are slice 2. */
+export function useAvailabilitySettingsProbe(enabled: boolean) {
+  return useQuery({
+    queryKey: ['availability-settings'],
+    enabled,
+    retry: false,
+    queryFn: () => apiGet('/api/availability/settings') as Promise<unknown>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useAvailabilitySubscriptionsProbe(enabled: boolean) {
+  return useQuery({
+    queryKey: ['availability-subscriptions'],
+    enabled,
+    retry: false,
+    queryFn: () => apiGet('/api/availability/subscriptions') as Promise<unknown>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export async function postMyAvailability(dateIso: string, status: string) {
+  return apiPost('/api/availability', { date: dateIso, status });
 }
