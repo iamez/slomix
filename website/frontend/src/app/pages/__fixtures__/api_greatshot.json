@@ -1,0 +1,20 @@
+{
+    "items": [
+        {
+            "id": "44f0543a5f8244e5b9e773c64b453d43",
+            "filename": "2026-02-03-220741-etl_adlernest.dm_84",
+            "status": "analyzed",
+            "error": null,
+            "created_at": "2026-09-02 12:19:59.352466",
+            "processing_started_at": "2026-09-02 12:19:59.366721",
+            "processing_finished_at": "2026-09-02 12:19:59.660632",
+            "map": "etl_adlernest",
+            "duration_ms": 281400,
+            "mod": "Legacy",
+            "warnings": [],
+            "highlight_count": 9,
+            "render_job_count": 0,
+            "rendered_count": 0
+        }
+    ]
+}

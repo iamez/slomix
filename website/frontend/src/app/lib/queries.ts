@@ -1,6 +1,6 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import type { paths } from '../../api/generated/openapi.d';
-import { ApiError, apiGet, apiPost } from './api';
+import { ApiError, apiGet, apiPost, apiUpload } from './api';
 import type {
   AdjustedLifetime,
   ActivityCalendar,
@@ -119,6 +119,9 @@ import type {
   AvailabilityAccess,
   AvailabilityStatus,
   BetsMarketCurrent,
+  GreatshotDetail,
+  GreatshotList,
+  GreatshotStatus,
   MapMesh,
   PlanningToday,
   PromotionCampaign,
@@ -1823,4 +1826,47 @@ export function usePopularUploadTags() {
       apiGet('/api/uploads/tags/popular', { query: { limit: 15 } }) as Promise<{ tag: string; count: number }[]>,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+
+// Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
+
+export function useGreatshotList() {
+  return useQuery({
+    queryKey: ['greatshot-list'],
+    retry: false,
+    queryFn: () => apiGet('/api/greatshot') as Promise<GreatshotList>,
+    staleTime: 15 * 1000,
+  });
+}
+
+export function useGreatshotStatus(demoId: string | null, active: boolean) {
+  return useQuery({
+    queryKey: ['greatshot-status', demoId],
+    enabled: demoId != null && active,
+    refetchInterval: active ? 5 * 1000 : false,
+    queryFn: () =>
+      apiGet('/api/greatshot/{demo_id}/status', {
+        pathParams: { demo_id: demoId! },
+      }) as Promise<GreatshotStatus>,
+  });
+}
+
+export function useGreatshotDetail(demoId: string | null) {
+  return useQuery({
+    queryKey: ['greatshot-detail', demoId],
+    enabled: demoId != null && demoId !== '',
+    retry: false,
+    queryFn: () =>
+      apiGet('/api/greatshot/{demo_id}', {
+        pathParams: { demo_id: demoId! },
+      }) as Promise<GreatshotDetail>,
+    staleTime: 30 * 1000,
+  });
+}
+
+export async function uploadGreatshotDemo(file: File) {
+  const form = new FormData();
+  form.append('file', file);
+  return apiUpload('/api/greatshot/upload', form) as Promise<{ demo_id: string; status: string; max_upload_bytes: number }>;
 }

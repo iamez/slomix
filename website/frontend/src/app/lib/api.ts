@@ -196,3 +196,23 @@ async function apiErrorFrom(res: Response, url: string): Promise<ApiError> {
   } catch { /* body was not JSON — the status is the whole story */ }
   return err;
 }
+
+
+/** Multipart upload — the browser sets the boundary Content-Type itself
+ *  and sends Origin on its own; setting Content-Type manually breaks the
+ *  boundary. Same ApiError-with-detail contract as apiPost. */
+export async function apiUpload<P extends PostPath>(
+  path: P,
+  form: FormData,
+): Promise<unknown> {
+  const url = fillPath(path, undefined);
+  // nosemgrep
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    credentials: 'same-origin',
+    body: form,
+  });
+  if (!res.ok) throw await apiErrorFrom(res, url);
+  return res.json();
+}

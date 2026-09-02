@@ -24,8 +24,6 @@
 /api/bets
 /api/bets/market
 /api/diagnostics
-/api/greatshot
-/api/greatshot/upload
 /api/live/feed
 /api/monitoring/status
 /api/server-activity/history

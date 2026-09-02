@@ -231,14 +231,16 @@
     "path": "/greatshot/:section?",
     "label": "Greatshot",
     "nav": "primary",
-    "phase": 6
+    "phase": 6,
+    "built": true
   },
   {
     "key": "greatshot-demo",
     "path": "/greatshot/demo/:demoId",
     "label": "Greatshot Demo",
     "nav": "hidden",
-    "phase": 6
+    "phase": 6,
+    "built": true
   },
   {
     "key": "uploads",
