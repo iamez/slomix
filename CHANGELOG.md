@@ -6,6 +6,23 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.44.0](https://github.com/iamez/slomix/compare/v1.43.0...v1.44.0) (2026-09-02)
+
+
+### Features
+
+* **lua:** v6.12 frame-health watcher — the measurement that splits the two lag hypotheses ([#874](https://github.com/iamez/slomix/issues/874)) ([9d48dfc](https://github.com/iamez/slomix/commit/9d48dfc1c9cbc78ec17a791b3c89de6676d1eada))
+* **website:** phase 5 — the proximity player profile, backbone measured first ([#877](https://github.com/iamez/slomix/issues/877)) ([12f0dec](https://github.com/iamez/slomix/commit/12f0decb347e6b82998656035ddfb272e4663b45))
+* **website:** phase 5 — the round replay in four shapes ([#879](https://github.com/iamez/slomix/issues/879)) ([556e176](https://github.com/iamez/slomix/commit/556e176b7ca4e2e6f0c48a2760d8f74f8f28db0d))
+* **website:** phase 5 — the round team comparison ([#878](https://github.com/iamez/slomix/issues/878)) ([e6a113b](https://github.com/iamez/slomix/commit/e6a113b1d8c67ce494ea2df0f84b0bf28bb7295f))
+* **website:** phase 5 — the spider web, slice 1 ([#880](https://github.com/iamez/slomix/issues/880)) ([113e255](https://github.com/iamez/slomix/commit/113e255767b63646f2534e4a9a551db8ce95d1b9))
+* **website:** slice six — the engagement record (events, drill-down, dispersion) ([#873](https://github.com/iamez/slomix/issues/873)) ([18357ba](https://github.com/iamez/slomix/commit/18357ba03176fa12ff0f0700dcc4ec4b60abb2ac))
+
+
+### Bug Fixes
+
+* **lua:** frame-health watcher proves itself on every map load ([#876](https://github.com/iamez/slomix/issues/876)) ([094de7e](https://github.com/iamez/slomix/commit/094de7ec6e196ebadaaf27c5a798e1275581f377))
+
 ## [1.43.0](https://github.com/iamez/slomix/compare/v1.42.0...v1.43.0) (2026-09-01)
 
 
