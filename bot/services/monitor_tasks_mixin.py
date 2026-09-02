@@ -1057,8 +1057,14 @@ class _MonitorTasksMixin:
         rules = payload.get("rules") if isinstance(payload, dict) else payload
         if not isinstance(rules, list):
             return "audit --json vrnil nepričakovano obliko — preveri skript"
+        # A rule carrying `acknowledged` fires on purpose: the reason is
+        # written down in the rule and the repair is already tracked. Alerting
+        # on it daily would train the reader to ignore this message, and the
+        # next real finding would arrive into that habit.
         live = [(r.get("name", "?"), int(r.get("live", 0) or 0))
-                for r in rules if isinstance(r, dict) and (r.get("live") or 0) > 0]
+                for r in rules
+                if isinstance(r, dict) and (r.get("live") or 0) > 0
+                and not r.get("acknowledged")]
         if not live:
             return None
         lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])

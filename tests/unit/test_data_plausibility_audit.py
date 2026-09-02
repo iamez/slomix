@@ -167,3 +167,113 @@ def test_actual_time_rules_still_target_actual_time_itself():
     lie started all of this."""
     for name in ("rounds_actual_time_missing_or_nonpositive", "rounds_actual_time_diverges_without_surrender"):
         assert "actual_time" in _rule(name).predicate, name
+
+
+# ---------------------------------------------------------------------------
+# "Known, under repair" — rules that fire on purpose
+#
+# Three of today's four new time rules report real, already-tracked breakage.
+# Without a way to say so they would hold the exit code non-zero until the
+# repairs land, and a sensor that is always red stops being read -- which is
+# how the NEXT problem hides. `Rule.acknowledged` is that way to say so.
+# ---------------------------------------------------------------------------
+
+from dataclasses import dataclass  # noqa: E402
+
+from scripts.data_plausibility_audit import (  # noqa: E402
+    Rule,
+    unacknowledged_live_count,
+)
+
+
+@dataclass
+class _Result:
+    rule: object
+    live: int
+
+
+def _fake_rule(name, acknowledged=""):
+    """A throwaway Rule for exercising the exit-code logic.
+
+    NB: not `_rule` -- that name is already taken above by the lookup helper
+    that finds a real rule in RULES. Two different things under one name is
+    exactly the confusion this rulebook exists to catch.
+    """
+    return Rule(name=name, table="player_comprehensive_stats", tier="T1",
+                severity="critical", predicate="TRUE", note="n",
+                acknowledged=acknowledged)
+
+
+def test_acknowledged_rules_do_not_hold_the_exit_code_open():
+    results = [
+        _Result(_fake_rule("known", acknowledged="tracked in #886. Remove once live is 0."), 4682),
+        _Result(_fake_rule("also_known", acknowledged="tracked. Remove once live is 0."), 30),
+        _Result(_fake_rule("clean"), 0),
+    ]
+    assert unacknowledged_live_count(results) == 0
+
+
+def test_an_unacknowledged_live_rule_still_breaks_the_exit_code():
+    """The mechanism must not become a way to silence everything."""
+    results = [
+        _Result(_fake_rule("known", acknowledged="tracked. Remove once live is 0."), 4682),
+        _Result(_fake_rule("new_problem"), 1),
+    ]
+    assert unacknowledged_live_count(results) == 1
+
+
+def test_every_acknowledgement_names_what_closes_it():
+    """An acknowledgement with no exit condition is a mute, and a mute is how
+    five months go by. Each one has to say what makes it removable."""
+    for rule in RULES:
+        if not rule.acknowledged:
+            continue
+        assert "Remove" in rule.acknowledged, (
+            f"{rule.name}: acknowledgement does not say what closes it")
+        assert len(rule.acknowledged) > 60, (
+            f"{rule.name}: acknowledgement is too short to carry a reason")
+
+
+def test_the_time_field_rules_are_present():
+    """These four are the ones the 23-rule audit could not see: it checked
+    whether values were possible, never whether they were written, and had no
+    rule for dead time at all."""
+    names = {r.name for r in RULES}
+    for expected in ("pcs_time_played_percent_is_zero",
+                     "pcs_time_dead_exceeds_time_played",
+                     "pcs_time_dead_ratio_out_of_range",
+                     "pcs_time_dead_inconsistent_with_ratio"):
+        assert expected in names, f"{expected} is missing"
+
+
+def test_the_consistency_rule_is_r1_only_and_stays_green():
+    """R2 diverges by design -- the parser recomputes time_dead_ratio after the
+    differential while the minutes are taken raw, so ~8% of live R2 rows differ
+    legitimately. A blanket rule would report 263 correct rows as broken."""
+    rule = next(r for r in RULES if r.name == "pcs_time_dead_inconsistent_with_ratio")
+    assert "pcs.round_number = 1" in rule.predicate
+    assert not rule.acknowledged, (
+        "this rule was calibrated to land green (live R1 max deviation 1.70 "
+        "against a 2.0 threshold); acknowledging it would hide a real hit")
+
+
+@pytest.mark.parametrize(
+    "rule", [r for r in RULES if r.acknowledged], ids=lambda r: r.name)
+def test_no_acknowledgement_has_outlived_its_reason(db_conn, rule):
+    """When the repair lands and the live count reaches zero, the
+    acknowledgement is stale and has to go -- otherwise a future recurrence of
+    the same breakage would be silently excused."""
+    # build_split_sql, not build_count_sql: the latter returns a single
+    # COUNT(*) and reading a "live" column out of it silently yields nothing,
+    # which this test would then report as "the acknowledgement is stale" --
+    # a wrong verdict rather than an error.
+    with db_conn.cursor() as cur:
+        cur.execute(build_split_sql(rule))
+        row = cur.fetchone()
+    assert row is not None and len(row) == 2, (
+        f"build_split_sql changed shape ({row!r}); this test cannot judge "
+        f"{rule.name} until it is updated")
+    live = int(row[1])
+    assert live > 0, (
+        f"{rule.name} no longer fires on live rows. Its acknowledgement has "
+        f"outlived its reason -- remove it so a recurrence is reported again.")

@@ -149,6 +149,15 @@ class Rule:
     needs_round_join: bool = False  # pcs rules only: JOIN rounds r ON r.id = pcs.round_id
     extra_cols: tuple[str, ...] = field(default_factory=tuple)  # qualified cols shown in top rows
     order_by: str = ""  # qualified expr to rank "worst offender" first; default = id DESC
+    # Non-empty = this rule is EXPECTED to fire right now, for a reason that is
+    # written down here and already being fixed. Such a rule still runs, still
+    # counts, and still appears in the report -- it just does not colour the
+    # sensor red or wake the daily alert, because a permanently red sensor
+    # stops being read and then the NEXT problem hides behind it.
+    #
+    # The string must name the reason AND what closes it. An acknowledgement
+    # with no exit is a mute, and a mute is how five months go by.
+    acknowledged: str = ""
 
 
 # Base gates. Applied to every rule on that table, in addition to the rule's
@@ -301,6 +310,101 @@ RULES: list[Rule] = [
         note="time_played_percent is a percentage of round duration; 105 gives 5pp slack for rounding/late joins.",
         extra_cols=("pcs.time_played_percent",),
         order_by="pcs.time_played_percent DESC",
+    ),
+    Rule(
+        name="pcs_time_played_percent_is_zero",
+        table="player_comprehensive_stats",
+        tier="T1",
+        severity="critical",
+        # Zero is INSIDE the range the rule above checks, which is exactly why
+        # this went unseen: `out_of_range` asks whether the value is possible,
+        # never whether it was written at all. The live import path
+        # (postgresql_database_manager) omitted the column from its INSERT, so
+        # every row it created took the schema DEFAULT 0 -- 100% of rows from
+        # the 2026-03-24 session onward.
+        #
+        # The damage is downstream: sessions_router computes survival_rate
+        # engine-first from this field, so survivability, consistency,
+        # aggression, discipline_score and alive_pct all silently fell back to
+        # dead-time. And alive_pct_drift -- the check that compares the two
+        # sources -- can only fire when both exist, so the one guard that
+        # would have reported this was disabled by the omission itself.
+        predicate="pcs.time_played_percent = 0",
+        note="time_played_percent (TAB[8], engine alive%) is zero on a row with playtime. "
+             "Zero is in range, so the range rule cannot see it: this asks whether the "
+             "value was WRITTEN, not whether it is possible.",
+        acknowledged="Known: the live INSERT omitted the column until #885. "
+                     "#886 backfills these from the archived capture files. "
+                     "Remove this acknowledgement once live reaches 0.",
+        extra_cols=("pcs.time_played_percent", "pcs.time_played_seconds"),
+        order_by="pcs.time_played_seconds DESC",
+    ),
+    Rule(
+        name="pcs_time_dead_exceeds_time_played",
+        table="player_comprehensive_stats",
+        tier="T1",
+        severity="critical",
+        # A player cannot be dead longer than they were in the round. Read-time
+        # LEAST(dead, played) hides this in session views, but season leaders
+        # and every all-time ranking read the raw column -- which is how a row
+        # claiming 580 minutes dead in a 7-minute round ends up at the top.
+        predicate="pcs.time_dead_minutes > pcs.time_played_seconds / 60.0 + 0.05",
+        note="time_dead_minutes cannot exceed the player's own time in the round "
+             "(0.05 min of slack for rounding). Caused by the pre-2026-03-20 "
+             "c0rnp0rn8 accumulator, which re-added the running limbo time every "
+             "5s without resetting it.",
+        acknowledged="Known: pre-2026-03-20 Lua accumulator bug, fixed on the game "
+                     "server and backported in 76cd77b3. The stored rows are still "
+                     "inflated; repairing them is owner-gated "
+                     "(docs/KNOWN_ISSUES.md 'no backfill'). Remove once live reaches 0.",
+        extra_cols=("pcs.time_dead_minutes", "pcs.time_played_seconds"),
+        order_by="(pcs.time_dead_minutes - pcs.time_played_seconds / 60.0) DESC",
+    ),
+    Rule(
+        name="pcs_time_dead_ratio_out_of_range",
+        table="player_comprehensive_stats",
+        tier="T1",
+        severity="critical",
+        predicate="pcs.time_dead_ratio < 0 OR pcs.time_dead_ratio > 100.5",
+        note="time_dead_ratio is a percentage of time played; 0.5pp of slack for "
+             "rounding. Same accumulator as the rule above -- the worst stored "
+             "value is 3690%.",
+        acknowledged="Known: same pre-2026-03-20 accumulator as "
+                     "pcs_time_dead_exceeds_time_played, and closed by the same "
+                     "owner-gated repair. Remove once live reaches 0.",
+        extra_cols=("pcs.time_dead_ratio",),
+        order_by="pcs.time_dead_ratio DESC",
+    ),
+    Rule(
+        name="pcs_time_dead_inconsistent_with_ratio",
+        table="player_comprehensive_stats",
+        tier="T1",
+        severity="high",
+        # R1 ONLY, and the threshold is measured rather than guessed.
+        #
+        # R2 is excluded because the two fields legitimately diverge there: the
+        # parser recomputes time_dead_ratio after the differential while
+        # time_dead_minutes is taken raw (it is in R2_ONLY_FIELDS). That is
+        # ~8% of live R2 rows behaving as designed -- a blanket rule would
+        # report 263 correct rows as broken.
+        #
+        # On live R1 rows (n=3,488) the deviation runs p99 = 0.300 min,
+        # p99.9 = 1.212, max = 1.70, and NOTHING exceeds 2.0. The threshold sits
+        # above the measured noise floor, so this rule lands green and only
+        # lights up on a genuinely new way the two fields disagree.
+        predicate=(
+            "pcs.round_number = 1 AND pcs.time_played_seconds > 60 "
+            "AND abs(pcs.time_dead_minutes "
+            "        - (pcs.time_played_seconds / 60.0) * pcs.time_dead_ratio / 100.0) > 2.0"
+        ),
+        note="R1 only: time_dead_minutes and time_dead_ratio describe the same "
+             "quantity and must agree within 2 minutes. Threshold measured against "
+             "live R1 data (p99 = 0.3 min, max = 1.7, none above 2.0). R2 is "
+             "excluded: the ratio is recomputed post-differential there while the "
+             "minutes are taken raw, so ~8% diverge by design.",
+        extra_cols=("pcs.time_dead_minutes", "pcs.time_dead_ratio", "pcs.time_played_seconds"),
+        order_by=("abs(pcs.time_dead_minutes "
+                  "- (pcs.time_played_seconds / 60.0) * pcs.time_dead_ratio / 100.0) DESC"),
     ),
     Rule(
         name="pcs_times_revived_exceeds_deaths",
@@ -642,8 +746,19 @@ class RuleResult:
             "total": self.total,
             "backfill": self.backfill,
             "live": self.live,
+            "acknowledged": self.rule.acknowledged,
             "top_rows": self.top_rows,
         }
+
+
+def unacknowledged_live_count(results: list[RuleResult]) -> int:
+    """The exit code: rules firing on live rows that nobody has accounted for.
+
+    An acknowledged rule is a known, tracked problem. Counting it here would
+    keep the exit code non-zero for as long as the repair takes, and a code
+    that is always non-zero stops meaning "something new broke".
+    """
+    return sum(1 for r in results if r.live > 0 and not r.rule.acknowledged)
 
 
 def run_audit(conn, rules: list[Rule], top_n: int = 3) -> list[RuleResult]:
@@ -685,10 +800,28 @@ def render_markdown(results: list[RuleResult], generated_at: str) -> str:
     total_rules = len(results)
     rules_with_violations = sum(1 for r in results if r.total > 0)
     rules_with_live = [r for r in results if r.live > 0]
+    unacknowledged_live = [r for r in rules_with_live if not r.rule.acknowledged]
+    acknowledged_live = [r for r in rules_with_live if r.rule.acknowledged]
     lines.append(
         f"**Summary**: {total_rules} rules checked, {rules_with_violations} fired at least once, "
-        f"**{len(rules_with_live)} fired on LIVE data**."
+        f"**{len(unacknowledged_live)} fired on LIVE data**"
+        + (f" (plus {len(acknowledged_live)} known and under repair)."
+           if acknowledged_live else ".")
     )
+    if acknowledged_live:
+        lines.append("")
+        lines.append("### Known, under repair")
+        lines.append("")
+        lines.append("These fire on purpose. They are listed so the count stays "
+                     "visible, and excluded from the exit code so they cannot "
+                     "hide a new problem behind a permanently red sensor.")
+        lines.append("")
+        lines.append("| Rule | Live | Why it is expected, and what closes it |")
+        lines.append("|---|---:|---|")
+        lines.extend(
+            f"| `{r.rule.name}` | {r.live} | {r.rule.acknowledged} |"
+            for r in sorted(acknowledged_live, key=lambda r: -r.live)
+        )
     lines.append("")
 
     lines.append("## Rules (by violation count)")
@@ -788,7 +921,7 @@ def main(argv: list[str] | None = None) -> int:
         out_path.write_text(report, encoding="utf-8")
         print(f"\nReport written to {out_path}", file=sys.stderr)
 
-    return sum(1 for r in results if r.live > 0)
+    return unacknowledged_live_count(results)
 
 
 if __name__ == "__main__":
