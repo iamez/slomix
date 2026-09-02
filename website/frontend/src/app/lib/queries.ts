@@ -97,6 +97,8 @@ import type {
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
+  ProxRoundTimeline,
+  ProxRoundTracks,
   ProxTeamComparison,
   ProxFocusFire,
   ProximityLeaderboard,
@@ -1353,6 +1355,34 @@ export function useProxTeamComparison(roundId: number | null) {
       apiGet('/api/proximity/round/{round_id}/team-comparison', {
         pathParams: { round_id: roundId! },
       }) as Promise<ProxTeamComparison>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+export function useProxRoundTimeline(roundId: number | null) {
+  return useQuery({
+    queryKey: ['prox-round-timeline', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/proximity/round/{round_id}/timeline', {
+        pathParams: { round_id: roundId! },
+      }) as Promise<ProxRoundTimeline>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** ~0.5-2 MB per captured round (measured); fetched once per visit and the
+ *  page uses it the way the parity target did -- summary numbers, no
+ *  playback canvas. 404 means "no tracks", captured-or-not. */
+export function useProxRoundTracks(roundId: number | null) {
+  return useQuery({
+    queryKey: ['prox-round-tracks', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/proximity/round/{round_id}/tracks', {
+        pathParams: { round_id: roundId! },
+      }) as Promise<ProxRoundTracks>,
     staleTime: 5 * 60 * 1000,
   });
 }

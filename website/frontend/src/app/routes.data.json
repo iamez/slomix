@@ -206,7 +206,8 @@
     "path": "/proximity/round/:roundId",
     "label": "Round Replay",
     "nav": "hidden",
-    "phase": 5
+    "phase": 5,
+    "built": true
   },
   {
     "key": "proximity-teams",

@@ -3244,3 +3244,88 @@ export interface ProxTeamComparison {
     execution_rate: number;
   }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the round replay (routes proximity-replay; parity target the old
+// React tree, whose page is timeline-centric: it fetched tracks "for stats
+// only" and never drew a canvas). Timeline events are a DISCRIMINATED UNION
+// of exactly the four types the emitter produces (proximity_round.py — the
+// old page also defended a 'crossfire' type the wire no longer sends). A
+// nonexistent round answers 404 on timeline; an uncaptured one answers 200
+// with the round's metadata and an empty events list. Tracks answers 404
+// for BOTH (indistinguishable there).
+
+export interface ReplayEngagementEvent {
+  type: 'engagement';
+  id: number;
+  time: number;
+  victim_name: string | null;
+  victim_team: string;
+  outcome: string | null;
+  damage: number;
+  attackers: number;
+  start_x: number | null;
+  start_y: number | null;
+  end_x: number | null;
+  end_y: number | null;
+}
+
+export interface ReplaySpawnTimingEvent {
+  type: 'spawn_timing_kill';
+  time: number;
+  attacker_name: string | null;
+  victim_name: string | null;
+  score: number;
+}
+
+export interface ReplayTradeKillEvent {
+  type: 'trade_kill';
+  time: number;
+  trader_name: string | null;
+  avenged_name: string | null;
+  delta_ms: number;
+}
+
+export interface ReplayTeamPushEvent {
+  type: 'team_push';
+  time: number;
+  team: string | null;
+  quality: number;
+  alignment: number;
+  participants: number;
+  duration_ms: number;
+}
+
+export type ReplayTimelineEvent =
+  | ReplayEngagementEvent
+  | ReplaySpawnTimingEvent
+  | ReplayTradeKillEvent
+  | ReplayTeamPushEvent;
+
+export interface ProxRoundTimeline {
+  round_id: number;
+  map_name: string;
+  round_number: number;
+  round_date: string;
+  duration_ms: number;
+  events: ReplayTimelineEvent[];
+}
+
+export interface ProxRoundTracks {
+  status: string;
+  round_id: number;
+  track_count: number;
+  tracks: {
+    guid: string;
+    name: string | null;
+    team: string | null;
+    class: string | null;
+    spawn_time: number;
+    /** Never null on the wire — the emitter coerces a missing death to 0
+     *  (int(r or 0)), so 0 is the survivor/unknown sentinel. */
+    death_time: number;
+    first_move_time: number | null;
+    death_type: string | null;
+    path: unknown[];
+  }[];
+}
