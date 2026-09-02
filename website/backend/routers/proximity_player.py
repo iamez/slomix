@@ -36,17 +36,19 @@ async def get_proximity_player_profile(
             FROM combat_engagement
             WHERE target_guid = $1 AND session_date >= $2
         """
+        # Containment instead of jsonb_array_elements EXISTS: the same
+        # predicate (proven row-equal on live data for two active guids)
+        # but answerable by the GIN jsonb_path_ops index from migration
+        # 080 -- 3.4 s of the profile's 3.5 s warm latency was this scan.
+        # got_kill is boolean in every stored element (measured), so the
+        # containment element matches exactly the COALESCE'd EXISTS.
         kill_query = """
             SELECT COUNT(*) AS total_kills
             FROM combat_engagement e
             WHERE e.outcome = 'killed'
               AND e.session_date >= $2
-              AND EXISTS (
-                    SELECT 1
-                    FROM jsonb_array_elements(COALESCE(e.attackers, '[]'::jsonb)) AS attacker
-                    WHERE attacker->>'guid' = $1
-                      AND COALESCE((attacker->>'got_kill')::boolean, FALSE)
-              )
+              AND e.attackers @> jsonb_build_array(
+                    jsonb_build_object('guid', $1::text, 'got_kill', TRUE))
         """
         spawn_query = """
             SELECT ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,

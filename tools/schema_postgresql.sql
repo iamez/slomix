@@ -9167,3 +9167,11 @@ CREATE TABLE IF NOT EXISTS player_aim_summary (
     payload          JSONB       NOT NULL,
     computed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration 080: the GIN jsonb_path_ops index behind the player-profile
+-- kill count (a containment test; the jsonb_array_elements EXISTS scan it
+-- replaces cost 3.4 s of the endpoint's 3.5 s warm latency). Loaded as a
+-- superuser on fresh deploys, so the etlegacy_user ownership note in the
+-- migration file does not apply here.
+CREATE INDEX IF NOT EXISTS idx_combat_engagement_attackers_gin
+    ON combat_engagement USING gin (attackers jsonb_path_ops);

@@ -198,7 +198,8 @@
     "path": "/proximity/player/:guid",
     "label": "Player Profile",
     "nav": "hidden",
-    "phase": 5
+    "phase": 5,
+    "built": true
   },
   {
     "key": "proximity-replay",

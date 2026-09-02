@@ -13,6 +13,7 @@
  * kill/revive/objective/gib/traded contribution.
  */
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
@@ -97,7 +98,10 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
             <Cluster key={e.guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
               <Cluster gap={3} align="baseline">
                 <span className="m lbl" style={{ width: 20, textAlign: 'right' }}>{i + 1}</span>
-                <span style={{ fontSize: 'var(--fs-row)' }}>{stripEtColors(e.name)}</span>
+                <Link to={`/proximity/player/${encodeURIComponent(e.guid)}`}
+                  style={{ fontSize: 'var(--fs-row)', color: 'inherit', textDecoration: 'none' }}>
+                  {stripEtColors(e.name)}
+                </Link>
               </Cluster>
               <Cluster gap={3} align="baseline">
                 <Meta>{detailFor(category, e)}</Meta>
