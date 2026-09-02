@@ -3717,3 +3717,52 @@ export interface ProxPlayerAim {
   yaw_bucket_width_deg: number;
   pitch_hist: { edges: number[]; counts: number[] };
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 — availability (docs/design 07 §B.4; legacy availability.js).
+// The surface has THREE auth tiers, all recorded: anonymous (401 on gated
+// paths), authenticated-but-unlinked Discord (403 with its own words), and
+// linked (200). 401/403 are STATES here, not failures.
+
+export interface AvailabilityAccess {
+  authenticated: boolean;
+  linked_discord: boolean;
+  can_submit: boolean;
+  is_admin: boolean;
+  can_promote: boolean;
+  website_user_id: number | null;
+}
+
+export type AvailabilityStatus = 'LOOKING' | 'AVAILABLE' | 'MAYBE' | 'NOT_PLAYING';
+// The week shape ALREADY lives above as AvailabilityOverview/AvailabilityDay
+// (#830, with the documented my_status tri-state) — reused, not redeclared.
+
+export interface PlanningToday {
+  date: string;
+  session_ready: { ready: boolean; looking_count: number; threshold: number };
+  unlocked: boolean;
+  participant_count: number;
+  participants: { user_id: number; display_name: string | null; status: string }[];
+  /** Dev backends serve mock planning rows and SAY so — rendered, not hidden. */
+  is_mock?: boolean;
+}
+
+export interface BetsMarketCurrent {
+  status: string;
+  market: unknown | null;
+}
+
+export interface PromotionCampaign {
+  campaign: unknown | null;
+}
+
+export interface PromotionPreferences {
+  user_id: number;
+  allow_promotions: boolean;
+  preferred_channel: string;
+  telegram_handle_masked: string | null;
+  signal_handle_masked: string | null;
+  quiet_hours: Record<string, unknown>;
+  timezone: string;
+  notify_threshold: number;
+}

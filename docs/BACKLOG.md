@@ -17,6 +17,11 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- `bets/wallet` 500 za avtenticirano sejo BREZ users vrstice (FK na
+  user_points ob auto-create; izmerjeno s sentinelom −1). Pravi uporabniki
+  ob OAuth vrstico dobijo; krhkost velja za izbrisane/sentinel uporabnike —
+  handler naj FK ujame in vrne prazen wallet ali 403.
+
 - round-end burst: batch write (table.concat → ~64 KB kosi) namesto 8400
   posamičnih trap_FS_Write; PREJ en večer self meritev z v6.12.
 - tracker mikro: cache `sv_maxclients` (isValidClient ga bere ob vsakem
