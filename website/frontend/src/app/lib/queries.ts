@@ -87,18 +87,25 @@ import type {
   ProxCohesion,
   ProxCombatPositions,
   ProxCrossfireAngles,
+  ProxCombatHeatmap,
+  ProxDangerZones,
   ProxDuos,
   ProxEngagements,
   ProxEventDetail,
   ProxEvents,
   ProxHeadshotRates,
   ProxHitRegions,
+  ProxHotzones,
+  ProxKillLines,
   ProxHitRegionsByWeapon,
   ProxKillOutcomePlayerStats,
   ProxKillOutcomes,
   ProxObjectivePressure,
   ProxMovementStats,
+  ProxMovers,
+  ProxPlayerAim,
   ProxPlayerCard,
+  ProxPlayerHeatmap,
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
@@ -1588,5 +1595,92 @@ export function useProxScoresFormula() {
     queryFn: () =>
       apiGet('/api/proximity/prox-scores/formula') as Promise<ProxScoresFormula>,
     staleTime: Infinity,
+  });
+}
+
+
+// Phase 5 — the map overlays, all (session_date, map_name)-scoped.
+
+export function useProxDangerZones(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-danger-zones', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/combat-positions/danger-zones', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxDangerZones>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxCombatHeatmap(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-combat-heatmap', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/combat-positions/heatmap', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxCombatHeatmap>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxKillLines(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-kill-lines', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/combat-positions/kill-lines', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxKillLines>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxHotzones(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-hotzones', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/hotzones', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxHotzones>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxMovers(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-movers', sessionDate, mapName],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/movers', {
+        query: { session_date: sessionDate!, ...(mapName != null ? { map_name: mapName } : {}) },
+      }) as Promise<ProxMovers>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxPlayerHeatmap(sessionDate: string | null, mapName: string | null, guid: string | null, mode: string) {
+  return useQuery({
+    queryKey: ['prox-player-heatmap', sessionDate, mapName, guid, mode],
+    enabled: sessionDate != null && mapName != null && guid != null,
+    queryFn: () =>
+      apiGet('/api/proximity/player-heatmap', {
+        query: { session_date: sessionDate!, map_name: mapName!, player_guid: guid!, mode },
+      }) as Promise<ProxPlayerHeatmap>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxPlayerAim(sessionDate: string | null, mapName: string | null, guid: string | null) {
+  return useQuery({
+    queryKey: ['prox-player-aim', sessionDate, mapName, guid],
+    enabled: sessionDate != null && mapName != null && guid != null,
+    queryFn: () =>
+      apiGet('/api/proximity/player-aim', {
+        query: { session_date: sessionDate!, map_name: mapName!, player_guid: guid! },
+      }) as Promise<ProxPlayerAim>,
+    staleTime: 5 * 60 * 1000,
   });
 }

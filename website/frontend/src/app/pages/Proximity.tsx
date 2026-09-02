@@ -23,6 +23,7 @@ import { ProximityInstruments } from './ProximityInstruments';
 import { ProximityCompetitive } from './ProximityCompetitive';
 import { ProximityObjectiveIntel } from './ProximityObjectiveIntel';
 import { ProximityOutcomes } from './ProximityOutcomes';
+import { ProximityMapOverlays } from './ProximityMapOverlays';
 import { ProximityRoundCanvases } from './ProximityRoundCanvases';
 import { ProximityEvents } from './ProximityEvents';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
@@ -301,6 +302,7 @@ export function Proximity() {
               />
               <ProximityRoundCanvases sessionDate={scopeDate} mapName={scopeMap} roundNumber={scopeRound?.n ?? null} roundStartUnix={scopeRound?.rsu ?? null} />
               <ProximityEvents sessionDate={scopeDate} mapName={scopeMap} roundNumber={scopeRound?.n ?? null} roundStartUnix={scopeRound?.rsu ?? null} />
+              <ProximityMapOverlays sessionDate={scopeDate} mapName={scopeMap} />
             </Stack>
           </>
         )}

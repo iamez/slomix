@@ -3631,3 +3631,89 @@ export interface ProxScoresFormula {
     metrics: Record<string, { label: string; weight: number; invert: boolean }>;
   }>;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the map overlays (the last seven pending paths). Shapes from
+// proximity_positions.py / proximity_combat.py.
+
+export interface ProxDangerZones {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  /** class -> deaths; undefined is what a lookup of an absent class
+   *  returns anyway (and it lets recorded zones with differing class keys
+   *  satisfy the type — the weapons-map lesson). */
+  zones: { x: number; y: number; deaths: number; classes: Record<string, number | undefined> }[];
+}
+
+export interface ProxCombatHeatmap {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  perspective: string;
+  hotzones: { x: number; y: number; count: number }[];
+}
+
+export interface ProxKillLines {
+  status: string;
+  map_name: string;
+  lines: { ax: number; ay: number; vx: number; vy: number; weapon_id: number; attacker_team: string | null }[];
+}
+
+export interface ProxHotzones {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  map_name: string;
+  hotzones: { x: number; y: number; count: number; kills: number; deaths: number }[];
+  grid_size: number;
+  source: string;
+}
+
+export interface ProxMoversRow { guid: string; name: string | null; tracks: number }
+export interface ProxMovers {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  limit: number;
+  distance: (ProxMoversRow & { total_distance: number })[];
+  sprint: (ProxMoversRow & { sprint_pct: number })[];
+  reaction: unknown[];
+  survival: unknown[];
+}
+
+/** mode ∈ kills_from | victims_die | player_dies | presence | aim — the
+ *  endpoint 400s without one (its own words, rendered verbatim). */
+export interface ProxPlayerHeatmap {
+  status: string;
+  map_name: string;
+  mode: string;
+  grid_size: number;
+  player_guid: string;
+  player_name: string | null;
+  hotzones: { x: number; y: number; count: number }[];
+  total: number;
+  sampled: boolean;
+  scope: ProxScope;
+}
+
+export interface ProxPlayerAim {
+  status: string;
+  map_name: string;
+  player_guid: string;
+  player_name: string | null;
+  grid_size: number;
+  total: number;
+  sampled: boolean;
+  scope: ProxScope;
+  hotzones: { x: number; y: number; count: number }[];
+  yaw_buckets: number;
+  yaw_bucket_width_deg: number;
+  pitch_hist: { edges: number[]; counts: number[] };
+}

@@ -161,9 +161,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/combat-positions/heatmap",
@@ -179,9 +180,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/combat-positions/kill-lines",
@@ -197,9 +199,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/competitive/clutch",
@@ -556,9 +559,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2866,
-        "file": "api_proximity_hotzones.json"
+        "file": "api_proximity_hotzones.json",
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/kill-outcomes",
@@ -668,9 +672,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2281,
-        "file": "api_proximity_movers.json"
+        "file": "api_proximity_movers.json",
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/objective-focus",
@@ -738,9 +743,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/player-heatmap",
@@ -756,9 +762,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/player-journey",
