@@ -61,8 +61,12 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
           isEmpty={(d) => d.summary.total_kills === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
-              <ProxRow name="gibbed" mid={`${figure(Math.round(d.summary.gib_rate * 1000) / 10)}% of kills`} val={figure(d.summary.gibbed)} />
-              <ProxRow name="revived against" mid={`${figure(Math.round(d.summary.revive_rate * 1000) / 10)}%`} val={figure(d.summary.revived)} />
+              {/* gib_rate/revive_rate arrive as PERCENTAGES on this wire
+                  (2.6 means 2.6%) — unlike kill-outcomes/player-stats,
+                  whose kpr is a fraction. Copying that pattern here showed
+                  1,800% (Codex on #881). */}
+              <ProxRow name="gibbed" mid={`${figure(d.summary.gib_rate)}% of kills`} val={figure(d.summary.gibbed)} />
+              <ProxRow name="revived against" mid={`${figure(d.summary.revive_rate)}%`} val={figure(d.summary.revived)} />
               <ProxRow name="tapped out" val={figure(d.summary.tapped_out)} />
               <ProxRow name="lasted to round end" val={figure(d.summary.round_end)} />
               <ProxRow name="denial per kill" val={`${figure(Math.round(d.summary.avg_denied_ms / 100) / 10)} s avg`} />

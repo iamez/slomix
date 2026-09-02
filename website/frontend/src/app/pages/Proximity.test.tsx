@@ -330,7 +330,11 @@ describe('Proximity', () => {
     // The evening in numbers: 1,382 engagements, 136 crossfires, 53.5% escapes.
     await waitFor(() => expect(screen.getByText('1,382')).toBeInTheDocument());
     expect(screen.getByText('53.5%')).toBeInTheDocument();
-    // What kills became: 16 gibs of 604 kills; revives at 18%.
+    // What kills became: the rates arrive as PERCENTAGES on this wire —
+    // these assertions are what catches the fraction-pattern bug (2.6%
+    // rendered as 260%).
+    expect(screen.getByText('2.6% of kills')).toBeInTheDocument();
+    expect(screen.getByText('18%')).toBeInTheDocument();
     expect(screen.getByText(/lasted to round end/)).toBeInTheDocument();
     // Headshot rates leader, colour codes stripped.
     expect(screen.getAllByText(/carniee/).length).toBeGreaterThan(0);
