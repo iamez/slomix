@@ -116,17 +116,22 @@ import type {
   ProxTradesPlayerStats,
   ProxTradesSummary,
   ProxWeaponAccuracy,
+  ActivityHistory,
+  ApiHealth,
   AvailabilityAccess,
   AvailabilityStatus,
   BetsMarketCurrent,
   GreatshotDetail,
   GreatshotList,
   GreatshotStatus,
+  LiveFeed,
   MapMesh,
+  MonitoringStatus,
   PlanningToday,
   PromotionCampaign,
   PromotionPreferences,
   UploadDetail,
+  VoiceHistory,
   UploadsList,
   ProxRoundTimeline,
   ProxRoundTracks,
@@ -1869,4 +1874,55 @@ export async function uploadGreatshotDemo(file: File) {
   const form = new FormData();
   form.append('file', file);
   return apiUpload('/api/greatshot/upload', form) as Promise<{ demo_id: string; status: string; max_upload_bytes: number }>;
+}
+
+// Phase 6 — the live surface. State and feed POLL while the page is
+// mounted; history and monitoring refresh on their own slower clocks.
+
+export function useLiveFeed(since: number) {
+  return useQuery({
+    queryKey: ['live-feed', since],
+    queryFn: () =>
+      apiGet('/api/live/feed', { query: { since } }) as Promise<LiveFeed>,
+    refetchInterval: 15 * 1000,
+    staleTime: 5 * 1000,
+  });
+}
+
+export function useServerActivityHistory(hours: number) {
+  return useQuery({
+    queryKey: ['server-activity', hours],
+    queryFn: () =>
+      apiGet('/api/server-activity/history', { query: { hours } }) as Promise<ActivityHistory>,
+    refetchInterval: 60 * 1000,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useVoiceActivityHistory(hours: number) {
+  return useQuery({
+    queryKey: ['voice-activity', hours],
+    queryFn: () =>
+      apiGet('/api/voice-activity/history', { query: { hours } }) as Promise<VoiceHistory>,
+    refetchInterval: 60 * 1000,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useMonitoringStatus() {
+  return useQuery({
+    queryKey: ['monitoring-status'],
+    queryFn: () => apiGet('/api/monitoring/status') as Promise<MonitoringStatus>,
+    refetchInterval: 60 * 1000,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useApiHealth() {
+  return useQuery({
+    queryKey: ['api-health'],
+    queryFn: () => apiGet('/api/status') as Promise<ApiHealth>,
+    refetchInterval: 60 * 1000,
+    staleTime: 60 * 1000,
+  });
 }

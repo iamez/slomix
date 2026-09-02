@@ -1,0 +1,24 @@
+{
+    "status": "ok",
+    "is_live": false,
+    "game_state": "idle",
+    "current_map": null,
+    "map_confirmed": false,
+    "map_age_seconds": null,
+    "previous_map": null,
+    "round_number": null,
+    "round_elapsed_seconds": null,
+    "roster": {
+        "axis": [],
+        "allies": [],
+        "spectators": [],
+        "player_count": 0,
+        "roster_age_seconds": null,
+        "has_bots": false
+    },
+    "session_start_seconds": null,
+    "recent_objectives": [],
+    "recent_roster_changes": [],
+    "last_event_age_seconds": null,
+    "server_time": 1788349751.9453247
+}
