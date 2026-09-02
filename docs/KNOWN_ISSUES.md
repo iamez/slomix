@@ -200,7 +200,7 @@ Verify (covers the Lua producer side and the Python consumer side):
 grep -rn "timestats" bot/ website/backend/ vps_scripts/ --include='*.py' --include='*.lua' | wc -l  # 0 → still not started
 ```
 
-### Time dead anomalies — mitigated, upstream fix pending — Low
+### Time dead anomalies — upstream fix LANDED, stored rows still inflated — Medium
 
 Between 211 and 301 player-rows (explicit range — the count varies with the
 counting method, measured 2026-06-02) have `time_dead > time_played` (max
@@ -208,12 +208,56 @@ overage ~573 min),
 caused by the server idling on a stale map + buggy c0rnp0rn Lua time stats.
 Mitigated read-time via `LEAST(time_dead, time_played)` (PR #350/#352) and the
 FM6 idle-map watchdog (PR #354); stored rows are intentionally untouched (owner
-decision — no backfill). True fix = Lua Time Stats Overhaul above.
+decision — no backfill).
+
+**Updated 2026-09-02 — the upstream fix this entry was waiting for has
+already happened, and the problem is larger than "a few hundred rows".**
+
+- The Lua was fixed **on the game server around 2026-03-20** and only reached
+  this repository on 2026-08-11 (`76cd77b3`, "repo lagged production"). The old
+  `StoreStats()` re-added the running limbo time every 5s without resetting
+  `death_time[i]`; the current one snapshots into `dt_snapshot` and leaves the
+  accumulator alone. So "True fix = Lua Time Stats Overhaul" is **done** — this
+  entry spent five months pointing at a closed task.
+- The break is a single day in the data: **2026-03-24**, the first session
+  after that deploy. Invariant violations (`dead > played`, humans, R1+R2) go
+  **80 → 0** across it; max stored dead time 107.26 min → 7.90; max
+  `time_dead_ratio` 3690% → 100.
+- The rows before it are not merely "a few anomalies" — they are
+  **systematically inflated by a factor of ~2**. Median dead share 36.5% before
+  vs 20.3% after; reconstructing from the engine's own alive% (TAB[8]) returns
+  the pre-boundary distribution to the post-boundary one at every quartile.
+  Confirmed by two sources independent of the broken accumulator: `round_awards`
+  from `endstats.lua` (median reconstruction/award **1.000** vs stored/award
+  **2.095**, n=265 pre-boundary) and `player_track` from the proximity tracker
+  (n=954).
+- ⚠️ Consequence beyond these rows: any comparison spanning 2026-03-24 puts two
+  different measurements side by side under one name — season `time_alive` /
+  `time_dead` leaders, ET Rating's `survival_rate` (weight 0.07), PWC survival
+  (0.08). The read-time `LEAST(...)` cap hides this in session views only.
+
+The owner decision above still stands and is **not** overridden here. It was
+taken against the narrower problem (211–301 visibly impossible rows, measured
+2026-06-02) and while the upstream fix was believed to be outstanding. Both of
+those premises have changed, so the decision is worth revisiting — but that is
+the owner's call, and nothing is repaired until it is made.
+
+Full analysis: `docs/research/ASSISTS_RCA_2026-09-02.md` §6 (local).
 
 Verify:
 ```sql
+-- the impossible rows this entry was opened for
 SELECT COUNT(*) FROM player_comprehensive_stats
 WHERE time_dead_minutes > time_played_minutes;  -- still > 200 stored rows
+
+-- the regime change, which is the larger story
+SELECT r.round_date < '2026-03-24' AS before_fix,
+       round(percentile_cont(0.5) WITHIN GROUP (
+           ORDER BY p.time_dead_minutes / (p.time_played_seconds/60.0) * 100)::numeric, 1) AS median_dead_pct
+FROM player_comprehensive_stats p JOIN rounds r ON r.id = p.round_id
+WHERE r.round_number IN (1,2) AND p.time_played_seconds > 0
+  AND p.player_name NOT LIKE '[BOT]%'
+GROUP BY 1;  -- ~36.5 before, ~20.3 after
 ```
 
 ---
