@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import importlib.util
 import json
 import os
 import re
@@ -85,6 +86,24 @@ def mint_owner_cookie() -> str:
     return itsdangerous.TimestampSigner(str(secret)).sign(payload).decode()
 
 
+def mint_sentinel_cookie() -> str:
+    """The Playwright owner rig's cookie, byte-for-byte: the SAME function
+    (scripts/e2e_owner_session.py:mint_session_cookie, loaded by path — the
+    scripts directory is not a package), same env (E2E_OWNER_*), so a
+    fixture recorded here and the page under e2e see one identity."""
+    spec = importlib.util.spec_from_file_location(
+        "e2e_owner_session", REPO_ROOT / "scripts" / "e2e_owner_session.py"
+    )
+    if spec is None or spec.loader is None:
+        raise SystemExit("scripts/e2e_owner_session.py not importable")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    cookie = module.mint_session_cookie()
+    if not cookie:
+        raise SystemExit("e2e_owner_session.mint_session_cookie() returned nothing (SESSION_SECRET?)")
+    return cookie
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     """Never follow redirects: /auth/login 302s to discord.com, and following
     it would ship the minted owner session cookie to a third party (Codex P1
@@ -140,6 +159,14 @@ def main() -> int:
     parser.add_argument("--out", default="tests/fixtures/api/recorded")
     parser.add_argument("--only", default="", help="record only paths with this prefix")
     parser.add_argument(
+        "--sentinel",
+        action="store_true",
+        help="record as the e2e SENTINEL session (scripts/e2e_owner_session.py, "
+        "E2E_OWNER_* env: Discord id -1, linked) instead of the owner cookie — "
+        "the linked-tier availability/bets fixtures are recorded this way so "
+        "no real identity reaches the public repo (phase 6, slice 2)",
+    )
+    parser.add_argument(
         "--sub",
         action="append",
         default=[],
@@ -158,7 +185,7 @@ def main() -> int:
     spec = json.loads(SNAPSHOT.read_text(encoding="utf-8"))
     out_dir = (REPO_ROOT / args.out).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
-    cookie = mint_owner_cookie()
+    cookie = mint_sentinel_cookie() if args.sentinel else mint_owner_cookie()
 
     index: list[dict] = []
     skipped: list[str] = []

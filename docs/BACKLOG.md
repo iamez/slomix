@@ -17,7 +17,30 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
-- `bets/wallet` 500 za avtenticirano sejo BREZ users vrstice (FK na
+- (2. 9., availability r. 2) **response-model round: availability + bets** —
+  24 handlerjev brez `response_model`, openapi brez shem → ročni tipi v
+  `types.ts` so pripeti le s harness posnetki
+  (`tests/unit/test_availability_slice2_fixtures.py`). Isti vzorec kot
+  #812/#820/#830; ownerjeva odločitev 2. 9.: ločen PR.
+- (2. 9.) **admin market kontrole** (`POST /api/bets/market`, `…/settle`) —
+  izpuščene iz rezine 2 po ownerjevi odločitvi; gap vrstici `/api/bets` in
+  `/api/bets/market` ostaneta (komentar v `endpoint_gap.txt`).
+- (2. 9.) `scripts/record_api_corpus.py:mint_owner_cookie` kuje cookie s
+  TRDO KODIRANIM realnim Discord id-jem (»corpus-recorder«); `--sentinel`
+  (rezina 2) je pot brez identitete — ownerjeva pot bi šla prek E2E_OWNER_*.
+- (2. 9., živ Playwright na :8056 med rezino 2) `app-routes` anon: greatshot
+  demo/clips stran kliče zaščiteno pot anonimno → 401 v konzoli (stran iz
+  #890); proximity/proximity-player `page.goto` presežeta 30 s `networkidle`
+  (hladna hrbtenica, memory `second_call_is_not_a_measurement`); spider-web
+  thin-data. Nič od tega ni v rezini 2 (diff se teh strani ne dotakne) —
+  vsak zasluži svojo vrstico, ne tišine.
+- (2. 9.) `bets_router.get_current_market`: `my_bet.payout` gre skozi `int()`
+  in ob `None` TIHO vrže `my_bet` na `null` (except TypeError). Stolpec je
+  NOT NULL DEFAULT 0, zato danes ne sproži — a tip laže, če se shema kdaj
+  sprosti.
+- `bets/wallet` 500 za avtenticirano sejo BREZ users vrstice (2. 9.: sentinel
+  ima zdaj vrstico prek `scripts/e2e_sentinel_rows.py`, hrošč za izbrisane
+  uporabnike ostaja) (FK na
   user_points ob auto-create; izmerjeno s sentinelom −1). Pravi uporabniki
   ob OAuth vrstico dobijo; krhkost velja za izbrisane/sentinel uporabnike —
   handler naj FK ujame in vrne prazen wallet ali 403.

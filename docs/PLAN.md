@@ -16,7 +16,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-02 popoldne (Fable, po #884 — faza 5 endpoint-kompletna)
+**Zadnja posodobitev:** 2026-09-02 zvečer (Fable 5.1, availability rezina 2)
 
 ## Proga: nova stran (Fable)
 
@@ -29,17 +29,19 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | 13 na tej veji; 8, ko sta #889 (−5) in #890 (−2) oba na mainu |
+| endpoint gap (H1) | **5** na tej veji (8 na mainu po #890; rezina 2 zapre link-token, preview, campaigns) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
+| availability r. 2 (ta veja) | linked formi (settings, kanali prek link-tokena, DELETE), promotions (status+jobs, preview z recipients, schedule), betting (bazen, multiplikator, stava, denarnica; BREZ admin kontrol — owner 2. 9.); fixturi povezane stopnje prek dev sentinela (`scripts/e2e_sentinel_rows.py`) + harness posnetkov |
+| delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
 ## Naslednji koraki (vrstni red)
 
-1. **Faza 6 — preostanek**: availability rezina 2 (linked formi:
-   settings/subscriptions/link-token/preview/campaigns, betting UI),
-   uploads rezina 2 (resumable upload, delete), diagnostics/stats/sessions
-   posamični endpointi iz gap seznama (8 poti po mergu #889+#890).
+1. **Faza 6 — preostanek**: uploads rezina 2 (resumable upload, delete),
+   `/api/diagnostics`; availability rezina 3 = admin market kontrole
+   (`/api/bets/market`, settle) — ownerjeva odločitev, kdaj; `/api/bets` in
+   `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
@@ -49,7 +51,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | 13 na tej veji → 8 po mergu #889+#890 (74 ob začetku 1. 9.) |
+| endpoint gap | 5 na tej veji (8 na mainu; 74 ob začetku 1. 9.) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: lag na puranu + Lua optimizacija (sestrska seja)

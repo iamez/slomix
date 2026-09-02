@@ -49,8 +49,16 @@ EXTRA_FILE = REPO_ROOT / "tests" / "data" / "endpoint_required_extra.txt"
 # Braces included: a typed template call — apiGet('/api/seasons/{season_id}/
 # awards') — must be captured WHOLE, or the capture stops at '{' and
 # registers a bare two-segment prefix (found in phase 2, batch 2).
+# apiPost/apiUpload/apiDelete joined the alternation in phase 6 slice 2: a
+# templated WRITE — apiPost('/api/bets/market/{market_id}/bet') — was not a
+# wrapper match, so only _NEW_LITERAL_RE saw it, and that charset stops at
+# '{': the capture was the bare '/api/bets/market', which is a DIFFERENT
+# operation (the admin market-open POST, unbuilt) — the line would have been
+# reported stale and deleted for work that did not happen. Pinned by
+# test_templated_write_does_not_register_its_truncated_prefix.
 _NEW_WRAPPER_RE = re.compile(
-    r"\b(?:get|post|put|patch|del|apiGet|apiFetch)(?:<[^>]{0,200}>)?\(\s*[`'\"](/[a-zA-Z0-9/_{}-]+)"
+    r"\b(?:get|post|put|patch|del|apiGet|apiFetch|apiPost|apiUpload|apiDelete)"
+    r"(?:<[^>]{0,200}>)?\(\s*[`'\"](/[a-zA-Z0-9/_{}-]+)"
 )
 _NEW_TEMPLATE_RE = re.compile(r"\$\{API(?:_BASE)?\}(/[a-zA-Z0-9/_-]+)")
 _NEW_LITERAL_RE = re.compile(r"(?<=['\"`}])/(?:api|auth)/[a-zA-Z0-9/_-]+")
@@ -100,6 +108,14 @@ def _extract_new_frontend_paths(root: Path | None = None) -> tuple[set[str], set
             for match in rx.finditer(text):
                 add(match.group(1), text, match.end())
         for match in _NEW_LITERAL_RE.finditer(text):
+            # A literal whose charset stopped at '{' is the head of a spec
+            # TEMPLATE, not a call: '/api/bets/market' cut out of
+            # apiPost('/api/bets/market/{market_id}/bet'). The wrapper regex
+            # registers the template whole; registering the stump as an
+            # exact call would clear a legacy exact requirement for an
+            # operation nobody built (slice 2 of phase 6).
+            if text[match.end():match.end() + 1] == "{":
+                continue
             add(match.group(0), text, match.end())
     return exact, dynamic
 
@@ -329,3 +345,38 @@ def test_gap_only_shrinks_to_zero_goal():
     assert all(p.startswith(("/api/", "/auth/")) for p in listed), (
         "gap entries must be absolute /api or /auth paths"
     )
+
+
+def test_templated_write_does_not_register_its_truncated_prefix(tmp_path: Path):
+    """A templated apiPost/apiDelete must be captured WHOLE (template), never
+    as the two-or-three-segment literal its '{' cuts it down to. The control
+    is the pre-slice-2 alternation, run on the same text: it DID register
+    the truncated prefix — that is the false coverage this test exists for."""
+    src = tmp_path / "app"
+    src.mkdir()
+    (src / "queries.ts").write_text(
+        "export const bet = (id: number) =>\n"
+        "  apiPost('/api/bets/market/{market_id}/bet', {}, { pathParams: { market_id: id } });\n"
+        "export const unlink = (c: string) =>\n"
+        "  apiDelete('/api/availability/subscriptions/{channel_type}', { pathParams: { channel_type: c } });\n",
+        encoding="utf-8",
+    )
+    exact, dynamic = _extract_new_frontend_paths(src)
+    assert "/api/bets/market/{market_id}/bet" in exact
+    assert "/api/availability/subscriptions/{channel_type}" in exact
+    assert "/api/bets/market" not in exact, "the truncated prefix registered as an exact call"
+    assert "/api/availability/subscriptions" not in exact
+    assert not dynamic
+    # The template must NOT clear the legacy exact requirement /api/bets/market
+    # (different segment count -> not an instantiation).
+    assert not _covered("/api/bets/market", False, exact, dynamic)
+
+    # Control: the previous alternation, on the same file, registers the
+    # truncated prefix — the guard has a subject.
+    old_wrapper = re.compile(
+        r"\b(?:get|post|put|patch|del|apiGet|apiFetch)(?:<[^>]{0,200}>)?\(\s*[`'\"](/[a-zA-Z0-9/_{}-]+)"
+    )
+    text = (src / "queries.ts").read_text(encoding="utf-8")
+    assert not old_wrapper.search(text)
+    literal_hits = {m.group(0).rstrip("/") for m in _NEW_LITERAL_RE.finditer(text)}
+    assert "/api/bets/market" in literal_hits, "control: the old extraction no longer misreads — retire this test"

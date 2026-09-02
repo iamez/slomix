@@ -1,0 +1,1 @@
+{"status":"ok","market":{"id":7,"gaming_session_id":150,"session_date":"2026-09-02","team_a_label":"Axis side","team_b_label":"Allied side","status":"settled","outcome":"team_b","pool":{"team_a":{"pool":120,"bets":3},"team_b":{"pool":80,"bets":2},"total_pool":200},"my_bet":{"choice":"team_a","amount":20,"payout":0,"status":"lost"}}}
