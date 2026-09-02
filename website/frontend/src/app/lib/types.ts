@@ -3802,15 +3802,18 @@ export interface UploadDetail {
   category: string;
   extension: string;
   file_size_bytes: number;
-  uploader_name: string | null;
+  /** Never null per the API schema (the drift checker is the arbiter). */
+  uploader_name: string;
   uploader_discord_id: string | null;
-  download_count: number;
-  created_at: string;
+  /** Nullable per the API schema even though every recording carries one —
+   *  the reader guards, the sample does not decide (#830's lesson). */
+  download_count: number | null;
+  created_at: string | null;
   description: string | null;
   expires_at: string | null;
   tags: string[];
   mime_type: string | null;
-  content_hash: string | null;
+  content_hash: string;
   is_playable: boolean;
   poster_url: string | null;
   download_url: string;

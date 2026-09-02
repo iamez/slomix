@@ -128,8 +128,9 @@ export function UploadDetailPage() {
           {d.title || d.filename}
         </h1>
         <Meta>
-          {d.filename} · {bytes(d.file_size_bytes)} · uploaded {d.created_at.slice(0, 10)} by {d.uploader_name ?? 'unknown'}
-          {' · '}{figure(d.download_count)} downloads
+          {d.filename} · {bytes(d.file_size_bytes)}
+          {d.created_at != null && <> · uploaded {d.created_at.slice(0, 10)}</>} by {d.uploader_name}
+          {d.download_count != null && <> · {figure(d.download_count)} downloads</>}
           {d.expires_at != null && <> · expires {d.expires_at.slice(0, 10)}</>}
         </Meta>
       </Stack>
