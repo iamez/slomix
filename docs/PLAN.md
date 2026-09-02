@@ -4,10 +4,23 @@
 > samo v pogovoru. Bereta jo obe seji (in vsak prihodnji model).
 > Podrobne raziskovalne zapiske drži lokalno (docs/REPO_BOUNDARY.md);
 > tu je samo načrt in pozicija. Repo je javen — brez skrivnosti.
+>
+> **Sočasnost (več agentov, plan mode):**
+> - Plan-mode datoteke (`~/.claude/plans/*.md`) so ZAČASNE in si jih seje
+>   DELIJO po slugih — ista datoteka je bila prepisana 3× v dveh dneh
+>   (tri različne seje, trije nepovezani načrti). Nikoli niso vir resnice:
+>   trajni izid se ob ExitPlanMode PREPIŠE SEM.
+> - Ta datoteka se ureja SAMO prek veje+PR (kot vse) — sočasni prepis se
+>   pokaže kot git konflikt, ne kot tiha izguba; vsaka verzija je commit.
+> - Vsaka delovna proga ima SVOJ razdelek in ureja samo svojega +
+>   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
+> - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
 **Zadnja posodobitev:** 2026-09-02 (Fable, po v1.44.0)
 
-## Kje smo
+## Proga: nova stran (Fable)
+
+### Kje smo
 
 Nova SPA (website/frontend/src/app) — faza 5 (proximity telemetrija) je
 **skoraj zaključena**. Prod ZAMRZNJEN na v1.39.0 (ownerjeva odločitev
@@ -35,7 +48,9 @@ Nova SPA (website/frontend/src/app) — faza 5 (proximity telemetrija) je
 6. **Ultra pregled** (owner-triggered, `/code-review ultra`) → 1–2 tedna
    teka na dev → šele nato pogovor o produkciji.
 
-## Vzporedna proga: lag na puranu
+## Proga: lag na puranu + Lua optimizacija (sestrska seja)
+
+**Zadnja posodobitev:** 2026-09-02 (Fable — predaja koordinacije)
 
 Watcher v6.12 ŽIV na puranu (deployan + dokazan 2. 9.). Naslednji večer
 igre = meritev (`~/.etlegacy/legacy/proximity/frame_health.log`; zbiralnik
