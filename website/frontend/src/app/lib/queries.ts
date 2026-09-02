@@ -1415,8 +1415,12 @@ export function useMapMesh(mapName: string | null) {
     queryKey: ['map-mesh', mapName],
     enabled: mapName != null && mapName !== '',
     queryFn: async () => {
-      const res = await fetch(`/assets/maps/geometry/${encodeURIComponent(mapName!)}.json`);
-      if (!res.ok) return null;
+      const url = `/assets/maps/geometry/${encodeURIComponent(mapName!)}.json`;
+      const res = await fetch(url);
+      // Only 404 means "this map was never exported" — any other failure is
+      // a real problem and must surface as one, not as a quiet absence.
+      if (res.status === 404) return null;
+      if (!res.ok) throw new ApiError(res.status, url);
       return res.json() as Promise<MapMesh>;
     },
     staleTime: Infinity,

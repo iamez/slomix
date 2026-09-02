@@ -94,10 +94,12 @@ function drawMoment(
     const { vertices, indexes } = mesh;
     for (let i = 0; i + 2 < indexes.length; i += 3) {
       const a = indexes[i] * 3; const b = indexes[i + 1] * 3; const c = indexes[i + 2] * 3;
-      // Skip triangles fully outside the viewport (the mesh covers the map,
-      // the moment covers the fight).
+      // Skip triangles fully outside the viewport on either axis (the mesh
+      // covers the map, the moment covers the fight).
       if ((vertices[a] < minX && vertices[b] < minX && vertices[c] < minX)
-        || (vertices[a] > maxX && vertices[b] > maxX && vertices[c] > maxX)) continue;
+        || (vertices[a] > maxX && vertices[b] > maxX && vertices[c] > maxX)
+        || (vertices[a + 1] < minY && vertices[b + 1] < minY && vertices[c + 1] < minY)
+        || (vertices[a + 1] > maxY && vertices[b + 1] > maxY && vertices[c + 1] > maxY)) continue;
       ctx.beginPath();
       ctx.moveTo(px(vertices[a]), py(vertices[a + 1]));
       ctx.lineTo(px(vertices[b]), py(vertices[b + 1]));
