@@ -31,4 +31,5 @@
 /api/server-activity/history
 /api/stats/sessions
 /api/status
+/api/uploads/resumable
 /api/voice-activity/history

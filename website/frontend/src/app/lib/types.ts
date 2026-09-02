@@ -3779,12 +3779,16 @@ export interface UploadItem {
   category: string;
   extension: string;
   file_size_bytes: number;
-  uploader_name: string | null;
+  /** Never null per the backend UploadListItem contract. */
+  uploader_name: string;
   uploader_discord_id: string | null;
-  download_count: number;
-  created_at: string;
+  /** Nullable per the contract even when every recording carries them. */
+  download_count: number | null;
+  created_at: string | null;
   description_preview: string | null;
   expires_at: string | null;
+  share_url: string;
+  poster_url: string | null;
 }
 
 export interface UploadsList {

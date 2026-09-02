@@ -15,3 +15,7 @@
 # a third formula (s.effort-v0.2) that needs its own panel and its own
 # sentence about not being comparable with the other two.
 /api/skill/adjusted-lifetime
+# 2026-09-02, /api/uploads/resumable: the app's templated /api/uploads/{upload_id}
+# call template-matches this literal sibling, but the resumable UPLOAD flow is
+# genuinely unbuilt (uploads slice 2) — an exact call is required to close it.
+/api/uploads/resumable

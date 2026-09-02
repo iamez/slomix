@@ -9,13 +9,16 @@
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import { usePopularUploadTags, useUploadDetail, useUploadsList } from '../lib/queries';
 
+// Keys from the backend's own sort whitelist (uploads.py _UPLOAD_SORTS) —
+// 'popular' was a guessed name and 400'd at runtime (Codex on #888).
 const SORTS = [
   { key: 'newest', label: 'newest' },
-  { key: 'popular', label: 'most downloaded' },
+  { key: 'downloads', label: 'most downloaded' },
+  { key: 'size', label: 'largest' },
 ];
 
 function bytes(n: number): string {
@@ -28,8 +31,9 @@ function bytes(n: number): string {
 export function UploadsPage() {
   const [sort, setSort] = useState('newest');
   const [offset, setOffset] = useState(0);
-  const [category, setCategory] = useState<string | null>(null);
-  const list = useUploadsList(sort, offset, category);
+  // No category UI in slice 1 — wiring state a user could never set was
+  // an unreachable feature, not a feature (Codex on #888).
+  const list = useUploadsList(sort, offset, null);
   const tags = usePopularUploadTags();
 
   return (
@@ -49,12 +53,6 @@ export function UploadsPage() {
             {s.label}
           </button>
         ))}
-        {category != null && (
-          <button type="button" onClick={() => { setCategory(null); setOffset(0); }}
-            style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', color: 'var(--color-accent)' }}>
-            category: {category} ✕
-          </button>
-        )}
       </Cluster>
 
       <div data-parity="uploads.list">
@@ -71,11 +69,12 @@ export function UploadsPage() {
                     {u.title || u.filename}
                   </Link>
                   <Meta>
-                    {u.category} · {bytes(u.file_size_bytes)} · {u.uploader_name ?? 'unknown'} · {u.created_at.slice(0, 10)}
+                    {u.category} · {bytes(u.file_size_bytes)} · {u.uploader_name}
+                    {u.created_at != null && <> · {u.created_at.slice(0, 10)}</>}
                   </Meta>
                 </Stack>
                 <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
-                  {figure(u.download_count)} downloads
+                  {u.download_count != null ? `${figure(u.download_count)} downloads` : '—'}
                 </span>
               </Cluster>
             ))}
