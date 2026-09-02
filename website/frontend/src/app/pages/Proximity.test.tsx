@@ -43,10 +43,20 @@ import proxEvents from './__fixtures__/api_proximity_events.json';
 import eventLong from './__fixtures__/api_proximity_event_event_id.json';
 import eventShort from './__fixtures__/api_proximity_event_short.json';
 import engagements from './__fixtures__/api_proximity_engagements.json';
+import killOutcomes from './__fixtures__/api_proximity_kill_outcomes.json';
+import headshotRates from './__fixtures__/api_proximity_hit_regions_headshot_rates.json';
+import teamplay from './__fixtures__/api_proximity_teamplay.json';
+import tradesSummary from './__fixtures__/api_proximity_trades_summary.json';
+import tradesEvents from './__fixtures__/api_proximity_trades_events.json';
+import weaponAccuracy from './__fixtures__/api_proximity_weapon_accuracy.json';
+import objectivePressure from './__fixtures__/api_proximity_objective_pressure.json';
+import proxSummary from './__fixtures__/api_proximity_summary.json';
 import type {
   CarrierEvents, CarrierKills, CarrierReturns, ConstructionEvents,
   EscortCredits, ObjectiveFocus, ObjectiveRuns, ProxEngagements,
-  ProxEventDetail, ProxEvents, VehicleProgress,
+  ProxEventDetail, ProxEvents, ProxHeadshotRates, ProxKillOutcomes,
+  ProxObjectivePressure, ProxSummary, ProxTeamplay, ProxTradesEvents,
+  ProxTradesSummary, ProxWeaponAccuracy, VehicleProgress,
 } from '../lib/types';
 
 // `satisfies` holds each RECORDED fixture against its wire type — the same
@@ -68,6 +78,14 @@ const proxEventsChecked = proxEvents satisfies ProxEvents;
 const eventLongChecked = eventLong satisfies ProxEventDetail;
 const eventShortChecked = eventShort satisfies ProxEventDetail;
 const engagementsChecked = engagements satisfies ProxEngagements;
+const killOutcomesChecked = killOutcomes satisfies ProxKillOutcomes;
+const headshotRatesChecked = headshotRates satisfies ProxHeadshotRates;
+const teamplayChecked = teamplay satisfies ProxTeamplay;
+const tradesSummaryChecked = tradesSummary satisfies ProxTradesSummary;
+const tradesEventsChecked = tradesEvents satisfies ProxTradesEvents;
+const weaponAccuracyChecked = weaponAccuracy satisfies ProxWeaponAccuracy;
+const objectivePressureChecked = objectivePressure satisfies ProxObjectivePressure;
+const proxSummaryChecked = proxSummary satisfies ProxSummary;
 
 const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/scopes', scopes],
@@ -107,6 +125,14 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/engagements', engagementsChecked],
   ['/api/proximity/event/297937', eventLongChecked],
   ['/api/proximity/event/297936', eventShortChecked],
+  ['/api/proximity/kill-outcomes', killOutcomesChecked],
+  ['/api/proximity/hit-regions/headshot-rates', headshotRatesChecked],
+  ['/api/proximity/teamplay', teamplayChecked],
+  ['/api/proximity/trades/summary', tradesSummaryChecked],
+  ['/api/proximity/trades/events', tradesEventsChecked],
+  ['/api/proximity/weapon-accuracy', weaponAccuracyChecked],
+  ['/api/proximity/objective-pressure', objectivePressureChecked],
+  ['/api/proximity/summary', proxSummaryChecked],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the
@@ -296,6 +322,26 @@ describe('Proximity', () => {
     const detailCalls = fetchSpy.mock.calls.map((c) => String(c[0]))
       .filter((u) => u.includes('/api/proximity/event/'));
     expect(detailCalls).toEqual(['/api/proximity/event/297937', '/api/proximity/event/297936']);
+  });
+
+  it('renders the outcome instruments from the recorded wire', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
+    renderPage();
+    // The evening in numbers: 1,382 engagements, 136 crossfires, 53.5% escapes.
+    await waitFor(() => expect(screen.getByText('1,382')).toBeInTheDocument());
+    expect(screen.getByText('53.5%')).toBeInTheDocument();
+    // What kills became: 16 gibs of 604 kills; revives at 18%.
+    expect(screen.getByText(/lasted to round end/)).toBeInTheDocument();
+    // Headshot rates leader, colour codes stripped.
+    expect(screen.getAllByText(/carniee/).length).toBeGreaterThan(0);
+    expect(screen.getByText('16.2%')).toBeInTheDocument();
+    // Trades: 97 made of 514 opportunities; support uptime recorded.
+    expect(screen.getByText('514')).toBeInTheDocument();
+    expect(screen.getByText(/21 support uptime|21\.0%/)).toBeInTheDocument();
+    // Accuracy leader from the shots-fired capture.
+    expect(screen.getByText('48.6%')).toBeInTheDocument();
+    // Objective pressure names its own scope vocabulary verbatim.
+    expect(screen.getByText(/session-wide metric; map\/round filters are not applied/)).toBeInTheDocument();
   });
 
   it('treats a 200 with status:error as a failure, not as data', async () => {

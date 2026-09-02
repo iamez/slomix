@@ -90,13 +90,21 @@ import type {
   ProxEngagements,
   ProxEventDetail,
   ProxEvents,
+  ProxHeadshotRates,
   ProxHitRegions,
   ProxHitRegionsByWeapon,
   ProxKillOutcomePlayerStats,
+  ProxKillOutcomes,
+  ProxObjectivePressure,
   ProxMovementStats,
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
+  ProxSummary,
+  ProxTeamplay,
+  ProxTradesEvents,
+  ProxTradesSummary,
+  ProxWeaponAccuracy,
   MapMesh,
   ProxRoundTimeline,
   ProxRoundTracks,
@@ -1424,5 +1432,104 @@ export function useMapMesh(mapName: string | null) {
       return res.json() as Promise<MapMesh>;
     },
     staleTime: Infinity,
+  });
+}
+
+
+// Phase 5 — the eight outcome instruments, all date-scoped and fail-closed.
+
+export function useProxKillOutcomes(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-kill-outcomes', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/kill-outcomes', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxKillOutcomes>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxHeadshotRates(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-headshot-rates', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/hit-regions/headshot-rates', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxHeadshotRates>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxTeamplay(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-teamplay', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/teamplay', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxTeamplay>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxTradesSummary(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-trades-summary', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/trades/summary', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxTradesSummary>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxTradesEvents(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-trades-events', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/trades/events', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxTradesEvents>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxWeaponAccuracy(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-weapon-accuracy', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/weapon-accuracy', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxWeaponAccuracy>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxObjectivePressure(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-objective-pressure', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/objective-pressure', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxObjectivePressure>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxSummary(sessionDate: string | null) {
+  return useQuery({
+    queryKey: ['prox-summary', sessionDate],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/summary', {
+        query: { session_date: sessionDate! },
+      }) as Promise<ProxSummary>,
+    staleTime: 5 * 60 * 1000,
   });
 }

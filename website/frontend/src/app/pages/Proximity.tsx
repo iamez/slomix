@@ -22,6 +22,7 @@ import { useProximityLeaderboard, useProxScopes, useSsr } from '../lib/queries';
 import { ProximityInstruments } from './ProximityInstruments';
 import { ProximityCompetitive } from './ProximityCompetitive';
 import { ProximityObjectiveIntel } from './ProximityObjectiveIntel';
+import { ProximityOutcomes } from './ProximityOutcomes';
 import { ProximityRoundCanvases } from './ProximityRoundCanvases';
 import { ProximityEvents } from './ProximityEvents';
 import type { LbCategory, ProximityLeaderboard } from '../lib/types';
@@ -270,6 +271,7 @@ export function Proximity() {
             <ProximityInstruments sessionDate={scopeDate} />
             <ProximityCompetitive sessionDate={scopeDate} />
             <ProximityObjectiveIntel sessionDate={scopeDate} />
+            <ProximityOutcomes sessionDate={scopeDate} />
             <Stack gap={3} parity="proximity.round-scope" style={{ marginTop: 'var(--space-8)' }}>
               <SectionHead
                 label="round canvases"
