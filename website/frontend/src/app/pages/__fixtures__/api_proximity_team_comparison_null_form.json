@@ -1,0 +1,29 @@
+{
+    "cohesion": {
+        "axis": {
+            "avg_dispersion": null,
+            "avg_max_spread": null,
+            "avg_stragglers": null,
+            "samples": null
+        },
+        "allies": {
+            "avg_dispersion": null,
+            "avg_max_spread": null,
+            "avg_stragglers": null,
+            "samples": null
+        }
+    },
+    "pushes": {
+        "axis": {
+            "push_count": null,
+            "avg_quality": null,
+            "avg_alignment": null
+        },
+        "allies": {
+            "push_count": null,
+            "avg_quality": null,
+            "avg_alignment": null
+        }
+    },
+    "crossfire": []
+}

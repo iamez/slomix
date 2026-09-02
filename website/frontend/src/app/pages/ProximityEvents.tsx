@@ -8,6 +8,7 @@
  * never a crash.
  */
 import { useState } from 'react';
+import { Link } from 'react-router';
 import { Stack } from '../components/layout';
 import { Lbl, Meta, Pending, Unavailable, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
@@ -187,6 +188,18 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
       </div>
 
       <div data-parity="proximity.events">
+        {/* The comparison link needs a round_id, which the scopes hierarchy
+            does not carry — the events rows do. Derived, not re-fetched. */}
+        {roundNumber != null && (() => {
+          const rid = events.data?.events.find((e) => e.round_id != null)?.round_id ?? null;
+          return rid != null ? (
+            <div style={{ marginBottom: 'var(--space-2)' }}>
+              <Link to={`/proximity/round/${rid}/teams`} className="lbl" style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
+                team comparison for this round →
+              </Link>
+            </div>
+          ) : null;
+        })()}
         <ProxPanel label="engagements" aside="by round, latest in-round moments first · click a row for its record" q={events} empty={NO_ROWS} isEmpty={(d) => d.events.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
