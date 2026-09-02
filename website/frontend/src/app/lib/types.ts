@@ -3766,3 +3766,61 @@ export interface PromotionPreferences {
   timezone: string;
   notify_threshold: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 — uploads (legacy uploads.js). uploader_discord_id travels as a
+// STRING — an 18-digit snowflake loses its last digit as a JS number (the
+// #850-era fix; the satisfies pin below is what keeps it fixed).
+
+export interface UploadItem {
+  id: string;
+  title: string;
+  filename: string;
+  category: string;
+  extension: string;
+  file_size_bytes: number;
+  /** Never null per the backend UploadListItem contract. */
+  uploader_name: string;
+  uploader_discord_id: string | null;
+  /** Nullable per the contract even when every recording carries them. */
+  download_count: number | null;
+  created_at: string | null;
+  description_preview: string | null;
+  expires_at: string | null;
+  share_url: string;
+  poster_url: string | null;
+}
+
+export interface UploadsList {
+  items: UploadItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface UploadDetail {
+  id: string;
+  title: string;
+  filename: string;
+  category: string;
+  extension: string;
+  file_size_bytes: number;
+  /** Never null per the API schema (the drift checker is the arbiter). */
+  uploader_name: string;
+  uploader_discord_id: string | null;
+  /** Nullable per the API schema even though every recording carries one —
+   *  the reader guards, the sample does not decide (#830's lesson). */
+  download_count: number | null;
+  created_at: string | null;
+  description: string | null;
+  expires_at: string | null;
+  tags: string[];
+  mime_type: string | null;
+  content_hash: string;
+  is_playable: boolean;
+  poster_url: string | null;
+  download_url: string;
+  share_url: string;
+  can_delete: boolean;
+}

@@ -123,6 +123,8 @@ import type {
   PlanningToday,
   PromotionCampaign,
   PromotionPreferences,
+  UploadDetail,
+  UploadsList,
   ProxRoundTimeline,
   ProxRoundTracks,
   ProxTeamComparison,
@@ -1785,4 +1787,40 @@ export function useAvailabilitySubscriptionsProbe(enabled: boolean) {
 
 export async function postMyAvailability(dateIso: string, status: AvailabilityStatus) {
   return apiPost('/api/availability', { date: dateIso, status });
+}
+
+
+// Phase 6 — uploads.
+
+export function useUploadsList(sort: string, offset: number, category: string | null) {
+  return useQuery({
+    queryKey: ['uploads', sort, offset, category],
+    queryFn: () =>
+      apiGet('/api/uploads', {
+        query: { sort, offset, limit: 24, ...(category != null ? { category } : {}) },
+      }) as Promise<UploadsList>,
+    placeholderData: (prev) => prev,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useUploadDetail(uploadId: string | null) {
+  return useQuery({
+    queryKey: ['upload-detail', uploadId],
+    enabled: uploadId != null && uploadId !== '',
+    queryFn: () =>
+      apiGet('/api/uploads/{upload_id}', {
+        pathParams: { upload_id: uploadId! },
+      }) as Promise<UploadDetail>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function usePopularUploadTags() {
+  return useQuery({
+    queryKey: ['upload-tags-popular'],
+    queryFn: () =>
+      apiGet('/api/uploads/tags/popular', { query: { limit: 15 } }) as Promise<{ tag: string; count: number }[]>,
+    staleTime: 5 * 60 * 1000,
+  });
 }
