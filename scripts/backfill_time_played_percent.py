@@ -134,21 +134,28 @@ def stats_file_for(stats_dir: Path, round_date: str, round_time: str,
     return candidate if candidate.exists() else None
 
 
-def parsed_percentages(path: Path) -> dict[str, float] | None:
-    """GUID -> time_played_percent, using the importer's own parser.
+def parsed_percentages(path: Path) -> tuple[str, dict[str, float]]:
+    """Return (reason, GUID -> time_played_percent), using the importer's parser.
 
-    Returns None when the file is an R2 whose R1 partner is missing: the
-    parser flags that as `is_orphan_r2` and the percentages it carries are raw
-    cumulative R1+R2 values, which would be written as if they described R2
-    alone.
+    Three outcomes, kept apart on purpose. Collapsing "orphan R2" and "could
+    not parse" into a single None would report every parse failure as an
+    orphan and hide it in a line of the preview that reads as expected --
+    the same absent-vs-empty conflation this whole repair exists to undo.
+
+      "ok"        -- percentages usable
+      "orphan_r2" -- R2 whose R1 partner is missing. The parser flags it, and
+                     its percentages are raw cumulative R1+R2, which would be
+                     written as if they described R2 alone.
+      "unparsed"  -- the file did not yield players at all. Not expected; if
+                     the count is non-zero, something is wrong upstream.
     """
     from bot.community_stats_parser import C0RNP0RN3StatsParser
 
     result = C0RNP0RN3StatsParser().parse_stats_file(str(path))
     if not result or not result.get("players"):
-        return None
+        return "unparsed", {}
     if result.get("is_orphan_r2"):
-        return None
+        return "orphan_r2", {}
 
     out: dict[str, float] = {}
     for player in result["players"]:
@@ -156,7 +163,30 @@ def parsed_percentages(path: Path) -> dict[str, float] | None:
         percent = (player.get("objective_stats") or {}).get("time_played_percent")
         if guid and percent:
             out[guid] = float(percent)
-    return out
+    return "ok", out
+
+
+def build_artifacts(updates, stamp: str) -> tuple[list[str], list[str]]:
+    """Generate the rollback and repair SQL.
+
+    Both sides are guarded on the value, not just the id. The repair only
+    fires while the row is still zero, and the rollback only reverts while the
+    row still holds what this run wrote -- an unconditional rollback, run
+    later, would clobber a legitimate value back to zero.
+    """
+    backup = [f"-- rollback for backfill_time_played_percent {stamp}", "BEGIN;"]
+    repair = [f"-- backfill_time_played_percent {stamp}", "BEGIN;"]
+    for row_id, percent, *_ in updates:
+        written = _sql_literal(round(percent, 1))
+        backup.append(
+            "UPDATE player_comprehensive_stats SET time_played_percent = 0 "
+            f"WHERE id = {row_id} AND time_played_percent = {written};")
+        repair.append(
+            "UPDATE player_comprehensive_stats SET time_played_percent = "
+            f"{written} WHERE id = {row_id} AND time_played_percent = 0;")
+    backup.append("COMMIT;")
+    repair.append("COMMIT;")
+    return backup, repair
 
 
 def main() -> int:
@@ -187,10 +217,10 @@ def main() -> int:
     cursor.execute(TARGET_SQL)
     rows = cursor.fetchall()
 
-    file_cache: dict[Path, dict[str, float] | None] = {}
+    file_cache: dict[Path, tuple[str, dict[str, float]]] = {}
     updates: list[tuple[int, float, str, str, str]] = []
     implausible: list[tuple[int, float, str, str, str]] = []
-    missing_file = missing_player = orphan_r2 = 0
+    missing_file = missing_player = orphan_r2 = unparsed = 0
     rounds_seen: set[int] = set()
 
     for (row_id, round_id, round_date, round_time, map_name, round_number,
@@ -203,9 +233,12 @@ def main() -> int:
             continue
         if path not in file_cache:
             file_cache[path] = parsed_percentages(path)
-        percentages = file_cache[path]
-        if percentages is None:
+        reason, percentages = file_cache[path]
+        if reason == "orphan_r2":
             orphan_r2 += 1
+            continue
+        if reason == "unparsed":
+            unparsed += 1
             continue
         percent = percentages.get((guid or "").strip().upper())
         if not percent:
@@ -227,6 +260,7 @@ def main() -> int:
     print(f"resolvable          : {len(updates)}  in {len(rounds_seen)} rounds")
     print(f"capture file missing: {missing_file}")
     print(f"orphan R2 (skipped) : {orphan_r2}")
+    print(f"unparsed (skipped)  : {unparsed}")
     print(f"player not in file  : {missing_player}")
     if implausible:
         print(f"above {IMPLAUSIBLE_ABOVE}% (skipped): {len(implausible)}")
@@ -249,18 +283,7 @@ def main() -> int:
         conn.close()
         return 0
 
-    backup = [f"-- rollback for backfill_time_played_percent {stamp}", "BEGIN;"]
-    repair = [f"-- backfill_time_played_percent {stamp}", "BEGIN;"]
-    for row_id, percent, _, _, _ in updates:
-        backup.append(
-            "UPDATE player_comprehensive_stats SET time_played_percent = 0 "
-            f"WHERE id = {row_id};")
-        repair.append(
-            "UPDATE player_comprehensive_stats SET time_played_percent = "
-            f"{_sql_literal(round(percent, 1))} "
-            f"WHERE id = {row_id} AND time_played_percent = 0;")
-    backup.append("COMMIT;")
-    repair.append("COMMIT;")
+    backup, repair = build_artifacts(updates, stamp)
 
     if not args.apply:
         print(f"\npreview only -- nothing written. {len(updates)} rows would change.")

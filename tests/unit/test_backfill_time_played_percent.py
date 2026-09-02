@@ -21,6 +21,7 @@ from scripts.backfill_time_played_percent import (  # noqa: E402
     REPAIRED_COLUMNS,
     TARGET_SQL,
     _sql_literal,
+    build_artifacts,
     stats_file_for,
 )
 
@@ -84,7 +85,7 @@ def test_orphan_r2_is_never_a_source(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         "bot.community_stats_parser.C0RNP0RN3StatsParser", _Parser, raising=True)
-    assert mod.parsed_percentages(tmp_path / "whatever.txt") is None
+    assert mod.parsed_percentages(tmp_path / "whatever.txt") == ("orphan_r2", {})
 
 
 def test_a_healthy_file_yields_uppercase_guid_keys(monkeypatch, tmp_path):
@@ -105,8 +106,8 @@ def test_a_healthy_file_yields_uppercase_guid_keys(monkeypatch, tmp_path):
 
     monkeypatch.setattr(
         "bot.community_stats_parser.C0RNP0RN3StatsParser", _Parser, raising=True)
-    result = mod.parsed_percentages(tmp_path / "whatever.txt")
-    assert result == {"ABCD1234": 79.6}
+    assert mod.parsed_percentages(tmp_path / "whatever.txt") == (
+        "ok", {"ABCD1234": 79.6})
 
 
 def test_the_implausible_threshold_leaves_headroom_for_rounding_only():
@@ -126,3 +127,45 @@ def test_sql_literal_escapes_quotes():
 @pytest.mark.parametrize("bad", ["DELETE", "TRUNCATE", "DROP"])
 def test_target_query_only_reads(bad):
     assert bad not in TARGET_SQL.upper()
+
+
+def test_a_parse_failure_is_not_reported_as_an_orphan(monkeypatch, tmp_path):
+    """Collapsing "could not parse" into "orphan R2" would file every real
+    parse problem under a line of the preview that reads as expected. Three
+    outcomes, three names."""
+    import scripts.backfill_time_played_percent as mod
+
+    class _Parser:
+        def parse_stats_file(self, _path):
+            return {"players": []}
+
+    monkeypatch.setattr(
+        "bot.community_stats_parser.C0RNP0RN3StatsParser", _Parser, raising=True)
+    reason, data = mod.parsed_percentages(tmp_path / "whatever.txt")
+    assert reason == "unparsed" and data == {}
+
+
+def test_rollback_only_reverts_the_value_this_run_wrote():
+    """An unconditional `WHERE id = ...` rollback, run after someone has
+    legitimately corrected the row, would set a good value back to zero."""
+    backup, repair = build_artifacts([(42, 79.64, "vid", "2026-04-01", "supply")], "S")
+
+    assert ("UPDATE player_comprehensive_stats SET time_played_percent = 0 "
+            "WHERE id = 42 AND time_played_percent = 79.6;") in backup
+    assert ("UPDATE player_comprehensive_stats SET time_played_percent = 79.6 "
+            "WHERE id = 42 AND time_played_percent = 0;") in repair
+
+    # Both sides are transactional, and neither may touch anything else.
+    for side in (backup, repair):
+        assert side[1] == "BEGIN;" and side[-1] == "COMMIT;"
+        assert all("player_comprehensive_stats" in s
+                   for s in side if s.startswith("UPDATE"))
+
+
+def test_rollback_is_not_a_blanket_update():
+    """Pin the guard itself: the id alone must never be the whole condition."""
+    backup, _ = build_artifacts([(7, 50.0, "x", "d", "m")], "S")
+    statements = [s for s in backup if s.startswith("UPDATE")]
+    assert statements, "no UPDATE generated -- the test cannot see its subject"
+    for statement in statements:
+        assert "AND time_played_percent =" in statement
