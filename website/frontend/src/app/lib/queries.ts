@@ -87,22 +87,33 @@ import type {
   ProxCohesion,
   ProxCombatPositions,
   ProxCrossfireAngles,
+  ProxCombatHeatmap,
+  ProxDangerZones,
+  ProxDuos,
   ProxEngagements,
   ProxEventDetail,
   ProxEvents,
   ProxHeadshotRates,
   ProxHitRegions,
+  ProxHotzones,
+  ProxKillLines,
   ProxHitRegionsByWeapon,
   ProxKillOutcomePlayerStats,
   ProxKillOutcomes,
   ProxObjectivePressure,
   ProxMovementStats,
+  ProxMovers,
+  ProxPlayerAim,
+  ProxPlayerCard,
+  ProxPlayerHeatmap,
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
+  ProxScoresFormula,
   ProxSummary,
   ProxTeamplay,
   ProxTradesEvents,
+  ProxTradesPlayerStats,
   ProxTradesSummary,
   ProxWeaponAccuracy,
   MapMesh,
@@ -1530,6 +1541,149 @@ export function useProxSummary(sessionDate: string | null) {
       apiGet('/api/proximity/summary', {
         query: { session_date: sessionDate! },
       }) as Promise<ProxSummary>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 5 — the player page additions.
+
+export function useProxPlayerCard(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-player-card', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/competitive/player-card', {
+        query: { player_guid: guid!, range_days: rangeDays },
+      }) as Promise<ProxPlayerCard>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxDuos(guid: string | null, rangeDays: number) {
+  return useQuery({
+    queryKey: ['prox-duos', guid, rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/duos', {
+        query: { range_days: rangeDays, player_guid: guid! },
+      }) as Promise<ProxDuos>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxTradesPlayerStats(guid: string | null, rangeDays: number) {
+  return useQuery({
+    // guid stays OUT of the key: the request is not player-scoped, so two
+    // players' pages share one cache entry instead of refetching identical
+    // data (review on #884). guid only gates the fetch.
+    queryKey: ['prox-trades-player-stats', rangeDays],
+    enabled: guid != null && guid !== '',
+    queryFn: () =>
+      // No player_guid here: the endpoint does not declare one and FastAPI
+      // drops undeclared params silently — measured byte-identical with and
+      // without (generated_at excluded). The page picks its own row from
+      // players[] client-side; the typed apiGet is what caught the dead
+      // parameter.
+      apiGet('/api/proximity/trades/player-stats', {
+        query: { range_days: rangeDays },
+      }) as Promise<ProxTradesPlayerStats>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxScoresFormula() {
+  return useQuery({
+    queryKey: ['prox-scores-formula'],
+    queryFn: () =>
+      apiGet('/api/proximity/prox-scores/formula') as Promise<ProxScoresFormula>,
+    staleTime: Infinity,
+  });
+}
+
+
+// Phase 5 — the map overlays, all (session_date, map_name)-scoped.
+
+export function useProxDangerZones(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-danger-zones', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/combat-positions/danger-zones', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxDangerZones>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxCombatHeatmap(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-combat-heatmap', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/combat-positions/heatmap', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxCombatHeatmap>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxKillLines(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-kill-lines', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/combat-positions/kill-lines', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxKillLines>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxHotzones(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-hotzones', sessionDate, mapName],
+    enabled: sessionDate != null && mapName != null,
+    queryFn: () =>
+      apiGet('/api/proximity/hotzones', {
+        query: { session_date: sessionDate!, map_name: mapName! },
+      }) as Promise<ProxHotzones>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxMovers(sessionDate: string | null, mapName: string | null) {
+  return useQuery({
+    queryKey: ['prox-movers', sessionDate, mapName],
+    enabled: sessionDate != null,
+    queryFn: () =>
+      apiGet('/api/proximity/movers', {
+        query: { session_date: sessionDate!, ...(mapName != null ? { map_name: mapName } : {}) },
+      }) as Promise<ProxMovers>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxPlayerHeatmap(sessionDate: string | null, mapName: string | null, guid: string | null, mode: string) {
+  return useQuery({
+    queryKey: ['prox-player-heatmap', sessionDate, mapName, guid, mode],
+    enabled: sessionDate != null && mapName != null && guid != null,
+    queryFn: () =>
+      apiGet('/api/proximity/player-heatmap', {
+        query: { session_date: sessionDate!, map_name: mapName!, player_guid: guid!, mode },
+      }) as Promise<ProxPlayerHeatmap>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useProxPlayerAim(sessionDate: string | null, mapName: string | null, guid: string | null) {
+  return useQuery({
+    queryKey: ['prox-player-aim', sessionDate, mapName, guid],
+    enabled: sessionDate != null && mapName != null && guid != null,
+    queryFn: () =>
+      apiGet('/api/proximity/player-aim', {
+        query: { session_date: sessionDate!, map_name: mapName!, player_guid: guid! },
+      }) as Promise<ProxPlayerAim>,
     staleTime: 5 * 60 * 1000,
   });
 }

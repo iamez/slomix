@@ -3565,3 +3565,155 @@ export interface ProxSummary {
   escape_rate_pct: number;
   kill_rate_pct: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the player page additions (four paths). Shapes from
+// proximity_competitive.py / proximity_combat.py / proximity_scoring.py.
+
+export interface ProxPlayerCard {
+  status: string;
+  scope: ProxScope;
+  player: { guid: string; name: string | null };
+  range_days: number;
+  timeline_range_days: number;
+  stagger: { kills: number; stagger_kills: number; stagger_rate: number; denied_s: number; avg_score: number };
+  sides: {
+    attack: { kills: number; denied_s: number };
+    defense: { kills: number; denied_s: number };
+  };
+  clutch: {
+    situations: number;
+    wins: number;
+    best: { enemies: number; kills: number; survived: boolean } | null;
+    win_pct: number;
+  };
+  man_advantage: { conversions: number };
+}
+
+export interface ProxDuos {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  /** ⚠️ scope.player_guid comes back TRUNCATED to 8 chars (the guid[:8]
+   *  family) — display-only; the filter itself accepts the full guid. */
+  scope: ProxScope;
+  limit: number;
+  duos: { player1: string | null; player2: string | null; crossfire_kills: number; crossfire_count: number; avg_delay_ms: number }[];
+}
+
+export interface ProxTradesPlayerStats {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  players: {
+    /** ⚠️ EIGHT-char guid on this wire (the guid[:8] family) — match by
+     *  prefix, never by full-guid equality. */
+    guid: string; name: string | null; trade_opps: number; trade_attempts: number;
+    trade_success: number; trade_missed: number; isolation_deaths: number;
+    avenged_count: number; avenger_attempt_events: number; avenger_attempt_damage: number;
+  }[];
+}
+
+export interface ProxScoresFormula {
+  status: string;
+  version: string;
+  min_engagements: number;
+  category_weights: Record<string, number>;
+  categories: Record<string, {
+    label: string;
+    description: string;
+    weight_in_overall: number;
+    metrics: Record<string, { label: string; weight: number; invert: boolean }>;
+  }>;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the map overlays (the last seven pending paths). Shapes from
+// proximity_positions.py / proximity_combat.py.
+
+export interface ProxDangerZones {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  /** class -> deaths; undefined is what a lookup of an absent class
+   *  returns anyway (and it lets recorded zones with differing class keys
+   *  satisfy the type — the weapons-map lesson). */
+  zones: { x: number; y: number; deaths: number; classes: Record<string, number | undefined> }[];
+}
+
+export interface ProxCombatHeatmap {
+  status: string;
+  map_name: string;
+  grid_size: number;
+  perspective: string;
+  hotzones: { x: number; y: number; count: number }[];
+}
+
+export interface ProxKillLines {
+  status: string;
+  map_name: string;
+  lines: { ax: number; ay: number; vx: number; vy: number; weapon_id: number; attacker_team: string | null }[];
+}
+
+export interface ProxHotzones {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  map_name: string;
+  hotzones: { x: number; y: number; count: number; kills: number; deaths: number }[];
+  grid_size: number;
+  source: string;
+}
+
+export interface ProxMoversRow { guid: string; name: string | null; tracks: number }
+export interface ProxMovers {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  limit: number;
+  distance: (ProxMoversRow & { total_distance: number })[];
+  sprint: (ProxMoversRow & { sprint_pct: number })[];
+  reaction: unknown[];
+  survival: unknown[];
+}
+
+/** mode ∈ kills_from | victims_die | player_dies | presence | aim — the
+ *  endpoint 400s without one (its own words, rendered verbatim). */
+export interface ProxPlayerHeatmap {
+  status: string;
+  map_name: string;
+  mode: string;
+  grid_size: number;
+  player_guid: string;
+  player_name: string | null;
+  hotzones: { x: number; y: number; count: number }[];
+  total: number;
+  sampled: boolean;
+  scope: ProxScope;
+}
+
+export interface ProxPlayerAim {
+  status: string;
+  map_name: string;
+  player_guid: string;
+  player_name: string | null;
+  grid_size: number;
+  total: number;
+  sampled: boolean;
+  scope: ProxScope;
+  hotzones: { x: number; y: number; count: number }[];
+  yaw_buckets: number;
+  yaw_bucket_width_deg: number;
+  pitch_hist: { edges: number[]; counts: number[] };
+}

@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Fable, 2026-09-02) SKOK: rekonstrukcija izgubljenih planov iz sejnih
+  transkriptov — IZVEDENO: 56 skupin / 200 različic / 121 editov v
+  `~/claude-plan-recovery/` (lokalno, INDEX.md; 41 skupin je obstajalo samo
+  v transkriptih). Skript: scratchpad `recover_plans.py` (samo bere,
+  idempotenten). Nič pokvarjeno. Vrnjen na rezino »player dodatki«.
 - (Fable, 2026-09-02) #881 v merge ciklu; naslednja rezina: player dodatki
   (4 poti). Ni prekinjenih skokov.
 

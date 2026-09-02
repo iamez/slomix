@@ -161,9 +161,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/combat-positions/heatmap",
@@ -179,9 +180,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/combat-positions/kill-lines",
@@ -197,9 +199,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/competitive/clutch",
@@ -281,9 +284,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 196,
-        "file": "api_proximity_competitive_player_card.json"
+        "file": "api_proximity_competitive_player_card.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player dodatki)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/competitive/side-splits",
@@ -399,9 +403,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 1344,
-        "file": "api_proximity_duos.json"
+        "file": "api_proximity_duos.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player dodatki)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/engagements",
@@ -554,9 +559,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2866,
-        "file": "api_proximity_hotzones.json"
+        "file": "api_proximity_hotzones.json",
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/kill-outcomes",
@@ -666,9 +672,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2281,
-        "file": "api_proximity_movers.json"
+        "file": "api_proximity_movers.json",
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/objective-focus",
@@ -736,9 +743,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/player-heatmap",
@@ -754,9 +762,10 @@
         "src": "korpus",
         "status": 400,
         "bytes": 33,
-        "file": null
+        "file": null,
+        "covered_by": "ProximityMapOverlays.tsx (faza 5, zadnja rezina)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/player-journey",
@@ -865,9 +874,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 958,
-        "file": "api_proximity_prox_scores_formula.json"
+        "file": "api_proximity_prox_scores_formula.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player dodatki)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/push-deaths/heatmap",
@@ -1131,9 +1141,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 3647,
-        "file": "api_proximity_trades_player_stats.json"
+        "file": "api_proximity_trades_player_stats.json",
+        "covered_by": "ProximityPlayerPage.tsx (faza 5, player dodatki)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/trades/summary",

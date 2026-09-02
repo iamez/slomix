@@ -37,17 +37,6 @@
 /api/monitoring/status
 /api/planning
 /api/planning/today
-/api/proximity/combat-positions/danger-zones
-/api/proximity/combat-positions/heatmap
-/api/proximity/combat-positions/kill-lines
-/api/proximity/competitive/player-card
-/api/proximity/duos
-/api/proximity/hotzones
-/api/proximity/movers
-/api/proximity/player-aim
-/api/proximity/player-heatmap
-/api/proximity/prox-scores/formula
-/api/proximity/trades/player-stats
 /api/server-activity/history
 /api/stats/sessions
 /api/status

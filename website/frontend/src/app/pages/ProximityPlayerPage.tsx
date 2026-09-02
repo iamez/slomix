@@ -12,9 +12,10 @@ import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import {
-  useProxHitRegions, useProxHitRegionsByWeapon, useProxKillOutcomePlayerStats,
-  useProxMovementStats, useProxPlayerProfile, useProxPlayerRadar,
-  useProxScoresForPlayer,
+  useProxDuos, useProxHitRegions, useProxHitRegionsByWeapon,
+  useProxKillOutcomePlayerStats, useProxMovementStats, useProxPlayerCard,
+  useProxPlayerProfile, useProxPlayerRadar, useProxScoresForPlayer,
+  useProxScoresFormula, useProxTradesPlayerStats,
 } from '../lib/queries';
 import { ProxPanel, ProxRow } from './proximityShared';
 
@@ -84,6 +85,10 @@ export function ProximityPlayerPage() {
   const hitRegions = useProxHitRegions(guid, PROFILE_DAYS);
   const byWeapon = useProxHitRegionsByWeapon(guid, PROFILE_DAYS);
   const movement = useProxMovementStats(guid, PROFILE_DAYS);
+  const card = useProxPlayerCard(guid, PROFILE_DAYS);
+  const duos = useProxDuos(guid, PROFILE_DAYS);
+  const trades = useProxTradesPlayerStats(guid, PROFILE_DAYS);
+  const formula = useProxScoresFormula();
 
   if (guid == null || guid === '') {
     return <Absent block reason="no player named — open a profile from the proximity leaderboards" />;
@@ -176,6 +181,15 @@ export function ProximityPlayerPage() {
                 {d.quality.successful_sources < d.quality.total_sources && (
                   <Meta>{figure(d.quality.successful_sources)}/{figure(d.quality.total_sources)} sources answered</Meta>
                 )}
+                {formula.data && (
+                  <Meta>
+                    how it is scored ({formula.data.version}):{' '}
+                    {Object.values(formula.data.categories)
+                      .map((c) => `${c.label.toLowerCase()} ${figure(Math.round(c.weight_in_overall * 100))}%`)
+                      .join(' · ')}
+                    {' · '}min {figure(formula.data.min_engagements)} engagements
+                  </Meta>
+                )}
               </Stack>
             );
           }}
@@ -232,6 +246,60 @@ export function ProximityPlayerPage() {
               ))}
             </Stack>
           )}
+        </ProxPanel>
+      </div>
+
+      <div data-parity="proximity-player.player-card">
+        <ProxPanel label="the competitive card" aside={`${PROFILE_DAYS}d`} q={card}
+          empty="no scored rounds in this window" isEmpty={(d) => d.stagger.kills === 0 && d.clutch.situations === 0}>
+          {(d) => (
+            <Stack gap={1} className="rows">
+              <ProxRow name="stagger kills" mid={`${figure(d.stagger.stagger_kills)} of ${figure(d.stagger.kills)} kills`} val={`${figure(d.stagger.stagger_rate)}%`} />
+              <ProxRow name="time denied" mid={`attack ${figure(Math.round(d.sides.attack.denied_s / 60))} min · defense ${figure(Math.round(d.sides.defense.denied_s / 60))} min`} val={`${figure(Math.round(d.stagger.denied_s / 60))} min`} />
+              <ProxRow name="clutches" mid={`${figure(d.clutch.wins)} of ${figure(d.clutch.situations)} situations`} val={`${figure(d.clutch.win_pct)}%`} />
+              {d.clutch.best && (
+                <ProxRow name="best clutch" mid={`${figure(d.clutch.best.kills)} kills vs ${figure(d.clutch.best.enemies)}`} val={d.clutch.best.survived ? 'survived' : 'fell'} />
+              )}
+              <ProxRow name="man-advantage conversions" val={figure(d.man_advantage.conversions)} />
+            </Stack>
+          )}
+        </ProxPanel>
+      </div>
+
+      <div data-parity="proximity-player.duos">
+        <ProxPanel label="crossfire partners" aside={`${PROFILE_DAYS}d`} q={duos}
+          empty="no crossfire pairs in this window" isEmpty={(d) => d.duos.length === 0}>
+          {(d) => (
+            <Stack gap={1} className="rows">
+              {d.duos.slice(0, 6).map((u) => (
+                <ProxRow key={`${u.player1 ?? '?'}:${u.player2 ?? '?'}`}
+                  name={`${u.player1 ? stripEtColors(u.player1) : '?'} + ${u.player2 ? stripEtColors(u.player2) : '?'}`}
+                  mid={`${figure(u.crossfire_count)} crossfires · ${figure(Math.round(u.avg_delay_ms))} ms delay`}
+                  val={`${figure(u.crossfire_kills)} kills`} />
+              ))}
+            </Stack>
+          )}
+        </ProxPanel>
+      </div>
+
+      <div data-parity="proximity-player.trades">
+        <ProxPanel label="trade economy" aside={`${PROFILE_DAYS}d`} q={trades}
+          empty="no trade opportunities in this window"
+          isEmpty={(d) => !d.players.some((r) => guid.startsWith(r.guid))}>
+          {(d) => {
+            // This wire carries EIGHT-char guids (the guid[:8] family) —
+            // full-guid equality silently rendered absence over real data.
+            const row = d.players.find((r) => guid.startsWith(r.guid)) ?? null;
+            if (row == null) return <Absent reason="no trade opportunities in this window" />;
+            return (
+              <Stack gap={1} className="rows">
+                <ProxRow name="trades made" mid={`${figure(row.trade_attempts)} attempts of ${figure(row.trade_opps)} chances`} val={figure(row.trade_success)} />
+                <ProxRow name="missed" val={figure(row.trade_missed)} />
+                <ProxRow name="deaths avenged by team" val={figure(row.avenged_count)} />
+                <ProxRow name="isolation deaths" val={figure(row.isolation_deaths)} />
+              </Stack>
+            );
+          }}
         </ProxPanel>
       </div>
 

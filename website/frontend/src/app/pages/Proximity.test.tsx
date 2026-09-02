@@ -51,12 +51,21 @@ import tradesEvents from './__fixtures__/api_proximity_trades_events.json';
 import weaponAccuracy from './__fixtures__/api_proximity_weapon_accuracy.json';
 import objectivePressure from './__fixtures__/api_proximity_objective_pressure.json';
 import proxSummary from './__fixtures__/api_proximity_summary.json';
+import dangerZones from './__fixtures__/api_proximity_combat_positions_danger_zones.json';
+import combatHeatmap from './__fixtures__/api_proximity_combat_positions_heatmap.json';
+import killLines from './__fixtures__/api_proximity_combat_positions_kill_lines.json';
+import hotzonesJson from './__fixtures__/api_proximity_hotzones.json';
+import moversJson from './__fixtures__/api_proximity_movers.json';
+import playerHeatmapJson from './__fixtures__/api_proximity_player_heatmap.json';
+import playerAimJson from './__fixtures__/api_proximity_player_aim.json';
 import type {
   CarrierEvents, CarrierKills, CarrierReturns, ConstructionEvents,
   EscortCredits, ObjectiveFocus, ObjectiveRuns, ProxEngagements,
   ProxEventDetail, ProxEvents, ProxHeadshotRates, ProxKillOutcomes,
   ProxObjectivePressure, ProxSummary, ProxTeamplay, ProxTradesEvents,
   ProxTradesSummary, ProxWeaponAccuracy, VehicleProgress,
+  ProxCombatHeatmap, ProxDangerZones, ProxHotzones, ProxKillLines,
+  ProxMovers, ProxPlayerAim, ProxPlayerHeatmap,
 } from '../lib/types';
 
 // `satisfies` holds each RECORDED fixture against its wire type — the same
@@ -86,6 +95,13 @@ const tradesEventsChecked = tradesEvents satisfies ProxTradesEvents;
 const weaponAccuracyChecked = weaponAccuracy satisfies ProxWeaponAccuracy;
 const objectivePressureChecked = objectivePressure satisfies ProxObjectivePressure;
 const proxSummaryChecked = proxSummary satisfies ProxSummary;
+const dangerZonesChecked = dangerZones satisfies ProxDangerZones;
+const combatHeatmapChecked = combatHeatmap satisfies ProxCombatHeatmap;
+const killLinesChecked = killLines satisfies ProxKillLines;
+const hotzonesChecked = hotzonesJson satisfies ProxHotzones;
+const moversChecked = moversJson satisfies ProxMovers;
+const playerHeatmapChecked = playerHeatmapJson satisfies ProxPlayerHeatmap;
+const playerAimChecked = playerAimJson satisfies ProxPlayerAim;
 
 const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/scopes', scopes],
@@ -133,6 +149,13 @@ const INSTRUMENTS = new Map<string, unknown>([
   ['/api/proximity/weapon-accuracy', weaponAccuracyChecked],
   ['/api/proximity/objective-pressure', objectivePressureChecked],
   ['/api/proximity/summary', proxSummaryChecked],
+  ['/api/proximity/combat-positions/danger-zones', dangerZonesChecked],
+  ['/api/proximity/combat-positions/heatmap', combatHeatmapChecked],
+  ['/api/proximity/combat-positions/kill-lines', killLinesChecked],
+  ['/api/proximity/hotzones', hotzonesChecked],
+  ['/api/proximity/movers', moversChecked],
+  ['/api/proximity/player-heatmap', playerHeatmapChecked],
+  ['/api/proximity/player-aim', playerAimChecked],
 ]);
 
 // `satisfies` makes the compiler hold the RECORDED fixture against the
@@ -346,6 +369,26 @@ describe('Proximity', () => {
     expect(screen.getByText('48.6%')).toBeInTheDocument();
     // Objective pressure names its own scope vocabulary verbatim.
     expect(screen.getByText(/session-wide metric; map\/round filters are not applied/)).toBeInTheDocument();
+  });
+
+  it('renders the map overlays once a map is picked, and the player pair once a player is', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
+    // Pick the map — the overlays mount with recorded facts.
+    fireEvent.click(screen.getAllByRole('button', { name: 'braundorf_b4' })[0]);
+    await waitFor(() => expect(screen.getByLabelText(/danger zones on/)).toBeInTheDocument());
+    expect(screen.getByText(/deadliest cell 25 deaths/)).toBeInTheDocument();
+    expect(screen.getByLabelText(/kill lines on/)).toBeInTheDocument();
+    expect(screen.getByText(/100 kills with both positions known/)).toBeInTheDocument();
+    // Movers: recorded distance leader (colour codes stripped: ^pvid → vid).
+    expect(screen.getByText('279 k u')).toBeInTheDocument();
+    // Pick a player — heatmap (22 samples, kills_from) and the aim
+    // histogram (1,173 recorded samples) appear.
+    fireEvent.click(screen.getAllByRole('button', { name: 'kanii' })[0]);
+    await waitFor(() => expect(screen.getByText(/22 samples · mode kills_from/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('pitch histogram')).toBeInTheDocument());
+    expect(screen.getByText(/1,173 samples/)).toBeInTheDocument();
   });
 
   it('treats a 200 with status:error as a failure, not as data', async () => {
