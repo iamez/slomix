@@ -3,7 +3,7 @@
 Pisano ob menjavi CLI + modela. Ta datoteka NADOMEŠČA `docs/HANDOFF-fable.md`
 (tisti je posnetek jutranje predaje in je zastarel za ~15 merganih PR-jev).
 Vir resnice za načrt je `docs/PLAN.md` (na mainu, svež z #890). Pravila in
-pasti nosi memory (`MEMORY.md` se v sejo naloži samodejno) — ta datoteka je
+pasti nosi lokalni agentov memory (`~/.claude/projects/…/memory/MEMORY.md`, ni v repu; v sejo se naloži samodejno) — ta datoteka je
 posnetek POZICIJE.
 
 ## 1. Trenutni plan in pozicija
@@ -43,10 +43,10 @@ Naslednje delo (vrstni red iz PLAN.md):
   IN mapa), pripeto z dvema »leaves no trace« testoma, oba videna pasti
   pod mutacijo (cmp dokaz); runtime dokaz in-process (junk → 400, 0
   datotek, 0 map). Polling prestavljen iz renderja v `useEffect`. MERGAN.
-- Dokazna veriga pred vsakim pushем: typecheck s svežim openapi.d.ts,
+- Dokazna veriga pred vsakim pushem: typecheck s svežim openapi.d.ts,
   vitest (569), build:app, živ Playwright na :8056, poln pytest (6152).
 
-## 2b. Narejeno, a NEverificirano / delno
+## 2b. Narejeno, a neverificirano / delno
 
 - **Watcher v6.12 na puranu**: deployan in dokazan s SIGSTOP, a PRAVA
   meritev = naslednji večer igre (`~/.etlegacy/legacy/proximity/
