@@ -3321,7 +3321,9 @@ export interface ProxRoundTracks {
     team: string | null;
     class: string | null;
     spawn_time: number;
-    death_time: number | null;
+    /** Never null on the wire — the emitter coerces a missing death to 0
+     *  (int(r or 0)), so 0 is the survivor/unknown sentinel. */
+    death_time: number;
     first_move_time: number | null;
     death_type: string | null;
     path: unknown[];

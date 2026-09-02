@@ -72,6 +72,7 @@ export function ProximityReplayPage() {
   const tracks = useProxRoundTracks(roundId);
   const [typeFilter, setTypeFilter] = useState<ReplayTimelineEvent['type'] | 'all'>('all');
 
+  const roundEndMs = timeline.data?.duration_ms ?? 0;
   const trackStats = useMemo(() => {
     const rows = tracks.data?.tracks;
     if (!rows || rows.length === 0) return null;
@@ -80,11 +81,15 @@ export function ProximityReplayPage() {
       const key = (t.team ?? 'unknown').toLowerCase();
       const cur = byTeam.get(key) ?? { lives: 0, alive_ms: 0 };
       cur.lives += 1;
-      if (t.death_time != null && t.death_time > t.spawn_time) cur.alive_ms += t.death_time - t.spawn_time;
+      // death_time 0 is the wire's survivor sentinel (the emitter coerces a
+      // missing death to 0) -- a survivor's life runs to the round end, it
+      // is not zero seconds long (review on #879).
+      const end = t.death_time > t.spawn_time ? t.death_time : roundEndMs;
+      if (end > t.spawn_time) cur.alive_ms += end - t.spawn_time;
       byTeam.set(key, cur);
     }
     return { total: rows.length, byTeam: [...byTeam.entries()] };
-  }, [tracks.data]);
+  }, [tracks.data, roundEndMs]);
 
   if (roundId == null) {
     return <Absent block reason="no round named — open a replay from a round's engagement panel" />;

@@ -4,16 +4,42 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { ProximityReplayPage } from './ProximityReplayPage';
-import type { ProxRoundTimeline, ProxRoundTracks } from '../lib/types';
+import type { ProxRoundTimeline, ProxRoundTracks, ReplayTimelineEvent } from '../lib/types';
 import timelineJson from './__fixtures__/api_proximity_round_round_id_timeline.json';
 import tracksJson from './__fixtures__/api_proximity_round_round_id_tracks.json';
 import uncapturedJson from './__fixtures__/api_proximity_timeline_uncaptured_form.json';
 
 // The recorded round (11344, et_brewdog r2) carries all FOUR event types —
 // chosen for that, so the union has no branch a fixture cannot reach.
-const timeline = timelineJson satisfies ProxRoundTimeline;
+// `satisfies` cannot hold a JSON import against a DISCRIMINATED union (the
+// import widens `type` to string), so the union check runs at runtime
+// below — it fails the suite on an unknown type or a missing member key,
+// which is the same guarantee by another door.
+const timeline = timelineJson as unknown as ProxRoundTimeline;
 const tracks = tracksJson satisfies ProxRoundTracks;
-const uncaptured = uncapturedJson satisfies ProxRoundTimeline;
+const uncaptured = uncapturedJson as unknown as ProxRoundTimeline;
+
+const REQUIRED_KEYS: Record<ReplayTimelineEvent['type'], string[]> = {
+  engagement: ['id', 'time', 'victim_name', 'victim_team', 'outcome', 'damage', 'attackers'],
+  spawn_timing_kill: ['time', 'attacker_name', 'victim_name', 'score'],
+  trade_kill: ['time', 'trader_name', 'avenged_name', 'delta_ms'],
+  team_push: ['time', 'team', 'quality', 'alignment', 'participants', 'duration_ms'],
+};
+
+describe('the recorded timeline fixture against the union', () => {
+  it('carries only known event types, each with its required keys, and all four are present', () => {
+    const seen = new Set<string>();
+    for (const e of timelineJson.events) {
+      const keys = REQUIRED_KEYS[e.type as ReplayTimelineEvent['type']];
+      expect(keys, `unknown event type on the wire: ${e.type}`).toBeDefined();
+      for (const k of keys) {
+        expect(e, `${e.type} event missing ${k}`).toHaveProperty(k);
+      }
+      seen.add(e.type);
+    }
+    expect([...seen].sort()).toEqual(['engagement', 'spawn_timing_kill', 'team_push', 'trade_kill']);
+  });
+});
 
 function stub(bodies: Map<string, unknown | { status: number }>) {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
