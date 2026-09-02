@@ -1039,12 +1039,15 @@ class _MonitorTasksMixin:
 
     # ── Daily data-plausibility sentinel (Data Trust pillar B, permanent) ────
     #
-    # scripts/data_plausibility_audit.py exits with the number of rules that
-    # fired on LIVE rows (backfill noise excluded by design). Green (exit 0)
-    # is the steady state since 2026-08-18; any live finding means the CURRENT
-    # pipeline wrote an impossible row and someone should look today, not at
-    # the next manual run. Same sensor family as lua_console_sentinel: quiet
-    # when healthy, loud in the admin channel when not.
+    # scripts/data_plausibility_audit.py reports two classes. Per-row rules
+    # fire on a row that is individually impossible (backfill noise excluded
+    # by design); trend rules fire when a MONTHLY statistic departs from the
+    # months before it — the class that stays invisible while every single
+    # row is in range, which is how a halved dead-time measurement went five
+    # months unnoticed. Green is the steady state since 2026-08-18; a finding
+    # in either class means someone should look today, not at the next manual
+    # run. Same sensor family as lua_console_sentinel: quiet when healthy,
+    # loud in the admin channel when not.
 
     @staticmethod
     def _summarize_audit_payload(payload) -> str | None:
