@@ -62,6 +62,11 @@ type NeedsOptions<P extends GetPath> = [PathParamsOf<P>] extends [never]
   : true;
 
 export class ApiError extends Error {
+  /** The backend's own `detail` string when the error body carried one —
+   *  so a gate like "Linked Discord account required" can be rendered
+   *  VERBATIM instead of paraphrased (review on #887). */
+  detail?: string;
+
   constructor(
     public readonly status: number,
     public readonly path: string,
@@ -110,7 +115,7 @@ export async function apiGetResponse<P extends GetPath>(
     buildQuery(options.query as Record<string, unknown> | undefined);
   // nosemgrep
   const res = await fetch(url, { signal: options.signal, cache: options.cache });
-  if (!res.ok) throw new ApiError(res.status, url);
+  if (!res.ok) throw await apiErrorFrom(res, url);
   return res;
 }
 
@@ -175,6 +180,19 @@ export async function apiPost<P extends PostPath>(
     credentials: 'same-origin',
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new ApiError(res.status, url);
+  if (!res.ok) throw await apiErrorFrom(res, url);
   return res.json();
+}
+
+/** Reads the error body ONCE for its `detail`; a non-JSON body (a plain
+ *  500 page) leaves detail unset. */
+async function apiErrorFrom(res: Response, url: string): Promise<ApiError> {
+  const err = new ApiError(res.status, url);
+  try {
+    const body: unknown = await res.json();
+    if (body && typeof body === 'object' && typeof (body as { detail?: unknown }).detail === 'string') {
+      err.detail = (body as { detail: string }).detail;
+    }
+  } catch { /* body was not JSON — the status is the whole story */ }
+  return err;
 }

@@ -90,13 +90,14 @@ describe('AvailabilityPage', () => {
       '/api/bets/wallet': { status: 500 },
       '/api/availability/promotions/campaign': { body: campaign },
       '/api/availability/promotion-preferences': { body: prefs },
-      '/api/availability/settings': { status: 403 },
-      '/api/availability/subscriptions': { status: 403 },
+      '/api/availability/settings': { status: 403, body: { detail: 'Linked Discord account required' } },
+      '/api/availability/subscriptions': { status: 403, body: { detail: 'Linked Discord account required' } },
     });
     renderPage();
     await waitFor(() => expect(screen.getByText(/Discord not linked/)).toBeInTheDocument());
     // 403 = a state with the gate's meaning; 500 (wallet) = unavailable.
-    await waitFor(() => expect(screen.getAllByText(/needs a linked Discord account/).length).toBeGreaterThanOrEqual(2));
+    // The backend's recorded words, VERBATIM (the fixture's own detail).
+    await waitFor(() => expect(screen.getAllByText(/Linked Discord account required/).length).toBeGreaterThanOrEqual(2));
     await waitFor(() => expect(screen.getByText(/your wallet: unavailable/)).toBeInTheDocument(),
       { timeout: 15000 }); // the 500 exhausts react-query's retries first
     // Recorded prefs render as the one-line summary.

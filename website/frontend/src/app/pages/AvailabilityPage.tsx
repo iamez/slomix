@@ -43,7 +43,12 @@ function tierOf(error: unknown): 'anonymous' | 'unlinked' | null {
 function TierNote({ error, what }: { error: unknown; what: string }) {
   const tier = tierOf(error);
   if (tier === 'anonymous') return <Absent reason={`sign in with CONNECT ID to see ${what}`} />;
-  if (tier === 'unlinked') return <Absent reason={`${what} needs a linked Discord account — the backend's own gate, rendered as a state`} />;
+  if (tier === 'unlinked') {
+    // The backend's OWN words, verbatim — the fallback only covers a 403
+    // whose body carried no detail.
+    const words = error instanceof ApiError && error.detail ? error.detail : 'Linked Discord account required';
+    return <Absent reason={`${what}: ${words}`} />;
+  }
   return <Unavailable what={what} />;
 }
 
@@ -72,11 +77,14 @@ export function AvailabilityPage() {
       await qc.invalidateQueries({ queryKey: ['planning-today'] });
     } catch (e) {
       const tier = tierOf(e);
+      const words = e instanceof ApiError && e.detail ? e.detail : null;
       setSaveError(tier === 'anonymous' ? 'sign in with CONNECT ID to submit availability'
-        : tier === 'unlinked' ? 'submitting needs a linked Discord account'
+        : tier === 'unlinked' ? (words ?? 'Linked Discord account required')
         : 'saving failed — the server did not accept the change');
     } finally {
-      setSaving(null);
+      // Clear only OUR date: a click on another day mid-flight must not be
+      // re-enabled by the earlier request settling (review on #887).
+      setSaving((cur) => (cur === dateIso ? null : cur));
     }
   };
 

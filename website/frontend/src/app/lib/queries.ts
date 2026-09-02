@@ -117,6 +117,7 @@ import type {
   ProxTradesSummary,
   ProxWeaponAccuracy,
   AvailabilityAccess,
+  AvailabilityStatus,
   BetsMarketCurrent,
   MapMesh,
   PlanningToday,
@@ -1782,6 +1783,6 @@ export function useAvailabilitySubscriptionsProbe(enabled: boolean) {
   });
 }
 
-export async function postMyAvailability(dateIso: string, status: string) {
+export async function postMyAvailability(dateIso: string, status: AvailabilityStatus) {
   return apiPost('/api/availability', { date: dateIso, status });
 }
