@@ -1283,8 +1283,11 @@ export function useProxScoresForPlayer(guid: string | null, rangeDays: number) {
     queryKey: ['prox-scores', guid, rangeDays],
     enabled: guid != null && guid !== '',
     queryFn: () =>
+      // No min_rounds here: the old page sent one and the handler has no
+      // such parameter -- the ignored-parameter class, caught by the
+      // regenerated openapi types on CI.
       apiGet('/api/proximity/prox-scores', {
-        query: { range_days: rangeDays, player_guid: guid!, min_rounds: 1 },
+        query: { range_days: rangeDays, player_guid: guid! },
       }) as Promise<ProxScores>,
     staleTime: 5 * 60 * 1000,
   });

@@ -3156,7 +3156,15 @@ export interface ProxScores {
     below_coverage_dropped: number;
   };
   range_days: number;
-  scope: ProxScope;
+  /** prox-scores' scope is its OWN shape -- a scoped flag, no player_guid
+   *  (the shared ProxScope requires one; CI's satisfies caught the drift). */
+  scope: {
+    scoped: boolean;
+    session_date: string | null;
+    map_name: string | null;
+    round_number: number | null;
+    round_start_unix: number | null;
+  };
   player_count: number;
   players: ProxScoreRow[];
 }
