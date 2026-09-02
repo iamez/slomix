@@ -271,8 +271,8 @@ export function ProximityPlayerPage() {
           empty="no crossfire pairs in this window" isEmpty={(d) => d.duos.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
-              {d.duos.slice(0, 6).map((u, i) => (
-                <ProxRow key={i}
+              {d.duos.slice(0, 6).map((u) => (
+                <ProxRow key={`${u.player1 ?? '?'}:${u.player2 ?? '?'}`}
                   name={`${u.player1 ? stripEtColors(u.player1) : '?'} + ${u.player2 ? stripEtColors(u.player2) : '?'}`}
                   mid={`${figure(u.crossfire_count)} crossfires · ${figure(Math.round(u.avg_delay_ms))} ms delay`}
                   val={`${figure(u.crossfire_kills)} kills`} />

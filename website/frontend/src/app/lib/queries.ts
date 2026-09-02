@@ -1574,7 +1574,10 @@ export function useProxDuos(guid: string | null, rangeDays: number) {
 
 export function useProxTradesPlayerStats(guid: string | null, rangeDays: number) {
   return useQuery({
-    queryKey: ['prox-trades-player-stats', guid, rangeDays],
+    // guid stays OUT of the key: the request is not player-scoped, so two
+    // players' pages share one cache entry instead of refetching identical
+    // data (review on #884). guid only gates the fetch.
+    queryKey: ['prox-trades-player-stats', rangeDays],
     enabled: guid != null && guid !== '',
     queryFn: () =>
       // No player_guid here: the endpoint does not declare one and FastAPI
