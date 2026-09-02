@@ -87,6 +87,43 @@ vleče na sambo). Delitev populacij (sestrska seja): A = round-end burst
 tudi med pavzo in NI izključen. Razsodi meritev prek `self`. Optimizacija bursta: batch write,
 šele PO enem večeru self meritev. Sestrska seja koordinira optimizacijo Lua.
 
+## Proga: časovna polja (Opus 5)
+
+**Zadnja posodobitev:** 2026-09-02 zvečer (Opus 5 — agregatni razred varovala)
+
+Dva ločena hrošča v istem deploy oknu (~20. 3. 2026) sta pustila bazo v
+stanju, kjer sta obdobji **nezdružljivi**: staro ima engine alive%, a ~2×
+napihnjen mrtvi čas (Lua je limbo čas prištevala znova ob vsakem 5-sekundnem
+tiku); novo ima pravilen mrtvi čas, a `time_played_percent` je bil od
+2026-04 ničla, ker ga aktivna uvozna pot ni pisala. Ker sta komplementarni,
+se da vsako obdobje popraviti iz signala drugega.
+
+| faza | kaj | stanje |
+|---|---|---|
+| 1 | uvozna pot piše `time_played_percent` + parnostno varovalo piscev | **#885**, zelen, čaka ownerjev merge |
+| 2 | backfill `time_played_percent` iz surovih datotek | **#886**, zelen; **IZVEDEN** 2. 9. (8.800 → 13.466 vrstic, +4.666; kontrola proti surovim datotekam 22/22) |
+| 3 | rekonstrukcija zgodovinskega `time_dead_minutes` iz engine alive% | ⛔ ownerjeva odločitev; velja SAMO za R1 (R2 gre prek kumulativne TAB[8]); prekliče zapis »owner decision — no backfill« v `docs/KNOWN_ISSUES.md` |
+| 4a | per-row varovala v plausibility auditu (4 nova pravila) | **#892**, zelen, čaka merge |
+| 4b | agregatni razred (»porazdelitev se je premaknila«) | **ta veja**, 7 trend pravil |
+| 5 | zastareli zapisi, ki so to skrivali | **#893**, zelen, čaka merge |
+
+⭐ **Ključna meritev (odklepa fazo 3):** po backfillu `alive_pct_drift` prvič
+po 5 mesecih spet deluje — 290 parov, engine 79,3 proti izračunanemu 79,3,
+povprečna |razlika| **0,15 o. t.**, le 2 para (0,7 %) nad 2 o. t. To potrjuje
+oboje: ALIVE% se premakne zanemarljivo IN formula za staro obdobje drži.
+
+⚠️ **Backfill je treba ponoviti** po mergu #885 IN restartu bota — do takrat
+vsak nov uvoz spet piše ničle. Skripta piše samo čez ničle, zato je
+ponovitev varna in idempotentna.
+
+⭐ **Nova najdba 2. 9. (zabeležena, ne raziskana):** mediana deleža mrtvega
+časa kaže **tri** ravni pred popravkom, ne dveh — ~0,33 (2025-01..04),
+0,48 (od 2025-05 naprej), 0,19 (od 2026-04). Per-row rekonstrukcija iz
+alive% je na to imuna, agregatna korekcija ne bi bila.
+
+⭐ **Nova najdba 2. 9.:** `revives_given` je 0 na vseh 5.538 vrsticah pred
+2025-12 — vsaka vseskozna revive lestvica se tiho začne decembra 2025.
+
 ## Odprte ownerjeve odločitve
 
 - puranov cron `0 20 * * * kill etlded` (vrže igralce sredi igre) — pogojni

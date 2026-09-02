@@ -18,14 +18,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.data_plausibility_audit import (  # noqa: E402
     RULES,
+    TREND_RULES,
     VALID_SEVERITIES,
     VALID_TABLES,
     VALID_TIERS,
+    MonthlyPoint,
+    TrendResult,
+    TrendRule,
     build_count_sql,
     build_split_sql,
     build_top_rows_sql,
+    build_trend_sql,
+    find_shifts,
     get_connection,
+    unexplained_shift_count,
     validate_rules,
+    validate_trend_rules,
 )
 from shared.round_time import round_duration_sql  # noqa: E402
 
@@ -277,3 +285,244 @@ def test_no_acknowledgement_has_outlived_its_reason(db_conn, rule):
     assert live > 0, (
         f"{rule.name} no longer fires on live rows. Its acknowledgement has "
         f"outlived its reason -- remove it so a recurrence is reported again.")
+
+
+# ── Distribution shifts (the aggregate rule class) ───────────────────────────
+#
+# The detector is a pure function over a monthly series, so most of it is
+# tested on hand-built series -- including the shapes this database does not
+# contain, and the one it no longer contains because #886 repaired it.
+
+
+def _pt(month, value, rows=500):
+    return MonthlyPoint(month=month, rows=rows, value=value)
+
+
+def _trend(**kw):
+    base = dict(name="t", statistic="AVG(pcs.kills)", threshold_pct=25.0, note="n")
+    base.update(kw)
+    return TrendRule(**base)
+
+
+def test_a_quiet_series_never_reports_a_shift():
+    """The measured shape of the control metrics: months wobble a few percent
+    around each other for years and nothing is wrong."""
+    rule = _trend(threshold_pct=20.0)
+    series = [_pt(f"2026-{m:02d}", v) for m, v in
+              enumerate([1.00, 1.03, 0.98, 1.02, 0.97, 1.01, 1.04], start=1)]
+    assert find_shifts(rule, series) == []
+
+
+def test_a_step_change_is_reported_with_its_size():
+    """The 2026-04 shape: a level that moves once and stays moved."""
+    rule = _trend(threshold_pct=25.0)
+    series = [_pt("2026-01", 0.35), _pt("2026-02", 0.34), _pt("2026-03", 0.36),
+              _pt("2026-04", 0.19)]
+    shifts = find_shifts(rule, series)
+    assert [s.month for s in shifts] == ["2026-04"]
+    assert shifts[0].kind == "moved"
+    assert shifts[0].baseline == pytest.approx(0.35)
+    assert shifts[0].change_pct == pytest.approx(-45.7, abs=0.1)
+
+
+def test_a_field_that_starts_being_written_is_an_appearance_not_a_percentage():
+    """revives_given is 0 on all 5,538 rows before 2025-12 and non-zero on 653
+    of 982 in it. "0 -> 0.18" has no percentage; calling it +inf% would be a
+    number where a state change belongs."""
+    rule = _trend()
+    series = [_pt("2025-01", 0.0), _pt("2025-02", 0.0), _pt("2025-03", 0.0),
+              _pt("2025-04", 0.18)]
+    shifts = find_shifts(rule, series)
+    assert [(s.month, s.kind, s.change_pct) for s in shifts] == [("2025-04", "appeared", None)]
+
+
+def test_a_statistic_that_becomes_undefined_is_reported_as_vanished():
+    """Absent is a third state, distinct from zero and from a value. A month
+    whose statistic is NULL (every row NULL, or every denominator zero) is not
+    a quiet month -- it is a month that could not be measured at all."""
+    rule = _trend()
+    series = [_pt("2026-01", 1.0), _pt("2026-02", 1.0), _pt("2026-03", 1.0),
+              _pt("2026-04", None)]
+    shifts = find_shifts(rule, series)
+    assert [(s.month, s.kind) for s in shifts] == [("2026-04", "vanished")]
+
+
+def test_zero_that_stays_zero_is_not_an_appearance():
+    """The companion to the appearance test: a metric that is simply not
+    collected yet must stay silent, or every such rule is red from birth."""
+    rule = _trend()
+    series = [_pt(f"2025-{m:02d}", 0.0) for m in range(1, 6)]
+    assert find_shifts(rule, series) == []
+
+
+def test_a_month_too_small_to_measure_is_neither_measured_nor_a_baseline():
+    """A month in progress is not a measurement. It must not fire, and -- the
+    half that is easy to forget -- it must not drag the next month's baseline
+    either."""
+    rule = _trend(threshold_pct=25.0, min_rows=200)
+    series = [_pt("2026-01", 1.0), _pt("2026-02", 1.0), _pt("2026-03", 1.0),
+              _pt("2026-04", 0.10, rows=12),   # two sessions in: wild, and tiny
+              _pt("2026-05", 1.0)]
+    shifts = find_shifts(rule, series)
+    assert shifts == [], "a sub-threshold month must be skipped, not judged"
+    # And it left no trace: 2026-05 is compared against 1.0, not against a
+    # baseline poisoned by the 0.10.
+    shifts = find_shifts(rule, [*series, _pt("2026-06", 0.5)])
+    assert [s.month for s in shifts] == ["2026-06"]
+    assert shifts[0].baseline == pytest.approx(1.0)
+
+
+def test_a_shift_cannot_fire_before_a_full_lookback_exists():
+    """With less history than `lookback`, there is no baseline -- and no
+    baseline means no verdict, not a default one."""
+    rule = _trend(lookback=3, threshold_pct=10.0)
+    series = [_pt("2026-01", 1.0), _pt("2026-02", 5.0), _pt("2026-03", 0.1)]
+    assert find_shifts(rule, series) == []
+
+
+def test_the_median_baseline_absorbs_a_single_outlier_month():
+    """Why the baseline is a median of three and not last month's value: one
+    freak month must not make the next two months look broken."""
+    rule = _trend(lookback=3, threshold_pct=25.0)
+    series = [_pt("2026-01", 1.0), _pt("2026-02", 1.0), _pt("2026-03", 4.0),
+              _pt("2026-04", 1.0)]
+    assert find_shifts(rule, series) == []
+
+
+def test_a_known_shift_is_matched_by_its_month_and_carries_its_explanation():
+    rule = _trend(threshold_pct=25.0, known_shifts=(("2026-04", "the Lua fix"),))
+    series = [_pt("2026-01", 0.35), _pt("2026-02", 0.34), _pt("2026-03", 0.36),
+              _pt("2026-04", 0.19), _pt("2026-05", 0.19)]
+    shifts = find_shifts(rule, series)
+    by_month = {s.month: s.explanation for s in shifts}
+    assert by_month["2026-04"] == "the Lua fix"
+    # The echo month is a separate shift and is NOT covered by its neighbour's
+    # explanation -- each month has to be named on its own.
+    assert by_month.get("2026-05") == ""
+
+
+def test_an_unexplained_shift_breaks_the_exit_code_and_an_explained_one_does_not():
+    series = [_pt("2026-01", 0.35), _pt("2026-02", 0.34), _pt("2026-03", 0.36),
+              _pt("2026-04", 0.19)]
+    naked = _trend(name="naked", threshold_pct=25.0)
+    named = _trend(name="named", threshold_pct=25.0,
+                   known_shifts=(("2026-04", "the Lua fix"),))
+    results = [TrendResult(rule=r, series=series, shifts=find_shifts(r, series))
+               for r in (naked, named)]
+    assert unexplained_shift_count(results) == 1
+    assert unexplained_shift_count(results[1:]) == 0
+
+
+def test_an_acknowledged_trend_rule_does_not_hold_the_exit_code_open():
+    """Same contract as Rule.acknowledged: a rule whose whole reason for
+    firing is written down and already being repaired stays visible in the
+    report but does not colour the sensor red."""
+    series = [_pt("2026-01", 1.0), _pt("2026-02", 1.0), _pt("2026-03", 1.0),
+              _pt("2026-04", 0.0)]
+    rule = _trend(threshold_pct=10.0, acknowledged="#885 lands, then this stops")
+    result = TrendResult(rule=rule, series=series, shifts=find_shifts(rule, series))
+    assert result.unexplained, "the shift is still detected and still reported"
+    assert unexplained_shift_count([result]) == 0
+
+
+def test_the_trend_rules_table_is_well_formed():
+    validate_trend_rules(TREND_RULES)
+
+
+@pytest.mark.parametrize("bad", [
+    _trend(statistic="  "),
+    _trend(threshold_pct=0.0),
+    _trend(lookback=0),
+    _trend(min_rows=0),
+    _trend(known_shifts=(("2026-4", "malformed month"),)),
+    _trend(known_shifts=(("2026-04", "   "),)),
+    _trend(known_shifts=(("2026-04", "a"), ("2026-04", "b"))),
+])
+def test_validate_trend_rules_rejects_a_malformed_rule(bad):
+    with pytest.raises(ValueError):
+        validate_trend_rules([bad])
+
+
+def test_every_trend_statistic_is_robust_to_the_rows_the_row_rules_catch():
+    """A trend rule must not be movable by the very rows the per-row rules
+    exist to report. Measured on this database: the ratio-of-sums version of
+    the dead-time share calls 2025-12 a +96% move; the median calls it +14%.
+    The whole difference is a handful of impossible rows (largest
+    time_dead_minutes that month: 580, in a round that lasted seven).
+
+    So every statistic here is either a median (an outlier cannot pull it) or
+    a proportion of rows (bounded in [0, 1] by construction). A SUM would pass
+    review and fail in the field.
+    """
+    for rule in TREND_RULES:
+        robust = ("percentile_cont" in rule.statistic
+                  or ("AVG(CASE WHEN" in rule.statistic and "1.0 ELSE 0.0" in rule.statistic))
+        assert robust, (
+            f"{rule.name}: statistic is neither a median nor a proportion — "
+            f"one impossible row can move it: {rule.statistic}")
+
+
+def test_the_dead_time_share_rule_names_the_month_it_was_built_for():
+    """2026-04 is the month the Lua fix landed and 23 per-row rules saw
+    nothing. If it ever stops being named here, this rule has lost its
+    provenance."""
+    rule = next(r for r in TREND_RULES if r.name == "pcs_dead_time_share_monthly")
+    assert "2026-04" in dict(rule.known_shifts)
+
+
+@pytest.mark.parametrize("rule", TREND_RULES, ids=[r.name for r in TREND_RULES])
+def test_trend_statistic_parses_against_schema(db_conn, rule):
+    with db_conn.cursor() as cur:
+        cur.execute(build_trend_sql(rule) + " LIMIT 0")
+
+
+@pytest.mark.parametrize(
+    "rule", [r for r in TREND_RULES if r.known_shifts], ids=lambda r: r.name)
+def test_every_known_shift_still_fires(db_conn, rule):
+    """A known shift is an explanation attached to a month. If the month stops
+    firing, the explanation is describing something that is no longer there --
+    which is exactly what happens the day we rewrite that history (the phase-3
+    reconstruction in docs/PLAN.md rewrites pre-2026-04 dead times). Fail then,
+    loudly, rather than carry a note about a shift that no longer exists.
+    """
+    with db_conn.cursor() as cur:
+        cur.execute(build_trend_sql(rule))
+        series = [MonthlyPoint(month=str(m), rows=int(n), value=None if v is None else float(v))
+                  for m, n, v in cur.fetchall()]
+    fired = {s.month for s in find_shifts(rule, series)}
+    named = {m for m, _ in rule.known_shifts}
+    assert named <= fired, (
+        f"{rule.name}: known_shifts names {sorted(named - fired)}, which no "
+        f"longer fire. Either the data changed under us or the entry was "
+        f"never right — re-measure and update the rulebook.")
+
+
+@pytest.mark.parametrize("rule", TREND_RULES, ids=[r.name for r in TREND_RULES])
+def test_the_live_database_carries_no_unexplained_shift(db_conn, rule):
+    """The sensor's steady state. A failure here is the point of the whole
+    class: some monthly statistic moved and nobody has written down why."""
+    with db_conn.cursor() as cur:
+        cur.execute(build_trend_sql(rule))
+        series = [MonthlyPoint(month=str(m), rows=int(n), value=None if v is None else float(v))
+                  for m, n, v in cur.fetchall()]
+    unexplained = [s for s in find_shifts(rule, series) if not s.explanation]
+    assert not unexplained or rule.acknowledged, (
+        f"{rule.name}: unexplained shift(s) "
+        + ", ".join(f"{s.month} ({s.kind}"
+                    + (f", {s.change_pct:+.1f}%)" if s.change_pct is not None else ")")
+                    for s in unexplained))
+
+
+@pytest.mark.parametrize(
+    "rule", [r for r in TREND_RULES if r.acknowledged], ids=lambda r: r.name)
+def test_no_trend_acknowledgement_has_outlived_its_reason(db_conn, rule):
+    """The mirror of the per-row stale check. An acknowledgement on a rule
+    that no longer fires is not caution — it is a mute left armed over a
+    healthy sensor, ready to swallow the next, unrelated break."""
+    with db_conn.cursor() as cur:
+        cur.execute(build_trend_sql(rule))
+        series = [MonthlyPoint(month=str(m), rows=int(n), value=None if v is None else float(v))
+                  for m, n, v in cur.fetchall()]
+    assert [s for s in find_shifts(rule, series) if not s.explanation], (
+        f"{rule.name} carries no unexplained shift any more — its "
+        f"acknowledgement has outlived its reason, remove it.")

@@ -1050,9 +1050,10 @@ class _MonitorTasksMixin:
     def _summarize_audit_payload(payload) -> str | None:
         """Return an alert body for live violations, or None when clean.
 
-        Accepts the script's --json output (a list of rule dicts, possibly
-        wrapped in {"rules": [...]}). Tolerant of shape drift: anything it
-        cannot read is reported as such rather than swallowed.
+        Accepts the script's --json output: a list of rule dicts, or the
+        wrapped {"rules": [...], "trends": [...]} form. Tolerant of shape
+        drift: anything it cannot read is reported as such rather than
+        swallowed.
         """
         rules = payload.get("rules") if isinstance(payload, dict) else payload
         if not isinstance(rules, list):
@@ -1065,13 +1066,37 @@ class _MonitorTasksMixin:
                 for r in rules
                 if isinstance(r, dict) and (r.get("live") or 0) > 0
                 and not r.get("acknowledged")]
-        if not live:
+
+        # Aggregate rules report a monthly statistic that MOVED — the class no
+        # per-row predicate can see (the 2026-03 dead-time fix halved the
+        # median dead share with every single row still inside every bound).
+        # A payload without a `trends` key is an older audit, not a clean one:
+        # absent and empty are different, and only the second is good news.
+        trends = payload.get("trends") if isinstance(payload, dict) else None
+        shifted: list[tuple[str, str]] = []
+        if isinstance(trends, list):
+            for tr in trends:
+                if not isinstance(tr, dict) or tr.get("acknowledged"):
+                    continue
+                months = [s.get("month", "?") for s in (tr.get("shifts") or [])
+                          if isinstance(s, dict) and not s.get("explanation")]
+                if months:
+                    shifted.append((tr.get("name", "?"), ", ".join(months[:4])))
+
+        if not live and not shifted:
             return None
-        lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
-        more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
-        return (f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n"
-                f"{lines}{more}\n"
-                f"Podrobnosti: `python scripts/data_plausibility_audit.py`")
+
+        parts: list[str] = []
+        if live:
+            lines = "\n".join(f"• `{name}`: {n} živih kršitev" for name, n in live[:8])
+            more = f"\n… in še {len(live) - 8} pravil" if len(live) > 8 else ""
+            parts.append(f"{len(live)} pravil se je sprožilo na ŽIVIH vrsticah:\n{lines}{more}")
+        if shifted:
+            lines = "\n".join(f"• `{name}`: {months}" for name, months in shifted[:8])
+            more = f"\n… in še {len(shifted) - 8} metrik" if len(shifted) > 8 else ""
+            parts.append(f"{len(shifted)} metrik se je premaknilo brez razlage:\n{lines}{more}")
+        parts.append("Podrobnosti: `python scripts/data_plausibility_audit.py`")
+        return "\n".join(parts)
 
     @staticmethod
     def _run_audit_in_thread():
@@ -1094,9 +1119,11 @@ class _MonitorTasksMixin:
         conn = mod.get_connection()
         try:
             results = mod.run_audit(conn, mod.RULES, top_n=0)
+            trends = mod.run_trend_audit(conn, mod.TREND_RULES)
         finally:
             conn.close()
-        return [r.to_dict() for r in results]
+        return {"rules": [r.to_dict() for r in results],
+                "trends": [t.to_dict() for t in trends]}
 
     @tasks.loop(hours=24)
     async def data_plausibility_sentinel(self):
