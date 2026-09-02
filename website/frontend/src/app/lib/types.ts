@@ -3217,9 +3217,12 @@ export interface ProxMovementStats {
 
 // ---------------------------------------------------------------------------
 // Phase 5 — the round team comparison (class B: the old React tree was its
-// only consumer). ⚠️ Every number is nullable, and the wire CANNOT tell an
-// uncaptured round from a nonexistent one: both answer 200 with all nulls
-// and an empty crossfire list (measured live on rounds 10472 and 99999999).
+// only consumer). ⚠️ Every cohesion/pushes number is nullable — the wire
+// CANNOT tell an uncaptured round from a nonexistent one: both answer 200
+// with those all null (measured live on rounds 10472 and 99999999). The
+// crossfire list is different: its rows are aggregates that exist only
+// when counted, so absence is an EMPTY LIST and the members stay
+// non-nullable.
 
 export interface ProxTeamComparisonSide {
   avg_dispersion: number | null;
