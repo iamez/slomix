@@ -31,7 +31,4 @@
 /api/server-activity/history
 /api/stats/sessions
 /api/status
-/api/uploads
-/api/uploads/resumable
-/api/uploads/tags/popular
 /api/voice-activity/history

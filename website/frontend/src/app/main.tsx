@@ -31,6 +31,7 @@ import { ProximityTeamsPage } from './pages/ProximityTeamsPage';
 import { ProximityReplayPage } from './pages/ProximityReplayPage';
 import { SpiderWebPage } from './pages/SpiderWebPage';
 import { AvailabilityPage } from './pages/AvailabilityPage';
+import { UploadsPage, UploadDetailPage } from './pages/UploadsPage';
 import { SkillRating } from './pages/SkillRating';
 import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
@@ -106,6 +107,8 @@ const PAGES: Record<string, React.ReactElement> = {
   'proximity-player': <ProximityPlayerPage />,
   'proximity-replay': <ProximityReplayPage />,
   availability: <AvailabilityPage />,
+  uploads: <UploadsPage />,
+  'upload-detail': <UploadDetailPage />,
   'spider-web': <SpiderWebPage />,
   'proximity-teams': <ProximityTeamsPage />,
   'session-detail': <SessionDetail />,

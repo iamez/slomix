@@ -3766,3 +3766,54 @@ export interface PromotionPreferences {
   timezone: string;
   notify_threshold: number;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 6 — uploads (legacy uploads.js). uploader_discord_id travels as a
+// STRING — an 18-digit snowflake loses its last digit as a JS number (the
+// #850-era fix; the satisfies pin below is what keeps it fixed).
+
+export interface UploadItem {
+  id: string;
+  title: string;
+  filename: string;
+  category: string;
+  extension: string;
+  file_size_bytes: number;
+  uploader_name: string | null;
+  uploader_discord_id: string | null;
+  download_count: number;
+  created_at: string;
+  description_preview: string | null;
+  expires_at: string | null;
+}
+
+export interface UploadsList {
+  items: UploadItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  sort: string;
+}
+
+export interface UploadDetail {
+  id: string;
+  title: string;
+  filename: string;
+  category: string;
+  extension: string;
+  file_size_bytes: number;
+  uploader_name: string | null;
+  uploader_discord_id: string | null;
+  download_count: number;
+  created_at: string;
+  description: string | null;
+  expires_at: string | null;
+  tags: string[];
+  mime_type: string | null;
+  content_hash: string | null;
+  is_playable: boolean;
+  poster_url: string | null;
+  download_url: string;
+  share_url: string;
+  can_delete: boolean;
+}
