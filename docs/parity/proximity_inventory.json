@@ -1634,9 +1634,10 @@
       ],
       "react_callers": [],
       "evidence": {
-        "src": "živa spec :8056, 31. 8. — posnetek 24. 8. jo je zamudil, ker je dev proces predatiral #792"
+        "src": "živa spec :8056, 31. 8. — posnetek 24. 8. jo je zamudil, ker je dev proces predatiral #792",
+        "covered_by": "SpiderWebPage.tsx (faza 5, SW-1)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     }
   ]
 }

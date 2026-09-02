@@ -97,9 +97,11 @@ import type {
   ProxPlayerProfile,
   ProxPlayerRadar,
   ProxScores,
+  MapMesh,
   ProxRoundTimeline,
   ProxRoundTracks,
   ProxTeamComparison,
+  SpiderWebSnapshot,
   ProxFocusFire,
   ProximityLeaderboard,
   ProxLuaTrades,
@@ -1384,5 +1386,43 @@ export function useProxRoundTracks(roundId: number | null) {
         pathParams: { round_id: roundId! },
       }) as Promise<ProxRoundTracks>,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+/** One reconstructed moment. ⛔ pov goes to the SERVER — never fetch the
+ *  world view and filter locally (#800's contract). keepPreviousData keeps
+ *  the last moment on screen while scrubbing; react-query's keying makes
+ *  the winner commit (a superseded response can never overwrite a newer
+ *  key's cache entry). */
+export function useSpiderWebMoment(roundId: number | null, tMs: number, pov: string) {
+  return useQuery({
+    queryKey: ['spider-web', roundId, tMs, pov],
+    enabled: roundId != null,
+    placeholderData: (prev) => prev,
+    queryFn: () =>
+      apiGet('/api/replay/round/{round_id}/web', {
+        pathParams: { round_id: roundId! },
+        query: { t: Math.round(tMs), ...(pov !== 'world' ? { pov } : {}) },
+      }) as Promise<SpiderWebSnapshot>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Static geometry; 404 = this map was never exported (named absence). */
+export function useMapMesh(mapName: string | null) {
+  return useQuery({
+    queryKey: ['map-mesh', mapName],
+    enabled: mapName != null && mapName !== '',
+    queryFn: async () => {
+      const url = `/assets/maps/geometry/${encodeURIComponent(mapName!)}.json`;
+      const res = await fetch(url);
+      // Only 404 means "this map was never exported" — any other failure is
+      // a real problem and must surface as one, not as a quiet absence.
+      if (res.status === 404) return null;
+      if (!res.ok) throw new ApiError(res.status, url);
+      return res.json() as Promise<MapMesh>;
+    },
+    staleTime: Infinity,
   });
 }

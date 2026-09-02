@@ -181,6 +181,9 @@ export function ProximityReplayPage() {
       )}
       {d.events.length > 0 && (
         <Meta>
+          <Link to={`/spider-web/round/${d.round_id}`} style={{ color: 'var(--color-accent)', textDecoration: 'none', marginRight: 'var(--space-4)' }}>
+            spider web →
+          </Link>
           <Link to={`/proximity/round/${d.round_id}/teams`} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
             team comparison for this round →
           </Link>

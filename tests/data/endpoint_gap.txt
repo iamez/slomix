@@ -56,7 +56,6 @@
 /api/proximity/trades/player-stats
 /api/proximity/trades/summary
 /api/proximity/weapon-accuracy
-/api/replay/round
 /api/server-activity/history
 /api/stats/sessions
 /api/status

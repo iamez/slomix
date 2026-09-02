@@ -3329,3 +3329,130 @@ export interface ProxRoundTracks {
     path: unknown[];
   }[];
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the spider web (route spider-web, /spider-web/round/:roundId).
+// GET /api/replay/round/{round_id}/web?t=<ms>[&pov=team:X] — the layer-1
+// reconstruction at one moment. ⛔ The point of view is a QUERY PARAMETER:
+// withholding happens on the SERVER (allowlist), and fetching the oracle
+// once to filter locally would quietly undo the guarantee (#800). Under a
+// team pov the enemy clock carries ONLY unknown_to_this_pov + reason + the
+// public interval, and withheld_by_pov names every hidden guid.
+
+/** The clock's known form: status is one of the emitter's five quality
+ *  states (validated / internally_consistent_unvalidated /
+ *  validation_failed / inconsistent / insufficient). */
+export interface SpiderClockKnown {
+  status: string;
+  interval_ms: number;
+  offset_ms: number;
+  timing_observations: number;
+  landing_clusters: number;
+  spawn_callbacks: number;
+  post_revive_spawn_callbacks: number;
+  passing_landing_clusters: number;
+  pass_ratio: number;
+  phase_ms: number;
+  time_to_next_wave_ms: number;
+}
+
+/** WITHHELD is a second axis, not a sixth quality state — it must branch
+ *  before any quality switch. */
+export interface SpiderClockWithheld {
+  status: 'unknown_to_this_pov';
+  interval_ms: number;
+  reason: string;
+}
+
+/** The THIRD form (the pov fixture caught it): the holder's own HUD —
+ *  interval and phase without observation counts, because the grade of
+ *  the reconstruction is a full-round verdict and stays in the oracle
+ *  view (spec §5.3, §6.3). */
+export interface SpiderClockOwnHud {
+  status: 'own_hud';
+  interval_ms: number;
+  offset_ms: number;
+  phase_ms: number;
+  time_to_next_wave_ms: number;
+  reason: string;
+}
+
+export type SpiderClock = SpiderClockKnown | SpiderClockWithheld | SpiderClockOwnHud;
+
+export function isClockWithheld(c: SpiderClock): c is SpiderClockWithheld {
+  return c.status === 'unknown_to_this_pov';
+}
+
+export function isClockOwnHud(c: SpiderClock): c is SpiderClockOwnHud {
+  return c.status === 'own_hud';
+}
+
+export interface SpiderPlayer {
+  guid: string;
+  name: string | null;
+  team: string;
+  class: string | null;
+  x: number;
+  y: number;
+  z: number;
+  health: number;
+  weapon: number;
+  stance: number;
+  speed: number;
+  alive: boolean;
+  track_id: number;
+  stale_ms: number;
+  overlap_conflict: boolean;
+  position_error: { p50: number; p90: number; well_sampled: boolean; basis: string } | null;
+  vx: number | null;
+  vy: number | null;
+  vz: number | null;
+  velocity_stale_ms: number | null;
+  velocity_reason: string | null;
+}
+
+export interface SpiderEdge {
+  a: string;
+  b: string;
+  kind: string;
+  distance: number;
+  recently_contested: boolean;
+}
+
+export interface SpiderWebSnapshot {
+  round_id: number;
+  t_ms: number;
+  map_name: string;
+  round_duration_ms: number;
+  teams: string[];
+  first_position_ms: number;
+  velocity_max_dt_ms: number;
+  player_count: number;
+  overlap_conflicts: number;
+  players: SpiderPlayer[];
+  edges: SpiderEdge[];
+  clock: Record<string, SpiderClock>;
+  capture_policy: {
+    mode: string;
+    observation_interval_ms: number | null;
+    source: string;
+    manifest_version: string | null;
+    /** Tri-state strings per capability (the manifest's own vocabulary). */
+    capabilities: Record<string, string>;
+    manifest_count: number;
+    conflicting_flags: number;
+  };
+  withheld_by_pov: string[];
+  notes: string[];
+}
+
+/** Flat triangle mesh under /assets/maps/geometry/<map>.json — static, and
+ *  ABSENT for some maps (etl_supply has no BSP export): a missing mesh is
+ *  named, never an empty stage. */
+export interface MapMesh {
+  map_name: string;
+  vertices: number[];
+  indexes: number[];
+  floor_normal_z: number;
+  bounds: unknown;
+}

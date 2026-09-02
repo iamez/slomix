@@ -223,7 +223,8 @@
     "label": "Spider Web",
     "nav": "hidden",
     "phase": 5,
-    "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 §3.5)."
+    "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 §3.5).",
+    "built": true
   },
   {
     "key": "greatshot",
