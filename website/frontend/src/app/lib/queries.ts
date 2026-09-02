@@ -116,14 +116,19 @@ import type {
   ProxTradesPlayerStats,
   ProxTradesSummary,
   ProxWeaponAccuracy,
+  ActivityHistory,
+  ApiHealth,
   AvailabilityAccess,
   AvailabilityStatus,
   BetsMarketCurrent,
+  LiveFeed,
   MapMesh,
+  MonitoringStatus,
   PlanningToday,
   PromotionCampaign,
   PromotionPreferences,
   UploadDetail,
+  VoiceHistory,
   UploadsList,
   ProxRoundTimeline,
   ProxRoundTracks,
@@ -1822,5 +1827,53 @@ export function usePopularUploadTags() {
     queryFn: () =>
       apiGet('/api/uploads/tags/popular', { query: { limit: 15 } }) as Promise<{ tag: string; count: number }[]>,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+
+// Phase 6 — the live surface. State and feed POLL while the page is
+// mounted; history and monitoring refresh on their own slower clocks.
+
+export function useLiveFeed(since: number) {
+  return useQuery({
+    queryKey: ['live-feed', since],
+    queryFn: () =>
+      apiGet('/api/live/feed', { query: { since } }) as Promise<LiveFeed>,
+    refetchInterval: 15 * 1000,
+    staleTime: 5 * 1000,
+  });
+}
+
+export function useServerActivityHistory(hours: number) {
+  return useQuery({
+    queryKey: ['server-activity', hours],
+    queryFn: () =>
+      apiGet('/api/server-activity/history', { query: { hours } }) as Promise<ActivityHistory>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useVoiceActivityHistory(hours: number) {
+  return useQuery({
+    queryKey: ['voice-activity', hours],
+    queryFn: () =>
+      apiGet('/api/voice-activity/history', { query: { hours } }) as Promise<VoiceHistory>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useMonitoringStatus() {
+  return useQuery({
+    queryKey: ['monitoring-status'],
+    queryFn: () => apiGet('/api/monitoring/status') as Promise<MonitoringStatus>,
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useApiHealth() {
+  return useQuery({
+    queryKey: ['api-health'],
+    queryFn: () => apiGet('/api/status') as Promise<ApiHealth>,
+    staleTime: 60 * 1000,
   });
 }

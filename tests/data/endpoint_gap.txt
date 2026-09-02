@@ -26,10 +26,5 @@
 /api/diagnostics
 /api/greatshot
 /api/greatshot/upload
-/api/live/feed
-/api/monitoring/status
-/api/server-activity/history
 /api/stats/sessions
-/api/status
 /api/uploads/resumable
-/api/voice-activity/history
