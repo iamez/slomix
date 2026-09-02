@@ -3456,3 +3456,112 @@ export interface MapMesh {
   floor_normal_z: number;
   bounds: unknown;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 5 — the outcome instruments (eight date-scope panels; legacy
+// proximity.js loaders documented in 07 §B.2). Shapes read from
+// proximity_scoring.py / proximity_combat.py / proximity_objectives.py.
+
+export interface ProxKillOutcomes {
+  status: string;
+  scope: ProxScope;
+  summary: {
+    total_kills: number; gibbed: number; revived: number; tapped_out: number;
+    expired: number; round_end: number; gib_rate: number; revive_rate: number;
+    avg_delta_ms: number; avg_denied_ms: number;
+  };
+  outcomes: Record<string, { count: number; avg_delta_ms: number; avg_denied_ms?: number }>;
+  events: unknown[];
+}
+
+export interface ProxHeadshotRates {
+  status: string;
+  scope: ProxScope;
+  leaders: { guid: string; name: string | null; headshot_pct: number; head_hits: number; total_hits: number }[];
+}
+
+export interface ProxTeamplay {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  limit: number;
+  sampled_engagements: number;
+  crossfire_kills: {
+    guid: string; name: string | null; crossfire_kills: number;
+    crossfire_participations: number; crossfire_final_blows: number;
+    avg_delay_ms: number; times_focused: number; focus_escapes: number;
+    kill_rate_pct: number;
+  }[];
+  sync: unknown[];
+}
+
+export interface ProxTradesSummary {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  events: number;
+  trade_opportunities: number;
+  trade_attempts: number;
+  trade_success: number;
+  missed_trade_candidates: number;
+  support_uptime_pct: number;
+  isolation_deaths: number;
+}
+
+export interface ProxTradesEvents {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  limit: number;
+  events: {
+    date: string; round: number; map: string; victim: string | null;
+    killer: string | null; opportunities: number; attempts: number;
+    success: number; missed: number; round_id: number | null;
+    round_date: string | null; round_time: string | null; outcome: string | null;
+  }[];
+}
+
+export interface ProxWeaponAccuracy {
+  status: string;
+  leaders: { guid: string; name: string | null; shots: number; hits: number; kills: number; headshots: number; accuracy: number }[];
+  /** Populated only under a player_guid filter (emitter branch). */
+  weapon_breakdown: { weapon_id: number; shots: number; hits: number; kills: number; headshots: number; accuracy: number }[];
+}
+
+/** ⚠️ Its own scope vocabulary: scope_applied + scope_note, not the shared
+ *  ProxScope — read from the emitter, not assumed. */
+export interface ProxObjectivePressure {
+  status: string;
+  session_date: string | null;
+  maps_counted: number;
+  top_fragger_guids: string[];
+  players: { guid: string; name: string | null; pressure_seconds: number; kills: number }[];
+  scope_applied: Record<string, string>;
+  scope_note: string;
+}
+
+export interface ProxSummary {
+  status: string;
+  ready: boolean;
+  message: string | null;
+  range_days: number;
+  generated_at: string | null;
+  scope: ProxScope;
+  total_engagements: number;
+  avg_distance_m: number;
+  crossfire_events: number;
+  hotzones: number;
+  avg_duration_ms: number;
+  avg_attackers: number;
+  escape_rate_pct: number;
+  kill_rate_pct: number;
+}

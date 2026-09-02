@@ -1,0 +1,1 @@
+{"status":"ok","ready":true,"message":null,"range_days":30,"generated_at":"2026-09-02T08:20:50.204211Z","scope":{"session_date":"2026-08-23","map_name":null,"round_number":null,"round_start_unix":null,"player_guid":null},"events":810,"trade_opportunities":514,"trade_attempts":189,"trade_success":97,"missed_trade_candidates":332,"support_uptime_pct":21.03,"isolation_deaths":301}

@@ -537,9 +537,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2501,
-        "file": "api_proximity_hit_regions_headshot_rates.json"
+        "file": "api_proximity_hit_regions_headshot_rates.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/hotzones",
@@ -571,9 +572,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 80282,
-        "file": "api_proximity_kill_outcomes.json"
+        "file": "api_proximity_kill_outcomes.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/kill-outcomes/player-stats",
@@ -697,9 +699,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 887,
-        "file": "api_proximity_objective_pressure.json"
+        "file": "api_proximity_objective_pressure.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/objective-runs",
@@ -1054,9 +1057,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 1880,
-        "file": "api_proximity_summary.json"
+        "file": "api_proximity_summary.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/support-summary",
@@ -1090,9 +1094,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 3575,
-        "file": "api_proximity_teamplay.json"
+        "file": "api_proximity_teamplay.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/trades/events",
@@ -1109,9 +1114,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 11952,
-        "file": "api_proximity_trades_events.json"
+        "file": "api_proximity_trades_events.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/trades/player-stats",
@@ -1144,9 +1150,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 379,
-        "file": "api_proximity_trades_summary.json"
+        "file": "api_proximity_trades_summary.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/proximity/v7-status",
@@ -1196,9 +1203,10 @@
         "src": "korpus",
         "status": 200,
         "bytes": 2725,
-        "file": "api_proximity_weapon_accuracy.json"
+        "file": "api_proximity_weapon_accuracy.json",
+        "covered_by": "ProximityOutcomes.tsx (faza 5)"
       },
-      "disposition": "pending"
+      "disposition": "covered"
     },
     {
       "path": "/api/replay/round/{round_id}/paths",
