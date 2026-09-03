@@ -8,6 +8,7 @@ import composite from './__fixtures__/api_skill_composite.json';
 import narrative from './__fixtures__/api_storytelling_narrative.json';
 import boxScore from './__fixtures__/api_storytelling_box_score.json';
 import moments from './__fixtures__/api_storytelling_moments.json';
+import escorts from './__fixtures__/api_storytelling_moments_escorts.json';
 import momentum from './__fixtures__/api_storytelling_momentum.json';
 import pwc from './__fixtures__/api_storytelling_win_contribution.json';
 import kis from './__fixtures__/api_storytelling_kill_impact.json';
@@ -67,7 +68,12 @@ const BODIES: [string, unknown][] = [
  * harder failure to read. Compare the pathname exactly.
  */
 function bodyFor(url: string): unknown | undefined {
-  const path = new URL(url, 'http://test.local').pathname.replace(/^\/api/, '');
+  const u = new URL(url, 'http://test.local');
+  const path = u.pathname.replace(/^\/api/, '');
+  // One path, two panels (stats 2.0 / docs/design/20 slice 5): the escorts
+  // panel asks the same endpoint with `types=escort_mover` and gets its own
+  // recording — the director's cut of 154 has no escort in it, this does.
+  if (path === '/storytelling/moments' && u.searchParams.get('types') === 'escort_mover') return escorts;
   return BODIES.find(([p]) => p === path)?.[1];
 }
 
@@ -219,6 +225,40 @@ describe('SessionStory (the session page story tab)', () => {
     // Two paths per chart — axis and allies — and both are drawn, since a
     // chart missing a series looks exactly like a team that never moved.
     expect(charts[0].querySelectorAll('path').length).toBe(2);
+  });
+
+  it('lists the objective escorts on their own, asked for by type', async () => {
+    // The default cut of this recording carries no escort_mover (the pools
+    // run 50–90 moments); the panel's own query does.
+    renderPage();
+    const first = (escorts as { moments: { player: string; round_number: number; narrative: string }[] }).moments[0];
+    await waitFor(() => expect(screen.getByText('objective escorts')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(first.narrative)).toBeInTheDocument());
+    const panel = document.querySelector('[data-parity="story.escorts"]');
+    expect(panel?.textContent).toContain(first.player);
+    expect(panel?.textContent).toContain(`R${first.round_number}`);
+  });
+
+  it('says why a night has no escorts, and keeps the moments when only the escort query fails', async () => {
+    const none = { ...escorts, moments: [], total: 0 };
+    renderPage((input) => {
+      const u = new URL(String(input), 'http://test.local');
+      if (u.pathname.endsWith('/storytelling/moments') && u.searchParams.get('types') === 'escort_mover') return jsonOnce(none)();
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/no round in this session had a vehicle moving/)).toBeInTheDocument());
+    // The two panels are two queries: an escort failure is declared in its
+    // own panel while the director's cut still renders.
+    renderPage((input) => {
+      const u = new URL(String(input), 'http://test.local');
+      if (u.pathname.endsWith('/storytelling/moments') && u.searchParams.get('types') === 'escort_mover') {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/escorts: unavailable/)).toBeInTheDocument());
+    const cut = (moments as { moments: { narrative: string }[] }).moments[0];
+    await waitFor(() => expect(screen.getAllByText(cut.narrative).length).toBeGreaterThan(0));
   });
 
   it('says a moment-less session is a result, not a gap', async () => {

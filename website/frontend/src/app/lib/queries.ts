@@ -716,7 +716,7 @@ export function useStoryScopes(limit: number) {
   });
 }
 
-function storyQuery<T>(name: string, path: StoryPath, gsid: number, extra?: Record<string, number>) {
+function storyQuery<T>(name: string, path: StoryPath, gsid: number, extra?: Record<string, number | string>) {
   return {
     queryKey: [name, gsid, extra],
     queryFn: () =>
@@ -757,6 +757,15 @@ export function useStoryBoxScore(gsid: number) {
 
 export function useStoryMoments(gsid: number) {
   return useQuery(storyQuery<StoryMoments>('story-moments', '/api/storytelling/moments', gsid, { limit: 10 }));
+}
+
+/** The escort moments on their own (docs/design/20 §7 slice 5): the
+ *  director's cut of a rich night is ten 5★ moments and a 3★ escort never
+ *  makes it, so the panel asks for that type by name — filtered on the full
+ *  pool server-side, then ranked among themselves. Its own query key: a
+ *  different `extra` is a different cache entry. */
+export function useStoryEscorts(gsid: number) {
+  return useQuery(storyQuery<StoryMoments>('story-escorts', '/api/storytelling/moments', gsid, { limit: 20, types: 'escort_mover' }));
 }
 
 export function useStoryMomentum(gsid: number) {
