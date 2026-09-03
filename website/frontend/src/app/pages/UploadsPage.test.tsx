@@ -26,17 +26,20 @@ const finalized = finalizedJson satisfies UploadCreated;
 const deleted = deletedJson satisfies UploadDeleteResponse;
 
 type Stub = { body?: unknown; status?: number; headers?: Record<string, string> };
-function stub(map: Record<string, Stub | ((init?: RequestInit) => Stub)>) {
+type StubOrFn = Stub | ((init?: RequestInit) => Stub);
+function stub(routes: Record<string, StubOrFn>) {
+  const map = new Map<string, StubOrFn>(Object.entries(routes));
   const spy = vi.fn((input: RequestInfo | URL, reqInit?: RequestInit): Promise<Response> => {
     const pathname = String(input).split('?')[0];
     const method = reqInit?.method ?? 'GET';
-    const raw = map[`${method} ${pathname}`] ?? map[pathname];
+    const raw = map.get(`${method} ${pathname}`) ?? map.get(pathname);
     if (raw === undefined) return Promise.reject(new Error(`unexpected: ${method} ${pathname}`));
     const hit = typeof raw === 'function' ? raw(reqInit) : raw;
     const status = hit.status ?? 200;
+    const headers = new Map<string, string>(Object.entries(hit.headers ?? {}));
     return Promise.resolve({
       ok: status < 400, status,
-      headers: { get: (k: string) => hit.headers?.[k] ?? null },
+      headers: { get: (k: string) => headers.get(k) ?? null },
       json: () => Promise.resolve(hit.body ?? { detail: 'x' }),
     } as unknown as Response);
   });
@@ -48,13 +51,13 @@ function stub(map: Record<string, Stub | ((init?: RequestInit) => Stub)>) {
 class FakeXhr {
   static last: FakeXhr | null = null;
   static answer: { status: number; body: unknown } = { status: 200, body: created };
-  url = ''; headers: Record<string, string> = {}; sent: FormData | null = null; withCredentials = false; responseType = '';
+  url = ''; headers = new Map<string, string>(); sent: FormData | null = null; withCredentials = false; responseType = '';
   upload = { onprogress: null as null | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) };
   onload: null | (() => void) = null; onerror: null | (() => void) = null; onabort: null | (() => void) = null;
   status = 0; responseText = '';
   constructor() { FakeXhr.last = this; }
   open(_m: string, url: string) { this.url = url; }
-  setRequestHeader(k: string, v: string) { this.headers[k] = v; }
+  setRequestHeader(k: string, v: string) { this.headers.set(k, v); }
   send(body: FormData) {
     this.sent = body;
     setTimeout(() => {
@@ -143,7 +146,7 @@ describe('UploadsPage', () => {
     const xhr = FakeXhr.last;
     if (!xhr) throw new Error('no XHR was opened');
     expect(xhr.url).toBe('/api/uploads');
-    expect(xhr.headers['X-Requested-With']).toBe('XMLHttpRequest');
+    expect(xhr.headers.get('X-Requested-With')).toBe('XMLHttpRequest');
     expect(xhr.sent?.get('title')).toBe('my cfg');
     expect(xhr.sent?.get('tags')).toBe('e2e');
     expect(xhr.sent?.get('retention_days')).toBe('30');

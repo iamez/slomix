@@ -111,13 +111,13 @@ describe('apiDelete', () => {
  *  fire upload progress and the terminal event it chooses. */
 class FakeXhr {
   static last: FakeXhr | null = null;
-  method = ''; url = ''; headers: Record<string, string> = {}; withCredentials = false; responseType = '';
+  method = ''; url = ''; headers = new Map<string, string>(); withCredentials = false; responseType = '';
   status = 0; responseText = ''; sent: unknown = null; aborted = false;
   upload = { onprogress: null as null | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) };
   onload: null | (() => void) = null; onerror: null | (() => void) = null; onabort: null | (() => void) = null;
   constructor() { FakeXhr.last = this; }
   open(method: string, url: string) { this.method = method; this.url = url; }
-  setRequestHeader(k: string, v: string) { this.headers[k] = v; }
+  setRequestHeader(k: string, v: string) { this.headers.set(k, v); }
   send(body: unknown) { this.sent = body; }
   abort() { this.aborted = true; this.onabort?.(); }
 }
@@ -134,7 +134,7 @@ describe('apiUploadWithProgress', () => {
     if (!xhr) throw new Error('no XHR was opened');
     expect(xhr.method).toBe('POST');
     expect(xhr.url).toBe('/api/uploads');
-    expect(xhr.headers['X-Requested-With']).toBe('XMLHttpRequest');
+    expect(xhr.headers.get('X-Requested-With')).toBe('XMLHttpRequest');
     expect(xhr.withCredentials).toBe(true);
     expect(xhr.sent).toBe(form);
     xhr.upload.onprogress?.({ lengthComputable: true, loaded: 40, total: 80 });

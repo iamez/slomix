@@ -20,20 +20,29 @@ function res(status: number, headers: Record<string, string> = {}, body?: unknow
 
 /** A fetch double that plays a script of PATCH answers in order and records
  *  every call. Non-PATCH routes are answered from the recorded fixtures. */
-function wire(patchScript: ((offset: number, size: number, n: number) => Response)[], opts: { head?: number | null; chunk?: number } = {}) {
+type PatchStep = (offset: number, size: number, n: number) => Response;
+function wire(patchScript: PatchStep[], opts: { head?: number | null; chunk?: number } = {}) {
   const calls: Call[] = [];
   let n = 0;
+  // Plays the script in order and repeats its last step — a queue, so no
+  // computed index ever selects a function to call.
+  const queue = [...patchScript];
+  const nextStep = (): PatchStep => {
+    const step = queue.length > 1 ? queue.shift() : queue[0];
+    if (!step) throw new Error('empty PATCH script');
+    return step;
+  };
   const spy = vi.fn(async (input: RequestInfo | URL, reqInit?: RequestInit): Promise<Response> => {
     const url = String(input);
     const method = reqInit?.method ?? 'GET';
-    const headers = (reqInit?.headers ?? {}) as Record<string, string>;
+    const headers = new Map<string, string>(Object.entries((reqInit?.headers ?? {}) as Record<string, string>));
     const body = reqInit?.body as Blob | undefined;
-    calls.push({ url, method, offset: headers['Upload-Offset'] ?? null, size: body instanceof Blob ? body.size : 0 });
+    calls.push({ url, method, offset: headers.get('Upload-Offset') ?? null, size: body instanceof Blob ? body.size : 0 });
     if (url === '/api/uploads/resumable' && method === 'POST') return res(200, {}, { ...init, chunk_size: opts.chunk ?? init.chunk_size });
     if (url === SESSION && method === 'PATCH') {
-      const step = patchScript[Math.min(n, patchScript.length - 1)];
+      const step = nextStep();
       n += 1;
-      return step(Number(headers['Upload-Offset']), body instanceof Blob ? body.size : 0, n);
+      return step(Number(headers.get('Upload-Offset')), body instanceof Blob ? body.size : 0, n);
     }
     if (url === SESSION && method === 'HEAD') return opts.head === null ? res(404) : res(200, { 'Upload-Offset': String(opts.head ?? 0) });
     if (url === SESSION && method === 'DELETE') return res(200, {}, { success: true });
