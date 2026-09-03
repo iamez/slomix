@@ -464,12 +464,16 @@ def test_every_trend_statistic_is_robust_to_the_rows_the_row_rules_catch():
             f"one impossible row can move it: {rule.statistic}")
 
 
-def test_the_dead_time_share_rule_names_the_month_it_was_built_for():
-    """2026-04 is the month the Lua fix landed and 23 per-row rules saw
-    nothing. If it ever stops being named here, this rule has lost its
-    provenance."""
+def test_the_dead_time_share_rule_keeps_its_provenance_after_the_repair():
+    """2026-04 is the month the Lua fix landed while 23 per-row rules saw
+    nothing -- the reason this rule class exists. The shift itself is gone
+    (the reconstruction flattened the series), so the provenance now lives in
+    the note. Losing it there would leave a rule nobody can explain."""
     rule = next(r for r in TREND_RULES if r.name == "pcs_dead_time_share_monthly")
-    assert "2026-04" in dict(rule.known_shifts)
+    assert not rule.known_shifts, (
+        "the series is flat since the 2026-09-03 reconstruction; a named shift "
+        "here would describe something that no longer happens")
+    assert "2026-04" in rule.note and "8,721" in rule.note
 
 
 @pytest.mark.parametrize("rule", TREND_RULES, ids=[r.name for r in TREND_RULES])
@@ -561,18 +565,32 @@ def test_armed_from_must_be_an_iso_date(bad):
         validate_rules([_armed(armed_from=bad)])
 
 
-def test_no_time_field_rule_is_muted_any_more():
+def test_no_time_field_rule_is_muted():
     """The three time-field rules landed acknowledged, which mutes the WHOLE
     rule: a fresh occurrence of the same breakage would have been swallowed
-    along with the history the acknowledgement excused. They are armed now.
-    If one of them ever goes back to `acknowledged`, that trade is being made
-    again and should be argued for, not slipped in."""
+    along with the history the acknowledgement excused.
+
+    Two of them need nothing now -- the 2026-09-03 reconstruction repaired all
+    80 + 43 historical rows, so they stand green on their own -- and the third
+    is armed rather than muted. What must never come back is the mute."""
     for name in ("pcs_time_played_percent_is_zero",
                  "pcs_time_dead_exceeds_time_played",
                  "pcs_time_dead_ratio_out_of_range"):
         rule = next(r for r in RULES if r.name == name)
-        assert rule.armed_from, f"{name} lost its arming date"
         assert not rule.acknowledged, f"{name} is muted again"
+
+
+def test_the_dead_time_rules_no_longer_need_arming():
+    """Arming is scaffolding around a backlog. Both dead-time rules were armed
+    on 2026-04-01 while 123 impossible rows stood; the reconstruction removed
+    the rows, so the scaffolding came down with them. A rule that is armed
+    with nothing behind the date is a date nobody can justify."""
+    for name in ("pcs_time_dead_exceeds_time_played",
+                 "pcs_time_dead_ratio_out_of_range"):
+        rule = next(r for r in RULES if r.name == name)
+        assert not rule.armed_from, (
+            f"{name} is armed again — if the defect came back, fix the data; "
+            f"if history came back, say which rows and why")
 
 
 def test_the_split_query_names_three_buckets():

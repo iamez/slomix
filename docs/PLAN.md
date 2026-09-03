@@ -100,7 +100,7 @@ tudi med pavzo in NI izključen. Razsodi meritev prek `self`. Optimizacija burst
 
 ## Proga: časovna polja (Opus 5)
 
-**Zadnja posodobitev:** 2026-09-03 (Opus 5 — vseh 5 PR-jev na mainu, bot restartan, varovala oborožena)
+**Zadnja posodobitev:** 2026-09-03 (Opus 5 — faza 3 IZVEDENA, proga zaključena)
 
 Dva ločena hrošča v istem deploy oknu (~20. 3. 2026) sta pustila bazo v
 stanju, kjer sta obdobji **nezdružljivi**: staro ima engine alive%, a ~2×
@@ -113,11 +113,37 @@ se da vsako obdobje popraviti iz signala drugega.
 |---|---|---|
 | 1 | uvozna pot piše `time_played_percent` + parnostno varovalo piscev | ✅ **#885** `f71906ac` |
 | 2 | backfill `time_played_percent` iz surovih datotek | ✅ **#886** `fb35e09b`; izveden 2. 9. (+4.666, kontrola 22/22), **ponovljen 3. 9. po restartu bota: 0 rešljivih vrstic — končano** |
-| 3 | rekonstrukcija zgodovinskega `time_dead_minutes` iz engine alive% | ⛔ ownerjeva odločitev; velja SAMO za R1 (R2 gre prek kumulativne TAB[8]); prekliče zapis »owner decision — no backfill« v `docs/KNOWN_ISSUES.md` |
+| 3 | rekonstrukcija zgodovinskega `time_dead_minutes` iz engine alive% | ✅ **IZVEDENA 3. 9.** — 8.721 vrstic, migracija 081, izvirnik ohranjen v `time_dead_minutes_original`; `dead > played` 80 → 0, `ratio > 100,5` 43 → 0 |
 | 4a | per-row varovala v plausibility auditu (4 nova pravila) | ✅ **#892** `75ebdeee` |
 | 4b | agregatni razred (»porazdelitev se je premaknila«) | ✅ **#895** `c213346f`, 7 trend pravil |
-| 4c | oborožitev namesto utišanja (`Rule.armed_from`) | **ta veja** |
+| 4c | oborožitev namesto utišanja (`Rule.armed_from`) | ✅ **#900** `eea9b617`; po fazi 3 obe dead-time pravili nista več oboroženi (ni več česa izvzeti) |
 | 5 | zastareli zapisi, ki so to skrivali | ✅ **#893** `0003e589` |
+
+⭐⭐ **RCA, ki je obseg faze 3 obrnil (3. 9.):** »R2 se je maja 2025 spremenil«
+je bila napačna diagnoza. Meja je **datum vpisa**, ne seje: vse vrstice za
+2025-01…05 so bile vstavljene 2025-12-20 (bulk uvoz). Primerjava
+datoteka ↔ baza ↔ rekonstrukcija (n = 8.369) pokaže, da je **Lua napihnila
+enotno ~2,2×** v vseh štirih celicah, uvoznik pa je datoteko prepisal dobesedno
+**razen pri bulk R2**, kjer jo je obravnaval kot kumulativo tekme in razdelil
+sorazmerno s časom (`× played_R2/(played_R1+played_R2)`, mediana 1,000,
+**97,8 %** vrstic znotraj ±10 %). Dve napaki, ki se v mediani skoraj izničita
+(1,058) in po vrsticah ne (le 18,2 % znotraj ±10 %).
+
+✅ **Izid rekonstrukcije (3. 9.):** 8.721 vrstic, 26.337 → 12.338 min, mediana
+faktorja 1,92. Porazdelitev se čez mejo zdaj ujema v vseh kvartilih
+(p25 0,169 / med 0,212 / p75 0,257 proti 0,153 / 0,203 / 0,255 po meji; prej je
+bila predmejna mediana 0,365). Preostalih 11 nemogočih vrstic sedi v rundah, ki
+jih cevovod že izloča (1× `orphan_r2`, 2× `is_valid = FALSE` bot rundi).
+
+⭐ **Neodvisna potrditev:** agregatno pravilo `pcs_dead_time_share_monthly`,
+zgrajeno in umerjeno na pokvarjenih podatkih tri dni prej, je prej javljalo tri
+pojasnjene premike (2025-05 +46,5 %, 2026-04 −53,1 %, 2026-05 −41,4 %), zdaj pa
+**nobenega** — mesečna serija je ravna 0,19–0,23 čez vseh dvajset mesecev.
+
+⚠️ **Najdba ob strani:** `scripts/db_backup.sh` je tekel kot `website_app`
+(ker `website/.env` prepiše `POSTGRES_USER`) in ta ne more brati 7 tabel →
+`pg_dump` je odpovedal. Odpovedal je glasno, kar je pravi izid, a razhajanje
+med korenskim in website `.env` za administrativna orodja ostaja odprto.
 
 ✅ **Bot restartan 3. 9. ob 11:25** (`etlegacy-bot`, dev enota, NOPASSWD;
 `etlegacy-web` nedotaknjen): 21 cogov, 98 ukazov, brez napak. Ponovni zagon
