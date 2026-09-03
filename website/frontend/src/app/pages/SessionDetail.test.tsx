@@ -26,6 +26,12 @@ import awards80 from './__fixtures__/api_stats_session_gaming_session_id_awards_
 import synergy from './__fixtures__/api_storytelling_synergy.json';
 import synergy80 from './__fixtures__/api_storytelling_synergy_80.json';
 import trades154 from './__fixtures__/api_proximity_trades_player_stats_session_154.json';
+import killImpact from './__fixtures__/api_storytelling_kill_impact.json';
+import killImpactDetails from './__fixtures__/api_storytelling_kill_impact_details.json';
+import kisFormula from './__fixtures__/api_storytelling_formula.json';
+import weaponsByPlayer from './__fixtures__/api_stats_weapons_by_player.json';
+import { perMapTotals } from '../lib/perMap';
+import type { SessionRound } from '../lib/types';
 import type { SessionAwards, SessionBasics } from '../lib/types';
 
 const basicsFull = basics satisfies SessionBasics;
@@ -47,18 +53,31 @@ const BODIES: [string, unknown][] = [
   // R4 tabs: synergy is session-keyed, the trade table date-keyed (154 = 2026-08-27).
   ['/storytelling/synergy', synergy],
   ['/proximity/trades/player-stats', trades154],
+  // R5 drilldown. Longer paths first: matching is by substring, and
+  // '/kill-impact' would otherwise answer for '/kill-impact/details'.
+  ['/storytelling/kill-impact/details', killImpactDetails],
+  ['/storytelling/kill-impact', killImpact],
+  ['/storytelling/formula', kisFormula],
+  ['/stats/weapons/by-player', weaponsByPlayer],
 ];
 
+/** Match the END of the pathname, not a substring of the URL: '/detail'
+ *  matched '/storytelling/kill-impact/details' and answered the KIS
+ *  breakdown with the session detail body (R5, the first row opened). */
+function pathOf(input: RequestInfo | URL): string {
+  return new URL(String(input), 'http://test.local').pathname;
+}
+
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
-  const url = String(input);
-  const hit = BODIES.find(([path]) => url.includes(path));
-  if (!hit) return Promise.reject(new Error(`unexpected endpoint: ${url}`));
+  const path = pathOf(input);
+  const hit = BODIES.find(([suffix]) => path.endsWith(suffix));
+  if (!hit) return Promise.reject(new Error(`unexpected endpoint: ${String(input)}`));
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(hit[1]) } as Response);
 }
 
-function withOverride(path: string, make: () => Promise<Response>) {
+function withOverride(suffix: string, make: () => Promise<Response>) {
   return (input: RequestInfo | URL) =>
-    String(input).includes(path) ? make() : fixtureFetch(input);
+    (pathOf(input).endsWith(suffix) ? make() : fixtureFetch(input));
 }
 
 function json(body: unknown): Promise<Response> {
@@ -90,6 +109,12 @@ afterEach(() => {
 /** Stats 2.0 moved the scoreboard, team totals, lives, form and top-dpm
  *  panels behind a "more" expander (docs/design/18 §C); the tests that
  *  read them open it first. */
+/** Text of one parity node — a string, not an element held in a variable
+ *  the html-scanner reads as raw markup. */
+function textOf(container: HTMLElement, parity: string): string {
+  return container.querySelector(`[data-parity="${parity}"]`)?.textContent ?? '';
+}
+
 async function openMore() {
   // Every collapsed "more" on the page: a test that renders twice has two.
   // A page that never reaches the summary (404, failure, another tab) has
@@ -457,7 +482,7 @@ describe('SessionDetail — stats 2.0 summary', () => {
     expect(screen.getByRole('button', { name: /^uk$|^uk ▾|^uk ▴/ })).toHaveAttribute('title', expect.stringMatching(/^useful kills — the victim had at least half the spawn cycle/));
     expect(screen.getByRole('button', { name: /^useless/ })).toHaveAttribute('title', expect.stringMatching(/next spawn wave/));
     // The expander names the player, not the guid, though the cell is a Link.
-    expect(screen.getByRole('button', { name: `weapons for ${first.name}` })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `details for ${first.name}` })).toBeInTheDocument();
     // No unmeasured cell prints undefined/NaN.
     expect(table.textContent).not.toMatch(/undefined|NaN/);
   });
@@ -537,7 +562,7 @@ describe('SessionDetail — stats 2.0 R4 tabs', () => {
     const top = [...(detail as { players: { player_name: string; dpm: number }[] }).players].sort((a, b) => b.dpm - a.dpm)[0];
     const firstRow = table.querySelectorAll('.rows > div')[0];
     expect(firstRow.textContent).toContain(top.player_name);
-    expect(screen.getByRole('button', { name: `weapons for ${top.player_name}` })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: `details for ${top.player_name}` })).toBeInTheDocument();
     expect(table.textContent).not.toMatch(/undefined|NaN/);
   });
 
@@ -613,5 +638,116 @@ describe('SessionDetail — stats 2.0 R4 tabs', () => {
     const { container } = renderPage(fetchImpl, '/session-detail/154/story');
     await waitFor(() => expect(container.querySelector('[data-parity="session.story"]')).toBeTruthy());
     await waitFor(() => expect(screen.getByText(/no accepted rounds, so there is no story to tell/)).toBeInTheDocument());
+  });
+});
+
+describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
+  type DetailPlayer = { player_guid: string; player_name: string; dpm: number };
+  const players = (detail as { players: DetailPlayer[] }).players;
+  const top = [...players].sort((a, b) => b.dpm - a.dpm)[0];
+  const allRounds = (rounds as { rounds: SessionRound[] }).rounds;
+
+  async function openTop(entry = '/session-detail/154/players') {
+    const rendered = renderPage(fixtureFetch, entry);
+    const button = await screen.findByRole('button', { name: `details for ${top.player_name}` });
+    fireEvent.click(button);
+    await waitFor(() => expect(rendered.container.querySelector('[data-parity="session.player"]')).toBeTruthy());
+    return rendered;
+  }
+
+  it('opens five instruments and two links, each in its own section', async () => {
+    const { container } = await openTop();
+    for (const part of ['links', 'maps', 'life', 'form', 'kis', 'weapons']) {
+      expect(container.querySelector(`[data-parity="session.player.${part}"]`), part).toBeTruthy();
+    }
+    const key = top.player_guid.slice(0, 8).toUpperCase();
+    expect(screen.getByRole('link', { name: /profile →/ })).toHaveAttribute('href', `/profile/${key}`);
+    expect(screen.getByRole('link', { name: /proximity →/ })).toHaveAttribute('href', `/proximity/player/${key}`);
+  });
+
+  it('sums the per-map rows from the rounds already on the page, counted rounds only', async () => {
+    const { container } = await openTop();
+    const expected = perMapTotals(allRounds, top.player_guid);
+    expect(expected.maps.length).toBeGreaterThan(0);
+    const rowsOf = () => [...container.querySelectorAll('[data-parity="session.player.maps"] [role="region"] .rows > div')];
+    await waitFor(() => expect(rowsOf().length).toBe(expected.maps.length));
+    // One map's dpm, read off the row, equals the hand formula.
+    const one = expected.maps[0];
+    const row = rowsOf().find((r) => r.textContent?.includes(one.map_name));
+    expect(row?.textContent).toContain(one.dpm == null ? '—' : one.dpm.toFixed(0));
+    expect(textOf(container, 'session.player.maps')).not.toMatch(/undefined|NaN|Infinity/);
+  });
+
+  it('picks the player\'s own verdict and best life out of the night\'s panels', async () => {
+    const { container } = await openTop();
+    const key = top.player_guid.slice(0, 8).toUpperCase();
+    const verdict = (verdicts as { players: { guid: string; label: string; first_night: boolean }[] }).players
+      .find((p) => p.guid.slice(0, 8).toUpperCase() === key);
+    if (verdict && !verdict.first_night) {
+      await waitFor(() => expect(textOf(container, 'session.player.form')).toContain(verdict.label));
+    } else {
+      await waitFor(() => expect(textOf(container, 'session.player.form')).toMatch(/no baseline|first night/));
+    }
+    const lives = (bestLives as { lives: { guid: string; kills: number }[] }).lives
+      .filter((l) => l.guid.slice(0, 8).toUpperCase() === key);
+    if (lives.length > 0) {
+      const best = Math.max(...lives.map((l) => l.kills));
+      await waitFor(() => expect(textOf(container, 'session.player.life')).toContain(`${best}kills · one life`));
+    } else {
+      await waitFor(() => expect(textOf(container, 'session.player.life')).toMatch(/no tracked life/));
+    }
+  });
+
+  it('translates the 8-character guid to the 32-character one the KIS details endpoint matches', async () => {
+    const spy = vi.fn(fixtureFetch);
+    renderPage(spy, '/session-detail/154/players');
+    fireEvent.click(await screen.findByRole('button', { name: `details for ${top.player_name}` }));
+    const key = top.player_guid.slice(0, 8).toUpperCase();
+    const full = (killImpact as { players: { guid: string }[] }).players.find((p) => p.guid.slice(0, 8).toUpperCase() === key);
+    expect(full, 'the recording must hold the top player in its kill-impact list').toBeDefined();
+    await waitFor(() => {
+      const call = spy.mock.calls.map(([u]) => String(u)).find((u) => u.includes('/kill-impact/details'));
+      expect(call).toBeDefined();
+      expect(call).toContain(`player_guid=${(full as { guid: string }).guid}`);
+    });
+    const summary = (killImpactDetails as { summary: { kills: number; total_kis: number } }).summary;
+    await waitFor(() => expect(screen.getByText(`${summary.kills} kills · ${summary.total_kis.toFixed(1)} total`, { exact: false })).toBeInTheDocument());
+  });
+
+  it('says an absence where an instrument has nothing, instead of drawing zeros', async () => {
+    const fetchImpl = (input: RequestInfo | URL) => {
+      const u = String(input);
+      if (u.includes('/storytelling/kill-impact/details')) return fixtureFetch(input);
+      if (u.includes('/storytelling/kill-impact')) return json({ ...(killImpact as object), players: [] });
+      if (u.includes('/verdicts')) return json({ status: 'ok', gaming_session_id: 154, players: [] });
+      if (u.includes('/storytelling/best-lives')) return json({ status: 'ok', lives: [], total: 0 });
+      return fixtureFetch(input);
+    };
+    const { container } = renderPage(fetchImpl, '/session-detail/154/players');
+    fireEvent.click(await screen.findByRole('button', { name: `details for ${top.player_name}` }));
+    await waitFor(() => expect(screen.getByText(/no scored kills for/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/no baseline for this player yet/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/no tracked life of theirs/)).toBeInTheDocument());
+    expect(container.querySelector('[data-parity="session.player"]')?.textContent).not.toMatch(/undefined|NaN/);
+  });
+
+  it('a first night is said, not scored against a baseline it does not have', async () => {
+    const key = top.player_guid.slice(0, 8).toUpperCase();
+    const firstNight = {
+      status: 'ok', gaming_session_id: 154, baseline: 'their own previous sessions',
+      players: [{ guid: key, name: top.player_name, dpm: 400, avg_dpm: null, kills: 1, first_night: true, percentile: null, label: 'Great', sessions_in_baseline: 0 }],
+    };
+    const { container } = renderPage(withOverride('/verdicts', () => json(firstNight)), '/session-detail/154/players');
+    fireEvent.click(await screen.findByRole('button', { name: `details for ${top.player_name}` }));
+    await waitFor(() => expect(textOf(container, 'session.player.form')).toMatch(/first night — no baseline yet/));
+    // The label a baseline would have earned is not printed beside it.
+    expect(textOf(container, 'session.player.form')).not.toContain('Great');
+  });
+
+  it('the basics table on the summary opens the same row', async () => {
+    const { container } = renderPage(fixtureFetch, '/session-detail/154');
+    const basics = (basicsFull as { players: { name: string }[] }).players[0];
+    fireEvent.click(await screen.findByRole('button', { name: `details for ${basics.name}` }));
+    await waitFor(() => expect(container.querySelector('[data-parity="session.basics"] [data-parity="session.player"]')).toBeTruthy());
   });
 });

@@ -44,6 +44,9 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., stats 2.0 R5) **Head-to-head za igralca** (koga je ubil / kdo ga je ubil iz `/storytelling/kill-matrix`) odložen — owner izbral obseg brez njega; matrix je že naložen v Story zavihku, vrstica bi ga le filtrirala.
+- (3. 9., R5) **`best-lives` brez coverage zastavice**: `lives: []` ne loči »nezajeto« od »nihče ni dosegel minimuma« — razširjena vrstica to pove z besedilom; prava rešitev je zastavica v odgovoru (backend).
+- (3. 9., R5) **KIS details rabi 32-znakovni guid** (`killer_guid = $5`, `storytelling_router.py:400`); stran ga dobi prek `kill-impact` seznama (limit 50) — seja z več kot 50 točkovanimi igralci bi za 51. pokazala »no scored kills«. Danes nemogoče (≤ 12 igralcev), a je meja v kodi imenovana.
 - (3. 9., stats 2.0 R4) **`/detail` brez `response_model`** — Players zavihek bere 8 polj, ki jih TS vmesnik prej ni poznal (`self_kills`, `useful_kills`, `full_selfkills`, `time_dead_minutes`, `denied_playtime`, `alive_pct_drift`, `played_pct`, `played_pct_lua`); drift checker jih ne vidi, dokler handler nima modela (rabi posnetek 154 + 80 v `_RECORDED` in črtanje iz `response_model_gap.txt`).
 - (3. 9., R4) **`played_pct_lua` je kopija `played_pct`** (`sessions_router.py:2298`) — legacy »Lua Played%« je bil fikcija; nova stran ga ne riše. Če owner hoče pravi TAB[8], rabi svoj stolpec v `session_player_sql`.
 - (3. 9., R4) **`headshot_kills`** ni več v Players tabeli (bil je pod istim `hs` kot head-hit %); če ga kdo pogreša, gre kot svoj stolpec `hs kills`.

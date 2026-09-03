@@ -67,7 +67,7 @@ deploy NI naloga.
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R4 v PR-ju; R5 naslednja)
+**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R4 mergan; R5 v PR-ju)
 
 Owner (3. 9.): »Sessions« + »Sessions 2.0« → ENA stran; seznam po datumu in
 id-ju s thumbnailom; ob kliku najprej jedrnat summary (basics tabela +
@@ -81,8 +81,8 @@ hits/shots lahkih orožij.
 | R1 | en arhiv `/sessions` z levelshoti, `#id`, BOX, mape, »one half missing«; `/sessions2` redirect; podnav brez podvojitve | #897 merged |
 | R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, vrata `/detail` + brez botov, KIS null=not covered, pravila agregacije nagrad z vzdevki, korpusni tek `scripts/audit_session_basics.py`) | **MERGAN** #898 (`ace66e3d`, 3. 9.) |
 | R3 | summary: glava z BigScore + trak map z levelshoti + figure; `DataTable` (nov, doc 11) s 17 stolpci in tooltipi (`uk` = useful (legacy), `useless` svoj — owner 3. 9.); nagrade v stavkih; night score + MVP; ostalih 5 panelov za »more ▸«; Playwright thin = seja 80 | **MERGAN** #899 (`965c2928`, 3. 9.) |
-| R4 | zavihki Players (21 legacy stolpcev + razširitev na `DataTable`; »Lua Played%« opuščen = kopija Played%) · Rounds (`RoundsTab`, `/rounds` upokojen → `/sessions`) · Teamplay (5 barov sinergije + trade tabela po datumu; `no_data`/`partial_data` = `Absent`) · Story (`SessionStory` kot zavihek; `/story/session/:gsid` → `/session-detail/:gsid/story` prek `PARAM_REDIRECTS`); slovnica zavihkov ENA kopija v `routes.ts`; e2e `session-tabs.spec.ts` (154 + 80, 5 zavihkov) | en PR (owner), veja `feat/app-stats20-r4-tabs` |
-| R5 | power user: vrstica igralca ▾, KIS details, povezave | — |
+| R4 | zavihki Players (21 legacy stolpcev + razširitev na `DataTable`; »Lua Played%« opuščen = kopija Played%) · Rounds (`RoundsTab`, `/rounds` upokojen → `/sessions`) · Teamplay (5 barov sinergije + trade tabela po datumu; `no_data`/`partial_data` = `Absent`) · Story (`SessionStory` kot zavihek; `/story/session/:gsid` → `/session-detail/:gsid/story` prek `PARAM_REDIRECTS`); slovnica zavihkov ENA kopija v `routes.ts`; e2e `session-tabs.spec.ts` (154 + 80, 5 zavihkov) | **MERGAN** #902 (`f3f06cdc`, 3. 9.) |
+| R5 (v PR-ju, veja `feat/app-stats20-r5-drilldown`) | power user: vrstica igralca ▾, KIS details, povezave | — |
 
 Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 

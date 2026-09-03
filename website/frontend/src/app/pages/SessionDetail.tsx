@@ -5,13 +5,14 @@ import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Una
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { RoundsTab, roundsReason } from '../components/RoundsTab';
 import { TeamplayTab } from '../components/TeamplayTab';
+import { PlayerDrilldown } from '../components/PlayerDrilldown';
 import { SessionStory } from './Story';
 import { mapImageFor, mapLabel } from '../lib/maps';
 import { SESSION_DETAIL_TABS, type SessionTab } from '../routes';
 import { ApiError } from '../lib/api';
 import {
   useSessionAwards, useSessionBasics, useSessionDetail, useSessionGoodNight, useSessionLeaderboard, useSessionMvp,
-  useSessionPlayerWeapons, useSessionRounds,
+  useSessionRounds,
   useSessionVerdicts, useSessions, useStoryBestLives,
 } from '../lib/queries';
 import type {
@@ -369,38 +370,6 @@ const PLAYERS_COLUMNS: readonly DataColumn<SessionPlayerTotals>[] = [
   { key: 'assists', label: 'assists', title: 'kill assists — the legacy page normalised this field and never drew it', width: 56, sortValue: (p) => p.kill_assists },
 ];
 
-/** One player's weapons within THIS session — the session-scoped call
- * legacy session-detail.js made, via the hyphen spelling (see
- * useSessionPlayerWeapons). Opened one row at a time: the response is per
- * player and two open rows would be two fetches for a comparison this
- * table does not draw (same rule as the story page's KIS detail). */
-function PlayerWeaponsRow({ sessionId, guid }: { sessionId: number; guid: string }) {
-  const weapons = useSessionPlayerWeapons(sessionId, guid);
-  const player = weapons.data?.players[0];
-  return (
-    <div style={{ padding: 'var(--space-2) 0 var(--space-3) var(--space-5)' }}>
-      {weapons.isPending && <Pending label="weapons" />}
-      {weapons.isError && <Unavailable what="weapons" />}
-      {weapons.data && (!player || player.weapons.length === 0 ? (
-        <Absent reason="no weapon rows recorded for this player in this session" />
-      ) : (
-        <Cluster gap={4} style={{ flexWrap: 'wrap' }}>
-          {player.weapons.map((w) => (
-            <span key={w.weapon_key} className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-400)' }}>
-              {w.name} · {figure(w.kills)}k
-              {w.shots > 0 && <> · {w.accuracy.toFixed(1)}%</>}
-              {/* head HITS (SUM(headshots)), not headshot kills — the parent
-                * row's hs column counts kills, and one shared abbreviation
-                * would invite comparing the two (Codex on #855). */}
-              {w.headshots > 0 && <> · {figure(w.headshots)} head hits</>}
-            </span>
-          ))}
-        </Cluster>
-      ))}
-    </div>
-  );
-}
-
 /** The Players tab — the legacy 22-column table (docs/design/18 §C plast 2)
  * on the one DataTable, every header carrying its definition. Two legacy
  * columns are not carried: "Lua Played%" printed a duplicate of Played%
@@ -425,9 +394,9 @@ function PlayersTab({ players, sessionId, teams }: { players: SessionPlayerTotal
         rows={players}
         rowKey={(p) => p.player_guid}
         defaultSort={{ key: 'dpm', dir: 'desc' }}
-        expandLabel="weapons"
+        expandLabel="details"
         expandName={(p) => p.player_name}
-        renderExpanded={(p) => <PlayerWeaponsRow sessionId={sessionId} guid={p.player_guid} />}
+        renderExpanded={(p) => <PlayerDrilldown sessionId={sessionId} guid8={p.player_guid} name={p.player_name} />}
         minWidth={1400}
         label="players"
       />
@@ -569,9 +538,9 @@ function Basics({ basics, sessionId }: { basics: SessionBasics; sessionId: numbe
         rows={basics.players}
         rowKey={(p) => p.guid}
         defaultSort={{ key: 'dpm', dir: 'desc' }}
-        expandLabel="weapons"
+        expandLabel="details"
         expandName={(p) => p.name}
-        renderExpanded={(p) => <PlayerWeaponsRow sessionId={sessionId} guid={p.guid} />}
+        renderExpanded={(p) => <PlayerDrilldown sessionId={sessionId} guid8={p.guid} name={p.name} />}
         minWidth={1160}
         label="the basics"
       />

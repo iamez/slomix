@@ -70,3 +70,22 @@ test('the players tab carries the 21 legacy columns with their definitions', asy
   await expect(table.getByRole('button', { name: /^uk/ })).toHaveAttribute('title', /useful kills — the victim had at least half the spawn cycle/);
   await expect(table.getByRole('button', { name: /^alive %/ })).toHaveAttribute('title', /Alive%: time not dead/);
 });
+
+for (const s of SESSIONS) {
+  test(`session ${s.id} (${s.note}) · the expanded player row opens with its five instruments`, async ({ page }) => {
+    const errors = watch(page);
+    await page.goto(`/app/session-detail/${s.id}/players`, { waitUntil: 'networkidle' });
+    const first = page.locator('[data-parity="session.players"] button[aria-expanded]').first();
+    await first.click();
+    const row = page.locator('[data-parity="session.player"]');
+    await expect(row).toBeVisible();
+    for (const part of ['links', 'maps', 'life', 'form', 'kis', 'weapons']) {
+      await expect(row.locator(`[data-parity="session.player.${part}"]`)).toBeVisible();
+    }
+    // Every instrument has answered — nothing is still pending.
+    await expect(row.getByText(/…$/)).toHaveCount(0, { timeout: 15000 });
+    const text = await row.innerText();
+    expect(text).not.toMatch(/\bundefined\b|\bNaN\b|\bInfinity\b|\[object Object\]/);
+    expect(errors, `session ${s.id} drilldown logged console errors`).toEqual([]);
+  });
+}
