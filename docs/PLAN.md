@@ -82,9 +82,28 @@ hits/shots lahkih orožij.
 | R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, vrata `/detail` + brez botov, KIS null=not covered, pravila agregacije nagrad z vzdevki, korpusni tek `scripts/audit_session_basics.py`) | **MERGAN** #898 (`ace66e3d`, 3. 9.) |
 | R3 | summary: glava z BigScore + trak map z levelshoti + figure; `DataTable` (nov, doc 11) s 17 stolpci in tooltipi (`uk` = useful (legacy), `useless` svoj — owner 3. 9.); nagrade v stavkih; night score + MVP; ostalih 5 panelov za »more ▸«; Playwright thin = seja 80 | **MERGAN** #899 (`965c2928`, 3. 9.) |
 | R4 | zavihki Players (21 legacy stolpcev + razširitev na `DataTable`; »Lua Played%« opuščen = kopija Played%) · Rounds (`RoundsTab`, `/rounds` upokojen → `/sessions`) · Teamplay (5 barov sinergije + trade tabela po datumu; `no_data`/`partial_data` = `Absent`) · Story (`SessionStory` kot zavihek; `/story/session/:gsid` → `/session-detail/:gsid/story` prek `PARAM_REDIRECTS`); slovnica zavihkov ENA kopija v `routes.ts`; e2e `session-tabs.spec.ts` (154 + 80, 5 zavihkov) | **MERGAN** #902 (`f3f06cdc`, 3. 9.) |
-| R5 (v PR-ju, veja `feat/app-stats20-r5-drilldown`) | power user: vrstica igralca ▾, KIS details, povezave | — |
+| R5 | **MERGAN** #903 (`e3b0a70c`, 3. 9.) —  power user: vrstica igralca ▾, KIS details, povezave | — |
 
 Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
+
+## Proga: frame-health v6.13 — watchdog za VSE Lua module + bot test (Fable 5.1)
+
+**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, v PR-ju)
+
+Owner 3. 9.: watcher razširiti na vseh 6 modulov, izboljšati, bot test (~30 min)
+za polno obremenitev; RCON `testmode` in deploy za ta PR izrecno predana.
+
+| korak | vsebina | stanje |
+|---|---|---|
+| 0 | osnovnica: bot test z v6.12 (18:37–19:07, 6 botov, `testmode on/off`) | izveden, poročilo po 19:10 |
+| 1 | skupni FH blok (`FH init mod=`, `FM wall mod self top`) v 6 modulih; tracker: `lt`/`paused` na gap vrstici, kapica 300→3000, `init_scan` meritev; `tests/lua/frame_health_modules_harness.lua`; identity test | veja `feat/lua-frame-health-v613` |
+| 2 | `scripts/frame_health_report.py` (pripis: Σ self v oknu gapa = naš Lua, ostanek = motor/gostitelj) + test | narejeno |
+| 3 | PR, CI, ownerjev merge | — |
+| 4 | deploy na prazen puran (scp na ŽIVE poti, map load, `FH init mod=` 6×, sha256 prej/potem; ⛔ nikoli `lua_restart`) | predano meni |
+| 5 | drugi bot test z v6.13 → poročilo; ukrepi v BACKLOG | — |
+
+Osnovnica iz obstoječih logov (report, 2. 9., prazen strežnik): stall 363 s,
+naš Lua 16 %, residual (motor/gostitelj) 84 %; 3. 9. do 18:00: 36 s, 22 % / 78 %.
 
 ## Proga: lag na puranu + Lua optimizacija (sestrska seja)
 
