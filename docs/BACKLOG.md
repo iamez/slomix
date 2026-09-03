@@ -27,6 +27,15 @@
   zajeti** (gibhub »Pillow Fort«); `sessions_router` ACC (lahka orožja) ≠
   `pcs.accuracy` (vsa orožja) — stran imenuje, katero; `endstats_aggregator`
   sešteva tudi K/D in accuracy čez runde (za sejni roll-up rabi `best`).
+- (3. 9., R3) `/stats/session/{id}/detail` vrže stran `warnings` iz
+  `build_session_scoring` (drugi element terke) → session glava ne more
+  pokazati »Lua header winner missing: used time fallback« (doc 12 vrstica 31
+  zahteva). `/basics` ali `/detail` naj ju vrne. `MapStrip` pari
+  `detail.matches` in `scoring.maps` po indeksu — ko se seznama razlikujeta
+  (map ni v scoringu), naj se pari po `match_id`.
+- (3. 9., R3) Playwright `SAMPLES_THIN` sessionId 151 → 80; 151 (0 štetih
+  rund) ostane pokrit v `SessionDetail.test.tsx` kratkih oblikah (mvp/verdicts/
+  good-night fixturi `api_session_151_*`), ne v preletu.
 - (3. 9., R2 korpus) **`denied_playtime` iz 2025 supastats backfilla je pokvarjen**:
   jan–maj 2025 ~50 s na uboj (max 18 880 s v rundi 107 s), od dec 2025 ~8 s;
   352/5 538 vrstic 2025 ima denied > 2× igranje, 2026 le 8. Ista doba kot

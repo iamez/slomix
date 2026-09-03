@@ -55,6 +55,48 @@ export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?
   );
 }
 
+/** BigScore (docs/design/11 §A): the BOX result, mono at hero size, team A
+ *  in the accent, team B in the warm accent — the one place team B is warm.
+ *  The separator is a label so it never reads as a third number. */
+export function BigScore({ a, b, note }: {
+  a: { name: ReactNode; score: ReactNode };
+  b: { name: ReactNode; score: ReactNode };
+  note?: ReactNode;
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-4)' }}>
+      <div>
+        <Lbl>{a.name}</Lbl>
+        <div className="m" style={{ fontSize: 'var(--fs-hero)', lineHeight: 0.84, color: 'var(--color-accent)' }}>{a.score}</div>
+      </div>
+      <Lbl style={{ fontSize: 'var(--fs-kpi)', paddingBottom: 'var(--space-2)' }}>/</Lbl>
+      <div>
+        <Lbl>{b.name}</Lbl>
+        <div className="m" style={{ fontSize: 'var(--fs-hero)', lineHeight: 0.84, color: 'var(--color-accent-warm)' }}>{b.score}</div>
+      </div>
+      {note != null && <Lbl style={{ paddingBottom: 'var(--space-2)' }}>{note}</Lbl>}
+    </div>
+  );
+}
+
+/** A row of KpiTiles on hairlines — a grid without boxes (docs/design/11). */
+export function FigureRow({ figures, parity }: {
+  figures: readonly { value: ReactNode; label: ReactNode }[];
+  parity?: string;
+}) {
+  return (
+    <div
+      data-parity={parity}
+      style={{
+        display: 'grid', gridTemplateColumns: `repeat(${figures.length}, minmax(0, 1fr))`,
+        borderTop: '1px solid var(--color-rule-900)', borderBottom: '1px solid var(--color-rule-900)',
+      }}
+    >
+      {figures.map((f, i) => <KpiTile key={i} value={f.value} label={f.label} />)}
+    </div>
+  );
+}
+
 export function KpiTile({ value, label }: { value: ReactNode; label: ReactNode }) {
   return (
     <div style={{ padding: 'var(--space-4) 0 var(--space-4)' }}>

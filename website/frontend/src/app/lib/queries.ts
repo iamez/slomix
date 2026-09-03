@@ -118,6 +118,8 @@ import type {
   SeasonCurrent,
   SeasonLeaders,
   SeasonSummary,
+  SessionAwards,
+  SessionBasics,
   SessionDetail,
   SessionGoodNight,
   SessionLeaderRow,
@@ -889,6 +891,33 @@ export function useSessionVerdicts(sessionId: number | null) {
       apiGet('/api/stats/session/{gaming_session_id}/verdicts', {
         pathParams: { gaming_session_id: sessionId! },
       }) as Promise<SessionVerdicts>,
+  });
+}
+
+/** Stats 2.0 (docs/design/18): the basics table, one row per human
+ *  player, with the coverage the numbers rest on. 404 = no counted round. */
+export function useSessionBasics(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-basics', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/basics', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionBasics>,
+    staleTime: 60 * 1000,
+  });
+}
+
+/** The evening's awards, one winner each, with the sentence to print. */
+export function useSessionAwards(sessionId: number | null) {
+  return useQuery({
+    queryKey: ['session-awards', sessionId],
+    enabled: sessionId != null,
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/awards', {
+        pathParams: { gaming_session_id: sessionId! },
+      }) as Promise<SessionAwards>,
+    staleTime: 60 * 1000,
   });
 }
 
