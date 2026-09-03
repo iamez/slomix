@@ -716,13 +716,19 @@ TREND_RULES: list[TrendRule] = [
         known_shifts=(
             (
                 "2025-05",
-                "Median dead share rose to 0.48 from the ~0.33 of the four "
-                "preceding months and stayed elevated through 2026-03 — a "
-                "SECOND regime inside the pre-fix era, measured 2026-09-02 "
-                "and not yet explained at the mechanism level. Named here so "
-                "it cannot pass for new; tracked as an open question in "
-                "docs/PLAN.md (phase 3), whose reconstruction reads per-row "
-                "engine alive% and is therefore immune to it.",
+                "Not a second regime in the game: an R2-only step, measured "
+                "2026-09-03. Split by round, R1 sits flat at 0.44-0.50 across "
+                "the whole pre-fix era, while R2 runs at ~0.22 through "
+                "2025-04 and jumps to R1's level from 2025-05 on. So "
+                "time_dead_minutes on an R2 row means one thing before that "
+                "month and another after it — the same one-name-two-"
+                "measurements shape the fix in 2026-04 has, one round deeper. "
+                "The combined median is what moves here; a per-round rule "
+                "would see it as R2 alone. Consequence for the phase-3 "
+                "reconstruction (docs/PLAN.md): R1 is one clean mechanism "
+                "throughout (factor 2.24 early / 2.20 late), R2 is not "
+                "(stored/reconstructed median 1.03 early vs 1.99 late, with "
+                "37% of early-2025 R2 rows below 0.9).",
             ),
             (
                 "2026-04",
