@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING
 
 from .base import (
     CARRIER_RETURN_WINDOW_MS,
+    ESCORT_MOVER_MIN_DISTANCE,
+    ESCORT_MOVER_MIN_SHARE,
+    ESCORT_MOVER_STAR_SHARES,
     KILL_STREAK_WINDOW_MS,
     MULTIKILL_EXTENDED_WINDOW_MS,
     MULTIKILL_SHORT_WINDOW_MS,
@@ -70,6 +73,7 @@ _TYPE_PRIORITY: dict[str, int] = {
     "focus_survival": 5,      # survived a 3v1+ — personal, uncommon (37)
     "trade_chain": 5,         # avenged a teammate
     "push_success": 4,        # team coordination, less personal (60)
+    "escort_mover": 4,        # stayed with the truck/tank while it moved — only on vehicle maps (27 rounds since March)
     "team_wipe": 4,           # great but the commonest 5★ (251) — shouldn't always headline
     "kill_streak": 3,         # least cinematic; overlaps multikill
 }
@@ -208,6 +212,7 @@ class _MomentsMixin:
             self._detect_multi_revive,
             self._detect_team_wipes,
             self._detect_multikills,
+            self._detect_escort_mover,
         ]
         # Run all detectors in parallel — each hits DB independently (-1.5s per session)
         results = await asyncio.gather(
@@ -571,6 +576,117 @@ class _MomentsMixin:
                 "detail": {
                     "carrier_guid": r[0], "duration_ms": r[4] or 0,
                     "carry_distance": distance, "efficiency": efficiency,
+                },
+            })
+        return moments
+
+    async def _detect_escort_mover(self, scope: GamingSessionScope) -> list:
+        """Detector L (stats 2.0 / docs/design/20 §4b): a player stayed with the
+        movable objective — the truck or tank — while it moved.
+
+        Reads two tables the tracker has written since v6 and nothing read
+        until now: proximity_vehicle_progress (one row per vehicle per round:
+        distance moved, destroyed count — NO time column) and
+        proximity_escort_credit (per player per vehicle per round:
+        distance-WEIGHTED credit_distance (× (1 − d/500)), unweighted
+        total_escort_distance, mounted / proximity time). Both carry the round
+        key the scope filters on, so the join is on the four-column key and
+        the scope's own filter, aliased to `vp`.
+
+        One moment per vehicle-round, credited to the top escort, when the
+        vehicle moved at least ESCORT_MOVER_MIN_DISTANCE and that escort's
+        weighted share of the vehicle's distance is at least
+        ESCORT_MOVER_MIN_SHARE. `credit_distance > 0` is in the SQL on
+        purpose: proximity credit accrues only while the vehicle MOVES, so a
+        medic standing beside a parked truck never appears here.
+
+        time_ms: the tables know the round's end but not when the push
+        happened, so the moment is placed at the round's end and says so in
+        detail.timestamp_source ("round_end"; "unknown" when the end is
+        missing). Slice 2 (Lua) will add first/last move times."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
+            SELECT vp.session_date, vp.round_number, vp.round_start_unix, vp.round_end_unix,
+                   vp.map_name, vp.vehicle_name, vp.vehicle_type, vp.total_distance,
+                   vp.destroyed_count,
+                   ec.player_guid, ec.player_name, ec.player_team,
+                   ec.credit_distance, ec.total_escort_distance,
+                   ec.mounted_time_ms, ec.proximity_time_ms, ec.samples
+            FROM proximity_vehicle_progress vp
+            JOIN proximity_escort_credit ec
+              ON ec.session_date = vp.session_date
+             AND ec.round_number = vp.round_number
+             AND ec.round_start_unix = vp.round_start_unix
+             AND ec.vehicle_name = vp.vehicle_name
+            WHERE vp.session_date = ANY($1) AND {scope.round_key_filter_sql(2, alias="vp")}
+              AND vp.total_distance >= $5
+              AND ec.credit_distance > 0
+            ORDER BY vp.round_start_unix, vp.vehicle_name, ec.credit_distance DESC
+        """, (dates, starts, maps, rnums, float(ESCORT_MOVER_MIN_DISTANCE)))
+
+        # Group by vehicle-round; rows arrive top escort first.
+        groups: dict[tuple, list] = {}
+        for r in (rows or []):
+            groups.setdefault((r[2], r[5]), []).append(r)
+
+        moments = []
+        for (_start, vehicle), escorts in groups.items():
+            top = escorts[0]
+            total = float(top[7] or 0)
+            if total <= 0:
+                continue
+            credit = float(top[12] or 0)
+            share = credit / total
+            if share < ESCORT_MOVER_MIN_SHARE:
+                continue
+            stars = 3
+            for tier, s in zip((3, 4, 5), ESCORT_MOVER_STAR_SHARES, strict=True):
+                if share >= s:
+                    stars = tier
+            name = strip_et_colors(top[10] or _safe_short(top[9]))
+            round_start = int(top[2] or 0)
+            round_end = int(top[3] or 0)
+            if round_start > 0 and round_end > round_start:
+                time_ms = (round_end - round_start) * 1000
+                timestamp_source = "round_end"
+            else:
+                time_ms = 0
+                timestamp_source = "unknown"
+            mounted_ms = int(top[14] or 0)
+            destroyed = int(top[8] or 0)
+            mounted_txt = f", {mounted_ms / 1000:.0f}s mounted" if mounted_ms > 0 else ""
+            destroyed_txt = f"; the {vehicle} was destroyed {destroyed}×" if destroyed > 0 else ""
+            moments.append({
+                "type": "escort_mover",
+                "round_number": top[1],
+                "map_name": top[4],
+                "time_ms": time_ms,
+                "player": name,
+                "narrative": (
+                    f"{name} escorted the {vehicle} on {top[4]} — {credit:.0f} of {total:.0f} units "
+                    f"within 500u ({share:.0%}){mounted_txt}{destroyed_txt}"
+                ),
+                "impact_stars": stars,
+                "detail": {
+                    "vehicle_name": vehicle,
+                    "vehicle_type": top[6],
+                    "distance_unit": "et_units",
+                    "total_distance": round(total, 1),
+                    # Two distances, two meanings — named, never conflated (docs/design/20 §6.4).
+                    "credit_distance": round(credit, 1),          # weighted by proximity (1 − d/500)
+                    "total_escort_distance": round(float(top[13] or 0), 1),  # unweighted
+                    "credit_share": round(share, 3),
+                    "mounted_time_ms": mounted_ms,
+                    "proximity_time_ms": int(top[15] or 0),
+                    "samples": int(top[16] or 0),
+                    "destroyed_count": destroyed,
+                    "escorts": [
+                        {"name": strip_et_colors(e[10] or _safe_short(e[9])), "guid": e[9],
+                         "credit_distance": round(float(e[12] or 0), 1)}
+                        for e in escorts[:3]
+                    ],
+                    "timestamp_source": timestamp_source,
                 },
             })
         return moments
