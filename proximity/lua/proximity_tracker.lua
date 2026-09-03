@@ -58,7 +58,86 @@ local modname = "proximity_tracker"
 -- the capture is off and when it is on with nothing to report. Consumers were
 -- resolving that ambiguity by assuming, which turns missing telemetry into a
 -- claim about the match.
-local version = "6.12"
+local version = "6.13"
+
+-- BEGIN frame_health v6.13 (identical in every module; tests/unit/test_lua_frame_health_block_identical.py pins it)
+-- Every Lua module runs in its own VM, and the engine calls their
+-- et_RunFrame hooks one after another (g_lua.c G_LuaHook_RunFrame). They
+-- share one clock (et.trap_Milliseconds) and one process, so each module
+-- can append its own frame cost to the SAME log the tracker's gap watcher
+-- writes, and the reader attributes a gap offline: sum of the modules'
+-- `self` inside the gap window is "our Lua", the rest is engine/host.
+--   FH init wall=<ms> version=6.13 mod=<name>   one per map load (write-path proof)
+--   FM wall=<frame end ms> mod=<name> self=<ms> top=<section>:<ms>
+--                                          when a frame cost >= self_threshold_ms
+-- Rate-limited to one line per second per module and capped per lua state.
+-- trap_FS paths are relative to the homepath game dir, so this is the
+-- tracker's ~/.etlegacy/legacy/proximity/frame_health.log for every module.
+local FH_MOD = "proximity_tracker"
+local fh = {
+    version = "6.13", log = "proximity/frame_health.log",
+    self_threshold_ms = 50, min_write_interval_ms = 1000, max_lines_per_state = 3000,
+    writes = 0, last_write = -math.huge, frame_start = nil, top_name = nil, top_ms = 0,
+    error_printed = false,
+}
+local function fh_now()
+    return (et and et.trap_Milliseconds and et.trap_Milliseconds()) or 0
+end
+local function fh_write(line)
+    if fh.writes >= fh.max_lines_per_state then return end
+    -- endstats append idiom: the SECOND return signals an open failure
+    local fd, open_len = et.trap_FS_FOpenFile(fh.log, et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
+    fh.writes = fh.writes + 1
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+local function fh_guard(what, f, ...)
+    local ok, err = pcall(f, ...)
+    if not ok and not fh.error_printed then
+        fh.error_printed = true
+        et.G_Print("[" .. FH_MOD .. "] frame_health " .. what .. " error: " .. tostring(err) .. "\n")
+    end
+end
+-- Call from et_InitGame: a map load (and map_restart) starts a fresh cadence.
+local function fh_init()
+    fh_guard("init", function()
+        fh.writes = 0
+        fh.last_write = -math.huge
+        fh.frame_start = nil
+        fh.top_name = nil
+        fh.top_ms = 0
+        fh_write(string.format("FH init wall=%d version=%s mod=%s\n", fh_now(), fh.version, FH_MOD))
+    end)
+end
+local function fh_begin()
+    fh.frame_start = fh_now()
+    fh.top_name = nil
+    fh.top_ms = 0
+end
+-- Call right after a known-costly section with the wall time taken before
+-- it: the costliest section of the frame is what the FM line names.
+local function fh_section(name, t0)
+    local ms = fh_now() - t0
+    if ms > fh.top_ms then
+        fh.top_ms = ms
+        fh.top_name = name
+    end
+end
+local function fh_end()
+    fh_guard("end", function()
+        if fh.frame_start == nil then return end
+        local now = fh_now()
+        local self_ms = now - fh.frame_start
+        fh.frame_start = nil
+        if self_ms < fh.self_threshold_ms then return end
+        if now - fh.last_write < fh.min_write_interval_ms then return end
+        fh.last_write = now
+        fh_write(string.format("FM wall=%d mod=%s self=%d top=%s:%d\n",
+            now, FH_MOD, self_ms, fh.top_name or "-", fh.top_ms))
+    end)
+end
+-- END frame_health v6.13
 
 -- ===== CONFIGURATION =====
 local config = {
@@ -86,7 +165,7 @@ local config = {
         enabled = true,
         gap_threshold_ms = 100,       -- 4x the 25 ms budget at sv_fps 40
         min_write_interval_ms = 1000, -- at most one line per second
-        max_lines_per_state = 300,    -- bound file growth per map load
+        max_lines_per_state = 3000,   -- bound file growth per map load (300 cut a 2 h storm on 2026-09-02)
     },
     max_string_length = 256,
     log_in_intermission = false,
@@ -3937,9 +4016,10 @@ end
 -- most 1/s, and a crash never loses buffered lines.
 local frame_health_state = {
     prev_wall = nil, prev_self = -1, last_write = -math.huge, writes = 0,
+    last_lt = nil, last_lt_wall = nil,
 }
 
-local function frameHealthReport(wall_now)
+local function frameHealthReport(wall_now, level_time)
     local fh = config.frame_health
     if not fh or not fh.enabled then return end
     local st = frame_health_state
@@ -3954,7 +4034,10 @@ local function frameHealthReport(wall_now)
         -- write path works, and it exercises open/format/write immediately.
         local fd0, open_len0 = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
         if fd0 and fd0 ~= -1 and fd0 ~= 0 and open_len0 ~= -1 then
-            local init_line = string.format("FH init wall=%d version=%s\n", wall_now, version)
+            -- "FH watcher", not "FH init": the shared block writes the per-module
+            -- init line from et_InitGame; this one proves the GAP watcher's own
+            -- write path on the first frame, and the report tells them apart.
+            local init_line = string.format("FH watcher wall=%d version=%s\n", wall_now, version)
             et.trap_FS_Write(init_line, string.len(init_line), fd0)
             et.trap_FS_FCloseFile(fd0)
         else
@@ -3962,6 +4045,18 @@ local function frameHealthReport(wall_now)
                 tostring(fd0) .. ", len=" .. tostring(open_len0) .. ")\n")
         end
         return
+    end
+    -- v6.13: a pause freezes levelTime while the wall clock runs on. The
+    -- 2026-09-02 storm grew DURING a pause, and only this flag can say so
+    -- from the log alone (the etconsole prefix is svs.time, not a pause bit).
+    local paused = 0
+    if level_time ~= nil then
+        if st.last_lt == level_time then
+            if st.last_lt_wall ~= nil and wall_now - st.last_lt_wall >= 1000 then paused = 1 end
+        else
+            st.last_lt = level_time
+            st.last_lt_wall = wall_now
+        end
     end
     local gap = wall_now - prev_start
     if gap < (fh.gap_threshold_ms or 100) then return end
@@ -3977,13 +4072,14 @@ local function frameHealthReport(wall_now)
     -- endstats append idiom: the SECOND return signals an open failure
     local fd, open_len = et.trap_FS_FOpenFile(config.output_dir .. "frame_health.log", et.FS_APPEND)
     if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
-    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d\n",
-        wall_now, gap, prev_self, gs, players)
+    local line = string.format("FH wall=%d gap=%d self=%d gs=%d players=%d lt=%d paused=%d\n",
+        wall_now, gap, prev_self, gs, players, math.floor(tonumber(level_time) or -1), paused)
     et.trap_FS_Write(line, string.len(line), fd)
     et.trap_FS_FCloseFile(fd)
 end
 
 function et_InitGame(levelTime, randomSeed, restart)
+    fh_init()
     et.RegisterModname(modname .. " " .. version)
 
     -- A map_restart keeps the lua VM alive, so without this reset the INIT
@@ -3993,6 +4089,8 @@ function et_InitGame(levelTime, randomSeed, restart)
     frame_health_state.prev_wall = nil
     frame_health_state.prev_self = -1
     frame_health_state.writes = 0
+    frame_health_state.last_lt = nil
+    frame_health_state.last_lt_wall = nil
 
     if not config.output_dir or config.output_dir == "" then
         config.output_dir = "proximity/"
@@ -4084,6 +4182,11 @@ function et_InitGame(levelTime, randomSeed, restart)
     -- pcall around all of et_InitGame would hide future errors — and LOUD on
     -- purpose: the etconsole.log error line is the only reason the original
     -- crash was ever found. Never swallow silently.
+    -- v6.13: the two entity scans (2 x 960 pcall'd gentity_get) are the
+    -- prime suspect for the seconds-long tracker frames seen at 0 players
+    -- right after a map load -- measured as their own FM line (init_scan).
+    fh_begin()
+    local fh_scan_t0 = fh_now()
     local sv_ok, sv_err = pcall(scanVehicleEntities)
     if not sv_ok then
         et.G_Print("[PROX] scanVehicleEntities FAILED: " .. tostring(sv_err) .. "\n")
@@ -4092,6 +4195,8 @@ function et_InitGame(levelTime, randomSeed, restart)
     if not so_ok then
         et.G_Print("[PROX] scanObjectiveEntities FAILED: " .. tostring(so_err) .. "\n")
     end
+    fh_section("init_scan", fh_scan_t0)
+    fh_end()
 
     -- v5 feature status
     local v5_features = {"spawn_timing", "team_cohesion", "crossfire_opportunities", "focus_fire", "team_push_detection", "trade_kills"}
@@ -4442,7 +4547,7 @@ function et_RunFrame(levelTime)
     local fh_wall = et.trap_Milliseconds()
     -- A swallowed error here would make a broken watcher look like a calm
     -- server -- print the first one, then stay quiet.
-    local fh_ok, fh_err = pcall(frameHealthReport, fh_wall)
+    local fh_ok, fh_err = pcall(frameHealthReport, fh_wall, levelTime)
     if not fh_ok and not frame_health_state.error_printed then
         frame_health_state.error_printed = true
         et.G_Print("[PROX] frame_health error: " .. tostring(fh_err) .. "\n")
@@ -4486,7 +4591,9 @@ function et_RunFrame(levelTime)
             -- `string.format("%d", <float>)` already caused once in this file
             -- (v6.10, et_InitGame, objectives never scanned). The capture is a
             -- diagnostic; it must never be able to stop the tracker.
+            local fh_t0 = fh_now()
             local ok, err = pcall(w6Step, config.trace_fixture.batch or 250)
+            fh_section("w6", fh_t0)
             if not ok then
                 et.G_Print("[PROX-W6] capture failed, disabling: "
                     .. tostring(err) .. "\n")
@@ -4531,6 +4638,7 @@ function et_RunFrame(levelTime)
         -- re-closing tracks and engagements into completed_tracks again and
         -- again (duplicated data), while the error spams the console. Contain
         -- the failure, print it loudly, and let the state machine advance.
+        local fh_round_end_t0 = fh_now()
         local re_ok, re_err = pcall(function()
         round_end_unix = os.time()
 
@@ -4577,6 +4685,7 @@ function et_RunFrame(levelTime)
             outputData()
         end
         end)
+        fh_section("round_end", fh_round_end_t0)
         if not re_ok then
             et.G_Print("[PROX] round-end handling FAILED: " .. tostring(re_err) .. "\n")
         end
@@ -4586,24 +4695,32 @@ function et_RunFrame(levelTime)
 
     -- During play
     if gamestate == 0 then
+        local fh_t0 = fh_now()
         sampleAllPlayers()
+        fh_section("sample", fh_t0)
 
         if isFeatureEnabled("escape_detection") then
             checkEscapes(levelTime)
         end
 
         -- v5: Run teamplay analysis
+        local fh_tp0 = fh_now()
         updateTeamplay(gameTime())
+        fh_section("teamplay", fh_tp0)
 
         if isFeatureEnabled("objective_run_tracking") then
+            local fh_pc0 = fh_now()
             pollConstructionProgress(gameTime())
+            fh_section("construction", fh_pc0)
         end
     end
 
     -- Handle delayed output
     if tracker.output_pending and et.trap_Milliseconds() >= tracker.output_due_ms then
         tracker.output_pending = false
+        local fh_out0 = fh_now()
         outputData()
+        fh_section("output", fh_out0)
     end
 
     -- The frame body completed: replace the -1 sentinel with the real cost.
@@ -5414,3 +5531,16 @@ end
 
 -- ===== MODULE END =====
 et.G_Print(">>> Proximity Tracker v" .. version .. " loaded\n")
+
+-- BEGIN frame_health hook v6.13 (identical in every module)
+-- Wraps the module's own et_RunFrame so its whole cost -- early returns
+-- included -- lands in fh_end. An error inside is re-raised unchanged so
+-- the engine still prints it; the measurement is taken first.
+local fh_wrapped_run_frame = et_RunFrame
+function et_RunFrame(levelTime)
+    fh_begin()
+    local ok, err = pcall(fh_wrapped_run_frame, levelTime)
+    fh_end()
+    if not ok then error(err, 0) end
+end
+-- END frame_health hook v6.13

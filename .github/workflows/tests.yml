@@ -254,6 +254,13 @@ jobs:
         # and of the end-of-frame self write were both watched failing
         # before this landed (2026-09-02).
         run: lua5.4 tests/lua/frame_health_harness.lua
+      - name: Frame-health block harness (the five other modules)
+        # v6.13: the same FH block is copied into every module with an
+        # et_RunFrame hook (no `require` across VMs). Each module is loaded
+        # in a fresh environment and must write its INIT line, stay quiet
+        # on cheap frames, name itself on a slow one, hold the 1 s throttle
+        # and re-raise a body error after measuring it.
+        run: lua5.4 tests/lua/frame_health_modules_harness.lua
       - name: Lua 5.4 semantics smoke (the classes that actually bit us)
         # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
         # fixes rely on, in the real interpreter: %d throws on non-integral

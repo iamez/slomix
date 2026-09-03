@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-03, 18:40) SKOK 4 (owner): **watchdog na puranu** —
+  frame-health watcher (tracker v6.12) razširiti na VSE Lua module (6 z
+  `et_RunFrame`), ga podrobno pregledati/izboljšati (ET:Legacy izvor po
+  potrebi), in **bot test** (boti/test mode na puranu ~30 min, nato dol) za
+  polno obremenitev brez čakanja na igro. Plan mode → nato nazaj na
+  originalni plan. Ostal sem pri: #903 (R5) v merge ciklu (`9209f6b4`, po
+  zlitju #900); po mergu: pull main, `git branch -d feat/app-stats20-r5-drilldown`,
+  spomin + PLAN (R5 mergan; Stats 2.0 končan). Stare naloge: doc 19/20 (po
+  ownerjevem vrstnem redu), doc 21 (po ultra pregledu), BACKLOG dolg.
 - (Fable 5.1, 2026-09-03, 12:15) SKOK 3 (ownerjeva ideja, `screenshots/vision.jpg`,
   `vision1.jpg`): **centralni runtime / »event brain«** — en Python proces na
   Linux strežniku spremlja igralni strežnik in iz ENEGA toka dogodkov streže
@@ -44,6 +53,11 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., sestrska seja) ⛔ **`scripts/db_backup.sh` pokvarjen**: teče kot `website_app`, ker `website/.env` prepiše `POSTGRES_USER` iz korenskega `.env`; ta vloga ne sme brati 7 tabel (`voice_members`, `team_pool`, `proximity_reaction_metric`, `processed_endstats_files`, `matchup_history`, `achievement_notification_ledger`, `player_identity_links`) → `pg_dump` »permission denied«. Obvod: `POSTGRES_USER=etlegacy_user POSTGRES_PASSWORD=… bash scripts/db_backup.sh`. Popravek = administrativna orodja berejo LE korenski `.env` (ali izrecen `--role`); še ni dodeljeno — javiti sestri pred dotikom.
+- (3. 9., #904) `time_dead_minutes` za vrstice pred 2026-03-24 je rekonstruiran (8 721 vrstic; izvirnik v `time_dead_minutes_original`, zastavica `time_dead_reconstructed`) → Players zavihek `dead min` in `alive %` za stare seje zdaj kažejo druge številke; tooltip bi lahko omenil zastavico (R6 ideja).
+- (3. 9., FH v6.13) **`stats_discord_webhook.lua` `pending_retry_sweep` = fork+exec (`os.execute mkdir`, `io.popen find`) vsakih 60 s na igralni niti, po `os.time()` (teče med pavzo in ob 0 igralcih)** — od v6.13 merjeno kot `FM … mod=stats_discord_webhook top=sweep:<ms>`; če se potrdi, sweep preseliti izven frame poti (redkeje, ali ob koncu runde) — sprememba webhooka, ownerjev deploy.
+- (3. 9., FH v6.13) tracker `scanVehicleEntities`+`scanObjectiveEntities` = 2×960 `pcall(gentity_get)` ob map loadu — merjeno kot `top=init_scan`; če sekunde, razdeliti sken na več framov.
+- (3. 9., FH v6.13) `is_bot_round` zgodovinsko nikoli true (`postgresql_database_manager.py:2246`) — po bot testu preveriti runde z današnjim datumom.
 - (3. 9., stats 2.0 R5) **Head-to-head za igralca** (koga je ubil / kdo ga je ubil iz `/storytelling/kill-matrix`) odložen — owner izbral obseg brez njega; matrix je že naložen v Story zavihku, vrstica bi ga le filtrirala.
 - (3. 9., R5) **`best-lives` brez coverage zastavice**: `lives: []` ne loči »nezajeto« od »nihče ni dosegel minimuma« — razširjena vrstica to pove z besedilom; prava rešitev je zastavica v odgovoru (backend).
 - (3. 9., R5) **KIS details rabi 32-znakovni guid** (`killer_guid = $5`, `storytelling_router.py:400`); stran ga dobi prek `kill-impact` seznama (limit 50) — seja z več kot 50 točkovanimi igralci bi za 51. pokazala »no scored kills«. Danes nemogoče (≤ 12 igralcev), a je meja v kodi imenovana.

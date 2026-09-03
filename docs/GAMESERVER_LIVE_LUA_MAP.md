@@ -134,3 +134,26 @@ When syncing or auditing game-server Lua:
 3. Pull current remote copies
 4. Mirror non-proximity scripts into `vps_scripts/`
 5. Mirror proximity only into `proximity/lua/`
+
+## Frame-health v6.13 (2026-09-03) — the watchdog in every module
+
+Every module above carries the same `-- BEGIN frame_health v6.13 … END`
+block (pinned byte-identical by `tests/unit/test_lua_frame_health_block_identical.py`)
+and a hook that wraps its own `et_RunFrame`. All six append to the ONE file
+the tracker's gap watcher writes, `~/.etlegacy/legacy/proximity/frame_health.log`
+(trap_FS paths are homepath-relative, so no per-module plumbing):
+
+- `FH init wall=<ms> version=6.13 mod=<name>` — one per module per map load
+  (a module whose line is missing after a map load did not load the new file);
+- `FH watcher wall=<ms> version=<v>` — the tracker's gap watcher proving its own path;
+- `FH wall=<ms> gap=<ms> self=<ms> gs=<n> players=<n> lt=<ms> paused=<0|1>` — the
+  tracker only: the frame gap the engine saw; `paused=1` = levelTime frozen ≥ 1 s;
+- `FM wall=<end> mod=<name> self=<ms> top=<section>:<ms>` — any module whose frame
+  cost ≥ 50 ms (1 line/s/module, 3000 lines per lua state).
+
+Read it with `scripts/frame_health_report.py`: for each gap the FM lines inside
+`(wall − gap, wall]` are our Lua, the remainder is engine/host. Sections named
+today: tracker `init_scan sample teamplay construction output round_end w6`,
+webhook `sweep send`, c0rnp0rn8 `store_stats`, endstats `topshots`,
+live_events `movement flush`. Deploy = the live paths in this document, a map
+load on an empty server, then six `FH init … mod=` lines; ⛔ never `lua_restart`.
