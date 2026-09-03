@@ -17,7 +17,7 @@ import {
 import type {
   SessionAwards, SessionBasics, SessionBasicsPlayer, SessionScoringMap,
   SessionDetail as SessionDetailData, SessionGoodNight, SessionPlayerTotals,
-  SessionRound, SessionScoring, SessionTeamMatrix, SessionVerdicts,
+  SessionScoring, SessionTeamMatrix, SessionVerdicts,
 } from '../lib/types';
 
 /**
