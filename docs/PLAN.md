@@ -49,10 +49,12 @@ deploy NI naloga.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
-   - `docs/design/22` (lokalno, v pisanju) — **»digitalni dvojčki« botov**: iz
-     sledi proximity trackerja poti/kampiranje/tempo PO IGRALCU → Omni-bot z
-     imenom pravega igralca igra »skoraj kot on«; puran: Omni-bot z `.way`
-     waypointi + mapni `.gm`/`_goals.gm` (2 032 nav datotek, potrjeno 4. 9.).
+   - `docs/design/22` (lokalno, **napisan 4. 9.**) — **»digitalni dvojčki« botov**:
+     `player_track.path` (200 ms, 74 480 življenj, regularji 28–63 sej/mapo)
+     → profil igralca (vozlišča, dwell = nova kemp metrika, tempo); Omni-bot
+     0.91 na puranu = en `.way` graf na mapo, per-bot le `OnBotJoin` +
+     `bot.SetRoles` + kamp čas + tempo → **»njegovi cilji, njegova kamp mesta,
+     njegov tempo«**, ne dobesedna pot; rezine 1–5 v docu; odločitve za ownerja.
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
