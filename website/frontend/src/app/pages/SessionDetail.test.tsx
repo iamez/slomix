@@ -109,6 +109,12 @@ afterEach(() => {
 /** Stats 2.0 moved the scoreboard, team totals, lives, form and top-dpm
  *  panels behind a "more" expander (docs/design/18 §C); the tests that
  *  read them open it first. */
+/** Text of one parity node — a string, not an element held in a variable
+ *  the html-scanner reads as raw markup. */
+function textOf(container: HTMLElement, parity: string): string {
+  return container.querySelector(`[data-parity="${parity}"]`)?.textContent ?? '';
+}
+
 async function openMore() {
   // Every collapsed "more" on the page: a test that renders twice has two.
   // A page that never reaches the summary (404, failure, another tab) has
@@ -663,13 +669,13 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
     const { container } = await openTop();
     const expected = perMapTotals(allRounds, top.player_guid);
     expect(expected.maps.length).toBeGreaterThan(0);
-    const maps = container.querySelector('[data-parity="session.player.maps"]') as HTMLElement;
-    await waitFor(() => expect(maps.querySelectorAll('[role="region"] .rows > div').length).toBe(expected.maps.length));
+    const rowsOf = () => [...container.querySelectorAll('[data-parity="session.player.maps"] [role="region"] .rows > div')];
+    await waitFor(() => expect(rowsOf().length).toBe(expected.maps.length));
     // One map's dpm, read off the row, equals the hand formula.
     const one = expected.maps[0];
-    const row = [...maps.querySelectorAll('[role="region"] .rows > div')].find((r) => r.textContent?.includes(one.map_name));
+    const row = rowsOf().find((r) => r.textContent?.includes(one.map_name));
     expect(row?.textContent).toContain(one.dpm == null ? '—' : one.dpm.toFixed(0));
-    expect(maps.textContent).not.toMatch(/undefined|NaN|Infinity/);
+    expect(textOf(container, 'session.player.maps')).not.toMatch(/undefined|NaN|Infinity/);
   });
 
   it('picks the player\'s own verdict and best life out of the night\'s panels', async () => {
@@ -677,20 +683,18 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
     const key = top.player_guid.slice(0, 8).toUpperCase();
     const verdict = (verdicts as { players: { guid: string; label: string; first_night: boolean }[] }).players
       .find((p) => p.guid.slice(0, 8).toUpperCase() === key);
-    const form = container.querySelector('[data-parity="session.player.form"]') as HTMLElement;
     if (verdict && !verdict.first_night) {
-      await waitFor(() => expect(form.textContent).toContain(verdict.label));
+      await waitFor(() => expect(textOf(container, 'session.player.form')).toContain(verdict.label));
     } else {
-      await waitFor(() => expect(form.textContent).toMatch(/no baseline|first night/));
+      await waitFor(() => expect(textOf(container, 'session.player.form')).toMatch(/no baseline|first night/));
     }
     const lives = (bestLives as { lives: { guid: string; kills: number }[] }).lives
       .filter((l) => l.guid.slice(0, 8).toUpperCase() === key);
-    const life = container.querySelector('[data-parity="session.player.life"]') as HTMLElement;
     if (lives.length > 0) {
       const best = Math.max(...lives.map((l) => l.kills));
-      await waitFor(() => expect(life.textContent).toContain(`${best}kills · one life`));
+      await waitFor(() => expect(textOf(container, 'session.player.life')).toContain(`${best}kills · one life`));
     } else {
-      await waitFor(() => expect(life.textContent).toMatch(/no tracked life/));
+      await waitFor(() => expect(textOf(container, 'session.player.life')).toMatch(/no tracked life/));
     }
   });
 
@@ -707,7 +711,7 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
       expect(call).toContain(`player_guid=${(full as { guid: string }).guid}`);
     });
     const summary = (killImpactDetails as { summary: { kills: number; total_kis: number } }).summary;
-    await waitFor(() => expect(screen.getByText(new RegExp(`${summary.kills} kills · ${summary.total_kis.toFixed(1)} total`))).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(`${summary.kills} kills · ${summary.total_kis.toFixed(1)} total`, { exact: false })).toBeInTheDocument());
   });
 
   it('says an absence where an instrument has nothing, instead of drawing zeros', async () => {
@@ -735,10 +739,9 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
     };
     const { container } = renderPage(withOverride('/verdicts', () => json(firstNight)), '/session-detail/154/players');
     fireEvent.click(await screen.findByRole('button', { name: `details for ${top.player_name}` }));
-    const form = await waitFor(() => container.querySelector('[data-parity="session.player.form"]') as HTMLElement);
-    await waitFor(() => expect(form.textContent).toMatch(/first night — no baseline yet/));
+    await waitFor(() => expect(textOf(container, 'session.player.form')).toMatch(/first night — no baseline yet/));
     // The label a baseline would have earned is not printed beside it.
-    expect(form.textContent).not.toContain('Great');
+    expect(textOf(container, 'session.player.form')).not.toContain('Great');
   });
 
   it('the basics table on the summary opens the same row', async () => {
