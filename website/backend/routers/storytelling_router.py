@@ -19,6 +19,7 @@ from website.backend.services.session_scope import (
     resolve_gaming_session_scope,
 )
 from website.backend.services.storytelling.kis import FORMULA_VERSION
+from website.backend.services.storytelling.moments import MOMENT_TYPES
 from website.backend.services.storytelling.win_contribution import (
     FORMULA_VERSION as PWC_FORMULA_VERSION,
 )
@@ -138,18 +139,41 @@ async def get_moments(
     request: Request,
     scope: GamingSessionScope = Depends(resolve_story_scope),
     limit: int = Query(default=10, le=50, ge=1),
+    types: str | None = Query(
+        default=None,
+        description=(
+            "Comma-separated moment types to keep (e.g. escort_mover), applied to the "
+            "full pool before the director's cut — a rare 3★ type never survives the "
+            "default cut of a rich night. Unknown types are a 422, not an empty answer."
+        ),
+    ),
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Match Moments — highlight reel of a session."""
+    wanted: tuple[str, ...] | None = None
+    if types is not None:
+        wanted = tuple(t.strip() for t in types.split(",") if t.strip())
+        unknown = sorted(set(wanted) - set(MOMENT_TYPES))
+        if unknown or not wanted:
+            raise HTTPException(
+                status_code=422,
+                detail={"unknown_types": unknown, "known_types": sorted(MOMENT_TYPES)},
+            )
     svc = StorytellingService(db)
-    moments = await svc.detect_moments(scope, limit=limit)
-    return {
+    # `types` only when asked for: the service signature grew, and callers'
+    # fakes (the scope-contract test's) keep the old two-argument shape.
+    moments = await (svc.detect_moments(scope, limit=limit, types=wanted) if wanted is not None
+                     else svc.detect_moments(scope, limit=limit))
+    body = {
         "status": "ok",
         "session_date": scope.dates[0],
         "scope": scope.to_metadata(),
         "moments": moments,
         "total": len(moments),
     }
+    if wanted is not None:
+        body["types"] = list(wanted)
+    return body
 
 
 # A life must land at least this many kills to be a "card" — below it there's no

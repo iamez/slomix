@@ -7,7 +7,7 @@ import { stripEtColors } from '../lib/names';
 import {
   useComposite,
   useStoryBoxScore, useStoryEnabler, useStoryGravity,
-  useStoryKillImpact, useStoryKillMatrix, useStoryKisDetails, useStoryKisFormula,
+  useStoryEscorts, useStoryKillImpact, useStoryKillMatrix, useStoryKisDetails, useStoryKisFormula,
   useStoryLurker, useStoryMoments, useStoryMomentum, useStoryMomentumSession,
   useStoryMovement, useStoryNarrative, useStoryPlayerNarratives, useStoryPwcFormula,
   useStorySpace, useStorySynergy, useStoryUselessDefense,
@@ -114,6 +114,45 @@ function formatClock(seconds: number | null): string {
 }
 
 /** The highlight reel. Stars are the server's own impact rating (1–5). */
+/** The escorts of the truck or tank, on their own (docs/design/20 §7
+ *  slice 5). Measured on the corpus: the director's cut never showed one —
+ *  the pools run 50–90 moments and stars are a hard tier — so the type is
+ *  asked for by name and ranked among itself. The empty text names the two
+ *  thresholds the detector applies, and the other reason a night has none. */
+function Escorts({ gsid }: { gsid: number }) {
+  const q = useStoryEscorts(gsid);
+  return (
+    <Stack gap={3} parity="story.escorts">
+      <SectionHead label="objective escorts" aside={<span className="lbl">truck / tank · who stayed with it while it moved · placed at round end</span>} />
+      {q.isPending && <Pending label="escorts" />}
+      {q.isError && <Unavailable what="escorts" />}
+      {q.data && q.data.moments.length === 0 && (
+        <Absent reason="no round in this session had a vehicle moving ≥ 1 000 u with an escort covering ≥ 25 % of its way within 500 u — or the night has no truck/tank map" />
+      )}
+      {q.data && q.data.moments.length > 0 && (
+        <Stack gap={1} className="rows">
+          {q.data.moments.map((m, i) => (
+            <Stack key={`${m.round_number}:${m.time_ms}:${i}`} gap={1} className="row" style={{ padding: 'var(--space-2) 0' }}>
+              <Cluster gap={3} justify="between" align="baseline">
+                <span style={{ fontSize: 'var(--fs-row)' }}>{m.player}</span>
+                <Cluster gap={2} align="baseline">
+                  <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-accent)' }}>
+                    {'★'.repeat(Math.max(0, Math.min(5, m.impact_stars)))}
+                  </span>
+                  <span className="m lbl" style={{ fontSize: 'var(--fs-caption)' }}>
+                    {m.map_name} R{m.round_number} · {m.time_formatted}
+                  </span>
+                </Cluster>
+              </Cluster>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.narrative}</span>
+            </Stack>
+          ))}
+        </Stack>
+      )}
+    </Stack>
+  );
+}
+
 function Moments({ gsid }: { gsid: number }) {
   const q = useStoryMoments(gsid);
   if (q.isPending) return <Pending label="moments" />;
@@ -1180,6 +1219,8 @@ export function SessionStory({ gsid }: { gsid: number }) {
         <SectionHead label="moments" aside={<span className="lbl">detected · impact 1–5</span>} />
         <Moments gsid={gsid} />
       </Stack>
+
+      <Escorts gsid={gsid} />
 
       <Stack gap={3} parity="story.momentum">
         <SectionHead

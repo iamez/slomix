@@ -71,6 +71,15 @@ test('the players tab carries the 21 legacy columns with their definitions', asy
   await expect(table.getByRole('button', { name: /^alive %/ })).toHaveAttribute('title', /Alive%: time not dead/);
 });
 
+test('the story tab lists the objective escorts on the full night and says why the thin one has none', async ({ page }) => {
+  await page.goto('/app/session-detail/154/story', { waitUntil: 'networkidle' });
+  const panel = page.locator('[data-parity="story.escorts"]');
+  await expect(panel).toBeVisible();
+  await expect(panel).toContainText('escorted the truck on supply');
+  await page.goto('/app/session-detail/80/story', { waitUntil: 'networkidle' });
+  await expect(page.locator('[data-parity="story.escorts"]')).toContainText('no round in this session had a vehicle');
+});
+
 for (const s of SESSIONS) {
   test(`session ${s.id} (${s.note}) · the expanded player row opens with its five instruments`, async ({ page }) => {
     const errors = watch(page);

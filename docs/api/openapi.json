@@ -21525,6 +21525,24 @@
       }
      },
      {
+      "description": "Comma-separated moment types to keep (e.g. escort_mover), applied to the full pool before the director's cut — a rare 3★ type never survives the default cut of a rich night. Unknown types are a 422, not an empty answer.",
+      "in": "query",
+      "name": "types",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Comma-separated moment types to keep (e.g. escort_mover), applied to the full pool before the director's cut — a rare 3★ type never survives the default cut of a rich night. Unknown types are a 422, not an empty answer.",
+       "title": "Types"
+      }
+     },
+     {
       "description": "Session date (YYYY-MM-DD) — legacy lookup; a date spanning more than one gaming session returns 409 with candidates. Prefer gaming_session_id.",
       "in": "query",
       "name": "session_date",

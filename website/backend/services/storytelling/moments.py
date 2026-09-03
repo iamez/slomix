@@ -78,6 +78,9 @@ _TYPE_PRIORITY: dict[str, int] = {
     "kill_streak": 3,         # least cinematic; overlaps multikill
 }
 
+#: Every moment type a detector can emit — the `types=` filter's allowlist.
+MOMENT_TYPES: tuple[str, ...] = tuple(sorted(_TYPE_PRIORITY))
+
 
 def _director_rank(m: dict) -> tuple:
     """Sort key for the director's cut: stars first (primary signal, preserved),
@@ -161,33 +164,47 @@ def _moments_cache_evict_oldest_computed() -> None:
 class _MomentsMixin:
     """Moments methods for StorytellingService."""
 
-    async def detect_moments(self, scope: GamingSessionScope, limit: int = 10) -> list:
-        """Detect highlight-reel moments for a session across 11 detectors.
+    async def detect_moments(
+        self, scope: GamingSessionScope, limit: int = 10, types: tuple[str, ...] | None = None,
+    ) -> list:
+        """Detect highlight-reel moments for a session across the detectors.
 
-        Results are memoized at module level per (gaming_session_id, limit) —
-        TTL 5 min for today, 1 h for historical. First caller computes,
-        subsequent callers hit the cache. Scoped by the full gaming session
-        (deep SS-C): a midnight-crossing session detects moments across ALL
-        its rounds, not just one date's fragment.
+        Results are memoized at module level per (gaming_session_id, limit,
+        types) — TTL 5 min for today, 1 h for historical. First caller
+        computes, subsequent callers hit the cache. Scoped by the full gaming
+        session (deep SS-C): a midnight-crossing session detects moments
+        across ALL its rounds, not just one date's fragment.
+
+        `types` keeps only those moment types, applied to the full pool
+        BEFORE the director's cut: a 3★ escort never survives a cut that has
+        ten 5★ moments above it, and the caller who asks for escorts wants
+        the escorts — ranked among themselves by the same director.
         """
         now = time.monotonic()
+        types_key = tuple(sorted(types)) if types else None
         # TTL "recency" keys off the session's LATEST date — a session that
         # ran past midnight is still "today" the morning after.
         ttl = _moments_cache_ttl(date.fromisoformat(scope.dates[-1]))
-        key = (scope.gaming_session_id, limit)
+        # The key grows a third element only when a filter is asked for, so
+        # every existing caller (and the cache tests' seam) keeps its shape.
+        key = (scope.gaming_session_id, limit, types_key) if types_key else (scope.gaming_session_id, limit)
         cached = _MOMENTS_CACHE.get(key)
         if cached and (now - cached[1]) < ttl:
             return cached[0]
 
         # Double-check under lock to prevent concurrent recompute when
         # several coroutines all miss the cache before any of them writes.
-        lock = _compute_locks.get(f"moments:{scope.gaming_session_id}:{limit}")
+        lock_name = f"moments:{scope.gaming_session_id}:{limit}"
+        if types_key:
+            lock_name += ":" + ",".join(types_key)
+        lock = _compute_locks.get(lock_name)
         async with lock:
             cached = _MOMENTS_CACHE.get(key)
             if cached and (time.monotonic() - cached[1]) < ttl:
                 return cached[0]
 
-            result = await self._detect_moments_uncached(scope, limit)
+            result = await (self._detect_moments_uncached(scope, limit, types_key) if types_key
+                            else self._detect_moments_uncached(scope, limit))
             _MOMENTS_CACHE[key] = (result, time.monotonic())
             _moments_cache_evict_oldest_computed()
             return result
@@ -234,11 +251,17 @@ class _MomentsMixin:
                 m["time_formatted"] = _format_time_ms(m.get("time_ms", 0))
         return moments
 
-    async def _detect_moments_uncached(self, scope: GamingSessionScope, limit: int) -> list:
-        """Collect all detector moments, then pick the director's cut (see
-        _select_director_cut): star tiers as a hard boundary, then a type-priority
-        + player-spread diversity pass within each tier."""
+    async def _detect_moments_uncached(
+        self, scope: GamingSessionScope, limit: int, types: tuple[str, ...] | None = None,
+    ) -> list:
+        """Collect all detector moments, keep the requested types (if any),
+        then pick the director's cut (see _select_director_cut): star tiers
+        as a hard boundary, then a type-priority + player-spread diversity
+        pass within each tier."""
         moments = await self._collect_moments(scope)
+        if types:
+            wanted = set(types)
+            moments = [m for m in moments if m.get("type") in wanted]
         return _select_director_cut(moments, limit)
 
     async def _detect_kill_streaks(self, scope: GamingSessionScope) -> list:

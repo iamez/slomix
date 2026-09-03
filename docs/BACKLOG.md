@@ -50,6 +50,7 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (4. 9., moments r. 5) `/storytelling/moments` je zdaj unija oblik (opcijski `types` v odgovoru) in še brez `response_model` (`response_model_gap.txt:208`) — kandidat za tipizacijo skupaj z `StoryMoment` (top-level `kills[]`/`victims` pri multikill/team_wipe niso v vmesniku).
 - (3. 9., moments r. 1) ⚠️ **tank na sw_goldrush_te: `total_distance` < 1 000 u v 112 od 128 rund** — meritev premika tanka (`sampleVehiclePositions`, `r.currentOrigin` za script_mover?) je vprašljiva; truck je normalen (p50 8 612 u). Preveriti v Lua (polje izvora, `MAX_SANE_MOVE`), preden se tank šteje za »ne premika se«.
 - (3. 9., moments r. 1) **moments nima besednjaka »not covered«**: `[]` pomeni tudi »proximity ni zajet«; coverage iz manifesta `vehicle_tracking` (`round_web_service.py:635`) bi dala `status: unavailable` po `_probe_unavailable` vzorcu — sprememba routerja + Story panel.
 - (3. 9., moments r. 1) **direktorjev rez skrije 3★ escort** pri bogatih sejah (154: bazen 91, limit 10/50) — po dizajnu; če owner hoče escort vedno viden, rabi svoj panel/filter po tipu (rezina 5), ne dvig zvezdic.
