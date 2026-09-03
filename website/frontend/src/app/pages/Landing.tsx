@@ -319,7 +319,7 @@ export function Landing() {
         <div className="landing-quad" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
           {[
             { to: '/profile', title: 'Your profile', body: 'Your rounds, against your own form.', bar: 'var(--color-accent)' },
-            { to: '/sessions2', title: 'The evenings', body: 'Maps, teams, how the night went.', bar: 'var(--color-accent-warm)' },
+            { to: '/sessions', title: 'The evenings', body: 'Maps, teams, how the night went.', bar: 'var(--color-accent-warm)' },
             { to: '/proximity', title: 'Telemetry', body: 'Paths, cover, reaction times.', bar: 'var(--color-pos)' },
             { to: '/uploads', title: 'Clips and files', body: 'Demos, highlights, configs.', bar: 'var(--color-accent)' },
           ].map((card) => (
@@ -337,7 +337,7 @@ export function Landing() {
           <SectionHead
             label="recent evenings"
             parity="landing.recent-evenings"
-            aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>all sessions →</Link>}
+            aside={<Link to="/sessions" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>all sessions →</Link>}
           />
           <div style={{ marginTop: 'var(--space-2)' }}>
             {sessions.isPending && <Pending label="sessions" />}

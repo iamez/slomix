@@ -50,6 +50,14 @@ import routeData from './routes.data.json';
  */
 export const APP_ROUTES: readonly AppRoute[] = Object.freeze(routeData as AppRoute[]);
 
+/** Retired paths and where they went (stats 2.0, docs/design/18: the two
+ *  archives became one). Data, not a router detail, so routes.test can hold
+ *  two facts: a legacy key may resolve through a redirect, and every
+ *  redirect target is a registered route. */
+export const REDIRECTS: readonly { from: string; to: string }[] = Object.freeze([
+  { from: '/sessions2', to: '/sessions' },
+]);
+
 
 const GREATSHOT_SECTIONS = new Set(['demos', 'highlights', 'clips', 'renders']);
 const SESSION_DETAIL_TABS = new Set(['summary', 'players', 'teamplay', 'charts']);
@@ -107,8 +115,12 @@ export function hashToPath(hash: string): string {
         const tab = SESSION_DETAIL_TABS.has(seg[2]) && seg[2] !== 'summary' ? `/${seg[2]}` : '';
         return `/session-detail/${enc(seg[1])}${tab}${q}`;
       }
-      return `/sessions2${q}`;
+      return `/sessions${q}`;
     }
+    // Stats 2.0 (docs/design/18): the two archives became one. The legacy
+    // hash keeps resolving, to the surviving route.
+    case 'sessions2':
+      return `/sessions${q}`;
     case 'story': {
       if (seg[1] === 'session' && seg[2]) return `/story/session/${enc(seg[2])}${q}`;
       if (seg[1] === 'date' && seg[2]) return `/story/date/${enc(seg[2])}${q}`;

@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 // switchover (docs/design/06 §3: "izpuščena route postane rdeč test").
 // @ts-expect-error plain-JS module, typed only where spider-web.d.ts covers it
 import { listRouteDefinitions, getRouteHash } from '../../../js/route-registry.js';
-import { APP_ROUTES, hashToPath } from './routes';
+import { APP_ROUTES, hashToPath, REDIRECTS } from './routes';
 
 /** Registry keys that deliberately fold into another app route. */
 const FOLDED = new Map<string, string>([
@@ -74,7 +74,11 @@ describe('routes.ts covers the legacy registry', () => {
   for (const key of Object.keys(definitions)) {
     it(`legacy key '${key}' resolves to an app route`, () => {
       const target = FOLDED.get(key) ?? key;
-      expect(appByKey.has(target), `no APP_ROUTES entry for '${target}'`).toBe(true);
+      // A retired route still resolves — through its redirect (stats 2.0
+      // folded sessions2 into sessions), never into a stub or a 404.
+      const redirected = REDIRECTS.find((r) => r.from === `/${target}`);
+      const resolved = redirected ? matchesRegisteredRoute(redirected.to) : appByKey.has(target);
+      expect(resolved, `no APP_ROUTES entry (or redirect) for '${target}'`).toBe(true);
     });
 
     it(`legacy hash for '${key}' maps to a REGISTERED route`, () => {
@@ -104,6 +108,16 @@ describe('routes.ts covers the legacy registry', () => {
 // ---------------------------------------------------------------------------
 // `nav` and the shell's own prefix list are two halves of one fact.
 // ---------------------------------------------------------------------------
+
+describe('redirects', () => {
+  it('every redirect target is a registered route and no source is', () => {
+    for (const r of REDIRECTS) {
+      expect(matchesRegisteredRoute(r.to), `${r.from} -> ${r.to} points at nothing`).toBe(true);
+      expect(matchesRegisteredRoute(r.from), `${r.from} is both a route and a redirect`).toBe(false);
+    }
+    expect(REDIRECTS.length).toBeGreaterThan(0);
+  });
+});
 
 describe('routes and the shell agree on what is a stats page', () => {
   /** Read from source: the list lives in AppShell and nothing joins it to

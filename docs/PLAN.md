@@ -54,6 +54,27 @@ deploy NI naloga.
 | endpoint gap | 5 na tej veji (8 na mainu; 74 ob začetku 1. 9.) |
 | proximity inventory pending | **0** (#884) |
 
+## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
+
+**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R1 v delu)
+
+Owner (3. 9.): »Sessions« + »Sessions 2.0« → ENA stran; seznam po datumu in
+id-ju s thumbnailom; ob kliku najprej jedrnat summary (basics tabela +
+tekstovne nagrade v gibhub slogu), podrobnosti za klikanje do power userja.
+Dizajn: `docs/design/18_STATS_2_0_SESSIONS.md` (lokalno). Odločitve: vzdevki
+nagrad (tabela v backendu) · Smart Stats = zavihek session strani · ACC =
+hits/shots lahkih orožij.
+
+| rezina | obseg | stanje |
+|---|---|---|
+| R1 | en arhiv `/sessions` z levelshoti, `#id`, BOX, mape, »one half missing«; `/sessions2` redirect; podnav brez podvojitve | ta veja |
+| R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, kanonična vrata, korpusni tek čez 153 sej) | — |
+| R3 | summary plast 1: `DataTable` basics (TP, denied %, DPM, KIS, KIS/min, DMG, DMR, ACC, HS %, GIBS, UK, SK, FSK, REV, REV'D) + awards | — |
+| R4 | zavihki Players 22 · Rounds (retire `/rounds`) · Teamplay · Story (retire `/story`) | — |
+| R5 | power user: vrstica igralca ▾, KIS details, povezave | — |
+
+Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
+
 ## Proga: lag na puranu + Lua optimizacija (sestrska seja)
 
 **Zadnja posodobitev:** 2026-09-02 (Fable — predaja koordinacije)

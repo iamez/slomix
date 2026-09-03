@@ -199,7 +199,7 @@ export function DesignCatalog() {
             onSelect={setTab}
           />
           <Cluster gap={4}>
-            <ActLink to="/sessions2">view all →</ActLink>
+            <ActLink to="/sessions">view all →</ActLink>
             <Cluster gap={2} align="center"><StatusDot state="ok" /><span className="lbl">ok</span></Cluster>
             <Cluster gap={2} align="center"><StatusDot state="warn" /><span className="lbl">warn</span></Cluster>
             <Cluster gap={2} align="center"><StatusDot state="error" /><span className="lbl">error</span></Cluster>

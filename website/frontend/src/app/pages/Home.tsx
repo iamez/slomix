@@ -398,7 +398,7 @@ function LatestGames() {
     <div data-parity="home.latest-games">
       <SectionHead
         label="latest games"
-        aside={<Link to="/sessions2" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>view all →</Link>}
+        aside={<Link to="/sessions" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>view all →</Link>}
       />
       <div style={{ marginTop: 'var(--space-3)' }}>
         {matches.isPending && <Pending label="matches" />}
@@ -776,7 +776,7 @@ function EarlierEvenings() {
             </span>
           </Link>
         ))}
-        <ActLink to="/sessions2" style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>All evenings →</ActLink>
+        <ActLink to="/sessions" style={{ display: 'inline-block', marginTop: 'var(--space-4)' }}>All evenings →</ActLink>
       </div>
     </div>
   );

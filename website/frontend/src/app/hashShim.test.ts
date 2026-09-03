@@ -33,7 +33,8 @@ const PRODUCER_CASES: Array<[string, string]> = [
   ['#/greatshot/highlights', '/greatshot/highlights'],
   ['#/greatshot/bogus-section', '/greatshot/demos'],
   ['#/greatshot/demo/abc123', '/greatshot/demo/abc123'],
-  ['#/sessions2?range=30d', '/sessions2?range=30d'],
+  ['#/sessions2?range=30d', '/sessions?range=30d'],
+  ['#/session-detail', '/sessions'],
 ];
 
 describe('hashToPath', () => {
