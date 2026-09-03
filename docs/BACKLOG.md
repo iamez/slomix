@@ -7,7 +7,11 @@
 
 ## Trenutna pozicija
 
-- (Fable 5.1, 2026-09-03, 22:30) SKOK 4 skoraj zaključen: v6.13 mergan (#905)
+- (Fable 5.1, 2026-09-04) Match moments r. 1 (#908) in r. 5 (#909) MERGANI; watchdog
+  v6.13 deployan; owner: naslednja **doc 22 (digitalni dvojčki botov)** —
+  raziskava teče (agent + puran read-only), nato `docs/design/22`; potem doc 19
+  ali moments r. 2 po ownerjevem vrstnem redu.
+- (Fable 5.1, 2026-09-03, 22:30) SKOK 4 zaključen: v6.13 mergan (#905)
   in deployan na puran (dokazano), osnovnica bot testa izmerjena, drugi bot
   test z v6.13 teče (22:25–22:55) → poročilo + ukrepi v BACKLOG. #903 (R5)
   mergan (`e3b0a70c`), Stats 2.0 R1–R5 KONČAN. Nato nazaj: doc 19/20 po
@@ -54,7 +58,7 @@
 - (3. 9., moments r. 1) ⚠️ **tank na sw_goldrush_te: `total_distance` < 1 000 u v 112 od 128 rund** — meritev premika tanka (`sampleVehiclePositions`, `r.currentOrigin` za script_mover?) je vprašljiva; truck je normalen (p50 8 612 u). Preveriti v Lua (polje izvora, `MAX_SANE_MOVE`), preden se tank šteje za »ne premika se«.
 - (3. 9., moments r. 1) **moments nima besednjaka »not covered«**: `[]` pomeni tudi »proximity ni zajet«; coverage iz manifesta `vehicle_tracking` (`round_web_service.py:635`) bi dala `status: unavailable` po `_probe_unavailable` vzorcu — sprememba routerja + Story panel.
 - (3. 9., moments r. 1) **direktorjev rez skrije 3★ escort** pri bogatih sejah (154: bazen 91, limit 10/50) — po dizajnu; če owner hoče escort vedno viden, rabi svoj panel/filter po tipu (rezina 5), ne dvig zvezdic.
-- (3. 9., sestrska seja) ⛔ **`scripts/db_backup.sh` pokvarjen**: teče kot `website_app`, ker `website/.env` prepiše `POSTGRES_USER` iz korenskega `.env`; ta vloga ne sme brati 7 tabel (`voice_members`, `team_pool`, `proximity_reaction_metric`, `processed_endstats_files`, `matchup_history`, `achievement_notification_ledger`, `player_identity_links`) → `pg_dump` »permission denied«. Obvod: `POSTGRES_USER=etlegacy_user POSTGRES_PASSWORD=… bash scripts/db_backup.sh`. Popravek = administrativna orodja berejo LE korenski `.env` (ali izrecen `--role`); še ni dodeljeno — javiti sestri pred dotikom.
+- (3. 9., sestrska seja; **REŠENO #906**, 4. 9.: vloga se izbere namerno, `BACKUP_DB_USER` → korenski `.env`) ~~`scripts/db_backup.sh` pokvarjen~~: teče kot `website_app`, ker `website/.env` prepiše `POSTGRES_USER` iz korenskega `.env`; ta vloga ne sme brati 7 tabel (`voice_members`, `team_pool`, `proximity_reaction_metric`, `processed_endstats_files`, `matchup_history`, `achievement_notification_ledger`, `player_identity_links`) → `pg_dump` »permission denied«. Obvod: `POSTGRES_USER=etlegacy_user POSTGRES_PASSWORD=… bash scripts/db_backup.sh`. Popravek = administrativna orodja berejo LE korenski `.env` (ali izrecen `--role`); še ni dodeljeno — javiti sestri pred dotikom.
 - (3. 9., #904) `time_dead_minutes` za vrstice pred 2026-03-24 je rekonstruiran (8 721 vrstic; izvirnik v `time_dead_minutes_original`, zastavica `time_dead_reconstructed`) → Players zavihek `dead min` in `alive %` za stare seje zdaj kažejo druge številke; tooltip bi lahko omenil zastavico (R6 ideja).
 - (3. 9., FH v6.13, test 2) **round-end burst trackerja izmerjen 188–224 ms z boti** (`FM top=round_end`) — z ljudmi (~3 000 vrstic) pričakovano več; batch write (`PLAN_LUA_PERF` A2) je prvi ukrep, zdaj z instrumentom pred/po.
 - (3. 9., FH v6.13, test 2) webhook `sweep` v 30 min NI presegel 50 ms → ni glavni osumljenec; 9 s `self` ob 0 igralcih (2. 9.) ostaja nepojasnjen, ob ponovitvi ga `FM top=` poimenuje.
