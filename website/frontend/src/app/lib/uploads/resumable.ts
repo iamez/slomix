@@ -103,10 +103,13 @@ export async function resumableUpload(file: File, meta: UploadMeta, options: Res
   let offset = typeof init.offset === 'number' && init.offset >= 0 ? init.offset : 0;
   let stalls = 0;
 
-  const bail = async () => { await abortSession(url); throw abortError(); };
+  // Cancel must reach the UI at once: the session DELETE is fire-and-forget
+  // (the server sweeps stale sessions after 24 h anyway) — awaiting it on a
+  // stalled network would hold the "cancelled" state hostage (Copilot on #896).
+  const bail = (): never => { void abortSession(url); throw abortError(); };
 
   while (offset < file.size) {
-    if (signal?.aborted) await bail();
+    if (signal?.aborted) bail();
     const before = offset;
     const blob = file.slice(offset, Math.min(offset + chunkSize, file.size));
     let attempt = 0;
@@ -130,7 +133,7 @@ export async function resumableUpload(file: File, meta: UploadMeta, options: Res
         }
         throw err;
       } catch (e) {
-        if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) await bail();
+        if (signal?.aborted || (e instanceof DOMException && e.name === 'AbortError')) bail();
         if (e instanceof ApiError) {
           if (e.status === 0 || e.status >= 500) {
             if (attempt >= MAX_RETRIES) throw e;
@@ -159,6 +162,6 @@ export async function resumableUpload(file: File, meta: UploadMeta, options: Res
     onProgress?.(offset, file.size);
   }
 
-  if (signal?.aborted) await bail();
+  if (signal?.aborted) bail();
   return await apiPost(FINALIZE_PATH, {}, { pathParams: { session_id: init.session_id } }) as UploadCreated;
 }
