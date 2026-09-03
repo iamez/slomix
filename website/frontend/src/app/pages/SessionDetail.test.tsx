@@ -545,8 +545,8 @@ describe('SessionDetail — stats 2.0 R4 tabs', () => {
     renderPage(fixtureFetch, '/session-detail/154/rounds');
     await waitFor(() => expect(screen.getByText(/12 of 12 count toward totals|11 of 12 count toward totals/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'one player' }));
-    const select = screen.getByLabelText('player') as HTMLSelectElement;
-    expect(select.options.length).toBeGreaterThan(1);
+    const picker = screen.getByLabelText('player') as HTMLSelectElement;
+    expect(picker.options.length).toBeGreaterThan(1);
     expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'true');
   });
 
@@ -557,8 +557,10 @@ describe('SessionDetail — stats 2.0 R4 tabs', () => {
     // A bar per axis, its value in the accessible name — a bar is not a number.
     await waitFor(() => expect(screen.getAllByRole('img', { name: `crossfire rate ${a.crossfire.toFixed(0)}` }).length).toBeGreaterThan(0));
     expect(screen.getAllByRole('img', { name: /^medic bond \d+$/ }).length).toBe(2);
-    // The group label and the trade table both name the player — at least once each.
-    expect(screen.getAllByText(new RegExp(a.players[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))).length).toBeGreaterThan(0);
+    // The group label and the trade table both name the player — at least
+    // once each. A substring match, not a RegExp built from data (the
+    // scanners flag a non-literal RegExp, and a name with a dot is one).
+    expect(screen.getAllByText(a.players[0], { exact: false }).length).toBeGreaterThan(0);
     // The trade table, scoped to the session's date and saying so.
     await waitFor(() => expect(container.querySelector('[data-parity="session.teamplay.trades"] [role="region"]')).toBeTruthy());
     expect(screen.getByRole('button', { name: /^rate/ })).toHaveAttribute('title', expect.stringMatching(/success ÷ opportunities/));
