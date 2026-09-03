@@ -58,6 +58,7 @@ SENTINEL_TABLES: tuple[tuple[str, str], ...] = (
     ("availability_entries", "user_id"),
     ("subscription_preferences", "user_id"),
     ("parimutuel_bets", "user_id"),
+    ("uploads", "uploader_discord_id"),  # upload_tags cascades
     ("user_points", "user_id"),
     ("user_permissions", "discord_id"),
     ("website_users", "id"),

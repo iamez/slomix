@@ -1,6 +1,6 @@
 import { QueryClient, useQuery } from '@tanstack/react-query';
 import type { paths } from '../../api/generated/openapi.d';
-import { ApiError, apiDelete, apiGet, apiPost, apiUpload } from './api';
+import { ApiError, apiDelete, apiGet, apiPost, apiUpload, apiUploadWithProgress } from './api';
 import type {
   ActivityCalendar,
   ActivityHistory,
@@ -158,6 +158,8 @@ import type {
   SubscriptionWriteResponse,
   SystemOverview,
   TonightStatus,
+  UploadCreated,
+  UploadDeleteResponse,
   UploadDetail,
   UploadsList,
   V7Status,
@@ -1903,6 +1905,31 @@ export function usePopularUploadTags() {
       apiGet('/api/uploads/tags/popular', { query: { limit: 15 } }) as Promise<{ tag: string; count: number }[]>,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+
+// Slice 2 writes. The chunked path lives in ./uploads/resumable.ts (its
+// init call is the exact literal that closes the gap line); this is the
+// single-shot path (≤ RESUMABLE_THRESHOLD) and the delete.
+export { resumableUpload, RESUMABLE_THRESHOLD } from './uploads/resumable';
+export type { UploadMeta } from './uploads/resumable';
+
+export async function uploadSingleShot(
+  file: File,
+  meta: { title?: string; description?: string; tags?: string; retention_days?: number | null },
+  options: { onProgress?: (sent: number, total: number) => void; signal?: AbortSignal } = {},
+) {
+  const form = new FormData();
+  form.append('file', file);
+  if (meta.title) form.append('title', meta.title);
+  if (meta.description) form.append('description', meta.description);
+  if (meta.tags) form.append('tags', meta.tags);
+  if (meta.retention_days != null) form.append('retention_days', String(meta.retention_days));
+  return apiUploadWithProgress('/api/uploads', form, options) as Promise<UploadCreated>;
+}
+
+export async function deleteUpload(uploadId: string) {
+  return apiDelete('/api/uploads/{upload_id}', { pathParams: { upload_id: uploadId } }) as Promise<UploadDeleteResponse>;
 }
 
 

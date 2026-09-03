@@ -33,6 +33,18 @@
 - (3. 9.) `routes.ts:52` grammar `SESSION_DETAIL_TABS` ima `teamplay/charts`,
   stran pa `summary/players/rounds` — legacy `#/session-detail/154/teamplay`
   pade na summary; R4 ga uskladi.
+- (3. 9., uploads r. 2) **poster capture** (.mp4 → JPEG prek canvasa,
+  `uploads.js:300-336`) za single-shot pot; **resume čez reload** (HEAD +
+  localStorage identiteta datoteke — legacy nima); filtriranje po
+  kategoriji/oznakah na seznamu (rezina 1 ga je izpustila, PR #888).
+- (3. 9.) **resumable router handlerji nimajo testov**: 0 testov v `tests/`
+  kliče `init_resumable_upload`/`resumable_patch`/`finalize_resumable_upload`/
+  `abort_resumable_upload`; le store (`test_upload_store_resumable.py`).
+  `test_uploads_slice2_fixtures.py` pokrije init/finalize/delete oblike,
+  ne PATCH/HEAD.
+- (3. 9.) `docs/UPLOAD_SECURITY.md` §3.6 zastarel (trdi, da admin ne more
+  brisati; `delete_upload` admin gate obstaja); `delete_upload` brez
+  `_require_valid_upload_id` → napačen id vrne 404, ne 400.
 - (2. 9., availability r. 2) **response-model round: availability + bets** —
   24 handlerjev brez `response_model`, openapi brez shem → ročni tipi v
   `types.ts` so pripeti le s harness posnetki
