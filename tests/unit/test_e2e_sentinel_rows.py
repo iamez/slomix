@@ -41,6 +41,9 @@ def test_remove_order_deletes_fk_dependents_before_website_users():
     assert tables[-1] == "website_users", "the FK target goes last"
     assert tables.index("user_points") < tables.index("website_users")
     assert tables.index("parimutuel_bets") < tables.index("website_users")
+    # The sentinel's fixture uploads (slice 2 recorded a real round trip and
+    # soft-deleted them) are removable too.
+    assert ("uploads", "uploader_discord_id") in mod.SENTINEL_TABLES
     # Each insert target is also removable.
     for table, _sql, _params in mod.INSERTS:
         assert table in tables

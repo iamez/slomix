@@ -130,8 +130,10 @@ function buildQuery(query: Record<string, unknown> | undefined): string {
   return rendered ? `?${rendered}` : '';
 }
 
-/** Substitute `{param}` segments, e.g. `/api/rounds/{round_id}/awards`. */
-function fillPath(path: string, pathParams: Record<string, string | number> | undefined): string {
+/** Substitute `{param}` segments, e.g. `/api/rounds/{round_id}/awards`.
+ *  Exported for the resumable uploader, whose PATCH/HEAD steps are raw
+ *  fetches on a typed path (no JSON body, a 204, a header answer). */
+export function fillPath(path: string, pathParams: Record<string, string | number> | undefined): string {
   if (!pathParams) return path;
   return path.replace(/\{([^}]+)\}/g, (whole, name: string) => {
     const value = pathParams[name];
@@ -185,8 +187,8 @@ export async function apiPost<P extends PostPath>(
 }
 
 /** Reads the error body ONCE for its `detail`; a non-JSON body (a plain
- *  500 page) leaves detail unset. */
-async function apiErrorFrom(res: Response, url: string): Promise<ApiError> {
+ *  500 page) leaves detail unset. Exported with fillPath, same reason. */
+export async function apiErrorFrom(res: Response, url: string): Promise<ApiError> {
   const err = new ApiError(res.status, url);
   try {
     const body: unknown = await res.json();
@@ -241,4 +243,53 @@ export async function apiUpload<P extends PostPath>(
   });
   if (!res.ok) throw await apiErrorFrom(res, url);
   return res.json();
+}
+
+
+/** Upload with byte progress. fetch() cannot report upload progress, so
+ *  this one helper is XMLHttpRequest — same envelope as apiUpload (multipart
+ *  boundary set by the browser, X-Requested-With for the CSRF gate,
+ *  credentials), same ApiError-with-detail on non-2xx, plus `signal` for the
+ *  cancel button (abort rejects with a DOMException named AbortError, like
+ *  fetch would). Used by the single-shot upload path (≤ 50 MiB). */
+export function apiUploadWithProgress<P extends PostPath>(
+  path: P,
+  form: FormData,
+  options: { onProgress?: (sent: number, total: number) => void; signal?: AbortSignal; pathParams?: Record<string, string | number> } = {},
+): Promise<unknown> {
+  const url = fillPath(path, options.pathParams);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+    xhr.withCredentials = true;
+    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+    xhr.responseType = 'text';
+    const onAbort = () => { xhr.abort(); };
+    if (options.signal) {
+      if (options.signal.aborted) { reject(new DOMException('upload aborted', 'AbortError')); return; }
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
+    xhr.upload.onprogress = (e) => {
+      if (options.onProgress && e.lengthComputable) options.onProgress(e.loaded, e.total);
+    };
+    const done = () => { options.signal?.removeEventListener('abort', onAbort); };
+    xhr.onload = () => {
+      done();
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try { resolve(xhr.responseText ? JSON.parse(xhr.responseText) : null); } catch (e) { reject(e); }
+        return;
+      }
+      const err = new ApiError(xhr.status, url);
+      try {
+        const body: unknown = JSON.parse(xhr.responseText);
+        if (body && typeof body === 'object' && typeof (body as { detail?: unknown }).detail === 'string') {
+          err.detail = (body as { detail: string }).detail;
+        }
+      } catch { /* not JSON — the status is the whole story */ }
+      reject(err);
+    };
+    xhr.onerror = () => { done(); reject(new ApiError(0, url)); };
+    xhr.onabort = () => { done(); reject(new DOMException('upload aborted', 'AbortError')); };
+    xhr.send(form);
+  });
 }

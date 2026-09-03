@@ -32,4 +32,3 @@
 /api/bets/market
 /api/diagnostics
 /api/stats/sessions
-/api/uploads/resumable
