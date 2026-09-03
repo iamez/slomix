@@ -907,3 +907,6 @@ website/frontend/src/api/generated/openapi.d.ts
 # Playwright owner storage state — embeds a signed session cookie
 website/frontend/e2e/.auth/
 .claude_session
+
+# Artifacts from scripts/backfill_time_played_percent.py (backup + repair SQL)
+tpp_backfill_artifacts/
