@@ -200,7 +200,7 @@ Verify (covers the Lua producer side and the Python consumer side):
 grep -rn "timestats" bot/ website/backend/ vps_scripts/ --include='*.py' --include='*.lua' | wc -l  # 0 → still not started
 ```
 
-### Time dead anomalies — upstream fix LANDED, stored rows still inflated — Medium
+### Time dead anomalies — RESOLVED 2026-09-03 (rows reconstructed)
 
 Between 211 and 301 player-rows (explicit range — the count varies with the
 counting method, measured 2026-06-02) have `time_dead > time_played` (max
@@ -236,11 +236,40 @@ already happened, and the problem is larger than "a few hundred rows".**
   `time_dead` leaders, ET Rating's `survival_rate` (weight 0.07), PWC survival
   (0.08). The read-time `LEAST(...)` cap hides this in session views only.
 
-The owner decision above still stands and is **not** overridden here. It was
-taken against the narrower problem (211–301 visibly impossible rows, measured
-2026-06-02) and while the upstream fix was believed to be outstanding. Both of
-those premises have changed, so the decision is worth revisiting — but that is
-the owner's call, and nothing is repaired until it is made.
+**Resolved 2026-09-03 — the owner revoked the no-backfill decision after the
+premises were re-measured, and the rows were reconstructed.**
+
+The decision above was taken against the narrower problem (211–301 visibly
+impossible rows, measured 2026-06-02) and while the upstream fix was believed
+to be outstanding. Both premises had changed. The owner reviewed the
+measurements and approved the repair on 2026-09-03; it ran the same day.
+
+- **8,721 rows rewritten** by `scripts/repair_dead_time_reconstruction.py`
+  (migration 081 adds the `time_dead_reconstructed` stamp; the previous value
+  is kept in `time_dead_minutes_original`, and the run wrote a row-level
+  rollback script before touching anything). Dead minutes 26,337 → 12,338;
+  median inflation factor 1.92.
+- `dead > played`: **80 → 0**. `time_dead_ratio > 100.5`: **43 → 0**. The
+  eleven rows that still break those bounds all sit in rounds the pipeline
+  already excludes (one `orphan_r2`, two `is_valid = FALSE` bot rounds), which
+  is why the plausibility audit reports zero.
+- The distributions now agree across the boundary at every quartile —
+  p25 0.169 / median 0.212 / p75 0.257 / p99 0.400 before it, against
+  0.153 / 0.203 / 0.255 / 0.417 after. Before the repair the pre-boundary
+  median was 0.365.
+- ⭐ The independent confirmation is the aggregate audit rule
+  `pcs_dead_time_share_monthly`, built and calibrated on the broken data three
+  days earlier: it used to report three explained shifts (2025-05 +46.5%,
+  2026-04 −53.1%, 2026-05 −41.4%) and now reports **none** — the monthly series
+  is flat at 0.19–0.23 across all twenty months.
+
+⛔ **One correction to the analysis above.** "The rows before it are inflated by
+a factor of ~2" is true of the capture files, but not of every stored row. The
+2025-12-20 bulk import treated the R2 file's dead time as a match cumulative
+and split it in proportion to playtime (`stored = file × played_R2 /
+(played_R1 + played_R2)`, median 1.000, 97.8% of rows within ±10%). Two errors
+that nearly cancel: those rows looked correct in aggregate (median
+stored/reconstructed 1.058) while only 18.2% were within ±10% of the truth.
 
 Full analysis: `docs/research/ASSISTS_RCA_2026-09-02.md` §6 (local).
 
