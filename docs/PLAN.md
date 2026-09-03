@@ -100,7 +100,7 @@ tudi med pavzo in NI izključen. Razsodi meritev prek `self`. Optimizacija burst
 
 ## Proga: časovna polja (Opus 5)
 
-**Zadnja posodobitev:** 2026-09-02 zvečer (Opus 5 — agregatni razred varovala)
+**Zadnja posodobitev:** 2026-09-03 (Opus 5 — vseh 5 PR-jev na mainu, bot restartan, varovala oborožena)
 
 Dva ločena hrošča v istem deploy oknu (~20. 3. 2026) sta pustila bazo v
 stanju, kjer sta obdobji **nezdružljivi**: staro ima engine alive%, a ~2×
@@ -111,21 +111,37 @@ se da vsako obdobje popraviti iz signala drugega.
 
 | faza | kaj | stanje |
 |---|---|---|
-| 1 | uvozna pot piše `time_played_percent` + parnostno varovalo piscev | **#885**, zelen, čaka ownerjev merge |
-| 2 | backfill `time_played_percent` iz surovih datotek | **#886**, zelen; **IZVEDEN** 2. 9. (8.800 → 13.466 vrstic, +4.666; kontrola proti surovim datotekam 22/22) |
+| 1 | uvozna pot piše `time_played_percent` + parnostno varovalo piscev | ✅ **#885** `f71906ac` |
+| 2 | backfill `time_played_percent` iz surovih datotek | ✅ **#886** `fb35e09b`; izveden 2. 9. (+4.666, kontrola 22/22), **ponovljen 3. 9. po restartu bota: 0 rešljivih vrstic — končano** |
 | 3 | rekonstrukcija zgodovinskega `time_dead_minutes` iz engine alive% | ⛔ ownerjeva odločitev; velja SAMO za R1 (R2 gre prek kumulativne TAB[8]); prekliče zapis »owner decision — no backfill« v `docs/KNOWN_ISSUES.md` |
-| 4a | per-row varovala v plausibility auditu (4 nova pravila) | **#892**, zelen, čaka merge |
-| 4b | agregatni razred (»porazdelitev se je premaknila«) | **ta veja**, 7 trend pravil |
-| 5 | zastareli zapisi, ki so to skrivali | **#893**, zelen, čaka merge |
+| 4a | per-row varovala v plausibility auditu (4 nova pravila) | ✅ **#892** `75ebdeee` |
+| 4b | agregatni razred (»porazdelitev se je premaknila«) | ✅ **#895** `c213346f`, 7 trend pravil |
+| 4c | oborožitev namesto utišanja (`Rule.armed_from`) | **ta veja** |
+| 5 | zastareli zapisi, ki so to skrivali | ✅ **#893** `0003e589` |
+
+✅ **Bot restartan 3. 9. ob 11:25** (`etlegacy-bot`, dev enota, NOPASSWD;
+`etlegacy-web` nedotaknjen): 21 cogov, 98 ukazov, brez napak. Ponovni zagon
+backfilla: **0 rešljivih vrstic**; ostane 16 ničelnih v treh rundah
+(14 neparsljivih zajemov, 2 vrednosti 101,2 %).
+
+⭐⭐ **Faza 4c: tri »znana« pravila so bila UTIŠANA, kar mutira cel senzor.**
+`acknowledged` utiša celo pravilo, torej bi tudi SVEŽA ponovitev iste okvare
+padla v isto tišino — natanko tako, kot je pet mesecev minilo prvič. Zato
+`Rule.armed_from`: zgodovina se še vedno šteje in prikaže (nov stolpec
+»pre-arming«), a izhodne kode in dnevnega alarma ne drži odprtih. Izmerjeno:
+`dead > played` 80 vrstic, **nobene po 2026-04-01**; `ratio` 43, nobene po
+istem datumu; `tpp = 0` 16, nobene po 2026-09-03. Utišanih pravil: **0**.
+Živih kršitev: **0**.
 
 ⭐ **Ključna meritev (odklepa fazo 3):** po backfillu `alive_pct_drift` prvič
 po 5 mesecih spet deluje — 290 parov, engine 79,3 proti izračunanemu 79,3,
 povprečna |razlika| **0,15 o. t.**, le 2 para (0,7 %) nad 2 o. t. To potrjuje
 oboje: ALIVE% se premakne zanemarljivo IN formula za staro obdobje drži.
 
-⚠️ **Backfill je treba ponoviti** po mergu #885 IN restartu bota — do takrat
-vsak nov uvoz spet piše ničle. Skripta piše samo čez ničle, zato je
-ponovitev varna in idempotentna.
+✅ **Backfill ponovljen 3. 9.** po restartu bota; 0 rešljivih vrstic ostane.
+Konec-do-konca dokaz, da uvozna pot spet piše `time_played_percent`, pride
+šele z naslednjim uvozom (naslednji večer igre) — do tedaj je dokazano le,
+da datoteka, ki jo bot poganja, vsebuje stolpec (54 stolpcev v `INSERT`).
 
 ⭐⭐ **Razrešeno 3. 9.: »tretja raven« je R2, ne igra.** Ločeno po rundah je
 **R1 raven skozi vso predpopravkovo obdobje** (delež mrtvega časa 0,44–0,50),

@@ -71,6 +71,20 @@ PROVENANCE_CUTOFF = "2026-01-01"
 # first day whose orphans nobody has hand-checked.
 ORPHAN_SENSOR_ARMED_FROM = "2026-08-18"
 
+# The day the game server's Lua stopped double-counting limbo time. Every
+# dead-time impossibility in this database predates it: newest offending row
+# 2026-02-11, zero rows on or after this date (measured 2026-09-03 across the
+# 80 rows of the dead>played rule and the 43 of the ratio rule).
+DEAD_TIME_FIX_ARMED_FROM = "2026-04-01"
+
+# The day #885 reached main and the bot was restarted, so the live import
+# began writing time_played_percent again. What is left before it is a finite,
+# named backlog of 16 rows in three rounds: 14 whose capture files no longer
+# parse (te_escape2 2026-08-20 R2, supply 2026-08-26 R1) and 2 whose engine
+# value reads 101.2%, which the backfill refuses on purpose. #886's backfill
+# has done everything it can -- re-run on 2026-09-03: 0 resolvable rows left.
+TPP_WRITTEN_ARMED_FROM = "2026-09-03"
+
 # ── Env / connection (mirrors scripts/data_trust_check.py) ────────────────────
 
 
@@ -162,6 +176,21 @@ class Rule:
     # The string must name the reason AND what closes it. An acknowledgement
     # with no exit is a mute, and a mute is how five months go by.
     acknowledged: str = ""
+    # The day this rule became responsible for what it finds. Rows BEFORE it
+    # are still counted and still shown -- they move into their own `pre-arming`
+    # column, not out of the report -- but they no longer reach the exit code
+    # or the daily alert.
+    #
+    # This is the honest alternative to an acknowledgement for a defect whose
+    # cause is already fixed: the acknowledgement mutes the WHOLE rule, so a
+    # fresh occurrence of the same breakage is swallowed alongside the history
+    # it was meant to excuse. An arming date mutes only the past. A rule with
+    # a known, finite backlog and a landed fix should be armed, not muted.
+    #
+    # (The orphan-R2 rule predates this field and bakes its date into the
+    # predicate instead, which hides the backlog entirely rather than parking
+    # it in a column. Arming is the better half of that idea.)
+    armed_from: str = ""
 
 
 # Base gates. Applied to every rule on that table, in addition to the rule's
@@ -337,9 +366,11 @@ RULES: list[Rule] = [
         note="time_played_percent (TAB[8], engine alive%) is zero on a row with playtime. "
              "Zero is in range, so the range rule cannot see it: this asks whether the "
              "value was WRITTEN, not whether it is possible.",
-        acknowledged="Known: the live INSERT omitted the column until #885. "
-                     "#886 backfills these from the archived capture files. "
-                     "Remove this acknowledgement once live reaches 0.",
+        # Armed rather than acknowledged: the live import writes the column
+        # again as of this date, so a zero from here on is a NEW break and has
+        # to be loud. What sits before it is a finite, named backlog (see
+        # TPP_WRITTEN_ARMED_FROM), still counted and still shown.
+        armed_from=TPP_WRITTEN_ARMED_FROM,
         extra_cols=("pcs.time_played_percent", "pcs.time_played_seconds"),
         order_by="pcs.time_played_seconds DESC",
     ),
@@ -357,10 +388,12 @@ RULES: list[Rule] = [
              "(0.05 min of slack for rounding). Caused by the pre-2026-03-20 "
              "c0rnp0rn8 accumulator, which re-added the running limbo time every "
              "5s without resetting it.",
-        acknowledged="Known: pre-2026-03-20 Lua accumulator bug, fixed on the game "
-                     "server and backported in 76cd77b3. The stored rows are still "
-                     "inflated; repairing them is owner-gated "
-                     "(docs/KNOWN_ISSUES.md 'no backfill'). Remove once live reaches 0.",
+        # The cause was fixed on the game server ~2026-03-20 (backported in
+        # 76cd77b3) and NOT ONE row on or after 2026-04-01 breaks this. Repairing
+        # the 80 historical rows is owner-gated (docs/KNOWN_ISSUES.md
+        # 'no backfill'); until then they belong in the pre-arming column, where
+        # they stay visible without muting a recurrence.
+        armed_from=DEAD_TIME_FIX_ARMED_FROM,
         extra_cols=("pcs.time_dead_minutes", "pcs.time_played_seconds"),
         order_by="(pcs.time_dead_minutes - pcs.time_played_seconds / 60.0) DESC",
     ),
@@ -373,9 +406,9 @@ RULES: list[Rule] = [
         note="time_dead_ratio is a percentage of time played; 0.5pp of slack for "
              "rounding. Same accumulator as the rule above -- the worst stored "
              "value is 3690%.",
-        acknowledged="Known: same pre-2026-03-20 accumulator as "
-                     "pcs_time_dead_exceeds_time_played, and closed by the same "
-                     "owner-gated repair. Remove once live reaches 0.",
+        # Same accumulator, same fix, same arming date: 43 rows before it,
+        # none after.
+        armed_from=DEAD_TIME_FIX_ARMED_FROM,
         extra_cols=("pcs.time_dead_ratio",),
         order_by="pcs.time_dead_ratio DESC",
     ),
@@ -1056,6 +1089,14 @@ def validate_rules(rules: list[Rule]) -> None:
             raise ValueError(f"{r.name}: needs_round_join is meaningless on the rounds table itself")
         if not r.predicate.strip():
             raise ValueError(f"{r.name}: empty predicate")
+        if r.armed_from:
+            if len(r.armed_from) != 10 or r.armed_from[4] != "-" or r.armed_from[7] != "-":
+                raise ValueError(f"{r.name}: armed_from {r.armed_from!r} is not YYYY-MM-DD")
+            if r.acknowledged:
+                raise ValueError(
+                    f"{r.name}: armed_from and acknowledged do the same job by "
+                    f"different means; acknowledged mutes the whole rule, arming "
+                    f"mutes only the past. Pick one.")
 
 
 # ── SQL builders ────────────────────────────────────────────────────────────
@@ -1078,13 +1119,38 @@ def build_count_sql(rule: Rule) -> str:
     return f"SELECT COUNT(*) FROM {from_clause} WHERE {base_gate} AND ({rule.predicate})"  # noqa: S608 # nosec B608 - rules are hardcoded literals validated at import
 
 
+def live_boundary(rule: Rule) -> str:
+    """The date from which a rule's findings count as LIVE.
+
+    An arming date earlier than the provenance cutover would carve nothing
+    out, so the boundary is whichever of the two comes later. Both are
+    ISO dates, and `round_date` is stored as text, so this is a plain string
+    comparison in SQL as well as here.
+    """
+    if not rule.armed_from:
+        return PROVENANCE_CUTOFF
+    return max(rule.armed_from, PROVENANCE_CUTOFF)
+
+
 def build_split_sql(rule: Rule) -> str:
+    """Three buckets that always sum to the rule's total.
+
+    backfill    -- before the provenance cutover, lossy historical import
+    pre_arming  -- live-captured, but before this rule took responsibility
+    live        -- what the exit code and the daily alert actually read
+
+    An unarmed rule has an empty middle bucket, so nothing about the existing
+    two-way split changes for the twenty-odd rules that do not use arming.
+    """
     from_clause, base_gate = _from_clause(rule)
     date_col = _date_col(rule)
+    live_from = live_boundary(rule)
     return (
         f"SELECT "
         f"COUNT(*) FILTER (WHERE {date_col} < '{PROVENANCE_CUTOFF}') AS backfill, "
-        f"COUNT(*) FILTER (WHERE {date_col} >= '{PROVENANCE_CUTOFF}') AS live "
+        f"COUNT(*) FILTER (WHERE {date_col} >= '{PROVENANCE_CUTOFF}' "
+        f"                   AND {date_col} < '{live_from}') AS pre_arming, "
+        f"COUNT(*) FILTER (WHERE {date_col} >= '{live_from}') AS live "
         f"FROM {from_clause} WHERE {base_gate} AND ({rule.predicate})"  # noqa: S608 # nosec B608 - rules are hardcoded literals validated at import
     )
 
@@ -1134,6 +1200,7 @@ class RuleResult:
     backfill: int
     live: int
     top_rows: list[dict[str, Any]]
+    pre_arming: int = 0
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -1144,6 +1211,8 @@ class RuleResult:
             "note": self.rule.note,
             "total": self.total,
             "backfill": self.backfill,
+            "pre_arming": self.pre_arming,
+            "armed_from": self.rule.armed_from,
             "live": self.live,
             "acknowledged": self.rule.acknowledged,
             "top_rows": self.top_rows,
@@ -1168,7 +1237,10 @@ def run_audit(conn, rules: list[Rule], top_n: int = 3) -> list[RuleResult]:
             total = int(cur.fetchone()[0])
 
             cur.execute(_composed(build_split_sql(rule)))
-            backfill, live = (int(v) for v in cur.fetchone())
+            row = cur.fetchone()
+            if row is None or len(row) != 3:
+                raise RuntimeError(f"{rule.name}: split query returned {row!r}, expected 3 counts")
+            backfill, pre_arming, live = (int(v) for v in row)
 
             top_rows: list[dict[str, Any]] = []
             if total > 0:
@@ -1176,7 +1248,8 @@ def run_audit(conn, rules: list[Rule], top_n: int = 3) -> list[RuleResult]:
                 cur.execute(_composed(sql))
                 top_rows.extend(dict(zip(labels, row, strict=True)) for row in cur.fetchall())
 
-            results.append(RuleResult(rule=rule, total=total, backfill=backfill, live=live, top_rows=top_rows))
+            results.append(RuleResult(rule=rule, total=total, backfill=backfill,
+                                      pre_arming=pre_arming, live=live, top_rows=top_rows))
     return results
 
 
@@ -1226,12 +1299,13 @@ def render_markdown(results: list[RuleResult], generated_at: str,
 
     lines.append("## Rules (by violation count)")
     lines.append("")
-    lines.append("| Rule | Table | Severity | Total | Backfill | Live | Note |")
-    lines.append("|---|---|---|---:|---:|---:|---|")
+    lines.append("| Rule | Table | Severity | Total | Backfill | Pre-arming | Live | Note |")
+    lines.append("|---|---|---|---:|---:|---:|---:|---|")
     for r in sorted(results, key=lambda r: r.total, reverse=True):
         flag = " ⚠️" if r.live > 0 else ""
+        pre = f"{r.pre_arming} (from {r.rule.armed_from})" if r.rule.armed_from else "—"
         lines.append(
-            f"| `{r.rule.name}`{flag} | {r.rule.table} | {r.rule.severity} | {r.total} | {r.backfill} | {r.live} | {r.rule.note} |"
+            f"| `{r.rule.name}`{flag} | {r.rule.table} | {r.rule.severity} | {r.total} | {r.backfill} | {pre} | {r.live} | {r.rule.note} |"
         )
     lines.append("")
 
@@ -1242,7 +1316,13 @@ def render_markdown(results: list[RuleResult], generated_at: str,
         lines.append("")
         lines.append(r.rule.note)
         lines.append("")
-        lines.append(f"- Total violations: **{r.total}** (backfill: {r.backfill}, live: {r.live})")
+        if r.rule.armed_from:
+            lines.append(
+                f"- Total violations: **{r.total}** (backfill: {r.backfill}, "
+                f"before this rule was armed on {r.rule.armed_from}: {r.pre_arming}, "
+                f"live: {r.live})")
+        else:
+            lines.append(f"- Total violations: **{r.total}** (backfill: {r.backfill}, live: {r.live})")
         if r.top_rows:
             lines.append("- Top offending rows:")
             for row in r.top_rows:
