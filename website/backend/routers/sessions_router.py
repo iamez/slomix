@@ -2325,8 +2325,11 @@ class SessionBasicsPlayer(BaseModel):
     #: null when nothing hit.
     headshot_pct: float | None
     gibs: int
-    #: pcs.most_useful_kills: kills on armed enemies — excludes selfkills and
-    #: teamkills (the legacy "Useful Kills" column; UK = useful, owner 2026-09-03).
+    #: pcs.most_useful_kills (the legacy "Useful Kills" column; UK = useful,
+    #: owner 2026-09-03). The writer's definition, c0rnp0rn8.lua:679: the
+    #: victim's next wave was >= limbo time / 2 away — they lose at least half
+    #: a spawn cycle. NOT "kills on armed enemies" as the legacy tooltip said;
+    #: useful + useless != kills (the middle band is neither).
     useful_kills: int
     #: pcs.useless_kills: kills of an enemy whose next wave was < 5 s away.
     useless_kills: int
