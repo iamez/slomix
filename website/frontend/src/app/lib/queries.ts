@@ -30,6 +30,7 @@ import type {
   CompSideSplits,
   CompStagger,
   ConstructionEvents,
+  Diagnostics,
   EscortCredits,
   GreatshotDetail,
   GreatshotList,
@@ -290,6 +291,23 @@ export function useQuickLeaders() {
  * interval is the page's acceptance test (a stage going bad shows up
  * without a manual reload).
  */
+/**
+ * /api/diagnostics — admin only. THREE states on the wire, all measured
+ * (2026-09-04): anonymous 401 "Authentication required", authenticated
+ * non-admin 403 "Admin privileges required", admin 200. The page renders all
+ * three, so `retry` stays off: retrying a 403 is asking the same question and
+ * getting the same answer three times slower.
+ */
+export function useDiagnostics() {
+  return useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: () => apiGet('/api/diagnostics', { cache: 'no-store' }) as Promise<Diagnostics>,
+    staleTime: 0,
+    retry: false,
+    refetchOnMount: 'always',
+  });
+}
+
 export function useSystemOverview() {
   return useQuery({
     queryKey: ['system-overview'],

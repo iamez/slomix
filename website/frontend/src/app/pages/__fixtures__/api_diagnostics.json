@@ -1,0 +1,86 @@
+{
+  "status": "ok",
+  "timestamp": "2026-09-03T23:15:18.126180",
+  "database": {
+    "status": "connected",
+    "tests": []
+  },
+  "tables": [
+    {
+      "name": "rounds",
+      "status": "ok",
+      "row_count": 3243,
+      "required": true
+    },
+    {
+      "name": "player_comprehensive_stats",
+      "status": "ok",
+      "row_count": 20977,
+      "required": true
+    },
+    {
+      "name": "gaming_sessions",
+      "status": "ok",
+      "row_count": 155,
+      "required": false
+    },
+    {
+      "name": "processed_files",
+      "status": "ok",
+      "row_count": 5341,
+      "required": true
+    },
+    {
+      "name": "lua_round_teams",
+      "status": "ok",
+      "row_count": 1111,
+      "required": false
+    },
+    {
+      "name": "round_correlations",
+      "status": "ok",
+      "row_count": 1061,
+      "required": false
+    },
+    {
+      "name": "player_skill_ratings",
+      "status": "ok",
+      "row_count": 28,
+      "required": false
+    },
+    {
+      "name": "user_player_links",
+      "status": "ok",
+      "row_count": 1,
+      "required": false
+    }
+  ],
+  "issues": [],
+  "warnings": [],
+  "time": {
+    "raw_dead_seconds": 2354368,
+    "agg_dead_seconds": 2341076,
+    "cap_seconds": 13291,
+    "cap_hits": 171,
+    "raw_denied_seconds": 5118961
+  },
+  "monitoring": {
+    "server": {
+      "count": 8831,
+      "last_recorded_at": "2026-09-03T23:11:30.405917+00:00"
+    },
+    "voice": {
+      "count": 43864,
+      "last_recorded_at": "2026-09-03T23:14:44.212682+00:00"
+    }
+  },
+  "pool": {
+    "connected": true,
+    "size": 1,
+    "idle": 1,
+    "in_use": 0,
+    "min_size": 2,
+    "max_size": 10,
+    "utilisation_pct": 0.0
+  }
+}

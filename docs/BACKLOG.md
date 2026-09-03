@@ -188,3 +188,19 @@
   ALIVE%, mora to vedeti.
 - ⛔ `docs/GAMESERVER_LIVE_LUA_MAP.md:74` in `deployed_lua/README.md`
   navajata 4 module; živih je 6.
+
+## 2026-09-04 — skok na 1v1 areno in nazaj (Opus 5)
+
+Owner je sredi rezine `/api/diagnostics` poslal stransko nalogo (Lua za fair
+1v1 na `dots_arena`). Skok je zapisan po hišnem pravilu, tu je izid obojega.
+
+**Nazaj z glavne proge:** rezina `/api/diagnostics` je DOKONČANA v tem PR-ju —
+vrzel 4 → 3.
+
+**Stranska naloga, kar ostane odprto:** `vps_scripts/dots_arena_1v1.lua` je
+napisan in preverjen s stubom motorja (`luac -p`, simulacija, ena mutacija
+videna pasti), a **ni deployan in ni testiran v živo**. Odprto vprašanje, ki ga
+stub ne more izmeriti: vrstni red v motorju ob `et_Obituary`/`ClientSpawn`.
+⛔ Varovalo proti rekurziji v njem je NEDOSEGLJIVO pri 1v1 (preverba živosti
+verigo ustavi prej) — v datoteki je označeno kot nepreizkušeno.
+Deploy na igralni strežnik je ownerjeva domena.
