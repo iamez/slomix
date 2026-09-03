@@ -71,11 +71,12 @@ PROVENANCE_CUTOFF = "2026-01-01"
 # first day whose orphans nobody has hand-checked.
 ORPHAN_SENSOR_ARMED_FROM = "2026-08-18"
 
-# The day the game server's Lua stopped double-counting limbo time. Every
-# dead-time impossibility in this database predates it: newest offending row
-# 2026-02-11, zero rows on or after this date (measured 2026-09-03 across the
-# 80 rows of the dead>played rule and the 43 of the ratio rule).
-DEAD_TIME_FIX_ARMED_FROM = "2026-04-01"
+# The day the game server's Lua stopped double-counting limbo time. It armed
+# the two dead-time rules while their 80 + 43 historical rows still stood; the
+# 2026-09-03 reconstruction repaired every one of them, so both rules are
+# unarmed again and this date is kept only as the documented boundary between
+# the inflated era and the measured one.
+DEAD_TIME_FIX = "2026-04-01"
 
 # The day #885 reached main and the bot was restarted, so the live import
 # began writing time_played_percent again. What is left before it is a finite,
@@ -388,12 +389,11 @@ RULES: list[Rule] = [
              "(0.05 min of slack for rounding). Caused by the pre-2026-03-20 "
              "c0rnp0rn8 accumulator, which re-added the running limbo time every "
              "5s without resetting it.",
-        # The cause was fixed on the game server ~2026-03-20 (backported in
-        # 76cd77b3) and NOT ONE row on or after 2026-04-01 breaks this. Repairing
-        # the 80 historical rows is owner-gated (docs/KNOWN_ISSUES.md
-        # 'no backfill'); until then they belong in the pre-arming column, where
-        # they stay visible without muting a recurrence.
-        armed_from=DEAD_TIME_FIX_ARMED_FROM,
+        # Armed on 2026-04-01 while 80 historical rows still broke this; the
+        # reconstruction (scripts/repair_dead_time_reconstruction.py, run
+        # 2026-09-03) repaired all 80, so the arming date now carves out
+        # nothing and the rule stands on its own -- which is what the
+        # arming stale-check demanded the moment the count reached zero.
         extra_cols=("pcs.time_dead_minutes", "pcs.time_played_seconds"),
         order_by="(pcs.time_dead_minutes - pcs.time_played_seconds / 60.0) DESC",
     ),
@@ -406,9 +406,9 @@ RULES: list[Rule] = [
         note="time_dead_ratio is a percentage of time played; 0.5pp of slack for "
              "rounding. Same accumulator as the rule above -- the worst stored "
              "value is 3690%.",
-        # Same accumulator, same fix, same arming date: 43 rows before it,
-        # none after.
-        armed_from=DEAD_TIME_FIX_ARMED_FROM,
+        # Same accumulator, same fix, same history: 43 rows, all repaired by
+        # the 2026-09-03 reconstruction. Unarmed for the same reason as the
+        # rule above.
         extra_cols=("pcs.time_dead_ratio",),
         order_by="pcs.time_dead_ratio DESC",
     ),
@@ -744,39 +744,16 @@ TREND_RULES: list[TrendRule] = [
         threshold_pct=25.0,
         note=(
             "Median share of a round spent dead. The metric the 2026-03 Lua "
-            "fix moved, and the reason this rule class exists."
-        ),
-        known_shifts=(
-            (
-                "2025-05",
-                "Not a second regime in the game: an R2-only step, measured "
-                "2026-09-03. Split by round, R1 sits flat at 0.44-0.50 across "
-                "the whole pre-fix era, while R2 runs at ~0.22 through "
-                "2025-04 and jumps to R1's level from 2025-05 on. So "
-                "time_dead_minutes on an R2 row means one thing before that "
-                "month and another after it — the same one-name-two-"
-                "measurements shape the fix in 2026-04 has, one round deeper. "
-                "The combined median is what moves here; a per-round rule "
-                "would see it as R2 alone. Consequence for the phase-3 "
-                "reconstruction (docs/PLAN.md): R1 is one clean mechanism "
-                "throughout (factor 2.24 early / 2.20 late), R2 is not "
-                "(stored/reconstructed median 1.03 early vs 1.99 late, with "
-                "37% of early-2025 R2 rows below 0.9).",
-            ),
-            (
-                "2026-04",
-                "The game server's Lua stopped re-adding the whole elapsed "
-                "limbo time on every 5s tick (fix deployed ~2026-03-20, "
-                "reached the repo only in 2026-08 as 76cd77b3). Median dead "
-                "share fell ~0.35 -> ~0.19 with every individual row still in "
-                "range. This month is the reason the rule exists.",
-            ),
-            (
-                "2026-05",
-                "The echo of 2026-04: the 3-month baseline still holds two "
-                "pre-fix months, so one step is reported twice. Mechanics of "
-                "a median baseline, not a second event.",
-            ),
+            "fix moved, and the reason this rule class exists.\n"
+            "It carried three explained shifts until 2026-09-03 -- 2025-05 "
+            "(+46.5%), 2026-04 (-53.1%) and its echo 2026-05 (-41.4%) -- and "
+            "carries none now. The reconstruction "
+            "(scripts/repair_dead_time_reconstruction.py) rewrote 8,721 "
+            "pre-fix rows from the engine's own alive%, and the series went "
+            "flat: 0.19-0.23 across all twenty months, where it used to step "
+            "from ~0.35 to ~0.19. That is this rule reporting on its own "
+            "repair -- a detector built and calibrated on the broken data, "
+            "finding nothing left to report."
         ),
     ),
     TrendRule(

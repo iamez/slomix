@@ -1752,7 +1752,8 @@ CREATE TABLE public.player_comprehensive_stats (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     time_dead_minutes_original double precision,
     full_selfkills integer DEFAULT 0,
-    time_played_percent real DEFAULT 0
+    time_played_percent real DEFAULT 0,
+    time_dead_reconstructed boolean
 );
 
 

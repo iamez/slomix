@@ -501,6 +501,7 @@ class PostgreSQLDatabaseManager:
                     -- Migration-added columns; kept in sync with schema_postgresql.sql.
                     time_dead_minutes_original DOUBLE PRECISION,
                     time_played_percent REAL DEFAULT 0,
+                    time_dead_reconstructed BOOLEAN,
                     FOREIGN KEY (round_id) REFERENCES rounds(id),
                     UNIQUE(round_id, player_guid)
                 )

@@ -747,6 +747,7 @@ website/data/uploads/
 # Repair-script artifacts (row backups + generated SQL) — data, never in git
 /playtime_repair_artifacts/
 /r2_repair_artifacts/
+/dead_time_repair_artifacts/
 
 # ============================================
 # DOCS RETIRED 2026-08-20 — working notes, kept local, not published
