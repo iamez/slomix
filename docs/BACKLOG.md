@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-03) SKOK: owner prosi za nov dizajnerski načrt
+  »stats 2.0 aka sessions/stats« → napisan `docs/design/18_STATS_2_0_SESSIONS.md`
+  (lokalno), rezine R1–R5. Ostal sem pri: #896 (uploads r. 2) v merge ciklu;
+  po mergu: pull main, `git branch -d feat/app-uploads-slice-2`.
 - (Fable, 2026-09-02) SKOK: rekonstrukcija izgubljenih planov iz sejnih
   transkriptov — IZVEDENO: 56 skupin / 200 različic / 121 editov v
   `~/claude-plan-recovery/` (lokalno, INDEX.md; 41 skupin je obstajalo samo
@@ -17,6 +21,18 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., stats 2.0 — doc 18, lokalno) **FSK prag** (−2 s → /2) čaka ownerjevo
+  odločitev; **TAB[8] `time_played_percent` je 0 v ~35 % vrstic vsak mesec**
+  (stalna luknja, ne od aprila — vzrok neznan); **medpacki/ammo packi niso
+  zajeti** (gibhub »Pillow Fort«); `sessions_router` ACC (lahka orožja) ≠
+  `pcs.accuracy` (vsa orožja) — stran imenuje, katero; `endstats_aggregator`
+  sešteva tudi K/D in accuracy čez runde (za sejni roll-up rabi `best`).
+- (3. 9., R1) `/api/sessions.maps_played` je abecedno urejen → thumbnail vrstice
+  je abecedno prva mapa, ne prva igrana; R2 naj `SessionSummary` doda vrstni
+  red igranja (ali `first_map`), response_model.
+- (3. 9.) `routes.ts:52` grammar `SESSION_DETAIL_TABS` ima `teamplay/charts`,
+  stran pa `summary/players/rounds` — legacy `#/session-detail/154/teamplay`
+  pade na summary; R4 ga uskladi.
 - (3. 9., uploads r. 2) **poster capture** (.mp4 → JPEG prek canvasa,
   `uploads.js:300-336`) za single-shot pot; **resume čez reload** (HEAD +
   localStorage identiteta datoteke — legacy nima); filtriranje po

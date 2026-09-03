@@ -21,15 +21,7 @@
     "label": "Sessions",
     "nav": "stats",
     "phase": 2,
-    "note": "Stats sub-navigation (STATS_VIEWS in the legacy registry).",
-    "built": true
-  },
-  {
-    "key": "sessions2",
-    "path": "/sessions2",
-    "label": "Sessions 2.0",
-    "nav": "stats",
-    "phase": 2,
+    "note": "Stats sub-navigation (STATS_VIEWS in the legacy registry). ONE archive since stats 2.0 (docs/design/18): the BOX view is the view; /sessions2 redirects here.",
     "built": true
   },
   {
@@ -172,7 +164,7 @@
   {
     "key": "smart-stats-diag",
     "path": "/smart-stats-diag",
-    "label": "Smart Stats — Diag",
+    "label": "Smart Stats \u2014 Diag",
     "nav": "footer",
     "phase": 1,
     "built": true
@@ -224,7 +216,7 @@
     "label": "Spider Web",
     "nav": "hidden",
     "phase": 5,
-    "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 §3.5).",
+    "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 \u00a73.5).",
     "built": true
   },
   {

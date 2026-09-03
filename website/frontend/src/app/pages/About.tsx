@@ -84,7 +84,7 @@ const THANKS = [
 ];
 
 const START = [
-  { to: '/sessions2', k: 'Last night', body: 'The session that just happened, map by map, with who played.' },
+  { to: '/sessions', k: 'Last night', body: 'The session that just happened, map by map, with who played.' },
   { to: '/profile', k: 'Your profile', body: 'Your own numbers against your own recent form, not a ladder.' },
   { to: '/proximity', k: 'Telemetry', body: 'The 200 ms feed: engagements, crossfire, trades, paths on the map.' },
   { to: '/uploads', k: 'Clips', body: 'Video from the group, plus what Greatshot cut out of uploaded demos.' },

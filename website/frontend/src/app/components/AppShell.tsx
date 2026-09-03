@@ -21,7 +21,7 @@ const PRIMARY: Array<{ label: string; to: string; section: 'stats' | 'telemetry'
 
 function sectionFor(pathname: string): 'stats' | 'telemetry' | null {
   const statsPrefixes = [
-    '/sessions', '/sessions2', '/session-detail', '/leaderboards', '/maps',
+    '/sessions', '/session-detail', '/leaderboards', '/maps',
     '/weapons', '/form', '/awards', '/record-book', '/retro-viz', '/profile',
     '/skill-rating', '/rivalries', '/story', '/replay', '/rounds',
   ];
