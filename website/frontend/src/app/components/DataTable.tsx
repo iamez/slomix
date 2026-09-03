@@ -49,6 +49,9 @@ export interface DataTableProps<Row> {
   parity?: string;
   /** `aria-label` for the table region. */
   label?: string;
+  /** The row's name for the expander's aria-label — needed when the first
+   *  cell renders a node (a Link), which the label cannot read. */
+  expandName?: (row: Row) => string;
 }
 
 const DASH = '—';
@@ -63,7 +66,7 @@ function compare(a: number | string | null, b: number | string | null): number {
 }
 
 export function DataTable<Row>({
-  columns, rows, rowKey, defaultSort, renderExpanded, expandLabel = 'more', minWidth, parity, label,
+  columns, rows, rowKey, defaultSort, renderExpanded, expandLabel = 'more', minWidth, parity, label, expandName,
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(defaultSort ?? null);
   const [open, setOpen] = useState<string | null>(null);
@@ -99,7 +102,8 @@ export function DataTable<Row>({
       <div style={{ minWidth: minWidth ?? undefined }}>
         <div className="row" style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
           {columns.map((col) => {
-            const active = sort?.key === col.key;
+            const activeDir = sort != null && sort.key === col.key ? sort.dir : null;
+            const active = activeDir != null;
             const sortable = col.sortValue != null;
             const style = {
               ...lblStyle,
@@ -112,11 +116,11 @@ export function DataTable<Row>({
                 key={col.key}
                 type="button"
                 title={col.title}
-                aria-sort={active ? (sort?.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                aria-sort={activeDir == null ? 'none' : activeDir === 'asc' ? 'ascending' : 'descending'}
                 onClick={() => { toggleSort(col); }}
                 style={style}
               >
-                {col.label}{active ? (sort?.dir === 'asc' ? ' ▴' : ' ▾') : ''}
+                {col.label}{activeDir == null ? '' : activeDir === 'asc' ? ' ▴' : ' ▾'}
               </button>
             ) : (
               <span key={col.key} title={col.title} style={style}>{col.label}</span>
@@ -146,7 +150,7 @@ export function DataTable<Row>({
                             <button
                               type="button"
                               aria-expanded={isOpen}
-                              aria-label={`${expandLabel} for ${typeof shown === 'string' ? shown : key}`}
+                              aria-label={`${expandLabel} for ${expandName ? expandName(row) : typeof shown === 'string' ? shown : key}`}
                               onClick={() => { setOpen((cur) => (cur === key ? null : key)); }}
                               className="m"
                               style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-400)', fontSize: 'var(--fs-caption)', padding: 0 }}

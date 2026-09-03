@@ -7,6 +7,22 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-03, 10:55) SKOK 2 (ownerjeva prošnja): raziskati
+  **match moment detektorje** — obstoječih 11 (team wipe, multikill, kill
+  streak, carrier chain, focus survival, push success, trade chain, objective
+  secured/denied/run, multi-revive; vsak s per-kill razčlenitvijo) razširiti z
+  **escorting objective** (soigralec nosi flag/docs/obj; ali si ob trucku/tanku,
+  ko se premika A→B) in kar še ET/ETL slog igre ponudi; vir = etlegacy source
+  + Lua API dokumentacija → plan mode → zapis v docs; IZVEDBA KASNEJE.
+- (Fable 5.1, 2026-09-03, 10:45) SKOK (ownerjeva prošnja): raziskati idejo
+  **modularnih statsov s per-user pogledom** — vsak dataset/stat se lahko
+  vklopi/izklopi za ZAJEM in za PRIKAZ; prijavljen uporabnik si nastavi
+  filtre/privzeti pogled (home: le par stvari, stats 2.0: vse); spletna
+  raziskava (kako to delajo drugi, varnost, performance) → plan mode → zapis.
+  Ostal sem pri: R2 (#898) dobiva `useful_kills` (UK = useful, ownerjeva
+  odločitev); R3 (#899) čaka: stolpec `useless` + `uk`=useful, Codacy/Copilot
+  popravki (DataTable aria-label, MapStrip parjenje po imenu mape). Oba PR-ja
+  še čakata sestrski signal za merge (#886→#892→#893→#895).
 - (Fable 5.1, 2026-09-03) SKOK: owner prosi za nov dizajnerski načrt
   »stats 2.0 aka sessions/stats« → napisan `docs/design/18_STATS_2_0_SESSIONS.md`
   (lokalno), rezine R1–R5. Ostal sem pri: #896 (uploads r. 2) v merge ciklu;

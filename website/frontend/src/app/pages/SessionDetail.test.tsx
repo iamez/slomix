@@ -88,15 +88,10 @@ async function openMore() {
   // Every collapsed "more" on the page: a test that renders twice has two.
   // A page that never reaches the summary (404, failure, another tab) has
   // none — then there is nothing to open and the test goes on.
-  try {
-    await waitFor(() => {
-      const buttons = screen.queryAllByRole('button', { name: /more about the night ▸/ });
-      if (buttons.length === 0) throw new Error('no more button yet');
-      for (const b of buttons) fireEvent.click(b);
-    }, { timeout: 1500 });
-  } catch {
-    /* nothing to open */
-  }
+  const buttons: HTMLElement[] = await screen
+    .findAllByRole('button', { name: /more about the night ▸/ }, { timeout: 1500 })
+    .catch(() => []);
+  for (const b of buttons) fireEvent.click(b);
 }
 
 
@@ -407,6 +402,28 @@ describe('SessionDetail — stats 2.0 summary', () => {
     expect(figures?.textContent).toContain('kills with KIS');
   });
 
+  it('the map strip pairs a scoring row with its own map, never with a neighbour by index', async () => {
+    // Drop the second scoring row (etl_sp_delivery). Pairing by index would
+    // hand supply's score to delivery and shift every later map by one;
+    // pairing by map name leaves delivery a dash and keeps supply's score.
+    type Scored = { map: string; team_a_points: number; team_b_points: number };
+    const scoring = (detail as { scoring: { maps: Scored[] } }).scoring;
+    const kept = scoring.maps.filter((_, i) => i !== 1);
+    const shifted = { ...detail, scoring: { ...scoring, maps: kept } };
+    const { container } = renderPage(withOverride('/detail', () => json(shifted)));
+    const strip = await waitFor(() => {
+      const el = container.querySelector('[data-parity="session.maps"]');
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    const rows = [...strip.querySelectorAll('.row')].map((r) => r.textContent ?? '');
+    // A dash alone — not a score (the score text also carries a dash between two numbers).
+    expect(rows[1]).not.toMatch(/\d+ — \d+/);
+    expect(rows[1]).toMatch(/—$/);
+    const supply = kept[1];
+    expect(rows[2]).toContain(`${supply.team_a_points} — ${supply.team_b_points}`);
+  });
+
   it('the basics table: one row per player, sorted by dpm, every header carrying its definition', async () => {
     const { container } = renderPage();
     const table = await waitFor(() => {
@@ -421,8 +438,12 @@ describe('SessionDetail — stats 2.0 summary', () => {
     expect(screen.getByRole('button', { name: /^denied %/ })).toHaveAttribute('title', expect.stringMatching(/denied to opponents/));
     expect(screen.getByRole('button', { name: /^hs %/ })).toHaveAttribute('title', expect.stringMatching(/never headshot kills/));
     expect(screen.getByRole('button', { name: /^kis$|^kis ▾|^kis ▴/ })).toHaveAttribute('title', expect.stringMatching(/not a ranking/));
-    // 16 columns.
-    expect(table.querySelectorAll('.row')[0].children.length).toBe(16);
+    // 17 columns; uk is the legacy Useful Kills, useless its own column (owner, 2026-09-03).
+    expect(table.querySelectorAll('.row')[0].children.length).toBe(17);
+    expect(screen.getByRole('button', { name: /^uk$|^uk ▾|^uk ▴/ })).toHaveAttribute('title', expect.stringMatching(/^Useful Kills/));
+    expect(screen.getByRole('button', { name: /^useless/ })).toHaveAttribute('title', expect.stringMatching(/next spawn wave/));
+    // The expander names the player, not the guid, though the cell is a Link.
+    expect(screen.getByRole('button', { name: `weapons for ${first.name}` })).toBeInTheDocument();
     // No unmeasured cell prints undefined/NaN.
     expect(table.textContent).not.toMatch(/undefined|NaN/);
   });

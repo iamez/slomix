@@ -2108,6 +2108,8 @@ export interface SessionBasicsPlayer {
   accuracy: number | null;
   headshot_pct: number | null;
   gibs: number;
+  /** pcs.most_useful_kills — the legacy "Useful Kills" column; UK = useful. */
+  useful_kills: number;
   useless_kills: number;
   self_kills: number;
   full_selfkills: number;

@@ -62,6 +62,17 @@ describe('DataTable', () => {
     expect(screen.getByRole('button', { name: 'weapons for bravo' })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('names the row for the expander when the first cell is a node, not text', () => {
+    const linked: readonly DataColumn<Row>[] = [{ ...COLUMNS[0], format: (r) => <a href={`/p/${r.id}`}>{r.name}</a> }, ...COLUMNS.slice(1)];
+    render(
+      <DataTable columns={linked} rows={ROWS} rowKey={(r) => r.id} expandLabel="weapons"
+        expandName={(r) => r.name} renderExpanded={(r) => <div>expanded {r.name}</div>} />,
+    );
+    // Without expandName the label would fall back to the row key ("weapons for a").
+    expect(screen.getByRole('button', { name: 'weapons for alpha' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'weapons for a' })).toBeNull();
+  });
+
   it('says no rows on an empty input instead of rendering nothing', () => {
     render(<DataTable columns={COLUMNS} rows={[]} rowKey={(r) => r.id} />);
     expect(screen.getByText('no rows')).toBeInTheDocument();

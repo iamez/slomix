@@ -11,7 +11,7 @@ import {
   useSessionVerdicts, useSessions, useStoryBestLives,
 } from '../lib/queries';
 import type {
-  SessionAwards, SessionBasics, SessionBasicsPlayer,
+  SessionAwards, SessionBasics, SessionBasicsPlayer, SessionScoringMap,
   SessionDetail as SessionDetailData, SessionGoodNight, SessionPlayerTotals,
   SessionRound, SessionScoring, SessionTeamMatrix, SessionVerdicts,
 } from '../lib/types';
@@ -580,7 +580,8 @@ const BASICS_COLUMNS: readonly DataColumn<SessionBasicsPlayer>[] = [
   { key: 'hs', label: 'hs %', title: 'head HITS ÷ hits over the same light weapons — never headshot kills ÷ kills', width: 58,
     sortValue: (p) => p.headshot_pct, format: (p) => pct(p.headshot_pct) },
   { key: 'gibs', label: 'gibs', title: 'gibs', width: 46, sortValue: (p) => p.gibs },
-  { key: 'uk', label: 'uk', title: 'useless kills — kills of an enemy whose next spawn wave was under 5 s away', width: 42, sortValue: (p) => p.useless_kills },
+  { key: 'uk', label: 'uk', title: 'Useful Kills: kills on armed enemies (excludes selfkills and teamkills)', width: 42, sortValue: (p) => p.useful_kills },
+  { key: 'useless', label: 'useless', title: 'useless kills — kills of an enemy whose next spawn wave was under 5 s away', width: 58, sortValue: (p) => p.useless_kills },
   { key: 'sk', label: 'sk', title: 'self kills', width: 42, sortValue: (p) => p.self_kills },
   { key: 'fsk', label: 'fsk', title: 'full self kills — /kill at health > 0 with the full respawn ahead (the Lua’s −2 s window; ~7 % of self kills, threshold under owner review)', width: 42,
     sortValue: (p) => p.full_selfkills },
@@ -602,8 +603,9 @@ function Basics({ basics, sessionId }: { basics: SessionBasics; sessionId: numbe
         rowKey={(p) => p.guid}
         defaultSort={{ key: 'dpm', dir: 'desc' }}
         expandLabel="weapons"
+        expandName={(p) => p.name}
         renderExpanded={(p) => <PlayerWeaponsRow sessionId={sessionId} guid={p.guid} />}
-        minWidth={1100}
+        minWidth={1160}
         label="the basics"
       />
       {!c.kis_covered && <Absent reason="KIS is not covered for this session — the proximity tracker scored no kill here, so the two kis columns say nothing, not zero" />}
@@ -649,11 +651,19 @@ function Awards({ awards }: { awards: SessionAwards }) {
 
 /** Layer 0: the maps as a strip — levelshot, the halves, the outcome. */
 function MapStrip({ detail }: { detail: SessionDetailData }) {
-  const byMap = new Map((detail.scoring.available ? detail.scoring.maps ?? [] : []).map((m, i) => [`${m.map}:${m.match_id ?? i}`, m]));
+  // A match carries only its map name and rounds; the scoring row carries a
+  // match_id the match does not. Pair the n-th match on a map with the n-th
+  // scoring row on that map — the same map played twice keeps its order, a
+  // map the scoring never mentioned gets a dash, never a neighbour's score.
+  const scoredByMap = new Map<string, SessionScoringMap[]>();
+  for (const m of detail.scoring.available ? detail.scoring.maps ?? [] : []) {
+    const list = scoredByMap.get(m.map);
+    if (list) list.push(m); else scoredByMap.set(m.map, [m]);
+  }
   return (
     <Stack gap={1} parity="session.maps" className="rows">
       {detail.matches.map((match, i) => {
-        const scored = [...byMap.values()][i];
+        const scored = scoredByMap.get(match.map_name)?.shift();
         const rounds = match.rounds;
         return (
           <div key={`${match.map_name}:${i}`} className="row" style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) auto auto', columnGap: 'var(--space-4)', alignItems: 'center', padding: 'var(--space-2) 0' }}>
