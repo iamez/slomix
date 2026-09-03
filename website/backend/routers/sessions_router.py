@@ -23,7 +23,17 @@ from website.backend.middleware.auth_helpers import require_ajax_csrf_header
 from website.backend.routers.api_helpers import (
     normalize_map_name as _normalize_map_name,
 )
+from website.backend.routers.api_helpers import (
+    resolve_alias_guid_map,
+    resolve_name_guid_map,
+)
+from website.backend.services.session_awards_service import (
+    computed_awards,
+    group_by_category,
+    roll_up,
+)
 from website.backend.services.session_matrix_service import SessionMatrixService
+from website.backend.services.session_scope import resolve_gaming_session_scope
 from website.backend.services.website_session_data_service import (
     WebsiteSessionDataService as SessionDataService,
 )
@@ -106,6 +116,89 @@ class SessionLeaderRow(BaseModel):
 
 
 logger = get_app_logger("api.sessions")
+
+
+
+#: The session's counted rounds — the SAME trio as the sessions list and the
+#: weapons expansion (Codex on #855, round six), plus no bot rounds. Shared
+#: by /detail, /basics and /awards so their totals cannot disagree.
+SESSION_ROUNDS_SQL = """
+        SELECT r.id, r.map_name, r.round_number, r.winner_team,
+               r.round_date, r.round_time, r.actual_time, r.round_start_unix,
+               r.actual_duration_seconds
+        FROM rounds r
+        WHERE r.gaming_session_id = $1
+          AND r.round_number IN (1, 2)
+          -- The SAME trio as the sessions list and the weapons expansion
+          -- (Codex on #855, round six): the detail carried only the status
+          -- gate, so its totals disagreed with both — sessions 151, 147,
+          -- 146, 128 and 127 hold completed-but-invalid rounds that the
+          -- list excluded and this endpoint counted.
+          AND r.is_valid IS DISTINCT FROM FALSE
+          AND r.is_bot_round IS DISTINCT FROM TRUE
+          AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
+        ORDER BY r.round_date, CAST(REPLACE(r.round_time, ':', '') AS INTEGER)
+    """
+
+#: Players who are not people. The detail keeps them (it always did); the
+#: basics table and the awards drop them.
+_BOT_PLAYER_FILTER = "AND UPPER(p.player_guid) NOT LIKE 'OMNIBOT%' AND p.player_name NOT LIKE '%[BOT]%'"
+
+
+def session_player_sql(placeholders: str, *, exclude_bots: bool) -> str:
+    """Per-player totals over the session's counted rounds. Column ORDER is a
+    contract — /detail and /basics index the row positionally; new columns go
+    at the end (useless_kills is #25)."""
+    return f"""
+        SELECT
+            p.player_guid,
+            MAX(p.player_name) as player_name,
+            SUM(p.kills) as kills,
+            SUM(p.deaths) as deaths,
+            SUM(p.damage_given) as damage_given,
+            SUM(p.damage_received) as damage_received,
+            CASE
+                WHEN SUM(p.time_played_seconds) > 0
+                THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
+                ELSE 0
+            END as dpm,
+            CASE
+                WHEN SUM(p.deaths) > 0
+                THEN ROUND(SUM(p.kills)::numeric / SUM(p.deaths), 2)
+                ELSE SUM(p.kills)::numeric
+            END as kd,
+            SUM(p.headshot_kills) as headshot_kills,
+            SUM(p.kills) as total_kills_for_hs,
+            SUM(p.gibs) as gibs,
+            SUM(p.self_kills) as self_kills,
+            SUM(COALESCE(p.most_useful_kills, 0)) as useful_kills,
+            SUM(COALESCE(p.full_selfkills, 0)) as full_selfkills,
+            SUM(p.revives_given) as revives_given,
+            SUM(p.times_revived) as times_revived,
+            SUM(p.time_played_seconds) as time_played_seconds,
+            SUM(p.kill_assists) as kill_assists,
+            SUM(LEAST(COALESCE(p.time_dead_minutes, 0), p.time_played_seconds / 60.0)) as time_dead_minutes,
+            SUM(p.denied_playtime) as denied_playtime,
+            COALESCE(SUM(w.hits), 0) as total_hits,
+            COALESCE(SUM(w.shots), 0) as total_shots,
+            COALESCE(SUM(w.headshots), 0) as weapon_headshots,
+            SUM(p.time_played_percent * p.time_played_seconds) as tpp_weighted_sum,
+            SUM(CASE WHEN p.time_played_percent > 0 THEN p.time_played_seconds ELSE 0 END) as tpp_weight,
+            SUM(COALESCE(p.useless_kills, 0)) as useless_kills
+        FROM player_comprehensive_stats p
+        LEFT JOIN (
+            SELECT round_id, player_guid,
+                SUM(hits) as hits, SUM(shots) as shots, SUM(headshots) as headshots
+            FROM weapon_comprehensive_stats
+            WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE',
+                                      'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
+            GROUP BY round_id, player_guid
+        ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
+        WHERE p.round_id IN ({placeholders})
+        {_BOT_PLAYER_FILTER if exclude_bots else ""}
+        GROUP BY p.player_guid
+        ORDER BY dpm DESC
+    """
 
 
 async def build_session_scoring(
@@ -1915,24 +2008,7 @@ async def get_stats_session_detail(
     Returns matches (grouped R1+R2), per-player stats, round metadata.
     """
     # 1. Get all rounds for this session (R1 and R2 only, exclude R0 summaries)
-    rounds_query = """
-        SELECT r.id, r.map_name, r.round_number, r.winner_team,
-               r.round_date, r.round_time, r.actual_time, r.round_start_unix,
-               r.actual_duration_seconds
-        FROM rounds r
-        WHERE r.gaming_session_id = $1
-          AND r.round_number IN (1, 2)
-          -- The SAME trio as the sessions list and the weapons expansion
-          -- (Codex on #855, round six): the detail carried only the status
-          -- gate, so its totals disagreed with both — sessions 151, 147,
-          -- 146, 128 and 127 hold completed-but-invalid rounds that the
-          -- list excluded and this endpoint counted.
-          AND r.is_valid IS DISTINCT FROM FALSE
-          AND r.is_bot_round IS DISTINCT FROM TRUE
-          AND (r.round_status IN ('completed', 'substitution') OR r.round_status IS NULL)
-        ORDER BY r.round_date, CAST(REPLACE(r.round_time, ':', '') AS INTEGER)
-    """
-    round_rows = await db.fetch_all(rounds_query, (gaming_session_id,))
+    round_rows = await db.fetch_all(SESSION_ROUNDS_SQL, (gaming_session_id,))
 
     if not round_rows:
         raise HTTPException(status_code=404, detail="Session not found")
@@ -2026,55 +2102,7 @@ async def get_stats_session_detail(
         )
 
     # 4. Get per-player stats aggregated across session
-    player_query = f"""
-        SELECT
-            p.player_guid,
-            MAX(p.player_name) as player_name,
-            SUM(p.kills) as kills,
-            SUM(p.deaths) as deaths,
-            SUM(p.damage_given) as damage_given,
-            SUM(p.damage_received) as damage_received,
-            CASE
-                WHEN SUM(p.time_played_seconds) > 0
-                THEN (SUM(p.damage_given) * 60.0) / SUM(p.time_played_seconds)
-                ELSE 0
-            END as dpm,
-            CASE
-                WHEN SUM(p.deaths) > 0
-                THEN ROUND(SUM(p.kills)::numeric / SUM(p.deaths), 2)
-                ELSE SUM(p.kills)::numeric
-            END as kd,
-            SUM(p.headshot_kills) as headshot_kills,
-            SUM(p.kills) as total_kills_for_hs,
-            SUM(p.gibs) as gibs,
-            SUM(p.self_kills) as self_kills,
-            SUM(COALESCE(p.most_useful_kills, 0)) as useful_kills,
-            SUM(COALESCE(p.full_selfkills, 0)) as full_selfkills,
-            SUM(p.revives_given) as revives_given,
-            SUM(p.times_revived) as times_revived,
-            SUM(p.time_played_seconds) as time_played_seconds,
-            SUM(p.kill_assists) as kill_assists,
-            SUM(LEAST(COALESCE(p.time_dead_minutes, 0), p.time_played_seconds / 60.0)) as time_dead_minutes,
-            SUM(p.denied_playtime) as denied_playtime,
-            COALESCE(SUM(w.hits), 0) as total_hits,
-            COALESCE(SUM(w.shots), 0) as total_shots,
-            COALESCE(SUM(w.headshots), 0) as weapon_headshots,
-            SUM(p.time_played_percent * p.time_played_seconds) as tpp_weighted_sum,
-            SUM(CASE WHEN p.time_played_percent > 0 THEN p.time_played_seconds ELSE 0 END) as tpp_weight
-        FROM player_comprehensive_stats p
-        LEFT JOIN (
-            SELECT round_id, player_guid,
-                SUM(hits) as hits, SUM(shots) as shots, SUM(headshots) as headshots
-            FROM weapon_comprehensive_stats
-            WHERE weapon_name NOT IN ('WS_GRENADE', 'WS_SYRINGE', 'WS_DYNAMITE',
-                                      'WS_AIRSTRIKE', 'WS_ARTILLERY', 'WS_SATCHEL', 'WS_LANDMINE')
-            GROUP BY round_id, player_guid
-        ) w ON p.round_id = w.round_id AND p.player_guid = w.player_guid
-        WHERE p.round_id IN ({placeholders})
-        GROUP BY p.player_guid
-        ORDER BY dpm DESC
-    """
-    player_rows = await db.fetch_all(player_query, tuple(round_ids))
+    player_rows = await db.fetch_all(session_player_sql(placeholders, exclude_bots=False), tuple(round_ids))
 
     # Use duration from matches (lua fallback to actual_time) for all rounds
     total_session_duration_seconds = sum(
@@ -2218,6 +2246,444 @@ async def get_stats_session_detail(
         "players": players,
         "scoring": scoring_payload,
         "team_matrix": team_matrix_payload,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Stats 2.0 (docs/design/18 §E): the basics table and the session awards.
+# ---------------------------------------------------------------------------
+
+
+class SessionBasicsCoverage(BaseModel):
+    """What the numbers below are computed over — so a page can say
+    "KIS covers 61 of 503 kills" instead of printing a small number as if
+    it were the whole night."""
+
+    #: Rounds that pass the validity gate (round_number 1/2, valid, no bots,
+    #: completed/substitution) and therefore feed every total.
+    rounds_counted: int
+    #: Every round the session holds, gate or not.
+    rounds_total: int
+    #: Kills over the counted rounds, from player_comprehensive_stats.
+    total_kills: int
+    #: Kills the Kill Impact Score has scored — the proximity-tracked subset.
+    #: 0 means no KIS row exists for the session (98 of 151 sessions had no
+    #: proximity capture at all when this was written).
+    kis_kills: int
+    #: True when at least one KIS row exists; kis_total/kis_per_min are null
+    #: on every player otherwise (null = not measured, never 0).
+    kis_covered: bool
+    #: True when session_teams carries two rosters and the BOX scoring ran;
+    #: `team` on every player is null otherwise.
+    teams_attributed: bool
+    #: Players whose denied_playtime exceeds twice their time played — a
+    #: figure the definition cannot produce, so denied_pct is null for them.
+    #: Measured 2026-09-03: 352 of 5 538 rows from the 2025 supastats backfill
+    #: (Jan–May 2025, ~50 s denied per kill against ~8 s since Dec 2025); 8
+    #: rows since. The rows are left as recorded; the page says "suspect".
+    denied_suspect_players: int
+
+
+class SessionBasicsTeam(BaseModel):
+    key: str
+    name: str
+    #: BOX points: 2 per map won, 1–1 on a draw (the same figure /sessions shows).
+    score: int
+
+
+class SessionBasicsPlayer(BaseModel):
+    """One row of the basics table (docs/design/18 §C plast 1). Every
+    definition names its source; the tooltip on the page is this docstring."""
+
+    guid: str
+    name: str
+    #: 'a' | 'b' from the session_teams roster; null when the session has no
+    #: attributed teams or the player is on neither roster (a sub who joined
+    #: after the roster was written).
+    team: str | None
+    #: pcs.time_played_seconds summed over the counted rounds.
+    time_played_seconds: int
+    #: pcs.denied_playtime (seconds the player kept enemies out of the game).
+    denied_playtime_seconds: int
+    #: denied / time played × 100 (1 dp); null when the player has no playtime
+    #: or the figure is suspect (denied > 2 × played — see coverage).
+    denied_pct: float | None
+    #: damage_given × 60 / time_played_seconds — from the sums, never from
+    #: pcs.dpm rows.
+    dpm: float
+    kills: int
+    deaths: int
+    damage_given: int
+    damage_received: int
+    #: damage_given / max(1, damage_received), 2 dp.
+    dmr: float
+    #: hits / shots over weapon_comprehensive_stats WITHOUT grenades, syringe,
+    #: dynamite, airstrike, artillery, satchel, landmine (light weapons).
+    #: null when nothing was fired.
+    accuracy: float | None
+    #: head HITS / hits over the same weapon set — never headshot kills / kills.
+    #: null when nothing hit.
+    headshot_pct: float | None
+    gibs: int
+    #: pcs.most_useful_kills (the legacy "Useful Kills" column; UK = useful,
+    #: owner 2026-09-03). The writer's definition, c0rnp0rn8.lua:679: the
+    #: victim's next wave was >= limbo time / 2 away — they lose at least half
+    #: a spawn cycle. NOT "kills on armed enemies" as the legacy tooltip said;
+    #: useful + useless != kills (the middle band is neither).
+    useful_kills: int
+    #: pcs.useless_kills: kills of an enemy whose next wave was < 5 s away.
+    useless_kills: int
+    self_kills: int
+    #: pcs.full_selfkills: /kill at health > 0 with the full respawn ahead
+    #: (the Lua's −2 s window — ~7 % of self kills; the threshold is an open
+    #: owner decision, see KNOWN_ISSUES).
+    full_selfkills: int
+    revives_given: int
+    times_revived: int
+    #: Sum of storytelling_kill_impact.total_impact for kills this player
+    #: made; null when the session has no KIS rows (coverage.kis_covered).
+    kis_total: float | None
+    #: kis_total / (time_played_seconds / 60), 2 dp; null with kis_total.
+    kis_per_min: float | None
+    #: time played / the sum of the counted rounds' durations × 100 (1 dp);
+    #: null when no round has a duration.
+    played_pct: float | None
+    #: Engine TAB[8] alive share (excludes dead AND limbo), playtime-weighted;
+    #: falls back to 100 − dead/played when the engine value is 0 (35 % of
+    #: rows); null when neither exists.
+    alive_pct: float | None
+    #: True when engine and computed alive % disagree by more than 2 points.
+    alive_pct_drift: bool
+
+
+class SessionBasics(BaseModel):
+    gaming_session_id: int
+    #: The counted rounds' first date.
+    date: str | None
+    coverage: SessionBasicsCoverage
+    teams: list[SessionBasicsTeam]
+    #: Sorted by dpm, descending.
+    players: list[SessionBasicsPlayer]
+
+
+class SessionAwardEntry(BaseModel):
+    #: The engine's own award string ("Most damage given"), or the computed
+    #: award's name for the three the engine never hands out.
+    engine_name: str
+    nickname: str
+    #: "The Damage Dealer award goes to X for most damage given — 17 139".
+    sentence: str
+    player: str
+    #: null when round_awards carried no guid and no alias resolved.
+    guid: str | None
+    #: The figure as the page shows it (unit applied).
+    value: str
+    #: The figure the rank was decided on; null when the award carries no
+    #: number at all.
+    value_numeric: float | None
+    unit: str
+    #: Rounds in which this player won this award (0 for computed awards).
+    rounds_won: int
+
+
+class SessionAwardCategory(BaseModel):
+    key: str
+    label: str
+    awards: list[SessionAwardEntry]
+
+
+class SessionAwards(BaseModel):
+    gaming_session_id: int
+    rounds_counted: int
+    #: Counted rounds that carry at least one engine award (~83 % since June).
+    rounds_with_awards: int
+    categories: list[SessionAwardCategory]
+
+
+async def _session_duration_seconds(db: DatabaseAdapter, round_rows: list, round_ids: list[int]) -> int:
+    """The denominator of played_pct, the way /detail derives it: the lua
+    measured duration first, the rounds mirror second, actual_time LAST
+    (it is the stopwatch target, inflated on surrender rounds)."""
+    placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
+    lua_by_round: dict = {}
+    try:
+        lua_rows = await db.fetch_all(
+            f"SELECT round_id, actual_duration_seconds FROM lua_round_teams WHERE round_id IN ({placeholders})",
+            tuple(round_ids),
+        )
+        lua_by_round = {lr[0]: lr[1] for lr in lua_rows or []}
+    except Exception as e:  # noqa: BLE001 — a missing lua table is a fallback case, not a 500 (Copilot on #898)
+        logger.debug("lua_round_teams unavailable for duration: %s", e)
+    total = 0
+    for rr in round_rows:
+        actual_time_seconds = None
+        if rr[6]:
+            parts = str(rr[6]).split(":")
+            if len(parts) == 2 and parts[0].isdigit() and parts[1].isdigit():
+                actual_time_seconds = int(parts[0]) * 60 + int(parts[1])
+        total += lua_by_round.get(rr[0]) or rr[8] or actual_time_seconds or 0
+    return int(total)
+
+
+def _team_rosters(hardcoded_teams: dict | None) -> dict[str, list[str]]:
+    """{team_name: [8-char upper guid]} from get_hardcoded_teams' two shapes."""
+    rosters: dict[str, list[str]] = {}
+    for team_name, players in (hardcoded_teams or {}).items():
+        guids: list[str] = []
+        if isinstance(players, dict):
+            guids = [str(g) for g in players.get("guids", []) or []]
+        else:
+            for p in players or []:
+                if isinstance(p, dict) and "guid" in p:
+                    guids.append(str(p["guid"]))
+                elif isinstance(p, str):
+                    guids.append(p)
+        rosters[str(team_name)] = [g.strip().upper()[:8] for g in guids if g]
+    return rosters
+
+
+async def _session_kis_by_guid(db: DatabaseAdapter, gaming_session_id: int) -> dict[str, tuple[float, int]]:
+    """{8-char guid: (total_impact, kills)} over the session's KIS rows; {}
+    when the session has none or cannot be scoped (no accepted rounds)."""
+    try:
+        scope = await resolve_gaming_session_scope(db, gaming_session_id=gaming_session_id)
+    except HTTPException:
+        return {}
+    from datetime import date as _date
+
+    dates = [_date.fromisoformat(d) for d in scope.dates]
+    starts, maps, rnums = scope.round_key_arrays()
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT killer_guid, SUM(total_impact), COUNT(*)
+            FROM storytelling_kill_impact
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+            GROUP BY killer_guid
+            """,
+            (dates, starts, maps, rnums),
+        )
+    except Exception as e:  # noqa: BLE001 — no KIS table is "not covered", not a 500
+        logger.debug("storytelling_kill_impact unavailable: %s", e)
+        return {}
+    out: dict[str, tuple[float, int]] = {}
+    for guid, impact, n in rows or []:
+        key = str(guid or "").strip().upper()[:8]
+        if not key:
+            continue
+        prev = out.get(key, (0.0, 0))
+        out[key] = (prev[0] + float(impact or 0.0), prev[1] + int(n or 0))
+    return out
+
+
+@router.get("/stats/session/{gaming_session_id}/basics", response_model=SessionBasics)
+async def get_session_basics(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """The basics table of an evening — one row per human player over the
+    counted rounds, with the coverage the numbers rest on. Same round gate
+    and the same per-player SQL as /detail (session_player_sql), minus bots,
+    plus what the stats 2.0 table needs: denied %, DMR, KIS, useless kills.
+    """
+    round_rows = await db.fetch_all(SESSION_ROUNDS_SQL, (gaming_session_id,))
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+    round_ids = [r[0] for r in round_rows]
+    placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
+    total_rounds_row = await db.fetch_one(
+        "SELECT COUNT(*) FROM rounds WHERE gaming_session_id = $1", (gaming_session_id,)
+    )
+    rounds_total = int(total_rounds_row[0]) if total_rounds_row and total_rounds_row[0] is not None else len(round_ids)
+
+    player_rows = await db.fetch_all(session_player_sql(placeholders, exclude_bots=True), tuple(round_ids))
+    duration = await _session_duration_seconds(db, round_rows, round_ids)
+    kis = await _session_kis_by_guid(db, gaming_session_id)
+    kis_kills = sum(n for _, n in kis.values())
+
+    # Teams: the BOX scoring's rosters and names (the figure /sessions shows).
+    teams: list[dict[str, Any]] = []
+    guid_team: dict[str, str] = {}
+    first_date = round_rows[0][4] if round_rows else None
+    try:
+        config = load_config()
+        db_path = config.sqlite_db_path if config.database_type == "sqlite" else None
+        service = SessionDataService(db, db_path)
+        scoring_service = StopwatchScoringService(db)
+        if first_date:
+            scoring_payload, _w, hardcoded = await build_session_scoring(str(first_date), round_ids, service, scoring_service)
+            if scoring_payload.get("available"):
+                names = {"a": scoring_payload.get("team_a_name", "Team A"), "b": scoring_payload.get("team_b_name", "Team B")}
+                teams = [
+                    {"key": "a", "name": names["a"], "score": int(scoring_payload.get("team_a_score") or 0)},
+                    {"key": "b", "name": names["b"], "score": int(scoring_payload.get("team_b_score") or 0)},
+                ]
+                for team_name, guids in _team_rosters(hardcoded).items():
+                    key = "a" if team_name == names["a"] else "b" if team_name == names["b"] else None
+                    if key:
+                        for g in guids:
+                            guid_team[g] = key
+    except Exception as e:  # noqa: BLE001 — teams are optional; the table is not
+        logger.warning(f"Teams unavailable for session {gaming_session_id} basics: {e}")
+
+    players: list[dict[str, Any]] = []
+    total_kills = 0
+    denied_suspect = 0
+    for pr in player_rows:
+        kills = int(pr[2] or 0)
+        deaths = int(pr[3] or 0)
+        damage_given = int(pr[4] or 0)
+        damage_received = int(pr[5] or 0)
+        time_played_seconds = int(pr[16] or 0)
+        time_dead_minutes = float(pr[18]) if pr[18] else 0.0
+        denied = int(pr[19] or 0)
+        total_hits = int(pr[20] or 0)
+        total_shots = int(pr[21] or 0)
+        weapon_headshots = int(pr[22] or 0)
+        tpp_weighted_sum = float(pr[23]) if pr[23] else 0.0
+        tpp_weight = float(pr[24]) if pr[24] else 0.0
+        useless = int(pr[25] or 0) if len(pr) > 25 else 0
+        total_kills += kills
+
+        played_min = time_played_seconds / 60.0
+        dpm = round(damage_given * 60.0 / time_played_seconds, 1) if time_played_seconds > 0 else 0.0
+        alive_computed = (
+            round(max(0.0, min(100.0, 100.0 - (min(time_dead_minutes, played_min) / played_min * 100.0))), 1)
+            if played_min > 0 else None
+        )
+        alive_engine = round(tpp_weighted_sum / tpp_weight, 1) if tpp_weight > 0 else None
+        alive_pct = alive_engine if alive_engine is not None else alive_computed
+        drift = alive_engine is not None and alive_computed is not None and abs(alive_engine - alive_computed) > 2.0
+        # Denial the definition cannot produce: more than twice the player's
+        # own playtime. The 2025 backfill rows carry it; say "suspect", not 900 %.
+        denied_ok = time_played_seconds > 0 and denied <= 2 * time_played_seconds
+        if time_played_seconds > 0 and not denied_ok:
+            denied_suspect += 1
+        guid8 = str(pr[0] or "").strip().upper()[:8]
+        kis_row = kis.get(guid8)
+        kis_total = round(kis_row[0], 1) if kis_row else None
+        players.append(
+            {
+                "guid": pr[0],
+                "name": strip_et_colors(pr[1] or ""),
+                "team": guid_team.get(guid8),
+                "time_played_seconds": time_played_seconds,
+                "denied_playtime_seconds": denied,
+                "denied_pct": round(denied / time_played_seconds * 100.0, 1) if denied_ok else None,
+                "dpm": dpm,
+                "kills": kills,
+                "deaths": deaths,
+                "damage_given": damage_given,
+                "damage_received": damage_received,
+                "dmr": round(damage_given / max(1, damage_received), 2),
+                "accuracy": round(total_hits / total_shots * 100.0, 1) if total_shots > 0 else None,
+                "headshot_pct": round(weapon_headshots / total_hits * 100.0, 1) if total_hits > 0 else None,
+                "gibs": int(pr[10] or 0),
+                "useful_kills": int(pr[12] or 0),
+                "useless_kills": useless,
+                "self_kills": int(pr[11] or 0),
+                "full_selfkills": int(pr[13] or 0),
+                "revives_given": int(pr[14] or 0),
+                "times_revived": int(pr[15] or 0),
+                "kis_total": kis_total,
+                "kis_per_min": round(kis_row[0] / played_min, 2) if kis_row and played_min > 0 else None,
+                "played_pct": min(100.0, round(time_played_seconds / duration * 100.0, 1)) if duration > 0 else None,
+                "alive_pct": alive_pct,
+                "alive_pct_drift": bool(drift),
+            }
+        )
+    players.sort(key=lambda p: -p["dpm"])
+    return {
+        "gaming_session_id": gaming_session_id,
+        "date": str(first_date) if first_date else None,
+        "coverage": {
+            "rounds_counted": len(round_ids),
+            "rounds_total": rounds_total,
+            "total_kills": total_kills,
+            "kis_kills": kis_kills,
+            "kis_covered": kis_kills > 0,
+            "teams_attributed": bool(teams),
+            "denied_suspect_players": denied_suspect,
+        },
+        "teams": teams,
+        "players": players,
+    }
+
+
+@router.get("/stats/session/{gaming_session_id}/awards", response_model=SessionAwards)
+async def get_session_awards(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """The evening's awards, one winner each, gibhub-style: the engine's
+    per-round awards rolled up by the rule each award carries
+    (session_awards_service.AWARD_RULES — sum, best, or lowest; never a
+    summed ratio), plus the three the engine does not hand out (Top Fragger,
+    iPod, Playtime), computed from the same rows the basics table shows.
+    """
+    round_rows = await db.fetch_all(SESSION_ROUNDS_SQL, (gaming_session_id,))
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+    round_ids = [r[0] for r in round_rows]
+    placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
+    try:
+        award_rows = await db.fetch_all(
+            f"""
+            SELECT ra.award_name, ra.player_name, ra.player_guid, ra.award_value, ra.award_value_numeric, ra.round_id
+            FROM round_awards ra
+            WHERE ra.round_id IN ({placeholders})
+              AND (ra.player_guid IS NULL OR UPPER(ra.player_guid) NOT LIKE 'OMNIBOT%')
+              AND ra.player_name NOT LIKE '%[BOT]%'
+            ORDER BY ra.round_id, ra.id
+            """,
+            tuple(round_ids),
+        ) or []
+    except Exception as e:  # noqa: BLE001 — no awards table: the computed three still answer
+        logger.debug("round_awards unavailable: %s", e)
+        award_rows = []
+    rounds_with_awards = len({
+        r[5] for r in award_rows
+        if not (str(r[2] or "").upper().startswith("OMNIBOT") or "[BOT]" in str(r[1] or ""))
+    })
+
+    # GUID for the name-only rows (504 historical rows): aliases, then names.
+    nameless = sorted({str(r[1]) for r in award_rows if not r[2] and r[1]})
+    alias_map: dict[str, str] = {}
+    if nameless:
+        alias_map = await resolve_alias_guid_map(db, nameless) or {}
+        missing = [n for n in nameless if n.lower() not in alias_map]
+        if missing:
+            alias_map.update(await resolve_name_guid_map(db, missing) or {})
+    rows = []
+    for award_name, player_name, guid, value, numeric, _rid in award_rows:
+        # The SQL already excludes bots; this guard keeps the promise even if
+        # a caller hands the roll-up rows from elsewhere (the stub DB does).
+        if str(guid or "").upper().startswith("OMNIBOT") or "[BOT]" in str(player_name or ""):
+            continue
+        clean = strip_et_colors(player_name or "")
+        effective = guid or alias_map.get(str(player_name or "").lower())
+        rows.append((award_name, clean, effective, value, numeric))
+    engine = roll_up(rows)
+
+    # Computed awards from the basics rows (same gate, same numbers).
+    player_rows = await db.fetch_all(session_player_sql(placeholders, exclude_bots=True), tuple(round_ids))
+    duration = await _session_duration_seconds(db, round_rows, round_ids)
+    basics = [
+        {
+            "guid": pr[0],
+            "name": strip_et_colors(pr[1] or ""),
+            "kills": int(pr[2] or 0),
+            "deaths": int(pr[3] or 0),
+            "played_pct": min(100.0, round(int(pr[16] or 0) / duration * 100.0, 1)) if duration > 0 else None,
+        }
+        for pr in player_rows
+    ]
+    awards = computed_awards(basics) + engine
+    return {
+        "gaming_session_id": gaming_session_id,
+        "rounds_counted": len(round_ids),
+        "rounds_with_awards": rounds_with_awards,
+        "categories": group_by_category(awards),
     }
 
 

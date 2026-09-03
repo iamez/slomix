@@ -72,6 +72,8 @@ GUARDED_PATHS = [
     "/api/rounds/1/viz",
     "/api/rounds/1/awards",
     "/api/stats/session/1/rounds",
+    "/api/stats/session/1/basics",
+    "/api/stats/session/1/awards",
 ]
 
 

@@ -241,6 +241,8 @@ from website.backend.routers.records_weapons import (
 from website.backend.routers.season_awards_router import SeasonAwards
 from website.backend.routers.sessions_router import (
     LastSession,
+    SessionAwards,
+    SessionBasics,
     SessionLeaderRow,
     SessionSummary,
 )
@@ -268,6 +270,12 @@ _RECORDED = [
     # unsortable figure; a future trim that loses those nulls loses the test.
     ("api_rounds_round_id_viz.json", RoundViz),
     ("api_rounds_round_id_awards.json", RoundAwards),
+    # Stats 2.0 R2: a full evening (154) and the thin one (80) whose
+    # proximity capture and team rosters are missing — the nulls in the second are the point.
+    ("api_stats_session_gaming_session_id_basics.json", SessionBasics),
+    ("api_stats_session_gaming_session_id_basics_80.json", SessionBasics),
+    ("api_stats_session_gaming_session_id_awards.json", SessionAwards),
+    ("api_stats_session_gaming_session_id_awards_80.json", SessionAwards),
 ]
 
 
