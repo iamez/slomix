@@ -56,7 +56,7 @@ deploy NI naloga.
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R1 v delu)
+**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R2 v delu)
 
 Owner (3. 9.): »Sessions« + »Sessions 2.0« → ENA stran; seznam po datumu in
 id-ju s thumbnailom; ob kliku najprej jedrnat summary (basics tabela +
@@ -67,8 +67,8 @@ hits/shots lahkih orožij.
 
 | rezina | obseg | stanje |
 |---|---|---|
-| R1 | en arhiv `/sessions` z levelshoti, `#id`, BOX, mape, »one half missing«; `/sessions2` redirect; podnav brez podvojitve | ta veja |
-| R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, kanonična vrata, korpusni tek čez 153 sej) | — |
+| R1 | en arhiv `/sessions` z levelshoti, `#id`, BOX, mape, »one half missing«; `/sessions2` redirect; podnav brez podvojitve | #897 merged |
+| R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, vrata `/detail` + brez botov, KIS null=not covered, pravila agregacije nagrad z vzdevki, korpusni tek `scripts/audit_session_basics.py`) | ta veja |
 | R3 | summary plast 1: `DataTable` basics (TP, denied %, DPM, KIS, KIS/min, DMG, DMR, ACC, HS %, GIBS, UK, SK, FSK, REV, REV'D) + awards | — |
 | R4 | zavihki Players 22 · Rounds (retire `/rounds`) · Teamplay · Story (retire `/story`) | — |
 | R5 | power user: vrstica igralca ▾, KIS details, povezave | — |

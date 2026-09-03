@@ -27,6 +27,25 @@
   zajeti** (gibhub »Pillow Fort«); `sessions_router` ACC (lahka orožja) ≠
   `pcs.accuracy` (vsa orožja) — stran imenuje, katero; `endstats_aggregator`
   sešteva tudi K/D in accuracy čez runde (za sejni roll-up rabi `best`).
+- (3. 9., R2 korpus) **`denied_playtime` iz 2025 supastats backfilla je pokvarjen**:
+  jan–maj 2025 ~50 s na uboj (max 18 880 s v rundi 107 s), od dec 2025 ~8 s;
+  352/5 538 vrstic 2025 ima denied > 2× igranje, 2026 le 8. Ista doba kot
+  pokvarjen `bullets_fired`. `/basics` take vrstice označi (`denied_pct` null,
+  `coverage.denied_suspect_players`); podatek ostane, kot je — popravek je
+  ownerjeva odločitev (rez po datumu ali ponovni backfill).
+- (3. 9., R2 korpus) 14 sej (83, 99–102, 104, 107, 123, 127, 128, 145–147, 151)
+  nima nobene štete runde (vse neveljavne/botovske) → `/detail`, `/basics`,
+  `/awards` 404; 73 sej (pred junijem 2026) nima `round_awards` → samo trije
+  računani; KIS le v 45/139 sejah; 65 vrstic igralcev brez ekipe (subi).
+- (3. 9., R2) `/stats/session/{id}/detail` še vedno BREZ `response_model`
+  (`response_model_gap.txt` vrstica); `/basics` ga ima — ob R4 /detail
+  tipizirati ali upokojiti. `endstats_aggregator._format_value` (bot) izpiše
+  `Least time dead`/`Full respawn king` (odstotek) kot m:ss in sešteva K/D —
+  bot naj prevzame `session_awards_service.AWARD_RULES`. `endstats_parser`:
+  `Quickest multikill` numeric = število ubojev, čas ostane le v tekstu
+  (drugi regex je mrtva koda); `Tank/Meatshield` numeric NULL (parsira se
+  v servisu). Playwright »thin« vzorec seja 151 je od #855 (vrata) 404 —
+  ni več tanka, ampak prazna; e2e SAMPLES_THIN rabi drugo sejo.
 - (3. 9., R1) `/api/sessions.maps_played` je abecedno urejen → thumbnail vrstice
   je abecedno prva mapa, ne prva igrana; R2 naj `SessionSummary` doda vrstni
   red igranja (ali `first_map`), response_model.

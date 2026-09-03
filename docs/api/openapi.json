@@ -4429,6 +4429,432 @@
     "title": "SeasonTotals",
     "type": "object"
    },
+   "SessionAwardCategory": {
+    "properties": {
+     "awards": {
+      "items": {
+       "$ref": "#/components/schemas/SessionAwardEntry"
+      },
+      "title": "Awards",
+      "type": "array"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     }
+    },
+    "required": [
+     "key",
+     "label",
+     "awards"
+    ],
+    "title": "SessionAwardCategory",
+    "type": "object"
+   },
+   "SessionAwardEntry": {
+    "properties": {
+     "engine_name": {
+      "title": "Engine Name",
+      "type": "string"
+     },
+     "guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Guid"
+     },
+     "nickname": {
+      "title": "Nickname",
+      "type": "string"
+     },
+     "player": {
+      "title": "Player",
+      "type": "string"
+     },
+     "rounds_won": {
+      "title": "Rounds Won",
+      "type": "integer"
+     },
+     "sentence": {
+      "title": "Sentence",
+      "type": "string"
+     },
+     "unit": {
+      "title": "Unit",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "string"
+     },
+     "value_numeric": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Numeric"
+     }
+    },
+    "required": [
+     "engine_name",
+     "nickname",
+     "sentence",
+     "player",
+     "guid",
+     "value",
+     "value_numeric",
+     "unit",
+     "rounds_won"
+    ],
+    "title": "SessionAwardEntry",
+    "type": "object"
+   },
+   "SessionAwards": {
+    "properties": {
+     "categories": {
+      "items": {
+       "$ref": "#/components/schemas/SessionAwardCategory"
+      },
+      "title": "Categories",
+      "type": "array"
+     },
+     "gaming_session_id": {
+      "title": "Gaming Session Id",
+      "type": "integer"
+     },
+     "rounds_counted": {
+      "title": "Rounds Counted",
+      "type": "integer"
+     },
+     "rounds_with_awards": {
+      "title": "Rounds With Awards",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "gaming_session_id",
+     "rounds_counted",
+     "rounds_with_awards",
+     "categories"
+    ],
+    "title": "SessionAwards",
+    "type": "object"
+   },
+   "SessionBasics": {
+    "properties": {
+     "coverage": {
+      "$ref": "#/components/schemas/SessionBasicsCoverage"
+     },
+     "date": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Date"
+     },
+     "gaming_session_id": {
+      "title": "Gaming Session Id",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/SessionBasicsPlayer"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "teams": {
+      "items": {
+       "$ref": "#/components/schemas/SessionBasicsTeam"
+      },
+      "title": "Teams",
+      "type": "array"
+     }
+    },
+    "required": [
+     "gaming_session_id",
+     "date",
+     "coverage",
+     "teams",
+     "players"
+    ],
+    "title": "SessionBasics",
+    "type": "object"
+   },
+   "SessionBasicsCoverage": {
+    "description": "What the numbers below are computed over — so a page can say\n\"KIS covers 61 of 503 kills\" instead of printing a small number as if\nit were the whole night.",
+    "properties": {
+     "denied_suspect_players": {
+      "title": "Denied Suspect Players",
+      "type": "integer"
+     },
+     "kis_covered": {
+      "title": "Kis Covered",
+      "type": "boolean"
+     },
+     "kis_kills": {
+      "title": "Kis Kills",
+      "type": "integer"
+     },
+     "rounds_counted": {
+      "title": "Rounds Counted",
+      "type": "integer"
+     },
+     "rounds_total": {
+      "title": "Rounds Total",
+      "type": "integer"
+     },
+     "teams_attributed": {
+      "title": "Teams Attributed",
+      "type": "boolean"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "rounds_counted",
+     "rounds_total",
+     "total_kills",
+     "kis_kills",
+     "kis_covered",
+     "teams_attributed",
+     "denied_suspect_players"
+    ],
+    "title": "SessionBasicsCoverage",
+    "type": "object"
+   },
+   "SessionBasicsPlayer": {
+    "description": "One row of the basics table (docs/design/18 §C plast 1). Every\ndefinition names its source; the tooltip on the page is this docstring.",
+    "properties": {
+     "accuracy": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Accuracy"
+     },
+     "alive_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Alive Pct"
+     },
+     "alive_pct_drift": {
+      "title": "Alive Pct Drift",
+      "type": "boolean"
+     },
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "damage_received": {
+      "title": "Damage Received",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "denied_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Denied Pct"
+     },
+     "denied_playtime_seconds": {
+      "title": "Denied Playtime Seconds",
+      "type": "integer"
+     },
+     "dmr": {
+      "title": "Dmr",
+      "type": "number"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "full_selfkills": {
+      "title": "Full Selfkills",
+      "type": "integer"
+     },
+     "gibs": {
+      "title": "Gibs",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "headshot_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Headshot Pct"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     },
+     "kis_per_min": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kis Per Min"
+     },
+     "kis_total": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Kis Total"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "played_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Played Pct"
+     },
+     "revives_given": {
+      "title": "Revives Given",
+      "type": "integer"
+     },
+     "self_kills": {
+      "title": "Self Kills",
+      "type": "integer"
+     },
+     "team": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team"
+     },
+     "time_played_seconds": {
+      "title": "Time Played Seconds",
+      "type": "integer"
+     },
+     "times_revived": {
+      "title": "Times Revived",
+      "type": "integer"
+     },
+     "useless_kills": {
+      "title": "Useless Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid",
+     "name",
+     "team",
+     "time_played_seconds",
+     "denied_playtime_seconds",
+     "denied_pct",
+     "dpm",
+     "kills",
+     "deaths",
+     "damage_given",
+     "damage_received",
+     "dmr",
+     "accuracy",
+     "headshot_pct",
+     "gibs",
+     "useless_kills",
+     "self_kills",
+     "full_selfkills",
+     "revives_given",
+     "times_revived",
+     "kis_total",
+     "kis_per_min",
+     "played_pct",
+     "alive_pct",
+     "alive_pct_drift"
+    ],
+    "title": "SessionBasicsPlayer",
+    "type": "object"
+   },
+   "SessionBasicsTeam": {
+    "properties": {
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "score": {
+      "title": "Score",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "key",
+     "name",
+     "score"
+    ],
+    "title": "SessionBasicsTeam",
+    "type": "object"
+   },
    "SessionLeaderRow": {
     "description": "One row of the session DPM leaderboard.\n\n⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.\n\n  name    `MAX(player_name)` over a NOT NULL column — never null.\n  dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.\n  kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every\n  deaths  summed value is NULL, and the handler passes the result through\n          with no guard. Zero such rows exist today; the column and the\n          aggregate both say it is reachable, and \"zero rows today\" is not\n          a type — a stricter model would answer 500 the first time it\n          happened rather than dropping a field.\n\nRequested by the session-detail workstream ahead of phase 4, so that page\ncan be written against a schema instead of against a sample.",
     "properties": {
@@ -19558,6 +19984,92 @@
      }
     },
     "summary": "Get Session Score",
+    "tags": [
+     "Sessions"
+    ]
+   }
+  },
+  "/api/stats/session/{gaming_session_id}/awards": {
+   "get": {
+    "description": "The evening's awards, one winner each, gibhub-style: the engine's\nper-round awards rolled up by the rule each award carries\n(session_awards_service.AWARD_RULES — sum, best, or lowest; never a\nsummed ratio), plus the three the engine does not hand out (Top Fragger,\niPod, Playtime), computed from the same rows the basics table shows.",
+    "operationId": "get_session_awards_api_stats_session__gaming_session_id__awards_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "gaming_session_id",
+      "required": true,
+      "schema": {
+       "title": "Gaming Session Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionAwards"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Session Awards",
+    "tags": [
+     "Sessions"
+    ]
+   }
+  },
+  "/api/stats/session/{gaming_session_id}/basics": {
+   "get": {
+    "description": "The basics table of an evening — one row per human player over the\ncounted rounds, with the coverage the numbers rest on. Same round gate\nand the same per-player SQL as /detail (session_player_sql), minus bots,\nplus what the stats 2.0 table needs: denied %, DMR, KIS, useless kills.",
+    "operationId": "get_session_basics_api_stats_session__gaming_session_id__basics_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "gaming_session_id",
+      "required": true,
+      "schema": {
+       "title": "Gaming Session Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionBasics"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Session Basics",
     "tags": [
      "Sessions"
     ]

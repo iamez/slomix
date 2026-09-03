@@ -34,6 +34,7 @@ from website.backend.routers.records_awards import (
 from website.backend.routers.records_matches import RoundAwards, RoundViz
 from website.backend.routers.records_seasons import CurrentSeason
 from website.backend.routers.records_weapons import WeaponsByPlayer
+from website.backend.routers.sessions_router import SessionAwards, SessionBasics
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "api_responses"
 
@@ -45,6 +46,10 @@ CASES = [
     ("api_stats_weapons_by_player.json", WeaponsByPlayer),
     ("api_rounds_round_id_viz.json", RoundViz),
     ("api_rounds_round_id_awards.json", RoundAwards),
+    ("api_stats_session_gaming_session_id_basics.json", SessionBasics),
+    ("api_stats_session_gaming_session_id_basics_80.json", SessionBasics),
+    ("api_stats_session_gaming_session_id_awards.json", SessionAwards),
+    ("api_stats_session_gaming_session_id_awards_80.json", SessionAwards),
 ]
 
 
