@@ -88,19 +88,19 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: frame-health v6.13 — watchdog za VSE Lua module + bot test (Fable 5.1)
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, v PR-ju)
+**Zadnja posodobitev:** 2026-09-03 22:30 (Fable 5.1, v6.13 deployan, test 2 teče)
 
 Owner 3. 9.: watcher razširiti na vseh 6 modulov, izboljšati, bot test (~30 min)
 za polno obremenitev; RCON `testmode` in deploy za ta PR izrecno predana.
 
 | korak | vsebina | stanje |
 |---|---|---|
-| 0 | osnovnica: bot test z v6.12 (18:37–19:07, 6 botov, `testmode on/off`) | izveden, poročilo po 19:10 |
-| 1 | skupni FH blok (`FH init mod=`, `FM wall mod self top`) v 6 modulih; tracker: `lt`/`paused` na gap vrstici, kapica 300→3000, `init_scan` meritev; `tests/lua/frame_health_modules_harness.lua`; identity test | veja `feat/lua-frame-health-v613` |
+| 0 | osnovnica: bot test z v6.12 (18:37–19:07, 6 botov, `testmode on/off`) | **izveden**: 2 stalla ≥ 100 ms, 0 ≥ 500, 2 motorjeva hitcha v 30 min — obremenitev z boti strežnika ne muči; `is_bot_round` deluje (komentar na #905) |
+| 1 | skupni FH blok (`FH init mod=`, `FM wall mod self top`) v 6 modulih; tracker: `lt`/`paused` na gap vrstici, kapica 300→3000, `init_scan` meritev; `tests/lua/frame_health_modules_harness.lua`; identity test | **MERGAN** #905 (`33126213`) |
 | 2 | `scripts/frame_health_report.py` (pripis: Σ self v oknu gapa = naš Lua, ostanek = motor/gostitelj) + test | narejeno |
-| 3 | PR, CI, ownerjev merge | — |
-| 4 | deploy na prazen puran (scp na ŽIVE poti, map load, `FH init mod=` 6×, sha256 prej/potem; ⛔ nikoli `lua_restart`) | predano meni |
-| 5 | drugi bot test z v6.13 → poročilo; ukrepi v BACKLOG | — |
+| 3 | PR, CI, ownerjev merge | **MERGAN** #905 |
+| 4 | deploy na prazen puran (scp na ŽIVE poti, map load, `FH init mod=` 6×, sha256 prej/potem; ⛔ nikoli `lua_restart`) | **IZVEDEN 3. 9. 22:2x** — 6/6 sha ujema, 6× `FH init … mod=` + `FH watcher`, motor 6× »loaded into Lua VM«, brez napak |
+| 5 | drugi bot test z v6.13 (22:25–22:55) → poročilo; ukrepi v BACKLOG | teče |
 
 Osnovnica iz obstoječih logov (report, 2. 9., prazen strežnik): stall 363 s,
 naš Lua 16 %, residual (motor/gostitelj) 84 %; 3. 9. do 18:00: 36 s, 22 % / 78 %.

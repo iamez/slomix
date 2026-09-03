@@ -7,15 +7,12 @@
 
 ## Trenutna pozicija
 
-- (Fable 5.1, 2026-09-03, 18:40) SKOK 4 (owner): **watchdog na puranu** —
-  frame-health watcher (tracker v6.12) razširiti na VSE Lua module (6 z
-  `et_RunFrame`), ga podrobno pregledati/izboljšati (ET:Legacy izvor po
-  potrebi), in **bot test** (boti/test mode na puranu ~30 min, nato dol) za
-  polno obremenitev brez čakanja na igro. Plan mode → nato nazaj na
-  originalni plan. Ostal sem pri: #903 (R5) v merge ciklu (`9209f6b4`, po
-  zlitju #900); po mergu: pull main, `git branch -d feat/app-stats20-r5-drilldown`,
-  spomin + PLAN (R5 mergan; Stats 2.0 končan). Stare naloge: doc 19/20 (po
-  ownerjevem vrstnem redu), doc 21 (po ultra pregledu), BACKLOG dolg.
+- (Fable 5.1, 2026-09-03, 22:30) SKOK 4 skoraj zaključen: v6.13 mergan (#905)
+  in deployan na puran (dokazano), osnovnica bot testa izmerjena, drugi bot
+  test z v6.13 teče (22:25–22:55) → poročilo + ukrepi v BACKLOG. #903 (R5)
+  mergan (`e3b0a70c`), Stats 2.0 R1–R5 KONČAN. Nato nazaj: doc 19/20 po
+  ownerjevem vrstnem redu, doc 21 po ultra pregledu, BACKLOG dolg
+  (`db_backup.sh` vloga — javiti sestri pred dotikom).
 - (Fable 5.1, 2026-09-03, 12:15) SKOK 3 (ownerjeva ideja, `screenshots/vision.jpg`,
   `vision1.jpg`): **centralni runtime / »event brain«** — en Python proces na
   Linux strežniku spremlja igralni strežnik in iz ENEGA toka dogodkov streže
