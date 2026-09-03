@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { createBrowserRouter, Navigate, RouterProvider } from 'react-router';
+import { createBrowserRouter, generatePath, Navigate, RouterProvider, useParams } from 'react-router';
 import { QueryClientProvider } from '@tanstack/react-query';
 import './tokens.css';
 import { applyHashShim } from './hashShim';
@@ -24,7 +24,6 @@ import { PlayerProfilePage } from './pages/PlayerProfile';
 import { DesignCatalog } from './pages/DesignCatalog';
 import { Rivalries } from './pages/Rivalries';
 import { SessionDetail } from './pages/SessionDetail';
-import { Story } from './pages/Story';
 import { Proximity } from './pages/Proximity';
 import { ProximityPlayerPage } from './pages/ProximityPlayerPage';
 import { ProximityTeamsPage } from './pages/ProximityTeamsPage';
@@ -35,9 +34,8 @@ import { UploadsPage, UploadDetailPage } from './pages/UploadsPage';
 import { GreatshotPage, GreatshotDemoPage } from './pages/GreatshotPage';
 import { LivePage } from './pages/LivePage';
 import { SkillRating } from './pages/SkillRating';
-import { RoundsPage } from './pages/RoundsPage';
 import { makeQueryClient } from './lib/queries';
-import { APP_ROUTES, REDIRECTS } from './routes';
+import { APP_ROUTES, PARAM_REDIRECTS, REDIRECTS } from './routes';
 
 // Must run before the router reads window.location (docs/design/06 §3).
 applyHashShim('/app');
@@ -75,6 +73,14 @@ function Stub({ label, phase }: { label: string; phase: number }) {
   );
 }
 
+/** A retired path whose parameter travels to the new one: /story/session/154
+ *  becomes /session-detail/154/story. `generatePath` substitutes the params
+ *  the matched pattern captured; a literal Navigate could not. */
+function ParamRedirect({ to }: { to: string }) {
+  const params = useParams();
+  return <Navigate to={generatePath(to, params)} replace />;
+}
+
 /** Built pages replace their stubs route by route as phases land. */
 const PAGES: Record<string, React.ReactElement> = {
   landing: <Landing />,
@@ -94,16 +100,6 @@ const PAGES: Record<string, React.ReactElement> = {
   design: <DesignCatalog />,
   rivalries: <Rivalries />,
   'skill-rating': <SkillRating />,
-  rounds: <RoundsPage />,
-  story: <Story />,
-  'story-session': <Story />,
-  // All three story routes mount the same page — the date variant included,
-  // which is the one that would otherwise render a stub while its tests pass
-  // (they mount the component directly; only the registry decides what the
-  // BROWSER gets). Found by the route sweep's own gap: a stub answers 200
-  // and renders cleanly, so "the sweep is green" says nothing about whether
-  // the right component is behind the route.
-  'story-date': <Story />,
   proximity: <Proximity />,
   'proximity-player': <ProximityPlayerPage />,
   'proximity-replay': <ProximityReplayPage />,
@@ -140,6 +136,7 @@ const router = createBrowserRouter(
         // Stats 2.0 (docs/design/18): the two archives became one. Old links
         // and bookmarks keep working — a redirect, not a 404 and not a stub.
         ...REDIRECTS.map((r) => ({ path: r.from, element: <Navigate to={r.to} replace /> })),
+        ...PARAM_REDIRECTS.map((r) => ({ path: r.from, element: <ParamRedirect to={r.to} /> })),
         { path: '*', element: <Stub label="Not found" phase={0} /> },
       ],
     },

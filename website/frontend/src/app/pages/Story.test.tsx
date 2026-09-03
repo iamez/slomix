@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Route, Routes } from 'react-router';
+import { MemoryRouter } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
-import { Story } from './Story';
-import scopes from './__fixtures__/api_storytelling_scopes.json';
+import { SessionStory } from './Story';
+import composite from './__fixtures__/api_skill_composite.json';
 import narrative from './__fixtures__/api_storytelling_narrative.json';
 import boxScore from './__fixtures__/api_storytelling_box_score.json';
 import moments from './__fixtures__/api_storytelling_moments.json';
@@ -34,7 +34,7 @@ import kisDetails from './__fixtures__/api_storytelling_kill_impact_details.json
  * array instead of reading the summary would now disagree with the server.
  */
 const BODIES: [string, unknown][] = [
-  ['/storytelling/scopes', scopes],
+  ['/skill/composite', composite],
   ['/storytelling/narrative', narrative],
   ['/storytelling/box-score', boxScore],
   ['/storytelling/moments', moments],
@@ -78,18 +78,19 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
 }
 
-function renderPage(fetchImpl = fixtureFetch, entry = '/story') {
+/** Stats 2.0 R4: the story is the session page's `story` tab, and this
+ *  harness mounts the content component the tab mounts, with the session
+ *  already resolved (154). The old shell's scope chips and dated-link
+ *  resolver are the session page's job now (SessionDetail.test covers
+ *  the date resolution; routes.test covers the redirects). */
+function renderPage(fetchImpl = fixtureFetch, gsid = 154) {
   vi.stubGlobal('fetch', vi.fn(fetchImpl));
   const client = makeQueryClient();
   client.setDefaultOptions({ queries: { retry: false } });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={[entry]}>
-        <Routes>
-          <Route path="/story" element={<Story />} />
-          <Route path="/story/session/:gsid" element={<Story />} />
-          <Route path="/story/date/:date" element={<Story />} />
-        </Routes>
+      <MemoryRouter>
+        <SessionStory gsid={gsid} />
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -117,23 +118,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('Story', () => {
-  it('opens on the most recent session without being told which', async () => {
-    // The picker's first entry is the newest session in the recording; a
-    // first visit with no gsid has to land somewhere real rather than empty.
-    renderPage();
-    await waitFor(() => expect(screen.getByText(/2026-08-27 · 12r/)).toBeInTheDocument());
-    expect(screen.getByRole('button', { name: /2026-08-27 · 12r/ })).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  it('follows the gsid in the legacy path, not the newest session', async () => {
-    // /story/session/:gsid is the hash the old page linked with, and a link
-    // that silently lands on a different night is worse than a dead one.
-    renderPage(fixtureFetch, '/story/session/153');
-    await waitFor(() => expect(screen.getByRole('button', { name: /2026-08-26/ })).toHaveAttribute('aria-pressed', 'true'));
-    expect(screen.getByRole('button', { name: /2026-08-27 · 12r/ })).toHaveAttribute('aria-pressed', 'false');
-  });
-
+describe('SessionStory (the session page story tab)', () => {
   it('prints the narrative as prose and says a machine wrote it', async () => {
     renderPage();
     await waitFor(() => expect(screen.getByText(/The night's story was resilience/)).toBeInTheDocument());
@@ -269,35 +254,6 @@ describe('Story', () => {
     // The rest of the page still renders — one dead endpoint is not a dead
     // session.
     expect(await screen.findByText(/The night's story was resilience/)).toBeInTheDocument();
-  });
-
-  it('resolves a dated legacy link to that night, not the newest one', async () => {
-    // /story/date/:date was a legacy hash, and the recording holds one
-    // session on 2026-08-26 (gsid 153). Ignoring the date and showing the
-    // newest session is the silent-wrong-answer this route exists to avoid.
-    renderPage(fixtureFetch, '/story/date/2026-08-26');
-    await waitFor(() => expect(screen.getByRole('button', { name: /2026-08-26/ })).toHaveAttribute('aria-pressed', 'true'));
-  });
-
-  it('asks which session when a date holds two of them', async () => {
-    const twoOnOneDay = {
-      ...scopes,
-      sessions: [
-        { ...(scopes as { sessions: Record<string, unknown>[] }).sessions[0], gaming_session_id: 900, start_date: '2026-08-27', end_date: '2026-08-27' },
-        { ...(scopes as { sessions: Record<string, unknown>[] }).sessions[1], gaming_session_id: 901, start_date: '2026-08-27', end_date: '2026-08-27' },
-      ],
-    };
-    renderPage(withOverride('/storytelling/scopes', () =>
-      Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(twoOnOneDay) } as Response)),
-    '/story/date/2026-08-27');
-    await waitFor(() => expect(screen.getByText(/two sessions were played on 2026-08-27/)).toBeInTheDocument());
-    // …and nothing is shown as if it were the answer.
-    expect(screen.queryByText(/scoreboard/i)).toBeNull();
-  });
-
-  it('says a dated link fell outside the window instead of showing another night', async () => {
-    renderPage(fixtureFetch, '/story/date/2019-01-01');
-    await waitFor(() => expect(screen.getByText(/no session in the recent window/)).toBeInTheDocument());
   });
 
   it('shows each player note with the archetype that produced it', async () => {

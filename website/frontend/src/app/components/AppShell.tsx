@@ -23,7 +23,7 @@ function sectionFor(pathname: string): 'stats' | 'telemetry' | null {
   const statsPrefixes = [
     '/sessions', '/session-detail', '/leaderboards', '/maps',
     '/weapons', '/form', '/awards', '/record-book', '/retro-viz', '/profile',
-    '/skill-rating', '/rivalries', '/story', '/replay', '/rounds',
+    '/skill-rating', '/rivalries', '/replay',
   ];
   // ⛔ This list and `nav: 'stats'` in routes.ts are two halves of one fact,
   // and nothing joins them: a route tagged for the stats sub-nav but missing

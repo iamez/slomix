@@ -56,11 +56,31 @@ export const APP_ROUTES: readonly AppRoute[] = Object.freeze(routeData as AppRou
  *  redirect target is a registered route. */
 export const REDIRECTS: readonly { from: string; to: string }[] = Object.freeze([
   { from: '/sessions2', to: '/sessions' },
+  // Stats 2.0 R4: rounds and the story became tabs of the session page.
+  // A bare /rounds or /story names no session, so they land on the list.
+  { from: '/rounds', to: '/sessions' },
+  { from: '/story', to: '/sessions' },
 ]);
+
+/** Retired paths that CARRY a parameter: `to` is a react-router pattern the
+ *  params are substituted into (generatePath). Kept apart from REDIRECTS
+ *  because a literal `<Navigate to>` cannot express them, and routes.test
+ *  substitutes sample params before checking both ends. */
+export const PARAM_REDIRECTS: readonly { from: string; to: string }[] = Object.freeze([
+  { from: '/story/session/:gsid', to: '/session-detail/:gsid/story' },
+  { from: '/story/date/:date', to: '/session-detail/date/:date/story' },
+]);
+
+/** The session page's tab grammar — ONE copy. SessionDetail renders these
+ *  and hashToPath validates a legacy hash's tab segment against the same
+ *  list; two copies drifted once (this set carried `charts`, the page did
+ *  not, and `rounds` was dropped from every legacy link). */
+export const SESSION_DETAIL_TABS = ['summary', 'players', 'rounds', 'teamplay', 'story'] as const;
+export type SessionTab = (typeof SESSION_DETAIL_TABS)[number];
 
 
 const GREATSHOT_SECTIONS = new Set(['demos', 'highlights', 'clips', 'renders']);
-const SESSION_DETAIL_TABS = new Set(['summary', 'players', 'teamplay', 'charts']);
+const SESSION_TAB_SET: ReadonlySet<string> = new Set(SESSION_DETAIL_TABS);
 
 function safeDecode(value: string): string {
   try {
@@ -108,11 +128,11 @@ export function hashToPath(hash: string): string {
       return seg[1] ? `/uploads/${enc(seg[1])}${q}` : `/uploads${q}`;
     case 'session-detail': {
       if (seg[1] === 'date' && seg[2]) {
-        const tab = SESSION_DETAIL_TABS.has(seg[3]) && seg[3] !== 'summary' ? `/${seg[3]}` : '';
+        const tab = SESSION_TAB_SET.has(seg[3]) && seg[3] !== 'summary' ? `/${seg[3]}` : '';
         return `/session-detail/date/${enc(seg[2])}${tab}${q}`;
       }
       if (seg[1]) {
-        const tab = SESSION_DETAIL_TABS.has(seg[2]) && seg[2] !== 'summary' ? `/${seg[2]}` : '';
+        const tab = SESSION_TAB_SET.has(seg[2]) && seg[2] !== 'summary' ? `/${seg[2]}` : '';
         return `/session-detail/${enc(seg[1])}${tab}${q}`;
       }
       return `/sessions${q}`;
@@ -121,10 +141,12 @@ export function hashToPath(hash: string): string {
     // hash keeps resolving, to the surviving route.
     case 'sessions2':
       return `/sessions${q}`;
+    // Stats 2.0 R4: the story is a tab of the session page. A bare #/story
+    // named no session and opened the newest; the list is the honest landing.
     case 'story': {
-      if (seg[1] === 'session' && seg[2]) return `/story/session/${enc(seg[2])}${q}`;
-      if (seg[1] === 'date' && seg[2]) return `/story/date/${enc(seg[2])}${q}`;
-      return `/story${q}`;
+      if (seg[1] === 'session' && seg[2]) return `/session-detail/${enc(seg[2])}/story${q}`;
+      if (seg[1] === 'date' && seg[2]) return `/session-detail/date/${enc(seg[2])}/story${q}`;
+      return `/sessions${q}`;
     }
     case 'proximity': {
       if (seg[1] === 'player' && seg[2]) return `/proximity/player/${enc(seg[2])}${q}`;

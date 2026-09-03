@@ -1525,12 +1525,19 @@ export interface StorySynergyGroup {
 
 /** GET /api/storytelling/synergy. `defaulted_players_count` is how many
  *  players had no telemetry and were scored at the default — the composite
- *  is that much less measured, which the page has to say out loud. */
+ *  is that much less measured, which the page has to say out loud.
+ *
+ *  ⚠️ A UNION OF SHAPES (synergy.py:40,48): `no_data` and `partial_data`
+ *  answer `groups: {}` with no weights and no defaulted count — recorded
+ *  on session 80 (api_storytelling_synergy_80.json). The optional marks
+ *  are that union, not laziness. */
 export interface StorySynergy {
   status: string;
-  groups: { group_a: StorySynergyGroup; group_b: StorySynergyGroup };
-  weights: Record<string, number>;
-  defaulted_players_count: number;
+  session_date?: string | null;
+  reason?: string;
+  groups: { group_a?: StorySynergyGroup; group_b?: StorySynergyGroup };
+  weights?: Record<string, number>;
+  defaulted_players_count?: number;
 }
 
 /** The four role boards (gravity / space-created / enabler / lurker-profile)
@@ -1964,6 +1971,24 @@ export interface SessionPlayerTotals {
   alive_pct: number | null;
   alive_pct_lua: number | null;
   alive_pct_diff: number | null;
+  /** True when the engine's alive % and the computed one disagree by > 2 pp. */
+  alive_pct_drift: boolean;
+  /** Share of the session's duration the player was present; null without a duration. */
+  played_pct: number | null;
+  /** ⚠️ NOT the raw TAB[8]: sessions_router.py:2298 returns played_pct
+   *  again "for frontend compat". The legacy "Lua Played%" column printed
+   *  this duplicate as a second measurement; the app does not draw it. */
+  played_pct_lua: number | null;
+  self_kills: number;
+  /** pcs.most_useful_kills — the victim had ≥ half the spawn cycle ahead
+   *  (c0rnp0rn8.lua topshots[15]); the legacy "armed enemies" tooltip was wrong. */
+  useful_kills: number;
+  /** /kill at health > 0 with the full respawn ahead (the Lua's −2 s window). */
+  full_selfkills: number;
+  /** SUM over rounds of LEAST(time_dead, time_played) in minutes. */
+  time_dead_minutes: number;
+  /** Seconds of playtime denied to opponents (raw; the 2025 backfill rows are suspect). */
+  denied_playtime: number;
 }
 
 export interface SessionMatchRound {

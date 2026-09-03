@@ -44,6 +44,12 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., stats 2.0 R4) **`/detail` brez `response_model`** — Players zavihek bere 8 polj, ki jih TS vmesnik prej ni poznal (`self_kills`, `useful_kills`, `full_selfkills`, `time_dead_minutes`, `denied_playtime`, `alive_pct_drift`, `played_pct`, `played_pct_lua`); drift checker jih ne vidi, dokler handler nima modela (rabi posnetek 154 + 80 v `_RECORDED` in črtanje iz `response_model_gap.txt`).
+- (3. 9., R4) **`played_pct_lua` je kopija `played_pct`** (`sessions_router.py:2298`) — legacy »Lua Played%« je bil fikcija; nova stran ga ne riše. Če owner hoče pravi TAB[8], rabi svoj stolpec v `session_player_sql`.
+- (3. 9., R4) **`headshot_kills`** ni več v Players tabeli (bil je pod istim `hs` kot head-hit %); če ga kdo pogreša, gre kot svoj stolpec `hs kills`.
+- (3. 9., R4) **Teamplay čez polnoč**: `/proximity/trades/player-stats` je keyed po `session_date`; seja z dvema datumoma pokaže le prvega (Meta pove). Rešitev = `gaming_session_id` parameter na endpointu (backend).
+- (3. 9., R4) **Sinergija `no_data`/`partial_data` vrne `groups: {}`** (seja 80) — stari Story panel bi na taki noči crashal; zdaj `Absent`. Tip `StorySynergy` je unija z opcijskimi polji.
+- (3. 9., R4) `api_storytelling_scopes.json` fixture je osirotel (lupina `/story` je umrla); `useStoryScopes` nima porabnika v app → kandidat za brisanje ob naslednjem čiščenju.
 - (3. 9., stats 2.0) **Legacy tooltip »Useful Kills: kills on armed enemies (excludes selfkills and teamkills)« je napačen** — pisec (`c0rnp0rn8.lua:679`, `topshots[15]`) šteje kill, pri katerem ima žrtev pred sabo ≥ polovico limbo časa. Nova stran pove resnico; legacy `website/js/session-detail.js:2484`, `matches.js:986`, `player-profile.js:1186` in bot `community_stats_parser.py:369` (`UK`) še nosijo staro besedilo → popraviti ob naslednjem dotiku legacy strani.
 - (3. 9., stats 2.0 — doc 18, lokalno) **FSK prag** (−2 s → /2) čaka ownerjevo
   odločitev; **TAB[8] `time_played_percent` je 0 v ~35 % vrstic vsak mesec**

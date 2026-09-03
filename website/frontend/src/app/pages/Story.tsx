@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useParams, useSearchParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, lblStyle } from '../components/ui';
 import { ApiError } from '../lib/api';
@@ -11,15 +10,19 @@ import {
   useStoryKillImpact, useStoryKillMatrix, useStoryKisDetails, useStoryKisFormula,
   useStoryLurker, useStoryMoments, useStoryMomentum, useStoryMomentumSession,
   useStoryMovement, useStoryNarrative, useStoryPlayerNarratives, useStoryPwcFormula,
-  useStoryScopes, useStorySpace, useStorySynergy, useStoryUselessDefense,
+  useStorySpace, useStorySynergy, useStoryUselessDefense,
   useStoryWinContribution,
 } from '../lib/queries';
 import type {
-  CompositeStats, FormulaTerm, StoryBoxScore, StoryMomentumRound, StoryRolePlayer, StoryScope,
+  CompositeStats, FormulaTerm, StoryBoxScore, StoryMomentumRound, StoryRolePlayer,
 } from '../lib/types';
 
 /**
- * Smart Stats — the story of one session (docs/design/12 row 26).
+ * Smart Stats — the story of one session (docs/design/12 row 26). Since
+ * stats 2.0 R4 this is the session page's `story` tab (docs/design/18 §C
+ * plast 3): the page resolves the session, this file tells it. The old
+ * /story shell (scope chips, the dated-link resolver) is gone — the session
+ * page already does both, and /story/session/:gsid redirects here.
  *
  * The legacy page (js/story.js, 2,081 lines) reads thirteen endpoints and
  * prints what each returns. The thing it never does is say where one number
@@ -36,26 +39,6 @@ import type {
  * carried it (PWC, KIS), and last the telemetry-derived roles, each labelled
  * with what it is measured from.
  */
-
-/** One session in the picker. A gsid is the only midnight-safe key. */
-function ScopeChip({ scope, active, onPick }: {
-  scope: StoryScope; active: boolean; onPick: (gsid: number) => void;
-}) {
-  const label = scope.start_date === scope.end_date
-    ? scope.start_date
-    : `${scope.start_date} → ${scope.end_date}`;
-  return (
-    <button
-      type="button"
-      className="chip"
-      aria-pressed={active}
-      onClick={() => { onPick(scope.gaming_session_id); }}
-      title={scope.distinct_map_names.join(', ')}
-    >
-      {label} · {scope.accepted_round_count}r
-    </button>
-  );
-}
 
 /** The generated paragraph, printed as prose and labelled as generated. */
 function Narrative({ gsid }: { gsid: number }) {
@@ -1152,7 +1135,7 @@ function CompositeFive({ data }: { data: CompositeStats }) {
 }
 
 
-function SessionStory({ gsid }: { gsid: number }) {
+export function SessionStory({ gsid }: { gsid: number }) {
   const narrative = useStoryNarrative(gsid);
   const box = useStoryBoxScore(gsid);
   const momentum = useStoryMomentum(gsid);
@@ -1278,7 +1261,13 @@ function SessionStory({ gsid }: { gsid: number }) {
         <SectionHead label="synergy" aside={<span className="lbl">two groups, one composite</span>} />
         {synergy.isPending && <Pending label="synergy" />}
         {synergy.isError && <Unavailable what="synergy" />}
-        {synergy.data && (
+        {/* `no_data` / `partial_data` answer `groups: {}` (session 80) —
+          * a bare read of group_a was a crash on such a night; the tab's
+          * teamplay panel says why, this panel only stays honest. */}
+        {synergy.data && (!synergy.data.groups.group_a || !synergy.data.groups.group_b) && (
+          <Absent reason={synergy.data.status === 'partial_data' ? 'insufficient data — no R1 rows to build the groups from' : 'no synergy rows for this session'} />
+        )}
+        {synergy.data && synergy.data.groups.group_a && synergy.data.groups.group_b && (
           <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>
             {/* Named, not indexed: the two groups are a pair, not a list,
               * and an object read by a computed key is a finding in this
@@ -1301,7 +1290,7 @@ function SessionStory({ gsid }: { gsid: number }) {
             })}
           </Cluster>
         )}
-        {synergy.data && synergy.data.defaulted_players_count > 0 && (
+        {synergy.data && (synergy.data.defaulted_players_count ?? 0) > 0 && (
           <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
             {synergy.data.defaulted_players_count} player(s) had no telemetry and were scored at the default — the composite is that much less measured
           </span>
@@ -1338,101 +1327,5 @@ function SessionStory({ gsid }: { gsid: number }) {
         )}
       </Stack>
     </Stack>
-  );
-}
-
-export function Story() {
-  const routeParams = useParams();
-  const [params, setParams] = useSearchParams();
-  const scopes = useStoryScopes(20);
-
-  // Four ways in, one key. The legacy hashes carried /story/session/:gsid and
-  // /story/date/:date, the app links with ?gsid=, and a first visit has none
-  // of them and takes the most recent session.
-  //
-  // The gsid is the key everywhere BELOW this line, because a date is not
-  // one: a session that crosses midnight has two, and a date can hold two
-  // sessions. So a dated link is resolved here, and when it resolves to more
-  // than one session the page asks instead of picking — silently showing the
-  // wrong night is the failure a deep link exists to prevent.
-  const fromRoute = Number(routeParams.gsid);
-  const fromQuery = Number(params.get('gsid'));
-  const explicit = Number.isFinite(fromRoute) && fromRoute > 0
-    ? fromRoute
-    : Number.isFinite(fromQuery) && fromQuery > 0 ? fromQuery : null;
-
-  const dateParam = routeParams.date ?? null;
-  const dated = dateParam && scopes.data
-    ? scopes.data.sessions.filter(
-      (s) => s.start_date === dateParam || s.end_date === dateParam,
-    )
-    : [];
-  const latest = scopes.data?.sessions.at(0)?.gaming_session_id ?? null;
-  const gsid = explicit
-    ?? (dateParam ? (dated.length === 1 ? dated[0].gaming_session_id : null) : latest);
-
-  return (
-    <div style={{ paddingTop: 'var(--space-7)', paddingBottom: 'var(--space-8)' }}>
-      <Lbl>smart stats · one session, told</Lbl>
-      <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: 'var(--track-title)', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
-        What happened that night.
-      </h1>
-
-      <Stack gap={2} style={{ paddingTop: 'var(--space-4)' }} parity="story.scopes">
-        <Lbl>session</Lbl>
-        {scopes.isPending && <Pending label="sessions" />}
-        {scopes.isError && <Unavailable what="sessions" />}
-        {scopes.data && scopes.data.sessions.length === 0 && (
-          <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-            no session has enough accepted rounds to tell a story yet
-          </span>
-        )}
-        {scopes.data && scopes.data.sessions.length > 0 && (
-          <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
-            {scopes.data.sessions.map((s) => (
-              <ScopeChip
-                key={s.gaming_session_id}
-                scope={s}
-                active={s.gaming_session_id === gsid}
-                onPick={(picked) => { setParams({ gsid: String(picked) }); }}
-              />
-            ))}
-          </Cluster>
-        )}
-      </Stack>
-
-      {/* A dated link that did not resolve to exactly one session. Both
-        * cases below are answers, not errors, and they read differently on
-        * purpose: one is a choice to make, the other is a fact about the
-        * window this page can see. */}
-      {gsid == null && dateParam && scopes.data && (
-        <Stack gap={2} parity="story.ambiguous" style={{ paddingTop: 'var(--space-5)' }}>
-          {dated.length > 1 ? (
-            <>
-              <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
-                two sessions were played on {dateParam} — which one?
-              </span>
-              <Cluster gap={2}>
-                {dated.map((s) => (
-                  <ScopeChip
-                    key={s.gaming_session_id}
-                    scope={s}
-                    active={false}
-                    onPick={(picked) => { setParams({ gsid: String(picked) }); }}
-                  />
-                ))}
-              </Cluster>
-            </>
-          ) : (
-            <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>
-              no session in the recent window started or ended on {dateParam} — it
-              may be older than the {scopes.data.sessions.length} shown above
-            </span>
-          )}
-        </Stack>
-      )}
-
-      {gsid != null && <SessionStory key={gsid} gsid={gsid} />}
-    </div>
   );
 }

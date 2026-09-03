@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 // switchover (docs/design/06 §3: "izpuščena route postane rdeč test").
 // @ts-expect-error plain-JS module, typed only where spider-web.d.ts covers it
 import { listRouteDefinitions, getRouteHash } from '../../../js/route-registry.js';
-import { APP_ROUTES, hashToPath, REDIRECTS } from './routes';
+import { APP_ROUTES, hashToPath, PARAM_REDIRECTS, REDIRECTS, SESSION_DETAIL_TABS } from './routes';
 
 /** Registry keys that deliberately fold into another app route. */
 const FOLDED = new Map<string, string>([
@@ -117,6 +117,30 @@ describe('redirects', () => {
     }
     expect(REDIRECTS.length).toBeGreaterThan(0);
   });
+
+  it('a parameterised redirect lands on a registered route once its params are filled', () => {
+    // Substitute sample values so both ends are concrete paths: the source
+    // must match no route (it is retired), the target must match one.
+    const fill = (pattern: string) => pattern.replace(/:gsid/g, '150').replace(/:date/g, '2026-08-27');
+    for (const r of PARAM_REDIRECTS) {
+      expect(matchesRegisteredRoute(fill(r.to)), `${r.from} -> ${r.to} points at nothing`).toBe(true);
+      expect(matchesRegisteredRoute(fill(r.from)), `${r.from} is both a route and a redirect`).toBe(false);
+      // The target keeps every param the source captured — otherwise
+      // generatePath throws at runtime for the visitor, not in a test.
+      const params = [...r.from.matchAll(/:([a-z]+)/g)].map((m) => m[1]);
+      for (const name of params) expect(r.to.includes(`:${name}`), `${r.to} drops :${name}`).toBe(true);
+    }
+    expect(PARAM_REDIRECTS.length).toBeGreaterThan(0);
+  });
+
+  it('the legacy story hashes land on the session page story tab', () => {
+    expect(hashToPath('#/story/session/154')).toBe('/session-detail/154/story');
+    expect(hashToPath('#/story/date/2026-08-27')).toBe('/session-detail/date/2026-08-27/story');
+    expect(hashToPath('#/story')).toBe('/sessions');
+    // The page's own tab list is the grammar: a rounds link keeps its tab.
+    expect(hashToPath('#/session-detail/154/rounds')).toBe('/session-detail/154/rounds');
+    expect(SESSION_DETAIL_TABS).toContain('rounds');
+  });
 });
 
 describe('routes and the shell agree on what is a stats page', () => {
@@ -197,6 +221,17 @@ describe('the shell, the phases and the sweep agree on what is built', () => {
     const source = readFileSync(join(appDir, '..', '..', 'e2e', 'app-routes.spec.ts'), 'utf8');
     expect(source, 'the sweep grew a hand threshold again').not.toMatch(/BUILT_THROUGH_PHASE/);
     expect(source.includes('route.built'), 'the sweep no longer reads route.built').toBe(true);
+  });
+
+  it('the session-tabs sweep spells out the same tab grammar as routes.ts', () => {
+    // e2e/session-tabs.spec.ts cannot import routes.ts (JSON import
+    // attribute), so it carries its own copy of SESSION_DETAIL_TABS; a tab
+    // added here and not there is a tab the sweep never visits.
+    const source = readFileSync(join(appDir, '..', '..', 'e2e', 'session-tabs.spec.ts'), 'utf8');
+    const m = source.match(/const SESSION_DETAIL_TABS = \[([^\]]*)\]/);
+    expect(m, 'the sweep lost its tab list').not.toBeNull();
+    const listed = [...(m as RegExpMatchArray)[1].matchAll(/'([a-z]+)'/g)].map((x) => x[1]);
+    expect(listed).toEqual([...SESSION_DETAIL_TABS]);
   });
 
   it('the checks can fail', () => {

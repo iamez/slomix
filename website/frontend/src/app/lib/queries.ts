@@ -1648,6 +1648,26 @@ export function useProxTradesPlayerStats(guid: string | null, rangeDays: number)
   });
 }
 
+/** The same trade table scoped to ONE session date — the session page's
+ *  teamplay tab (stats 2.0 R4). The endpoint has no gaming_session_id: it
+ *  is date-scoped, and when session_date is given the where-clause drops
+ *  the range_days window entirely (proximity_helpers.py:286-293), so a
+ *  January session is reachable without a 3650-day range. A session that
+ *  crosses midnight has two dates and this call sees the first — the tab
+ *  says so. */
+export function useProxTradesPlayerStatsForSession(sessionDate: string | null) {
+  const date = sessionDate ?? '';
+  return useQuery({
+    queryKey: ['prox-trades-player-stats-session', date],
+    enabled: date !== '',
+    queryFn: () =>
+      apiGet('/api/proximity/trades/player-stats', {
+        query: { session_date: date },
+      }) as Promise<ProxTradesPlayerStats>,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useProxScoresFormula() {
   return useQuery({
     queryKey: ['prox-scores-formula'],
