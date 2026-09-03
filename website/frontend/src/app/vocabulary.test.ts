@@ -86,7 +86,7 @@ describe('design vocabulary', () => {
     // use the component. A ratchet that leaves headroom for work already in
     // flight is an allowance nobody is forced to spend down, which is the
     // failure mode #823 named.
-    const BUDGET = 43;
+    const BUDGET = 41;
 
     let count = 0;
     const perFile = new Map<string, number>();

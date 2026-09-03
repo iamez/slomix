@@ -23,6 +23,9 @@ import basics from './__fixtures__/api_stats_session_gaming_session_id_basics.js
 import awards from './__fixtures__/api_stats_session_gaming_session_id_awards.json';
 import basics80 from './__fixtures__/api_stats_session_gaming_session_id_basics_80.json';
 import awards80 from './__fixtures__/api_stats_session_gaming_session_id_awards_80.json';
+import synergy from './__fixtures__/api_storytelling_synergy.json';
+import synergy80 from './__fixtures__/api_storytelling_synergy_80.json';
+import trades154 from './__fixtures__/api_proximity_trades_player_stats_session_154.json';
 import type { SessionAwards, SessionBasics } from '../lib/types';
 
 const basicsFull = basics satisfies SessionBasics;
@@ -41,6 +44,9 @@ const BODIES: [string, unknown][] = [
   ['/basics', basicsFull],
   ['/awards', awardsFull],
   ['/api/sessions', sessions],
+  // R4 tabs: synergy is session-keyed, the trade table date-keyed (154 = 2026-08-27).
+  ['/storytelling/synergy', synergy],
+  ['/proximity/trades/player-stats', trades154],
 ];
 
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
@@ -226,14 +232,18 @@ describe('SessionDetail', () => {
     await openMore();
     await waitFor(() => expect(screen.getByText(/11 of 12 count toward totals/)).toBeInTheDocument());
     // Shown, not hidden: a player who played it has to be able to find it.
-    expect(screen.getByText(/cancelled · shown, not summed/)).toBeInTheDocument();
+    // RoundsTable (the retired /rounds page's table, now this tab) marks it
+    // with its status and keeps the row.
+    expect(screen.getByText(/cancelled · not counted/)).toBeInTheDocument();
     expect(screen.getAllByText(/^R[12]$/).length).toBe((rounds as { rounds: unknown[] }).rounds.length);
+    // The two views of the same data — by round, one player — are here too.
+    expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('shows the per-player totals on their own tab', async () => {
     renderPage(fixtureFetch, '/session-detail/154/players');
     await openMore();
-    await waitFor(() => expect(screen.getByText(/sorted by damage/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/sorted by dpm/)).toBeInTheDocument());
     const first = (detail as { players: { player_name: string }[] }).players[0];
     expect(screen.getAllByText(first.player_name).length).toBeGreaterThan(0);
   });
@@ -502,5 +512,106 @@ describe('SessionDetail — stats 2.0 summary', () => {
     renderPage(withOverride('/basics', () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
     await waitFor(() => expect(screen.getByText(/the basics: unavailable/)).toBeInTheDocument());
     await waitFor(() => expect(screen.getByText('Damage Dealer')).toBeInTheDocument());
+  });
+});
+
+describe('SessionDetail — stats 2.0 R4 tabs', () => {
+  it('the players tab is the legacy 22-column table on the one DataTable, definitions on every header', async () => {
+    const { container } = renderPage(fixtureFetch, '/session-detail/154/players');
+    const table = await waitFor(() => {
+      const el = container.querySelector('[data-parity="session.players"]');
+      expect(el).toBeTruthy();
+      return el as HTMLElement;
+    });
+    await waitFor(() => expect(screen.getByText(/sorted by dpm/)).toBeInTheDocument());
+    // 21 data columns; the expander rides in the first cell (legacy's 22nd).
+    expect(table.querySelectorAll('.row')[0].children.length).toBe(21);
+    // The definitions are the writer's, not the legacy tooltips'.
+    expect(screen.getByRole('button', { name: /^uk$|^uk ▾|^uk ▴/ })).toHaveAttribute('title', expect.stringMatching(/^useful kills — the victim had at least half the spawn cycle/));
+    expect(screen.getByRole('button', { name: /^fsk/ })).toHaveAttribute('title', expect.stringMatching(/health > 0/));
+    expect(screen.getByRole('button', { name: /^alive %/ })).toHaveAttribute('title', expect.stringMatching(/^Alive%: time not dead/));
+    expect(screen.getByRole('button', { name: /^hs %/ })).toHaveAttribute('title', expect.stringMatching(/never headshot kills/));
+    // "Lua Played%" printed a duplicate of Played% as a second measurement; it is not drawn.
+    expect(screen.queryByRole('button', { name: /lua/i })).toBeNull();
+    // Sorted by dpm: the top row is the fixture's highest dpm.
+    const top = [...(detail as { players: { player_name: string; dpm: number }[] }).players].sort((a, b) => b.dpm - a.dpm)[0];
+    const firstRow = table.querySelectorAll('.rows > div')[0];
+    expect(firstRow.textContent).toContain(top.player_name);
+    expect(screen.getByRole('button', { name: `weapons for ${top.player_name}` })).toBeInTheDocument();
+    expect(table.textContent).not.toMatch(/undefined|NaN/);
+  });
+
+  it('the rounds tab keeps the two views — by round, one player — with the roster in the select', async () => {
+    renderPage(fixtureFetch, '/session-detail/154/rounds');
+    await waitFor(() => expect(screen.getByText(/12 of 12 count toward totals|11 of 12 count toward totals/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'one player' }));
+    // Typed through the query's generic, not a cast the html-scanner reads as raw markup.
+    const options = screen.getByLabelText<HTMLSelectElement>('player').options;
+    expect(options.length).toBeGreaterThan(1);
+    expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('the teamplay tab draws the five axes per group as bars and the trade table for the date', async () => {
+    const { container } = renderPage(fixtureFetch, '/session-detail/154/teamplay');
+    await waitFor(() => expect(container.querySelector('[data-parity="session.teamplay.synergy"]')).toBeTruthy());
+    const a = (synergy as { groups: { group_a: { crossfire: number; players: string[] } } }).groups.group_a;
+    // A bar per axis, its value in the accessible name — a bar is not a number.
+    await waitFor(() => expect(screen.getAllByRole('img', { name: `crossfire rate ${a.crossfire.toFixed(0)}` }).length).toBeGreaterThan(0));
+    expect(screen.getAllByRole('img', { name: /^medic bond \d+$/ }).length).toBe(2);
+    // The group label and the trade table both name the player — at least
+    // once each. A substring match, not a RegExp built from data (the
+    // scanners flag a non-literal RegExp, and a name with a dot is one).
+    expect(screen.getAllByText(a.players[0], { exact: false }).length).toBeGreaterThan(0);
+    // The trade table, scoped to the session's date and saying so.
+    await waitFor(() => expect(container.querySelector('[data-parity="session.teamplay.trades"] [role="region"]')).toBeTruthy());
+    expect(screen.getByRole('button', { name: /^rate/ })).toHaveAttribute('title', expect.stringMatching(/success ÷ opportunities/));
+    expect(screen.getByText(/scoped to 2026-08-27/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/undefined|NaN/);
+  });
+
+  it('a no_data synergy night (groups: {}) and a prototype trade tracker say so instead of drawing zeros', async () => {
+    const fetchImpl = (input: RequestInfo | URL) => {
+      const u = String(input);
+      if (u.includes('/storytelling/synergy')) return json(synergy80);
+      if (u.includes('/proximity/trades/player-stats')) return json({ status: 'prototype', ready: false, message: 'Proximity pipeline not connected.', range_days: 30, generated_at: null, scope: {}, players: [] });
+      return fixtureFetch(input);
+    };
+    const { container } = renderPage(fetchImpl, '/session-detail/154/teamplay');
+    await waitFor(() => expect(screen.getByText(/no synergy rows for this session/)).toBeInTheDocument());
+    expect(screen.queryAllByRole('img').length).toBe(0);
+    await waitFor(() => expect(screen.getByText('Proximity pipeline not connected.')).toBeInTheDocument());
+    expect(container.textContent).not.toMatch(/undefined|NaN/);
+  });
+
+  it('a partial_data synergy answer reads as insufficient data, not as a measured zero', async () => {
+    const partial = { status: 'partial_data', reason: 'no_r1_data', groups: {} };
+    renderPage(withOverride('/storytelling/synergy', () => json(partial)), '/session-detail/154/teamplay');
+    await waitFor(() => expect(screen.getByText(/insufficient data — no R1 rows/)).toBeInTheDocument());
+    expect(screen.queryAllByRole('img').length).toBe(0);
+  });
+
+  it('an ok status with no groups (a shape the backend does not send today) is said, not drawn', async () => {
+    // Synthetic on purpose: synergy.py answers groups:{} only under
+    // no_data/partial_data. The guard exists for the day a status slips
+    // through with the groups missing — and a guard nobody can see fail
+    // is not a guard (the control-that-must-fail rule).
+    const okNoGroups = { status: 'ok', groups: {}, weights: {}, defaulted_players_count: 0 };
+    renderPage(withOverride('/storytelling/synergy', () => json(okNoGroups)), '/session-detail/154/teamplay');
+    await waitFor(() => expect(screen.getByText(/no player groups could be built/)).toBeInTheDocument());
+    expect(screen.queryAllByRole('img').length).toBe(0);
+  });
+
+  it('the story tab mounts the session story and folds a no-rounds night into one sentence', async () => {
+    const fetchImpl = (input: RequestInfo | URL) => {
+      const u = String(input);
+      if (u.includes('/storytelling/narrative')) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'no accepted rounds' }) } as Response);
+      // Every other story endpoint is left to the corpus stub, which rejects
+      // what it does not hold: each panel goes unavailable, none crashes, and
+      // the fold replaces them all once the narrative's 404 lands.
+      return fixtureFetch(input);
+    };
+    const { container } = renderPage(fetchImpl, '/session-detail/154/story');
+    await waitFor(() => expect(container.querySelector('[data-parity="session.story"]')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText(/no accepted rounds, so there is no story to tell/)).toBeInTheDocument());
   });
 });

@@ -3,7 +3,11 @@ import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { DataTable, type DataColumn } from '../components/DataTable';
+import { RoundsTab, roundsReason } from '../components/RoundsTab';
+import { TeamplayTab } from '../components/TeamplayTab';
+import { SessionStory } from './Story';
 import { mapImageFor, mapLabel } from '../lib/maps';
+import { SESSION_DETAIL_TABS, type SessionTab } from '../routes';
 import { ApiError } from '../lib/api';
 import {
   useSessionAwards, useSessionBasics, useSessionDetail, useSessionGoodNight, useSessionLeaderboard, useSessionMvp,
@@ -13,7 +17,7 @@ import {
 import type {
   SessionAwards, SessionBasics, SessionBasicsPlayer, SessionScoringMap,
   SessionDetail as SessionDetailData, SessionGoodNight, SessionPlayerTotals,
-  SessionRound, SessionScoring, SessionTeamMatrix, SessionVerdicts,
+  SessionScoring, SessionTeamMatrix, SessionVerdicts,
 } from '../lib/types';
 
 /**
@@ -35,13 +39,15 @@ import type {
  * than by table.
  */
 
-type TabKey = 'summary' | 'players' | 'rounds';
+/** The tab grammar lives in routes.ts (one copy — hashToPath validates
+ *  legacy links against the same list). Labels are the keys. */
+type TabKey = SessionTab;
 
-const TABS: readonly { key: TabKey; label: string }[] = [
-  { key: 'summary', label: 'summary' },
-  { key: 'players', label: 'players' },
-  { key: 'rounds', label: 'rounds' },
-];
+const TABS: readonly { key: TabKey; label: string }[] = SESSION_DETAIL_TABS.map((key) => ({ key, label: key }));
+
+function isTab(value: string | undefined): value is TabKey {
+  return value != null && (SESSION_DETAIL_TABS as readonly string[]).includes(value);
+}
 
 function clock(seconds: number | null): string {
   if (seconds == null) return '—';
@@ -331,17 +337,36 @@ function TopDpm({ sessionId }: { sessionId: number }) {
  * injection sink — and the accessor also lets the compiler check that the
  * field exists, which a `keyof` string only pretends to do once the value
  * comes back as a union of everything. */
-const PLAYER_COLUMNS: readonly {
-  label: string; read: (p: SessionPlayerTotals) => number; digits?: number;
-}[] = [
-  { label: 'k', read: (p) => p.kills },
-  { label: 'd', read: (p) => p.deaths },
-  { label: 'k/d', read: (p) => p.kd, digits: 2 },
-  { label: 'dpm', read: (p) => p.dpm, digits: 0 },
-  { label: 'dmg', read: (p) => p.damage_given },
-  { label: 'hs', read: (p) => p.headshot_kills },
-  { label: 'rev', read: (p) => p.revives_given },
-  { label: 'acc', read: (p) => p.accuracy, digits: 1 },
+const PLAYERS_COLUMNS: readonly DataColumn<SessionPlayerTotals>[] = [
+  { key: 'player', label: 'player', align: 'left', width: 150, title: 'name · team colour when the basics attributed teams',
+    format: (p) => <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'inherit', textDecoration: 'none' }}>{p.player_name}</Link>,
+    sortValue: (p) => p.player_name.toLowerCase() },
+  { key: 'k', label: 'k', title: 'kills', width: 42, sortValue: (p) => p.kills },
+  { key: 'd', label: 'd', title: 'deaths', width: 42, sortValue: (p) => p.deaths },
+  { key: 'kd', label: 'k/d', title: 'kills ÷ max(1, deaths)', width: 48, sortValue: (p) => p.kd, format: (p) => p.kd.toFixed(2) },
+  { key: 'dmg_g', label: 'dmg g', title: 'damage given', width: 62, sortValue: (p) => p.damage_given, format: (p) => figure(p.damage_given) },
+  { key: 'dmg_r', label: 'dmg r', title: 'damage received', width: 62, sortValue: (p) => p.damage_received, format: (p) => figure(p.damage_received) },
+  { key: 'dpm', label: 'dpm', title: 'damage given × 60 ÷ time played', width: 52, sortValue: (p) => p.dpm, format: (p) => p.dpm.toFixed(0) },
+  { key: 'alive', label: 'alive %', title: 'Alive%: time not dead during the time the player actually played — engine figure when the stats file carried one, else 100 − dead ÷ played', width: 62,
+    sortValue: (p) => p.alive_pct, format: (p) => pct(p.alive_pct) },
+  { key: 'played', label: 'played %', title: 'Played%: share of the session duration the player was present', width: 66,
+    sortValue: (p) => p.played_pct, format: (p) => pct(p.played_pct) },
+  { key: 'dead', label: 'dead min', title: 'minutes dead, capped at minutes played per round', width: 62, sortValue: (p) => p.time_dead_minutes, format: (p) => p.time_dead_minutes.toFixed(1) },
+  { key: 'denied', label: 'denied', title: 'playtime denied to opponents, m:ss (raw seconds; the 2025 backfill rows are suspect — the basics tab blanks those)', width: 58,
+    sortValue: (p) => p.denied_playtime, format: (p) => clock(p.denied_playtime) },
+  { key: 'eff', label: 'eff', title: 'kills ÷ (kills + deaths) × 100', width: 52, sortValue: (p) => p.efficiency, format: (p) => pct(p.efficiency) },
+  { key: 'hs', label: 'hs %', title: 'head HITS ÷ hits over light weapons — never headshot kills ÷ kills', width: 56,
+    sortValue: (p) => p.headshot_pct, format: (p) => pct(p.headshot_pct) },
+  { key: 'acc', label: 'acc', title: 'hits ÷ shots over light weapons', width: 56, sortValue: (p) => p.accuracy, format: (p) => pct(p.accuracy) },
+  { key: 'gibs', label: 'gibs', title: 'gibs', width: 44, sortValue: (p) => p.gibs },
+  { key: 'uk', label: 'uk', title: 'useful kills — the victim had at least half the spawn cycle still ahead (their next wave ≥ limbo time ÷ 2; c0rnp0rn8.lua topshots[15]). The legacy tooltip said “kills on armed enemies”; the writer does not', width: 42,
+    sortValue: (p) => p.useful_kills },
+  { key: 'sk', label: 'sk', title: 'Self Kills: /kill command or own explosives', width: 42, sortValue: (p) => p.self_kills },
+  { key: 'fsk', label: 'fsk', title: 'full self kills — /kill at health > 0 with the full respawn ahead (the Lua’s −2 s window; threshold under owner review). The legacy tooltip said “self-inflicted gibs”; the writer does not', width: 42,
+    sortValue: (p) => p.full_selfkills },
+  { key: 'rev', label: 'rev', title: 'revives given', width: 44, sortValue: (p) => p.revives_given },
+  { key: 'revd', label: "rev'd", title: 'times revived', width: 46, sortValue: (p) => p.times_revived },
+  { key: 'assists', label: 'assists', title: 'kill assists — the legacy page normalised this field and never drew it', width: 56, sortValue: (p) => p.kill_assists },
 ];
 
 /** One player's weapons within THIS session — the session-scoped call
@@ -376,100 +401,42 @@ function PlayerWeaponsRow({ sessionId, guid }: { sessionId: number; guid: string
   );
 }
 
-function PlayerTable({ players, sessionId }: { players: SessionPlayerTotals[]; sessionId: number }) {
-  const [openGuid, setOpenGuid] = useState<string | null>(null);
-  const sorted = useMemo(
-    () => [...players].sort((a, b) => b.damage_given - a.damage_given),
-    [players],
+/** The Players tab — the legacy 22-column table (docs/design/18 §C plast 2)
+ * on the one DataTable, every header carrying its definition. Two legacy
+ * columns are not carried: "Lua Played%" printed a duplicate of Played%
+ * (sessions_router.py:2298) as if it were a second measurement, and the
+ * bare headshot-kills count lived under the same `hs` label as head-hit
+ * percentage. Kill assists, which legacy normalised and never drew, are.
+ * Team colour comes from the basics payload when it attributed teams. */
+function PlayersTab({ players, sessionId, teams }: { players: SessionPlayerTotals[]; sessionId: number; teams: ReadonlyMap<string, string> }) {
+  const columns = useMemo<readonly DataColumn<SessionPlayerTotals>[]>(
+    () => PLAYERS_COLUMNS.map((c) => (c.key === 'player' ? { ...c, color: (p) => teams.get(p.player_guid.slice(0, 8).toUpperCase()) } : c)),
+    [teams],
   );
+  const drifted = players.filter((p) => p.alive_pct_drift).length;
   return (
     <Stack gap={3} parity="session.players">
       <SectionHead
         label="players"
-        aside={<span className="lbl">{PLAYER_COLUMNS.map((c) => c.label).join(' · ')}</span>}
+        aside={<span className="lbl">{figure(players.length)} players · every header carries its definition</span>}
       />
-      <div style={{ overflowX: 'auto' }}>
-        <Stack gap={1} className="rows" style={{ minWidth: 640 }}>
-          {sorted.map((p) => (
-            <div key={p.player_guid}>
-              <Cluster gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
-                <Cluster gap={2} align="baseline" style={{ minWidth: 140 }}>
-                  <Link to={`/profile/${p.player_guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)', textDecoration: 'none', fontSize: 'var(--fs-row)' }}>
-                    {p.player_name}
-                  </Link>
-                  <button
-                    type="button"
-                    onClick={() => setOpenGuid(openGuid === p.player_guid ? null : p.player_guid)}
-                    className="m"
-                    style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-400)', fontSize: 'var(--fs-caption)', padding: 0 }}
-                  >
-                    {openGuid === p.player_guid ? 'weapons ▾' : 'weapons ▸'}
-                  </button>
-                </Cluster>
-                <Cluster gap={3} align="baseline">
-                  {PLAYER_COLUMNS.map((col) => {
-                    const value = col.read(p);
-                    return (
-                      <span key={col.label} className="m" style={{ fontSize: 'var(--fs-small)', width: 62, textAlign: 'right' }}>
-                        {col.digits == null ? figure(value) : value.toFixed(col.digits)}
-                      </span>
-                    );
-                  })}
-                </Cluster>
-              </Cluster>
-              {openGuid === p.player_guid && <PlayerWeaponsRow sessionId={sessionId} guid={p.player_guid} />}
-            </div>
-          ))}
-        </Stack>
-      </div>
+      <DataTable
+        columns={columns}
+        rows={players}
+        rowKey={(p) => p.player_guid}
+        defaultSort={{ key: 'dpm', dir: 'desc' }}
+        expandLabel="weapons"
+        expandName={(p) => p.player_name}
+        renderExpanded={(p) => <PlayerWeaponsRow sessionId={sessionId} guid={p.player_guid} />}
+        minWidth={1400}
+        label="players"
+      />
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
-        totals over the session's counted rounds · sorted by damage
+        totals over the session's counted rounds · sorted by dpm
       </Lbl>
-    </Stack>
-  );
-}
-
-/** Every round the session recorded, including the ones that do not count.
- *
- * The endpoint deliberately does not filter them (it marks them instead),
- * and this page keeps that decision: a player who played a cancelled round
- * has to be able to find it, and finding it missing with no explanation is
- * the bug that endpoint was built to end. */
-function RoundList({ rounds, counted, total }: { rounds: SessionRound[]; counted: number; total: number }) {
-  return (
-    <Stack gap={3} parity="session.rounds">
-      <SectionHead
-        label="rounds"
-        aside={
-          <span className="lbl">
-            {counted} of {total} count toward totals
-          </span>
-        }
-      />
-      <Stack gap={1} className="rows">
-        {rounds.map((r) => (
-          <Cluster key={r.round_id} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
-            <Cluster gap={2} align="baseline" style={{ minWidth: 0 }}>
-              <span className="m lbl" style={{ width: 28, textAlign: 'right' }}>R{r.round_number}</span>
-              <span style={{ fontSize: 'var(--fs-row)' }}>{r.map_name}</span>
-              {!r.counts_toward_totals && (
-                <span className="lbl" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-neg)' }}>
-                  {r.round_status ?? 'not counted'} · shown, not summed
-                </span>
-              )}
-            </Cluster>
-            <Cluster gap={3} align="baseline">
-              <span className="m" style={{ fontSize: 'var(--fs-small)' }}>{clock(r.duration_seconds)}</span>
-              <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 120, textAlign: 'right' }}>
-                {r.players.length} players
-              </span>
-              <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 90, textAlign: 'right' }}>
-                {r.end_reason ?? '—'}
-              </span>
-            </Cluster>
-          </Cluster>
-        ))}
-      </Stack>
+      {drifted > 0 && (
+        <Meta>{figure(drifted)} player(s) carry an alive % where the engine and the computed figure disagree by more than 2 pp — the engine figure is shown</Meta>
+      )}
     </Stack>
   );
 }
@@ -782,9 +749,21 @@ export function SessionDetail() {
     ? explicit
     : dated.length === 1 ? dated[0].session_id : null;
 
-  const current: TabKey = TABS.some((t) => t.key === tab) ? (tab as TabKey) : 'summary';
+  const current: TabKey = isTab(tab) ? tab : 'summary';
   const detail = useSessionDetail(sessionId);
   const rounds = useSessionRounds(sessionId);
+  // Shared with the Summary's own call (same key, one fetch): the basics
+  // payload is where team attribution lives, and the players tab colours
+  // names by it when it is there.
+  const basics = useSessionBasics(sessionId);
+  const teams = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const p of basics.data?.players ?? []) {
+      const colour = p.team ? TEAM_COLOR.get(p.team) : undefined;
+      if (colour) m.set(p.guid.slice(0, 8).toUpperCase(), colour);
+    }
+    return m;
+  }, [basics.data]);
 
   const goTab = (next: TabKey) => {
     if (sessionId == null) return;
@@ -867,20 +846,24 @@ export function SessionDetail() {
           )}
           {detail.data && current === 'players' && (
             <div style={{ paddingTop: 'var(--space-5)' }}>
-              <PlayerTable players={detail.data.players} sessionId={sessionId} />
+              <PlayersTab players={detail.data.players} sessionId={sessionId} teams={teams} />
             </div>
           )}
+          {/* The rounds tab does not wait for /detail: a session whose
+            * totals do not exist (every round orphan_r2) still played rounds. */}
           {current === 'rounds' && (
             <div style={{ paddingTop: 'var(--space-5)' }}>
-              {rounds.isPending && <Pending label="rounds" />}
-              {rounds.isError && <Unavailable what="rounds" />}
-              {rounds.data && (
-                <RoundList
-                  rounds={rounds.data.rounds}
-                  counted={rounds.data.counted_rounds}
-                  total={rounds.data.total_rounds}
-                />
-              )}
+              <RoundsTab rounds={rounds.isError ? undefined : rounds.data} reason={roundsReason(rounds)} />
+            </div>
+          )}
+          {detail.data && current === 'teamplay' && (
+            <div style={{ paddingTop: 'var(--space-5)' }}>
+              <TeamplayTab gsid={sessionId} sessionDate={detail.data.date} />
+            </div>
+          )}
+          {current === 'story' && (
+            <div data-parity="session.story">
+              <SessionStory key={sessionId} gsid={sessionId} />
             </div>
           )}
         </>
