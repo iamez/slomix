@@ -48,6 +48,12 @@ deploy NI naloga.
 4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
+6. **Raziskano 3. 9., čaka na svojo vrsto (po Stats 2.0 R4):**
+   - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
+     register datasetov + `user_page_layouts` + column picker/sekcije/home
+     v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
+   - `docs/design/20` (lokalno) — **match moments: escorting objective +
+     ET-specifični detektorji** (Lua zajem → importer → detektor → Story).
 
 | ratchet | stanje |
 |---|---|
@@ -156,6 +162,9 @@ zmaga v 83,2 %, pri hudih (n=41) v 97,6 %.
 
 ## Odprte ownerjeve odločitve
 
+- doc 19 (per-user pogled): zajem globalno ali per-server; zgodovina ob
+  izklopu (priporočilo: nič retroaktivno); admin UI ali config (config v1);
+  anonimni localStorage (odloži).
 - puranov cron `0 20 * * * kill etlded` (vrže igralce sredi igre) — pogojni
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
