@@ -7,6 +7,29 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-03, 12:15) SKOK 3 (ownerjeva ideja, `screenshots/vision.jpg`,
+  `vision1.jpg`): **centralni runtime / »event brain«** — en Python proces na
+  Linux strežniku spremlja igralni strežnik in iz ENEGA toka dogodkov streže
+  website, Discord bot, statistiko in live prikaz (»Slomix runtime v2«; ChatGPT
+  dela vzporedni deep research z Redis Streams). Ownerjevo navodilo: ChatGPT-ju
+  NE verjeti, vse kot hipoteze, sam raziskati, nato plan mode z vprašanji →
+  `docs/design/21` (lokalno). IZVEDBA KASNEJE; Stats 2.0 ostaja prva naloga.
+- (Fable 5.1, 2026-09-03, 10:55) SKOK 2 (ownerjeva prošnja): raziskati
+  **match moment detektorje** — obstoječih 11 (team wipe, multikill, kill
+  streak, carrier chain, focus survival, push success, trade chain, objective
+  secured/denied/run, multi-revive; vsak s per-kill razčlenitvijo) razširiti z
+  **escorting objective** (soigralec nosi flag/docs/obj; ali si ob trucku/tanku,
+  ko se premika A→B) in kar še ET/ETL slog igre ponudi; vir = etlegacy source
+  + Lua API dokumentacija → plan mode → zapis v docs; IZVEDBA KASNEJE.
+- (Fable 5.1, 2026-09-03, 10:45) SKOK (ownerjeva prošnja): raziskati idejo
+  **modularnih statsov s per-user pogledom** — vsak dataset/stat se lahko
+  vklopi/izklopi za ZAJEM in za PRIKAZ; prijavljen uporabnik si nastavi
+  filtre/privzeti pogled (home: le par stvari, stats 2.0: vse); spletna
+  raziskava (kako to delajo drugi, varnost, performance) → plan mode → zapis.
+  Ostal sem pri: R2 (#898) dobiva `useful_kills` (UK = useful, ownerjeva
+  odločitev); R3 (#899) čaka: stolpec `useless` + `uk`=useful, Codacy/Copilot
+  popravki (DataTable aria-label, MapStrip parjenje po imenu mape). Oba PR-ja
+  še čakata sestrski signal za merge (#886→#892→#893→#895).
 - (Fable 5.1, 2026-09-03) SKOK: owner prosi za nov dizajnerski načrt
   »stats 2.0 aka sessions/stats« → napisan `docs/design/18_STATS_2_0_SESSIONS.md`
   (lokalno), rezine R1–R5. Ostal sem pri: #896 (uploads r. 2) v merge ciklu;
@@ -21,12 +44,22 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., stats 2.0) **Legacy tooltip »Useful Kills: kills on armed enemies (excludes selfkills and teamkills)« je napačen** — pisec (`c0rnp0rn8.lua:679`, `topshots[15]`) šteje kill, pri katerem ima žrtev pred sabo ≥ polovico limbo časa. Nova stran pove resnico; legacy `website/js/session-detail.js:2484`, `matches.js:986`, `player-profile.js:1186` in bot `community_stats_parser.py:369` (`UK`) še nosijo staro besedilo → popraviti ob naslednjem dotiku legacy strani.
 - (3. 9., stats 2.0 — doc 18, lokalno) **FSK prag** (−2 s → /2) čaka ownerjevo
   odločitev; **TAB[8] `time_played_percent` je 0 v ~35 % vrstic vsak mesec**
   (stalna luknja, ne od aprila — vzrok neznan); **medpacki/ammo packi niso
   zajeti** (gibhub »Pillow Fort«); `sessions_router` ACC (lahka orožja) ≠
   `pcs.accuracy` (vsa orožja) — stran imenuje, katero; `endstats_aggregator`
   sešteva tudi K/D in accuracy čez runde (za sejni roll-up rabi `best`).
+- (3. 9., R3) `/stats/session/{id}/detail` vrže stran `warnings` iz
+  `build_session_scoring` (drugi element terke) → session glava ne more
+  pokazati »Lua header winner missing: used time fallback« (doc 12 vrstica 31
+  zahteva). `/basics` ali `/detail` naj ju vrne. `MapStrip` pari
+  `detail.matches` in `scoring.maps` po indeksu — ko se seznama razlikujeta
+  (map ni v scoringu), naj se pari po `match_id`.
+- (3. 9., R3) Playwright `SAMPLES_THIN` sessionId 151 → 80; 151 (0 štetih
+  rund) ostane pokrit v `SessionDetail.test.tsx` kratkih oblikah (mvp/verdicts/
+  good-night fixturi `api_session_151_*`), ne v preletu.
 - (3. 9., R2 korpus) **`denied_playtime` iz 2025 supastats backfilla je pokvarjen**:
   jan–maj 2025 ~50 s na uboj (max 18 880 s v rundi 107 s), od dec 2025 ~8 s;
   352/5 538 vrstic 2025 ima denied > 2× igranje, 2026 le 8. Ista doba kot

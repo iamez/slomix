@@ -1,14 +1,17 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { DataTable, type DataColumn } from '../components/DataTable';
+import { mapImageFor, mapLabel } from '../lib/maps';
 import { ApiError } from '../lib/api';
 import {
-  useSessionDetail, useSessionGoodNight, useSessionLeaderboard, useSessionMvp,
+  useSessionAwards, useSessionBasics, useSessionDetail, useSessionGoodNight, useSessionLeaderboard, useSessionMvp,
   useSessionPlayerWeapons, useSessionRounds,
   useSessionVerdicts, useSessions, useStoryBestLives,
 } from '../lib/queries';
 import type {
+  SessionAwards, SessionBasics, SessionBasicsPlayer, SessionScoringMap,
   SessionDetail as SessionDetailData, SessionGoodNight, SessionPlayerTotals,
   SessionRound, SessionScoring, SessionTeamMatrix, SessionVerdicts,
 } from '../lib/types';
@@ -544,22 +547,217 @@ function LivesOfTheNight({ sessionId }: { sessionId: number }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Stats 2.0 (docs/design/18 §C): the summary a player reads first.
+
+const TEAM_COLOR = new Map<string, string>([['a', 'var(--color-accent)'], ['b', 'var(--color-accent-warm)']]);
+
+function pct(v: number | null): string | null {
+  return v == null ? null : `${v.toFixed(1)} %`;
+}
+
+/** The basics columns — labels from the owner's list, definitions from the
+ *  backend model's own docstrings (SessionBasicsPlayer), on the header's
+ *  `title`. Accessors, not key strings (the PLAYER_COLUMNS rule). */
+const BASICS_COLUMNS: readonly DataColumn<SessionBasicsPlayer>[] = [
+  { key: 'player', label: 'player', align: 'left', width: 150, title: 'name · team colour: a accent, b warm',
+    format: (p) => <Link to={`/profile/${p.guid.slice(0, 8)}`} style={{ color: 'inherit', textDecoration: 'none' }}>{p.name}</Link>,
+    sortValue: (p) => p.name.toLowerCase(), color: (p) => (p.team ? TEAM_COLOR.get(p.team) : undefined) },
+  { key: 'tp', label: 'tp', title: 'time played — pcs.time_played_seconds over the counted rounds', width: 58,
+    sortValue: (p) => p.time_played_seconds, format: (p) => clock(p.time_played_seconds) },
+  { key: 'denied', label: 'denied %', title: 'playtime denied to opponents ÷ time played × 100 — null when nothing was played or the figure is suspect (denied > 2× played, the 2025 backfill)', width: 72,
+    sortValue: (p) => p.denied_pct, format: (p) => pct(p.denied_pct) },
+  { key: 'dpm', label: 'dpm', title: 'damage given × 60 ÷ time played, from the sums', width: 58,
+    sortValue: (p) => p.dpm, format: (p) => p.dpm.toFixed(0) },
+  { key: 'kis', label: 'kis', title: 'Kill Impact Score, summed over the kills the proximity tracker scored — null when the session has no KIS rows; information beside DPM, not a ranking of who is better', width: 62,
+    sortValue: (p) => p.kis_total, format: (p) => (p.kis_total == null ? null : p.kis_total.toFixed(1)) },
+  { key: 'kis_min', label: 'kis/min', title: 'KIS ÷ minutes played', width: 62,
+    sortValue: (p) => p.kis_per_min, format: (p) => (p.kis_per_min == null ? null : p.kis_per_min.toFixed(2)) },
+  { key: 'dmg', label: 'dmg', title: 'damage given', width: 66, sortValue: (p) => p.damage_given, format: (p) => figure(p.damage_given) },
+  { key: 'dmr', label: 'dmr', title: 'damage given ÷ max(1, damage received)', width: 52, sortValue: (p) => p.dmr, format: (p) => p.dmr.toFixed(2) },
+  { key: 'acc', label: 'acc', title: 'hits ÷ shots over light weapons (no grenades, syringe, dynamite, airstrike, artillery, satchel, landmine) — null when nothing was fired', width: 58,
+    sortValue: (p) => p.accuracy, format: (p) => pct(p.accuracy) },
+  { key: 'hs', label: 'hs %', title: 'head HITS ÷ hits over the same light weapons — never headshot kills ÷ kills', width: 58,
+    sortValue: (p) => p.headshot_pct, format: (p) => pct(p.headshot_pct) },
+  { key: 'gibs', label: 'gibs', title: 'gibs', width: 46, sortValue: (p) => p.gibs },
+  { key: 'uk', label: 'uk', title: 'useful kills — the victim had at least half the spawn cycle still ahead (their next wave ≥ limbo time ÷ 2; c0rnp0rn8.lua topshots[15]). The legacy tooltip said “kills on armed enemies”; the writer does not. useful + useless ≠ kills: the middle band is neither', width: 42, sortValue: (p) => p.useful_kills },
+  { key: 'useless', label: 'useless', title: 'useless kills — kills of an enemy whose next spawn wave was under 5 s away', width: 58, sortValue: (p) => p.useless_kills },
+  { key: 'sk', label: 'sk', title: 'self kills', width: 42, sortValue: (p) => p.self_kills },
+  { key: 'fsk', label: 'fsk', title: 'full self kills — /kill at health > 0 with the full respawn ahead (the Lua’s −2 s window; ~7 % of self kills, threshold under owner review)', width: 42,
+    sortValue: (p) => p.full_selfkills },
+  { key: 'rev', label: 'rev', title: 'revives given', width: 46, sortValue: (p) => p.revives_given },
+  { key: 'revd', label: "rev'd", title: 'times revived', width: 46, sortValue: (p) => p.times_revived },
+];
+
+function Basics({ basics, sessionId }: { basics: SessionBasics; sessionId: number }) {
+  const c = basics.coverage;
+  return (
+    <Stack gap={3} parity="session.basics">
+      <SectionHead
+        label="the basics"
+        aside={<span className="lbl">{figure(c.rounds_counted)} of {figure(c.rounds_total)} rounds count · sorted by dpm</span>}
+      />
+      <DataTable
+        columns={BASICS_COLUMNS}
+        rows={basics.players}
+        rowKey={(p) => p.guid}
+        defaultSort={{ key: 'dpm', dir: 'desc' }}
+        expandLabel="weapons"
+        expandName={(p) => p.name}
+        renderExpanded={(p) => <PlayerWeaponsRow sessionId={sessionId} guid={p.guid} />}
+        minWidth={1160}
+        label="the basics"
+      />
+      {!c.kis_covered && <Absent reason="KIS is not covered for this session — the proximity tracker scored no kill here, so the two kis columns say nothing, not zero" />}
+      {c.kis_covered && c.kis_kills < c.total_kills && (
+        <Meta>KIS covers {figure(c.kis_kills)} of {figure(c.total_kills)} kills — the rest were not tracked</Meta>
+      )}
+      {c.denied_suspect_players > 0 && (
+        <Absent reason={`${figure(c.denied_suspect_players)} player(s) carry a denied figure the definition cannot produce (more than twice their playtime — the 2025 backfill); their denied % is left blank`} />
+      )}
+      {!c.teams_attributed && <Meta>no team attribution for this evening — names are uncoloured</Meta>}
+    </Stack>
+  );
+}
+
+function Awards({ awards }: { awards: SessionAwards }) {
+  return (
+    <Stack gap={4} parity="session.awards">
+      <SectionHead
+        label="the awards"
+        aside={<span className="lbl">{awards.rounds_with_awards} of {awards.rounds_counted} rounds carried engine awards</span>}
+      />
+      {awards.rounds_with_awards === 0 && (
+        <Absent reason="the engine handed out no awards on this evening (they exist since June 2026) — only the three computed ones follow" />
+      )}
+      {awards.categories.map((cat) => (
+        <Stack key={cat.key} gap={1}>
+          <Lbl>{cat.label}</Lbl>
+          {cat.awards.map((a) => (
+            <div key={`${cat.key}:${a.engine_name}`} className="row" style={{ padding: 'var(--space-1) 0', fontSize: 'var(--fs-row)' }}>
+              <span title={a.engine_name}>
+                The <strong style={{ fontWeight: 600 }}>{a.nickname}</strong> award goes to{' '}
+                {a.guid ? <Link to={`/profile/${a.guid.slice(0, 8)}`} style={{ color: 'var(--color-text-100)' }}>{a.player}</Link> : a.player}
+                {a.sentence.slice(a.sentence.indexOf(' for '))}
+              </span>
+              {a.rounds_won > 1 && <> <Meta>· won in {figure(a.rounds_won)} rounds</Meta></>}
+            </div>
+          ))}
+        </Stack>
+      ))}
+    </Stack>
+  );
+}
+
+/** Layer 0: the maps as a strip — levelshot, the halves, the outcome. */
+function MapStrip({ detail }: { detail: SessionDetailData }) {
+  // A match carries only its map name and rounds; the scoring row carries a
+  // match_id the match does not. Pair the n-th match on a map with the n-th
+  // scoring row on that map — the same map played twice keeps its order, a
+  // map the scoring never mentioned gets a dash, never a neighbour's score.
+  const scoredByMap = new Map<string, SessionScoringMap[]>();
+  for (const m of detail.scoring.available ? detail.scoring.maps ?? [] : []) {
+    const list = scoredByMap.get(m.map);
+    if (list) list.push(m); else scoredByMap.set(m.map, [m]);
+  }
+  return (
+    <Stack gap={1} parity="session.maps" className="rows">
+      {detail.matches.map((match, i) => {
+        const scored = scoredByMap.get(match.map_name)?.shift();
+        const rounds = match.rounds;
+        return (
+          <div key={`${match.map_name}:${i}`} className="row" style={{ display: 'grid', gridTemplateColumns: '64px minmax(0,1fr) auto auto', columnGap: 'var(--space-4)', alignItems: 'center', padding: 'var(--space-2) 0' }}>
+            <img src={mapImageFor(match.map_name)} alt={`${mapLabel(match.map_name)} levelshot`} loading="lazy"
+              style={{ width: 56, height: 32, objectFit: 'cover', display: 'block', filter: 'grayscale(1) contrast(1.1) brightness(0.6)', background: 'var(--color-ink-800)' }} />
+            <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {mapLabel(match.map_name)}
+              {scored && !scored.counted && <> <span className="lbl">not counted</span></>}
+            </span>
+            <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
+              {rounds.map((r) => `R${r.round_number} ${clock(r.duration_seconds)}`).join(' · ')}
+            </span>
+            <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right' }}>
+              {scored ? `${scored.team_a_points} — ${scored.team_b_points}` : '—'}
+            </span>
+          </div>
+        );
+      })}
+    </Stack>
+  );
+}
+
+function More({ children, label = 'more' }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Stack gap={5} parity="session.more">
+      <button type="button" aria-expanded={open} onClick={() => { setOpen((o) => !o); }}
+        style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--color-accent)' }}>
+        {open ? `${label} ▾` : `${label} ▸`}
+      </button>
+      {open && children}
+    </Stack>
+  );
+}
+
 function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: number }) {
+  const basics = useSessionBasics(sessionId);
+  const awards = useSessionAwards(sessionId);
   const night = useSessionGoodNight(sessionId);
   const verdicts = useSessionVerdicts(sessionId);
+  const teams = basics.data?.teams ?? [];
+  const duration = detail.matches.flatMap((m) => m.rounds).reduce((acc, r) => acc + (r.duration_seconds ?? 0), 0);
   return (
     <Stack gap={7} style={{ paddingTop: 'var(--space-5)' }}>
-      <Scoreboard scoring={detail.scoring} />
-      <TeamTotals matrix={detail.team_matrix} />
-      <LivesOfTheNight sessionId={sessionId} />
+      <div data-parity="session.head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 'var(--space-6)', flexWrap: 'wrap' }}>
+        <Stack gap={2}>
+          <Link to="/sessions" className="lbl" style={{ textDecoration: 'none' }}>← sessions</Link>
+          <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)' }}>
+            #{sessionId} · {detail.round_count} rounds · {detail.matches.length} maps · {detail.player_count} players · {clock(duration)}
+          </span>
+        </Stack>
+        {teams.length === 2
+          ? <BigScore a={{ name: teams[0].name.toLowerCase(), score: teams[0].score }} b={{ name: teams[1].name.toLowerCase(), score: teams[1].score }} note="box · sides swap every map" />
+          : basics.data
+            ? <Lbl>score not attributed for this session</Lbl>
+            : basics.isPending ? <Pending label="score" /> : null}
+      </div>
+
+      <MapStrip detail={detail} />
+
+      <FigureRow
+        parity="session.figures"
+        figures={[
+          { value: figure(basics.data?.coverage.rounds_counted ?? detail.round_count), label: 'rounds counted' },
+          { value: figure(detail.matches.length), label: 'maps' },
+          { value: figure(detail.player_count), label: 'players' },
+          { value: clock(duration), label: 'played' },
+          { value: basics.data ? figure(basics.data.coverage.total_kills) : '—', label: 'kills' },
+          { value: basics.data ? (basics.data.coverage.kis_covered ? figure(basics.data.coverage.kis_kills) : '—') : '—', label: 'kills with KIS' },
+        ]}
+      />
+
+      {basics.isPending && <Pending label="the basics" />}
+      {basics.isError && <Unavailable what="the basics" />}
+      {basics.data && <Basics basics={basics.data} sessionId={sessionId} />}
+
+      {awards.isPending && <Pending label="the awards" />}
+      {awards.isError && <Unavailable what="the awards" />}
+      {awards.data && <Awards awards={awards.data} />}
+
       {night.isPending && <Pending label="night score" />}
       {night.isError && <Unavailable what="night score" />}
       {night.data && <GoodNight data={night.data} />}
-      {verdicts.isPending && <Pending label="form" />}
-      {verdicts.isError && <Unavailable what="form" />}
-      {verdicts.data && <Verdicts data={verdicts.data} />}
-      <TopDpm sessionId={sessionId} />
       <MvpVotes sessionId={sessionId} />
+
+      <More label="more about the night">
+        <Scoreboard scoring={detail.scoring} />
+        <TeamTotals matrix={detail.team_matrix} />
+        <LivesOfTheNight sessionId={sessionId} />
+        {verdicts.isPending && <Pending label="form" />}
+        {verdicts.isError && <Unavailable what="form" />}
+        {verdicts.data && <Verdicts data={verdicts.data} />}
+        <TopDpm sessionId={sessionId} />
+      </More>
     </Stack>
   );
 }

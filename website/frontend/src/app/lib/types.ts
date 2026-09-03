@@ -2066,6 +2066,97 @@ export interface SessionMvp {
 }
 
 // ---------------------------------------------------------------------------
+// Stats 2.0 (docs/design/18 §E) — the basics table and the evening's awards.
+// Names and nullability mirror the backend models EXACTLY: openapi carries
+// these schemas, so scripts/check_manual_types_against_openapi.py compares
+// every field (required = no `?`; nullable = `| null`).
+
+export interface SessionBasicsCoverage {
+  rounds_counted: number;
+  rounds_total: number;
+  total_kills: number;
+  /** Kills the Kill Impact Score has scored — the proximity-tracked subset. */
+  kis_kills: number;
+  /** False = no KIS row for the session; every kis_* cell is null then. */
+  kis_covered: boolean;
+  teams_attributed: boolean;
+  /** Players whose denied figure the definition cannot produce (denied >
+   *  2 × played — the 2025 backfill rows); their denied_pct is null. */
+  denied_suspect_players: number;
+}
+
+export interface SessionBasicsTeam {
+  key: string;
+  name: string;
+  score: number;
+}
+
+export interface SessionBasicsPlayer {
+  guid: string;
+  name: string;
+  /** 'a' | 'b' from the roster; null when unattributed. */
+  team: string | null;
+  time_played_seconds: number;
+  denied_playtime_seconds: number;
+  denied_pct: number | null;
+  dpm: number;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  dmr: number;
+  accuracy: number | null;
+  headshot_pct: number | null;
+  gibs: number;
+  /** pcs.most_useful_kills — the legacy "Useful Kills" column (UK = useful): kills whose
+   *  victim had ≥ half the spawn cycle ahead (c0rnp0rn8.lua topshots[15]). */
+  useful_kills: number;
+  useless_kills: number;
+  self_kills: number;
+  full_selfkills: number;
+  revives_given: number;
+  times_revived: number;
+  kis_total: number | null;
+  kis_per_min: number | null;
+  played_pct: number | null;
+  alive_pct: number | null;
+  alive_pct_drift: boolean;
+}
+
+export interface SessionBasics {
+  gaming_session_id: number;
+  date: string | null;
+  coverage: SessionBasicsCoverage;
+  teams: SessionBasicsTeam[];
+  players: SessionBasicsPlayer[];
+}
+
+export interface SessionAwardEntry {
+  engine_name: string;
+  nickname: string;
+  sentence: string;
+  player: string;
+  guid: string | null;
+  value: string;
+  value_numeric: number | null;
+  unit: string;
+  rounds_won: number;
+}
+
+export interface SessionAwardCategory {
+  key: string;
+  label: string;
+  awards: SessionAwardEntry[];
+}
+
+export interface SessionAwards {
+  gaming_session_id: number;
+  rounds_counted: number;
+  rounds_with_awards: number;
+  categories: SessionAwardCategory[];
+}
+
+// ---------------------------------------------------------------------------
 // The backwards-debt eight: paths legacy called that the app had not adopted.
 
 /** GET /api/stats/live-session — a UNION, not optional fields: the inactive

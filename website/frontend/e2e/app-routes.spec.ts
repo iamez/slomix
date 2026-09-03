@@ -74,14 +74,21 @@ const SAMPLES = new Map<string, string>([
  * position tracker never covered, and 2026-06-21 a date whose session is
  * likewise thin.
  */
+// 2026-09-03 (stats 2.0 R3): the session sample moved from 151 to 80.
+// Since #855's validity gate, 151 has ZERO counted rounds — /detail, /basics
+// and /awards all 404 — so a pass against it renders no basics table and no
+// awards block at all, the very blind spot the paragraph above names. 80
+// has counted rounds (8 of 15), no KIS, no team attribution and engine
+// awards on one round only: the sparse shapes the new panels must survive.
+// 151's short-form mvp/verdicts/good-night stay pinned in the unit test.
 const SAMPLES_THIN = new Map<string, string>([
   [':id?', '3C89435D'],
   [':guid', '3C89435D'],
   [':roundId', '11306'],
-  [':sessionId', '151'],
-  [':sessionDate', '2026-06-21'],
-  [':gsid', '151'],
-  [':date', '2026-06-21'],
+  [':sessionId', '80'],
+  [':sessionDate', '2026-01-27'],
+  [':gsid', '80'],
+  [':date', '2026-01-27'],
   [':section?', 'clips'],
   [':demoId', '7dc01a5727344cd8afece44a1cc572e6'],
   [':uploadId', 'de4f8d8628c148e5a8756a522aeb43b0'],

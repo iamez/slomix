@@ -48,6 +48,12 @@ deploy NI naloga.
 4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
+6. **Raziskano 3. 9., čaka na svojo vrsto (po Stats 2.0 R4):**
+   - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
+     register datasetov + `user_page_layouts` + column picker/sekcije/home
+     v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
+   - `docs/design/20` (lokalno) — **match moments: escorting objective +
+     ET-specifični detektorji** (Lua zajem → importer → detektor → Story).
 
 | ratchet | stanje |
 |---|---|
@@ -56,7 +62,7 @@ deploy NI naloga.
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R2 v delu)
+**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, R3 v delu)
 
 Owner (3. 9.): »Sessions« + »Sessions 2.0« → ENA stran; seznam po datumu in
 id-ju s thumbnailom; ob kliku najprej jedrnat summary (basics tabela +
@@ -68,8 +74,8 @@ hits/shots lahkih orožij.
 | rezina | obseg | stanje |
 |---|---|---|
 | R1 | en arhiv `/sessions` z levelshoti, `#id`, BOX, mape, »one half missing«; `/sessions2` redirect; podnav brez podvojitve | #897 merged |
-| R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, vrata `/detail` + brez botov, KIS null=not covered, pravila agregacije nagrad z vzdevki, korpusni tek `scripts/audit_session_basics.py`) | ta veja |
-| R3 | summary plast 1: `DataTable` basics (TP, denied %, DPM, KIS, KIS/min, DMG, DMR, ACC, HS %, GIBS, UK, SK, FSK, REV, REV'D) + awards | — |
+| R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, vrata `/detail` + brez botov, KIS null=not covered, pravila agregacije nagrad z vzdevki, korpusni tek `scripts/audit_session_basics.py`) | PR #898 |
+| R3 | summary: glava z BigScore + trak map z levelshoti + figure; `DataTable` (nov, doc 11) s 17 stolpci in tooltipi (`uk` = useful (legacy), `useless` svoj — owner 3. 9.); nagrade v stavkih; night score + MVP; ostalih 5 panelov za »more ▸«; Playwright thin = seja 80 | PR #899 (`e565ea30`), čaka #898 → sestrski signal |
 | R4 | zavihki Players 22 · Rounds (retire `/rounds`) · Teamplay · Story (retire `/story`) | — |
 | R5 | power user: vrstica igralca ▾, KIS details, povezave | — |
 
@@ -156,6 +162,9 @@ zmaga v 83,2 %, pri hudih (n=41) v 97,6 %.
 
 ## Odprte ownerjeve odločitve
 
+- doc 19 (per-user pogled): zajem globalno ali per-server; zgodovina ob
+  izklopu (priporočilo: nič retroaktivno); admin UI ali config (config v1);
+  anonimni localStorage (odloži).
 - puranov cron `0 20 * * * kill etlded` (vrže igralce sredi igre) — pogojni
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
