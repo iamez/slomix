@@ -2399,11 +2399,15 @@ async def _session_duration_seconds(db: DatabaseAdapter, round_rows: list, round
     measured duration first, the rounds mirror second, actual_time LAST
     (it is the stopwatch target, inflated on surrender rounds)."""
     placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
-    lua_rows = await db.fetch_all(
-        f"SELECT round_id, actual_duration_seconds FROM lua_round_teams WHERE round_id IN ({placeholders})",
-        tuple(round_ids),
-    )
-    lua_by_round = {lr[0]: lr[1] for lr in lua_rows}
+    lua_by_round: dict = {}
+    try:
+        lua_rows = await db.fetch_all(
+            f"SELECT round_id, actual_duration_seconds FROM lua_round_teams WHERE round_id IN ({placeholders})",
+            tuple(round_ids),
+        )
+        lua_by_round = {lr[0]: lr[1] for lr in lua_rows or []}
+    except Exception as e:  # noqa: BLE001 — a missing lua table is a fallback case, not a 500 (Copilot on #898)
+        logger.debug("lua_round_teams unavailable for duration: %s", e)
     total = 0
     for rr in round_rows:
         actual_time_seconds = None
@@ -2443,15 +2447,19 @@ async def _session_kis_by_guid(db: DatabaseAdapter, gaming_session_id: int) -> d
 
     dates = [_date.fromisoformat(d) for d in scope.dates]
     starts, maps, rnums = scope.round_key_arrays()
-    rows = await db.fetch_all(
-        f"""
-        SELECT killer_guid, SUM(total_impact), COUNT(*)
-        FROM storytelling_kill_impact
-        WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
-        GROUP BY killer_guid
-        """,
-        (dates, starts, maps, rnums),
-    )
+    try:
+        rows = await db.fetch_all(
+            f"""
+            SELECT killer_guid, SUM(total_impact), COUNT(*)
+            FROM storytelling_kill_impact
+            WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
+            GROUP BY killer_guid
+            """,
+            (dates, starts, maps, rnums),
+        )
+    except Exception as e:  # noqa: BLE001 — no KIS table is "not covered", not a 500
+        logger.debug("storytelling_kill_impact unavailable: %s", e)
+        return {}
     out: dict[str, tuple[float, int]] = {}
     for guid, impact, n in rows or []:
         key = str(guid or "").strip().upper()[:8]
@@ -2611,17 +2619,21 @@ async def get_session_awards(
         raise HTTPException(status_code=404, detail="Session not found")
     round_ids = [r[0] for r in round_rows]
     placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
-    award_rows = await db.fetch_all(
-        f"""
-        SELECT ra.award_name, ra.player_name, ra.player_guid, ra.award_value, ra.award_value_numeric, ra.round_id
-        FROM round_awards ra
-        WHERE ra.round_id IN ({placeholders})
-          AND (ra.player_guid IS NULL OR UPPER(ra.player_guid) NOT LIKE 'OMNIBOT%')
-          AND ra.player_name NOT LIKE '%[BOT]%'
-        ORDER BY ra.round_id, ra.id
-        """,
-        tuple(round_ids),
-    )
+    try:
+        award_rows = await db.fetch_all(
+            f"""
+            SELECT ra.award_name, ra.player_name, ra.player_guid, ra.award_value, ra.award_value_numeric, ra.round_id
+            FROM round_awards ra
+            WHERE ra.round_id IN ({placeholders})
+              AND (ra.player_guid IS NULL OR UPPER(ra.player_guid) NOT LIKE 'OMNIBOT%')
+              AND ra.player_name NOT LIKE '%[BOT]%'
+            ORDER BY ra.round_id, ra.id
+            """,
+            tuple(round_ids),
+        ) or []
+    except Exception as e:  # noqa: BLE001 — no awards table: the computed three still answer
+        logger.debug("round_awards unavailable: %s", e)
+        award_rows = []
     rounds_with_awards = len({
         r[5] for r in award_rows
         if not (str(r[2] or "").upper().startswith("OMNIBOT") or "[BOT]" in str(r[1] or ""))

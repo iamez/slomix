@@ -184,19 +184,26 @@ def sentence(nickname: str, player: str, phrase: str, value: str) -> str:
 class _Tally:
     player: str
     guid: str | None
-    figures: list[float]
-    texts: list[str]
+    #: (figure, text) per round won — kept as PAIRS so the text shown for a
+    #: max/min award is the one that carried the winning figure, even when
+    #: some rounds had text but no parsable number (Copilot on #898).
+    pairs: list[tuple[float | None, str | None]]
     rounds_won: int = 0
+
+    @property
+    def figures(self) -> list[float]:
+        return [f for f, _ in self.pairs if f is not None]
 
 
 def _combined(t: _Tally, mode: Mode) -> float | None:
-    if not t.figures:
+    figures = t.figures
+    if not figures:
         return None
     if mode == "sum":
-        return float(sum(t.figures))
+        return float(sum(figures))
     if mode == "max":
-        return float(max(t.figures))
-    return float(min(t.figures))
+        return float(max(figures))
+    return float(min(figures))
 
 
 def roll_up(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
@@ -209,12 +216,9 @@ def roll_up(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
         tallies = per_award.setdefault(award_name, {})
         t = tallies.get(key)
         if t is None:
-            t = tallies[key] = _Tally(player=player_name or "?", guid=(player_guid or None), figures=[], texts=[])
+            t = tallies[key] = _Tally(player=player_name or "?", guid=(player_guid or None), pairs=[])
         t.rounds_won += 1
-        if fig is not None:
-            t.figures.append(fig)
-        if value_text:
-            t.texts.append(value_text)
+        t.pairs.append((fig, value_text or None))
     out: list[dict[str, Any]] = []
     for award_name, tallies in per_award.items():
         rule = rule_for(award_name)
@@ -233,11 +237,8 @@ def roll_up(rows: list[tuple[Any, ...]]) -> list[dict[str, Any]]:
         # For max/min modes the text that matches the winning figure is the
         # one to show verbatim (Quickest multikill); for sums there is none.
         text = None
-        if best.texts and rule.mode != "sum":
-            for f, tx in zip(best.figures, best.texts, strict=False):
-                if value is not None and f == value:
-                    text = tx
-                    break
+        if rule.mode != "sum" and value is not None:
+            text = next((tx for f, tx in best.pairs if f == value and tx), None)
         out.append(
             {
                 "engine_name": award_name,

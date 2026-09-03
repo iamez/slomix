@@ -102,6 +102,17 @@ def test_quickest_multikill_keeps_the_engine_text_because_the_number_is_the_kill
     assert won["value"] == "4 kills in 1.10s" and won["unit"] == "kills"
 
 
+def test_a_textless_or_numberless_round_cannot_shift_the_winning_text():
+    # Round 1: text but no number (unparsable); round 2: the real best.
+    rows = [
+        ("Quickest multikill w/ light weapons", "alpha", "AAAAAAAA", "n/a", None),
+        ("Quickest multikill w/ light weapons", "alpha", "AAAAAAAA", "4 kills in 1.10s", 4.0),
+        ("Quickest multikill w/ light weapons", "alpha", "AAAAAAAA", "3 kills in 0.62s", 3.0),
+    ]
+    (won,) = roll_up(rows)
+    assert won["value"] == "4 kills in 1.10s" and won["rounds_won"] == 3
+
+
 def test_ties_break_on_rounds_won_then_name():
     rows = [
         ("Most revives", "bravo", "BBBBBBBB", "3", 3.0),
