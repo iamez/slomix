@@ -2325,6 +2325,9 @@ class SessionBasicsPlayer(BaseModel):
     #: null when nothing hit.
     headshot_pct: float | None
     gibs: int
+    #: pcs.most_useful_kills: kills on armed enemies — excludes selfkills and
+    #: teamkills (the legacy "Useful Kills" column; UK = useful, owner 2026-09-03).
+    useful_kills: int
     #: pcs.useless_kills: kills of an enemy whose next wave was < 5 s away.
     useless_kills: int
     self_kills: int
@@ -2573,6 +2576,7 @@ async def get_session_basics(
                 "accuracy": round(total_hits / total_shots * 100.0, 1) if total_shots > 0 else None,
                 "headshot_pct": round(weapon_headshots / total_hits * 100.0, 1) if total_hits > 0 else None,
                 "gibs": int(pr[10] or 0),
+                "useful_kills": int(pr[12] or 0),
                 "useless_kills": useless,
                 "self_kills": int(pr[11] or 0),
                 "full_selfkills": int(pr[13] or 0),

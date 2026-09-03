@@ -4797,6 +4797,10 @@
       "title": "Times Revived",
       "type": "integer"
      },
+     "useful_kills": {
+      "title": "Useful Kills",
+      "type": "integer"
+     },
      "useless_kills": {
       "title": "Useless Kills",
       "type": "integer"
@@ -4818,6 +4822,7 @@
      "accuracy",
      "headshot_pct",
      "gibs",
+     "useful_kills",
      "useless_kills",
      "self_kills",
      "full_selfkills",

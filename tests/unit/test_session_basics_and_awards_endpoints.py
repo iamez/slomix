@@ -119,7 +119,8 @@ async def test_basics_rows_bots_dropped_definitions_honoured():
     assert alpha["dpm"] == 600.0                  # 12000*60/1200
     assert alpha["dmr"] == 1.33                   # 12000 / 9000
     assert alpha["accuracy"] == 40.0 and alpha["headshot_pct"] == 20.0   # 200/500, 40/200
-    assert alpha["useless_kills"] == 7 and alpha["full_selfkills"] == 1
+    # UK means useful (the legacy column, owner 2026-09-03); useless is its own field.
+    assert alpha["useful_kills"] == 12 and alpha["useless_kills"] == 7 and alpha["full_selfkills"] == 1
     assert alpha["kis_total"] == 42.5 and alpha["kis_per_min"] == 2.12   # 42.5 / 20 min, round-half-even
     # played_pct = 1200 / (600 + 660) — the lua duration wins for round 12.
     assert alpha["played_pct"] == 95.2
