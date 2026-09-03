@@ -187,7 +187,7 @@ export function SessionsList() {
                 >
                   {firstMap
                     ? <img src={mapImageFor(firstMap)} alt={`${mapLabel(firstMap)} levelshot`} style={thumbStyle} loading="lazy" />
-                    : <span style={{ ...thumbStyle, display: 'block' }} aria-label="no map recorded" />}
+                    : <span role="img" style={{ ...thumbStyle, display: 'block' }} aria-label="no map recorded" />}
                   <span style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
                     <span style={{ fontSize: 'var(--fs-row)', letterSpacing: '0.04em', textTransform: 'uppercase', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       <span className="m">{row.date}</span>{weekday(row) && <> · {weekday(row)}</>} · <span className="m">#{row.session_id}</span>
