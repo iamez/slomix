@@ -2717,13 +2717,15 @@ class PostgreSQLDatabaseManager:
                         denied_playtime, constructions, tank_meatshield,
                         double_kills, triple_kills, quad_kills,
                         multi_kills, mega_kills,
-                        killing_spree_best, death_spree_worst
+                        killing_spree_best, death_spree_worst,
+                        time_played_percent
                     ) VALUES (
                         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
                         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
                         $21, $22, $23, $24, $25, $26, $27, $28, $29, $30,
                         $31, $32, $33, $34, $35, $36, $37, $38, $39, $40,
-                        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53
+                        $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53,
+                        $54
                     )
                     ON CONFLICT (round_id, player_guid) DO UPDATE SET
                         kills = EXCLUDED.kills,
@@ -2769,7 +2771,12 @@ class PostgreSQLDatabaseManager:
                     obj_stats.get('multikill_5x', 0),
                     obj_stats.get('multikill_6x', 0),
                     obj_stats.get('killing_spree', 0),
-                    obj_stats.get('death_spree', 0)
+                    obj_stats.get('death_spree', 0),
+                    # TAB[8], engine alive%. Omitted here until 2026-09, so every row
+                    # this path wrote took the schema DEFAULT 0 -- which pins
+                    # alive_pct_engine to None and with it disables alive_pct_drift,
+                    # the check meant to catch exactly this.
+                    obj_stats.get('time_played_percent', 0)
                 )
 
                 # 🔗 CRITICAL: Update player aliases for !stats and !link commands
