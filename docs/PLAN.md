@@ -87,6 +87,73 @@ vleče na sambo). Delitev populacij (sestrska seja): A = round-end burst
 tudi med pavzo in NI izključen. Razsodi meritev prek `self`. Optimizacija bursta: batch write,
 šele PO enem večeru self meritev. Sestrska seja koordinira optimizacijo Lua.
 
+## Proga: časovna polja (Opus 5)
+
+**Zadnja posodobitev:** 2026-09-02 zvečer (Opus 5 — agregatni razred varovala)
+
+Dva ločena hrošča v istem deploy oknu (~20. 3. 2026) sta pustila bazo v
+stanju, kjer sta obdobji **nezdružljivi**: staro ima engine alive%, a ~2×
+napihnjen mrtvi čas (Lua je limbo čas prištevala znova ob vsakem 5-sekundnem
+tiku); novo ima pravilen mrtvi čas, a `time_played_percent` je bil od
+2026-04 ničla, ker ga aktivna uvozna pot ni pisala. Ker sta komplementarni,
+se da vsako obdobje popraviti iz signala drugega.
+
+| faza | kaj | stanje |
+|---|---|---|
+| 1 | uvozna pot piše `time_played_percent` + parnostno varovalo piscev | **#885**, zelen, čaka ownerjev merge |
+| 2 | backfill `time_played_percent` iz surovih datotek | **#886**, zelen; **IZVEDEN** 2. 9. (8.800 → 13.466 vrstic, +4.666; kontrola proti surovim datotekam 22/22) |
+| 3 | rekonstrukcija zgodovinskega `time_dead_minutes` iz engine alive% | ⛔ ownerjeva odločitev; velja SAMO za R1 (R2 gre prek kumulativne TAB[8]); prekliče zapis »owner decision — no backfill« v `docs/KNOWN_ISSUES.md` |
+| 4a | per-row varovala v plausibility auditu (4 nova pravila) | **#892**, zelen, čaka merge |
+| 4b | agregatni razred (»porazdelitev se je premaknila«) | **ta veja**, 7 trend pravil |
+| 5 | zastareli zapisi, ki so to skrivali | **#893**, zelen, čaka merge |
+
+⭐ **Ključna meritev (odklepa fazo 3):** po backfillu `alive_pct_drift` prvič
+po 5 mesecih spet deluje — 290 parov, engine 79,3 proti izračunanemu 79,3,
+povprečna |razlika| **0,15 o. t.**, le 2 para (0,7 %) nad 2 o. t. To potrjuje
+oboje: ALIVE% se premakne zanemarljivo IN formula za staro obdobje drži.
+
+⚠️ **Backfill je treba ponoviti** po mergu #885 IN restartu bota — do takrat
+vsak nov uvoz spet piše ničle. Skripta piše samo čez ničle, zato je
+ponovitev varna in idempotentna.
+
+⭐⭐ **Razrešeno 3. 9.: »tretja raven« je R2, ne igra.** Ločeno po rundah je
+**R1 raven skozi vso predpopravkovo obdobje** (delež mrtvega časa 0,44–0,50),
+R2 pa teče pri ~0,22 do 2025-04 in od 2025-05 skoči na R1 raven. Torej
+`time_dead_minutes` na R2 vrstici pomeni **eno stvar pred majem 2025 in
+drugo po njem** — isti vzorec kot popravek 2026-04, eno rundo globlje.
+
+⭐⭐ **Faza 3 je s tem odločljiva, in odgovor je ločen po rundah:**
+
+| era | runda | n | razred B (baza < 0,9 × rekon) | mediana faktorja |
+|---|---|---|---|---|
+| zgodnje 2025 | **R1** | 2.708 | **0,15 %** | 2,238 |
+| pozno (2025-05..2026-03) | **R1** | 1.724 | **1,28 %** | 2,195 |
+| zgodnje 2025 | R2 | 2.596 | **37,1 %** | 1,031 |
+| pozno | R2 | 1.693 | 10,0 % | 1,992 |
+
+**R1 = en sam čist mehanizem čez vso ero**, R2 ne. Trije neodvisni razsodniki
+(3. 9., razširjeni vzorci):
+
+| razsodnik | pokritost | rekon / razsodnik | baza / razsodnik |
+|---|---|---|---|
+| izmerjeni dead po popravku (n=4.447, prej 344) | 2026-04→ | R1 **1,0000**, R2 0,9993 | — |
+| `round_awards` (endstats.lua, n=126) | 2026-01..03 | R1 **1,0020**, R2 1,0053 | 1,96 / 1,74 |
+| `player_track` (proximity, n=888) | 2026-02-11→ | R1 0,9166, R2 0,9335 (metoda vrzeli podceni ~8 %) | 1,94 / 2,00 |
+
+⚠️ **Zunanja razsodnika pokrivata SAMO 2026-01..03** (~2.200 vrstic od 8.700).
+Za 2025-01..04 (5.304 vrstic) ni neodvisnega vira — tam stoji rekonstrukcija
+na mehanizmu (branje stare Lue) + na tem, da je R1 faktor identičen v obeh
+erah (2,238 proti 2,195).
+
+⭐ Kje bi prepis **poslabšal**: proti `player_track` je rekonstrukcija bližja
+na **80,7 %** vrstic, baza na 19,3 %; mediana napake pade z **1,125 min na
+0,289 min**. Razčlenjeno: pri parih, kjer se kandidata skoraj ne razlikujeta
+(≤0,5 min, n=118), je izid vseeno; pri napihnjenih (n=727) rekonstrukcija
+zmaga v 83,2 %, pri hudih (n=41) v 97,6 %.
+
+⭐ **Nova najdba 2. 9.:** `revives_given` je 0 na vseh 5.538 vrsticah pred
+2025-12 — vsaka vseskozna revive lestvica se tiho začne decembra 2025.
+
 ## Odprte ownerjeve odločitve
 
 - puranov cron `0 20 * * * kill etlded` (vrže igralce sredi igre) — pogojni
