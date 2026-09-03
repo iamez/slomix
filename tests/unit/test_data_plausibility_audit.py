@@ -17,12 +17,14 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.data_plausibility_audit import (  # noqa: E402
+    PROVENANCE_CUTOFF,
     RULES,
     TREND_RULES,
     VALID_SEVERITIES,
     VALID_TABLES,
     VALID_TIERS,
     MonthlyPoint,
+    Rule,
     TrendResult,
     TrendRule,
     build_count_sql,
@@ -31,6 +33,7 @@ from scripts.data_plausibility_audit import (  # noqa: E402
     build_trend_sql,
     find_shifts,
     get_connection,
+    live_boundary,
     unexplained_shift_count,
     validate_rules,
     validate_trend_rules,
@@ -189,7 +192,6 @@ def test_actual_time_rules_still_target_actual_time_itself():
 from dataclasses import dataclass  # noqa: E402
 
 from scripts.data_plausibility_audit import (  # noqa: E402
-    Rule,
     unacknowledged_live_count,
 )
 
@@ -278,10 +280,10 @@ def test_no_acknowledgement_has_outlived_its_reason(db_conn, rule):
     with db_conn.cursor() as cur:
         cur.execute(build_split_sql(rule))
         row = cur.fetchone()
-    assert row is not None and len(row) == 2, (
+    assert row is not None and len(row) == 3, (
         f"build_split_sql changed shape ({row!r}); this test cannot judge "
         f"{rule.name} until it is updated")
-    live = int(row[1])
+    live = int(row[2])
     assert live > 0, (
         f"{rule.name} no longer fires on live rows. Its acknowledgement has "
         f"outlived its reason -- remove it so a recurrence is reported again.")
@@ -526,3 +528,87 @@ def test_no_trend_acknowledgement_has_outlived_its_reason(db_conn, rule):
     assert [s for s in find_shifts(rule, series) if not s.explanation], (
         f"{rule.name} carries no unexplained shift any more — its "
         f"acknowledgement has outlived its reason, remove it.")
+
+
+# ── Arming: muting the past without muting the rule ─────────────────────────
+
+
+def _armed(name="a", armed_from="2026-04-01", acknowledged=""):
+    return Rule(name=name, table="player_comprehensive_stats", tier="T1",
+                severity="critical", predicate="pcs.kills < 0", note="n",
+                armed_from=armed_from, acknowledged=acknowledged)
+
+
+def test_live_boundary_is_the_later_of_the_two_dates():
+    assert live_boundary(_armed(armed_from="")) == PROVENANCE_CUTOFF
+    assert live_boundary(_armed(armed_from="2026-04-01")) == "2026-04-01"
+    # An arming date before the cutover carves nothing out, and must not
+    # silently WIDEN the live window back into backfill territory.
+    assert live_boundary(_armed(armed_from="2020-01-01")) == PROVENANCE_CUTOFF
+
+
+def test_arming_and_acknowledgement_cannot_both_be_set():
+    """They do the same job by different means, and the difference is the
+    whole point: acknowledged mutes the rule, arming mutes only the past.
+    A rule carrying both would look armed and behave muted."""
+    with pytest.raises(ValueError, match="Pick one"):
+        validate_rules([_armed(acknowledged="because reasons")])
+
+
+@pytest.mark.parametrize("bad", ["2026-4-1", "2026/04/01", "yesterday", "2026-04"])
+def test_armed_from_must_be_an_iso_date(bad):
+    with pytest.raises(ValueError, match="armed_from"):
+        validate_rules([_armed(armed_from=bad)])
+
+
+def test_no_time_field_rule_is_muted_any_more():
+    """The three time-field rules landed acknowledged, which mutes the WHOLE
+    rule: a fresh occurrence of the same breakage would have been swallowed
+    along with the history the acknowledgement excused. They are armed now.
+    If one of them ever goes back to `acknowledged`, that trade is being made
+    again and should be argued for, not slipped in."""
+    for name in ("pcs_time_played_percent_is_zero",
+                 "pcs_time_dead_exceeds_time_played",
+                 "pcs_time_dead_ratio_out_of_range"):
+        rule = next(r for r in RULES if r.name == name)
+        assert rule.armed_from, f"{name} lost its arming date"
+        assert not rule.acknowledged, f"{name} is muted again"
+
+
+def test_the_split_query_names_three_buckets():
+    sql = build_split_sql(_armed())
+    assert "AS backfill" in sql and "AS pre_arming" in sql and "AS live" in sql
+    # The middle bucket is bounded on BOTH sides, or it double-counts backfill.
+    assert f"< '{PROVENANCE_CUTOFF}') AS backfill" in sql
+    assert f">= '{PROVENANCE_CUTOFF}'" in sql and "< '2026-04-01') AS pre_arming" in sql
+
+
+@pytest.mark.parametrize("rule", RULES, ids=[r.name for r in RULES])
+def test_the_three_buckets_sum_to_the_total(db_conn, rule):
+    """The arming column must MOVE rows, never drop them. A bucket that does
+    not add up is how a sensor quietly stops counting."""
+    with db_conn.cursor() as cur:
+        cur.execute(build_count_sql(rule))
+        total = int(cur.fetchone()[0])
+        cur.execute(build_split_sql(rule))
+        row = cur.fetchone()
+    assert row is not None and len(row) == 3, f"split query shape changed: {row!r}"
+    assert sum(int(v) for v in row) == total, (
+        f"{rule.name}: buckets {row} do not sum to {total}")
+
+
+@pytest.mark.parametrize(
+    "rule", [r for r in RULES if r.armed_from], ids=lambda r: r.name)
+def test_an_armed_rule_carries_history_and_a_quiet_present(db_conn, rule):
+    """What arming claims, measured. If `live` ever leaves zero here, the
+    defect the arming date closed has come back and the sensor is doing its
+    job -- fix the data, do not move the date."""
+    with db_conn.cursor() as cur:
+        cur.execute(build_split_sql(rule))
+        backfill, pre_arming, live = (int(v) for v in cur.fetchone())
+    assert pre_arming > 0, (
+        f"{rule.name}: nothing before {rule.armed_from} — the arming date is "
+        f"carving out nothing and should be removed")
+    assert live == 0, (
+        f"{rule.name}: {live} row(s) on or after {rule.armed_from}, which is "
+        f"exactly what this rule is armed to catch")
