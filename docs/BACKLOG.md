@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-03, 12:15) SKOK 3 (ownerjeva ideja, `screenshots/vision.jpg`,
+  `vision1.jpg`): **centralni runtime / »event brain«** — en Python proces na
+  Linux strežniku spremlja igralni strežnik in iz ENEGA toka dogodkov streže
+  website, Discord bot, statistiko in live prikaz (»Slomix runtime v2«; ChatGPT
+  dela vzporedni deep research z Redis Streams). Ownerjevo navodilo: ChatGPT-ju
+  NE verjeti, vse kot hipoteze, sam raziskati, nato plan mode z vprašanji →
+  `docs/design/21` (lokalno). IZVEDBA KASNEJE; Stats 2.0 ostaja prva naloga.
 - (Fable 5.1, 2026-09-03, 10:55) SKOK 2 (ownerjeva prošnja): raziskati
   **match moment detektorje** — obstoječih 11 (team wipe, multikill, kill
   streak, carrier chain, focus survival, push success, trade chain, objective
