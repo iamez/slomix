@@ -753,7 +753,7 @@ function KisFormula() {
  * Fetched only when a row is opened: 205 kills for the top player of session
  * 150 is the right size for a disclosure and the wrong size for a page load.
  */
-function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: string }) {
+export function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; name: string }) {
   const q = useStoryKisDetails(gsid, guid);
   // The per-kill payload carries `is_objective_area` as a FLAG and not as a
   // multiplier, and the objective boost is the last term of the published
