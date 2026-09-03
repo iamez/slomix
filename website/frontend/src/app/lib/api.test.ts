@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ApiError, apiDelete, apiGet, apiGetResponse, apiPost } from './api';
+import { ApiError, apiDelete, apiGet, apiGetResponse, apiPost, apiUploadWithProgress } from './api';
 
 /**
  * Compile-time contract (checked by `npm run typecheck`, which compiles this
@@ -104,5 +104,58 @@ describe('apiDelete', () => {
     await expect(apiDelete('/api/availability/subscriptions/{channel_type}', {
       pathParams: { channel_type: 'signal' },
     })).rejects.toMatchObject({ name: 'ApiError', status: 403, detail: 'Linked Discord account required' });
+  });
+});
+
+/** A minimal XMLHttpRequest double: records what was sent, lets the test
+ *  fire upload progress and the terminal event it chooses. */
+class FakeXhr {
+  static last: FakeXhr | null = null;
+  method = ''; url = ''; headers: Record<string, string> = {}; withCredentials = false; responseType = '';
+  status = 0; responseText = ''; sent: unknown = null; aborted = false;
+  upload = { onprogress: null as null | ((e: { lengthComputable: boolean; loaded: number; total: number }) => void) };
+  onload: null | (() => void) = null; onerror: null | (() => void) = null; onabort: null | (() => void) = null;
+  constructor() { FakeXhr.last = this; }
+  open(method: string, url: string) { this.method = method; this.url = url; }
+  setRequestHeader(k: string, v: string) { this.headers[k] = v; }
+  send(body: unknown) { this.sent = body; }
+  abort() { this.aborted = true; this.onabort?.(); }
+}
+
+describe('apiUploadWithProgress', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('POSTs the form over XHR with the CSRF header, reports progress, resolves the JSON', async () => {
+    vi.stubGlobal('XMLHttpRequest', FakeXhr);
+    const seen: [number, number][] = [];
+    const form = new FormData();
+    const p = apiUploadWithProgress('/api/uploads', form, { onProgress: (a, b) => { seen.push([a, b]); } });
+    const xhr = FakeXhr.last!;
+    expect(xhr.method).toBe('POST');
+    expect(xhr.url).toBe('/api/uploads');
+    expect(xhr.headers['X-Requested-With']).toBe('XMLHttpRequest');
+    expect(xhr.withCredentials).toBe(true);
+    expect(xhr.sent).toBe(form);
+    xhr.upload.onprogress?.({ lengthComputable: true, loaded: 40, total: 80 });
+    xhr.status = 200; xhr.responseText = JSON.stringify({ upload_id: 'x' }); xhr.onload?.();
+    await expect(p).resolves.toEqual({ upload_id: 'x' });
+    expect(seen).toEqual([[40, 80]]);
+  });
+
+  it("rejects with ApiError carrying the backend's detail on non-2xx", async () => {
+    vi.stubGlobal('XMLHttpRequest', FakeXhr);
+    const p = apiUploadWithProgress('/api/uploads', new FormData());
+    const xhr = FakeXhr.last!;
+    xhr.status = 413; xhr.responseText = JSON.stringify({ detail: 'Upload too large (9 bytes). Max allowed is 2 bytes' }); xhr.onload?.();
+    await expect(p).rejects.toMatchObject({ name: 'ApiError', status: 413, detail: 'Upload too large (9 bytes). Max allowed is 2 bytes' });
+  });
+
+  it('an AbortSignal aborts the request and rejects with AbortError', async () => {
+    vi.stubGlobal('XMLHttpRequest', FakeXhr);
+    const ctl = new AbortController();
+    const p = apiUploadWithProgress('/api/uploads', new FormData(), { signal: ctl.signal });
+    ctl.abort();
+    await expect(p).rejects.toMatchObject({ name: 'AbortError' });
+    expect(FakeXhr.last!.aborted).toBe(true);
   });
 });

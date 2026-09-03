@@ -3994,6 +3994,38 @@ export interface UploadDetail {
   can_delete: boolean;
 }
 
+// Slice 2 — the write shapes, read off the handlers (no response_model on
+// any uploads write route: tests/unit/test_uploads_slice2_fixtures.py replays
+// them and diffs the live-recorded fixtures).
+
+/** POST /api/uploads and POST …/resumable/{id}/finalize share
+ *  uploads.py:_persist_upload (:146-157). `failed_tags`/`warning` appear
+ *  only when a tag insert failed. */
+export interface UploadCreated {
+  upload_id: string;
+  filename: string;
+  title: string;
+  category: string;
+  file_size_bytes: number;
+  share_url: string;
+  failed_tags?: string[];
+  warning?: string;
+}
+
+/** POST /api/uploads/resumable (uploads.py:369). */
+export interface ResumableInitResponse {
+  session_id: string;
+  offset: number;
+  chunk_size: number;
+  category: string;
+}
+
+/** DELETE /api/uploads/{upload_id} (uploads.py:937). */
+export interface UploadDeleteResponse {
+  success: boolean;
+  message: string;
+}
+
 // ---------------------------------------------------------------------------
 // Phase 6 — greatshot (legacy greatshot.js): per-user demo analysis. The
 // whole surface is auth-gated (401 anonymous = a state). Shapes from a
