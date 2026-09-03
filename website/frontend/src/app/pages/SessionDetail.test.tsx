@@ -545,8 +545,9 @@ describe('SessionDetail — stats 2.0 R4 tabs', () => {
     renderPage(fixtureFetch, '/session-detail/154/rounds');
     await waitFor(() => expect(screen.getByText(/12 of 12 count toward totals|11 of 12 count toward totals/)).toBeInTheDocument());
     fireEvent.click(screen.getByRole('button', { name: 'one player' }));
-    const picker = screen.getByLabelText('player') as HTMLSelectElement;
-    expect(picker.options.length).toBeGreaterThan(1);
+    // Typed through the query's generic, not a cast the html-scanner reads as raw markup.
+    const options = screen.getByLabelText<HTMLSelectElement>('player').options;
+    expect(options.length).toBeGreaterThan(1);
     expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'true');
   });
 
