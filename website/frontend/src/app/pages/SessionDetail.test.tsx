@@ -88,9 +88,12 @@ async function openMore() {
   // Every collapsed "more" on the page: a test that renders twice has two.
   // A page that never reaches the summary (404, failure, another tab) has
   // none — then there is nothing to open and the test goes on.
-  const buttons: HTMLElement[] = await screen
-    .findAllByRole('button', { name: /more about the night ▸/ }, { timeout: 1500 })
-    .catch(() => []);
+  let buttons: HTMLElement[] = [];
+  try {
+    buttons = await screen.findAllByRole('button', { name: /more about the night ▸/ }, { timeout: 1500 });
+  } catch {
+    return; // nothing to open on this page
+  }
   for (const b of buttons) fireEvent.click(b);
 }
 
