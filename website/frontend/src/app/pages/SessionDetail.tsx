@@ -580,7 +580,7 @@ const BASICS_COLUMNS: readonly DataColumn<SessionBasicsPlayer>[] = [
   { key: 'hs', label: 'hs %', title: 'head HITS ÷ hits over the same light weapons — never headshot kills ÷ kills', width: 58,
     sortValue: (p) => p.headshot_pct, format: (p) => pct(p.headshot_pct) },
   { key: 'gibs', label: 'gibs', title: 'gibs', width: 46, sortValue: (p) => p.gibs },
-  { key: 'uk', label: 'uk', title: 'Useful Kills: kills on armed enemies (excludes selfkills and teamkills)', width: 42, sortValue: (p) => p.useful_kills },
+  { key: 'uk', label: 'uk', title: 'useful kills — the victim had at least half the spawn cycle still ahead (their next wave ≥ limbo time ÷ 2; c0rnp0rn8.lua topshots[15]). The legacy tooltip said “kills on armed enemies”; the writer does not. useful + useless ≠ kills: the middle band is neither', width: 42, sortValue: (p) => p.useful_kills },
   { key: 'useless', label: 'useless', title: 'useless kills — kills of an enemy whose next spawn wave was under 5 s away', width: 58, sortValue: (p) => p.useless_kills },
   { key: 'sk', label: 'sk', title: 'self kills', width: 42, sortValue: (p) => p.self_kills },
   { key: 'fsk', label: 'fsk', title: 'full self kills — /kill at health > 0 with the full respawn ahead (the Lua’s −2 s window; ~7 % of self kills, threshold under owner review)', width: 42,

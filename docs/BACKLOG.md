@@ -37,6 +37,7 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., stats 2.0) **Legacy tooltip »Useful Kills: kills on armed enemies (excludes selfkills and teamkills)« je napačen** — pisec (`c0rnp0rn8.lua:679`, `topshots[15]`) šteje kill, pri katerem ima žrtev pred sabo ≥ polovico limbo časa. Nova stran pove resnico; legacy `website/js/session-detail.js:2484`, `matches.js:986`, `player-profile.js:1186` in bot `community_stats_parser.py:369` (`UK`) še nosijo staro besedilo → popraviti ob naslednjem dotiku legacy strani.
 - (3. 9., stats 2.0 — doc 18, lokalno) **FSK prag** (−2 s → /2) čaka ownerjevo
   odločitev; **TAB[8] `time_played_percent` je 0 v ~35 % vrstic vsak mesec**
   (stalna luknja, ne od aprila — vzrok neznan); **medpacki/ammo packi niso

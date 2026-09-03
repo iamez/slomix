@@ -69,7 +69,7 @@ hits/shots lahkih orožij.
 |---|---|---|
 | R1 | en arhiv `/sessions` z levelshoti, `#id`, BOX, mape, »one half missing«; `/sessions2` redirect; podnav brez podvojitve | #897 merged |
 | R2 | backend `GET /stats/session/{id}/basics` + `/awards` (response_model, vrata `/detail` + brez botov, KIS null=not covered, pravila agregacije nagrad z vzdevki, korpusni tek `scripts/audit_session_basics.py`) | PR #898 |
-| R3 | summary: glava z BigScore + trak map z levelshoti + figure; `DataTable` (nov, doc 11) z 16 stolpci in tooltipi; nagrade v stavkih; night score + MVP; ostalih 5 panelov za »more ▸«; Playwright thin = seja 80 | ta veja |
+| R3 | summary: glava z BigScore + trak map z levelshoti + figure; `DataTable` (nov, doc 11) s 17 stolpci in tooltipi (`uk` = useful (legacy), `useless` svoj — owner 3. 9.); nagrade v stavkih; night score + MVP; ostalih 5 panelov za »more ▸«; Playwright thin = seja 80 | PR #899 (`e565ea30`), čaka #898 → sestrski signal |
 | R4 | zavihki Players 22 · Rounds (retire `/rounds`) · Teamplay · Story (retire `/story`) | — |
 | R5 | power user: vrstica igralca ▾, KIS details, povezave | — |
 

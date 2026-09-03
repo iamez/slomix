@@ -2108,7 +2108,8 @@ export interface SessionBasicsPlayer {
   accuracy: number | null;
   headshot_pct: number | null;
   gibs: number;
-  /** pcs.most_useful_kills — the legacy "Useful Kills" column; UK = useful. */
+  /** pcs.most_useful_kills — the legacy "Useful Kills" column (UK = useful): kills whose
+   *  victim had ≥ half the spawn cycle ahead (c0rnp0rn8.lua topshots[15]). */
   useful_kills: number;
   useless_kills: number;
   self_kills: number;

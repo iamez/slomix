@@ -438,9 +438,10 @@ describe('SessionDetail — stats 2.0 summary', () => {
     expect(screen.getByRole('button', { name: /^denied %/ })).toHaveAttribute('title', expect.stringMatching(/denied to opponents/));
     expect(screen.getByRole('button', { name: /^hs %/ })).toHaveAttribute('title', expect.stringMatching(/never headshot kills/));
     expect(screen.getByRole('button', { name: /^kis$|^kis ▾|^kis ▴/ })).toHaveAttribute('title', expect.stringMatching(/not a ranking/));
-    // 17 columns; uk is the legacy Useful Kills, useless its own column (owner, 2026-09-03).
+    // 17 columns; uk is the legacy Useful Kills column, useless its own (owner, 2026-09-03).
+    // The definition is the Lua writer's (half a spawn cycle ahead), not the legacy tooltip's.
     expect(table.querySelectorAll('.row')[0].children.length).toBe(17);
-    expect(screen.getByRole('button', { name: /^uk$|^uk ▾|^uk ▴/ })).toHaveAttribute('title', expect.stringMatching(/^Useful Kills/));
+    expect(screen.getByRole('button', { name: /^uk$|^uk ▾|^uk ▴/ })).toHaveAttribute('title', expect.stringMatching(/^useful kills — the victim had at least half the spawn cycle/));
     expect(screen.getByRole('button', { name: /^useless/ })).toHaveAttribute('title', expect.stringMatching(/next spawn wave/));
     // The expander names the player, not the guid, though the cell is a Link.
     expect(screen.getByRole('button', { name: `weapons for ${first.name}` })).toBeInTheDocument();
