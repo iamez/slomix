@@ -96,7 +96,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 | 2 | Lua: `first/last_move_time` moverja + `et_Damage` pripis uničenja (ownerjev deploy protokol) | — |
 | 3 | Lua: zajem escorta NOSILCA (`proximity_carrier_escort`) + migracija + parser | — |
 | 4 | detektor escorta nosilca + fixture varovalo »medic ≠ escort« | — |
-| 5 | UI: `MomentCard` oznake po tipu (danes generična `type.replace`) | — |
+| 5 | **vidnost (owner 3. 9.)**: `/storytelling/moments?types=escort_mover` (backend filter) + majhen panel »objective escorts« v Story zavihku pod momenti; direktorjev rez nespremenjen; oznake po tipu | naslednja po r. 1 |
 
 ## Proga: frame-health v6.13 — watchdog za VSE Lua module + bot test (Fable 5.1)
 
