@@ -53,6 +53,8 @@
 
 ## Tehnični dolg / ideje (nikjer drugje zapisane)
 
+- (3. 9., sestrska seja) ⛔ **`scripts/db_backup.sh` pokvarjen**: teče kot `website_app`, ker `website/.env` prepiše `POSTGRES_USER` iz korenskega `.env`; ta vloga ne sme brati 7 tabel (`voice_members`, `team_pool`, `proximity_reaction_metric`, `processed_endstats_files`, `matchup_history`, `achievement_notification_ledger`, `player_identity_links`) → `pg_dump` »permission denied«. Obvod: `POSTGRES_USER=etlegacy_user POSTGRES_PASSWORD=… bash scripts/db_backup.sh`. Popravek = administrativna orodja berejo LE korenski `.env` (ali izrecen `--role`); še ni dodeljeno — javiti sestri pred dotikom.
+- (3. 9., #904) `time_dead_minutes` za vrstice pred 2026-03-24 je rekonstruiran (8 721 vrstic; izvirnik v `time_dead_minutes_original`, zastavica `time_dead_reconstructed`) → Players zavihek `dead min` in `alive %` za stare seje zdaj kažejo druge številke; tooltip bi lahko omenil zastavico (R6 ideja).
 - (3. 9., FH v6.13) **`stats_discord_webhook.lua` `pending_retry_sweep` = fork+exec (`os.execute mkdir`, `io.popen find`) vsakih 60 s na igralni niti, po `os.time()` (teče med pavzo in ob 0 igralcih)** — od v6.13 merjeno kot `FM … mod=stats_discord_webhook top=sweep:<ms>`; če se potrdi, sweep preseliti izven frame poti (redkeje, ali ob koncu runde) — sprememba webhooka, ownerjev deploy.
 - (3. 9., FH v6.13) tracker `scanVehicleEntities`+`scanObjectiveEntities` = 2×960 `pcall(gentity_get)` ob map loadu — merjeno kot `top=init_scan`; če sekunde, razdeliti sken na več framov.
 - (3. 9., FH v6.13) `is_bot_round` zgodovinsko nikoli true (`postgresql_database_manager.py:2246`) — po bot testu preveriti runde z današnjim datumom.
