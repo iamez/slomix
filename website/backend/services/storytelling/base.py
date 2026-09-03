@@ -123,6 +123,19 @@ TRADE_KILL_DELTA_MS = 5000          # Avenger must kill within 5s of teammate's 
 LURKER_MIN_DURATION_MS = 2000       # player_track segments shorter than this are not "lurks"
 DEATH_TRADE_WINDOW_MS = 10000       # Window after a death in which a trade counts
 
+# ── Escort of a movable objective (truck/tank), moments detector L ────────
+# Measured over proximity_vehicle_progress ⋈ proximity_escort_credit on
+# 2026-09-03 (157 vehicle-rounds since March): a truck round moves p50 8 612 u
+# (max 19 412); the tank on sw_goldrush_te reads under 1 000 u in 112 of 128
+# rounds (its movement measurement is an open question, BACKLOG). Over the 40
+# rounds where the vehicle moved >= 1 000 u, the top escort's weighted share
+# of the vehicle's distance was >= 0.25 in 27, >= 0.5 in 7 and >= 0.75 in 2 —
+# which is what the star tiers below are cut from. Below 0.25 nobody stayed
+# with the vehicle: a result about the push, not a moment.
+ESCORT_MOVER_MIN_DISTANCE = 1000    # ET units (~25 m at 39.37 u/m): the vehicle actually moved
+ESCORT_MOVER_MIN_SHARE = 0.25       # top escort's credit_distance / vehicle total_distance
+ESCORT_MOVER_STAR_SHARES = (0.25, 0.5, 0.75)  # 3★ / 4★ / 5★
+
 def _to_date(val: str | date) -> date:
     """Normalize to datetime.date for asyncpg DATE params (proximity tables use DATE type)."""
     if isinstance(val, date):

@@ -86,6 +86,18 @@ hits/shots lahkih orožij.
 
 Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
+## Proga: match moments (doc 20, lokalno) — Fable 5.1
+
+**Zadnja posodobitev:** 2026-09-03 23:40 (Fable 5.1, rezina 1 v PR-ju)
+
+| rezina | vsebina | stanje |
+|---|---|---|
+| 1 | `escort_mover` detektor (12.) brez Lua: `proximity_vehicle_progress ⋈ proximity_escort_credit` po 4-ključu + `round_key_filter_sql(alias="vp")`; pragi iz meritve (`ESCORT_MOVER_*` v `base.py`: 1 000 u, delež ≥ 0,25; 3/4/5★ pri 0,25/0,5/0,75); `time_ms` = konec runde (`timestamp_source`); prvi test, ki poganja SQL detektorja (stub); korpus: **19 = 19** (detektor proti SQL, sprejete runde); ⚠️ **v privzetem rezu (10) se ne prikaže v NOBENI seji** (bazeni 50–90 momentov, zvezdice so trda meja) → vidnost = rezina 5 (filter po tipu / svoj panel), ownerjeva odločitev | PR |
+| 2 | Lua: `first/last_move_time` moverja + `et_Damage` pripis uničenja (ownerjev deploy protokol) | — |
+| 3 | Lua: zajem escorta NOSILCA (`proximity_carrier_escort`) + migracija + parser | — |
+| 4 | detektor escorta nosilca + fixture varovalo »medic ≠ escort« | — |
+| 5 | **vidnost (owner 3. 9.)**: `/storytelling/moments?types=escort_mover` (backend filter) + majhen panel »objective escorts« v Story zavihku pod momenti; direktorjev rez nespremenjen; oznake po tipu | naslednja po r. 1 |
+
 ## Proga: frame-health v6.13 — watchdog za VSE Lua module + bot test (Fable 5.1)
 
 **Zadnja posodobitev:** 2026-09-03 23:00 (Fable 5.1, v6.13 deployan in izmerjen; proga čaka na pravi večer)
