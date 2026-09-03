@@ -130,7 +130,8 @@ describe('apiUploadWithProgress', () => {
     const seen: [number, number][] = [];
     const form = new FormData();
     const p = apiUploadWithProgress('/api/uploads', form, { onProgress: (a, b) => { seen.push([a, b]); } });
-    const xhr = FakeXhr.last!;
+    const xhr = FakeXhr.last;
+    if (!xhr) throw new Error('no XHR was opened');
     expect(xhr.method).toBe('POST');
     expect(xhr.url).toBe('/api/uploads');
     expect(xhr.headers['X-Requested-With']).toBe('XMLHttpRequest');
@@ -145,7 +146,8 @@ describe('apiUploadWithProgress', () => {
   it("rejects with ApiError carrying the backend's detail on non-2xx", async () => {
     vi.stubGlobal('XMLHttpRequest', FakeXhr);
     const p = apiUploadWithProgress('/api/uploads', new FormData());
-    const xhr = FakeXhr.last!;
+    const xhr = FakeXhr.last;
+    if (!xhr) throw new Error('no XHR was opened');
     xhr.status = 413; xhr.responseText = JSON.stringify({ detail: 'Upload too large (9 bytes). Max allowed is 2 bytes' }); xhr.onload?.();
     await expect(p).rejects.toMatchObject({ name: 'ApiError', status: 413, detail: 'Upload too large (9 bytes). Max allowed is 2 bytes' });
   });
@@ -156,6 +158,6 @@ describe('apiUploadWithProgress', () => {
     const p = apiUploadWithProgress('/api/uploads', new FormData(), { signal: ctl.signal });
     ctl.abort();
     await expect(p).rejects.toMatchObject({ name: 'AbortError' });
-    expect(FakeXhr.last!.aborted).toBe(true);
+    expect(FakeXhr.last?.aborted).toBe(true);
   });
 });

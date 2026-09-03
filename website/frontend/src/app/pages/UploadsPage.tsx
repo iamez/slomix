@@ -34,11 +34,11 @@ const SORTS = [
 // Mirrors website/backend/services/upload_validators.py (ALLOWED_EXTENSIONS,
 // SIZE_LIMITS) so the form can say no before a byte moves — the server is
 // still the arbiter, and its sentence is what the user sees if they differ.
-const CATEGORY_OF: Record<string, string> = {
-  '.cfg': 'config', '.hud': 'config', '.zip': 'archive', '.rar': 'archive',
-  '.mp4': 'clip', '.avi': 'clip', '.mkv': 'clip',
-};
-const LIMIT_MB: Record<string, number> = { config: 2, archive: 50, clip: 500 };
+const CATEGORY_OF = new Map<string, string>([
+  ['.cfg', 'config'], ['.hud', 'config'], ['.zip', 'archive'], ['.rar', 'archive'],
+  ['.mp4', 'clip'], ['.avi', 'clip'], ['.mkv', 'clip'],
+]);
+const LIMIT_MB = new Map<string, number>([['config', 2], ['archive', 50], ['clip', 500]]);
 const ALLOWED_SENTENCE = 'Allowed: .cfg .hud .zip .rar .mp4 .avi .mkv';
 const RETENTION = [
   { value: '', label: 'keep forever' },
@@ -60,11 +60,11 @@ function bytes(n: number): string {
 export function preflight(file: File): string | null {
   const dot = file.name.lastIndexOf('.');
   const ext = dot >= 0 ? file.name.slice(dot).toLowerCase() : '';
-  const category = CATEGORY_OF[ext];
+  const category = CATEGORY_OF.get(ext);
   if (!category) return `Unsupported file type '${ext}'. ${ALLOWED_SENTENCE}`;
   if (file.size === 0) return 'Empty upload is not allowed.';
-  const limit = LIMIT_MB[category] * 1024 * 1024;
-  if (file.size > limit) return `${bytes(file.size)} is over the ${LIMIT_MB[category]} MB limit for ${category} files`;
+  const limitMb = LIMIT_MB.get(category) ?? 0;
+  if (file.size > limitMb * 1024 * 1024) return `${bytes(file.size)} is over the ${limitMb} MB limit for ${category} files`;
   return null;
 }
 

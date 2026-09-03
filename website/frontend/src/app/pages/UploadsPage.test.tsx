@@ -140,7 +140,8 @@ describe('UploadsPage', () => {
     expect(screen.getByText(/in one go/)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'upload' }));
     await waitFor(() => expect(screen.getByText(/open it →/)).toBeInTheDocument());
-    const xhr = FakeXhr.last!;
+    const xhr = FakeXhr.last;
+    if (!xhr) throw new Error('no XHR was opened');
     expect(xhr.url).toBe('/api/uploads');
     expect(xhr.headers['X-Requested-With']).toBe('XMLHttpRequest');
     expect(xhr.sent?.get('title')).toBe('my cfg');
