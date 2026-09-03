@@ -88,7 +88,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: frame-health v6.13 — watchdog za VSE Lua module + bot test (Fable 5.1)
 
-**Zadnja posodobitev:** 2026-09-03 22:30 (Fable 5.1, v6.13 deployan, test 2 teče)
+**Zadnja posodobitev:** 2026-09-03 23:00 (Fable 5.1, v6.13 deployan in izmerjen; proga čaka na pravi večer)
 
 Owner 3. 9.: watcher razširiti na vseh 6 modulov, izboljšati, bot test (~30 min)
 za polno obremenitev; RCON `testmode` in deploy za ta PR izrecno predana.
@@ -100,7 +100,7 @@ za polno obremenitev; RCON `testmode` in deploy za ta PR izrecno predana.
 | 2 | `scripts/frame_health_report.py` (pripis: Σ self v oknu gapa = naš Lua, ostanek = motor/gostitelj) + test | narejeno |
 | 3 | PR, CI, ownerjev merge | **MERGAN** #905 |
 | 4 | deploy na prazen puran (scp na ŽIVE poti, map load, `FH init mod=` 6×, sha256 prej/potem; ⛔ nikoli `lua_restart`) | **IZVEDEN 3. 9. 22:2x** — 6/6 sha ujema, 6× `FH init … mod=` + `FH watcher`, motor 6× »loaded into Lua VM«, brez napak |
-| 5 | drugi bot test z v6.13 (22:25–22:55) → poročilo; ukrepi v BACKLOG | teče |
+| 5 | drugi bot test z v6.13 (22:25–22:55) → poročilo; ukrepi v BACKLOG | **IZVEDEN**: 2 gap, 2 `FM` (obe tracker `round_end` 188–224 ms); webhook `sweep` in `init_scan` < 50 ms; 3 motorjevi map-load hitchi; komentar na #905. Naslednje: odčitek pravega igralnega večera |
 
 Osnovnica iz obstoječih logov (report, 2. 9., prazen strežnik): stall 363 s,
 naš Lua 16 %, residual (motor/gostitelj) 84 %; 3. 9. do 18:00: 36 s, 22 % / 78 %.
