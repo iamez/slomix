@@ -49,6 +49,7 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[2]
+README = REPO / "vps_scripts" / "dots_arena" / "README.md"
 LUA = REPO / "vps_scripts" / "dots_arena_1v1.lua"
 CONFIG = REPO / "vps_scripts" / "dots_arena" / "dots_arena_1v1.config"
 
@@ -177,3 +178,46 @@ def test_config_uses_only_tokens_the_engine_parses() -> None:
 )
 def test_extractor_self_check(source: str, expected: set[str]) -> None:
     assert runtime_written_cvars(source) == expected
+
+
+def readme_documented_cvars() -> set[str]:
+    """Every cvar the README's own table presents as a knob.
+
+    Rows look like `| `arena_vamp` | `0` | lifesteal |` and appear once per
+    language section; the set is the union.
+    """
+    text = README.read_text(encoding="utf-8")
+    return set(re.findall(r"^\|\s*`(arena_[A-Za-z0-9_]+)`\s*\|", text, re.M))
+
+
+def test_the_readme_table_is_actually_parsed() -> None:
+    """The vacuous half: an empty set would satisfy the contract below."""
+    documented = readme_documented_cvars()
+    assert len(documented) >= 10, (
+        f"only {len(documented)} cvars parsed out of the README table — the "
+        "row format changed and the contract below is measuring nothing"
+    )
+
+
+def test_every_cvar_the_readme_calls_a_knob_is_set_not_setl() -> None:
+    """We shipped a README describing twelve runtime knobs, eleven of which
+    were `setl` in the config we shipped beside it.
+
+    `G_ConfigCheckLocked` (g_config.c:516) compares every `setl` cvar against
+    its live value once per frame from `G_RunFrame` and, on the first
+    difference, blanks CS_CONFIGNAME and memsets `level.config` — the whole
+    ruleset gone, the cvar not restored. So a reader who followed our own
+    instruction and typed `arena_1v1 0` destroyed the config that was making
+    the arena work, on somebody else's server, with a message that names
+    neither us nor the cvar.
+
+    This is a contract across three files: the module writes some of these
+    cvars, the README calls all of them adjustable, and the config decides
+    whether adjusting one is a knob or a landmine.
+    """
+    locked = locked_cvars(CONFIG.read_text(encoding="utf-8"))
+    clash = readme_documented_cvars() & locked
+    assert not clash, (
+        f"{sorted(clash)} are documented as runtime knobs but declared `setl`; "
+        "changing one unloads the entire config (g_config.c:516)"
+    )

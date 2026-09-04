@@ -167,7 +167,28 @@ local LETHAL_DAMAGE        = 1000        -- far past GIB_HEALTH from any health
 
 local active        = false   -- armed on this map?
 local forced        = {}      -- clientNum -> true while OUR damage is in flight
+--- Last shield expiry each player was handed, so a pair can be levelled.
+--- ⛔ Declared up HERE, not next to the levelling code where it is used:
+--- et_ClientDisconnect has to clear it, and a Lua function closes over the
+--- locals that already exist when it is defined — a declaration further down
+--- the file would have left the hook writing to a nil GLOBAL instead. That is
+--- the same trap the withdrawn AMMO_FILL note records.
+local spawn_shield  = {}
 local saved_forcerespawn = nil
+--- Set when a duelist leaves mid-duel. The player still standing keeps
+--- whatever health he had, and nothing respawns him — so the re-levelling has
+--- to wait until somebody joins and a duel exists again.
+local relevel_pending    = false
+local saved_arena_hp     = nil   -- what arena_hp was before anyone typed /arenahp
+--- ⛔ Only true once THIS module has written the cvar. The first version of
+--- the restore was unconditional, and the live run caught what that costs: an
+--- admin who sets arena_hp at the console between two maps had it wiped by the
+--- previous map's teardown. Restore what we changed; leave alone what we did
+--- not.
+local pool_typed         = false
+--- Whether the module last saw a real 1v1. Only used to announce TRANSITIONS,
+--- so a three-player warm-up does not spam the chat every death.
+local was_armed_pair     = false
 
 local function cvar_num(name, fallback)
   local raw = et.trap_Cvar_Get(name)
@@ -376,7 +397,14 @@ local function configured_pool()
   local snapped = nearest_preset(want)
   if hp_warned ~= want then
     hp_warned = want
-    log("HPWARN  arena_hp=%d is not a measured preset -> using %d", want, snapped)
+    -- ⛔ %s, not %d. cvar_num is tonumber, and tonumber("750.5") is a FLOAT;
+    -- Lua 5.4 raises "number has no integer representation" on %d with one.
+    -- Measured: 750.5 throws, 500.0 does not. A throw here would abort
+    -- et_ClientSpawn three statements after the 1v1 gate, taking the ammo
+    -- fill, the pool write and the whole shield-levelling loop with it —
+    -- and exactly ONCE, because hp_warned is set on the line above before
+    -- the throw. One duel with no shields, one console line, never again.
+    log("HPWARN  arena_hp=%s is not a measured preset -> using %d", tostring(want), snapped)
     et.G_Print(MODNAME .. ": arena_hp " .. tostring(want) ..
                " is not one of 250/500/1000; using " .. snapped .. "\n")
   end
@@ -392,6 +420,7 @@ local function set_pool(want, cn)
     applied = nearest_preset(want)
   end
   pool_state = applied
+  pool_typed = true
   et.trap_Cvar_Set("arena_hp", tostring(applied))
   local shown = (applied == 0) and "engine default" or (applied .. " HP")
   local line = "^7arena pool ^3" .. shown .. " ^7— from the next spawn"
@@ -488,6 +517,28 @@ local function force_reset(cn, mod, why)
   et.gentity_set(cn, "ps.powerups", et.PW_INVULNERABLE, 0)
   et.G_Damage(cn, ENTITYNUM_WORLD, ENTITYNUM_WORLD, LETHAL_DAMAGE,
               DAMAGE_NO_PROTECTION, mod)
+
+  -- ⛔⛔ G_Damage IS ALLOWED TO DO NOTHING, and it says nothing when it does.
+  -- It returns early on !takedamage (g_combat.c:1435), on
+  -- `intermissionQueued || (gamestate != GS_PLAYING && match_warmupDamage == 0)`
+  -- (:1445), on noclip (:1593) and on FL_GODMODE (:1600) — the last two BEFORE
+  -- dflags is ever read, so DAMAGE_NO_PROTECTION does not cover them.
+  --
+  -- Two things then rot, and both are silent. The flag latches, so this
+  -- player's NEXT REAL DEATH is swallowed by the recursion guard — no point,
+  -- no reset, no line. And his spawn shield has already been stripped one
+  -- statement above, leaving him alive and unprotected: the precise
+  -- unfairness this module exists to remove, produced by the module.
+  --
+  -- ⭐ Reading health HERE is sound even though reading it inside et_Obituary
+  -- is not. G_Damage syncs ps.stats[STAT_HEALTH] from ent->health at
+  -- g_combat.c:2052, on its way out — the 2..42 positive readings this file
+  -- records elsewhere were taken from INSIDE the obituary, before that sync.
+  if is_alive(cn) then
+    forced[cn] = nil
+    et.gentity_set(cn, "ps.powerups", et.PW_INVULNERABLE, shield)
+    log("FORCE   cn=%d REFUSED by the engine — shield restored, flag cleared", cn)
+  end
 end
 
 function et_InitGame(levelTime, randomSeed, restart)
@@ -506,6 +557,9 @@ function et_InitGame(levelTime, randomSeed, restart)
   -- was capped by a number from a duel that was over. Carrying state across a
   -- map change is the same defect the score reset above already fixes.
   duel_pool = 0
+  relevel_pending = false
+  was_armed_pair = false
+  pool_typed = false
   -- A new map starts from the server's configuration, not from what somebody
   -- typed on the last one.
   pool_state = nil
@@ -527,6 +581,7 @@ function et_InitGame(levelTime, randomSeed, restart)
   -- onto the same wave by setting g_redlimbotime and g_bluelimbotime equal.
   -- Instant respawn sidesteps the wave entirely, which is the only way to get
   -- both players back in the same frame.
+  saved_arena_hp = et.trap_Cvar_Get("arena_hp")
   saved_forcerespawn = et.trap_Cvar_Get("g_forcerespawn")
   et.trap_Cvar_Set("g_forcerespawn", "-1")
   et.G_Print(MODNAME .. ": armed on " .. map_name() ..
@@ -540,6 +595,19 @@ local function restore_forcerespawn()
   if saved_forcerespawn ~= nil and saved_forcerespawn ~= "" then
     et.trap_Cvar_Set("g_forcerespawn", saved_forcerespawn)
   end
+  -- ⛔ `arena_hp` too, and for a reason the old comment on `pool_state = nil`
+  -- got backwards. That reset claimed "a new map starts from the server's
+  -- configuration, not from what somebody typed on the last one" — but
+  -- set_pool writes the CVAR as well, and configured_pool falls straight back
+  -- to it, so clearing the Lua state only demoted the read one level onto the
+  -- value the typing had already overwritten. Two players agreeing on
+  -- /arenahp 1000 silently handed 1000 to the next pair. Restoring the cvar
+  -- here is what makes the sentence true.
+  if pool_typed and saved_arena_hp ~= nil then
+    et.trap_Cvar_Set("arena_hp", saved_arena_hp)
+  end
+  pool_typed = false
+  saved_arena_hp = nil
   saved_forcerespawn = nil
   active = false
 end
@@ -565,6 +633,52 @@ end
 --- back on its own.
 function et_Quit()
   restore_forcerespawn()
+end
+
+--- ⛔⛔ LEAVING IS INVISIBLE WITHOUT THIS HOOK.
+---
+--- `ClientDisconnect` NEVER calls player_die (g_client.c:3526), so a duelist
+--- who quits produces no obituary at all and the module simply does not learn
+--- about it. The consequence is the module's one guarantee, off by a factor of
+--- six: the survivor keeps whatever he had — 87 HP and no shield — while the
+--- next player to join spawns with the full pool, full ammo and a fresh
+--- shield. The engine's own rescue does not cover it either: G_verifyMatchState
+--- only restarts when g_gamestate is PLAYING/WARMUP_COUNTDOWN and
+--- g_doWarmup > 0, and an arena server sits in plain GS_WARMUP.
+---
+--- ⭐ The leaver STILL COUNTS here. The hook fires at g_client.c:3585 and
+--- `pers.connected = CON_DISCONNECTED` is 138 lines later at :3723, so
+--- players_on_teams() still returns two and the leaver has to be excluded by
+--- hand rather than by the roster.
+---
+--- ⛔ And the re-levelling cannot happen now. Resetting the survivor while he
+--- is alone would put him back at the engine's default health with no pool and
+--- no ammo, because et_ClientSpawn bails on a roster of one — so he would be
+--- the disadvantaged one instead. The flag waits for a duel to exist again.
+function et_ClientDisconnect(clientNum)
+  if not active then
+    return
+  end
+  local roster = players_on_teams()
+  local was_duelling = false
+  if #roster == 2 then
+    for _, cn in ipairs(roster) do
+      if cn == clientNum then was_duelling = true end
+    end
+  end
+
+  -- Slot numbers are recycled. Every table this module keys by clientNum stops
+  -- describing a person the moment that person leaves, and the next connection
+  -- to take the slot would inherit it — including the score.
+  forced[clientNum]       = nil
+  spawn_shield[clientNum] = nil
+  score[clientNum]        = nil
+  score_pair              = nil
+
+  if was_duelling then
+    relevel_pending = true
+  end
+  log("QUIT    cn=%d duelling=%s — state cleared", clientNum, tostring(was_duelling))
 end
 
 function et_Obituary(victim, killer, mod)
@@ -618,19 +732,60 @@ function et_Obituary(victim, killer, mod)
     return
   end
 
+  -- ⛔⛔ LEAVING IS NOT DYING, and the engine makes it look exactly like it.
+  --
+  -- SetTeam kills you BEFORE it writes your new team: player_die(ent, ent,
+  -- ent, 100000, MOD_SWITCHTEAM) at g_cmds.c:1589, sess.sessionTeam = team
+  -- only at :1644 — 55 lines later. So when somebody types /team s in the
+  -- middle of a duel, this hook runs while they are still on their old team,
+  -- players_on_teams() still returns two, and without this guard the module
+  -- would score a point for the opponent AND execute him. Pressing spectate
+  -- was the strongest move in the game.
+  --
+  -- ⛔ Only MOD_SWITCHTEAM returns here. My first cut also returned on
+  -- MOD_SUICIDE, and that BROKE /kill: the module would have done nothing at
+  -- all, so the player who typed /kill would come back fresh while his
+  -- opponent kept his leftover health — the exact unfairness this file exists
+  -- to remove, reintroduced by the fix for a different bug. A self-inflicted
+  -- death still deserves the reset; what it does not deserve is a POINT, and
+  -- those are two different decisions (see `self_inflicted` below).
+  if victim == killer and mod == et.MOD_SWITCHTEAM then
+    log("LEAVE   cn=%d — team change, not a duel death", victim)
+    return
+  end
+
   local players = players_on_teams()
   if #players ~= 2 then
     log("SKIP    players=%d (not a 1v1)", #players)
+    -- ⛔ Say it out loud, ONCE. Until now every roster change disarmed the
+    -- module in total silence: the winner simply stopped being reset, there
+    -- was no announcement, and the only evidence was a log line the players
+    -- cannot read. A disarmed arena was indistinguishable from an armed one.
+    if was_armed_pair then
+      was_armed_pair = false
+      et.trap_SendServerCommand(-1, string.format(
+        'chat "^7arena: ^3paused ^7— %d players on the teams, needs exactly 2"', #players))
+    end
     return  -- not a 1v1 right now; leave the map alone
   end
+  was_armed_pair = true
 
-  -- The point goes to the other player, however the victim died — killed,
-  -- gibbed by the world, or self-inflicted. Only OUR reset is exempt, and the
-  -- guard above has already returned for that case.
+  -- ⛔ A point and a reset are NOT the same decision. `victim == killer` is
+  -- precisely a self-inflicted death (/kill, MOD_SUICIDE); world damage such
+  -- as falling arrives with killer = ENTITYNUM_WORLD, so it is not caught
+  -- here and still scores, which is right — the world killing you is a way of
+  -- losing the duel. Typing /kill is not, and paying a point for it would
+  -- make "kill yourself when you are behind" a tactic.
+  local self_inflicted = (victim == killer)
+
   ensure_pair(players)
-  for _, cn in ipairs(players) do
-    if cn ~= victim then
-      score[cn] = (score[cn] or 0) + 1
+  if self_inflicted then
+    log("SELFK   cn=%d mod=%d — reset yes, point no", victim, mod)
+  else
+    for _, cn in ipairs(players) do
+      if cn ~= victim then
+        score[cn] = (score[cn] or 0) + 1
+      end
     end
   end
 
@@ -649,8 +804,7 @@ end
 --- The spawn side of the reading. `levelTime` is not passed to this hook, so
 --- the shield IS the clock: ClientSpawn sets it to level.time + 3000, so two
 --- players that spawned in the same frame carry the same absolute number.
--- Last shield expiry each player was handed, so a pair can be levelled.
-local spawn_shield = {}
+-- (declared next to `forced` near the top — see the note there.)
 
 --- Give the arena loadout: one SMG, per team, nothing else. Also the reason
 --- the 190-damage gib trap (g_combat.c:1928, any single hit above 190 sets
@@ -913,7 +1067,16 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   -- warm-up in which this module has no business touching anybody's shield.
   local roster = players_on_teams()
   if #roster ~= 2 then
+    if was_armed_pair then
+      was_armed_pair = false
+      et.trap_SendServerCommand(-1, string.format(
+        'chat "^7arena: ^3paused ^7— %d players on the teams, needs exactly 2"', #roster))
+    end
     return
+  end
+  if not was_armed_pair then
+    was_armed_pair = true
+    et.trap_SendServerCommand(-1, 'chat "^7arena: ^2armed ^7— 1v1"')
   end
   -- The switch takes effect HERE and nowhere else: flipping vampiric in the
   -- middle of a duel would hand one player a pool the other never had. The
@@ -923,6 +1086,25 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     vamp_pending = nil
     log("VAMP    now %s", tostring(vamp_active))
   end
+  -- ⛔ The other half of the disconnect fix. A duel exists again, and the
+  -- player who never died still carries the leftover health from the duel his
+  -- opponent walked out of. Send him through the same door the module uses
+  -- after a kill, so both come back together.
+  --
+  -- ⛔⛔ This is deliberately gated on the flag and NOT a blanket "reset
+  -- whoever is alive". After a normal kill both players are dead when the
+  -- first one spawns, but the SECOND spawn would find the first one alive —
+  -- and a blanket rule would reset him, which resets the other, forever.
+  if relevel_pending then
+    relevel_pending = false
+    for _, other in ipairs(roster) do
+      if other ~= clientNum and is_alive(other) then
+        log("RELEVEL cn=%d — opponent had left mid-duel", other)
+        force_reset(other, et.MOD_SUICIDE, "opponent-left")
+      end
+    end
+  end
+
   duel_started = et.trap_Milliseconds()
   -- ⛔ Snapshot, not a live read. The cap lifesteal heals up to has to be the
   -- pool both players ACTUALLY spawned with: reading the cvar again from the
@@ -1061,7 +1243,7 @@ function et_ClientCommand(clientNum, command)
   if pool_arg ~= nil then
     vamp_pending = true
     set_pool(pool_arg, clientNum)
-    log("VAMPREQ cn=%d want=true pool=%d", clientNum, pool_arg)
+    log("VAMPREQ cn=%d want=true pool=%s", clientNum, tostring(pool_arg))
     return 1
   end
   local want = not (vamp_pending == nil and vamp_active or vamp_pending)
@@ -1121,7 +1303,7 @@ function et_ConsoleCommand()
     et.G_Print(MODNAME .. ": usage: arena_kill <clientnum>\n")
     return 1
   end
-  log("TESTCMD arena_kill cn=%d", cn)
+  log("TESTCMD arena_kill cn=%s", tostring(cn))
   force_reset(cn, et.MOD_SUICIDE, "test-command")
   return 1
 end

@@ -134,6 +134,32 @@ want, not for the number that sounds generous.
 picks its own class and the module cannot make it stop. They are consistent
 with each other, but none of them is a mirrored-SMG duel.
 
+### What this config does to your whole server
+
+Read this before you vote it in. The config is derived from the official
+Legacy 1on1 competition config, and it brings that config's opinions with it.
+
+- ⛔ **It becomes your server's permanent config.** `G_configSet` writes the
+  name into `g_customConfig`, which is `CVAR_ARCHIVE` — so the arena ruleset
+  applies to **every map**, survives map changes, and survives a restart of the
+  server process. Vote another config to undo it.
+- ⛔ **Only Field Ops is selectable.** `team_maxSoldiers/Medics/Engineers/
+  Covertops "0"` cap those classes at zero (`-1` means unlimited, `0` means
+  banned), so your players get "class is not available" for four of the five.
+  On every map, per the point above. Raise the caps if you do not want that.
+- ⛔ **Your map rotation stops.** `set nextmap "map_restart 0"` makes the
+  server replay the current map forever. Remove that line to keep a rotation.
+- ⛔ **A referee can unload the config by accident.** `\ref warmup 30` writes
+  `g_warmup`, which this config locks, and the votes for friendlyfire, antilag,
+  warmupdamage and balancedteams write locked cvars too. Any of them triggers
+  "WAS UNLOADED DUE TO EXTERNAL MANIPULATION" on the next frame — the config is
+  forgotten and the value is *not* restored.
+- ⚠️ **It is ready-up match mode.** `g_doWarmup 1`, `match_minplayers 2`,
+  `match_readypercent 100`: two players who join will sit in warmup until both
+  type `/ready`.
+- ⚠️ **`g_mapConfigs` and `g_campaignfile` are cleared**, so any per-map
+  configs or campaign you had are disabled while this config is loaded.
+
 ### Things that will bite you
 
 - ⛔ **Do not set `lua_modules` by hand while the server runs.** The engine's
@@ -313,6 +339,35 @@ réserve pour la durée voulue, pas pour le chiffre qui paraît généreux.
 Omni-bot choisit sa propre classe et le module ne peut pas l'en empêcher. Ils
 sont cohérents entre eux, mais aucun n'est un duel SMG contre SMG.
 
+### Ce que cette config fait à tout votre serveur
+
+À lire avant de la voter. Elle est dérivée de la config officielle 1on1 de
+compétition et elle en apporte les partis pris.
+
+- ⛔ **Elle devient la config permanente du serveur.** `G_configSet` écrit son
+  nom dans `g_customConfig`, qui est `CVAR_ARCHIVE` : le règlement de l'arène
+  s'applique donc à **toutes les cartes**, survit aux changements de carte et
+  survit à un redémarrage du processus. Votez une autre config pour l'annuler.
+- ⛔ **Seul Field Ops est sélectionnable.** `team_maxSoldiers/Medics/Engineers/
+  Covertops "0"` plafonnent ces classes à zéro (`-1` = illimité, `0` = interdit),
+  donc vos joueurs obtiennent « classe non disponible » pour quatre des cinq.
+  Sur toutes les cartes, cf. le point précédent. Relevez les plafonds si ce
+  n'est pas ce que vous voulez.
+- ⛔ **Votre rotation de cartes s'arrête.** `set nextmap "map_restart 0"` fait
+  rejouer la carte courante indéfiniment. Retirez cette ligne pour garder une
+  rotation.
+- ⛔ **Un arbitre peut décharger la config sans le vouloir.** `\ref warmup 30`
+  écrit `g_warmup`, que cette config verrouille ; les votes friendlyfire,
+  antilag, warmupdamage et balancedteams écrivent eux aussi des cvars
+  verrouillées. N'importe lequel déclenche « WAS UNLOADED DUE TO EXTERNAL
+  MANIPULATION » à la frame suivante — la config est oubliée et la valeur n'est
+  *pas* restaurée.
+- ⚠️ **C'est un mode match avec ready.** `g_doWarmup 1`, `match_minplayers 2`,
+  `match_readypercent 100` : deux joueurs qui arrivent resteront en warmup
+  jusqu'à ce que les deux tapent `/ready`.
+- ⚠️ **`g_mapConfigs` et `g_campaignfile` sont vidés**, donc vos configs par
+  carte et votre campagne sont désactivées tant que cette config est chargée.
+
 ### Ce qui va vous poser problème
 
 - ⛔ **Ne réglez pas `lua_modules` à la main pendant que le serveur tourne.**
@@ -491,6 +546,33 @@ dvoboja, ne glede na številko, ki zveni radodarno.
 ⚠️ Vse te številke so izmerjene z **mešanimi orožji** — Omnibot si razred
 izbere sam in modul mu tega ne more preprečiti. Med seboj so skladne, nobena pa
 ni dvoboj brzostrelka proti brzostrelki.
+
+### Kaj ta config naredi celemu tvojemu strežniku
+
+Preberi, preden ga izglasuješ. Izpeljan je iz uradnega tekmovalnega 1on1
+configa in s sabo prinese njegova stališča.
+
+- ⛔ **Postane trajni config strežnika.** `G_configSet` njegovo ime zapiše v
+  `g_customConfig`, ki je `CVAR_ARCHIVE` — arena ruleset torej velja na
+  **vseh mapah**, preživi menjave map in preživi restart procesa. Odpraviš ga
+  z izglasovanjem drugega configa.
+- ⛔ **Izbirni razred je samo Field Ops.** `team_maxSoldiers/Medics/Engineers/
+  Covertops "0"` te razrede omeji na nič (`-1` pomeni neomejeno, `0` pomeni
+  prepovedano), zato igralci pri štirih od petih dobijo »razred ni na voljo«.
+  Na vseh mapah, glej prejšnjo točko. Če tega nočeš, dvigni omejitve.
+- ⛔ **Rotacija map se ustavi.** `set nextmap "map_restart 0"` pomeni, da
+  strežnik v nedogled ponavlja isto mapo. Odstrani to vrstico, če hočeš
+  rotacijo.
+- ⛔ **Referee lahko config nehote odklopi.** `\ref warmup 30` piše `g_warmup`,
+  ki ga ta config zaklepa; prav tako pišejo zaklenjene cvare glasovanja
+  friendlyfire, antilag, warmupdamage in balancedteams. Katerokoli od njih
+  sproži »WAS UNLOADED DUE TO EXTERNAL MANIPULATION« v naslednjem frameu —
+  config je pozabljen, vrednost pa **ni** povrnjena.
+- ⚠️ **To je tekmovalni način z ready.** `g_doWarmup 1`, `match_minplayers 2`,
+  `match_readypercent 100`: dva igralca, ki se pridružita, bosta v warmupu,
+  dokler oba ne natipkata `/ready`.
+- ⚠️ **`g_mapConfigs` in `g_campaignfile` sta izpraznjena**, torej so tvoje
+  per-map konfiguracije in kampanja onemogočene, dokler je ta config naložen.
 
 ### Kar te bo ugriznilo
 
