@@ -7,6 +7,33 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-04, 13:40) **Arena 1v1 IZMERJENA na 2.84** — `871e92c5` na
+  `feat/lua-dots-arena` (PR #912, čaka ownerjev merge, NIČ deployanega).
+  45 min dvobojev z dvema botoma po raziskavi izvorne kode.
+  ✅ strelivo **9999/9999 pri ~100 spawnih**, ob koncu dvoboja pade le za
+  izstreljene naboje (najslabše `9999/9949`); ✅ sprint **20000** = natanko
+  `SPRINTTIME`; ✅ preset **250 HP = mediana 6 s** (n=13); ✅ `STAT_MAX_HEALTH`
+  ostane 100; ✅ veriga modulov nedotaknjena, 0 Lua napak.
+  ⛔ **Simetrija orožij**: zapis prime (50/50 potrjenih takoj po zapisu),
+  orožje pa obstane le **2 od 25** — Omnibot si svoje vzame nazaj. Ni vihar
+  (1,53/s vklopljeno proti 1,03/s kontrola = ~1,5× osnovnice, ker odgovarja
+  bot prek `Cmd_Team_f`/`G_SetClientWeapons`), dvoboji tečejo normalno →
+  privzeto izklopljeno, ne umaknjeno.
+  ⛔⛔ **Za naslednjič:** `G_Damage` je med warmupom TIHI NIČ
+  (`g_combat.c:1445`) — reset se ne zgodi in ne javi ničesar; zadetek >190
+  postavi zdravje na −176 **ne glede na bazen** (`g_combat.c:1931`).
+  ⛔⛔ **Rata iz nezaključenega okna ni rata**: objavil sem 1,52/s iz odčitka
+  50 s v 95-sekundno okno, končni izid 1,03/s → commit amendan.
+  ⛔ **Deploy na testni strežnik ne dela**: `scp` do `et@127.0.0.1` javi
+  `Permission denied (publickey)`; obvod je NOPASSWD `tmux ... run-shell`
+  (owner odobril 4. 9.) prek staging datoteke v `/tmp` (et ne more brati
+  `/home/samba`). Trajni popravek: dodati javni ključ v `et`-jev
+  `authorized_keys`.
+  ⛔ `local_et.sh start` zažene strežnik tudi, če je deploy odpovedal → **pred
+  vsako meritvijo `cmp` med repo datoteko in nameščeno**.
+  Odprto: klientska polovica 16-bitnega polja streliva in vezavi
+  `/vampiric`/`/arenahp` z boti nista merljivi.
+
 - (Opus 5, 2026-09-04, 03:30) **1v1 arena Lua: testna baterija KONČANA**, PR #912
   (`feat/lua-dots-arena`, čaka ownerjev merge, NIČ deployanega). Šest časovno
   omejenih testov na lokalnem **2.84** z dvema botoma. Deluje: prisilni reset
