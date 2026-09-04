@@ -9,6 +9,8 @@ import logging
 import os
 from typing import Any
 
+from bot.core.round_contract import DEFAULT_EXCLUDED_MAPS
+
 # Load .env file if it exists
 try:
     from dotenv import load_dotenv
@@ -211,7 +213,8 @@ class BotConfig:
         # (e.g. mp_sillyctf, a CTF map). Rounds on these maps are flagged
         # rounds.is_valid = FALSE at import and excluded from all stats/leaderboards.
         # Comma-separated, case-insensitive. See bot/core/round_contract.is_filler_map.
-        _excluded = self._get_config('EXCLUDED_MAPS', 'mp_sillyctf') or ''
+        _excluded = self._get_config(
+            'EXCLUDED_MAPS', ','.join(sorted(DEFAULT_EXCLUDED_MAPS))) or ''
         self.excluded_maps: set[str] = {
             m.strip().lower() for m in str(_excluded).split(',') if m.strip()
         }
