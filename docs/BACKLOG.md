@@ -7,6 +7,22 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-04, 14:35) **Arena kot deljiv paket** — `7efaa491` na
+  `feat/lua-dots-arena` (PR #912). `vps_scripts/dots_arena/` = config
+  (izpeljanka `legacy1.config` brez `sv_cvar` omejitev) + trijezični README
+  (EN/FR/SL). Preverjeno v živo: config se naloži, modul se oboroži, na tuji
+  mapi miruje in `g_forcerespawn` se povrne.
+  ⛔⛔ **Ob tem najden pravi hrošč: `CS_SERVERINFO` je ob PRVEM `map` PRAZEN**
+  (dolžina 0), zato gate na imenu mape ni nikoli deloval ob svežem nalaganju.
+  Modul se je oboroževal LE zato, ker `G_configSet` ob vsakem configu pošlje
+  `map_restart` in je dev strežnik vedno imel `g_customConfig`. Popravljeno:
+  bere se cvar `mapname`, configstring ostane rezerva. Primer 22 + 2 mutaciji.
+  ⛔⛔ Za vsak prihodnji config: `G_ConfigCheckLocked` teče **vsak frame** in
+  odklopi config, brž ko se kak `setl` cvar spremeni → `arena_hp` mora biti
+  `set`. Pinnano z `tests/unit/test_dots_arena_config_contract.py`.
+  ⛔ `lua_modules` v configu **prepiše** ves seznam modulov (6 → 1, izmerjeno).
+  Odprto: ključ za `et` še vedno ni nameščen (obvod `tmux run-shell`).
+
 - (Opus 5, 2026-09-04, 13:40) **Arena 1v1 IZMERJENA na 2.84** — `871e92c5` na
   `feat/lua-dots-arena` (PR #912, čaka ownerjev merge, NIČ deployanega).
   45 min dvobojev z dvema botoma po raziskavi izvorne kode.
