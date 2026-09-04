@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-04, PAVZA zaradi limitov) Ostal sem pri doc 22 rezini 1:
+  skripta + testi na veji `feat/bot-twins-route-distinctiveness` (commitano,
+  potisnjeno, BREZ PR-ja), korpusni tek še brez številk → glej
+  `docs/HANDOFF-next.md`.
 - (Fable 5.1, 2026-09-04) Match moments r. 1 (#908) in r. 5 (#909) MERGANI; watchdog
   v6.13 deployan; owner: naslednja **doc 22 (digitalni dvojčki botov)** —
   raziskava teče (agent + puran read-only), nato `docs/design/22`; potem doc 19
