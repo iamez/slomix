@@ -150,6 +150,52 @@ local function is_alive(cn)
   return type(hp) == "number" and hp > 0
 end
 
+-- ── The world keeps the score ──────────────────────────────────────────────
+--
+-- The world kills both players, so the world owes them the tally. It has to,
+-- because nothing else here can:
+--
+--   * the scoreboard is useless on this map — every duel gives the WINNER a
+--     death too (player_die counts one for every mod, g_combat.c:861), so K/D
+--     reads as a draw no matter who is winning;
+--   * arena rounds are excluded from stats on purpose (owner, 2026-09-04), so
+--     nothing downstream will ever add them up either.
+--
+-- A point goes to the OPPONENT of whoever died — including when a player kills
+-- themselves, which is the duel convention and also stops "/kill to deny the
+-- point" from being a tactic. Our own forced reset is not a death anybody
+-- earned and scores nothing; the recursion guard already tells the two apart.
+local score = {}     -- clientNum -> duels won
+local score_pair = nil  -- the two clientNums the current tally belongs to
+
+local function player_name(cn)
+  local raw = et.gentity_get(cn, "pers.netname")
+  if type(raw) ~= "string" or raw == "" then return "cn" .. tostring(cn) end
+  return et.Q_CleanStr(raw)
+end
+
+--- Reset the tally whenever the pair changes: a score carried over from a
+--- different pair of players is a lie about both of them.
+local function ensure_pair(players)
+  local key = table.concat(players, ":")
+  if score_pair ~= key then
+    score_pair = key
+    score = {}
+    for _, cn in ipairs(players) do score[cn] = 0 end
+  end
+end
+
+local function announce(players)
+  local parts = {}
+  for _, cn in ipairs(players) do
+    parts[#parts + 1] = string.format("%s ^3%d", player_name(cn), score[cn] or 0)
+  end
+  local line = table.concat(parts, " ^7- ")
+  et.trap_SendServerCommand(-1, 'cp "^7' .. line .. '\n"')
+  et.trap_SendServerCommand(-1, 'chat "^7arena: ' .. line .. '"')
+  log("SCORE   %s", line:gsub("%^%d", ""))
+end
+
 --- End a life without scoring it: world as inflictor and attacker, and enough
 --- damage to gib from any starting health.
 ---
@@ -178,6 +224,10 @@ end
 function et_InitGame(levelTime, randomSeed, restart)
   et.RegisterModname(MODNAME .. " " .. VERSION)
   forced = {}
+  -- A new map starts 0-0. Without this the tally survives a map change and
+  -- the first announcement of the next map is a score nobody played for.
+  score = {}
+  score_pair = nil
   -- ⛔ `active` is the MAP gate ONLY. It used to fold in the arena_1v1 enable
   -- cvar as well, which made the control run impossible to take: with
   -- arena_1v1 0 the module went fully dark, so the very measurement that has
@@ -253,6 +303,16 @@ function et_Obituary(victim, killer, mod)
     return  -- not a 1v1 right now; leave the map alone
   end
 
+  -- The point goes to the other player, however the victim died — killed,
+  -- gibbed by the world, or self-inflicted. Only OUR reset is exempt, and the
+  -- guard above has already returned for that case.
+  ensure_pair(players)
+  for _, cn in ipairs(players) do
+    if cn ~= victim then
+      score[cn] = (score[cn] or 0) + 1
+    end
+  end
+
   -- Everyone still standing goes down in THIS frame, which is the whole point:
   -- both players then leave limbo in the same frame and ClientSpawn hands them
   -- the same `level.time + 3000` shield.
@@ -261,6 +321,8 @@ function et_Obituary(victim, killer, mod)
       force_reset(cn, et.MOD_SUICIDE, "survivor")
     end
   end
+
+  announce(players)
 end
 
 --- The spawn side of the reading. `levelTime` is not passed to this hook, so
@@ -293,7 +355,15 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   if not enabled() then
     return
   end
-  for _, other in ipairs(players_on_teams()) do
+  -- ⛔ The 1v1 gate belongs here too. Without it the levelling ran on every
+  -- spawn no matter how many players were on the teams — measured on 2.84:
+  -- 55 levelling events against 12 actual duels, the surplus being a six-bot
+  -- warm-up in which this module has no business touching anybody's shield.
+  local roster = players_on_teams()
+  if #roster ~= 2 then
+    return
+  end
+  for _, other in ipairs(roster) do
     if other ~= clientNum then
       local theirs = spawn_shield[other]
       if theirs and theirs > 0 and shield > 0 and math.abs(shield - theirs) <= 1000 then

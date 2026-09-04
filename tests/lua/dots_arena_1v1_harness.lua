@@ -8,7 +8,7 @@
 -- server said the opposite (health 2..42 at obituary time, never negative).
 -- Treat a pass here as "the logic is consistent", never as "it works".
 -- Stub motorja, razširjen na nove poti: log, spawn hook, testni ukaz.
-local calls, logged = {}, {}
+local calls, logged, sent = {}, {}, {}
 local health = {[0]=100, [1]=100}
 local team   = {[0]=1,   [1]=2}
 local conn   = {[0]=2,   [1]=2}
@@ -30,11 +30,14 @@ et = {
   trap_FS_FCloseFile=function() end,
   gentity_get=function(cn, field, idx)
     if field=="pers.connected" then return conn[cn] end
+    if field=="pers.netname" then return ({[0]="^1alpha",[1]="^2bravo",[2]="^3charlie",[3]="^4delta"})[cn] end
     if field=="sess.sessionTeam" then return team[cn] end
     if field=="ps.stats" and idx==0 then return health[cn] end
     if field=="ps.powerups" and idx==1 then return shield[cn] end
     if field=="pers.playerStats.selfkills" then return 0 end
   end,
+  Q_CleanStr=function(s) return (s:gsub("%^%d","")) end,
+  trap_SendServerCommand=function(cn, cmd) sent[#sent+1]=cmd end,
   gentity_set=function(cn, field, idx, val)
     if field=="ps.powerups" and idx==1 then shield[cn]=val end
     calls[#calls+1]=("set(%d,%s,%s,%s)"):format(cn, field, tostring(idx), tostring(val))
@@ -131,3 +134,42 @@ argv = {"arena_kill", "0"}
 assert(et_ConsoleCommand() == 1, "⛔ testni ukaz mora delati tudi pri arena_1v1 0 (sicer ni kontrole)")
 assert(#calls == 2 and calls[2]:match("^G_Damage%(0,"), "arena_kill ni ubil: "..table.concat(calls," | "))
 print("✅ kontrola je izvedljiva: reset miruje, testni ukaz dela")
+
+-- 8) Svet vodi izid: točka gre NASPROTNIKU umrlega, prisilni reset ne šteje,
+--    in ob vsakem dvoboju gre ven objava. Brez tega je na tej mapi izid
+--    neberljiv — zmagovalec dobi smrt tako kot poraženec, K/D pa neodločeno.
+et.trap_GetConfigstring = function() return "\\mapname\\dots_arena" end
+cvars.arena_1v1 = "1"; cvars.arena_1v1_test = "1"
+et_InitGame(0,0,false)
+sent = {}; health[0]=100; health[1]=100; shield[0]=0; shield[1]=0
+health[1] = 0; et_Obituary(1, 0, 7)          -- 0 ubije 1
+health[1] = 100; health[0] = 0; et_Obituary(0, 1, 7)  -- 1 ubije 0
+health[0] = 100; health[1] = 0; et_Obituary(1, 1, 37) -- 1 se ubije sam
+local last = sent[#sent] or ""
+-- ⛔ `^` je v Lua vzorcih poseben SAMO na prvem mestu; prvi zapis
+-- ("alpha ^%^3") je zato iskal DVA stršična znaka in ni ujel ničesar, assert
+-- pa je padel s sporočilom, ki je kazalo pravilen izid. Vzorec mora biti
+-- preverjen prav tako kot koda, ki jo meri.
+local a = tonumber(last:match("alpha %^3(%d+)"))
+local b = tonumber(last:match("bravo %^3(%d+)"))
+assert(a and b, "objava ni v pričakovani obliki: "..tostring(last))
+assert(a == 2 and b == 1,
+       "izid ni 2-1 (selfkill mora dati točko nasprotniku): "..tostring(last))
+assert(#sent >= 6, "vsak dvoboj mora dati cp IN chat: "..#sent)
+assert(sent[1]:match("alpha %^31 %^7%- bravo %^30"),
+       "prvi dvoboj po et_InitGame se mora začeti pri 0-0, dobil: "..sent[1])
+print("✅ svet vodi izid 2-1 (selfkill šteje nasprotniku), nova mapa začne 0-0")
+
+-- 9) Poravnava ščitov mora spati, kadar NI 1v1. Brez tega je modul na
+--    šestbotovskem ogrevanju posegal v ščite vseh (izmerjeno na 2.84:
+--    55 poravnav proti 12 dvobojem).
+conn[2]=2; team[2]=1; health[2]=100; shield[2]=0   -- tretji igralec na ekipi
+cvars.sv_maxclients = "3"
+et_InitGame(0,0,false)
+calls = {}; logged = {}
+shield[0]=50000; shield[1]=50025
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(shield[0]==50000 and shield[1]==50025,
+       "⛔ pri treh igralcih se ščitov ne sme dotikati: "..shield[0].."/"..shield[1])
+assert(not table.concat(logged," "):match("LEVEL"), "poravnava se je vseeno zgodila")
+print("✅ poravnava spi, kadar ni 1v1")
