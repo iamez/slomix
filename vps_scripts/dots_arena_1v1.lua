@@ -75,6 +75,9 @@ local VERSION  = "1.0.0"
 
 -- Not et.* constants on 2.85 (checked): write them as the numbers they are.
 local ENTITYNUM_WORLD      = 1022
+local MAX_CLIENTS          = 64    -- entity numbers below this are players
+local WP_MP40              = 3     -- bg_public.h:848+ ; Axis SMG
+local WP_THOMPSON          = 8     -- ; Allies SMG
 local DAMAGE_NO_PROTECTION = 0x00000020  -- g_local.h @ v2.85.0
 local LETHAL_DAMAGE        = 1000        -- far past GIB_HEALTH from any health
 
@@ -148,6 +151,59 @@ local function is_alive(cn)
   -- `health` is not exposed to Lua; STAT_HEALTH is the only reading available.
   local hp = et.gentity_get(cn, "ps.stats", et.STAT_HEALTH)
   return type(hp) == "number" and hp > 0
+end
+
+-- ── Vampiric: what you take off them, you get back ─────────────────────────
+--
+-- Diabotical's Shaft Arena and QuakeLive's vampiric servers, on ET's numbers.
+-- Diabotical leeches 50% ("do 10 damage, receive 5hp") and that is the default
+-- here; QuakeLive's own community warns that 100% makes LG fights "almost
+-- endless", which is the failure this mode has to avoid, not chase.
+--
+-- MP40 and Thompson both do 18 damage every 150 ms (bg_misc.c:164, :169) =
+-- 120 dmg/s sustained. With a 1000 HP pool and 50% leech, a duel where one
+-- player lands 60% and the other 40% resolves in roughly 20-30 s -- long
+-- enough for movement and tracking to decide it, short enough to end.
+--
+-- ⛔ Two engine facts shape this, both read out of the source rather than
+-- assumed:
+--
+--  * ps.stats[STAT_MAX_HEALTH] CANNOT be raised. ClientEndFrame calls
+--    AddMedicTeamBonus() every frame (g_active.c:2307), which recomputes it
+--    from pers.maxHealth -- and pers.maxHealth is read-only to Lua
+--    (g_lua.c:1282). So we raise `health` and leave the ceiling alone; nothing
+--    clamps health down to it. The engine does bleed the surplus at 1 HP per
+--    second while health > max (g_active.c:941-944) -- about 30 HP over a
+--    30 s duel, which is noise, but it LOOKS like a lifesteal bug, so it is
+--    written down here.
+--  * et_Damage can CANCEL damage (return 1) but cannot change it, and a
+--    returned 1 stops the module walk -- which would starve c0rnp0rn8,
+--    endstats, live_events and proximity_tracker of every damage event. This
+--    hook therefore returns NOTHING, ever.
+
+local vamp_active  = false   -- in force for the duel being fought now
+local vamp_pending = nil     -- what the next spawn will adopt
+local duel_started = nil     -- trap_Milliseconds at the start of this duel
+
+local function vamp_hp()    return cvar_num("arena_vamp_hp", 1000) end
+local function vamp_steal() return cvar_num("arena_vamp_steal", 50) end
+local function vamp_grace() return cvar_num("arena_vamp_grace", 90) end
+local function vamp_decay() return cvar_num("arena_vamp_decay", 30) end
+
+--- The leech fraction right now: full until the grace period, then falling to
+--- zero across the decay window. A duel that will not end on skill ends on
+--- arithmetic instead of running until someone leaves.
+local function steal_fraction()
+  local base = vamp_steal() / 100.0
+  if base <= 0 or duel_started == nil then return base end
+  local elapsed = (et.trap_Milliseconds() - duel_started) / 1000.0
+  local grace = vamp_grace()
+  if elapsed <= grace then return base end
+  local decay = vamp_decay()
+  if decay <= 0 then return 0 end
+  local left = 1.0 - (elapsed - grace) / decay
+  if left <= 0 then return 0 end
+  return base * left
 end
 
 -- ── The world keeps the score ──────────────────────────────────────────────
@@ -228,6 +284,9 @@ function et_InitGame(levelTime, randomSeed, restart)
   -- the first announcement of the next map is a score nobody played for.
   score = {}
   score_pair = nil
+  vamp_active = cvar_num("arena_vamp", 0) ~= 0
+  vamp_pending = nil
+  duel_started = nil
   -- ⛔ `active` is the MAP gate ONLY. It used to fold in the arena_1v1 enable
   -- cvar as well, which made the control run impossible to take: with
   -- arena_1v1 0 the module went fully dark, so the very measurement that has
@@ -331,6 +390,23 @@ end
 -- Last shield expiry each player was handed, so a pair can be levelled.
 local spawn_shield = {}
 
+--- Give the arena loadout: one SMG, per team, nothing else. Also the reason
+--- the 190-damage gib trap (g_combat.c:1928, any single hit above 190 sets
+--- health to -176 regardless of the pool) cannot fire here — an 18-damage SMG
+--- never reaches it, while a panzerfaust would end a 1000 HP duel in one shot.
+local function arena_loadout(cn)
+  local team = et.gentity_get(cn, "sess.sessionTeam")
+  local keep = (team == et.TEAM_AXIS) and WP_MP40 or WP_THOMPSON
+  for wp = 1, 55 do
+    if wp ~= keep then
+      pcall(et.RemoveWeaponFromPlayer, cn, wp)
+    end
+  end
+  -- Five arguments: the fifth (setcurrent) is required by the binding even
+  -- though its docstring omits it (g_lua.c:1096).
+  et.AddWeaponToPlayer(cn, keep, 999, 30, 1)
+end
+
 function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   if not active then
     return
@@ -363,6 +439,21 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   if #roster ~= 2 then
     return
   end
+  -- The switch takes effect HERE and nowhere else: flipping vampiric in the
+  -- middle of a duel would hand one player a pool the other never had. The
+  -- request waits until both are fresh, which is this moment.
+  if vamp_pending ~= nil then
+    vamp_active = vamp_pending
+    vamp_pending = nil
+    log("VAMP    now %s", tostring(vamp_active))
+  end
+  duel_started = et.trap_Milliseconds()
+  if vamp_active then
+    et.gentity_set(clientNum, "health", vamp_hp())
+    et.gentity_set(clientNum, "ps.stats", et.STAT_HEALTH, vamp_hp())
+    arena_loadout(clientNum)
+  end
+
   for _, other in ipairs(roster) do
     if other ~= clientNum then
       local theirs = spawn_shield[other]
@@ -381,6 +472,89 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
       end
     end
   end
+end
+
+--- Lifesteal. `damage` is the FINAL figure the engine is about to subtract —
+--- every multiplier (headshot, helmet, adrenaline, falloff) already applied
+--- (g_combat.c:1856) — so leeching a fraction of it is leeching what the
+--- opponent actually lost.
+---
+--- ⛔ RETURNS NOTHING. A returned 1 cancels the damage AND stops the module
+--- walk, which would leave c0rnp0rn8, endstats, live_events and
+--- proximity_tracker without a single damage event. This hook only watches.
+function et_Damage(target, attacker, damage, dflags, mod)
+  if not active or not vamp_active then
+    return
+  end
+  -- ⚠️ These are ENTITY numbers, not clientNums: attacker can be the world
+  -- (1022), and target can be a mover or a missile. Both must be players, and
+  -- the world must never heal anybody — including our own forced reset.
+  if type(attacker) ~= "number" or type(target) ~= "number" then
+    return
+  end
+  if attacker == target then
+    return   -- self-damage heals nobody
+  end
+  -- ⚠️ The next test and the roster test below are MUTUALLY REDUNDANT for the
+  -- world: remove either one and the other still stops entity 1022, which is
+  -- why neither shows up as a surviving mutation on its own. Removing BOTH
+  -- does break the harness, and that is the case that pins the behaviour. Both
+  -- stay: this one keeps et.gentity_get away from non-client entities, the
+  -- roster one keeps the heal inside the duel, and they would stop covering
+  -- for each other the moment this mode grew past 1v1.
+  if attacker >= MAX_CLIENTS or target >= MAX_CLIENTS then
+    return
+  end
+  local roster = players_on_teams()
+  if #roster ~= 2 then
+    return
+  end
+  local in_duel = 0
+  for _, cn in ipairs(roster) do
+    if cn == attacker or cn == target then in_duel = in_duel + 1 end
+  end
+  if in_duel ~= 2 then
+    return
+  end
+
+  local heal = math.floor((tonumber(damage) or 0) * steal_fraction())
+  if heal <= 0 then
+    return
+  end
+  local hp = et.gentity_get(attacker, "ps.stats", et.STAT_HEALTH)
+  hp = tonumber(hp) or 0
+  local capped = math.min(hp + heal, vamp_hp())
+  if capped <= hp then
+    return
+  end
+  et.gentity_set(attacker, "health", capped)
+  et.gentity_set(attacker, "ps.stats", et.STAT_HEALTH, capped)
+  log("STEAL   cn=%d dmg=%d heal=%d health=%d", attacker, damage, capped - hp, capped)
+end
+
+--- The switch a player can reach. Not everybody wants lifesteal, and in a 1v1
+--- the agreement is two people, so this needs neither a vote nor an admin.
+---
+--- ⛔ Returns 1 ONLY for its own command. et_ClientCommand stops the module
+--- walk on a returned 1 (tests/unit/test_lua_hook_return_contract.py), so
+--- claiming anything else would swallow /say, /kill and every other command
+--- the other modules read.
+function et_ClientCommand(clientNum, command)
+  if not active then
+    return 0
+  end
+  local cmd = string.lower(et.trap_Argv(0))
+  if cmd ~= "vampiric" and cmd ~= "vamp" then
+    return 0
+  end
+  local want = not (vamp_pending == nil and vamp_active or vamp_pending)
+  vamp_pending = want
+  local state = want and "^2ON" or "^1OFF"
+  local line = "^7vampiric " .. state .. " ^7— from the next spawn"
+  et.trap_SendServerCommand(-1, 'cp "' .. line .. '\n"')
+  et.trap_SendServerCommand(-1, 'chat "^7arena: ' .. line .. '"')
+  log("VAMPREQ cn=%d want=%s", clientNum, tostring(want))
+  return 1
 end
 
 --- Test-only console command, so a duel can be driven deterministically from

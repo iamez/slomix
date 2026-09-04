@@ -9,6 +9,8 @@
 -- Treat a pass here as "the logic is consistent", never as "it works".
 -- Stub motorja, razširjen na nove poti: log, spawn hook, testni ukaz.
 local calls, logged, sent = {}, {}, {}
+local weapons, current_wp = {}, {}
+local now_ms = 100000
 local health = {[0]=100, [1]=100}
 local team   = {[0]=1,   [1]=2}
 local conn   = {[0]=2,   [1]=2}
@@ -37,9 +39,16 @@ et = {
     if field=="pers.playerStats.selfkills" then return 0 end
   end,
   Q_CleanStr=function(s) return (s:gsub("%^%d","")) end,
+  trap_Milliseconds=function() return now_ms end,
+  RemoveWeaponFromPlayer=function(cn, wp) weapons[cn] = weapons[cn] or {}; weapons[cn][wp] = nil end,
+  AddWeaponToPlayer=function(cn, wp, ammo, clip, cur)
+    weapons[cn] = weapons[cn] or {}; weapons[cn][wp] = true; current_wp[cn] = wp
+  end,
   trap_SendServerCommand=function(cn, cmd) sent[#sent+1]=cmd end,
   gentity_set=function(cn, field, idx, val)
     if field=="ps.powerups" and idx==1 then shield[cn]=val end
+    if field=="health" then health[cn]=idx end
+    if field=="ps.stats" and idx==0 then health[cn]=val end
     calls[#calls+1]=("set(%d,%s,%s,%s)"):format(cn, field, tostring(idx), tostring(val))
   end,
   G_Damage=function(t,i,a,d,f,m)
@@ -173,3 +182,55 @@ assert(shield[0]==50000 and shield[1]==50025,
        "⛔ pri treh igralcih se ščitov ne sme dotikati: "..shield[0].."/"..shield[1])
 assert(not table.concat(logged," "):match("LEVEL"), "poravnava se je vseeno zgodila")
 print("✅ poravnava spi, kadar ni 1v1")
+
+-- ── vampiric ────────────────────────────────────────────────────────────────
+
+-- 10) Stikalo velja ŠELE od naslednjega spawna. Vklop sredi dvoboja bi enemu
+--     podaril zalogovnik, ki ga drugi nima.
+conn[2]=nil; team[2]=nil; cvars.sv_maxclients = "2"
+cvars.arena_vamp = "0"; cvars.arena_vamp_hp = "1000"; cvars.arena_vamp_steal = "50"
+cvars.arena_vamp_grace = "90"; cvars.arena_vamp_decay = "30"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+argv = {"vampiric"}
+assert(et_ClientCommand(0, "vampiric") == 1, "svoj ukaz mora prevzeti")
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 100, "⛔ vklop ne sme veljati sredi dvoboja: "..health[0])
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 1000 and health[1] == 1000, "po spawnu mora veljati: "..health[0].."/"..health[1])
+print("✅ /vampiric velja šele od naslednjega spawna")
+
+-- 11) Lifesteal je 50 % in ne preseže zalogovnika.
+health[0] = 500
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 520, "50 % od 40 je 20: dobil "..health[0])
+health[0] = 995
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 1000, "meja mora držati: "..health[0])
+print("✅ lifesteal 50 %, meja drži")
+
+-- 12) Svet ne zdravi nikogar, in tuj ukaz ni požrt.
+-- ⛔ Prvi zapis tega primera je preverjal ŽRTEV (health[0]) — a zdravljenje
+--    gre NAPADALCU, torej entiteti 1022. Test je zato prehajal tudi z
+--    odstranjenima OBEMA varovaloma: meril je stvar, ki se ni mogla premakniti.
+--    Preveri tisto, kar se res zapiše.
+health[0] = 500; health[1022] = nil
+et_Damage(0, 1022, 100, 0, 37)
+assert(health[1022] == nil, "⛔ svet (1022) ne sme dobiti zdravja: "..tostring(health[1022]))
+assert(health[0] == 500, "žrtev se ne sme spremeniti: "..health[0])
+argv = {"say", "hi"}
+assert(et_ClientCommand(0, "say") == 0, "⛔ tuj ukaz mora vrniti 0, sicer ga požremo")
+print("✅ svet ne zdravi, tuj ukaz ni požrt")
+
+-- 13) Po pragu lifesteal upada, da se dvoboj konča.
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+health[0] = 500
+now_ms = now_ms + 91000            -- tik čez 90 s grace
+et_Damage(1, 0, 40, 0, 8)
+local after_grace = health[0] - 500
+now_ms = now_ms + 40000            -- daleč čez decay
+health[0] = 500
+et_Damage(1, 0, 40, 0, 8)
+assert(after_grace < 20 and after_grace > 0, "tik po pragu mora upadati, ne pasti na nic: "..after_grace)
+assert(health[0] == 500, "po izteku upadanja lifesteala ne sme biti ve\195\168: "..health[0])
+print("✅ lifesteal upada po pragu in se izteče")
