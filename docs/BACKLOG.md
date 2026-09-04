@@ -7,6 +7,26 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-04, 03:30) **1v1 arena Lua: testna baterija KONČANA**, PR #912
+  (`feat/lua-dots-arena`, čaka ownerjev merge, NIČ deployanega). Šest časovno
+  omejenih testov na lokalnem **2.84** z dvema botoma. Deluje: prisilni reset
+  33/33, poravnava ščitov, lifesteal točno 50 %, meja `arena_vamp_hp` na enoto,
+  stikalo šele ob naslednjem spawnu, veriga modulov nedotaknjena.
+  ⛔ **Privzetek vampiric pool 1000 → 500**: krivulja dolžine dvoboja NI
+  linearna (300 HP = mediana 7 s, 500 = 14 s, 1000 = **en dvoboj v 120 s**) —
+  1000 je natanko »fights take forever« odpoved, dosežena pri 50 %, ne 100 %.
+  ⛔ **Izsiljevanje orožja UMAKNJENO** v dokumentiran stub: Axis boti so kljub
+  temu spawnali s Kar98, `ClientUserinfoChanged` vihar ~1 Hz, bota sta se
+  nehala pobijati (246 lifesteal dogodkov, ENA smrt v 2 min). Odstranitev
+  orožja, ki ga klient DRŽI, sproži `EV_WEAPONSWITCHED` (`g_lua.c:1163`).
+  **Odprto:** vezava `/vampiric` kot klientskega ukaza ni bila izmerjena (boti
+  ne pošiljajo lastnih ukazov, ufw blokira človeka z LAN-a) — semantika je
+  izmerjena skozi `arena_vamp_toggle`, ki gre po isti `vamp_pending` poti.
+  ⚠️ Na namestitvi **2.85** je `stats_discord_webhook.lua` zastarel in konča
+  `et_Obituary` z `return 0` → `live_events.lua` tam ne dobi obituaryjev; na
+  2.84 je v redu. **Ali je puran v istem stanju, NI preverjeno.**
+  ⛔ `luac` na tem stroju je Lua **5.1** — sintaksa se preverja z `luac5.4`.
+
 - (Fable 5.1, 2026-09-04) Match moments r. 1 (#908) in r. 5 (#909) MERGANI; watchdog
   v6.13 deployan; owner: naslednja **doc 22 (digitalni dvojčki botov)** —
   raziskava teče (agent + puran read-only), nato `docs/design/22`; potem doc 19
