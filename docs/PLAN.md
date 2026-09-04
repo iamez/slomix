@@ -48,7 +48,13 @@ deploy NI naloga.
 4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
-6. **Raziskano 3. 9., čaka na svojo vrsto (po Stats 2.0 R4):**
+6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
+   - `docs/design/22` (lokalno, **napisan 4. 9.**) — **»digitalni dvojčki« botov**:
+     `player_track.path` (200 ms, 74 480 življenj, regularji 28–63 sej/mapo)
+     → profil igralca (vozlišča, dwell = nova kemp metrika, tempo); Omni-bot
+     0.91 na puranu = en `.way` graf na mapo, per-bot le `OnBotJoin` +
+     `bot.SetRoles` + kamp čas + tempo → **»njegovi cilji, njegova kamp mesta,
+     njegov tempo«**, ne dobesedna pot; rezine 1–5 v docu; odločitve za ownerja.
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -88,7 +94,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-04 (Fable 5.1, r. 1 mergana, r. 5 v PR-ju)
+**Zadnja posodobitev:** 2026-09-04 (Fable 5.1, r. 1 in r. 5 mergani; naslednja doc 22)
 
 | rezina | vsebina | stanje |
 |---|---|---|
@@ -96,7 +102,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 | 2 | Lua: `first/last_move_time` moverja + `et_Damage` pripis uničenja (ownerjev deploy protokol) | — |
 | 3 | Lua: zajem escorta NOSILCA (`proximity_carrier_escort`) + migracija + parser | — |
 | 4 | detektor escorta nosilca + fixture varovalo »medic ≠ escort« | — |
-| 5 | **vidnost (owner 3. 9.)**: `/storytelling/moments?types=escort_mover` (backend filter) + majhen panel »objective escorts« v Story zavihku pod momenti; direktorjev rez nespremenjen; oznake po tipu | veja `feat/moments-types-filter-escorts-panel`: `types=` (allowlist `MOMENT_TYPES`, 422 na neznan tip, filter nad bazenom pred rezom, cache ključ `(gsid, limit, types)`), `useStoryEscorts` + panel `story.escorts`, posnetek 154 (1 moment R2) |
+| 5 | **vidnost (owner 3. 9.)**: `/storytelling/moments?types=escort_mover` (backend filter) + majhen panel »objective escorts« v Story zavihku pod momenti; direktorjev rez nespremenjen; oznake po tipu | **MERGAN** #909 (`6d61805d`, 4. 9.) — `types=` filter + panel `story.escorts` |
 
 ## Proga: frame-health v6.13 — watchdog za VSE Lua module + bot test (Fable 5.1)
 
