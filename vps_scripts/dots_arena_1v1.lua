@@ -185,7 +185,19 @@ local vamp_active  = false   -- in force for the duel being fought now
 local vamp_pending = nil     -- what the next spawn will adopt
 local duel_started = nil     -- trap_Milliseconds at the start of this duel
 
-local function vamp_hp()    return cvar_num("arena_vamp_hp", 1000) end
+--- Measured on the local 2.84 server with two bots, 2026-09-04. The pool and
+--- the duel length are NOT proportional — lifesteal makes it a race between
+--- two drains, so the curve bends hard:
+---
+---     300 HP  ->  median  7 s  (n=11)
+---     500 HP  ->  median 14 s  (n=7)
+---    1000 HP  ->  ONE duel in 120 s
+---
+--- 1000 was the first guess and it is the "fights take forever" failure the
+--- QuakeLive community warns about, reached at 50% leech rather than 100%.
+--- 500 is the measured middle and the default; raise it with the cvar if you
+--- want longer, but raise it knowing the curve.
+local function vamp_hp()    return cvar_num("arena_vamp_hp", 500) end
 local function vamp_steal() return cvar_num("arena_vamp_steal", 50) end
 local function vamp_grace() return cvar_num("arena_vamp_grace", 90) end
 local function vamp_decay() return cvar_num("arena_vamp_decay", 30) end
@@ -394,17 +406,26 @@ local spawn_shield = {}
 --- the 190-damage gib trap (g_combat.c:1928, any single hit above 190 sets
 --- health to -176 regardless of the pool) cannot fire here — an 18-damage SMG
 --- never reaches it, while a panzerfaust would end a 1000 HP duel in one shot.
+--- ⛔ WITHDRAWN after the first live run (2026-09-04). This stripped every
+--- weapon but one on each spawn, and the measurement said it did not work:
+--- Axis bots kept spawning with `w\23` (Kar98, their class default) instead of
+--- MP40, while the server produced a ClientUserinfoChanged storm at ~1 Hz and
+--- the bots stopped killing each other entirely — 246 lifesteal events and a
+--- single obituary in two minutes.
+---
+--- Two mistakes worth naming rather than quietly deleting:
+---  * `pcall` around every RemoveWeaponFromPlayer swallowed whatever the
+---    binding was actually saying. A loop that cannot fail is a loop that
+---    cannot be debugged.
+---  * removing the weapon a client is HOLDING sets ps.weapon = 0 and fires
+---    EV_WEAPONSWITCHED (g_lua.c:1163-1176); doing that 54 times per spawn,
+---    against a bot that re-picks its own weapon every frame, is a fight the
+---    script cannot win.
+---
+--- Forcing the loadout is not required by lifesteal and is now an open item,
+--- not a silent half-feature. Left as a stub so its absence is deliberate.
 local function arena_loadout(cn)
-  local team = et.gentity_get(cn, "sess.sessionTeam")
-  local keep = (team == et.TEAM_AXIS) and WP_MP40 or WP_THOMPSON
-  for wp = 1, 55 do
-    if wp ~= keep then
-      pcall(et.RemoveWeaponFromPlayer, cn, wp)
-    end
-  end
-  -- Five arguments: the fifth (setcurrent) is required by the binding even
-  -- though its docstring omits it (g_lua.c:1096).
-  et.AddWeaponToPlayer(cn, keep, 999, 30, 1)
+  return   -- see the note above; weapon forcing is not attempted
 end
 
 function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
@@ -452,6 +473,12 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     et.gentity_set(clientNum, "health", vamp_hp())
     et.gentity_set(clientNum, "ps.stats", et.STAT_HEALTH, vamp_hp())
     arena_loadout(clientNum)
+    -- ⛔ The SPAWN line above was written BEFORE this, so it reports the
+    -- engine's 100 and not the pool a vampiric duel actually starts with. It
+    -- read like the mode was not applying at all (live run, 2026-09-04) while
+    -- the STEAL lines showed health climbing to exactly the configured cap.
+    -- An instrument that logs before the action measures the wrong moment.
+    log("VAMPHP  cn=%d health=%d", clientNum, vamp_hp())
   end
 
   for _, other in ipairs(roster) do
@@ -572,7 +599,21 @@ function et_ConsoleCommand()
   if not active or cvar_num("arena_1v1_test", 0) == 0 then
     return 0
   end
-  if string.lower(et.trap_Argv(0)) ~= "arena_kill" then
+  local cmd = string.lower(et.trap_Argv(0))
+  -- The switch, reachable from the server console. Bots do not send custom
+  -- client commands and a human cannot reach this box through ufw, so without
+  -- this the /vampiric path could never be measured on a running server — only
+  -- against a stub, which is exactly the kind of coverage that has been wrong
+  -- three times in this module already.
+  if cmd == "arena_vamp_toggle" then
+    local want = not (vamp_pending == nil and vamp_active or vamp_pending)
+    vamp_pending = want
+    log("VAMPREQ console want=%s", tostring(want))
+    et.G_Print(MODNAME .. ": vampiric " .. (want and "ON" or "OFF") ..
+               " from the next spawn\n")
+    return 1
+  end
+  if cmd ~= "arena_kill" then
     return 0
   end
   local cn = tonumber(et.trap_Argv(1))

@@ -234,3 +234,17 @@ et_Damage(1, 0, 40, 0, 8)
 assert(after_grace < 20 and after_grace > 0, "tik po pragu mora upadati, ne pasti na nic: "..after_grace)
 assert(health[0] == 500, "po izteku upadanja lifesteala ne sme biti ve\195\168: "..health[0])
 print("✅ lifesteal upada po pragu in se izteče")
+
+-- 14) Konzolni preklop gre skozi ISTO pot kot /vampiric: velja šele od
+--     naslednjega spawna, in tujih konzolnih ukazov ne požre.
+et_InitGame(0,0,false)
+cvars.arena_vamp = "0"; health[0]=100; health[1]=100
+argv = {"arena_vamp_toggle"}
+assert(et_ConsoleCommand() == 1, "svoj konzolni ukaz mora prevzeti")
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 100, "⛔ preklop ne sme veljati sredi dvoboja: "..health[0])
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 1000, "po spawnu mora veljati: "..health[0])
+argv = {"status"}
+assert(et_ConsoleCommand() == 0, "⛔ tuj konzolni ukaz mora vrniti 0")
+print("✅ konzolni preklop: velja od naslednjega spawna, tujih ukazov ne požre")
