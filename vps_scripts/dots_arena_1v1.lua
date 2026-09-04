@@ -65,13 +65,41 @@ USAGE
   lua_modules "dots_arena_1v1.lua"       (alongside the existing modules)
   arena_1v1 1                            (default 1; set 0 to disable live)
 
+  arena_hp 0|250|500|1000                the health both duelists spawn with.
+                                         0 (default) leaves the engine alone.
+                                         Only these three are accepted; any
+                                         other number snaps to the nearest and
+                                         says so, because the duel-length curve
+                                         below only speaks for these points.
+  arena_vamp 0|1                         lifesteal (default 0)
+  arena_vamp_steal 50                    percent of damage healed back
+  arena_ammo 1                           9999/9999 at spawn (default on)
+  arena_nofatigue 1                      unlimited sprint (default on)
+
+  In game:  /arenahp 250|500|1000|0      set the pool (takes effect next spawn)
+            /vampiric [250|500|1000]     toggle lifesteal, optionally with pool
+  Console:  arena_hp_set <n>, arena_vamp_toggle, arena_kill <cn>
+                                         (need arena_1v1_test 1)
+
+HOW LONG A DUEL LASTS (measured, local 2.84, two bots, 2026-09-04)
+------------------------------------------------------------------
+  300 HP -> median  7 s (n=11)    500 HP -> median 14 s (n=7)
+  1000 HP -> ONE duel in 120 s
+
+⚠️ 250 is NOT one of the measured points — it is offered because 300 already
+sat at 7 s and the shortest preset should be reachable, but its duel length is
+an interpolation, not a reading. 500 and 1000 are readings.
+With lifesteal the pool and the duel length are NOT proportional — the fight
+is a race between two drains, so the curve bends. Pick the pool for the duel
+length you want, not for the number that sounds generous.
+
 The script only arms itself on a map whose name contains "dots_arena" AND when
 exactly two players are on the two teams. Anything else — three players, a
 spectator joining, another map — and it stands down without touching a thing.
 ------------------------------------------------------------------------------]]
 
 local MODNAME  = "dots_arena_1v1"
-local VERSION  = "1.0.0"
+local VERSION  = "1.1.0"
 
 -- Not et.* constants on 2.85 (checked): write them as the numbers they are.
 local ENTITYNUM_WORLD      = 1022
@@ -184,6 +212,7 @@ end
 local vamp_active  = false   -- in force for the duel being fought now
 local vamp_pending = nil     -- what the next spawn will adopt
 local duel_started = nil     -- trap_Milliseconds at the start of this duel
+local duel_pool    = 0       -- the pool BOTH players actually spawned with
 
 --- Measured on the local 2.84 server with two bots, 2026-09-04. The pool and
 --- the duel length are NOT proportional — lifesteal makes it a race between
@@ -197,7 +226,76 @@ local duel_started = nil     -- trap_Milliseconds at the start of this duel
 --- QuakeLive community warns about, reached at 50% leech rather than 100%.
 --- 500 is the measured middle and the default; raise it with the cvar if you
 --- want longer, but raise it knowing the curve.
-local function vamp_hp()    return cvar_num("arena_vamp_hp", 500) end
+---
+--- ⛔ ONE number, not two. The pool a duelist SPAWNS with and the ceiling
+--- lifesteal heals up to are the same thing, and giving them separate cvars is
+--- how "one name, two measurements" starts — you would be able to set a cap
+--- above the health both players began the duel with, and the mode would look
+--- like it was leaking health when it was only obeying a second setting.
+local HP_PRESETS       = { 250, 500, 1000 }
+local VAMP_FALLBACK_HP = 500
+local hp_warned        = nil    -- the last bad value we complained about
+
+--- The preset closest to what was asked for. An unrecognised number is NOT
+--- silently honoured: a typo would create a regime nobody has measured, and
+--- the curve above only speaks for these three points.
+local function nearest_preset(want)
+  local best, best_gap = HP_PRESETS[1], math.huge
+  for _, preset in ipairs(HP_PRESETS) do
+    local gap = math.abs(preset - want)
+    if gap < best_gap then
+      best, best_gap = preset, gap
+    end
+  end
+  return best
+end
+
+--- What a duel should start with, resolved from the settings.
+---   arena_hp 0        -> do not touch health at all (the default, and exactly
+---                        what the already-measured plain arena does)
+---   arena_hp 250/500/1000 -> that pool, vampiric on or off
+---   arena_hp unset, vampiric on -> 500, the measured middle
+local function configured_pool()
+  local want = cvar_num("arena_hp", -1)
+  if want == -1 then
+    -- Compatibility with the cvar this started life as. Read only when the new
+    -- name is absent, so nobody ends up with two settings disagreeing.
+    want = cvar_num("arena_vamp_hp", -1)
+  end
+  if want == -1 or want == 0 then
+    -- ⛔ Vampiric with no pool is a contradiction, and a dangerous one: the
+    -- leech caps at this number, so 0 would cap every heal at zero — the mode
+    -- would heal players to death. When lifesteal is on there is always a pool.
+    return vamp_active and VAMP_FALLBACK_HP or 0
+  end
+  for _, preset in ipairs(HP_PRESETS) do
+    if want == preset then return preset end
+  end
+  local snapped = nearest_preset(want)
+  if hp_warned ~= want then
+    hp_warned = want
+    log("HPWARN  arena_hp=%d is not a measured preset -> using %d", want, snapped)
+    et.G_Print(MODNAME .. ": arena_hp " .. tostring(want) ..
+               " is not one of 250/500/1000; using " .. snapped .. "\n")
+  end
+  return snapped
+end
+
+--- Apply a requested pool. The cvar IS the state — there is no second pending
+--- variable, because et_ClientSpawn is the only place health is written and it
+--- reads the cvar there. A change therefore cannot reach a duel in progress.
+local function set_pool(want, cn)
+  local applied = want
+  if want ~= 0 then
+    applied = nearest_preset(want)
+  end
+  et.trap_Cvar_Set("arena_hp", tostring(applied))
+  local shown = (applied == 0) and "engine default" or (applied .. " HP")
+  local line = "^7arena pool ^3" .. shown .. " ^7— from the next spawn"
+  et.trap_SendServerCommand(-1, 'chat "^7arena: ' .. line .. '"')
+  log("POOL    cn=%s want=%s applied=%s", tostring(cn), tostring(want), tostring(applied))
+  return applied
+end
 local function vamp_steal() return cvar_num("arena_vamp_steal", 50) end
 local function vamp_grace() return cvar_num("arena_vamp_grace", 90) end
 local function vamp_decay() return cvar_num("arena_vamp_decay", 30) end
@@ -299,6 +397,12 @@ function et_InitGame(levelTime, randomSeed, restart)
   vamp_active = cvar_num("arena_vamp", 0) ~= 0
   vamp_pending = nil
   duel_started = nil
+  -- ⛔ The pool has to go back to 0 with everything else. It did not, and the
+  -- mutation battery is what found it: with the last map's pool still in the
+  -- variable, a damage event on the new map — before anybody had spawned —
+  -- was capped by a number from a duel that was over. Carrying state across a
+  -- map change is the same defect the score reset above already fixes.
+  duel_pool = 0
   -- ⛔ `active` is the MAP gate ONLY. It used to fold in the arena_1v1 enable
   -- cvar as well, which made the control run impossible to take: with
   -- arena_1v1 0 the module went fully dark, so the very measurement that has
@@ -428,6 +532,80 @@ local function arena_loadout(cn)
   return   -- see the note above; weapon forcing is not attempted
 end
 
+-- ── Ammo: unlimited, and why the number is 9999 and not 99999 ─────────────
+--
+-- A duel decided by who has to reload first is decided by the magazine, not by
+-- movement or aim. So both duelists get a magazine and a reserve neither can
+-- empty inside a duel.
+--
+-- ⛔ 99999 DOES NOT SURVIVE THE NETWORK, and this is invisible on the server.
+-- ps.ammo and ps.ammoclip are delta-encoded with MSG_WriteShort/MSG_ReadShort
+-- (qcommon/msg.c:2503, :2537, :2755, :2773) and MSG_ReadShort sign-extends 16
+-- bits (`c = (short)MSG_ReadBits(msg, 16)`, msg.c:655). The server would go on
+-- holding 99999 and every reading taken server-side would agree with itself,
+-- while the client — and client-side prediction runs the SAME bg_pmove — would
+-- receive (int16)99999 = -31073 and predict a player who cannot shoot.
+-- MSG_WriteShort even carries a PARANOID range check for exactly this.
+--
+-- 9999 is the ceiling with room to spare, and it is the number abs1.3.lua was
+-- already using. The margin matters for a second reason: PM_ReloadClip
+-- (bg_pmove.c:2814-2828) computes `ammomove = maxClip - ammoclip`, which goes
+-- NEGATIVE when the clip is over-full, so a manual reload MOVES AMMO BACKWARDS
+-- — clip 9999 -> 30 and reserve 9999 -> 19968. That still fits in the field;
+-- 99999 would not have, twice over.
+--
+-- 9999 rounds at the MP40's 150 ms cycle (bg_misc.c:164) is 1500 seconds of
+-- held trigger. The longest duel ever measured here was 120 s.
+local AMMO_FILL = 9999
+
+--- Top up whatever the player is actually holding. Deliberately NOT weapon
+--- forcing — that was tried, measured and withdrawn (see above). This asks the
+--- engine what the weapon is and refills that.
+---
+--- et.AddWeaponToPlayer is the right call rather than writing ps.ammo
+--- directly: the array is indexed by the weapon table's ammoIndex/clipIndex,
+--- not by the weapon number (g_lua.c:1110-1112), and that mapping is not
+--- exposed to Lua. For the SMGs the two happen to be equal (bg_misc.c:164,
+--- :169), which is exactly the kind of coincidence that makes a hardcoded
+--- index look right until somebody duels with a pistol.
+local function arena_ammo(cn)
+  if cvar_num("arena_ammo", 1) == 0 then return end
+  local weapon = et.GetCurrentWeapon(cn)
+  -- WP_NONE would make AddWeaponToPlayer raise a Lua error (IS_VALID_WEAPON,
+  -- g_lua.c:1104), and an error raised inside et_ClientSpawn takes the rest of
+  -- the spawn handling with it — including the shield levelling.
+  if type(weapon) ~= "number" or weapon <= 0 then
+    log("AMMO    cn=%d skipped weapon=%s", cn, tostring(weapon))
+    return
+  end
+  -- setcurrent = 0: fill the weapon, never switch it. ps.weapon is read-only
+  -- to Lua (g_lua.c:1289) so AddWeaponToPlayer is the ONLY way to change the
+  -- held weapon, and we are deliberately not doing that.
+  local ok, err = pcall(et.AddWeaponToPlayer, cn, weapon, AMMO_FILL, AMMO_FILL, 0)
+  if not ok then
+    -- ⛔ NOT a silent pcall. The last time a pcall wrapped this area it
+    -- swallowed whatever the binding was saying and the loadout feature was
+    -- debugged blind for an hour.
+    log("AMMO    cn=%d weapon=%d FAILED %s", cn, weapon, tostring(err))
+    et.G_Print(MODNAME .. ": ammo fill failed: " .. tostring(err) .. "\n")
+    return
+  end
+  local _, ammo, clip = et.GetCurrentWeapon(cn)
+  log("AMMO    cn=%d weapon=%d ammo=%s clip=%s", cn, weapon, tostring(ammo), tostring(clip))
+end
+
+--- Unlimited sprint. A strafe duel in which one player runs out of stamina
+--- mid-circle is decided by the stamina bar, which is the same complaint as
+--- the magazine. PW_NOFATIGUE is one of the powerups ClientEndFrame explicitly
+--- never expires (g_active.c:2222-2227), so it is set once per spawn and stays.
+---
+--- ⚠️ My addition, not asked for — abs1.3.lua sets it and a movement-decided
+--- duel wants it. `arena_nofatigue 0` turns it off.
+local function arena_nofatigue(cn)
+  if cvar_num("arena_nofatigue", 1) == 0 then return end
+  et.gentity_set(cn, "ps.powerups", et.PW_NOFATIGUE, 1)
+end
+
 function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   if not active then
     return
@@ -469,16 +647,24 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
     log("VAMP    now %s", tostring(vamp_active))
   end
   duel_started = et.trap_Milliseconds()
-  if vamp_active then
-    et.gentity_set(clientNum, "health", vamp_hp())
-    et.gentity_set(clientNum, "ps.stats", et.STAT_HEALTH, vamp_hp())
+  -- ⛔ Snapshot, not a live read. The cap lifesteal heals up to has to be the
+  -- pool both players ACTUALLY spawned with: reading the cvar again from the
+  -- damage path meant that raising arena_hp mid-duel lifted the ceiling above
+  -- the health either player started with, and the mode looked like it was
+  -- inventing health when it was only obeying a setting that had moved.
+  duel_pool = configured_pool()
+  arena_ammo(clientNum)
+  arena_nofatigue(clientNum)
+  if duel_pool > 0 then
+    et.gentity_set(clientNum, "health", duel_pool)
+    et.gentity_set(clientNum, "ps.stats", et.STAT_HEALTH, duel_pool)
     arena_loadout(clientNum)
     -- ⛔ The SPAWN line above was written BEFORE this, so it reports the
     -- engine's 100 and not the pool a vampiric duel actually starts with. It
     -- read like the mode was not applying at all (live run, 2026-09-04) while
     -- the STEAL lines showed health climbing to exactly the configured cap.
     -- An instrument that logs before the action measures the wrong moment.
-    log("VAMPHP  cn=%d health=%d", clientNum, vamp_hp())
+    log("VAMPHP  cn=%d health=%d vamp=%s", clientNum, duel_pool, tostring(vamp_active))
   end
 
   for _, other in ipairs(roster) do
@@ -550,7 +736,11 @@ function et_Damage(target, attacker, damage, dflags, mod)
   end
   local hp = et.gentity_get(attacker, "ps.stats", et.STAT_HEALTH)
   hp = tonumber(hp) or 0
-  local capped = math.min(hp + heal, vamp_hp())
+  -- Defence in depth for the same reason: a zero cap here is lethal, and this
+  -- line is reached from the damage path where a mistake is a dead player
+  -- rather than a wrong log line.
+  local cap = duel_pool > 0 and duel_pool or VAMP_FALLBACK_HP
+  local capped = math.min(hp + heal, cap)
   if capped <= hp then
     return
   end
@@ -571,8 +761,31 @@ function et_ClientCommand(clientNum, command)
     return 0
   end
   local cmd = string.lower(et.trap_Argv(0))
+  -- The pool, without touching lifesteal. 250 / 500 / 1000 are the measured
+  -- points; 0 hands health back to the engine. It lands at the next spawn for
+  -- the same reason the switch does — changing the pool mid-duel would give
+  -- one player a number the other never had.
+  if cmd == "arenahp" or cmd == "arena_hp" then
+    local want = tonumber(et.trap_Argv(1))
+    if want == nil then
+      et.trap_SendServerCommand(clientNum,
+        'print "^7arena: usage: /arenahp 250|500|1000|0 (now: ' .. configured_pool() .. ')\n"')
+      return 1
+    end
+    set_pool(want, clientNum)
+    return 1
+  end
   if cmd ~= "vampiric" and cmd ~= "vamp" then
     return 0
+  end
+  -- /vampiric 250 turns lifesteal on AND sets the pool in one command, which
+  -- is how it will actually be typed between two people agreeing on a duel.
+  local pool_arg = tonumber(et.trap_Argv(1))
+  if pool_arg ~= nil then
+    vamp_pending = true
+    set_pool(pool_arg, clientNum)
+    log("VAMPREQ cn=%d want=true pool=%d", clientNum, pool_arg)
+    return 1
   end
   local want = not (vamp_pending == nil and vamp_active or vamp_pending)
   vamp_pending = want
@@ -611,6 +824,16 @@ function et_ConsoleCommand()
     log("VAMPREQ console want=%s", tostring(want))
     et.G_Print(MODNAME .. ": vampiric " .. (want and "ON" or "OFF") ..
                " from the next spawn\n")
+    return 1
+  end
+  if cmd == "arena_hp_set" then
+    local want = tonumber(et.trap_Argv(1))
+    if want == nil then
+      et.G_Print(MODNAME .. ": usage: arena_hp_set <250|500|1000|0>\n")
+      return 1
+    end
+    local applied = set_pool(want, nil)
+    et.G_Print(MODNAME .. ": pool " .. applied .. " from the next spawn\n")
     return 1
   end
   if cmd ~= "arena_kill" then

@@ -10,6 +10,8 @@
 -- Stub motorja, razširjen na nove poti: log, spawn hook, testni ukaz.
 local calls, logged, sent = {}, {}, {}
 local weapons, current_wp = {}, {}
+local ammo_of, clip_of, setcurrent_of = {}, {}, {}
+local nofatigue = {}
 local now_ms = 100000
 local health = {[0]=100, [1]=100}
 local team   = {[0]=1,   [1]=2}
@@ -20,7 +22,7 @@ local cvars  = {sv_maxclients="2", arena_1v1="1", arena_1v1_map="dots_arena",
 local argv   = {}
 et = {
   TEAM_AXIS=1, TEAM_ALLIES=2, STAT_HEALTH=0, CS_SERVERINFO=0, PW_INVULNERABLE=1,
-  MOD_SUICIDE=37, FS_APPEND=2,
+  MOD_SUICIDE=37, FS_APPEND=2, PW_NOFATIGUE=2,
   RegisterModname=function() end, G_Print=function() end,
   trap_Cvar_Get=function(n) return cvars[n] or "" end,
   trap_Cvar_Set=function(n,v) cvars[n]=v; calls[#calls+1]="cvar "..n.."="..v end,
@@ -41,12 +43,27 @@ et = {
   Q_CleanStr=function(s) return (s:gsub("%^%d","")) end,
   trap_Milliseconds=function() return now_ms end,
   RemoveWeaponFromPlayer=function(cn, wp) weapons[cn] = weapons[cn] or {}; weapons[cn][wp] = nil end,
+  -- ⛔ setcurrent is modelled, not ignored: the real binding only writes
+  -- ps.weapon when the 5th argument is exactly 1 (g_lua.c:1113-1116). A stub
+  -- that always switched the weapon would have hidden a module that switches
+  -- it by accident — the exact failure the withdrawn loadout produced live.
   AddWeaponToPlayer=function(cn, wp, ammo, clip, cur)
-    weapons[cn] = weapons[cn] or {}; weapons[cn][wp] = true; current_wp[cn] = wp
+    -- ⛔ The real binding RAISES on an invalid weapon (luaL_error via
+    -- IS_VALID_WEAPON, g_lua.c:1102-1107). A stub that quietly accepted
+    -- WP_NONE could not make case 18's guard fail, and a guard that cannot be
+    -- seen failing is not a guard.
+    if type(wp) ~= "number" or wp <= 0 then
+      error(("weapon \"%s\" is not a valid weapon"):format(tostring(wp)), 0)
+    end
+    weapons[cn] = weapons[cn] or {}; weapons[cn][wp] = true
+    ammo_of[cn] = ammo; clip_of[cn] = clip; setcurrent_of[cn] = cur
+    if cur == 1 then current_wp[cn] = wp end
   end,
+  GetCurrentWeapon=function(cn) return current_wp[cn] or 0, ammo_of[cn] or 0, clip_of[cn] or 0 end,
   trap_SendServerCommand=function(cn, cmd) sent[#sent+1]=cmd end,
   gentity_set=function(cn, field, idx, val)
     if field=="ps.powerups" and idx==1 then shield[cn]=val end
+    if field=="ps.powerups" and idx==2 then nofatigue[cn]=val end
     if field=="health" then health[cn]=idx end
     if field=="ps.stats" and idx==0 then health[cn]=val end
     calls[#calls+1]=("set(%d,%s,%s,%s)"):format(cn, field, tostring(idx), tostring(val))
@@ -248,3 +265,120 @@ assert(health[0] == 1000, "po spawnu mora veljati: "..health[0])
 argv = {"status"}
 assert(et_ConsoleCommand() == 0, "⛔ tuj konzolni ukaz mora vrniti 0")
 print("✅ konzolni preklop: velja od naslednjega spawna, tujih ukazov ne požre")
+
+-- 15) Strelivo: oba duelista dobita poln zalogovnik in rezervo ob spawnu,
+--     orožja pa jima NIHČE ne zamenja. Prav zamenjava je bila tista, ki je v
+--     živi meritvi ubila prejšnji poskus (bota sta se nehala pobijati).
+et_InitGame(0,0,false)
+cvars.arena_vamp = "0"; cvars.arena_hp = ""; cvars.arena_vamp_hp = ""
+current_wp[0] = 3   -- WP_MP40
+current_wp[1] = 8   -- WP_THOMPSON
+ammo_of = {}; clip_of = {}; nofatigue = {}
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(ammo_of[0] == 9999 and clip_of[0] == 9999, "rezerva in zalogovnik: "..tostring(ammo_of[0]).."/"..tostring(clip_of[0]))
+assert(ammo_of[1] == 9999 and clip_of[1] == 9999, "drugi igralec tudi")
+assert(current_wp[0] == 3 and current_wp[1] == 8, "⛔ orožja ne sme zamenjati: "..current_wp[0].."/"..current_wp[1])
+-- ⛔ Zgornja trditev SAMA ne zadostuje: polnimo prav tisto orožje, ki ga
+--    igralec že drži, zato je setcurrent=1 tu naključno brez učinka in
+--    mutacija 0->1 je prešla. Preveri ARGUMENT, ne posledice, ki se ne more
+--    premakniti — isti vzorec kot primer 12 (svet, ki ne more biti pozdravljen).
+assert(setcurrent_of[0] == 0 and setcurrent_of[1] == 0,
+       "⛔ setcurrent mora biti 0: "..tostring(setcurrent_of[0]).."/"..tostring(setcurrent_of[1]))
+assert(nofatigue[0] == 1 and nofatigue[1] == 1, "sprint mora biti neomejen")
+-- ⛔ 9999 ni okrasna številka: ps.ammo potuje kot PREDZNAČEN 16-bitni short
+--    (msg.c:655, :2503). Karkoli, kar bi s polnjenjem ali z ročnim reloadom
+--    (PM_ReloadClip prenese ammomove NAZAJ, bg_pmove.c:2818) preseglo 32767,
+--    pride do klienta kot negativno število. 9999 + (9999-30) = 19968.
+assert(9999 + (9999 - 30) < 32767, "⛔ polnjenje mora ostati v 16-bitnem polju")
+print("✅ neomejeno strelivo, brez menjave orožja, neomejen sprint")
+
+-- 16) Vsak neizmerjen zalogovnik se prilepi na najbližji preset, in vampiric
+--     BREZ zalogovnika nikoli ne sme dobiti meje 0 — meja 0 pomeni, da vsako
+--     zdravljenje postavi zdravje na nič, torej te mod pozdravi do smrti.
+et_InitGame(0,0,false)
+cvars.arena_hp = "700"; cvars.arena_vamp = "1"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 500, "700 se mora prilepiti na 500: "..health[0])
+cvars.arena_hp = "0"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+-- ⛔ Trditev o zdravljenju je premalo: obe varovali (rezervni zalogovnik in
+--    varovalo stropa) dasta isti izid, zato je mutacija enega od njiju prešla.
+--    Zalogovnik ob SPAWNU loči prav to eno.
+assert(health[0] == 500 and health[1] == 500,
+       "⛔ vampiric brez arena_hp mora dobiti rezervni zalogovnik 500: "..health[0].."/"..health[1])
+health[0] = 100
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 120, "⛔ meja 0 bi pozdravila do smrti; dobil "..health[0])
+print("✅ preseti se prilepijo, meja nikoli ni 0")
+
+-- 17) /arenahp velja šele od naslednjega spawna, in konzolni dvojnik tudi.
+et_InitGame(0,0,false)
+cvars.arena_hp = "1000"; cvars.arena_vamp = "1"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 1000, "izhodišče 1000: "..health[0])
+argv = {"arenahp", "250"}
+assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
+assert(health[0] == 1000, "⛔ sprememba ne sme poseči v tekoč dvoboj: "..health[0])
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 250 and health[1] == 250, "od naslednjega spawna: "..health[0].."/"..health[1])
+-- ⛔ Meja lifesteala mora biti POSNETEK zalogovnika, s katerim sta oba
+--    spawnala — ne svež odčitek cvara. Če bi se brala živo, bi vrnitev
+--    arena_hp na 1000 sredi dvoboja dvignila strop nad zdravje, s katerim je
+--    kdorkoli začel, in mod bi izgledal, kot da si izmišlja zdravje.
+cvars.arena_hp = "1000"
+health[0] = 245
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 250, "⛔ strop mora ostati posnet na 250: "..health[0])
+cvars.arena_hp = "250"
+-- ⛔ Ukazna pot mora prilepiti prav tako kot bralna. Prvi zapis tega primera je
+--    uporabljal 250, ki JE preset — mutacija »ne prilepi« je zato prešla, ker
+--    se vhod in izhod nista razlikovala. Vzemi vrednost, ki se MORA premakniti.
+argv = {"arenahp", "700"}
+assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
+assert(cvars.arena_hp == "500", "⛔ 700 se mora prilepiti na 500, dobil "..tostring(cvars.arena_hp))
+argv = {"arena_hp_set", "1000"}
+assert(et_ConsoleCommand() == 1, "konzolni dvojnik mora prevzeti svoj ukaz")
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 1000, "konzolni ukaz mora imeti isti učinek: "..health[0])
+print("✅ /arenahp in arena_hp_set: veljata od naslednjega spawna")
+
+-- 18) Orožje WP_NONE ne sme sprožiti napake v et_ClientSpawn. Prava vezava
+--     ob neveljavnem orožju vrže Lua napako (IS_VALID_WEAPON, g_lua.c:1104),
+--     ta pa bi odnesla ves preostanek spawna — vključno s poravnavo ščitov.
+et_InitGame(0,0,false)
+current_wp[0] = 0; current_wp[1] = 0
+ammo_of = {}; clip_of = {}
+shield[0] = 5000; shield[1] = 4000
+local ok = pcall(function() et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0) end)
+assert(ok, "⛔ spawn ne sme pasti zaradi WP_NONE")
+assert(ammo_of[0] == nil, "brez orožja se strelivo ne polni")
+-- ⛔ pcall okoli vezave pomeni, da odstranjen gate NE zruši spawna — le
+--    zabeleži napako. Trditev mora torej brati, KATERA vrstica je bila
+--    zapisana: preskočeno (gate je delal) proti FAILED (gate ga ni ujel).
+local skipped, failed = false, false
+for _, line in ipairs(logged) do
+  if line:find("AMMO") and line:find("skipped") then skipped = true end
+  if line:find("AMMO") and line:find("FAILED") then failed = true end
+end
+assert(skipped, "⛔ preskok mora biti zabeležen")
+assert(not failed, "⛔ gate ga ni ujel: vezava je vrgla napako namesto preskoka")
+assert(shield[0] == shield[1], "poravnava ščitov mora vseeno steči: "..shield[0].."/"..shield[1])
+print("✅ WP_NONE: brez napake, poravnava ščitov preživi")
+
+-- 19) Škoda PRED prvim spawnom. Modul se lahko naloži sredi runde: et_InitGame
+--     prebere arena_vamp in lifesteal je takoj v veljavi, duel_pool pa je še
+--     0, ker spawna še ni bilo. Brez varovala stropa bi bila meja 0 in vsako
+--     zdravljenje bi zdravje POSTAVILO na nič — mod bi ubijal, ne zdravil.
+--     To ni hipotetično: natanko to se zgodi ob `lua_status`-u sredi runde.
+cvars.arena_hp = ""; cvars.arena_vamp_hp = ""; cvars.arena_vamp = "1"
+et_InitGame(0,0,false)
+health[0] = 90; health[1] = 90
+et_Damage(1, 0, 40, 0, 8)
+assert(health[0] == 110, "⛔ pred prvim spawnom mora zdravljenje delati, ne ubijati: "..health[0])
+print("✅ škoda pred prvim spawnom ne pobije napadalca")
