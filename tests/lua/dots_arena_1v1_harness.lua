@@ -18,15 +18,21 @@ local team   = {[0]=1,   [1]=2}
 local conn   = {[0]=2,   [1]=2}
 local shield = {[0]=0,   [1]=0}
 local cvars  = {sv_maxclients="2", arena_1v1="1", arena_1v1_map="dots_arena",
-                arena_1v1_test="1", arena_1v1_log="1", g_forcerespawn="0"}
+                arena_1v1_test="1", arena_1v1_log="1", g_forcerespawn="0",
+                mapname="dots_arena"}
 local argv   = {}
+local serverinfo = "\\mapname\\dots_arena"
 et = {
   TEAM_AXIS=1, TEAM_ALLIES=2, STAT_HEALTH=0, CS_SERVERINFO=0, PW_INVULNERABLE=1,
   MOD_SUICIDE=37, FS_APPEND=2, PW_NOFATIGUE=4,
   RegisterModname=function() end, G_Print=function() end,
   trap_Cvar_Get=function(n) return cvars[n] or "" end,
   trap_Cvar_Set=function(n,v) cvars[n]=v; calls[#calls+1]="cvar "..n.."="..v end,
-  trap_GetConfigstring=function() return "\\mapname\\dots_arena" end,
+  -- ⛔ The stub must be able to produce the FRESH-LOAD shape, where
+  -- CS_SERVERINFO is empty and only the cvar knows the map. A stub that
+  -- always answered from the configstring could not fail case 22 — and
+  -- that is precisely why this bug survived every offline test.
+  trap_GetConfigstring=function() return serverinfo end,
   Info_ValueForKey=function(s,k) return s:match("\\"..k.."\\([^\\]*)") end,
   trap_Argv=function(i) return argv[i+1] or "" end,
   trap_FS_FOpenFile=function() return 7, 0 end,
@@ -136,7 +142,11 @@ print("✅ testni ukaz je mrtev, ko je testni način izklopljen")
 --    Brez tega primera mutacija »odstrani gate mape« preživi: vsi prejšnji
 --    primeri tečejo NA arena mapi, torej gate ne loči ničesar.
 cvars.arena_1v1_test = "1"
-et.trap_GetConfigstring = function() return "\\mapname\\supply" end
+-- ⛔ BOTH sources have to say "supply". The module now reads the `mapname`
+-- cvar first (the configstring is empty at a fresh map load), so moving
+-- only the configstring left the cvar still saying dots_arena and the
+-- module armed on a map this case exists to prove it ignores.
+serverinfo = "\\mapname\\supply"; cvars.mapname = "supply"
 calls = {}; health[0]=100; health[1]=100
 et_InitGame(0,0,false)
 health[1] = 0
@@ -149,7 +159,7 @@ print("✅ na mapi, ki ni arena, ne stori ničesar")
 
 -- 7) KONTROLA mora biti izvedljiva: pri arena_1v1 0 se samodejni reset NE
 --    sproži, testni ukaz pa MORA delati — sicer neenakosti ni mogoče izmeriti.
-et.trap_GetConfigstring = function() return "\\mapname\\dots_arena" end
+serverinfo = "\\mapname\\dots_arena"; cvars.mapname = "dots_arena"
 cvars.arena_1v1 = "0"; cvars.arena_1v1_test = "1"
 et_InitGame(0,0,false)
 calls = {}; health[0]=100; health[1]=100
@@ -164,7 +174,7 @@ print("✅ kontrola je izvedljiva: reset miruje, testni ukaz dela")
 -- 8) Svet vodi izid: točka gre NASPROTNIKU umrlega, prisilni reset ne šteje,
 --    in ob vsakem dvoboju gre ven objava. Brez tega je na tej mapi izid
 --    neberljiv — zmagovalec dobi smrt tako kot poraženec, K/D pa neodločeno.
-et.trap_GetConfigstring = function() return "\\mapname\\dots_arena" end
+serverinfo = "\\mapname\\dots_arena"; cvars.mapname = "dots_arena"
 cvars.arena_1v1 = "1"; cvars.arena_1v1_test = "1"
 et_InitGame(0,0,false)
 sent = {}; health[0]=100; health[1]=100; shield[0]=0; shield[1]=0
@@ -431,3 +441,32 @@ health[0]=100; health[1]=100
 et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
 assert(health[0] == 1000, "⛔ prejšnja mapa ne sme prevladati: "..health[0])
 print("✅ bazen ne uhaja čez mejo mape")
+
+-- 22) ⛔⛔ FRESH MAP LOAD: the engine has not filled CS_SERVERINFO yet.
+--     Measured on 2.84 — at et_InitGame after `map dots_arena` the
+--     configstring is EMPTY (length 0) and only the `mapname` cvar is right.
+--     Everything armed before this fix only because a map_restart happened to
+--     follow (G_configSet issues one for every config load), so the module ran
+--     a second time with the configstring populated. On a server without a
+--     custom config there is no restart and the arena would never arm.
+serverinfo = ""            -- the fresh-load shape
+cvars.mapname = "dots_arena"
+cvars.g_forcerespawn = "0"
+et_InitGame(0,0,false)
+assert(cvars.g_forcerespawn == "-1",
+       "⛔ modul se mora oborožiti tudi ob prvem nalaganju mape: g_forcerespawn="..tostring(cvars.g_forcerespawn))
+-- in na tuji mapi se ne sme, tudi če je configstring prazen
+cvars.mapname = "oasis"
+cvars.g_forcerespawn = "0"
+et_InitGame(0,0,false)
+assert(cvars.g_forcerespawn == "0",
+       "⛔ na tuji mapi se ne sme oborožiti: "..tostring(cvars.g_forcerespawn))
+-- konfiguracijski niz ostane rezerva, kadar cvar molči
+serverinfo = "\\mapname\\dots_arena"
+cvars.mapname = ""
+cvars.g_forcerespawn = "0"
+et_InitGame(0,0,false)
+assert(cvars.g_forcerespawn == "-1",
+       "⛔ configstring mora ostati rezerva: "..tostring(cvars.g_forcerespawn))
+serverinfo = "\\mapname\\dots_arena"; cvars.mapname = "dots_arena"
+print("✅ oboroži se ob PRVEM nalaganju mape (prazen CS_SERVERINFO)")

@@ -177,9 +177,36 @@ local function enabled()
   return cvar_num("arena_1v1", 1) ~= 0
 end
 
+--- ⛔⛔ The `mapname` CVAR, not the serverinfo configstring — and this is the
+--- difference between a module that arms and one that never does.
+---
+--- Measured on the local 2.84 with a throwaway probe module, 2026-09-04:
+---
+---     fresh `map dots_arena`   CS_SERVERINFO length 0, mapname ""   -> NEVER ARMED
+---     `map_restart 0`          CS_SERVERINFO length 743, mapname ok -> armed
+---
+--- The engine populates CS_SERVERINFO after GAME_INIT, so at et_InitGame on a
+--- first map load it is EMPTY. The `mapname` cvar is already correct at that
+--- point (the same probe read "dots_arena" from it while the configstring was
+--- blank).
+---
+--- ⛔⛔ Everything measured before this fix was still real — but the mechanism
+--- that made it work was an ACCIDENT. G_configSet issues a map_restart every
+--- time it loads a config (g_config.c:500-508), and this dev server always had
+--- g_customConfig set, so a restart always followed the map load and the
+--- module armed on the second pass. On a server with no custom config there is
+--- no restart, and the arena would have silently never armed — which is
+--- exactly what a recipient of the shipped bundle would have got.
+---
+--- The configstring stays as a fallback: it is the correct source once the map
+--- is up, and costs nothing when the cvar already answered.
 local function map_name()
-  local info = et.trap_GetConfigstring(et.CS_SERVERINFO)
-  return (et.Info_ValueForKey(info, "mapname") or ""):lower()
+  local raw = et.trap_Cvar_Get("mapname")
+  if raw == nil or raw == "" then
+    local info = et.trap_GetConfigstring(et.CS_SERVERINFO)
+    raw = et.Info_ValueForKey(info, "mapname") or ""
+  end
+  return raw:lower()
 end
 
 --- Which map arms the script. A cvar rather than a hardcoded name, because the
