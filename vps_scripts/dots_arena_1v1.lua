@@ -45,7 +45,8 @@ VERIFIED AGAINST THIS SERVER'S BINARY (legacy/qagame.mp.x86_64.so, ET:L 2.84)
 ----------------------------------------------------------------------------
 Read out of the module's own registration tables, not from memory:
 
-  * Callbacks present: et_InitGame, et_ShutdownGame, et_RunFrame, et_Obituary,
+  * Callbacks present: et_InitGame, et_ShutdownGame, et_Quit, et_RunFrame,
+    et_Obituary,
     et_ClientSpawn, et_ClientCommand, et_ConsoleCommand.
   * There is NO Lua binding that kills or respawns a client. et.G_Damage is
     the only way to end a life from a script.
@@ -532,11 +533,38 @@ function et_InitGame(levelTime, randomSeed, restart)
              " (g_forcerespawn was '" .. tostring(saved_forcerespawn) .. "', now -1)\n")
 end
 
-function et_ShutdownGame(restart)
-  if active and saved_forcerespawn ~= nil and saved_forcerespawn ~= "" then
+--- Put g_forcerespawn back the way we found it. Idempotent: once restored the
+--- saved value is dropped, so whichever teardown path runs first wins and the
+--- second is a no-op.
+local function restore_forcerespawn()
+  if saved_forcerespawn ~= nil and saved_forcerespawn ~= "" then
     et.trap_Cvar_Set("g_forcerespawn", saved_forcerespawn)
   end
+  saved_forcerespawn = nil
   active = false
+end
+
+function et_ShutdownGame(restart)
+  restore_forcerespawn()
+end
+
+--- ⛔⛔ THE OTHER TEARDOWN, and the one that actually happens when somebody
+--- votes a different config.
+---
+--- Changing lua_modules at runtime calls G_LuaShutdown() straight from the
+--- cvar-change hook (g_cvars.c:907-913) — with NO matching G_LuaHook_
+--- ShutdownGame. G_LuaShutdown walks the VMs into G_LuaStopVM, which calls
+--- **et_Quit** and then lua_close (g_lua.c:3450-3468). et_ShutdownGame is only
+--- ever reached through G_ShutdownGame (g_main.c:1903), and by the time that
+--- runs the VM is already gone.
+---
+--- So without this hook, `callvote config legacy3` from inside the arena kills
+--- the module and leaves g_forcerespawn at -1 — instant respawn for everyone,
+--- on every map, until somebody notices. Checked on the production box: NOT
+--- ONE of its ten configs sets g_forcerespawn, so nothing would have put it
+--- back on its own.
+function et_Quit()
+  restore_forcerespawn()
 end
 
 function et_Obituary(victim, killer, mod)

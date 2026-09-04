@@ -470,3 +470,32 @@ assert(cvars.g_forcerespawn == "-1",
        "⛔ configstring mora ostati rezerva: "..tostring(cvars.g_forcerespawn))
 serverinfo = "\\mapname\\dots_arena"; cvars.mapname = "dots_arena"
 print("✅ oboroži se ob PRVEM nalaganju mape (prazen CS_SERVERINFO)")
+
+-- 23) ⛔⛔ Ko igralec izglasuje drug config, se Lua NE ustavi prek
+--     et_ShutdownGame. Sprememba lua_modules pokliče G_LuaShutdown naravnost
+--     iz cvar hooka (g_cvars.c:907-913), ta pa gre v G_LuaStopVM, ki pokliče
+--     **et_Quit** in zapre VM (g_lua.c:3450-3468). Brez et_Quit ostane
+--     g_forcerespawn na -1 — instant respawn povsod, in na produkciji ga ne
+--     povrne noben od desetih configov.
+serverinfo = "\\mapname\\dots_arena"; cvars.mapname = "dots_arena"
+cvars.g_forcerespawn = "0"
+et_InitGame(0,0,false)
+assert(cvars.g_forcerespawn == "-1", "predpogoj: oborožen")
+et_Quit()
+assert(cvars.g_forcerespawn == "0",
+       "⛔ et_Quit mora povrniti g_forcerespawn: "..tostring(cvars.g_forcerespawn))
+-- in obe poti sta idempotentni: kar steče drugo, ne sme ničesar pokvariti
+cvars.g_forcerespawn = "7"
+et_ShutdownGame(false)
+assert(cvars.g_forcerespawn == "7",
+       "⛔ druga pot rušenja ne sme znova pisati: "..tostring(cvars.g_forcerespawn))
+-- ista zgodba v obratnem vrstnem redu
+cvars.g_forcerespawn = "0"
+et_InitGame(0,0,false)
+et_ShutdownGame(false)
+assert(cvars.g_forcerespawn == "0", "et_ShutdownGame mora prav tako povrniti")
+cvars.g_forcerespawn = "7"
+et_Quit()
+assert(cvars.g_forcerespawn == "7", "⛔ et_Quit po ShutdownGame ne sme znova pisati")
+cvars.g_forcerespawn = "0"
+print("✅ et_Quit povrne g_forcerespawn (pot ob glasovanju o configu)")

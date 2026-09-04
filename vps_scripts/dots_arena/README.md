@@ -146,6 +146,14 @@ with each other, but none of them is a mirrored-SMG duel.
   `setl` cvar once per frame and unloads the whole config the moment one of
   them changes — and `/arenahp` changes this one. You will see
   "Config WAS UNLOADED DUE TO EXTERNAL MANIPULATION".
+- ✅ **Voting another config takes the arena back out cleanly.** Measured:
+  arena armed -> `g_forcerespawn -1`; the vote's `lua_modules` change kills the
+  module and `et_Quit` puts `g_forcerespawn` back to `0`; the `map_restart` the
+  vote issues then loads that config's own modules. Worth knowing why the
+  module needs `et_Quit` at all: a runtime `lua_modules` change calls
+  `G_LuaShutdown` directly, which reaches `et_Quit` but never
+  `et_ShutdownGame` — without it the server would keep instant respawn on every
+  map afterwards.
 - ⛔ **The module stays loaded after you leave the map.** `lua_modules` is
   never reverted by a later config vote, so it survives map changes until
   another config overwrites it or the server process restarts. The
@@ -319,6 +327,13 @@ sont cohérents entre eux, mais aucun n'est un duel SMG contre SMG.
   chaque cvar `setl` à chaque frame et décharge toute la config dès que l'une
   d'elles change — et `/arenahp` change celle-ci. Vous verrez
   « Config WAS UNLOADED DUE TO EXTERNAL MANIPULATION ».
+- ✅ **Voter une autre config retire l'arène proprement.** Mesuré : arène
+  armée -> `g_forcerespawn -1` ; le changement de `lua_modules` du vote tue le
+  module et `et_Quit` remet `g_forcerespawn` à `0` ; le `map_restart` émis par
+  le vote charge ensuite les modules de cette config. Pourquoi `et_Quit` est
+  nécessaire : un changement de `lua_modules` à chaud appelle directement
+  `G_LuaShutdown`, qui atteint `et_Quit` mais jamais `et_ShutdownGame` — sans
+  lui le serveur garderait la réapparition instantanée sur toutes les cartes.
 - ⛔ **Le module reste chargé après avoir quitté la carte.** `lua_modules`
   n'est jamais remis à zéro par un vote de config ultérieur : il survit aux
   changements de carte jusqu'à ce qu'une autre config l'écrase ou que le
@@ -491,6 +506,14 @@ ni dvoboj brzostrelka proti brzostrelki.
   preveri vsak `setl` cvar in odklopi cel config, brž ko se eden od njih
   spremeni — `/arenahp` pa spremeni prav tega. Videl boš
   »Config WAS UNLOADED DUE TO EXTERNAL MANIPULATION«.
+- ✅ **Glasovanje o drugem configu areno čisto odstrani.** Izmerjeno: arena
+  oborožena -> `g_forcerespawn -1`; sprememba `lua_modules` ob glasovanju modul
+  ubije in `et_Quit` postavi `g_forcerespawn` nazaj na `0`; `map_restart`, ki
+  ga glasovanje sproži samo, nato naloži module tistega configa. Zakaj je
+  `et_Quit` sploh potreben: sprememba `lua_modules` med tekom pokliče
+  `G_LuaShutdown` naravnost, ta pa doseže `et_Quit`, nikoli pa
+  `et_ShutdownGame` — brez njega bi strežnik obdržal instant respawn na vseh
+  mapah.
 - ⛔ **Modul ostane naložen tudi potem, ko zapustiš mapo.** `lua_modules` se ob
   kasnejšem glasovanju o configu nikoli ne povrne, zato preživi menjave map,
   dokler ga drug config ne prepiše ali dokler se proces ne zažene znova. Blok
