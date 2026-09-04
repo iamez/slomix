@@ -7,6 +7,33 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-05, 01:15) **Arena: trioosni pregled + popravki P0/P1** —
+  `2b21828a` na `feat/lua-dots-arena` (PR #912). Tri visoke, vse dosegljive z
+  navadno igro:
+  ⛔⛔ **`/team s` sredi dvoboja je prinesel točko IN usmrtil nasprotnika** —
+  motor ubije 55 vrstic pred prepisom moštva (`g_cmds.c:1589` proti `:1644`),
+  zato je roster ob obituaryju še vedno 2. Dokazano v živo.
+  ⛔⛔ **Ni bilo `et_ClientDisconnect`** — `ClientDisconnect` nikoli ne kliče
+  `player_die`; preživeli je ostal ranjen, naslednji je dobil poln bazen.
+  ⭐ Odhajajoči ob hooku ŠE ŠTEJE (hook `:3585`, `CON_DISCONNECTED` `:3723`).
+  ⛔⛔ **`forced[cn]` je bil zapah brez izteka** — `G_Damage` sme ne narediti
+  nič (warmup, intermission, godmode, noclip) in tega ne pove; naslednja prava
+  smrt je bila požrta, ščit pa že odvzet.
+  ⛔⛔ **Paket, ki smo ga poslali, je bil hujši:** 11 od 12 cvarov, ki jih naš
+  README imenuje gumbe, je bilo `setl` → `arena_1v1 0` po naših navodilih
+  odklopi cel config. In `g_customConfig` je `CVAR_ARCHIVE`: en glas naredi
+  arena ruleset TRAJEN (vse mape, čez restart procesa), s samo Field Ops
+  razredom in ustavljeno rotacijo. Zdaj dokumentirano v vseh treh jezikih.
+  ⭐ **Dve moji lastni regresiji, ki ju je ujel šele živi tek:** prvi popravek
+  `/team s` je pokvaril `/kill` (točka in reset sta dve odločitvi), povrnitev
+  `arena_hp` pa je brisala vrednost, ki jo je admin nastavil med mapama.
+  ⭐ Harness stub je bil **brezpogojno smrtonosen** — zato so bile vse poti
+  brez obituaryja nevidne po zasnovi. Zdaj zna zavrniti.
+  30 primerov, 31 mutacij, 6.225 testov. Puran ima popravljeno različico,
+  config ostaja `.off`. **P2 (dovoljenja za ukaze, meje `arena_kill`, ime v
+  ukaznem nizu, rotacija loga, verzija paketa, oblika configa, mutacije v
+  repo) ni narejen** — glej `~/.claude/plans/distributed-inventing-fox.md`.
+
 - (Opus 5, 2026-09-04, 14:35) **Arena kot deljiv paket** — `7efaa491` na
   `feat/lua-dots-arena` (PR #912). `vps_scripts/dots_arena/` = config
   (izpeljanka `legacy1.config` brez `sv_cvar` omejitev) + trijezični README
