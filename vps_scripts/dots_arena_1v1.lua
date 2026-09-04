@@ -25,7 +25,23 @@ respawn in the same frame, the shields are identical BY CONSTRUCTION and this
 script never has to write a powerup at all. Everything below exists to make
 "same frame" true.
 
-VERIFIED AGAINST THIS SERVER'S BINARY (legacy/qagame.mp.x86_64.so, ET:L 2.85)
+WHICH SOURCE THE LINE NUMBERS BELOW REFER TO
+--------------------------------------------
+⛔ Every citation in this file was labelled "v2.85.0". That was wrong, and a
+citation whose version label does not match the tree it was read from is a
+citation nobody can re-check. Corrected, and stated once here:
+
+  * source tree read:   v2.84.0-26-g732518ef
+  * server it runs on:  ET Legacy v2.84.0  (etlded.x86_64, built 2026-05-18)
+
+Those are 26 commits apart. Of the files cited here, only two differ across
+that gap: g_lua.c (-3 lines, all after 1348, i.e. after every line cited here)
+and g_client.c (-27 lines, hunks from 2091). So g_combat.c, g_active.c,
+bg_pmove.c, bg_misc.c and msg.c citations are exact for the running binary,
+g_lua.c citations are exact, and **g_client.c citations are given in the
+running binary's numbering** (which is +18 from the tree).
+
+VERIFIED AGAINST THIS SERVER'S BINARY (legacy/qagame.mp.x86_64.so, ET:L 2.84)
 ----------------------------------------------------------------------------
 Read out of the module's own registration tables, not from memory:
 
@@ -33,16 +49,51 @@ Read out of the module's own registration tables, not from memory:
     et_ClientSpawn, et_ClientCommand, et_ConsoleCommand.
   * There is NO Lua binding that kills or respawns a client. et.G_Damage is
     the only way to end a life from a script.
-  * `health` is NOT a gentity field the Lua API exposes — not for get, not for
-    set. Aliveness has to be read as ps.stats[STAT_HEALTH].
+  * `health` IS exposed and IS writable — g_lua.c:1397, flags 0 — and the
+    official Lua API docs say the same. This file used to claim the opposite
+    while the module itself wrote the field; two statements in one file
+    disagreeing is worse than either being wrong alone.
+    ⭐ And `ent->health` is the REAL quantity: ps.stats[STAT_HEALTH] is
+    re-derived from it every ClientEndFrame (g_active.c:2331), death is
+    decided on ent->health (g_combat.c:1942), and the client HUD only ever
+    sees STAT_HEALTH. Writing both, as this module does, is redundant but
+    harmless; writing ONLY ps.stats would show the number for one frame and
+    then snap back.
   * ⛔ `DAMAGE_*` and `ENTITYNUM_*` are NOT registered as et.* constants (zero
     matches in the module's constant table), so their values are written out
     below as numbers. DAMAGE_NO_PROTECTION = 0x20 comes from
-    src/game/g_local.h at tag v2.85.0; 1022 is ENTITYNUM_WORLD.
-  * `PW_INVULNERABLE`, `STAT_HEALTH`, `TEAM_*`, `MOD_*` ARE registered, so
-    those are read off et.* rather than hardcoded.
+    src/game/g_local.h; 1022 is ENTITYNUM_WORLD.
+  * `PW_INVULNERABLE`, `PW_NOFATIGUE`, `STAT_HEALTH`, `TEAM_*`, `MOD_*` ARE
+    registered (PW_NOFATIGUE at g_lua.c:2985), so those are read off et.*
+    rather than hardcoded.
   * Array fields take an index: et.gentity_get(cn, "ps.powerups", idx) — the
     same call shape c0rnp0rn8.lua:984 already uses on this server.
+
+WHAT THE POOL DOES NOT PROTECT AGAINST, AND WHAT QUIETLY EATS IT
+----------------------------------------------------------------
+⛔⛔ **A hit over 190 damage sets health to -176 regardless of the pool.**
+g_combat.c:1931 is an UNCONDITIONAL assignment — it never looks at remaining
+health:
+    if (targ->s.number < MAX_CLIENTS && take > 190) { targ->health = GIB_HEALTH - 1; }
+Good news: that is why LETHAL_DAMAGE = 1000 reliably kills at any pool. Bad
+news: a duelist on 1000 HP is still one-shot by panzerfaust, dynamite, satchel
+or mortar. Against those weapons the pool is worth nothing.
+
+⛔⛔ **G_Damage is a silent no-op during warmup.** g_combat.c:1445 returns
+early when `g_gamestate != GS_PLAYING && match_warmupDamage == 0`. The forced
+reset then does not happen AND reports nothing — which reads exactly like "the
+module is broken". Check gamestate before concluding anything.
+
+⛔ **The engine bleeds surplus health at 1 HP per second** (g_active.c:941-943,
+compared against ps.stats[STAT_MAX_HEALTH], which is ~100-140 and cannot be
+raised past 156 by any supported field). Measured against the presets:
+250 -> ~140 in 110 s, 500 -> 360 s, 1000 -> 860 s. At the 500 default and a
+14 s duel that is ~14 HP, about 3%. Deliberately not fixed: the clean fix is
+to re-assert STAT_MAX_HEALTH from et_RunFrame (which runs after
+ClientEndFrame, g_main.c:4649 vs 4676), and that would give this module a
+frame hook — too much machinery for 3%.
+⚠️ Consequence that stays visible: the HUD health bar is scaled against
+STAT_MAX_HEALTH, so a 500 HP duelist shows an overfull bar. Cosmetic.
 
 WHY THE ATTACKER IS THE WORLD AND NOT THE PLAYER HIMSELF
 --------------------------------------------------------
@@ -83,12 +134,16 @@ USAGE
 
 HOW LONG A DUEL LASTS (measured, local 2.84, two bots, 2026-09-04)
 ------------------------------------------------------------------
-  300 HP -> median  7 s (n=11)    500 HP -> median 14 s (n=7)
-  1000 HP -> ONE duel in 120 s
+  250 HP -> median  6 s (n=13)    300 HP -> median  7 s (n=11)
+  500 HP -> median 14 s (n=7)     1000 HP -> ONE duel in 120 s
 
-⚠️ 250 is NOT one of the measured points — it is offered because 300 already
-sat at 7 s and the shortest preset should be reachable, but its duel length is
-an interpolation, not a reading. 500 and 1000 are readings.
+250 was an interpolation when it was added; it is a reading now (2026-09-04,
+local 2.84), and it landed where the interpolation said it would.
+
+⚠️ Every one of these points was measured with MIXED loadouts — Omni-bot picks
+its own class and this module cannot make it stop (see arena_loadout below).
+The numbers are consistent with each other because the same mess was present
+at all four, but none of them is a mirrored-SMG duel.
 With lifesteal the pool and the duel length are NOT proportional — the fight
 is a race between two drains, so the curve bends. Pick the pool for the duel
 length you want, not for the number that sounds generous.
@@ -101,12 +156,12 @@ spectator joining, another map — and it stands down without touching a thing.
 local MODNAME  = "dots_arena_1v1"
 local VERSION  = "1.1.0"
 
--- Not et.* constants on 2.85 (checked): write them as the numbers they are.
+-- Not et.* constants on 2.84 (checked): write them as the numbers they are.
 local ENTITYNUM_WORLD      = 1022
 local MAX_CLIENTS          = 64    -- entity numbers below this are players
 local WP_MP40              = 3     -- bg_public.h:848+ ; Axis SMG
 local WP_THOMPSON          = 8     -- ; Allies SMG
-local DAMAGE_NO_PROTECTION = 0x00000020  -- g_local.h @ v2.85.0
+local DAMAGE_NO_PROTECTION = 0x00000020  -- g_local.h:1671
 local LETHAL_DAMAGE        = 1000        -- far past GIB_HEALTH from any health
 
 local active        = false   -- armed on this map?
@@ -176,7 +231,9 @@ local function players_on_teams()
 end
 
 local function is_alive(cn)
-  -- `health` is not exposed to Lua; STAT_HEALTH is the only reading available.
+  -- STAT_HEALTH is the reading, not the truth: it is re-derived from
+  -- ent->health every ClientEndFrame (g_active.c:2331). For "is he alive"
+  -- that distinction does not matter, because both are written together.
   local hp = et.gentity_get(cn, "ps.stats", et.STAT_HEALTH)
   return type(hp) == "number" and hp > 0
 end
@@ -188,10 +245,18 @@ end
 -- here; QuakeLive's own community warns that 100% makes LG fights "almost
 -- endless", which is the failure this mode has to avoid, not chase.
 --
--- MP40 and Thompson both do 18 damage every 150 ms (bg_misc.c:164, :169) =
--- 120 dmg/s sustained. With a 1000 HP pool and 50% leech, a duel where one
--- player lands 60% and the other 40% resolves in roughly 20-30 s -- long
--- enough for movement and tracking to decide it, short enough to end.
+-- ⛔ This block used to compute a duel out of "MP40 and Thompson both do 18
+-- damage every 150 ms = 120 dmg/s". That duel never happened. The bots in the
+-- run those numbers came from played whatever class Omni-bot picked: from the
+-- server's own userinfo, akimbo colt (506) and akimbo luger (500) led, then
+-- Thompson (314), Kar98 (286), MP40 (266) and Carbine (242). A second and
+-- independent route to the same conclusion -- damage per hit in this module's
+-- own STEAL lines -- says the same thing: dmg=34 dominates (94 hits, a
+-- bolt-action rifle) against dmg=18 (33, an SMG).
+--
+-- So the curve below is real but it is a MIXED-LOADOUT curve, not a mirrored
+-- SMG one. The ratios between its three points should survive (the same mess
+-- was present at all three), the arithmetic explaining them did not.
 --
 -- ⛔ Two engine facts shape this, both read out of the source rather than
 -- assumed:
@@ -235,6 +300,15 @@ local duel_pool    = 0       -- the pool BOTH players actually spawned with
 local HP_PRESETS       = { 250, 500, 1000 }
 local VAMP_FALLBACK_HP = 500
 local hp_warned        = nil    -- the last bad value we complained about
+--- ⛔ The cvar is the INTERFACE, not the storage. et.trap_Cvar_Set goes through
+--- Cvar_Set2 with force = qtrue (g_lua.c:287-294 -> sv_game.c:454 ->
+--- cvar.c:841), which creates arena_hp with flags 0 and bypasses every
+--- latch/ROM/cheat rejection — so the write always lands. What it does NOT
+--- survive is Cvar_Restart, which resets a flags-0 cvar to the FIRST value it
+--- ever held (cvar.c:1552-1555), not the last. Keeping the number in Lua state
+--- as well means an in-game change cannot be silently rolled back to whatever
+--- the pool happened to be the first time somebody set it.
+local pool_state       = nil    -- what a command asked for, this map
 
 --- The preset closest to what was asked for. An unrecognised number is NOT
 --- silently honoured: a typo would create a regime nobody has measured, and
@@ -256,7 +330,7 @@ end
 ---   arena_hp 250/500/1000 -> that pool, vampiric on or off
 ---   arena_hp unset, vampiric on -> 500, the measured middle
 local function configured_pool()
-  local want = cvar_num("arena_hp", -1)
+  local want = pool_state or cvar_num("arena_hp", -1)
   if want == -1 then
     -- Compatibility with the cvar this started life as. Read only when the new
     -- name is absent, so nobody ends up with two settings disagreeing.
@@ -289,6 +363,7 @@ local function set_pool(want, cn)
   if want ~= 0 then
     applied = nearest_preset(want)
   end
+  pool_state = applied
   et.trap_Cvar_Set("arena_hp", tostring(applied))
   local shown = (applied == 0) and "engine default" or (applied .. " HP")
   local line = "^7arena pool ^3" .. shown .. " ^7— from the next spawn"
@@ -403,6 +478,9 @@ function et_InitGame(levelTime, randomSeed, restart)
   -- was capped by a number from a duel that was over. Carrying state across a
   -- map change is the same defect the score reset above already fixes.
   duel_pool = 0
+  -- A new map starts from the server's configuration, not from what somebody
+  -- typed on the last one.
+  pool_state = nil
   -- ⛔ `active` is the MAP gate ONLY. It used to fold in the arena_1v1 enable
   -- cvar as well, which made the control run impossible to take: with
   -- arena_1v1 0 the module went fully dark, so the very measurement that has
@@ -464,8 +542,21 @@ function et_Obituary(victim, killer, mod)
   -- could not answer, and it decides whether the recursion guard above is ever
   -- in play at all.
   local vhp, vshield, vself = reading(victim)
-  log("OBIT    victim=%d killer=%d mod=%d health=%d shield=%d selfkills=%d",
-      victim, killer, mod, vhp, vshield, vself)
+  -- ⛔ The weapon belongs on THIS line. Whether a forced loadout survives is a
+  -- question about a moment seconds after the spawn, and the spawn line cannot
+  -- answer it — an instrument that only reads at the moment of the write can
+  -- never see the write being undone.
+  -- ⛔ Ammo and stamina belong on THIS line too, and for the same reason: the
+  -- spawn line is written at the moment of the write, so it can only ever say
+  -- that the write happened — never that it survived. A duel's END is where
+  -- "did the clip hold" and "did the sprint bar stay full" are answerable.
+  local vic_wp, vic_ammo, vic_clip = et.GetCurrentWeapon(victim)
+  local vic_sprint = et.gentity_get(victim, "ps.stats", et.STAT_SPRINTTIME)
+  local vic_max = et.gentity_get(victim, "ps.stats", et.STAT_MAX_HEALTH)
+  log("OBIT    victim=%d killer=%d mod=%d health=%d shield=%d selfkills=%d " ..
+      "vicwp=%s ammo=%s clip=%s sprint=%s maxhp=%s",
+      victim, killer, mod, vhp, vshield, vself, tostring(vic_wp),
+      tostring(vic_ammo), tostring(vic_clip), tostring(vic_sprint), tostring(vic_max))
 
   if not enabled() then
     log("OFF     arena_1v1=0 — no reset, this is the control")
@@ -528,9 +619,10 @@ local spawn_shield = {}
 ---
 --- Forcing the loadout is not required by lifesteal and is now an open item,
 --- not a silent half-feature. Left as a stub so its absence is deliberate.
-local function arena_loadout(cn)
-  return   -- see the note above; weapon forcing is not attempted
-end
+-- The retry lives further down, after AMMO_FILL is in scope. ⛔ Defining it
+-- here would have referenced a GLOBAL AMMO_FILL (nil) rather than the local
+-- declared below it — Lua closes over locals that already exist, not ones
+-- that come later.
 
 -- ── Ammo: unlimited, and why the number is 9999 and not 99999 ─────────────
 --
@@ -556,6 +648,49 @@ end
 --
 -- 9999 rounds at the MP40's 150 ms cycle (bg_misc.c:164) is 1500 seconds of
 -- held trigger. The longest duel ever measured here was 120 s.
+--
+-- ✅ MEASURED 2026-09-04 on the local 2.84: 9999/9999 at every one of ~100
+-- spawns, and at the end of every duel the clip had dropped ONLY by the shots
+-- fired (9999/9949 was the worst case). Nothing clamped it, nothing topped it
+-- up, and no reload was ever needed.
+-- ⚠️ The corpse hazard below did NOT fire in ~45 minutes of duels: the bots
+-- kill each other in 4-6 s and do not walk over the weapons they drop. So it
+-- stays a prediction derived from the source, not an observation -- which is
+-- the honest status, not a clean bill of health.
+--
+-- Two more things a source sweep settled, both of which change how this is
+-- allowed to be written:
+--
+-- ✅ NOTHING PERIODIC FIGHTS THE WRITE. An exhaustive grep of ps.ammo[ and
+--    ps.ammoclip[ across the whole tree finds exactly two per-frame writers,
+--    and neither is real ammo: ps.ammo[WP_ARTY] used as an airstrike bitfield
+--    (g_active.c:1223-1231) and ps.ammo[WP_DUMMY_MG42] used as mounted-MG heat
+--    (bg_pmove.c:5427). Every other writer is event-driven. maxAmmo/maxClip
+--    are enforced ONLY on pickup (g_items.c:148-151) and reload
+--    (bg_pmove.c:2500), never as a general clamp -- and the pickup guard
+--    `ps->ammo[clip] < maxAmmo` (bg_misc.c:2651) is simply false at 9999.
+--
+-- ⚠️ ONCE PER SPAWN IS THE DESIGN, NOT A SHORTCUT. CG_PredictionOk
+--    (cg_predict.c:902-910) returns a prediction error on ANY unpredicted ammo
+--    change. Once per spawn is one resync and harmless; a per-frame top-up
+--    would be a PERMANENT prediction failure. That is why this fills at spawn
+--    and never on a timer.
+--
+-- ⛔ THE ONE REAL HAZARD IS CORPSES. dots_arena itself is clean -- its BSP
+--    entity lump has no item_health*, ammo_* or weapon_* at all, only spawns,
+--    objectives and lights -- so the medpack clamp that would cut health back
+--    to STAT_MAX_HEALTH (g_items.c:601-603) cannot fire here. But a dying
+--    player DROPS his primary weapon (G_DropWeapon from player_die,
+--    g_combat.c:194), and picking one up runs Fill_Clip -> AddToClip
+--    (g_items.c:67-95) where `ammomove = maxclip - inclip` is NEGATIVE at
+--    9999: the clip moves DOWN toward 30 and the reserve moves UP. Not fatal
+--    -- reloading from a ~19968 reserve works fine -- but "never has to
+--    reload" degrades to "reloads sometimes" for whoever walks over a corpse.
+--
+-- ⚠️ 9999 DOES overflow two spectator relays: the shoutcast overlay ships ammo
+--    in 10 bits (bg_ebs.h:63-64, written g_team.c:2492-2493) and multiview in
+--    9-11 (g_multiview.c:490-499), so 9999 shows up there as 783. Affects
+--    shoutcasters and multiview spectators only, never the duelists.
 local AMMO_FILL = 9999
 
 --- Top up whatever the player is actually holding. Deliberately NOT weapon
@@ -603,7 +738,94 @@ end
 --- duel wants it. `arena_nofatigue 0` turns it off.
 local function arena_nofatigue(cn)
   if cvar_num("arena_nofatigue", 1) == 0 then return end
+  -- The literal 1 is correct and not a timestamp. Both readers are truthiness
+  -- tests inside PM_Sprint (bg_pmove.c:4973, :4999) and nothing anywhere reads
+  -- the VALUE — the engine's own /nofatigue cheat writes FL_NOFATIGUE = 65536
+  -- (g_cmds.c:1090), which would be nonsense as a level.time expiry.
   et.gentity_set(cn, "ps.powerups", et.PW_NOFATIGUE, 1)
+end
+
+--- ⚠️ Side effect nobody asked for, found while checking what the powerup
+--- actually does: a jump deducts 2500 from sprintTime (bg_pmove.c:1341) and
+--- PM_Sprint puts it straight back, so this also grants UNLIMITED JUMPING.
+--- For a strafe duel that is probably wanted, but it was not the request, so
+--- it is written down rather than discovered later.
+
+--- ⛔ Weapon forcing, ATTEMPT TWO. The first attempt removed 54 weapons per
+--- spawn, produced a ClientUserinfoChanged storm at ~1 Hz and stopped the bots
+--- fighting; it was withdrawn. This one only ADDS, which the source says is a
+--- different path entirely: Bot_Event_AddWeapon (g_etbot_interface.cpp:6310)
+--- is fire-and-forget into the Omni-bot DLL, writes nothing to the playerState
+--- and never calls ClientUserinfoChanged — unlike the Remove path.
+---
+--- ⛔ One exception the source names: for Garand, K43, FG42 and their _SCOPE
+--- variants, Bot_Event_AddWeapon itself ALSO emits MESSAGE_REMOVEWEAPON
+--- (g_etbot_interface.cpp:6317-6382) — the very message class that caused the
+--- storm. MP40 and Thompson are not in that set, which is why this is limited
+--- to the two SMGs and not generalised.
+---
+--- setcurrent = 1 here (unlike arena_ammo) precisely because ps.weapon is
+--- read-only to Lua (g_lua.c:1289): this binding is the only way to select a
+--- weapon at all.
+---
+--- ⛔⛔ MEASURED, 2026-09-04, local 2.84, and the answer is: THE WRITE LANDS,
+--- THE WEAPON DOES NOT STAY. 50 forced loadouts in one three-minute window;
+--- every one confirmed by reading the weapon back immediately (`now=` equals
+--- `want=` on all 50), and at the end of those duels the victim was holding
+--- the forced weapon in 2 of 25 obituaries. Omni-bot re-picks its class
+--- weapon within seconds and this module has no way to argue.
+---
+--- ⚠️ It DOES cost userinfo traffic, and the first version of this note said
+--- otherwise. ClientUserinfoChanged, three windows:
+---
+---     1.76/s   forcing off (contaminated: forcing came on mid-window)
+---     1.53/s   forcing ON, 180 s clean
+---     1.03/s   forcing off, 95 s clean control
+---
+--- The clean pair is 1.53 against 1.03 — forcing runs about **1.5x baseline**,
+--- roughly 1.8 extra userinfo changes per forced loadout. AddWeaponToPlayer
+--- itself never calls ClientUserinfoChanged (checked in
+--- g_etbot_interface.cpp), so the extra traffic is the BOT answering: it
+--- re-selects its own weapon, and re-selection goes through Cmd_Team_f /
+--- G_SetClientWeapons, which do call it (g_cmds.c:2358, :2034).
+---
+--- ⛔ I wrote "1.52/s in the control" from a partial reading taken 50 s into
+--- that window and committed it before the window closed. The finished
+--- control said 1.03. A rate read off an unfinished window is not a rate.
+---
+--- ⭐ What is still true, and is the whole difference from attempt one: this
+--- is EXTRA TRAFFIC, not a storm, and nothing breaks. Duels kept their cadence
+--- (median 6 s with forcing on, 7 s in the control) instead of collapsing to
+--- one obituary in two minutes. So this is not withdrawn a second time — but
+--- it is not free either, and on a busy server that cost is worth knowing.
+---
+--- ⭐ And it is only visible at all because the reading was moved to the
+--- OBITUARY line. `now=` is taken one instruction after the write, so it can
+--- only ever report that the write happened -- exactly the mistake the first
+--- attempt made. An instrument that reads at the moment of the write can
+--- never see the write being undone.
+---
+--- Default OFF: useful for humans, ineffective against bots, and the curve it
+--- was meant to produce (mirrored SMGs) is therefore still not measurable
+--- with bots.
+local function arena_loadout(cn)
+  if cvar_num("arena_symmetric", 0) == 0 then return end
+  local team = et.gentity_get(cn, "sess.sessionTeam")
+  local want
+  if team == et.TEAM_AXIS then
+    want = WP_MP40
+  elseif team == et.TEAM_ALLIES then
+    want = WP_THOMPSON
+  else
+    return
+  end
+  local ok, err = pcall(et.AddWeaponToPlayer, cn, want, AMMO_FILL, AMMO_FILL, 1)
+  if not ok then
+    log("LOADOUT cn=%d want=%d FAILED %s", cn, want, tostring(err))
+    return
+  end
+  local now = et.GetCurrentWeapon(cn)
+  log("LOADOUT cn=%d want=%d now=%s", cn, want, tostring(now))
 end
 
 function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
@@ -623,7 +845,7 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   -- that floor is exactly the 25 ms median we saw at sv_fps 40.
   --
   -- So level the thing the players actually feel instead. ClientSpawn writes
-  -- `powerups[PW_INVULNERABLE] = level.time + 3000` (g_client.c:3331) and this
+  -- `powerups[PW_INVULNERABLE] = level.time + 3000` (g_client.c:3349) and this
   -- hook runs AFTER it, so the write below survives. Both shields are pulled
   -- to the EARLIER expiry — never the later one, so nobody ends up with more
   -- protection than the engine meant to give.

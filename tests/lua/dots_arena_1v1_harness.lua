@@ -22,7 +22,7 @@ local cvars  = {sv_maxclients="2", arena_1v1="1", arena_1v1_map="dots_arena",
 local argv   = {}
 et = {
   TEAM_AXIS=1, TEAM_ALLIES=2, STAT_HEALTH=0, CS_SERVERINFO=0, PW_INVULNERABLE=1,
-  MOD_SUICIDE=37, FS_APPEND=2, PW_NOFATIGUE=2,
+  MOD_SUICIDE=37, FS_APPEND=2, PW_NOFATIGUE=4,
   RegisterModname=function() end, G_Print=function() end,
   trap_Cvar_Get=function(n) return cvars[n] or "" end,
   trap_Cvar_Set=function(n,v) cvars[n]=v; calls[#calls+1]="cvar "..n.."="..v end,
@@ -63,7 +63,7 @@ et = {
   trap_SendServerCommand=function(cn, cmd) sent[#sent+1]=cmd end,
   gentity_set=function(cn, field, idx, val)
     if field=="ps.powerups" and idx==1 then shield[cn]=val end
-    if field=="ps.powerups" and idx==2 then nofatigue[cn]=val end
+    if field=="ps.powerups" and idx==4 then nofatigue[cn]=val end
     if field=="health" then health[cn]=idx end
     if field=="ps.stats" and idx==0 then health[cn]=val end
     calls[#calls+1]=("set(%d,%s,%s,%s)"):format(cn, field, tostring(idx), tostring(val))
@@ -331,11 +331,17 @@ assert(health[0] == 250 and health[1] == 250, "od naslednjega spawna: "..health[
 --    spawnala — ne svež odčitek cvara. Če bi se brala živo, bi vrnitev
 --    arena_hp na 1000 sredi dvoboja dvignila strop nad zdravje, s katerim je
 --    kdorkoli začel, in mod bi izgledal, kot da si izmišlja zdravje.
-cvars.arena_hp = "1000"
+-- ⛔ Sprememba mora iti po ISTI poti, po kateri gre igralec — po ukazu. Prvi
+--    zapis je premaknil samo cvar, a odkar bazen živi tudi v Lua stanju, je
+--    cvar mimo ukaza brez učinka in mutacija »beri živo« je prešla: test je
+--    premikal vzvod, ki ni bil priklopljen.
+argv = {"arenahp", "1000"}
+assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
 health[0] = 245
 et_Damage(1, 0, 40, 0, 8)
 assert(health[0] == 250, "⛔ strop mora ostati posnet na 250: "..health[0])
-cvars.arena_hp = "250"
+argv = {"arenahp", "250"}
+et_ClientCommand(0, "arenahp")
 -- ⛔ Ukazna pot mora prilepiti prav tako kot bralna. Prvi zapis tega primera je
 --    uporabljal 250, ki JE preset — mutacija »ne prilepi« je zato prešla, ker
 --    se vhod in izhod nista razlikovala. Vzemi vrednost, ki se MORA premakniti.
@@ -382,3 +388,46 @@ health[0] = 90; health[1] = 90
 et_Damage(1, 0, 40, 0, 8)
 assert(health[0] == 110, "⛔ pred prvim spawnom mora zdravljenje delati, ne ubijati: "..health[0])
 print("✅ škoda pred prvim spawnom ne pobije napadalca")
+
+-- 20) Simetrija orožij, drugi poskus. Prvi je odstranjeval 54 orožij in ubil
+--     boje; ta samo DODA in izbere. Preverjata se dve stvari, ki ju prvi
+--     poskus ni ločil: da se doda PRAVO orožje za ekipo, in da se z
+--     `setcurrent=1` orožje res IZBERE (drugače je dodajanje brez učinka).
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"; cvars.arena_symmetric = "1"
+current_wp[0] = 23  -- WP_KAR98, kar bot dejansko dobi
+current_wp[1] = 24  -- WP_CARBINE
+ammo_of = {}; clip_of = {}; setcurrent_of = {}
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(current_wp[0] == 3, "Axis mora dobiti MP40, dobil "..tostring(current_wp[0]))
+assert(current_wp[1] == 8, "Allies mora dobiti Thompson, dobil "..tostring(current_wp[1]))
+assert(setcurrent_of[0] == 1 and setcurrent_of[1] == 1,
+       "⛔ brez setcurrent=1 je dodajanje brez učinka: "..tostring(setcurrent_of[0]))
+-- ⛔ In izklopljeno stikalo se mora res izklopiti — sicer je privzetek laž.
+et_InitGame(0,0,false)
+cvars.arena_symmetric = "0"
+current_wp[0] = 23; current_wp[1] = 24
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(current_wp[0] == 23 and current_wp[1] == 24,
+       "⛔ pri arena_symmetric 0 se oborožitev ne sme dogajati: "..current_wp[0])
+print("✅ simetrija orožij: doda in izbere, izklopljena pa miruje")
+
+-- 21) Kar je nekdo natipkal na prejšnji mapi, ne sme prevladati nad
+--     konfiguracijo strežnika na naslednji. Cvar je vmesnik, Lua stanje je
+--     zaščita pred Cvar_Restart — a zaščita, ki se ne resetira, je le drugo
+--     ime za stanje, ki uhaja čez mejo mape.
+et_InitGame(0,0,false)
+cvars.arena_hp = "1000"; cvars.arena_vamp = "1"; cvars.arena_symmetric = "0"
+et_InitGame(0,0,false)
+argv = {"arenahp", "250"}
+assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 250, "na tej mapi velja natipkano: "..health[0])
+-- nova mapa, strežnik spet pove 1000
+cvars.arena_hp = "1000"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+assert(health[0] == 1000, "⛔ prejšnja mapa ne sme prevladati: "..health[0])
+print("✅ bazen ne uhaja čez mejo mape")
