@@ -234,4 +234,3 @@ test('the legacy replay page lands where rounds are picked, and never asks an an
   expect(page.locator('[data-parity="admin.diagnostics"]')).toHaveCount(0);
   expect(asked.filter((u) => /\/api\/diagnostics(\?|$)/.test(u))).toEqual([]);
 });
-
