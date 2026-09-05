@@ -2849,10 +2849,12 @@ end
 -- Lua damage hook fires for EVERY damaged entity (g_combat.c:1857 sits at
 -- the top of G_Damage, outside the targ->client branches), so a script_mover
 -- reaches et_Damage — where the first line used to reject it as "not a
--- client". This branch runs BEFORE that line. By the time the hook runs the
--- engine has already subtracted the damage (same ordering as G_LogRegionHit,
--- see the headshot note in et_Damage), so "dead now" is read from the
--- entity and "health before" comes from the 500 ms poll's cache.
+-- client". This branch runs BEFORE that line. The hook fires BEFORE the
+-- engine subtracts the damage (g_combat.c:1857 vs `targ->health -= take`
+-- at :1915 — unlike G_LogRegionHit, which runs before the hook), so the
+-- entity still reads its pre-hit health here: "dead" = health - damage <= 0.
+-- Live (goldrush, bots): with "dead = entity reads 0" the killing hit
+-- recorded nothing and the poll then logged the death without an attacker.
 -- Cost is accounted per frame as the "vehdmg" section (fh_section only
 -- brackets et_RunFrame, so the hook accumulates and the frame reports).
 local vehdmg = { ms = 0 }
@@ -2861,8 +2863,9 @@ local function recordVehicleDamage(target, attacker, damage, meansOfDeath)
     local veh = tracker.vehicles.entities[target]
     if not veh then return end
     local t0 = fh_now()
-    local health_now = tonumber(safe_gentity_get(target, "health")) or 0
-    if health_now <= 0 and veh.last_health > 0 then
+    local health_now = tonumber(safe_gentity_get(target, "health")) or 0   -- pre-hit (see above)
+    local health_after = health_now - (tonumber(damage) or 0)
+    if health_after <= 0 and health_now > 0 then
         local guid, name, team = "", "", ""
         if isValidClient(attacker) and attacker ~= 1022 and attacker ~= 1023 then
             guid = getPlayerGUID(attacker) or ""
@@ -2874,12 +2877,12 @@ local function recordVehicleDamage(target, attacker, damage, meansOfDeath)
             time = gameTime(),
             attacker_guid = guid, attacker_name = name, attacker_team = team,
             means_of_death = tonumber(meansOfDeath) or 0,
-            health_before = veh.last_health,
+            health_before = health_now,
         }
         -- The poll must not count this death a second time.
         veh.last_health = 0
-    elseif health_now > 0 then
-        veh.last_health = health_now
+    elseif health_after > 0 then
+        veh.last_health = health_after
     end
     vehdmg.ms = vehdmg.ms + (fh_now() - t0)
 end

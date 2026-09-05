@@ -135,14 +135,17 @@ check(client_hits == 0 and #prints == before, "a hit on client 1 does not touch 
 -- Control: the same killing hit during WARMUP (gamestate 1) is not a
 -- round event — nothing recorded, the truck stays "alive" for the poll.
 gamestate = "1"
-truck.health = 0
 et_Damage(64, 3, 900, 0, 5)
-truck.health = 800
 gamestate = "0"
 frame(500)
--- The engine has already subtracted the damage when the hook runs.
-truck.health = 0
+-- The hook fires BEFORE the engine subtracts the damage: the entity still
+-- reads 800 during the hook. A 300 hit is not a kill (the tracker's cache
+-- drops to 500); the 900 hit is.
+et_Damage(64, 3, 300, 0, 5)
+truck.health = 500
+frame(500)
 et_Damage(64, 3, 900, 0, 5)
+truck.health = 0
 -- Two more polls: health stays 0, last_health is 0 → no second count.
 frame(500); frame(500)
 -- Repaired and later killed by a script (no hit): after it has moved, the
@@ -198,7 +201,7 @@ check(vd[1] == "truck", "destroyed vehicle is the truck")
 check(vd[3] == "GUID3ABCDEF", "attacker guid is client 3's (got " .. vd[3] .. ")")
 check(vd[5] == "allies" or vd[5] == "ALLIES" or vd[5] ~= "", "attacker team recorded (" .. vd[5] .. ")")
 check(tonumber(vd[6]) == 5, "means_of_death carried through")
-check(tonumber(vd[7]) == 800, "health_before is the poll's last healthy reading")
+check(tonumber(vd[7]) == 500, "health_before is the entity's pre-hit health (got " .. vd[7] .. ")")
 local truck_rows = 0
 for line in out:gmatch("[^\n]+") do
     if line:sub(1, 6) == "truck;" then truck_rows = truck_rows + 1 end
