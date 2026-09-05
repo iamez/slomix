@@ -17,7 +17,9 @@
 local now_ms = 100000          -- wall clock (trap_Milliseconds)
 local level_time = 0           -- engine level time (et_RunFrame argument)
 local gamestate = "0"
-local truck = { x = 1000, y = 2000, z = 10, health = 800 }
+-- The truck is read at (0,0,0) at map load — not yet spawned — and jumps
+-- to its real place on the first sample: that jump must NOT be a move.
+local truck = { x = 0, y = 0, z = 0, health = 800 }
 local written = {}
 local prints = {}
 local client_hits = 0
@@ -101,7 +103,9 @@ for _, p in ipairs(prints) do
 end
 check(veh, "init scan registered the truck (ent 64)")
 
--- Two standing samples (500 ms poll interval), then three moving ones.
+-- First sample: the truck appears at its real place (spawn jump, not a
+-- move). Then one standing sample, then three moving ones.
+truck.x, truck.y, truck.z = 1000, 2000, 10
 frame(500); frame(500)
 truck.x = truck.x + 120; frame(500)
 local t_first = level_time
@@ -144,6 +148,7 @@ check(vp_line ~= nil, "truck row present")
 local fields = {}
 for f in (vp_line .. ";"):gmatch("([^;]*);") do fields[#fields + 1] = f end
 check(#fields == 14, "VEHICLE_PROGRESS row has 14 fields (got " .. #fields .. ")")
+check(tonumber(fields[9]) == 360.0, "total_distance counts the three real moves only, not the spawn jump from (0,0,0) (got " .. fields[9] .. ")")
 check(tonumber(fields[12]) == 1, "destroyed_count is exactly 1 (poll did not double-count), got " .. fields[12])
 -- gameTime() is level time minus the round's start, and the tracker
 -- re-anchors that start on the first PLAYING frame (the warmup→play

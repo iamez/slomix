@@ -2719,6 +2719,19 @@ sampleVehiclePositions = function()
         end
         local current_pos = {x = vx, y = vy, z = vz}
 
+        -- v6.14: an entity read before it spawns answers (0,0,0) (the init
+        -- scan's sane_coord clamps garbage to 0 too). Its first real
+        -- position is then a "move" of a few thousand units from the world
+        -- origin — under MAX_SANE_MOVE, so it used to count (a supply truck
+        -- showed 3380 u and first_move_time=600 ms on an empty map load).
+        -- A mover is never really at the exact origin: resync and skip.
+        if veh.last_pos.x == 0 and veh.last_pos.y == 0 and veh.last_pos.z == 0
+            and (vx ~= 0 or vy ~= 0 or vz ~= 0) then
+            veh.start_pos = current_pos
+            veh.last_pos = current_pos
+            goto continue_vehicle
+        end
+
         local delta = distance3D(current_pos, veh.last_pos)
         -- Cap the per-sample delta. An entity read at map load before it spawns
         -- can return a billions-large origin (seen: truck pos ~1.15e10); that
@@ -2805,6 +2818,7 @@ sampleVehiclePositions = function()
                 end
             end
         end
+        ::continue_vehicle::
     end
 end
 
