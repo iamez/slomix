@@ -2671,13 +2671,7 @@ local function scanVehicleEntities()
                     last_pos = {x = ox, y = oy, z = oz},
                     total_distance = 0,
                     max_health = health,
-                    -- v6.14: 0, not `health`. The init scan runs before the
-                    -- map script sets the mover up: goldrush's tank reads
-                    -- 1200 here and is BROKEN (0 HP, to be repaired) by the
-                    -- first poll — which used to log a "destruction" at
-                    -- 1.2 s with no attacker on every round. A mover is
-                    -- alive once a poll has READ it alive.
-                    last_health = 0,
+                    last_health = health,
                     destroyed_count = 0,
                     -- v6.14 (docs/design/20 slice 2): WHEN the mover moved,
                     -- and who took it down. gameTime() ms since round start,
@@ -2768,16 +2762,26 @@ sampleVehiclePositions = function()
         -- Track health changes
         local health = tonumber(safe_gentity_get(entNum, "health")) or 0
         if health <= 0 and veh.last_health > 0 then
-            -- The 500 ms poll saw it die without a hit on it (script kill,
-            -- or a hit below min_damage). Record it without an attacker so
-            -- destroyed_count and the VEHICLE_DESTROYED rows stay one set.
-            -- (last_health starts at 0 — see scanVehicleEntities — so a
-            -- mover that begins broken is not "destroyed" by its start.)
-            veh.destroyed_count = veh.destroyed_count + 1
-            veh.destroyed[#veh.destroyed + 1] = {
-                time = now, attacker_guid = "", attacker_name = "", attacker_team = "",
-                means_of_death = 0, health_before = veh.last_health,
-            }
+            if veh.first_escort_time > 0 then
+                -- The 500 ms poll saw it die without a hit on it (script
+                -- kill, or a hit below min_damage). Record it without an
+                -- attacker so destroyed_count and the VEHICLE_DESTROYED rows
+                -- stay one set.
+                veh.destroyed_count = veh.destroyed_count + 1
+                veh.destroyed[#veh.destroyed + 1] = {
+                    time = now, attacker_guid = "", attacker_name = "", attacker_team = "",
+                    means_of_death = 0, health_before = veh.last_health,
+                }
+            end
+            -- else: nobody has escorted this mover yet and it reads 0 HP —
+            -- its START state. Live (goldrush, three builds): the map
+            -- script sets the tank up alive at ~0.7 s and breaks it at
+            -- ~1.2 s (to be repaired), every round; "after the first move"
+            -- did not catch it (the tank moves by script at 0.6 s) and
+            -- neither did distrusting the init scan (a poll HAD read it
+            -- alive). Gameplay has engaged a mover once someone escorted
+            -- it; a hit with an attacker (recordVehicleDamage) counts
+            -- regardless of this gate.
         end
         if health > veh.max_health then veh.max_health = health end
         veh.last_health = health
