@@ -159,13 +159,14 @@ existing `vehicle_tracking` flag (docs/design/20 slice 2):
   build assumed the opposite: the killing hit recorded nothing and the poll
   logged the death without an attacker.)
   An empty attacker means the poll saw the death without a hit (script
-  kill, sub-threshold damage). ⚠️ The poll's own detection counts only once
-  someone has escorted the mover (`first_escort_time > 0`): goldrush's map
-  script sets the tank up alive at ~0.7 s and BREAKS it at ~1.2 s (to be
-  repaired) every round, and that transition used to log a "destruction"
-  with no attacker — two other gates ("after the first move": the tank
-  moves by script at 0.6 s; "distrust the init scan": a poll had read it
-  alive) fell live before this one held —
+  kill, sub-threshold damage). ⚠️ A death with NO player behind it counts only
+  once someone has escorted the mover (`first_escort_time > 0`), on both
+  paths: goldrush's map script sets the tank up alive and BREAKS it at
+  ~1.0 s through `G_Damage` itself (attacker = world, mod 36, take ≥ 1200; to
+  be repaired) every round, and that used to log a "destruction" with no
+  attacker — two other gates ("after the first move": the tank moves by
+  script at 0.6 s; "distrust the init scan": a poll had read it alive) fell
+  live before this one held. A player's kill counts at any time —
   `destroyed_count` no longer counts that start state (a contract change
   for that column: the corpus before v6.14 carries the phantom 1 on every
   goldrush round). Its per-frame cost shows up in the FM line as the
