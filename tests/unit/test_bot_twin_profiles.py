@@ -76,7 +76,7 @@ def test_distinctive_goals_are_where_a_player_holds_more_than_the_others():
     assert [g for g, _, _ in a] == ["ATTACK_bCp1"]
     assert a[0][1] == 0.6 and abs(a[0][2] - 0.1) < 1e-9      # group mean over the OTHERS (B 0, C 0.2)
     assert [g for g, _, _ in bt.distinctive_goals(shares, "B")] == ["DEFEND_rGate7"]
-    # C holds everywhere: nothing lifts 1.5× above the others → no distinctive goal.
+    # C holds everywhere: nothing lifts 2× above the others → no distinctive goal.
     assert bt.distinctive_goals(shares, "C") == []
     # The shared flag is nobody's personality even though it tops C's raw time.
     for p in ("A", "B", "C"):
@@ -84,13 +84,13 @@ def test_distinctive_goals_are_where_a_player_holds_more_than_the_others():
 
 
 def test_ranking_is_by_lift_over_the_group_not_by_raw_share_and_tiny_shares_are_noise():
-    # D: 30 % at G1 where the others average 18 % (lift 1.7, +12 points) and
-    # 20 % at G2 where the others average 5 % (lift 4, +15 points). Raw share
-    # would put G1 first; personality puts G2 first.
+    # D: 30 % at G1 where the others average 14.5 % (lift 2.1, +15.5 points)
+    # and 21 % at G2 where the others average 5 % (lift 4.2, +16 points). Raw
+    # share would put G1 first; personality puts G2 first.
     shares = {
-        "D": {"G1": 0.30, "G2": 0.20, "G3": 0.01},
-        "E": {"G1": 0.18, "G2": 0.05},
-        "F": {"G1": 0.18, "G2": 0.05},
+        "D": {"G1": 0.30, "G2": 0.21, "G3": 0.01},
+        "E": {"G1": 0.145, "G2": 0.05},
+        "F": {"G1": 0.145, "G2": 0.05},
     }
     assert [g for g, _, _ in bt.distinctive_goals(shares, "D")] == ["G2", "G1"]
     # G3: nobody else was ever there (lift = infinity) but 1 % of D's hold
@@ -111,7 +111,7 @@ def test_the_control_must_fail_shuffled_sessions_erase_distinctiveness():
     assert [g for g, _, _ in real["B"]["distinctive"]] == ["DEFEND_rGate7"]
     ctrl = bt.measure_map(bt.shuffle_sessions(rows, seed=3), goals)
     n_ctrl = sum(len(r["distinctive"]) for r in ctrl.values())
-    assert n_ctrl <= 1, ctrl   # 24 sessions shuffled: at most a fluke survives the 1.5× lift
+    assert n_ctrl <= 1, ctrl   # 24 sessions shuffled: at most a fluke survives the 2× lift
     # The control keeps every session and point, only the labels move.
     assert sorted(s for _, s, _ in rows) == sorted(s for _, s, _ in bt.shuffle_sessions(rows, seed=3))
 
@@ -162,3 +162,35 @@ def test_rendered_gm_is_balanced_names_are_quote_free_and_only_twins_get_a_profi
     # Without profiles the stock shape is untouched.
     assert 'AxisBots["olz"] = t;' in render_botnames(axis, allies, "^o[BOT]^7", ["ExtraOne"])
     assert bt.bot_aliases_from_table(table) == ["olz", "vid", "bronze"]
+
+
+def test_two_bot_names_of_one_player_make_one_twin_and_the_twin_plays_his_class():
+    a = bt.Twin(alias="olz", guid="5D989160")
+    b = bt.Twin(alias="Olympus", guid="5D989160")
+    c = bt.Twin(alias="vid", guid="D8423F90")
+    kept, dropped = bt.dedupe_by_guid([a, b, c])
+    assert [t.alias for t in kept] == ["olz", "vid"] and dropped == [("Olympus", "olz", "5D989160")]
+    axis = {"COVERTOPS": ["olz"], "MEDIC": [], "SOLDIER": ["x"]}
+    allies = {"COVERTOPS": [], "MEDIC": ["y"], "SOLDIER": ["vid"]}
+    bt.place_in_class(axis, allies, "olz", "MEDIC")
+    bt.place_in_class(axis, allies, "vid", "MEDIC")
+    assert axis == {"COVERTOPS": [], "MEDIC": ["olz"], "SOLDIER": ["x"]}
+    assert allies == {"COVERTOPS": [], "MEDIC": ["y", "vid"], "SOLDIER": []}
+    bt.place_in_class(axis, allies, "nobody", "MEDIC")   # unknown name: no change, no error
+    assert axis["MEDIC"] == ["olz"]
+
+
+def test_a_spot_is_a_habit_not_one_long_night():
+    goals = bt.parse_goals(GOALS_GM)
+    cp, gate = (1, 1), (9, 9)
+    rows = []
+    for i in range(20):
+        # A holds at the CP every session; B held at the gate ONCE, for a very long time.
+        rows.append(("A", f"2026-01-{i + 1:02d}", [(0, 0.0, 0.0, 0.0), (4_000, (cp[0] + .5) * 512, (cp[1] + .5) * 512, 0.0), (14_000, (cp[0] + .5) * 512, (cp[1] + .5) * 512, 0.0)]))
+        rows.append(("B", f"2026-01-{i + 1:02d}", [(0, 0.0, 0.0, 0.0), (4_000, 9500.0, 9500.0, 0.0), (14_000, 9500.0, 9500.0, 0.0)] if i else
+                    [(0, 0.0, 0.0, 0.0), (4_000, (gate[0] + .5) * 512, (gate[1] + .5) * 512, 0.0), (304_000, (gate[0] + .5) * 512, (gate[1] + .5) * 512, 0.0)]))
+    res = bt.measure_map(rows, goals)
+    assert [g for g, _, _ in res["A"]["distinctive"]] == ["ATTACK_bCp1"]
+    # B's one 300 s night at the gate is 60 % of his hold time and nobody else
+    # was there — a lift of infinity — yet it is one session of twenty.
+    assert "DEFEND_rGate7" not in [g for g, _, _ in res["B"]["distinctive"]]

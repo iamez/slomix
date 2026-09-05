@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06) Dvojčki r. 3 zgrajena (generator + 11 testov, 7
+  mutacij padlo, tek čez 6 map). ⚠️ Kontrola NE pade na nič: premešane seje
+  preživijo ≈ 21 % (14/67) razločevalnih ciljev — s 7 regularji je skupinsko
+  povprečje šumna osnovnica. Možni naslednji koraki: z-score proti razpršenosti
+  drugih igralcev, ali več sej; do takrat poročilo tiska kontrolo ob vsakem
+  teku. Odprto: `botnames` je bral `DB_*` env (ni v `.env`) → vedno fallback
+  imena (popravljeno s `POSTGRES_*` rezervo, a živa tabela na puranu je še
+  fallback); `carniee` ima 2 guida; Olympus = olz (isti igralec, dva bota).
 - (Fable 5.1, 2026-09-05, 23:20) #916 MERGAN in v6.14 DEPLOYAN na puran
   (dokazano). Odprto: (1) en večer `frame_health.log` na puranu brez novega
   `self` stroška; (2) migracija 082 na prod ob release deployu; (3) popravek

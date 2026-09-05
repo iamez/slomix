@@ -15,8 +15,12 @@ tools/slomix_rcon.py), with >= --min-sessions sessions on a map:
                2026-09-05: every top cell has a goal within 46-344 u.
   distinctive  ⛔ raw time at a goal is the MAP (supply's forward flag tops
                everyone); a twin carries what the player does MORE than the
-               group: share − group mean, kept only when share/group >= 1.5
-               and share >= 3 %. An empty list is a legitimate answer.
+               group: share − group mean, kept only when share/group >= 2.0,
+               share >= 3 % and he held there in >= 15 % of his sessions (a
+               habit, not one night). An empty list is a legitimate answer.
+               Every run also measures the shuffled control and prints it:
+               at these thresholds about a fifth of the kept goals would
+               survive a shuffle — read the report's control line.
   camp times   p25/p75 of his hold episodes at that goal → Min/MaxCampTime
                (clamped 5-60 s), emitted as SetMapGoalProperties.
   role         a named heuristic over his distinctive goals and hold share
@@ -70,8 +74,19 @@ from website.backend.services.storytelling.advanced_metrics import (  # noqa: E4
 GRID = _CAMP_CELL
 DEFAULT_MAPS = ("supply", "sw_goldrush_te", "etl_adlernest", "te_escape2", "etl_sp_delivery", "etl_frostbite")
 NOT_PLACES = ("ROUTE_", "AIRSTRIKE_", "ARTILLERY_", "CALLARTILLERY_", "PLANTMINE_")
-MIN_LIFT = 1.5
+# Thresholds set FROM the control (2026-09-06, 6 twins × 5 maps, sessions
+# shuffled among players): lift 1.5 / 3 % kept 66 real vs 30 shuffled goals
+# (45 % noise); 2.0 / 3 % keeps 43 vs 9 (≈ 21 %); 2.5 / 5 % 19 vs 4; 3.0 / 5 %
+# 12 vs 4. With seven players the group mean is a noisy baseline, so the
+# control never reaches zero — the report prints both numbers every run.
+MIN_LIFT = 2.0
 MIN_SHARE = 0.03
+# A spot is a habit, not a night: the player must have held there in at
+# least this share of his sessions (and at least MIN_GOAL_SESSIONS of them).
+# Without it the shuffled control kept 39 of 82 "distinctive" goals — one
+# long hold on one evening looked like personality.
+MIN_GOAL_SESSION_SHARE = 0.15
+MIN_GOAL_SESSIONS = 3
 TOP_GOALS = 3
 CAMP_MIN_S, CAMP_MAX_S = 5.0, 60.0
 REACTION_MIN, REACTION_MAX = 0.6, 1.5
@@ -154,20 +169,28 @@ def goal_shares(cells_by_player: dict[str, dict[Cell, int]], goals: list[Goal],
 
 
 def distinctive_goals(shares: dict[str, dict[str, float]], player: str, top: int = TOP_GOALS,
-                      min_lift: float = MIN_LIFT, min_share: float = MIN_SHARE) -> list[tuple[str, float, float]]:
+                      min_lift: float = MIN_LIFT, min_share: float = MIN_SHARE,
+                      goal_sessions: dict[str, int] | None = None, player_sessions: int = 0,
+                      min_session_share: float = MIN_GOAL_SESSION_SHARE,
+                      min_sessions: int = MIN_GOAL_SESSIONS) -> list[tuple[str, float, float]]:
     """Goals where the player holds MORE than the group: ranked by
-    share − group mean (others), kept when share/group >= min_lift and share
-    >= min_share. The group mean is over the OTHER players, so one player
-    cannot lift his own baseline."""
+    share − group mean (others), kept when share/group >= min_lift, share
+    >= min_share and — when `goal_sessions` (goal → sessions he held there)
+    is given — he held there in >= max(min_sessions, min_session_share ×
+    player_sessions) sessions. The group mean is over the OTHER players, so
+    one player cannot lift his own baseline."""
     others = [p for p in shares if p != player]
     if not others:
         return []
     names = {g for p in shares for g in shares[p]}
+    need = max(min_sessions, math.ceil(min_session_share * player_sessions)) if goal_sessions is not None else 0
     ranked = []
     for g in names:
         share = shares[player].get(g, 0.0)
         group = sum(shares[o].get(g, 0.0) for o in others) / len(others)
         if share < min_share:
+            continue
+        if goal_sessions is not None and goal_sessions.get(g, 0) < need:
             continue
         lift = share / group if group > 0 else float("inf")
         if lift < min_lift:
@@ -333,6 +356,19 @@ async def load_aliases(db, aliases: list[str]) -> dict[str, list[str]]:
     return dict(out)
 
 
+async def load_classes(db, guids: list[str]) -> dict[str, str]:
+    rows = await db.fetch(
+        """
+        SELECT UPPER(LEFT(player_guid, 8)) AS g,
+               mode() WITHIN GROUP (ORDER BY UPPER(player_class)) AS cls
+        FROM player_track WHERE UPPER(LEFT(player_guid, 8)) = ANY($1) AND player_class IS NOT NULL
+        GROUP BY 1
+        """,
+        guids,
+    )
+    return {r["g"]: str(r["cls"]) for r in rows}
+
+
 async def load_reactions(db) -> dict[str, float]:
     rows = await db.fetch(
         """
@@ -350,10 +386,12 @@ async def load_reactions(db) -> dict[str, float]:
     return {r["g"]: float(r["med"]) for r in rows}
 
 
-def measure_map(rows: list[tuple[str, str, list[Point]]], goals: list[Goal]) -> dict:
+def measure_map(rows: list[tuple[str, str, list[Point]]], goals: list[Goal],
+                min_lift: float = MIN_LIFT, min_share: float = MIN_SHARE) -> dict:
     """Per player on one map: hold %, distinctive goals, camp times."""
     cells: dict[str, dict[Cell, int]] = defaultdict(lambda: defaultdict(int))
     episodes: dict[str, dict[str, list[float]]] = defaultdict(lambda: defaultdict(list))
+    goal_sessions: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
     hold_ms: dict[str, int] = defaultdict(int)
     alive_ms: dict[str, int] = defaultdict(int)
     sessions: dict[str, set] = defaultdict(set)
@@ -367,12 +405,15 @@ def measure_map(rows: list[tuple[str, str, list[Point]]], goals: list[Goal]) -> 
             if goals:
                 g, _ = nearest_goal(cell, goals)
                 episodes[player][g.name].append(ms / 1000)
+                goal_sessions[player][g.name].add(session)
     shares = goal_shares(cells, goals)
     hold_pct = {p: hold_ms[p] / alive_ms[p] * 100 if alive_ms[p] else 0.0 for p in cells}
     med = statistics.median(hold_pct.values()) if hold_pct else 0.0
     out = {}
     for p in cells:
-        dist = distinctive_goals(shares, p)
+        dist = distinctive_goals(shares, p, min_lift=min_lift, min_share=min_share,
+                                 goal_sessions={g: len(v) for g, v in goal_sessions[p].items()},
+                                 player_sessions=len(sessions[p]))
         out[p] = {
             "sessions": len(sessions[p]),
             "hold_pct": hold_pct[p],
@@ -387,6 +428,34 @@ def bot_aliases_from_table(text: str) -> list[str]:
     return re.findall(r'(?:AxisBots|AlliedBots)\["([^"]+)"\]', text)
 
 
+def dedupe_by_guid(twins: list[Twin]) -> tuple[list[Twin], list[tuple[str, str, str]]]:
+    """Two bot names that are aliases of the SAME player (olz / Olympus on
+    the live table) must not become two copies of one twin: the first name
+    keeps the twin, the rest are reported as (dropped_alias, kept_alias, guid)."""
+    kept: list[Twin] = []
+    seen: dict[str, str] = {}
+    dropped: list[tuple[str, str, str]] = []
+    for t in twins:
+        if t.guid in seen:
+            dropped.append((t.alias, seen[t.guid], t.guid))
+            continue
+        seen[t.guid] = t.alias
+        kept.append(t)
+    return kept, dropped
+
+
+def place_in_class(axis: dict[str, list[str]], allies: dict[str, list[str]], name: str, cls: str) -> None:
+    """The bot table's class comes from a round-robin; a twin plays the class
+    its player plays (the mode of player_track.player_class — every regular
+    here is a MEDIC). Moves `name` into `cls` on whichever team it is on."""
+    for table in (axis, allies):
+        for c, names in table.items():
+            if name in names and c != cls and cls in table:
+                names.remove(name)
+                table[cls].append(name)
+                return
+
+
 async def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--maps", nargs="*", default=list(DEFAULT_MAPS))
@@ -396,6 +465,8 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", type=Path, default=REPO / "server" / "omnibot" / "twins")
     ap.add_argument("--report", type=Path, default=REPO / "docs" / "design" / "23_TWINS_REPORT.md")
     ap.add_argument("--prefix", default=BOT_PREFIX)
+    ap.add_argument("--min-lift", type=float, default=MIN_LIFT, help="share/group floor for a distinctive goal")
+    ap.add_argument("--min-share", type=float, default=MIN_SHARE, help="share floor for a distinctive goal")
     ap.add_argument("--shuffle", action="store_true", help="control: reassign sessions among players")
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--fetch", action="store_true", help="scp the goal files from the game server first")
@@ -423,7 +494,13 @@ async def main(argv: list[str] | None = None) -> int:
             twins[alias] = Twin(alias=alias, guid=guids[0])
     regulars: dict[str, set] = defaultdict(set)
     warnings = [f"alias `{a}` maps to {len(g)} guids ({', '.join(g)}); newest used" for a, g in alias_guids.items() if len(g) > 1]
+    kept, dropped = dedupe_by_guid(list(twins.values()))
+    twins = {t.alias: t for t in kept}
+    warnings += [f"bot name `{d}` is an alias of the same player as `{k}` (guid {g}); one twin, `{k}`" for d, k, g in dropped]
+    classes = await load_classes(conn, [t.guid for t in twins.values()])
     per_map: dict[str, dict] = {}
+    control_goals = 0
+    real_goals_all = 0
     for m in args.maps:
         gfile = args.goals_dir / f"{m}_goals.gm"
         if not gfile.exists():
@@ -433,8 +510,12 @@ async def main(argv: list[str] | None = None) -> int:
         rows = await load_rows(conn, m, args.min_sessions)
         if args.shuffle:
             rows = shuffle_sessions(rows, args.seed)
-        res = measure_map(rows, goals)
+        res = measure_map(rows, goals, args.min_lift, args.min_share)
         per_map[m] = res
+        # The control, always: the same rows with sessions reassigned.
+        ctrl = measure_map(shuffle_sessions(rows, args.seed), goals, args.min_lift, args.min_share)
+        control_goals += sum(len(r["distinctive"]) for r in ctrl.values())
+        real_goals_all += sum(len(r["distinctive"]) for r in res.values())
         for guid in res:
             regulars[guid].add(m)
         for t in twins.values():
@@ -465,17 +546,23 @@ async def main(argv: list[str] | None = None) -> int:
     names = dedupe([sanitize_name(n, 20) for n in bot_aliases])
     axis, allies = assign_names(names)
     ensure_class_coverage(axis, allies, names)
+    for t in active:
+        if t.guid in classes:
+            place_in_class(axis, allies, t.alias, classes[t.guid])
     extra = [n for n in names if n not in sum(axis.values(), []) + sum(allies.values(), [])] or ["ExtraOne", "ExtraTwo", "ExtraThree"]
     profiles = {t.alias: f"twins/{gm_name(t.alias)}.gm" for t in active}
     (args.out / "et_botnames_ext.gm").write_text(render_botnames(axis, allies, args.prefix, extra, profiles=profiles), encoding="utf-8")
 
     # Report
     lines = [f"# Dvojčki botov — poročilo generatorja ({today}{', KONTROLA: premešane seje' if args.shuffle else ''})", ""]
-    lines.append(f"Prag sej: {args.min_sessions}. Skupinska mediana `return_fire_ms`: {group_rf:.0f} ms." if group_rf else f"Prag sej: {args.min_sessions}.")
+    lines.append(f"Prag sej: {args.min_sessions}; razločevalni cilj = delež/skupina ≥ {args.min_lift:g} in delež ≥ {args.min_share * 100:g} %. "
+                 + (f"Skupinska mediana `return_fire_ms`: {group_rf:.0f} ms." if group_rf else ""))
     lines.append("")
     total_distinct = 0
     for t in active:
         lines.append(f"## {t.alias} (guid {t.guid}) — ReactionTime {t.reaction_time} (return_fire {t.reaction_ms:.0f} ms)" if t.reaction_ms else f"## {t.alias} (guid {t.guid}) — ReactionTime {t.reaction_time} (brez meritve)")
+        lines.append("")
+        lines.append(f"Razred: {classes.get(t.guid, 'neizmerjen')}.")
         lines.append("")
         lines.append("| mapa | sej | hold % | vloga | razločevalni cilji (delež / skupina → kamp s) |")
         lines.append("|---|---|---|---|---|")
@@ -493,12 +580,18 @@ async def main(argv: list[str] | None = None) -> int:
     lines.append("")
     lines += [f"- `{g}` na {', '.join(sorted(regulars[g]))}" for g in missing] or ["- (nobenega)"]
     lines.append("")
-    lines.append(f"Skupaj razločevalnih ciljev: {total_distinct}.")
+    lines.append(f"Skupaj razločevalnih ciljev pri dvojčkih: {total_distinct}.")
+    lines.append("")
+    fdr = control_goals / real_goals_all if real_goals_all else 0.0
+    lines.append(f"**Kontrola (premešane seje, vsi regularji):** {control_goals} »razločevalnih« ciljev proti {real_goals_all} pravim "
+                 f"→ pri teh pragih bi premešanje preživelo ≈ {fdr * 100:.0f} % najdb. Kontrola ne pade na nič: s ~7 igralci je "
+                 f"skupinsko povprečje šumna osnovnica. Beri cilje z največjim dvigom kot najzanesljivejše.")
     if warnings:
         lines += ["", "## Opozorila", ""] + [f"- {w}" for w in warnings]
     args.report.parent.mkdir(parents=True, exist_ok=True)
     args.report.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    print(f"twins: {len(active)} ({', '.join(t.alias for t in active)}); maps: {len(per_map)}; distinctive goals: {total_distinct}")
+    print(f"twins: {len(active)} ({', '.join(t.alias for t in active)}); maps: {len(per_map)}; distinctive goals: {total_distinct}; "
+          f"control (all regulars): {control_goals} of {real_goals_all}")
     print(f"wrote {args.out}/ and {args.report}")
     return 0
 
