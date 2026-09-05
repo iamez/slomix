@@ -42,12 +42,16 @@ def test_the_vehicle_progress_file_write_truncates_toward_zero():
     coordinates AND both health fields."""
     src = _tracker()
     i = src.index("# VEHICLE_PROGRESS")
-    block = src[i:i + 2000]
+    # 2600, not 2000: v6.14 appended first/last_move_time to the header and
+    # the format line, which pushed the last pinned string past 2000 chars.
+    # The window guards the trunc() calls, not the block's length.
+    block = src[i:i + 2600]
     assert "math.floor(v) or math.ceil(v)" in block or "and math.floor" in block
     assert "trunc(veh.start_pos.x)" in block
     assert "trunc(veh.last_pos.z)" in block
     assert "trunc(veh.max_health)" in block
     assert "trunc(veh.last_health)" in block
+    assert "trunc(veh.first_move_time), trunc(veh.last_move_time)" in block
     # the raw fields must no longer be format arguments
     assert "veh.start_pos.x, veh.start_pos.y" not in block
 

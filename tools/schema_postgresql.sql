@@ -3422,7 +3422,12 @@ CREATE TABLE public.proximity_vehicle_progress (
     round_link_source character varying(32),
     round_link_reason character varying(64),
     round_linked_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    first_move_time integer,
+    last_move_time integer,
+    first_escort_time integer,
+    last_escort_time integer,
+    destroyed_events jsonb
 );
 
 

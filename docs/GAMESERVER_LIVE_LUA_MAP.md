@@ -135,6 +135,37 @@ When syncing or auditing game-server Lua:
 4. Mirror non-proximity scripts into `vps_scripts/`
 5. Mirror proximity only into `proximity/lua/`
 
+## Tracker v6.14 (2026-09-05) — when the mover moved, and who took it down
+
+`proximity_tracker.lua` only (the frame-health block is unchanged and still
+byte-identical across the six modules). Two additions, both under the
+existing `vehicle_tracking` flag (docs/design/20 slice 2):
+
+- `# VEHICLE_PROGRESS` rows carry four trailing fields, `first_move_time;
+  last_move_time;first_escort_time;last_escort_time` — `gameTime()` ms since
+  round start (the carrier `kill_time` base), `0` = never. Move = the mover's
+  own motion (a supply truck drives itself off the line at ~0.6 s); escort =
+  motion with a player mounted or within `escort_radius`, i.e. when the
+  escort happened — the moment's timestamp. The parser keeps its 12-field
+  floor, so pre-v6.14 files still import; migration 082 adds the columns.
+- `# VEHICLE_DESTROYED` — one row per destruction of a tracked mover:
+  `vehicle_name;time;attacker_guid;attacker_name;attacker_team;means_of_death;
+  health_before`. Source: a branch at the top of `et_Damage`, BEFORE the
+  `isValidClient(target)` line that used to reject every non-client target.
+  The engine's hook (`g_combat.c:1857`) fires for every damaged entity, and
+  by then the engine has already subtracted the damage, so "dead now" is
+  read from the entity and "health before" from the 500 ms poll's cache.
+  An empty attacker means the poll saw the death without a hit (script
+  kill, sub-threshold damage). ⚠️ A mover is alive only once a poll has READ
+  it alive (`last_health` starts at 0, not at the init scan's reading):
+  goldrush's tank begins BROKEN (0 HP until repaired) while the init scan
+  reads 1200 before the map script disables it, and every round used to log
+  a "destruction" at 1.2 s with no attacker —
+  `destroyed_count` no longer counts that start state (a contract change
+  for that column: the corpus before v6.14 carries the phantom 1 on every
+  goldrush round). Its per-frame cost shows up in the FM line as the
+  `vehdmg` section.
+
 ## Frame-health v6.13 (2026-09-03) — the watchdog in every module
 
 Every module above carries the same `-- BEGIN frame_health v6.13 … END`
