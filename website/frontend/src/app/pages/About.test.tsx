@@ -8,6 +8,8 @@ import { About } from './About';
 import overview from './__fixtures__/api_stats_overview.json';
 import build from './__fixtures__/api_build.json';
 import systemOverview from './__fixtures__/api_system_overview.json';
+import access from './__fixtures__/api_availability_access.json';
+import diagnostics from './__fixtures__/api_diagnostics.json';
 
 /**
  * Rendered against RECORDED responses. The About page is the widest consumer
@@ -20,6 +22,8 @@ const DATA = new Map<string, unknown>([
   ['/api/stats/overview', overview],
   ['/api/build', build],
   ['/api/system/overview', systemOverview],
+  // Anonymous access: the diagnostics panel must not even ask.
+  ['/api/availability/access', access],
 ]);
 const PROBE_PATHS = new Set(API_PROBES.map((p) => p.endpoint.split('?')[0]));
 
@@ -113,5 +117,40 @@ describe('About', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText(/figures: unavailable/)).toBeInTheDocument());
     expect(await screen.findByText(/build info: unavailable/)).toBeInTheDocument();
+  });
+
+  it('shows the backend diagnostics only to an admin, and asks for them only then', async () => {
+    const calls: string[] = [];
+    const adminFetch = (input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      calls.push(pathname);
+      if (pathname === '/api/availability/access') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ...access, authenticated: true, is_admin: true }) } as Response);
+      }
+      if (pathname === '/api/diagnostics') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(diagnostics) } as Response);
+      }
+      return fixtureFetch(input);
+    };
+    vi.stubGlobal('fetch', vi.fn(adminFetch));
+    renderPage();
+    // The recording: eight tables, none missing, no issues.
+    await waitFor(() => expect(screen.getByText('player_comprehensive_stats')).toBeInTheDocument());
+    expect(screen.getByText('lua_round_teams')).toBeInTheDocument();
+    expect(screen.getByText(/all systems go · database connected/)).toBeInTheDocument();
+    expect(calls.filter((c) => c === '/api/diagnostics')).toHaveLength(1);
+  });
+
+  it('does not request diagnostics for an anonymous visitor', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      calls.push(String(input).split('?')[0]);
+      return fixtureFetch(input);
+    }));
+    renderPage();
+    await waitFor(() => expect(calls).toContain('/api/availability/access'));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(calls).not.toContain('/api/diagnostics');
+    expect(screen.queryByText(/backend diagnostics/)).toBeNull();
   });
 });

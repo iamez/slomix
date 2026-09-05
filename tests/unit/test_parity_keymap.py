@@ -126,3 +126,21 @@ def test_named_debt_is_pinned():
         "mapping a piece lowers the budget here; demoting one raises it, and "
         "both are review-visible edits of this file"
     )
+
+
+ROUTES_DATA = APP_SRC / "routes.data.json"
+
+
+def test_a_route_the_spa_has_built_cannot_still_carry_a_phase_status():
+    """The keymap's `phase-N` statuses mean "not built yet, nothing to map".
+    Seven routes kept that status after phases 5 and 6 landed (found
+    2026-09-06), so the join skipped exactly the pages it was built to check
+    — the budget number stayed at 2 while proving less. A route marked
+    `built` in routes.data.json must be mapped (or `retired` with a note)."""
+    _inventory, keymap = _load()
+    built = {r["key"] for r in json.loads(ROUTES_DATA.read_text(encoding="utf-8")) if r.get("built")}
+    stale = sorted(
+        route_key for route_key, entry in keymap["routes"].items()
+        if str(entry.get("status", "")).startswith("phase-") and route_key in built
+    )
+    assert not stale, f"built in the SPA but still phase-status in the keymap: {stale}"

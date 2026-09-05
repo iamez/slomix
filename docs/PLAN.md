@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **4** na tej veji (5 na mainu po #894; uploads r. 2 zapre `/api/uploads/resumable`) |
+| endpoint gap (H1) | **3** (dolg r. 1 zapre `/api/diagnostics`; ostanejo `/api/bets`, `/api/bets/market` = ownerjeva odločitev, `/api/stats/sessions` = z upokojitvijo legacy JS) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -37,9 +37,14 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
-## Naslednji koraki (vrstni red)
+## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
-1. **Faza 6 — preostanek**: `/api/diagnostics`; availability rezina 3 = admin market kontrole
+0. **Dolg r. 1 (6. 9., v PR-ju)**: keymap 7 rut zares preslikanih (guard:
+   zgrajena ruta ne sme nositi `phase-N` — videti pasti na starem keymapu),
+   `/replay` → preusmeritev na `/proximity` (edina nezgrajena ruta umaknjena
+   iz `routes.data.json`), `/api/diagnostics` kot admin panel na `/admin`
+   (anonimni ne pošlje zahteve) → **vrzel endpointov 4 → 3**.
+1. **Faza 6 — preostanek**: availability rezina 3 = admin market kontrole
    (`/api/bets/market`, settle) — ownerjeva odločitev, kdaj; `/api/bets` in
    `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;

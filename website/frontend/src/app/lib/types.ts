@@ -4245,3 +4245,31 @@ export interface ApiHealth {
   service: string;
   database: string;
 }
+
+// ---------------------------------------------------------------------------
+// Admin — GET /api/diagnostics (legacy diagnostics.js printed this to the
+// console; the About page shows it). Admin-only: anonymous gets 401, so the
+// page asks only when /api/availability/access says is_admin.
+
+export interface DiagnosticsTable {
+  name: string;
+  status: 'ok' | 'permission_denied' | 'not_found' | 'error' | string;
+  required: boolean;
+  /** Present when the count query succeeded. */
+  row_count?: number | null;
+  /** Present when it did not. */
+  error?: string;
+}
+
+export interface Diagnostics {
+  status: string;
+  timestamp: string | null;
+  database: { status: string; tests: unknown[] };
+  tables: DiagnosticsTable[];
+  issues: string[];
+  warnings: string[];
+  /** Free-form counters the backend adds; shown as key/value rows. */
+  time: Record<string, number | string | null>;
+  monitoring: Record<string, { count?: number; last_recorded_at?: string | null } | unknown>;
+  pool?: Record<string, unknown>;
+}
