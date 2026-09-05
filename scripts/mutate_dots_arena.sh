@@ -140,6 +140,23 @@ mutate "a shield gap too wide is silently skipped again" \
 '        force_reset(other, et.MOD_SUICIDE, "shield-gap")' \
 '        local _ = other'
 
+mutate "the loser is left lying on the floor again" \
+'  force_tapout(victim)' \
+'  local _ = victim'
+
+mutate "the tap-out only writes one of the two health fields" \
+'  et.gentity_set(cn, "ps.stats", et.STAT_HEALTH, TAPOUT_HEALTH)
+  et.gentity_set(cn, "health", TAPOUT_HEALTH)' \
+'  et.gentity_set(cn, "ps.stats", et.STAT_HEALTH, TAPOUT_HEALTH)'
+
+mutate "the tap-out stops just short of GIB_HEALTH" \
+'local TAPOUT_HEALTH        = GIB_HEALTH - 25' \
+'local TAPOUT_HEALTH        = GIB_HEALTH + 25'
+
+mutate "arena_instant_tapout stops being honoured" \
+'  if cvar_num("arena_instant_tapout", 1) == 0 then return end' \
+'  local _ = 0'
+
 mutate "a team change no longer arms the relevel" \
 '    relevel_pending = true
     log("LEAVE   cn=%d — team change, relevel armed", victim)' \

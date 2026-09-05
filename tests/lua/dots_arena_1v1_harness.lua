@@ -14,6 +14,13 @@ local ammo_of, clip_of, setcurrent_of = {}, {}, {}
 local nofatigue = {}
 local now_ms = 100000
 local health = {[0]=100, [1]=100}
+-- ⛔⛔ `ent->health` in `client->ps.stats[STAT_HEALTH]` sta v motorju LOČENI
+-- skladišči. G_Damage ju uskladi šele na svoji poti ven (g_combat.c:2052),
+-- vrednost, ki jo nastavimo sami, pa se ne uskladi nikoli. Stub ju je zlival v
+-- eno spremenljivko, zato mutacija »zapiši samo eno od dveh polj« ni imela
+-- načina, da bi padla — model je bil ohlapnejši od predmeta, isti razred kot
+-- brezpogojno smrtonosni G_Damage in manjkajoče konstante pred njim.
+local ent_health = {[0]=100, [1]=100}
 local team   = {[0]=1,   [1]=2}
 local conn   = {[0]=2,   [1]=2}
 local shield = {[0]=0,   [1]=0}
@@ -84,6 +91,7 @@ et = {
     if field=="pers.netname" then return ({[0]="^1alpha",[1]="^2bravo",[2]="^3charlie",[3]="^4delta"})[cn] end
     if field=="sess.sessionTeam" then return team[cn] end
     if field=="ps.stats" and idx==0 then return health[cn] end
+    if field=="health" then return ent_health[cn] end
     if field=="ps.powerups" and idx==1 then return shield[cn] end
     if field=="pers.playerStats.selfkills" then return 0 end
   end,
@@ -114,7 +122,7 @@ et = {
     end
     if field=="ps.powerups" and idx==1 then shield[cn]=val end
     if field=="ps.powerups" and idx==4 then nofatigue[cn]=val end
-    if field=="health" then health[cn]=idx end
+    if field=="health" then ent_health[cn]=idx end
     if field=="ps.stats" and idx==0 then health[cn]=val end
     calls[#calls+1]=("set(%d,%s,%s,%s)"):format(cn, field, tostring(idx), tostring(val))
   end,
@@ -125,7 +133,8 @@ et = {
   G_Damage=function(t,i,a,d,f,m)
     calls[#calls+1]=("G_Damage(%d,%d,%d,%d,0x%x,%d)"):format(t,i,a,d,f,m)
     if not damage_lands then return end      -- the engine declined; nothing happens
-    et_Obituary(t, a, m); health[t]=-500
+    -- kot g_combat.c:2052: škoda ob izhodu USKLADI obe skladišči
+    et_Obituary(t, a, m); health[t]=-500; ent_health[t]=-500
   end,
 }
 local here = debug.getinfo(1, "S").source:sub(2):match("(.*/)")
@@ -1085,3 +1094,56 @@ local said_off = false
 for _, m in ipairs(sent) do if m:match("OFF") then said_off = true end end
 assert(said_off, "⛔ /vampiric 0 mora povedati, da je IZKLOPLJEN: "..table.concat(sent," | "))
 print("✅ /vampiric 0 izklopi in to tudi pove")
+
+-- 47) ⛔⛔ PORAZENEC NI ŠEL V LIMBO. Motor ima iz ranjenega stanja natanko dve
+--     poti (g_active.c:1592-1615): igralčev skok, ali `g_forcerespawn > 0`
+--     ODP `health <= GIB_HEALTH`. Modul sam nastavi `g_forcerespawn -1`, kar
+--     drugo polovico ubije, navadna smrt od MP40 (18 škode) pa pusti pri ~-5,
+--     daleč od -175. Zmagovalec dobi LETHAL_DAMAGE in ga motor prisili na
+--     -176 → limbo v naslednjem framu; poraženec leži, dokler sam ne pritisne
+--     skoka. Dva izhoda z dvema latencama in dvema različnima trenutkoma za
+--     3-sekundni ščit, ki ga motor deli ob spawnu (g_client.c:3327-3331).
+et_InitGame(0,0,false)
+cvars.arena_1v1 = "1"; cvars.arena_hp = ""
+et_InitGame(0,0,false)
+team[0], team[1] = 1, 2
+conn[0], conn[1] = 2, 2
+-- ⛔ OBE polji na znano vrednost, sicer ent_health nosi -500 iz prejšnjega
+-- G_Damage in trditev spodaj prehaja na ostanku, ne na tem popravku. (Prvi
+-- zapis tega primera je to spregledal; ujela ga je mutacija »zapiši samo eno
+-- od dveh polj«, ki je preživela.)
+health[0], health[1] = 100, 100
+ent_health[0], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+health[1] = 0                       -- poraženec: navadna smrt, NE gib
+et_Obituary(1, 0, 4)
+assert(health[1] <= -175,
+       "⛔ ps.stats[STAT_HEALTH] mora pasti pod GIB_HEALTH (sprožilec limba, "
+       .."g_active.c:1612): "..tostring(health[1]))
+-- ⛔ In drugo polje posebej: limbo() se za truplo odloči po `ent->health`
+-- (g_client.c:886), ne po ps.stats. Zapis samo enega pusti poraženca brez
+-- limba ALI z netrdnim truplom, ki ga krogle ne zadenejo.
+assert(ent_health[1] <= -175,
+       "⛔ ent->health mora prav tako pasti pod GIB_HEALTH (odločitev o truplu, "
+       .."g_client.c:886): "..tostring(ent_health[1]))
+
+-- ⭐ In kontrola, ki mora pasti v drugo smer: z izklopljenim stikalom se
+--    zdravje NE sme dotakniti. Brez tega bi test prehajal tudi, če bi popravek
+--    veljal brezpogojno in cvar ne bi delal ničesar.
+et_InitGame(0,0,false)
+cvars.arena_instant_tapout = "0"
+et_InitGame(0,0,false)
+-- ⛔ Obe polji izrecno nazaj. Prva polovica tega primera je pustila
+-- ent_health[1] = -200; brez tega reseta kontrola pade na ostanku prejšnje
+-- polovice namesto na kodi, ki jo meri — natanko past, ki jo pregled očita
+-- primeroma 18 in 20.
+health[0], health[1] = 100, 100
+ent_health[0], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+health[1] = 0
+et_Obituary(1, 0, 4)
+assert(health[1] == 0 and ent_health[1] == 100,
+       "⛔ arena_instant_tapout 0 mora pustiti OBE polji pri miru: "
+       ..tostring(health[1]).."/"..tostring(ent_health[1]))
+cvars.arena_instant_tapout = nil
+print("✅ poraženec je prisiljen v limbo, stikalo pa to res izklopi")

@@ -176,6 +176,8 @@ local WP_MP40              = 3     -- bg_public.h:848+ ; Axis SMG
 local WP_THOMPSON          = 8     -- ; Allies SMG
 local DAMAGE_NO_PROTECTION = 0x00000020  -- g_local.h:1669
 local LETHAL_DAMAGE        = 1000        -- far past GIB_HEALTH from any health
+local GIB_HEALTH           = -175        -- bg_public.h:58
+local TAPOUT_HEALTH        = GIB_HEALTH - 25   -- comfortably past it, not on it
 
 local active        = false   -- armed on this map?
 local forced        = {}      -- clientNum -> true while OUR damage is in flight
@@ -619,6 +621,58 @@ end
 --- instant. Where the shield was still up, the damage was a NO-OP and the
 --- survivor died 2.8-3.4 s later — i.e. the first duel after every spawn, the
 --- start of every series, was the unfair one.
+--- Push a dead-but-not-gibbed duellist past GIB_HEALTH so the engine limbos
+--- him on its very next frame — the forced tap-out.
+---
+--- ⛔⛔ ROOT CAUSE, and it is OURS. The engine has exactly two routes out of
+--- the wounded state (g_active.c:1592-1615), and this module closed both:
+---
+---   if (ucmd->upmove > 0) { ... limbo(...) }                        -- (a) the player jumps
+---   if ((g_forcerespawn.integer > 0 && elapsed > g_forcerespawn*1000)
+---       || client->ps.stats[STAT_HEALTH] <= GIB_HEALTH) { limbo(); } -- (b) timer OR gib
+---
+--- We set `g_forcerespawn -1` for instant respawn. That switches on the
+--- instant-respawn branch at :1816 — but it makes `g_forcerespawn.integer > 0`
+--- FALSE, so the timer half of (b) is dead code. And a normal MP40 kill (18
+--- damage) leaves the loser at about -5, nowhere near -175, so the gib half of
+--- (b) does not fire either. Only (a) is left: the loser lies there until HE
+--- decides to press space.
+---
+--- The winner has no such choice. force_reset sends LETHAL_DAMAGE = 1000, the
+--- engine clamps anything over 190 to health = GIB_HEALTH - 1 = -176
+--- (g_combat.c:1931), (b) fires immediately, and he is respawned within two
+--- frames. So the two players leave the round by different mechanisms with
+--- different latencies, and the spawn shield — a hardcoded `level.time + 3000`
+--- with no cvar (g_client.c:3327-3331) — is handed out at two different
+--- moments. Whoever respawns LAST holds a shield the other one has already
+--- spent. Owner saw it from the losing side: "on respawna in ze zgubi
+--- spawnshield.. potem js space prtisnem da respawnam in mam spawnshield on ga
+--- nima."
+---
+--- ⚠️ The shield-gap relevel below was written against this same fact and
+--- treats the symptom: it notices two shields far apart and sends one player
+--- back. This treats the cause, so the gap should stop occurring. The relevel
+--- stays as the backstop for every route that does not pass through here
+--- (revive, a mod that changes the wounded rules, a death we did not observe).
+---
+--- ⭐ Free bonus: limbo() computes `makeCorpse = makeCorpse && ent->health >
+--- GIB_HEALTH` (g_client.c:886), so a tapped-out loser leaves NO corpse. A
+--- corpse is unlinked from every bullet trace (G_TempTraceIgnoreBodies,
+--- g_weapon.c:3551) while still being visible, which is one of the documented
+--- reasons shots on a body register nothing at all.
+local function force_tapout(cn)
+  if cvar_num("arena_instant_tapout", 1) == 0 then return end
+  -- ⛔ Write BOTH. The limbo trigger at g_active.c:1612 reads
+  -- `client->ps.stats[STAT_HEALTH]`; limbo() itself reads the gentity's
+  -- `ent->health` for the corpse decision. They are separate storage and
+  -- G_Damage syncs one to the other only on its own way out (g_combat.c:2052),
+  -- which does not happen for a value we set ourselves.
+  et.gentity_set(cn, "ps.stats", et.STAT_HEALTH, TAPOUT_HEALTH)
+  et.gentity_set(cn, "health", TAPOUT_HEALTH)
+  log("TAPOUT  cn=%d health forced to %d (past GIB_HEALTH %d) — engine limbos next frame",
+      cn, TAPOUT_HEALTH, GIB_HEALTH)
+end
+
 local function force_reset(cn, mod, why)
   -- ⛔ NO second bounds check here, deliberately. One belongs at the entry
   -- point (arena_kill), and the only other callers pass a clientNum that came
@@ -982,6 +1036,14 @@ function et_Obituary(victim, killer, mod)
       force_reset(cn, et.MOD_SUICIDE, "survivor")
     end
   end
+
+  -- ⭐ And the victim leaves by the same mechanism as the survivors, in the
+  -- same frame. Before this line the survivors gibbed (LETHAL_DAMAGE) and the
+  -- victim did not, so the two sides of one duel used two different exits with
+  -- two different latencies — see force_tapout's header. Ordering matters: the
+  -- survivors' force_reset must run FIRST, because force_reset refuses an
+  -- already-dead target and this write makes the victim look freshly gibbed.
+  force_tapout(victim)
 
   announce(players)
 end

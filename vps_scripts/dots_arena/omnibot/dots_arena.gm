@@ -1,0 +1,83 @@
+// dots_arena.gm — Omni-bot map script for the 1v1 arena.
+//
+// INSTALL AS:  legacy/omni-bot/et/nav/dots_arena.gm   (owner: et)
+//
+// This file loads even though dots_arena has NO waypoints. The DLL looks for
+// nav/<mapname>.gm independently of nav/<mapname>.way; two maps that ship with
+// this Omni-bot install already rely on that (nav/hall_of_fraggers.gm is 39
+// bytes and has no .way, likewise nav/mineLabs_a3f.gm).
+//
+// WHAT IT FIXES
+//
+// Bots stand still here because every travel goal moves through Goto(), which
+// is pure waypoint pathfinding — with no waypoints, goal_roaming.gm:78-81 gets
+// EVENT.PATH_FAILED and sleeps 15 seconds, forever. Combat behaviour is a
+// separate subsystem that needs no nav, which is why they aim and shoot but
+// never move. Measured from the proximity samples: 69-95 ups net during
+// engagements, against ~230 ups of actual run speed. That is jitter.
+//
+// DeathMatch = 1 also stops goal_roaming from being scheduled at all
+// (goal_roaming.gm:16), so the bot stops burning cycles on failing paths.
+
+global Map =
+{
+	DeathMatch = 1,
+
+	OnBotJoin = function(bot)
+	{
+		// ⛔ Difficulty 6 — this install's default — is ReactionTime 0.0,
+		// AimErrorX/Y 0, AimOffsetZ 0, FieldOfView 180 (goal_difficulty.gm:241-262).
+		// That is a 360-degree-aware zero-error aimbot. Training against it
+		// teaches nothing, because nothing you do changes the outcome.
+		// ProfileSkill pins this per bot and is immune to `bot difficulty`.
+		bot.ProfileSkill = 4;
+
+		// 3 = "hard" combat movement. ⛔ NOT 4: goal_combatmovement.gm:32-34
+		// assigns RandInt(0,3) for moveskill 4, and 0 means OFF.
+		bot.moveskill = 3;
+
+		// ⭐ The crouch branches (goal_combatmovement.gm:135,141,151) are what
+		// makes a bot look frozen mid-duel. Off for arena training.
+		bot.DontCombatCrouch = true;
+	},
+};
+
+// ArenaStrafe — real left-right strafing, not the stock 0.2-0.4s twitch.
+//
+// The stock hard() behaviour rolls RandInt(0,10) every 0.4s and produces a
+// burst of RandFloat(0.2, 0.4) seconds — 18% of the time it does nothing at
+// all. It is designed to spoil an ENEMY's aim, not to be a duel partner.
+//
+// This goal holds each direction for 0.8-1.6 seconds instead, which is long
+// enough to read and to track. It uses MoveTowards (goal_testbot.gm:230,
+// goal_hunt.gm:31), which is direct steering and needs no pathfinder, so it
+// works on a bare BSP with no waypoints at all.
+global ArenaStrafe = function()
+{
+	this.Name = "ArenaStrafe";
+	this.Parent = "HighLevel";
+
+	this.GetPriority = function()
+	{
+		if (this.Bot.GetTarget()) { this.Priority = 0.5; }
+		else                      { this.Priority = 0; }
+		block(0);
+	};
+
+	this.Update = function()
+	{
+		for (;;)
+		{
+			target = this.Bot.GetTarget();
+			if (!target) { break; }
+
+			this.Bot.MoveTowards(GetEntPosition(target));
+
+			d = RandFloat(0.8, 1.6);
+			if (RandInt(0, 1)) { this.Bot.HoldButton(BTN.STRAFE_R, d); }
+			else               { this.Bot.HoldButton(BTN.STRAFE_L, d); }
+			sleep(d);
+		}
+		this.Finished();
+	};
+};
