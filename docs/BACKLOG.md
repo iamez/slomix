@@ -340,3 +340,28 @@ zdravja v stubu. **Odprto ostaja:**
 **Neizmerjeno v živo:** `/team s` med življenjem, `sv_maxclients` (latched),
 rotacija loga, gledalska vrata in cooldown, `arena_symmetric` proti človeku,
 paket v pk3, dva človeka hkrati — in NOVO: `arena_instant_tapout` v živo.
+
+## 2026-09-05 13:50 — arena PAVZIRANA (owner ugasnil testni strežnik)
+
+Kje sem ostal: PR #912, 22 commitov, CI zelen, **delovno drevo čisto**.
+
+**Dokazano v živo danes** (2.84, podpisi prek `lua_status`):
+- `force_tapout`: 20 vrstic, 9 zanje; čas ležanja igralca mediana 1,0 s → 0,0 s,
+  max 23,0 s → 0,0 s; ščiti 25 ms narazen. Prvi TAPOUT 13:09:58.
+- ⛔ Odkrito ob tem: strežnik je tekel 11,5 ure in bil **10 ur starejši od
+  popravka** — »ne dela« je pomenilo »ni naloženo«. Razsodnik je bil
+  `lua_status` podpis (`G_SHA1(code)` ob nalaganju, g_lua.c:2597), ne datoteka.
+
+**Nameščeno, a NEIZMERJENO:** `arena_acc_log` (podpis 0CCBE140 naložen ob
+13:47, owner je nato ugasnil strežnik → **0 ACC vrstic v živo**). Instrument
+je offline pokrit (primera 48/49, mutacije 32/32), runtime dokaza NIMA.
+
+**Ownerjev nedokončan eksperiment:** tapanje proti full auto, v blokih po ~15
+dvobojev z oznako v chatu; hipoteza je, da acc naraste, a odloči šele
+zadetkov-na-sekundo.
+
+**Odprto ostaja** vse iz vnosa 2026-09-05 zgoraj (22 postavk pregleda testne
+zbirke, od tega 5 popravljenih) + ⛔ PR-ja ni pregledal nihče.
+
+⚠️ Pytest je v enem teku danes javil 1 padec, ponovni tek 6227 passed —
+neidentificirana nestabilnost, ne moja sprememba. Ob naslednjem padcu ujemi ime.
