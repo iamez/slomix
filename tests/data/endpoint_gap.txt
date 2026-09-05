@@ -53,10 +53,18 @@
 # to a live path in docs/api/openapi.json, and `src/app` contains no call to it
 # (the two `graphs` hits in the app are prose in comments).
 #
-# ⚠️ These 16 are NOT phase-7 scope by themselves. Some belong to pages already
-# built (player profile calls four of them), which means those pages are
-# thinner than the ratchet claimed — that is the finding, and it is the owner's
-# call what to do about it.
+# ⚠️⚠️ VISIBLE IS NOT MISSING, and the first draft of this note got that wrong.
+# It said the player profile page "is thinner than the ratchet claimed"
+# because seven of its legacy calls appear here. Checked afterwards: it is not.
+# `/api/players/{identifier}/profile` is a COMPOSITE — its own docstring says
+# it "assembles every profile section in a single round-trip-parallel call" —
+# and the page reads milestones from `/api/stats/player/{name}` and recent
+# rounds from `/api/player/{name}/matches`. Several of these lines are
+# SUPERSEDED, not unbuilt.
+#
+# So each of the 16 needs the same triage `/api/stats/sessions` already got
+# above: superseded (delete with the reason written down) or genuinely missing
+# (build it). Nobody should read this block as sixteen pieces of work.
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/player/{}/vs-stats
