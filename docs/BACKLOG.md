@@ -302,3 +302,41 @@
   ALIVE%, mora to vedeti.
 - ⛔ `docs/GAMESERVER_LIVE_LUA_MAP.md:74` in `deployed_lua/README.md`
   navajata 4 module; živih je 6.
+
+## 2026-09-05 — arena PR #912, odprto po pregledu testov
+
+Pregledni agent za testno zbirko je našel 22 postavk. Popravljene so 4
+(zastareli vzorci mutacij → `fail`, `re.search` → `findall`, `setl "ime"` v
+narekovajih, prazna datoteka prestane preverbo oklepajev) in ločeni skladišči
+zdravja v stubu. **Odprto ostaja:**
+
+- ⛔ mutacijska baterija nima izhodiščnega zagona: če harness pade iz
+  nepovezanega razloga, VSAKA mutacija poroča »ujeta«. Popravek: pred zanko
+  poženi harness enkrat in prekini, če ne vrne 0.
+- primer 20 je votel (`arena_symmetric 0` se preverja, ko `duel_pool` sploh ni
+  postavljen → `arena_loadout` se ne kliče). Zraven razkriva vedenje:
+  `arena_symmetric 1` ne naredi nič, kadar sta `arena_hp` in `arena_vamp` 0 —
+  kar je natanko to, kar nastavi priloženi config.
+- primer 20 prva polovica prehaja na puščenem stanju iz primera 19; vzorec
+  `et_InitGame` PRED nastavitvijo cvarov se ponovi na 6 mestih.
+- stub `trap_SendServerCommand` zavrže naslovnika → zasebna zavrnitev bi lahko
+  postala broadcast in noben test ne bi padel.
+- stub `gentity_set` sprejme pisanje v `pers.connected` in
+  `pers.playerStats.selfkills`, ki sta v motorju READONLY (g_lua.c:1248/:1283).
+- `ps.stats` je modeliran samo pri indeksu 0; `STAT_MAX_HEALTH`/`STAT_SPRINTTIME`
+  sta deklarirana, a neodgovorjena → `et_Obituary` ju v offline teku bere kot nil.
+- štiri vstopna varovala v `et_Damage` niso posamično pripeta (odstrani eno in
+  zbirka je zelena); `active`/`enabled()` vrata so testirana na 2 od 5 hookov.
+- vsi privzetki vampirica so neizmerjeni (primer 10 pusti cvare postavljene).
+- `arena_ammo 0`, `arena_nofatigue 0`, `arena_1v1_log 0` — nobenega primera.
+- README pogodba ne opazi IZGINOTJA cele jezikovne tabele (množica ne loči
+  odsotnosti od soglasja; rabi `Counter(rows)[ime] == 3`).
+- `arena_1v1_map` je dokumentiran, a ga nobena pogodba ne doseže: `armed_map()`
+  uporablja `trap_Cvar_Get` in dobesedni fallback, ne `cvar_num`.
+- ⛔ B-1: ujemanje imena mape je podniz → `dots_arena_v2` oboroži modul.
+- ⛔ NIHČE ni pregledal PR #912 (Copilot in Codex brez kvote). Pred deljenjem
+  paketa tujcem naj owner požene `/code-review ultra`.
+
+**Neizmerjeno v živo:** `/team s` med življenjem, `sv_maxclients` (latched),
+rotacija loga, gledalska vrata in cooldown, `arena_symmetric` proti človeku,
+paket v pk3, dva človeka hkrati — in NOVO: `arena_instant_tapout` v živo.
