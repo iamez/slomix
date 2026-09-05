@@ -134,3 +134,43 @@ def test_garbage_origins_cannot_reach_the_vehicle_progress_write():
     assert "1e6" in scan
     vp = src[src.index("# VEHICLE_PROGRESS"):src.index("# VEHICLE_PROGRESS") + 2500]
     assert 'math.type(n) == "integer" and n or 0' in vp
+
+
+def test_dots_arena_never_formats_a_cvar_derived_number_with_percent_d():
+    """`cvar_num` is `tonumber`, and `tonumber("750.5")` is a float.
+
+    Lua 5.4 raises `number has no integer representation` on `%d` with a
+    non-integral float — measured, not assumed: `string.format("%d", 750.5)`
+    throws while `500.0` passes. Three sites in dots_arena_1v1.lua fed a raw
+    cvar or a raw client argument straight to `%d`:
+
+        arena_hp / arena_vamp_hp  -> the HPWARN line in configured_pool()
+        /vampiric <pool>          -> the VAMPREQ line
+        arena_kill <cn>           -> the TESTCMD line
+
+    The first is the expensive one. `configured_pool()` is called three
+    statements after the 1v1 gate in `et_ClientSpawn`, and a throw there aborts
+    the rest of that hook — the ammo fill, PW_NOFATIGUE, the pool write and the
+    entire shield-levelling loop, which is the module's whole reason to exist.
+    It also fires exactly ONCE: `hp_warned` is assigned on the line above,
+    before the throw, so the next spawn takes the quiet path. One duel with no
+    shields and no ammo, one line in the console, and it never recurs.
+
+    This module was the one live Lua file this guard did not look at.
+    """
+    src = _read("vps_scripts/dots_arena_1v1.lua")
+    offenders = [
+        line.strip()
+        for line in src.splitlines()
+        if "%d" in line
+        and not line.lstrip().startswith("--")
+        and ("cvar_num(" in line or "tonumber(et.trap_Argv" in line
+             or "arena_hp=%d" in line or "pool=%d" in line or "arena_kill cn=%d" in line)
+    ]
+    assert not offenders, (
+        "a cvar- or argument-derived value is formatted with %d; a fractional "
+        f"value throws and aborts the hook: {offenders}"
+    )
+    # And the three known sites must be reading as strings.
+    for probe in ('arena_hp=%s', 'pool=%s', 'arena_kill cn=%s'):
+        assert probe in src, f"{probe!r} missing — the %d fix was reverted"

@@ -261,6 +261,15 @@ jobs:
         # on cheap frames, name itself on a slow one, hold the 1 s throttle
         # and re-raise a body error after measuring it.
         run: lua5.4 tests/lua/frame_health_modules_harness.lua
+      - name: dots_arena 1v1 harness (the fair-duel module)
+        # Seven decisions the module has to get right, checked against a
+        # stubbed engine: the spawn shield is cleared BEFORE G_Damage (without
+        # that the damage is a no-op -- G_Damage returns on PW_INVULNERABLE at
+        # g_combat.c:1593, twenty-two lines before it reads dflags), the two
+        # shields level to the EARLIER expiry, the test command takes only its
+        # own console command, and the module stands down on any other map.
+        # All three of those were watched failing as mutations (2026-09-04).
+        run: lua5.4 tests/lua/dots_arena_1v1_harness.lua
       - name: Lua 5.4 semantics smoke (the classes that actually bit us)
         # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
         # fixes rely on, in the real interpreter: %d throws on non-integral

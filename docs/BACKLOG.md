@@ -7,6 +7,116 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-05, 11:30) **SKOK: ownerjeva nova prošnja** — boti na
+  dots_arena naj bodo samo medic/fieldops (drugi razredi se ne premikajo), naj
+  strejfajo levo-desno in dodgajo; + raziskava izvorne kode ET:Legacy: **zakaj
+  ni hitsounda**, čeprav je crosshair na tarči (prvih nekaj headshotov da zvok,
+  potem tišina), ali gre za neregistrirane strele (owner ocenjuje 30–60 %) in
+  ali te ob zadetku »vrže« strele vstran; + ločeni research docsi »kako postati
+  unkillable v ET/Legacy«.
+  **KJE SEM OSTAL:** PR #912 (`feat/lua-dots-arena`, 15 commitov, CI zelen,
+  `OPEN CLEAN`). P0/P1/P2 zaprti, zadnji commit `67785c84` je bratova najdba
+  (self-frag mora šteti — `mod`, ne identiteta). 39 primerov harnessa, 17
+  mutacij v `scripts/mutate_dots_arena.sh`, 6.227 testov.
+  ⏳ **TEČEJO TRIJE MOJI AGENTI** (napadalni pregled, pregled današnjega diffa,
+  pregled testov samih) — izsledke je treba pobrati in obdelati, preden se PR
+  šteje za pregledan.
+  ⛔ **Kode ni pregledal nihče** (Copilot in Codex sta zadela kvoto) → owner naj
+  požene `/code-review ultra`, preden gre paket neznancem.
+  ⛔ Odprto brez meritve: `/team s` ko si ŽIV, `sv_maxclients` v živo, rotacija
+  loga v živo, gledalčev gate in cooldown v živo, `arena_symmetric` proti
+  človeku, paket v pk3, dva človeka hkrati.
+
+- (Opus 5, 2026-09-05, 01:15) **Arena: trioosni pregled + popravki P0/P1** —
+  `2b21828a` na `feat/lua-dots-arena` (PR #912). Tri visoke, vse dosegljive z
+  navadno igro:
+  ⛔⛔ **`/team s` sredi dvoboja je prinesel točko IN usmrtil nasprotnika** —
+  motor ubije 55 vrstic pred prepisom moštva (`g_cmds.c:1589` proti `:1644`),
+  zato je roster ob obituaryju še vedno 2. Dokazano v živo.
+  ⛔⛔ **Ni bilo `et_ClientDisconnect`** — `ClientDisconnect` nikoli ne kliče
+  `player_die`; preživeli je ostal ranjen, naslednji je dobil poln bazen.
+  ⭐ Odhajajoči ob hooku ŠE ŠTEJE (hook `:3585`, `CON_DISCONNECTED` `:3723`).
+  ⛔⛔ **`forced[cn]` je bil zapah brez izteka** — `G_Damage` sme ne narediti
+  nič (warmup, intermission, godmode, noclip) in tega ne pove; naslednja prava
+  smrt je bila požrta, ščit pa že odvzet.
+  ⛔⛔ **Paket, ki smo ga poslali, je bil hujši:** 11 od 12 cvarov, ki jih naš
+  README imenuje gumbe, je bilo `setl` → `arena_1v1 0` po naših navodilih
+  odklopi cel config. In `g_customConfig` je `CVAR_ARCHIVE`: en glas naredi
+  arena ruleset TRAJEN (vse mape, čez restart procesa), s samo Field Ops
+  razredom in ustavljeno rotacijo. Zdaj dokumentirano v vseh treh jezikih.
+  ⭐ **Dve moji lastni regresiji, ki ju je ujel šele živi tek:** prvi popravek
+  `/team s` je pokvaril `/kill` (točka in reset sta dve odločitvi), povrnitev
+  `arena_hp` pa je brisala vrednost, ki jo je admin nastavil med mapama.
+  ⭐ Harness stub je bil **brezpogojno smrtonosen** — zato so bile vse poti
+  brez obituaryja nevidne po zasnovi. Zdaj zna zavrniti.
+  30 primerov, 31 mutacij, 6.225 testov. Puran ima popravljeno različico,
+  config ostaja `.off`. **P2 (dovoljenja za ukaze, meje `arena_kill`, ime v
+  ukaznem nizu, rotacija loga, verzija paketa, oblika configa, mutacije v
+  repo) ni narejen** — glej `~/.claude/plans/distributed-inventing-fox.md`.
+
+- (Opus 5, 2026-09-04, 14:35) **Arena kot deljiv paket** — `7efaa491` na
+  `feat/lua-dots-arena` (PR #912). `vps_scripts/dots_arena/` = config
+  (izpeljanka `legacy1.config` brez `sv_cvar` omejitev) + trijezični README
+  (EN/FR/SL). Preverjeno v živo: config se naloži, modul se oboroži, na tuji
+  mapi miruje in `g_forcerespawn` se povrne.
+  ⛔⛔ **Ob tem najden pravi hrošč: `CS_SERVERINFO` je ob PRVEM `map` PRAZEN**
+  (dolžina 0), zato gate na imenu mape ni nikoli deloval ob svežem nalaganju.
+  Modul se je oboroževal LE zato, ker `G_configSet` ob vsakem configu pošlje
+  `map_restart` in je dev strežnik vedno imel `g_customConfig`. Popravljeno:
+  bere se cvar `mapname`, configstring ostane rezerva. Primer 22 + 2 mutaciji.
+  ⛔⛔ Za vsak prihodnji config: `G_ConfigCheckLocked` teče **vsak frame** in
+  odklopi config, brž ko se kak `setl` cvar spremeni → `arena_hp` mora biti
+  `set`. Pinnano z `tests/unit/test_dots_arena_config_contract.py`.
+  ⛔ `lua_modules` v configu **prepiše** ves seznam modulov (6 → 1, izmerjeno).
+  Odprto: ključ za `et` še vedno ni nameščen (obvod `tmux run-shell`).
+
+- (Opus 5, 2026-09-04, 13:40) **Arena 1v1 IZMERJENA na 2.84** — `871e92c5` na
+  `feat/lua-dots-arena` (PR #912, čaka ownerjev merge, NIČ deployanega).
+  45 min dvobojev z dvema botoma po raziskavi izvorne kode.
+  ✅ strelivo **9999/9999 pri ~100 spawnih**, ob koncu dvoboja pade le za
+  izstreljene naboje (najslabše `9999/9949`); ✅ sprint **20000** = natanko
+  `SPRINTTIME`; ✅ preset **250 HP = mediana 6 s** (n=13); ✅ `STAT_MAX_HEALTH`
+  ostane 100; ✅ veriga modulov nedotaknjena, 0 Lua napak.
+  ⛔ **Simetrija orožij**: zapis prime (50/50 potrjenih takoj po zapisu),
+  orožje pa obstane le **2 od 25** — Omnibot si svoje vzame nazaj. Ni vihar
+  (1,53/s vklopljeno proti 1,03/s kontrola = ~1,5× osnovnice, ker odgovarja
+  bot prek `Cmd_Team_f`/`G_SetClientWeapons`), dvoboji tečejo normalno →
+  privzeto izklopljeno, ne umaknjeno.
+  ⛔⛔ **Za naslednjič:** `G_Damage` je med warmupom TIHI NIČ
+  (`g_combat.c:1445`) — reset se ne zgodi in ne javi ničesar; zadetek >190
+  postavi zdravje na −176 **ne glede na bazen** (`g_combat.c:1931`).
+  ⛔⛔ **Rata iz nezaključenega okna ni rata**: objavil sem 1,52/s iz odčitka
+  50 s v 95-sekundno okno, končni izid 1,03/s → commit amendan.
+  ⛔ **Deploy na testni strežnik ne dela**: `scp` do `et@127.0.0.1` javi
+  `Permission denied (publickey)`; obvod je NOPASSWD `tmux ... run-shell`
+  (owner odobril 4. 9.) prek staging datoteke v `/tmp` (et ne more brati
+  `/home/samba`). Trajni popravek: dodati javni ključ v `et`-jev
+  `authorized_keys`.
+  ⛔ `local_et.sh start` zažene strežnik tudi, če je deploy odpovedal → **pred
+  vsako meritvijo `cmp` med repo datoteko in nameščeno**.
+  Odprto: klientska polovica 16-bitnega polja streliva in vezavi
+  `/vampiric`/`/arenahp` z boti nista merljivi.
+
+- (Opus 5, 2026-09-04, 03:30) **1v1 arena Lua: testna baterija KONČANA**, PR #912
+  (`feat/lua-dots-arena`, čaka ownerjev merge, NIČ deployanega). Šest časovno
+  omejenih testov na lokalnem **2.84** z dvema botoma. Deluje: prisilni reset
+  33/33, poravnava ščitov, lifesteal točno 50 %, meja `arena_vamp_hp` na enoto,
+  stikalo šele ob naslednjem spawnu, veriga modulov nedotaknjena.
+  ⛔ **Privzetek vampiric pool 1000 → 500**: krivulja dolžine dvoboja NI
+  linearna (300 HP = mediana 7 s, 500 = 14 s, 1000 = **en dvoboj v 120 s**) —
+  1000 je natanko »fights take forever« odpoved, dosežena pri 50 %, ne 100 %.
+  ⛔ **Izsiljevanje orožja UMAKNJENO** v dokumentiran stub: Axis boti so kljub
+  temu spawnali s Kar98, `ClientUserinfoChanged` vihar ~1 Hz, bota sta se
+  nehala pobijati (246 lifesteal dogodkov, ENA smrt v 2 min). Odstranitev
+  orožja, ki ga klient DRŽI, sproži `EV_WEAPONSWITCHED` (`g_lua.c:1163`).
+  **Odprto:** vezava `/vampiric` kot klientskega ukaza ni bila izmerjena (boti
+  ne pošiljajo lastnih ukazov, ufw blokira človeka z LAN-a) — semantika je
+  izmerjena skozi `arena_vamp_toggle`, ki gre po isti `vamp_pending` poti.
+  ⚠️ Na namestitvi **2.85** je `stats_discord_webhook.lua` zastarel in konča
+  `et_Obituary` z `return 0` → `live_events.lua` tam ne dobi obituaryjev; na
+  2.84 je v redu. **Ali je puran v istem stanju, NI preverjeno.**
+  ⛔ `luac` na tem stroju je Lua **5.1** — sintaksa se preverja z `luac5.4`.
+
 - (Fable 5.1, 2026-09-04) Match moments r. 1 (#908) in r. 5 (#909) MERGANI; watchdog
   v6.13 deployan; owner: naslednja **doc 22 (digitalni dvojčki botov)** —
   raziskava teče (agent + puran read-only), nato `docs/design/22`; potem doc 19
@@ -192,3 +302,41 @@
   ALIVE%, mora to vedeti.
 - ⛔ `docs/GAMESERVER_LIVE_LUA_MAP.md:74` in `deployed_lua/README.md`
   navajata 4 module; živih je 6.
+
+## 2026-09-05 — arena PR #912, odprto po pregledu testov
+
+Pregledni agent za testno zbirko je našel 22 postavk. Popravljene so 4
+(zastareli vzorci mutacij → `fail`, `re.search` → `findall`, `setl "ime"` v
+narekovajih, prazna datoteka prestane preverbo oklepajev) in ločeni skladišči
+zdravja v stubu. **Odprto ostaja:**
+
+- ⛔ mutacijska baterija nima izhodiščnega zagona: če harness pade iz
+  nepovezanega razloga, VSAKA mutacija poroča »ujeta«. Popravek: pred zanko
+  poženi harness enkrat in prekini, če ne vrne 0.
+- primer 20 je votel (`arena_symmetric 0` se preverja, ko `duel_pool` sploh ni
+  postavljen → `arena_loadout` se ne kliče). Zraven razkriva vedenje:
+  `arena_symmetric 1` ne naredi nič, kadar sta `arena_hp` in `arena_vamp` 0 —
+  kar je natanko to, kar nastavi priloženi config.
+- primer 20 prva polovica prehaja na puščenem stanju iz primera 19; vzorec
+  `et_InitGame` PRED nastavitvijo cvarov se ponovi na 6 mestih.
+- stub `trap_SendServerCommand` zavrže naslovnika → zasebna zavrnitev bi lahko
+  postala broadcast in noben test ne bi padel.
+- stub `gentity_set` sprejme pisanje v `pers.connected` in
+  `pers.playerStats.selfkills`, ki sta v motorju READONLY (g_lua.c:1248/:1283).
+- `ps.stats` je modeliran samo pri indeksu 0; `STAT_MAX_HEALTH`/`STAT_SPRINTTIME`
+  sta deklarirana, a neodgovorjena → `et_Obituary` ju v offline teku bere kot nil.
+- štiri vstopna varovala v `et_Damage` niso posamično pripeta (odstrani eno in
+  zbirka je zelena); `active`/`enabled()` vrata so testirana na 2 od 5 hookov.
+- vsi privzetki vampirica so neizmerjeni (primer 10 pusti cvare postavljene).
+- `arena_ammo 0`, `arena_nofatigue 0`, `arena_1v1_log 0` — nobenega primera.
+- README pogodba ne opazi IZGINOTJA cele jezikovne tabele (množica ne loči
+  odsotnosti od soglasja; rabi `Counter(rows)[ime] == 3`).
+- `arena_1v1_map` je dokumentiran, a ga nobena pogodba ne doseže: `armed_map()`
+  uporablja `trap_Cvar_Get` in dobesedni fallback, ne `cvar_num`.
+- ⛔ B-1: ujemanje imena mape je podniz → `dots_arena_v2` oboroži modul.
+- ⛔ NIHČE ni pregledal PR #912 (Copilot in Codex brez kvote). Pred deljenjem
+  paketa tujcem naj owner požene `/code-review ultra`.
+
+**Neizmerjeno v živo:** `/team s` med življenjem, `sv_maxclients` (latched),
+rotacija loga, gledalska vrata in cooldown, `arena_symmetric` proti človeku,
+paket v pk3, dva človeka hkrati — in NOVO: `arena_instant_tapout` v živo.

@@ -207,6 +207,7 @@ lua_target() {
         stats_discord_webhook.lua) echo "${HOME_PATH}/luascripts/" ;;
         c0rnp0rn8.lua|endstats.lua) echo "${GAME_DIR}/legacy/" ;;
         proximity_tracker.lua|live_events.lua|team-lock.lua) echo "${GAME_DIR}/legacy/luascripts/" ;;
+        dots_arena_1v1.lua) echo "${GAME_DIR}/legacy/luascripts/" ;;
         *) echo "" ;;
     esac
 }
@@ -217,7 +218,8 @@ cmd_deploy() {
     local dst; dst="$(lua_target "${src}")"
     [ -n "${dst}" ] || die "Ne vem, kam sodi $(basename "${src}").
    Znane: stats_discord_webhook.lua, c0rnp0rn8.lua, endstats.lua,
-          proximity_tracker.lua, live_events.lua, team-lock.lua"
+          proximity_tracker.lua, live_events.lua, team-lock.lua,
+          dots_arena_1v1.lua"
 
     info "Parse gate (luac5.4 -p) …"
     luac5.4 -p "${src}" || die "Lua se ne prevede — deploy prekinjen."
