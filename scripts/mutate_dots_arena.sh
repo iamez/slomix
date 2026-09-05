@@ -140,6 +140,28 @@ mutate "a shield gap too wide is silently skipped again" \
 '        force_reset(other, et.MOD_SUICIDE, "shield-gap")' \
 '        local _ = other'
 
+mutate "the accuracy read is no longer protected, so a typo kills the duel" \
+'    local ok, ws = pcall(et.gentity_get, cn, "sess.aWeaponStats", i)' \
+'    local ok, ws = true, et.gentity_get(cn, "sess.aWeaponStats", i)'
+
+mutate "accuracy reports the running total instead of the duel" \
+'  local d_atts, d_hits, d_hs = atts - prev[1], hits - prev[2], hs - prev[3]' \
+'  local d_atts, d_hits, d_hs = atts, hits, hs'
+
+mutate "accuracy divides by zero shots instead of warning" \
+'  if d_atts == 0 then
+    if d_hits > 0 then' \
+'  if false then
+    if d_hits > 0 then'
+
+mutate "accuracy reads only the first weapon-stat row" \
+'  for i = 0, WS_ROW_COUNT - 1 do' \
+'  for i = 0, 0 do'
+
+mutate "arena_acc_log stops being honoured" \
+'  if cvar_num("arena_acc_log", 1) == 0 then return end' \
+'  local _ = 0'
+
 mutate "the loser is left lying on the floor again" \
 '  force_tapout(victim)' \
 '  local _ = victim'

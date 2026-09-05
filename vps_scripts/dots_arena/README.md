@@ -111,6 +111,7 @@ other never had.
 | `arena_vamp_decay` | `30` | seconds over which it decays to zero |
 | `arena_ammo` | `1` | 9999/9999 at every spawn |
 | `arena_nofatigue` | `1` | unlimited sprint (and unlimited jumping) |
+| `arena_acc_log` | `1` | after every duel, log each player's shots, hits and headshots for that duel — the engine's own counters, so it is accuracy, not a guess |
 | `arena_instant_tapout` | `1` | the loser is pushed into limbo at once, so both players respawn — and get their 3-second spawn shield — in the same frame. Set to `0` to keep the engine's wounded state. |
 | `arena_symmetric` | `0` | force MP40/Thompson — see the warnings |
 | `arena_1v1_log` | `1` | write `<homepath>/legacy/arena_1v1.log` |
@@ -317,6 +318,7 @@ valeur que l'autre n'a jamais eue.
 | `arena_vamp_decay` | `30` | secondes sur lesquelles il tombe à zéro |
 | `arena_ammo` | `1` | 9999/9999 à chaque réapparition |
 | `arena_nofatigue` | `1` | sprint illimité (et sauts illimités) |
+| `arena_acc_log` | `1` | après chaque duel, journalise les tirs, touches et headshots de chaque joueur pour ce duel — les compteurs du moteur, donc une précision mesurée, pas estimée |
 | `arena_instant_tapout` | `1` | le perdant passe immédiatement en limbo : les deux joueurs réapparaissent — et reçoivent leur bouclier de 3 secondes — dans la même frame. Mettre `0` pour conserver l'état blessé du moteur. |
 | `arena_symmetric` | `0` | impose MP40/Thompson — voir les avertissements |
 | `arena_1v1_log` | `1` | écrit `<homepath>/legacy/arena_1v1.log` |
@@ -526,6 +528,7 @@ sprememba zalogovnika med bojem bi enemu podarila številko, ki je drugi ni imel
 | `arena_vamp_decay` | `30` | sekunde, v katerih upade na nič |
 | `arena_ammo` | `1` | 9999/9999 ob vsakem spawnu |
 | `arena_nofatigue` | `1` | neomejen sprint (in neomejeno skakanje) |
+| `arena_acc_log` | `1` | po vsakem dvoboju zapiše strele, zadetke in headshote vsakega igralca za ta dvoboj — motorjevi lastni števci, torej izmerjena natančnost, ne ocena |
 | `arena_instant_tapout` | `1` | poraženca takoj potisne v limbo, tako da oba respawnata — in dobita svoj 3-sekundni ščit — v istem framu. `0` pusti motorjevo ranjeno stanje. |
 | `arena_symmetric` | `0` | vsili MP40/Thompson — glej opozorila |
 | `arena_1v1_log` | `1` | piše `<homepath>/legacy/arena_1v1.log` |

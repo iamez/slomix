@@ -204,6 +204,7 @@ local pool_typed         = false
 --- ⛔ Keyed by clientNum, so et_ClientDisconnect must clear it — otherwise this
 --- is a fresh instance of the very class this review exists to remove.
 local last_cmd           = {}
+local acc_last           = {}     -- clientNum -> {atts, hits, headshots} at last sample
 local CMD_COOLDOWN_MS    = 3000
 --- Whether the module last saw a real 1v1. Only used to announce TRANSITIONS,
 --- so a three-player warm-up does not spam the chat every death.
@@ -621,6 +622,91 @@ end
 --- instant. Where the shield was still up, the damage was a NO-OP and the
 --- survivor died 2.8-3.4 s later — i.e. the first duel after every spawn, the
 --- start of every series, was the unfair one.
+--- Sum the engine's own per-weapon shot counters for one client.
+---
+--- `sess.aWeaponStats` is a READ-ONLY array of `WS_MAX` rows (bg_public.h:1834-1862,
+--- array declared WS_MAX+1 at g_local.h:688). Each row comes back as a Lua table
+--- `{atts, deaths, headshots, hits, kills}` (g_lua.c:1597-1611).
+---
+--- ⭐ Summing every row instead of indexing the current weapon is deliberate.
+--- The array is keyed by WS_* (weapon-STAT index), not by the weapon id that
+--- et.GetCurrentWeapon returns — WP_MP40 is 3 but WS_MP40 is 4, and the two
+--- enums diverge further down. A wrong index reads a neighbouring weapon's
+--- counters and reports a plausible, wrong accuracy. In a 1v1 with one gun the
+--- sum IS that gun; if a knife or a grenade lands it joins the total, which is
+--- honest rather than silently mis-attributed.
+--- ⛔ The binding does NO bounds check on the index: it computes
+--- `addr + sizeof(weapon_stat_t) * index` straight from the Lua argument
+--- (g_lua.c:2098). The array holds WS_MAX+1 = 29 rows (g_local.h:688), so
+--- 0..27 is inside it — but the safety is MINE, not the engine's, which is the
+--- same lesson this whole module was rewritten around.
+local WS_ROW_COUNT = 28    -- WS_KNIFE(0) .. WS_SYRINGE(27)
+
+--- ⛔⛔ WRAPPED IN pcall ON PURPOSE. An unknown field name raises inside the
+--- binding (luaL_error, g_lua.c:2032), and this is called from et_Obituary —
+--- so a single typo would abort the hook and take the score, the reset and the
+--- announcement down with it. An instrument that can break the thing it
+--- measures is worse than no instrument. If the read ever fails, the duel
+--- still runs and the log says why, once.
+local ws_read_failed = false
+local function shooting_totals(cn)
+  local atts, hits, hs = 0, 0, 0
+  for i = 0, WS_ROW_COUNT - 1 do
+    local ok, ws = pcall(et.gentity_get, cn, "sess.aWeaponStats", i)
+    if not ok then
+      if not ws_read_failed then
+        ws_read_failed = true
+        log("ACC     cn=%d — sess.aWeaponStats unreadable (%s); accuracy off for this map",
+            cn, tostring(ws))
+      end
+      return nil
+    end
+    if type(ws) == "table" then
+      atts = atts + (tonumber(ws[1]) or 0)
+      hs   = hs   + (tonumber(ws[3]) or 0)
+      hits = hits + (tonumber(ws[4]) or 0)
+    end
+  end
+  return atts, hits, hs
+end
+
+--- Log shots/hits/headshots for one client as a DELTA since the last sample.
+---
+--- ⛔⛔ THE TRAP THIS GUARD EXISTS FOR: `atts` is incremented inside
+--- `if (g_gamestate.integer == GS_PLAYING)` (g_weapon.c:4388-4392), but `hits`
+--- is incremented with no such gate (g_match.c:392-395). During warmup the
+--- denominator therefore stops while the numerator keeps going, and accuracy
+--- reads as infinite — or, worse, as a merely flattering number. Two counters
+--- with one name and two conditions. When the shots delta is zero and the hits
+--- delta is not, this says so instead of dividing.
+local function log_accuracy(cn, label)
+  if cvar_num("arena_acc_log", 1) == 0 then return end
+  local atts, hits, hs = shooting_totals(cn)
+  if atts == nil then return end
+  local prev = acc_last[cn] or { 0, 0, 0 }
+  local d_atts, d_hits, d_hs = atts - prev[1], hits - prev[2], hs - prev[3]
+  acc_last[cn] = { atts, hits, hs }
+
+  -- A first sample has nothing to subtract from; a negative delta means the
+  -- engine reset the counters under us (map change, session rewrite).
+  if d_atts < 0 or d_hits < 0 or d_hs < 0 then
+    log("ACC     cn=%d %s counters went backwards — baseline reset, no rate", cn, label)
+    return
+  end
+  if d_atts == 0 then
+    if d_hits > 0 then
+      log("ACC     cn=%d %s shots=0 hits=%d — ⛔ atts NOT counting (g_gamestate ~= GS_PLAYING), rate meaningless",
+          cn, label, d_hits)
+    end
+    return
+  end
+  log("ACC     cn=%d %s shots=%d hits=%d hs=%d acc=%.1f%% hs/hit=%.1f%% | skupaj %d/%d %.1f%%",
+      cn, label, d_atts, d_hits, d_hs,
+      d_hits * 100.0 / d_atts,
+      d_hits > 0 and (d_hs * 100.0 / d_hits) or 0.0,
+      hits, atts, atts > 0 and (hits * 100.0 / atts) or 0.0)
+end
+
 --- Push a dead-but-not-gibbed duellist past GIB_HEALTH so the engine limbos
 --- him on its very next frame — the forced tap-out.
 ---
@@ -742,6 +828,8 @@ function et_InitGame(levelTime, randomSeed, restart)
   relevel_pending = false
   was_armed_pair = false
   spawn_shield = {}
+  acc_last     = {}
+  ws_read_failed = false
   pool_typed = false
   last_cmd = {}
   log_writes = 0
@@ -861,6 +949,7 @@ function et_ClientDisconnect(clientNum)
   spawn_shield[clientNum] = nil
   score[clientNum]        = nil
   last_cmd[clientNum]     = nil
+  acc_last[clientNum]     = nil
 
   -- ⛔ `score[cn] ~= nil` is exactly "was one of the two being scored" —
   -- ensure_pair populates that table for the duelists and nobody else. Testing
@@ -1044,6 +1133,15 @@ function et_Obituary(victim, killer, mod)
   -- survivors' force_reset must run FIRST, because force_reset refuses an
   -- already-dead target and this write makes the victim look freshly gibbed.
   force_tapout(victim)
+
+  -- ⭐ Sampled HERE, after the kill has been booked. The killing blow's `hits`
+  -- is written inside G_Damage's tail (g_match.c:394) and the shot that landed
+  -- it in FireWeapon (g_weapon.c:4392) — both strictly before player_die calls
+  -- this hook, so the duel that just ended is fully inside the delta. An
+  -- instrument that reads before the write measures the previous duel.
+  for _, cn in ipairs(players) do
+    log_accuracy(cn, cn == victim and "died " or "won  ")
+  end
 
   announce(players)
 end

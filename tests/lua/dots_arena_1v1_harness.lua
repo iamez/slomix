@@ -21,6 +21,7 @@ local health = {[0]=100, [1]=100}
 -- načina, da bi padla — model je bil ohlapnejši od predmeta, isti razred kot
 -- brezpogojno smrtonosni G_Damage in manjkajoče konstante pred njim.
 local ent_health = {[0]=100, [1]=100}
+local wstats = {}   -- cn -> { [wsIndex] = {atts,deaths,hs,hits,kills} }
 local team   = {[0]=1,   [1]=2}
 local conn   = {[0]=2,   [1]=2}
 local shield = {[0]=0,   [1]=0}
@@ -33,8 +34,7 @@ local argv   = {}
 local KNOWN_FIELDS = {
   ["pers.connected"]=true, ["pers.netname"]=true, ["sess.sessionTeam"]=true,
   ["ps.stats"]=true, ["ps.powerups"]=true, ["health"]=true,
-  ["pers.playerStats.selfkills"]=true,
-}
+  ["pers.playerStats.selfkills"]=true, ["sess.aWeaponStats"]=true }
 local damage_lands = true
 local fs_open_fails = false
 local fs_len = 0
@@ -94,6 +94,8 @@ et = {
     if field=="health" then return ent_health[cn] end
     if field=="ps.powerups" and idx==1 then return shield[cn] end
     if field=="pers.playerStats.selfkills" then return 0 end
+    -- {atts, deaths, headshots, hits, kills} kot g_lua.c:1597-1611
+    if field=="sess.aWeaponStats" then return wstats[cn] and wstats[cn][idx] or nil end
   end,
   Q_CleanStr=function(s) return (s:gsub("%^%d","")) end,
   trap_Milliseconds=function() return now_ms end,
@@ -1147,3 +1149,107 @@ assert(health[1] == 0 and ent_health[1] == 100,
        ..tostring(health[1]).."/"..tostring(ent_health[1]))
 cvars.arena_instant_tapout = nil
 print("✅ poraženec je prisiljen v limbo, stikalo pa to res izklopi")
+
+-- 48) ⛔⛔ NATANČNOST IZ DVEH ŠTEVCEV Z DVEMA POGOJEMA. `atts` se poveča le
+--     znotraj `if (g_gamestate.integer == GS_PLAYING)` (g_weapon.c:4388-4392),
+--     `hits` pa brez vsakega pogoja (g_match.c:392-395). Med warmupom se
+--     imenovalec ustavi, števec pa teče — razmerje postane neskončno ali, še
+--     huje, samo laskavo. Instrument mora to POVEDATI, ne deliti.
+et_InitGame(0,0,false)
+cvars.arena_1v1 = "1"; cvars.arena_hp = ""
+et_InitGame(0,0,false)
+team[0], team[1] = 1, 2
+conn[0], conn[1] = 2, 2
+health[0], health[1] = 100, 100
+ent_health[0], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+
+-- prva runda: 20 strelov, 8 zadetkov, 3 headshoti pri igralcu (WS_MP40 = 4)
+wstats[0] = { [4] = { 20, 0, 3, 8, 1 } }
+wstats[1] = { [4] = { 30, 0, 0, 6, 0 } }
+logged = {}
+health[1] = 0
+et_Obituary(1, 0, 4)
+local acc0 = nil
+for _, l in ipairs(logged) do if l:match("ACC     cn=0") then acc0 = l end end
+assert(acc0, "⛔ ni ACC vrstice za igralca: "..table.concat(logged," | "))
+assert(acc0:match("shots=20") and acc0:match("hits=8") and acc0:match("acc=40%.0%%"),
+       "⛔ napačen izračun v prvi rundi: "..acc0)
+
+-- druga runda: SAMO delta se sme poročati (25 strelov, 12 zadetkov skupaj)
+wstats[0] = { [4] = { 25, 0, 4, 12, 2 } }
+logged = {}
+health[0], ent_health[0] = 100, 100
+health[1], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+health[1] = 0
+et_Obituary(1, 0, 4)
+acc0 = nil
+for _, l in ipairs(logged) do if l:match("ACC     cn=0") then acc0 = l end end
+assert(acc0 and acc0:match("shots=5") and acc0:match("hits=4"),
+       "⛔ druga runda mora poročati DELTO (5/4), ne vsote: "..tostring(acc0))
+assert(acc0:match("skupaj 12/25"), "⛔ manjka kumulativa: "..acc0)
+
+-- ⭐ in kontrola za warmup past: hits rastejo, atts stojijo
+wstats[0] = { [4] = { 25, 0, 4, 19, 2 } }
+logged = {}
+health[0], ent_health[0] = 100, 100
+health[1], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+health[1] = 0
+et_Obituary(1, 0, 4)
+local warned = false
+for _, l in ipairs(logged) do
+  if l:match("ACC     cn=0") and l:match("atts NOT counting") then warned = true end
+  if l:match("ACC     cn=0") and l:match("acc=") then
+    error("⛔ delil je z ničlo namesto da bi opozoril: "..l)
+  end
+end
+assert(warned, "⛔ mora opozoriti, da atts ne šteje: "..table.concat(logged," | "))
+-- ⭐ In stikalo se mora dati izklopiti. Pregled testne zbirke je ravno ta
+--    razred očital: arena_ammo, arena_nofatigue in arena_1v1_log nima nobenega
+--    primera, ki bi jih postavil na 0, zato bi bila vrata lahko dekoracija.
+cvars.arena_acc_log = "0"
+wstats[0] = { [4] = { 60, 0, 9, 30, 5 } }
+logged = {}
+health[0], ent_health[0] = 100, 100
+health[1], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+health[1] = 0
+et_Obituary(1, 0, 4)
+for _, l in ipairs(logged) do
+  assert(not l:match("ACC     "), "⛔ arena_acc_log 0 mora utišati merilnik: "..l)
+end
+cvars.arena_acc_log = nil
+wstats = {}
+print("✅ natančnost: delta, kumulativa, opozorilo namesto deljenja, in izklop drži")
+
+-- 49) ⛔⛔ INSTRUMENT NE SME ZLOMITI TISTEGA, KAR MERI. Neznano ime polja v
+--     pravi vezavi VRŽE (luaL_error, g_lua.c:2032), merilnik pa se kliče iz
+--     et_Obituary — brez pcall bi ena tipkarska napaka odnesla izid, reset in
+--     objavo. Tu stub vrže namesto vezave.
+et_InitGame(0,0,false)
+cvars.arena_1v1 = "1"; cvars.arena_hp = ""
+et_InitGame(0,0,false)
+team[0], team[1] = 1, 2
+conn[0], conn[1] = 2, 2
+health[0], health[1] = 100, 100
+ent_health[0], ent_health[1] = 100, 100
+et_ClientSpawn(0, false); et_ClientSpawn(1, false)
+local real_get = et.gentity_get
+et.gentity_get = function(cn, field, idx)
+  if field == "sess.aWeaponStats" then error("Lua API: unknown field \"sess.aWeaponStats\"", 0) end
+  return real_get(cn, field, idx)
+end
+logged = {}; sent = {}
+health[1] = 0
+local ok = pcall(et_Obituary, 1, 0, 4)
+et.gentity_get = real_get
+assert(ok, "⛔ obituarij se je sesul zaradi merilnika — instrument je zlomil predmet")
+local said = false
+for _, l in ipairs(logged) do if l:match("unreadable") then said = true end end
+assert(said, "⛔ mora enkrat povedati, da polja ne more brati: "..table.concat(logged," | "))
+local scored = false
+for _, m in ipairs(sent) do if m:match("^chat") or m:match("^cp") then scored = true end end
+assert(scored, "⛔ dvoboj se mora normalno zaključiti kljub odpovedi merilnika")
+print("✅ merilnik odpove tiho in sam — dvoboj teče naprej")
