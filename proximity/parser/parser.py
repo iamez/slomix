@@ -524,6 +524,30 @@ class VehicleProgress:
     max_health: int
     final_health: int
     destroyed_count: int
+    # v6.14 (docs/design/20 slice 2): gameTime() ms since round start, like
+    # carrier kill_time — stored unconverted. None = the file predates the
+    # fields (12-column line) or the mover never moved (Lua writes 0).
+    first_move_time: int | None = None
+    last_move_time: int | None = None
+    # First/last moving tick with a player mounted or within escort_radius —
+    # when the escort happened (a supply truck drives itself at round start,
+    # so the raw first move is not it). Fields 15-16.
+    first_escort_time: int | None = None
+    last_escort_time: int | None = None
+
+
+@dataclass
+class VehicleDestroyed:
+    """v6.14 `# VEHICLE_DESTROYED`: one row per destruction of a tracked
+    mover. `attacker_guid` is empty when the 500 ms poll saw the vehicle die
+    without a hit on it (script kill, sub-threshold damage)."""
+    vehicle_name: str
+    time: int
+    attacker_guid: str
+    attacker_name: str
+    attacker_team: str
+    means_of_death: int
+    health_before: int
 
 
 @dataclass
@@ -618,6 +642,7 @@ class ProximityParserV4:
         # v6 phases 1.5-4
         self.carrier_returns: list[CarrierReturn] = []
         self.vehicle_progress: list[VehicleProgress] = []
+        self.vehicle_destroyed: list[VehicleDestroyed] = []
         self.escort_credits: list[EscortCredit] = []
         self.construction_events: list[ConstructionEvent] = []
         self.objective_runs: list[ObjectiveRun] = []
@@ -812,6 +837,7 @@ class ProximityParserV4:
         self.carrier_kills = []
         self.carrier_returns = []
         self.vehicle_progress = []
+        self.vehicle_destroyed = []
         self.escort_credits = []
         self.construction_events = []
         self.objective_runs = []
@@ -963,6 +989,9 @@ class ProximityParserV4:
                     if line.startswith('# VEHICLE_PROGRESS'):
                         section = 'vehicle_progress'
                         continue
+                    if line.startswith('# VEHICLE_DESTROYED'):
+                        section = 'vehicle_destroyed'
+                        continue
                     if line.startswith('# ESCORT_CREDIT'):
                         section = 'escort_credit'
                         continue
@@ -1070,6 +1099,8 @@ class ProximityParserV4:
                         self._parse_carrier_return_line(line)
                     elif section == 'vehicle_progress':
                         self._parse_vehicle_progress_line(line)
+                    elif section == 'vehicle_destroyed':
+                        self._parse_vehicle_destroyed_line(line)
                     elif section == 'escort_credit':
                         self._parse_escort_credit_line(line)
                     elif section == 'construction_events':
@@ -2805,9 +2836,33 @@ class ProximityParserV4:
                 max_health=int(parts[9]),
                 final_health=int(parts[10]),
                 destroyed_count=int(parts[11].strip()),
+                # v6.14 trailing fields: present from 14 columns on; the
+                # 12-column floor above stays so pre-v6.14 files still parse.
+                # Lua writes 0 for "never moved" — that is no time, not t=0.
+                first_move_time=(int(parts[12].strip()) or None) if len(parts) > 13 else None,
+                last_move_time=(int(parts[13].strip()) or None) if len(parts) > 13 else None,
+                first_escort_time=(int(parts[14].strip()) or None) if len(parts) > 15 else None,
+                last_escort_time=(int(parts[15].strip()) or None) if len(parts) > 15 else None,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip vehicle_progress line: {e}")
+
+    def _parse_vehicle_destroyed_line(self, line: str):
+        try:
+            parts = line.split(';')
+            if len(parts) < 7:
+                return
+            self.vehicle_destroyed.append(VehicleDestroyed(
+                vehicle_name=parts[0],
+                time=int(parts[1]),
+                attacker_guid=parts[2],
+                attacker_name=parts[3],
+                attacker_team=parts[4],
+                means_of_death=int(parts[5]),
+                health_before=int(parts[6].strip()),
+            ))
+        except (ValueError, IndexError) as e:
+            self.logger.debug(f"Skip vehicle_destroyed line: {e}")
 
     def _parse_escort_credit_line(self, line: str):
         try:
@@ -3214,6 +3269,20 @@ class ProximityParserV4:
         if not await self._table_has_column('proximity_vehicle_progress', 'vehicle_name'):
             return
         supports_round_end = await self._table_has_column('proximity_vehicle_progress', 'round_end_unix')
+        # v6.14 (migration 082): move times + the destruction list as JSONB
+        # on the vehicle's own row — no second table. Guarded so the importer
+        # keeps working on a database that has not applied 082 yet.
+        supports_move_times = await self._table_has_column('proximity_vehicle_progress', 'first_move_time')
+        destroyed_by_vehicle: dict[str, list[dict]] = {}
+        for vd in self.vehicle_destroyed:
+            destroyed_by_vehicle.setdefault(vd.vehicle_name, []).append({
+                "time": vd.time,
+                "attacker_guid": vd.attacker_guid,
+                "attacker_name": vd.attacker_name,
+                "attacker_team": vd.attacker_team,
+                "means_of_death": vd.means_of_death,
+                "health_before": vd.health_before,
+            })
         for vp in self.vehicle_progress:
             columns = [
                 "session_date", "round_number", "round_start_unix",
@@ -3233,6 +3302,12 @@ class ProximityParserV4:
                 vp.end_x, vp.end_y, vp.end_z,
                 vp.total_distance, vp.max_health, vp.final_health, vp.destroyed_count,
             ]
+            if supports_move_times:
+                columns += ["first_move_time", "last_move_time", "first_escort_time", "last_escort_time", "destroyed_events"]
+                values += [
+                    vp.first_move_time, vp.last_move_time, vp.first_escort_time, vp.last_escort_time,
+                    json.dumps(destroyed_by_vehicle.get(vp.vehicle_name, [])),
+                ]
             if supports_round_end:
                 columns.insert(3, "round_end_unix")
                 values.insert(3, self.metadata.get('round_end_unix', 0))
@@ -4255,6 +4330,7 @@ class ProximityParserV4:
             'carrier_kills': len(self.carrier_kills),
             'carrier_returns': len(self.carrier_returns),
             'vehicle_progress': len(self.vehicle_progress),
+            'vehicle_destroyed': len(self.vehicle_destroyed),
             'escort_credits': len(self.escort_credits),
             'construction_events': len(self.construction_events),
             'objective_runs': len(self.objective_runs),

@@ -69,7 +69,18 @@ deploy NI naloga.
      < 1,2 s (delež počasnih točk NI kemp → epizodna metrika); obe definiciji
      stabilna lastnost igralca (Spearman polovic +0,61…+0,95). Živ dokaz:
      seja 154 hold 11–18 %, seja 120 16–23 %, hladno 0,9–1,1 s, toplo 3 ms.
-     Naslednje: r. 3 (per-bot `.gm` profil iz `top_cells` + tempa) — owner.
+     #914 mergan 5. 9. Naslednje: r. 3 (per-bot `.gm` profil iz `top_cells`
+     + tempa) — owner je 5. 9. izbral **najprej moments r. 2** (spodaj).
+   - **Moments r. 2 (doc 20 §7.2) — v gradnji 5. 9.** (veja
+     `feat/moments-mover-times`): Lua v6.14 (`first/last_move_time` na
+     `VEHICLE_PROGRESS`, nova sekcija `VEHICLE_DESTROYED` iz `et_Damage`
+     veje pred `isValidClient` — izvor g_combat.c:1857 kljuko sproži za vsako
+     entiteto), parser + migracija 082 (3 stolpci na `proximity_vehicle_progress`,
+     JSONB seznam uničenj, brez nove tabele), detektor `escort_mover` z
+     `timestamp_source: "first_move"` in `destroyed_by`. Testi: harness
+     `tests/lua/vehicle_tracking_harness.lua` v CI (3 mutacije padle), parser 5,
+     escort 13. Runtime: lokalni ET 2.85 (:27961) z boti; **puran deploy =
+     ownerjev korak po mergu** (protokol: map load, nikoli `lua_restart`).
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -109,7 +120,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, doc 22 r. 1 mergana #913, r. 2 v PR-ju)
+**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, doc 22 r. 1+2 mergani #913/#914; moments r. 2 v gradnji)
 
 | rezina | vsebina | stanje |
 |---|---|---|
