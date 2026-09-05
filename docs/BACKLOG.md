@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-05, 23:20) #916 MERGAN in v6.14 DEPLOYAN na puran
+  (dokazano). Odprto: (1) en večer `frame_health.log` na puranu brez novega
+  `self` stroška; (2) migracija 082 na prod ob release deployu; (3) popravek
+  korpusa `destroyed_count` (fantomska +1 na goldrush rundah pred v6.14) —
+  ownerjeva odločitev; (4) naslednja proga: dvojčki r. 3 ali doc 19.
 - (Fable 5.1, 2026-09-05, pozno) Moments r. 2 — dve živi pasti iz lokalnega ET:
   (a) supply truck se sam odpelje pri 0,6 s → `first_move_time` ni čas escorta
   → dodana `first/last_escort_time` (premik z igralcem na/ob vozilu), detektor
