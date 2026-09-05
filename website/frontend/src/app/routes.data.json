@@ -244,6 +244,14 @@
     "built": true
   },
   {
+    "key": "diagnostics",
+    "path": "/diagnostics",
+    "label": "Diagnostics",
+    "nav": "footer",
+    "phase": 6,
+    "built": true
+  },
+  {
     "key": "design",
     "path": "/design",
     "label": "Design",

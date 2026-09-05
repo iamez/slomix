@@ -30,5 +30,4 @@
 # register_its_truncated_prefix pins that. Both close in a later slice.
 /api/bets
 /api/bets/market
-/api/diagnostics
 /api/stats/sessions

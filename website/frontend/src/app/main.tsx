@@ -9,6 +9,7 @@ import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { installErrorReporting } from './lib/errorReporting';
 import { Landing } from './pages/Landing';
 import { About } from './pages/About';
+import { DiagnosticsPage } from './pages/DiagnosticsPage';
 import { SystemPage } from './pages/SystemPage';
 import { SmartStatsDiag } from './pages/SmartStatsDiag';
 import { Home } from './pages/Home';
@@ -86,6 +87,7 @@ const PAGES: Record<string, React.ReactElement> = {
   landing: <Landing />,
   admin: <About />,
   system: <SystemPage />,
+  diagnostics: <DiagnosticsPage />,
   'smart-stats-diag': <SmartStatsDiag />,
   home: <Home />,
   sessions: <SessionsList />,

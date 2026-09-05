@@ -4245,3 +4245,71 @@ export interface ApiHealth {
   service: string;
   database: string;
 }
+
+// ── /api/diagnostics (admin) ────────────────────────────────────────────────
+//
+// A UNION, not the shape a healthy database happens to return. Every field
+// below is a branch of get_diagnostics (website/backend/routers/
+// diagnostics_router.py): a table check can succeed with a count or fail
+// three different ways, the time block is `{}` when its query raised, a
+// monitoring table can answer with an error instead of a timestamp, and the
+// pool has three forms. Typing only the recorded branch would let the page
+// render `undefined` the first time the dev database is anything but healthy.
+
+/** ok — the count is present. The other three carry `error` instead. */
+export type DiagnosticsTableStatus = 'ok' | 'permission_denied' | 'not_found' | 'error';
+
+export interface DiagnosticsTable {
+  name: string;
+  status: DiagnosticsTableStatus;
+  /** Present only on `ok`. Absent is not zero: a table nobody could read has
+   *  no count, and rendering one would invent a fact. */
+  row_count?: number;
+  /** Present on every status but `ok`. */
+  error?: string;
+  required: boolean;
+}
+
+/** Empty object when the timing query raised — the handler leaves `time` as
+ *  `{}` and pushes the reason into `warnings`. */
+export interface DiagnosticsTime {
+  raw_dead_seconds?: number;
+  agg_dead_seconds?: number;
+  cap_seconds?: number;
+  cap_hits?: number;
+  raw_denied_seconds?: number;
+}
+
+export interface DiagnosticsMonitoringTable {
+  count: number;
+  last_recorded_at: string | null;
+  /** Set instead of a real reading when the query failed. */
+  error?: string;
+}
+
+/** `connected` is on every branch on purpose (the handler says so in a
+ *  comment): one key to switch on, not three shapes to sniff. */
+export interface DiagnosticsPool {
+  connected: boolean;
+  reason?: string;
+  error?: string;
+  size?: number;
+  idle?: number;
+  in_use?: number;
+  min_size?: number;
+  max_size?: number;
+  utilisation_pct?: number;
+}
+
+export interface Diagnostics {
+  /** ok | warning (warnings only) | error (at least one issue). */
+  status: string;
+  timestamp: string | null;
+  database: { status: string; tests?: unknown[]; error?: string };
+  tables: DiagnosticsTable[];
+  issues: string[];
+  warnings: string[];
+  time: DiagnosticsTime;
+  monitoring: { server?: DiagnosticsMonitoringTable; voice?: DiagnosticsMonitoringTable };
+  pool?: DiagnosticsPool;
+}
