@@ -87,6 +87,14 @@ deploy NI naloga.
      igralca šteje šele po prvem escortu) in ena o motorju (kljuka teče PRED
      odštetjem zdravja). ⚠️ Kontrakt `destroyed_count`: korpus pred v6.14
      nosi fantomsko +1 na goldrush rundah (popravek = odprta naloga).
+   - **Dvojčki r. 3 — zgrajena 6. 9.** (veja `feat/bot-twins-profile-generator`):
+     `scripts/build_bot_twin_profiles.py` → `server/omnibot/twins/` (profil na
+     bota z `ReactionTime`, `<mapa>_twins.gm` z vlogami + kamp časi na
+     njegovih razločevalnih ciljih, tabela imen s `profile=` in pravim
+     razredom) + `docs/design/23_TWINS_REPORT.md` (lokalno). 5 dvojčkov,
+     43 ciljev; ⚠️ kontrola (premešane seje) preživi ≈ 21 % — pragi iz
+     kontrole, številka je v poročilu. Deploy na puran + bot test = owner;
+     r. 4 = harness bot proti človeku (+ kontrola proti tujemu profilu).
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -126,7 +134,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, #913/#914/#916 mergani; v6.14 na puranu)
+**Zadnja posodobitev:** 2026-09-06 (Fable 5.1, dvojčki r. 3 v PR-ju)
 
 | rezina | vsebina | stanje |
 |---|---|---|
