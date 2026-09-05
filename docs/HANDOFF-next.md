@@ -20,14 +20,15 @@
 - Doc 22 r. 1 (#913) in r. 2 (#914) MERGANI: razločljivost poti (osebnost =
   časovna utež, identifikacija 81–91 %) in camp-profile (peta plošča vlog,
   hold/still). Podrobnosti v PLAN in spominu `camp_metric_is_episodic`.
-- **Moments r. 2 v PR #916** (veja `feat/moments-mover-times`): Lua v6.14
+- **Moments r. 2 MERGANA (#916) in v6.14 DEPLOYAN na puran 5. 9. 23:16** (veja `feat/moments-mover-times`): Lua v6.14
   (`first/last_move_time`, `first/last_escort_time`, sekcija
   `VEHICLE_DESTROYED` iz `et_Damage` veje), parser, migracija 082 (na devu
   aplicirana), detektor `first_escort` → `first_move` → `round_end`.
   Živ dokaz na lokalnem ET 2.85 (:27961) z boti; dve pasti odkriti v živo
   (supply truck se sam odpelje pri 0,6 s; goldrush tank začne pokvarjen →
-  fantomski `destroyed_count` v korpusu). Po mergu: **puran deploy = owner**
-  (map load, nikoli `lua_restart`; `lua_status` SHA1 = `sha1sum` datoteke).
+  fantomski `destroyed_count` v korpusu; kljuka teče PRED odštetjem
+  zdravja). Puran: sha256 = main, `FH watcher version=6.14`; odprto en večer
+  `frame_health.log`, migracija 082 na prod ob release deployu.
 - Lokalni ET: deploy prek `sudo -n -u et tmux -S …-285.sock run-shell "cp
   /tmp/x.lua …"` (scp pot nima ključa). Strežnik 2.85 po testu UGASNI
   (`local_et.sh -v 2.85.0 stop`), da ne teče čez noč.
