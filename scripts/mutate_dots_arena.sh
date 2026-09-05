@@ -34,7 +34,11 @@ pass=0; fail=0
 mutate() {  # name, old, new
     local name="$1" old="$2" new="$3"
     cp "$ORIG" "$LUA"
-    python3 - "$LUA" "$old" "$new" <<'PY' || { echo "⛔ ${name}: pattern no longer matches — the mutation is stale, not the guard"; return 1; }
+    # ⛔ A stale pattern counts as MISSED. It printed and returned without
+    # touching `fail`, so the script exited 0 reporting "missed 0" while a
+    # mutation had never run at all — the same defect its own header warns
+    # about, one level up. Found by a review agent, not by running it.
+    python3 - "$LUA" "$old" "$new" <<'PY' || { echo "⛔ ${name}: pattern no longer matches — the mutation is stale, not the guard"; fail=$((fail + 1)); return 1; }
 import sys
 path, old, new = sys.argv[1], sys.argv[2], sys.argv[3]
 src = open(path, encoding="utf-8").read()
@@ -77,21 +81,69 @@ mutate "leaving for spectator scores a point again" \
 '  if victim == killer and mod == et.MOD_SWITCHTEAM then' \
 '  if false then'
 
-mutate "a self-inflicted death scores a point again" \
-'  local self_inflicted = (victim == killer and mod == et.MOD_SUICIDE)' \
-'  local self_inflicted = false'
-
-mutate "a self-frag is swallowed as /kill again (identity, not mod)" \
-'  local self_inflicted = (victim == killer and mod == et.MOD_SUICIDE)' \
-'  local self_inflicted = (victim == killer)'
+mutate "/kill stops costing the point (the escape hatch reopens)" \
+'  ensure_pair(players)
+  for _, cn in ipairs(players) do
+    if cn ~= victim then
+      score[cn] = (score[cn] or 0) + 1
+    end
+  end' \
+'  ensure_pair(players)
+  if victim ~= killer then
+  for _, cn in ipairs(players) do
+    if cn ~= victim then
+      score[cn] = (score[cn] or 0) + 1
+    end
+  end
+  end'
 
 mutate "disconnect stops clearing the slot" \
 '  forced[clientNum]       = nil
   spawn_shield[clientNum] = nil
   score[clientNum]        = nil
-  last_cmd[clientNum]     = nil
-  score_pair              = nil' \
+  last_cmd[clientNum]     = nil' \
 '  local _ = clientNum'
+
+mutate "the relevel flag outlives an empty arena" \
+'  elseif #roster == 1 and roster[1] == clientNum then' \
+'  elseif false then'
+
+mutate "force_reset latches on an already-dead target" \
+'  if not is_alive(cn) then
+    log("FORCE   cn=%d why=%s SKIPPED — already dead, no obituary would fire", cn, why)
+    return
+  end' \
+'  local _ = cn'
+
+mutate "an uninvolved disconnect wipes the score again" \
+'  if was_scored then
+    score_pair = nil
+  end' \
+'  score_pair = nil'
+
+mutate "a query charges the cooldown again" \
+'  local function charge()
+    last_cmd[clientNum] = now
+  end' \
+'  local function charge() end
+  last_cmd[clientNum] = now'
+
+mutate "/vampiric 0 turns lifesteal on again" \
+'  if pool_arg == 0 then
+    charge()
+    vamp_pending = false' \
+'  if false then
+    charge()
+    vamp_pending = false'
+
+mutate "a shield gap too wide is silently skipped again" \
+'        force_reset(other, et.MOD_SUICIDE, "shield-gap")' \
+'        local _ = other'
+
+mutate "a team change no longer arms the relevel" \
+'    relevel_pending = true
+    log("LEAVE   cn=%d — team change, relevel armed", victim)' \
+'    log("LEAVE   cn=%d — team change, relevel armed", victim)'
 
 mutate "refused damage no longer restores the shield" \
 '    et.gentity_set(cn, "ps.powerups", et.PW_INVULNERABLE, shield)' \

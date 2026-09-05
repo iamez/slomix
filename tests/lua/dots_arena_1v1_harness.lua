@@ -238,13 +238,13 @@ local last = sent[#sent] or ""
 local a = tonumber(last:match("alpha %^3(%d+)"))
 local b = tonumber(last:match("bravo %^3(%d+)"))
 assert(a and b, "objava ni v pričakovani obliki: "..tostring(last))
--- ⛔ SPREMENJENO VEDENJE, namerno. Prej je selfkill dal točko nasprotniku in
---    ta test je to trdil. Ne več: samomor prinese POŠTEN RESET, ne pa točke —
---    sicer je »ubij se, ko zaostajaš« taktika. Reset in točka sta dve
---    odločitvi, ne ena, in `victim == killer` loči natanko samomor (padec z
---    višine pride s killerjem ENTITYNUM_WORLD in še vedno šteje).
-assert(a == 1 and b == 1,
-       "izid mora biti 1-1: selfkill resetira, a NE prinese točke: "..tostring(last))
+-- ⛔ Dvakrat sem to obrnil in glava je imela ves čas prav: VSAKA smrt prinese
+--    točko nasprotniku, tudi /kill. Če je /kill zastonj, JE taktika — pri 3 HP
+--    se ubiješ, nihče ne dobi točke, oba se resetirata, in izgubljenemu dvoboju
+--    si ušel. Če te stane točko, ki bi jo tako ali tako izgubil, nimaš kaj
+--    pridobiti.
+assert(a == 2 and b == 1,
+       "izid mora biti 2-1: tudi /kill prinese točko nasprotniku: "..tostring(last))
 assert(#sent >= 6, "vsak dvoboj mora dati cp IN chat: "..#sent)
 assert(sent[1]:match("alpha %^31 %^7%- bravo %^30"),
        "prvi dvoboj po et_InitGame se mora začeti pri 0-0, dobil: "..sent[1])
@@ -430,6 +430,13 @@ print("✅ /arenahp in arena_hp_set: veljata od naslednjega spawna")
 et_InitGame(0,0,false)
 current_wp[0] = 0; current_wp[1] = 0
 ammo_of = {}; clip_of = {}
+-- ⛔ Ogrevalni par z enakima ščitoma: modulov `spawn_shield` nosi vrednosti iz
+--    prejšnjih primerov, in odkar prevelika razlika sproži ponovni reset
+--    (primer 40), bi prvi spawn tega primera meril proti zastareli številki.
+--    To ni napaka modula — je nesnaga v deljenem stanju harnessa.
+shield[0] = 4500; shield[1] = 4500
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+logged = {}
 shield[0] = 5000; shield[1] = 4000
 local ok = pcall(function() et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0) end)
 assert(ok, "⛔ spawn ne sme pasti zaradi WP_NONE")
@@ -747,6 +754,7 @@ for _, bad in ipairs({-1, 5000, 3.5, 1.5, 0/0}) do
 end
 -- kontrola: veljavna številka MORA delovati, sicer varovalo samo ubije funkcijo
 calls = {}
+health[1] = 100          -- ⛔ force_reset zdaj zavrne že mrtvo tarčo (primer 43)
 argv = {"arena_kill", "1"}
 et_ConsoleCommand()
 local hit = false
@@ -918,30 +926,162 @@ et_ClientSpawn(0,0,0,0)
 assert(#logged > 0, "⛔ nov zagon mape mora števec ponastaviti")
 print("✅ log je omejen na zagon mape in se ob novi mapi ponastavi")
 
--- 39) ⛔⛔ `victim == killer` NI »natipkal /kill«. Lastna granata, lasten
---     panzer in lastna dinamit pridejo z attacker == self in ORODNIM modom —
---     to so legitimni načini, kako izgubiti dvoboj, in nasprotnik si je točko
---     zaslužil. Preverba same identitete jih je vse pogoltnila kot »pošten
---     reset brez točke«. Našel drug model ob branju zasnove, ne test.
+-- 39) ⛔⛔ Ne lastna granata ne /kill ne smeta biti brezplačna. Prva je
+--     legitimen način, kako izgubiti dvoboj (attacker == self z ORODNIM
+--     modom); drugi je bil izhod v sili, dokler ga nisem obdavčil. Oba zdaj
+--     prineseta točko nasprotniku, oba sprožita pošten reset.
 et_InitGame(0,0,false)
 cvars.arena_hp = ""; cvars.arena_vamp = "0"
 et_InitGame(0,0,false)
+for _, m in ipairs({ et.MOD_GRENADE, et.MOD_SUICIDE }) do
+  health[0]=100; health[1]=100; shield[0]=0; shield[1]=0
+  sent = {}
+  health[1] = 0
+  et_Obituary(1, 1, m)                 -- cn=1 se ubije sam
+  local last = sent[#sent] or ""
+  local a = tonumber(last:match("alpha %^3(%d+)"))
+  assert(a and a >= 1,
+         "⛔ mod "..m.." mora prinesti točko nasprotniku: "..tostring(last))
+end
+print("✅ lastna granata IN /kill: oba prineseta točko")
+
+-- 40) ⛔⛔ »Zadrži truplo«. Poraženec NE gibne — `LETHAL_DAMAGE` gibne samo
+--     zmagovalca — zato ga nič ne prisili v limbo, in ker modul postavi
+--     `g_forcerespawn -1`, odpade še časovna pot. Lahko leži, kolikor hoče,
+--     pogleda, kje je spawnal zmagovalec, in šele nato skoči: svež 3-sekundni
+--     ščit proti nasprotniku, ki mu je ščit potekel. Tiho preskočena poravnava
+--     mu je to podarila.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+shield[0] = 10000                  -- ⛔ ščit mora biti nastavljen PRED spawnom:
+shield[1] = 10000                  --    modul si ga zabeleži ob spawnu samem
+et_ClientSpawn(0,0,0,0)            -- zmagovalec spawna zdaj
+shield[1] = 90000                  -- poraženec pa 80 s kasneje
+calls = {}
+et_ClientSpawn(1,0,0,0)
+local reset_seen = false
+for _, c in ipairs(calls) do if c:match("G_Damage%(0,") then reset_seen = true end end
+assert(reset_seen,
+       "⛔ prevelika razlika ščitov mora poslati oba nazaj, ne biti preskočena: "..table.concat(calls," | "))
+print("✅ prevelika razlika ščitov ne pomeni, da modul ne stori nič")
+
+-- 41) ⛔ Odhod v gledalce je isto kot odklop: kdor ostane, obdrži načeto
+--     zdravje, kdor pride, spawna poln. Varovalo za `MOD_SWITCHTEAM` je
+--     ustavilo »spectate usmrti nasprotnika« in samo zase postavilo
+--     »spectate je brezplačno polno zdravje«.
+et_InitGame(0,0,false)
+cvars.arena_hp = "500"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+health[0] = 40                     -- eden je načet
+health[1] = 0
+et_Obituary(1, 1, et.MOD_SWITCHTEAM)   -- drugi gre v gledalce
+calls = {}
+health[1] = 100
+et_ClientSpawn(1,0,0,0)                -- in se vrne
+local relevel = false
+for _, c in ipairs(calls) do if c:match("G_Damage%(0,") then relevel = true end end
+assert(relevel, "⛔ ob vrnitvi mora biti načeti igralec poravnan: "..table.concat(calls," | "))
+print("✅ menjava moštva sproži ponovno poravnavo, kot jo sproži odklop")
+
+-- 42) ⛔ Odklop NEUDELEŽENEGA ne sme pobrisati izida. `score_pair = nil` je
+--     stal zunaj varovala, zato je gledalec z enim pritiskom na disconnect
+--     resetiral 9-0 na 0-0 — in vrstica QUIT je celo trdila `duelling=false`,
+--     kar se bere, kot da ga je modul pravilno prezrl.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.sv_maxclients = "4"
+et_InitGame(0,0,false)
 health[0]=100; health[1]=100; shield[0]=0; shield[1]=0
+health[1] = 0; et_Obituary(1, 0, 7)
+health[0]=100; health[1]=100
+health[1] = 0; et_Obituary(1, 0, 7)     -- izid 2-0
+conn[2]=2; team[2]=3                    -- gledalec
+et_ClientDisconnect(2)                  -- ki se odklopi
 sent = {}
-health[1] = 0
-et_Obituary(1, 1, et.MOD_GRENADE)      -- ubil se je z lastno granato
-local last = sent[#sent] or ""
-local a = tonumber(last:match("alpha %^3(%d+)"))
-local b = tonumber(last:match("bravo %^3(%d+)"))
-assert(a and b, "objava mora priti: "..tostring(last))
-assert(a == 1 and b == 0,
-       "⛔ samoubijstvo z orožjem MORA prinesti točko nasprotniku: "..a.."-"..b)
--- /kill pa še vedno ne
+health[0]=100; health[1]=100
+health[1] = 0; et_Obituary(1, 0, 7)
+local a = tonumber((sent[#sent] or ""):match("alpha %^3(%d+)"))
+assert(a == 3, "⛔ odklop gledalca ne sme pobrisati izida, dobil "..tostring(a))
+conn[2]=nil; team[2]=nil; cvars.sv_maxclients = "2"
+print("✅ odklop neudeleženega pusti izid pri miru")
+
+-- 43) ⛔⛔ Zapah se ne sme postaviti na poti, ki obituarija NE more roditi.
+--     `G_Damage` na odjemalcu, ki je že pri health <= 0, gre v vejo
+--     `!wasAlive` (g_combat.c:1946): gibne ga, `targ->die` pa NIKOLI ne
+--     pokliče. Zato `player_die` ne steče, hook ne pade, in `forced[cn]`
+--     ostane postavljen za vedno — naslednja PRAVA smrt tega igralca je
+--     požrta: brez točke, brez reseta, brez objave, brez vrstice v logu.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"; cvars.arena_1v1_test = "1"
+et_InitGame(0,0,false)
+health[0] = -1                       -- že mrtev
+calls = {}
+argv = {"arena_kill", "0"}
+et_ConsoleCommand()
+for _, c in ipairs(calls) do
+  assert(not c:match("G_Damage"), "⛔ že mrtve tarče ne smemo znova ubijati: "..c)
+end
+-- in njegova naslednja PRAVA smrt mora biti štet a
+health[0] = 100; health[1] = 100; shield[0] = 0; shield[1] = 0
 sent = {}
+health[0] = 0
+et_Obituary(0, 1, 7)
+assert(#sent > 0, "⛔ zapah je obtičal: naslednja prava smrt je bila požrta")
+print("✅ force_reset zavrne že mrtvo tarčo, zapah ne obtiči")
+
+-- 44) ⛔⛔ Zastavica za ponovno poravnavo ne sme preživeti prazne arene. Ko
+--     odideta oba, drugi odhod vidi roster 1 (odhajajoči še šteje), zato
+--     `was_duelling` ne drži in zastavica prvega bi ostala — pa bi usmrtila
+--     povsem novega igralca ob prvem spawnu naslednjega para.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.sv_maxclients = "4"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
+et_ClientDisconnect(1)               -- prvi odide sredi dvoboja -> zastavica gor
+conn[1] = nil; team[1] = nil
+et_ClientDisconnect(0)               -- za njim še drugi -> arena je prazna
+conn[0] = 2; team[0] = 1             -- prideta dva povsem nova
+conn[1] = 2; team[1] = 2
 health[0] = 100; health[1] = 100
-health[1] = 0
-et_Obituary(1, 1, et.MOD_SUICIDE)
-last = sent[#sent] or ""
-a = tonumber(last:match("alpha %^3(%d+)"))
-assert(a == 1, "⛔ /kill ne sme prinesti točke, izid je zdaj "..tostring(a))
-print("✅ lastna granata šteje, /kill ne")
+calls = {}
+et_ClientSpawn(0,0,0,0)
+for _, c in ipairs(calls) do
+  assert(not c:match("G_Damage"), "⛔ nov igralec je bil usmrčen ob prihodu: "..c)
+end
+cvars.sv_maxclients = "2"
+print("✅ zastavica ne preživi prazne arene")
+
+-- 45) ⛔ Cooldown se sme zaračunati samo za spremembo stanja. Bralna poizvedba
+--     `/arenahp` brez argumenta je igralca stala tri sekunde in mu nato
+--     zavrnila ukaz, ki ga je res hotel.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"
+et_InitGame(0,0,false)
+now_ms = now_ms + 5000
+argv = {"arenahp"}                   -- poizvedba brez argumenta
+et_ClientCommand(0, "arenahp")
+now_ms = now_ms + 100                -- takoj zatem pravi ukaz
+argv = {"arenahp", "500"}
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "500",
+       "⛔ poizvedba ne sme zapreti ukaza: arena_hp je "..tostring(cvars.arena_hp))
+print("✅ poizvedba je zastonj, sprememba stanja stane")
+
+-- 46) ⛔ `/vampiric 0` je vklapljal lifesteal. `tonumber("0")` ni nil, zato je
+--     šel v vejo »vklop z bazenom«, igralec pa je videl samo sporočilo o
+--     bazenu — objava o vampiricu živi za tistim returnom.
+et_InitGame(0,0,false)
+cvars.arena_vamp = "0"; cvars.arena_hp = ""
+et_InitGame(0,0,false)
+sent = {}
+now_ms = now_ms + 5000
+argv = {"vampiric", "0"}
+et_ClientCommand(0, "vampiric")
+local said_off = false
+for _, m in ipairs(sent) do if m:match("OFF") then said_off = true end end
+assert(said_off, "⛔ /vampiric 0 mora povedati, da je IZKLOPLJEN: "..table.concat(sent," | "))
+print("✅ /vampiric 0 izklopi in to tudi pove")

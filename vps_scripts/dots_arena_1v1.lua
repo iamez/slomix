@@ -627,6 +627,18 @@ local function force_reset(cn, mod, why)
   -- can see fail is decoration, not a guard. It was written, its mutation
   -- survived because the entry-point check masks it, and it was removed.
   local hp, shield, selfkills = reading(cn)
+  -- ⛔⛔ Never arm the latch on a path that cannot produce an obituary.
+  -- G_Damage on a client already at health <= 0 takes the `!wasAlive` branch
+  -- (g_combat.c:1946): it gibs, and it NEVER calls targ->die — so player_die
+  -- never runs, G_LuaHook_Obituary never fires, and nothing clears
+  -- forced[cn]. The `is_alive` check after the call then reads -176, concludes
+  -- the damage landed, and leaves the flag set forever. That client's next
+  -- REAL death is then swallowed: no point, no reset, no announcement, no log
+  -- line. Reproduced by a review agent through the harness stub.
+  if not is_alive(cn) then
+    log("FORCE   cn=%d why=%s SKIPPED — already dead, no obituary would fire", cn, why)
+    return
+  end
   log("FORCE   cn=%d why=%s health=%d shield=%d selfkills=%d",
       cn, why, hp, shield, selfkills)
   forced[cn] = true
@@ -675,6 +687,7 @@ function et_InitGame(levelTime, randomSeed, restart)
   duel_pool = 0
   relevel_pending = false
   was_armed_pair = false
+  spawn_shield = {}
   pool_typed = false
   last_cmd = {}
   log_writes = 0
@@ -789,14 +802,35 @@ function et_ClientDisconnect(clientNum)
   -- Slot numbers are recycled. Every table this module keys by clientNum stops
   -- describing a person the moment that person leaves, and the next connection
   -- to take the slot would inherit it — including the score.
+  local was_scored = score[clientNum] ~= nil
   forced[clientNum]       = nil
   spawn_shield[clientNum] = nil
   score[clientNum]        = nil
   last_cmd[clientNum]     = nil
-  score_pair              = nil
+
+  -- ⛔ `score[cn] ~= nil` is exactly "was one of the two being scored" —
+  -- ensure_pair populates that table for the duelists and nobody else. Testing
+  -- the roster instead missed the case where a duelist leaves after the roster
+  -- has already grown past two. `score_pair = nil` used to sit outside any
+  -- gate, so ANY disconnect rebuilt the tally: a spectator could reset a 9-0
+  -- series by pressing disconnect, and hold it at 0-0 by reconnecting on a
+  -- loop, while the QUIT line said `duelling=false` as if he had been ignored.
+  if was_scored then
+    score_pair = nil
+  end
 
   if was_duelling then
     relevel_pending = true
+  elseif #roster == 1 and roster[1] == clientNum then
+    -- ⛔⛔ The arena just emptied. Without this the flag armed by the FIRST
+    -- player to leave survives an empty arena and fires on the first spawn of
+    -- the next pair — a brand-new player is gibbed on arrival, takes a death
+    -- he did not earn, and nothing in the log explains it. Reproduced by a
+    -- review agent driving the harness stub, not by any case here.
+    -- ⚠️ The `roster[1] == clientNum` term matters: a plain `= was_duelling`
+    -- would clear a legitimately pending flag whenever a SPECTATOR left, since
+    -- spectators are absent from the roster and never set `was_duelling`.
+    relevel_pending = false
   end
   log("QUIT    cn=%d duelling=%s — state cleared", clientNum, tostring(was_duelling))
 end
@@ -870,7 +904,15 @@ function et_Obituary(victim, killer, mod)
   -- death still deserves the reset; what it does not deserve is a POINT, and
   -- those are two different decisions (see `self_inflicted` below).
   if victim == killer and mod == et.MOD_SWITCHTEAM then
-    log("LEAVE   cn=%d — team change, not a duel death", victim)
+    -- ⛔ Leaving the roster by team change and leaving it by disconnect have
+    -- IDENTICAL consequences for the player left standing: he keeps his
+    -- leftover health while whoever arrives next spawns full. The guard above
+    -- stopped "pressing spectate executes your opponent" and, on its own,
+    -- replaced it with "pressing spectate is a free full heal" — /team s at
+    -- 20 HP, /team r two seconds later, back at the pool with a shield the
+    -- opponent no longer has. The flag is what closes it.
+    relevel_pending = true
+    log("LEAVE   cn=%d — team change, relevel armed", victim)
     return
   end
 
@@ -883,6 +925,12 @@ function et_Obituary(victim, killer, mod)
     -- cannot read. A disarmed arena was indistinguishable from an armed one.
     if was_armed_pair then
       was_armed_pair = false
+      -- ⛔ The roster leaving 2 is the third way a pair stops being levelled,
+      -- and it is the quietest: a spectator taps a team button, the module
+      -- pauses, the winner is no longer reset, and the loser respawns at the
+      -- ENGINE's health with no pool and no ammo. Nothing used to put that
+      -- right when the roster came back to 2.
+      relevel_pending = true
       et.trap_SendServerCommand(-1, string.format(
         'chat "^7arena: ^3paused ^7— %d players on the teams, needs exactly 2"', #players))
     end
@@ -890,31 +938,39 @@ function et_Obituary(victim, killer, mod)
   end
   was_armed_pair = true
 
-  -- ⛔⛔ THE MOD, NOT THE IDENTITY. `victim == killer` is not "typed /kill" —
-  -- it is also every self-frag: your own grenade, your own panzerfaust, your
-  -- own dynamite all arrive with attacker == self and a WEAPON mod. Those are
-  -- legitimate ways to lose a duel and the opponent has earned the point;
-  -- testing identity alone swallowed all of them as "fair reset, no point".
-  -- (Found by a second model reading the design, not by any test here.)
+  -- ⛔⛔ EVERY death scores for the other player. /kill included.
   --
-  -- ⭐ The measured values matter more than the header enum: a live /kill
-  -- logged `mod=33` and a live /team s logged `mod=59`, while a naive read of
-  -- bg_public.h counts MOD_SUICIDE at 26. Cmd_Kill_f settles it —
-  -- `player_die(ent, ent, ent, ..., MOD_SUICIDE)` — so 33 IS MOD_SUICIDE and
-  -- the enum count was wrong. The comparison stays symbolic either way.
+  -- I got this wrong twice today, in opposite directions, and the header had
+  -- it right from the start: "a point goes to the OPPONENT of whoever died —
+  -- including when a player kills themselves, which stops '/kill to deny the
+  -- point' from being a tactic."
   --
-  -- Falling is not caught here at all and should not be: MOD_FALLING arrives
-  -- with killer = ENTITYNUM_WORLD, so it scores, which is right.
-  local self_inflicted = (victim == killer and mod == et.MOD_SUICIDE)
-
+  -- First I exempted `victim == killer`, reasoning that paying a point for
+  -- /kill would make "kill yourself when you are behind" a tactic. That is
+  -- backwards. If /kill is FREE it is a tactic: at 3 HP against a full-health
+  -- opponent you type /kill, nobody scores, both reset, and you have escaped a
+  -- duel you had already lost — every time, forever, while the scoreboard
+  -- reads 0-0. If /kill COSTS you the point you were about to lose anyway,
+  -- there is nothing to gain by typing it.
+  --
+  -- Then a second model pointed out the exemption also swallowed self-frags —
+  -- your own grenade, panzerfaust or dynamite arrive with attacker == self and
+  -- a weapon mod — so I narrowed it to MOD_SUICIDE. Correct as far as it went,
+  -- but it left the /kill escape intact. The exemption is gone entirely.
+  --
+  -- ⚠️ The cost: a WINNER who types /kill out of the old manual habit now hands
+  -- his opponent a point. That is visible, self-inflicted, and it stops being a
+  -- habit after one duel — the module does the reset for him now. A loser's
+  -- escape is deliberate and repeatable, which is the worse of the two.
+  --
+  -- Falling stays scored too, by a different route: MOD_FALLING arrives with
+  -- killer = ENTITYNUM_WORLD, so it never looked self-inflicted in the first
+  -- place. Two equivalent mistakes — died to the map, died to yourself — now
+  -- score the same, which they did not before.
   ensure_pair(players)
-  if self_inflicted then
-    log("SELFK   cn=%d mod=%d — reset yes, point no", victim, mod)
-  else
-    for _, cn in ipairs(players) do
-      if cn ~= victim then
-        score[cn] = (score[cn] or 0) + 1
-      end
+  for _, cn in ipairs(players) do
+    if cn ~= victim then
+      score[cn] = (score[cn] or 0) + 1
     end
   end
 
@@ -1198,6 +1254,7 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   if #roster ~= 2 then
     if was_armed_pair then
       was_armed_pair = false
+      relevel_pending = true
       et.trap_SendServerCommand(-1, string.format(
         'chat "^7arena: ^3paused ^7— %d players on the teams, needs exactly 2"', #roster))
     end
@@ -1258,6 +1315,23 @@ function et_ClientSpawn(clientNum, revived, teamChange, restoreHealth)
   for _, other in ipairs(roster) do
     if other ~= clientNum then
       local theirs = spawn_shield[other]
+      -- ⛔⛔ A gap WIDER than the window is the dangerous case, not the safe
+      -- one. The loser does not gib — LETHAL_DAMAGE gibs only the winner — so
+      -- he is never forced into limbo, and with g_forcerespawn -1 the timer
+      -- route is gone too. He can lie on the floor as long as he likes, watch
+      -- where the winner spawned, and then jump: a fresh 3-second shield
+      -- against an opponent whose shield expired seconds ago. Silently
+      -- skipping the levelling handed that to him.
+      if theirs and theirs > 0 and shield > 0 and math.abs(shield - theirs) > 1000
+         and is_alive(other) then
+        -- ⛔ Act NOW, not on a flag. The relevel flag is consumed earlier in
+        -- this same hook, so setting it here would defer the fix to the NEXT
+        -- spawn — which is the spawn after the one that already handed out the
+        -- unmatched shield. (Written as a flag first; the test caught it.)
+        log("REGAP   cn=%d cn=%d shields %d apart — sending the other one back",
+            clientNum, other, math.abs(shield - theirs))
+        force_reset(other, et.MOD_SUICIDE, "shield-gap")
+      end
       if theirs and theirs > 0 and shield > 0 and math.abs(shield - theirs) <= 1000 then
         local level_to = math.min(shield, theirs)
         if level_to ~= shield then
@@ -1378,7 +1452,15 @@ function et_ClientCommand(clientNum, command)
       'print "^7arena: slow down — one change every 3 seconds\n"')
     return 1
   end
-  last_cmd[clientNum] = now
+
+  -- ⛔ The charge happens where the STATE CHANGES, not here. Writing it at this
+  -- point billed the player for a read-only `/arenahp` with no argument — the
+  -- usage line — and then refused the command he actually wanted 100 ms later.
+  -- Two people agreeing on a pool had to discover that asking costs three
+  -- seconds. Reproduced by a review agent.
+  local function charge()
+    last_cmd[clientNum] = now
+  end
 
   -- The pool, without touching lifesteal. 250 / 500 / 1000 are the measured
   -- points; 0 hands health back to the engine. It lands at the next spawn for
@@ -1391,6 +1473,7 @@ function et_ClientCommand(clientNum, command)
         'print "^7arena: usage: /arenahp 250|500|1000|0 (now: ' .. configured_pool() .. ')\n"')
       return 1
     end
+    charge()
     set_pool(want, clientNum)
     return 1
   end
@@ -1399,13 +1482,33 @@ function et_ClientCommand(clientNum, command)
   end
   -- /vampiric 250 turns lifesteal on AND sets the pool in one command, which
   -- is how it will actually be typed between two people agreeing on a duel.
+  -- ⛔ `/vampiric 0` used to turn lifesteal ON. `tonumber("0")` is not nil, so
+  -- it took the "on, with a pool" branch, and the only line the player saw was
+  -- about the POOL — the vampiric announcement lives past that branch's return.
+  -- Worse, configured_pool maps a 0 pool under vamp_active to the 500 fallback,
+  -- so the most natural spelling of "turn it off" enabled it AND handed out
+  -- 500 HP, silently. 0 now falls through to the toggle below, which announces.
   local pool_arg = tonumber(et.trap_Argv(1))
+  -- ⛔ 0 means OFF, explicitly — not "toggle". Falling through to the toggle
+  -- was my first fix and it still turned lifesteal ON when it happened to be
+  -- off, which is the same defect with a different path.
+  if pool_arg == 0 then
+    charge()
+    vamp_pending = false
+    local off = "^7vampiric ^1OFF ^7— from the next spawn"
+    et.trap_SendServerCommand(-1, 'cp "' .. off .. '\n"')
+    et.trap_SendServerCommand(-1, 'chat "^7arena: ' .. off .. '"')
+    log("VAMPREQ cn=%d want=false (explicit 0)", clientNum)
+    return 1
+  end
   if pool_arg ~= nil then
+    charge()
     vamp_pending = true
     set_pool(pool_arg, clientNum)
     log("VAMPREQ cn=%d want=true pool=%s", clientNum, tostring(pool_arg))
     return 1
   end
+  charge()
   local want = not (vamp_pending == nil and vamp_active or vamp_pending)
   vamp_pending = want
   local state = want and "^2ON" or "^1OFF"

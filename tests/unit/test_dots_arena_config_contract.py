@@ -73,11 +73,15 @@ def runtime_written_cvars(lua_source: str) -> set[str]:
 
 
 def locked_cvars(config_source: str) -> set[str]:
-    return set(re.findall(r'^\s*setl\s+([A-Za-z0-9_]+)', _strip_comments(config_source), re.M))
+    # ⛔ `setl "arena_hp" "0"` is legal: G_ParseSettings reads the name with
+    # trap_PC_ReadToken, which strips quotes — and the config's own header
+    # tells the reader to quote things. Without the optional quotes here the
+    # engine would lock a cvar while this file's headline test reported clean.
+    return set(re.findall(r'^\s*setl\s+"?([A-Za-z0-9_]+)"?', _strip_comments(config_source), re.M))
 
 
 def plain_set_cvars(config_source: str) -> set[str]:
-    return set(re.findall(r'^\s*set\s+([A-Za-z0-9_]+)', _strip_comments(config_source), re.M))
+    return set(re.findall(r'^\s*set\s+"?([A-Za-z0-9_]+)"?', _strip_comments(config_source), re.M))
 
 
 def test_the_extractor_actually_finds_the_writes() -> None:
@@ -166,6 +170,10 @@ def test_config_uses_only_tokens_the_engine_parses() -> None:
         expected = INNER_TOKENS if depth else OUTER_TOKENS
         assert head in expected, f"unknown token {head!r} at depth {depth}: {line!r}"
     assert depth == 0, "unbalanced braces in the config"
+    # ⛔ Anti-vacuity: on an empty or all-comment file the loop body never runs
+    # and `depth == 0` passes. Every other check in this file has such a
+    # partner; this one did not.
+    assert "map dots_arena" in text, "the config parsed as empty — nothing was checked"
 
 
 @pytest.mark.parametrize(
@@ -245,13 +253,20 @@ def test_one_version_for_the_whole_bundle() -> None:
     """
     lua = re.search(r'^local VERSION\s*=\s*"([^"]+)"', _lua_source(), re.M)
     cfg = re.search(r'^version\s+"([^"]+)"', CONFIG.read_text(encoding="utf-8"), re.M)
-    doc = re.search(r"\*\*Version\s+([0-9][^*\s]*)\*\*", README.read_text(encoding="utf-8"))
-    assert lua and cfg and doc, (
-        f"a version string is missing: lua={bool(lua)} config={bool(cfg)} readme={bool(doc)}"
+    # ⛔ findall, not search. `re.search` keeps only the FIRST match, and the
+    # README carries three language sections — the exact defect the sibling
+    # test below documents and guards against, reintroduced here in mirror
+    # image. Today there is one Version line, so it was vacuously fine; the
+    # moment a translation grows its own, drift would have been invisible.
+    docs = set(re.findall(r"\*\*Version\s+([0-9][^*\s]*)\*\*",
+                          README.read_text(encoding="utf-8")))
+    assert lua and cfg and docs, (
+        f"a version string is missing: lua={bool(lua)} config={bool(cfg)} readme={bool(docs)}"
     )
-    assert lua.group(1) == cfg.group(1) == doc.group(1), (
+    assert len(docs) == 1, f"the README states more than one version: {sorted(docs)}"
+    assert {lua.group(1)} == {cfg.group(1)} == docs, (
         f"bundle versions disagree: lua={lua.group(1)} "
-        f"config={cfg.group(1)} readme={doc.group(1)}"
+        f"config={cfg.group(1)} readme={sorted(docs)}"
     )
 
 
