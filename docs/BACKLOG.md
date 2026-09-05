@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-05, večer) SKOK na moments r. 2 (ownerjeva izbira po
+  #914, ki je mergan): veja `feat/moments-mover-times`; Lua v6.14 + parser +
+  migracija 082 (na devu aplicirana kot `etlegacy_user` — ⚠️ `apply_migrations.py`
+  iz `website/.env` pobere `website_app` in pade z »must be owner«; obvod
+  `POSTGRES_USER=… POSTGRES_PASSWORD=…`) + detektor. Lokalni ET: `local_et.sh
+  deploy` pade na scp (ključ ni v et-jevem authorized_keys) → kopija prek
+  `sudo -n -u et tmux -S …-285.sock run-shell "cp /tmp/x.lua …"` (sestra),
+  nato `map` load in `lua_status` SHA1 = `sha1sum` datoteke. Pred-obstoječi
+  ruff DTZ001/DTZ007 v `parser.py:713/1579` nista moja (enako na mainu).
 - (Fable 5.1, 2026-09-05, popoldne) Doc 22 rezina 2 zgrajena (camp-profile +
   peta plošča vlog), PR odprt z veje `feat/bot-twins-camp-profile`; #913 mergan.
   Odprto: e2e `session 154 · players tab renders` je enkrat padel v vzporednem
