@@ -5,6 +5,7 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING
 
@@ -159,6 +160,34 @@ def _moments_cache_evict_oldest_computed() -> None:
         return
     oldest = min(_MOMENTS_CACHE, key=lambda k: _MOMENTS_CACHE[k][1])
     _MOMENTS_CACHE.pop(oldest, None)
+
+
+def _destroyed_by(raw) -> list[dict]:
+    """`proximity_vehicle_progress.destroyed_events` (JSONB, migration 082)
+    → `[{name, team, time_s, attacker_guid}]`, names colour-stripped, an
+    empty attacker kept as "" (the poll saw the death, nobody is credited).
+    None / unreadable → [] — the recording predates v6.14."""
+    if raw is None:
+        return []
+    events = raw
+    if isinstance(raw, str):
+        try:
+            events = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(events, list):
+        return []
+    out = []
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        out.append({
+            "name": strip_et_colors(str(ev.get("attacker_name") or "")),
+            "team": str(ev.get("attacker_team") or ""),
+            "attacker_guid": str(ev.get("attacker_guid") or ""),
+            "time_s": round(int(ev.get("time") or 0) / 1000, 1),
+        })
+    return out
 
 
 class _MomentsMixin:
@@ -625,8 +654,11 @@ class _MomentsMixin:
 
         time_ms: the tables know the round's end but not when the push
         happened, so the moment is placed at the round's end and says so in
-        detail.timestamp_source ("round_end"; "unknown" when the end is
-        missing). Slice 2 (Lua) will add first/last move times."""
+        detail.timestamp_source: "first_move" when the v6.14 tracker recorded
+        when the mover first moved (gameTime() ms since round start, stored
+        unconverted — migration 082), else "round_end" (older recordings),
+        else "unknown". detail.destroyed_by lists who took the mover down
+        when the recording carries it (v6.14 VEHICLE_DESTROYED)."""
         dates = [date.fromisoformat(d) for d in scope.dates]
         starts, maps, rnums = scope.round_key_arrays()
         rows = await self.db.fetch_all(f"""
@@ -635,7 +667,8 @@ class _MomentsMixin:
                    vp.destroyed_count,
                    ec.player_guid, ec.player_name, ec.player_team,
                    ec.credit_distance, ec.total_escort_distance,
-                   ec.mounted_time_ms, ec.proximity_time_ms, ec.samples
+                   ec.mounted_time_ms, ec.proximity_time_ms, ec.samples,
+                   vp.first_move_time, vp.last_move_time, vp.destroyed_events
             FROM proximity_vehicle_progress vp
             JOIN proximity_escort_credit ec
               ON ec.session_date = vp.session_date
@@ -670,7 +703,14 @@ class _MomentsMixin:
             name = strip_et_colors(top[10] or _safe_short(top[9]))
             round_start = int(top[2] or 0)
             round_end = int(top[3] or 0)
-            if round_start > 0 and round_end > round_start:
+            first_move = int(top[17] or 0) if len(top) > 17 else 0
+            last_move = int(top[18] or 0) if len(top) > 18 else 0
+            if first_move > 0:
+                # Already ms since round start (the tracker's gameTime()),
+                # the same base every other moment's time_ms uses.
+                time_ms = first_move
+                timestamp_source = "first_move"
+            elif round_start > 0 and round_end > round_start:
                 time_ms = (round_end - round_start) * 1000
                 timestamp_source = "round_end"
             else:
@@ -678,8 +718,12 @@ class _MomentsMixin:
                 timestamp_source = "unknown"
             mounted_ms = int(top[14] or 0)
             destroyed = int(top[8] or 0)
+            destroyed_by = _destroyed_by(top[19] if len(top) > 19 else None)
             mounted_txt = f", {mounted_ms / 1000:.0f}s mounted" if mounted_ms > 0 else ""
             destroyed_txt = f"; the {vehicle} was destroyed {destroyed}×" if destroyed > 0 else ""
+            named = [d["name"] for d in destroyed_by if d["name"]]
+            if destroyed > 0 and named:
+                destroyed_txt += f" (by {', '.join(named)})"
             moments.append({
                 "type": "escort_mover",
                 "round_number": top[1],
@@ -710,6 +754,8 @@ class _MomentsMixin:
                         for e in escorts[:3]
                     ],
                     "timestamp_source": timestamp_source,
+                    "move_window_s": round((last_move - first_move) / 1000, 1) if first_move > 0 and last_move >= first_move else None,
+                    "destroyed_by": destroyed_by,
                 },
             })
         return moments

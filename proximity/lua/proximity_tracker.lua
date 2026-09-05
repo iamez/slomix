@@ -58,7 +58,7 @@ local modname = "proximity_tracker"
 -- the capture is off and when it is on with nothing to report. Consumers were
 -- resolving that ambiguity by assuming, which turns missing telemetry into a
 -- claim about the match.
-local version = "6.13"
+local version = "6.14"
 
 -- BEGIN frame_health v6.13 (identical in every module; tests/unit/test_lua_frame_health_block_identical.py pins it)
 -- Every Lua module runs in its own VM, and the engine calls their
@@ -2673,6 +2673,12 @@ local function scanVehicleEntities()
                     max_health = health,
                     last_health = health,
                     destroyed_count = 0,
+                    -- v6.14 (docs/design/20 slice 2): WHEN the mover moved,
+                    -- and who took it down. gameTime() ms since round start,
+                    -- 0 = never moved (the parser reads 0 as "no time").
+                    first_move_time = 0,
+                    last_move_time = 0,
+                    destroyed = {},
                 }
                 -- %.0f, not %d: ox/oy/oz/health come from tonumber() and are
                 -- floats. Lua 5.4 %d THROWS on a non-integral float (LuaJIT
@@ -2725,13 +2731,25 @@ sampleVehiclePositions = function()
 
         if is_moving then
             veh.total_distance = veh.total_distance + delta
+            -- v6.14: the escort moment's timestamp. `now` is gameTime()
+            -- (ms since round start, frozen during pause) — the same base
+            -- as carrier kill_time, so the parser stores it unconverted.
+            if veh.first_move_time == 0 then veh.first_move_time = now end
+            veh.last_move_time = now
         end
         veh.last_pos = current_pos
 
         -- Track health changes
         local health = tonumber(safe_gentity_get(entNum, "health")) or 0
         if health <= 0 and veh.last_health > 0 then
+            -- The 500 ms poll saw it die without a hit on it (script kill,
+            -- or a hit below min_damage). Record it without an attacker so
+            -- destroyed_count and the VEHICLE_DESTROYED rows stay one set.
             veh.destroyed_count = veh.destroyed_count + 1
+            veh.destroyed[#veh.destroyed + 1] = {
+                time = now, attacker_guid = "", attacker_name = "", attacker_team = "",
+                means_of_death = 0, health_before = veh.last_health,
+            }
         end
         if health > veh.max_health then veh.max_health = health end
         veh.last_health = health
@@ -2788,6 +2806,45 @@ sampleVehiclePositions = function()
             end
         end
     end
+end
+
+-- v6.14: vehicle damage attribution (docs/design/20 slice 2). The engine's
+-- Lua damage hook fires for EVERY damaged entity (g_combat.c:1857 sits at
+-- the top of G_Damage, outside the targ->client branches), so a script_mover
+-- reaches et_Damage — where the first line used to reject it as "not a
+-- client". This branch runs BEFORE that line. By the time the hook runs the
+-- engine has already subtracted the damage (same ordering as G_LogRegionHit,
+-- see the headshot note in et_Damage), so "dead now" is read from the
+-- entity and "health before" comes from the 500 ms poll's cache.
+-- Cost is accounted per frame as the "vehdmg" section (fh_section only
+-- brackets et_RunFrame, so the hook accumulates and the frame reports).
+local vehdmg = { ms = 0 }
+
+local function recordVehicleDamage(target, attacker, damage, meansOfDeath)
+    local veh = tracker.vehicles.entities[target]
+    if not veh then return end
+    local t0 = fh_now()
+    local health_now = tonumber(safe_gentity_get(target, "health")) or 0
+    if health_now <= 0 and veh.last_health > 0 then
+        local guid, name, team = "", "", ""
+        if isValidClient(attacker) and attacker ~= 1022 and attacker ~= 1023 then
+            guid = getPlayerGUID(attacker) or ""
+            name = getPlayerName(attacker) or ""
+            team = getPlayerTeam(attacker) or ""
+        end
+        veh.destroyed_count = veh.destroyed_count + 1
+        veh.destroyed[#veh.destroyed + 1] = {
+            time = gameTime(),
+            attacker_guid = guid, attacker_name = name, attacker_team = team,
+            means_of_death = tonumber(meansOfDeath) or 0,
+            health_before = veh.last_health,
+        }
+        -- The poll must not count this death a second time.
+        veh.last_health = 0
+    elseif health_now > 0 then
+        veh.last_health = health_now
+    end
+    vehdmg.ms = vehdmg.ms + (fh_now() - t0)
 end
 
 -- ===== v6.01 OBJECTIVE RUN INTELLIGENCE =====
@@ -3777,7 +3834,8 @@ local function outputDataInner()
         if #vp_items > 0 then
             local vp_header = "\n# VEHICLE_PROGRESS\n" ..
                 "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
-                "total_distance;max_health;final_health;destroyed_count\n"
+                "total_distance;max_health;final_health;destroyed_count;" ..
+                "first_move_time;last_move_time\n"
             et.trap_FS_Write(vp_header, string.len(vp_header), fd)
             -- Coordinates and health come from tonumber() and are floats;
             -- Lua 5.4 %d throws on a non-integral float. This is a FILE
@@ -3796,13 +3854,42 @@ local function outputDataInner()
                 return math.type(n) == "integer" and n or 0
             end
             for _, veh in ipairs(vp_items) do
-                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d\n",
+                -- v6.14: two trailing fields (the parser keeps its 12-field
+                -- floor and reads them only when present). gameTime() values
+                -- are integers, but they pass through trunc like the rest.
+                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d;%d;%d\n",
                     veh.name, veh.type,
                     trunc(veh.start_pos.x), trunc(veh.start_pos.y), trunc(veh.start_pos.z),
                     trunc(veh.last_pos.x), trunc(veh.last_pos.y), trunc(veh.last_pos.z),
                     veh.total_distance, trunc(veh.max_health), trunc(veh.last_health),
-                    veh.destroyed_count)
+                    veh.destroyed_count, trunc(veh.first_move_time), trunc(veh.last_move_time))
                 et.trap_FS_Write(line, string.len(line), fd)
+            end
+
+            -- ===== VEHICLE DESTROYED (v6.14, docs/design/20 slice 2) =====
+            -- Inside the progress block on purpose: a destroyed vehicle is
+            -- always a progress row (destroyed_count > 0), and trunc() lives
+            -- here. One row per destruction of a tracked mover: when, by whom
+            -- (empty attacker when the 500 ms poll saw it die without a hit),
+            -- how.
+            local vd_items = {}
+            for _, veh in pairs(tracker.vehicles.entities) do
+                for _, d in ipairs(veh.destroyed) do
+                    vd_items[#vd_items + 1] = { name = veh.name, d = d }
+                end
+            end
+            if #vd_items > 0 then
+                local vd_header = "\n# VEHICLE_DESTROYED\n" ..
+                    "# vehicle_name;time;attacker_guid;attacker_name;attacker_team;" ..
+                    "means_of_death;health_before\n"
+                et.trap_FS_Write(vd_header, string.len(vd_header), fd)
+                for _, it in ipairs(vd_items) do
+                    local d = it.d
+                    local line = string.format("%s;%d;%s;%s;%s;%d;%d\n",
+                        it.name, trunc(d.time), d.attacker_guid, d.attacker_name, d.attacker_team,
+                        trunc(d.means_of_death), trunc(d.health_before))
+                    et.trap_FS_Write(line, string.len(line), fd)
+                end
             end
         end
     end
@@ -4723,6 +4810,14 @@ function et_RunFrame(levelTime)
         fh_section("output", fh_out0)
     end
 
+    -- v6.14: the vehicle-damage hook's cost this frame, surfaced through
+    -- the same top-section mechanism (fh_section takes a start time, so
+    -- hand it "now minus what the hook spent").
+    if vehdmg.ms > 0 then
+        fh_section("vehdmg", fh_now() - vehdmg.ms)
+        vehdmg.ms = 0
+    end
+
     -- The frame body completed: replace the -1 sentinel with the real cost.
     -- This is the LAST statement on purpose -- everything above it, the
     -- round-end write burst included, is inside the measurement.
@@ -4732,6 +4827,12 @@ end
 function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
     if not config.enabled then return end
     if not target or not attacker then return end
+    -- v6.14: a tracked vehicle is not a client; attribute the hit and stop.
+    -- pcall: an unguarded throw here would fire on every hit of the round.
+    if isFeatureEnabled("vehicle_tracking") and tracker.vehicles.entities[target] then
+        pcall(recordVehicleDamage, target, attacker, damage, meansOfDeath)
+        return
+    end
     if not isValidClient(target) or not isValidClient(attacker) then return end
     if target == attacker then return end
     if attacker == 1022 or attacker == 1023 then return end

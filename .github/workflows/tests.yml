@@ -261,6 +261,14 @@ jobs:
         # on cheap frames, name itself on a slow one, hold the 1 s throttle
         # and re-raise a body error after measuring it.
         run: lua5.4 tests/lua/frame_health_modules_harness.lua
+      - name: Vehicle tracking harness (v6.14 move times + damage attribution)
+        # docs/design/20 slice 2: a stubbed script_mover stands, moves, stands,
+        # takes the killing hit from client 3. Pins first/last_move_time in
+        # gameTime, one destruction credited to the attacker, no double count
+        # by the poll, the 14-field VEHICLE_PROGRESS row and the new
+        # VEHICLE_DESTROYED section. Three mutations watched failing
+        # (branch removed, last_health reset removed, first_move overwritten).
+        run: lua5.4 tests/lua/vehicle_tracking_harness.lua
       - name: Lua 5.4 semantics smoke (the classes that actually bit us)
         # Parsing cannot see a runtime %d-on-float; this pins the SEMANTICS the
         # fixes rely on, in the real interpreter: %d throws on non-integral

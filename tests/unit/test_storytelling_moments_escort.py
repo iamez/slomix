@@ -5,6 +5,7 @@ SQL must carry (the round-key alias, the credit > 0 guard)."""
 from __future__ import annotations
 
 import asyncio
+import json
 
 import pytest
 
@@ -27,9 +28,13 @@ END = START + 612
 
 def row(*, rn=1, start=START, end=END, map_name="supply", vehicle="truck", vtype="script_mover",
         total=12744.3, destroyed=0, guid="9F2B3930797D7D142795B1B6EE194722", name="^6[^2T^6W^2K^6]^2I^6mb3ci^2L",
-        team="allies", credit=2799.5, total_escort=5095.1, mounted=0, prox=36000, samples=72):
+        team="allies", credit=2799.5, total_escort=5095.1, mounted=0, prox=36000, samples=72,
+        first_move=None, last_move=None, destroyed_events=None):
+    # Columns 17-19 (v6.14 / migration 082) are appended so the first 17
+    # keep their indices; None is what every pre-v6.14 row carries.
     return ("2026-08-27", rn, start, end, map_name, vehicle, vtype, total, destroyed,
-            guid, name, team, credit, total_escort, mounted, prox, samples)
+            guid, name, team, credit, total_escort, mounted, prox, samples,
+            first_move, last_move, destroyed_events)
 
 
 class _StubDB:
@@ -148,3 +153,40 @@ def test_the_detector_is_registered_and_ranked():
 def test_below_the_floor_is_not_a_moment_control(share):
     _, out = _run([row(total=10000.0, credit=share * 10000.0)]) if share > 0 else _run([row(total=10000.0, credit=0.0)])
     assert out == []
+
+
+def test_a_v614_recording_places_the_moment_at_the_first_move_and_names_who_destroyed_the_mover():
+    """Migration 082: first_move_time is the tracker's gameTime() (ms since
+    round start) and needs NO conversion; destroyed_events is the JSONB list
+    the v6.14 VEHICLE_DESTROYED section became."""
+    events = json.dumps([
+        {"time": 118900, "attacker_guid": "GUID3ABCDEF", "attacker_name": "^1kanii", "attacker_team": "axis",
+         "means_of_death": 5, "health_before": 800},
+        {"time": 300000, "attacker_guid": "", "attacker_name": "", "attacker_team": "", "means_of_death": 0,
+         "health_before": 350},
+    ])
+    _svc, moments = _run([row(destroyed=2, credit=4000.0, first_move=61000, last_move=118500, destroyed_events=events)])
+    assert len(moments) == 1
+    m = moments[0]
+    assert m["time_ms"] == 61000 and m["detail"]["timestamp_source"] == "first_move"
+    assert m["detail"]["move_window_s"] == 57.5
+    assert m["detail"]["destroyed_by"] == [
+        {"name": "kanii", "team": "axis", "attacker_guid": "GUID3ABCDEF", "time_s": 118.9},
+        {"name": "", "team": "", "attacker_guid": "", "time_s": 300.0},
+    ]
+    assert "destroyed 2× (by kanii)" in m["narrative"]
+
+
+def test_a_pre_v614_recording_still_reads_round_end_and_no_destroyer():
+    _svc, moments = _run([row(destroyed=1, credit=4000.0)])
+    m = moments[0]
+    assert m["detail"]["timestamp_source"] == "round_end" and m["time_ms"] == (END - START) * 1000
+    assert m["detail"]["destroyed_by"] == [] and m["detail"]["move_window_s"] is None
+    assert "(by" not in m["narrative"]
+
+
+def test_a_zero_first_move_is_no_time_not_t0():
+    # The Lua writes 0 for "never moved"; the parser turns it into NULL, but
+    # a 0 that slipped through must not pin the moment to the round's start.
+    _svc, moments = _run([row(credit=4000.0, first_move=0, last_move=0)])
+    assert moments[0]["detail"]["timestamp_source"] == "round_end"
