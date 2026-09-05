@@ -173,6 +173,7 @@ import type {
   WeaponsByPlayer,
   WeaponsHallOfFame,
   Diagnostics,
+  Wrapped,
 } from './types';
 
 /**
@@ -255,6 +256,21 @@ export function usePlayerProfile(playerId: string) {
         // for panels nobody sees.
         query: { sections: PROFILE_SECTIONS },
       }) as Promise<PlayerProfile>,
+  });
+}
+
+/** Phase 7: the season card's facts. `season` is 'current' or YYYY-QN; the
+ *  backend answers 400 for anything else, which the page shows as unavailable. */
+export function useWrapped(playerId: string, season: string) {
+  return useQuery({
+    queryKey: ['wrapped', playerId, season],
+    enabled: playerId.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      apiGet('/api/players/{identifier}/wrapped', {
+        pathParams: { identifier: playerId },
+        query: { season },
+      }) as Promise<Wrapped>,
   });
 }
 

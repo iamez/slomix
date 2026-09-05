@@ -50,7 +50,13 @@ deploy NI naloga.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
-4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
+4. **Faza 7**: r. 1 (6. 9., v PR-ju) = `compare` (`/compare/:a?/:b?`, šest
+   legacy vrstic iz profilnega endpointa, barva = boljša stran) in `wrapped`
+   (`/profile/:id/wrapped`, canvas 1080×1920 v žetonih — brez gradienta,
+   radius 0, pravilo pripeto v testu — + dejstva kot besedilo, copy/download);
+   obe kot RUTI (dizajn sistem nima modalov), povezavi v glavi profila;
+   `PickPlayer` seljen iz Rivalries v `components/`. Ostane: Clips (O1),
+   upokojitev `/rounds` (že preusmerjen), končni paritetni prelet.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
