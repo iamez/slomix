@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-05, popoldne) Doc 22 rezina 2 zgrajena (camp-profile +
+  peta plošča vlog), PR odprt z veje `feat/bot-twins-camp-profile`; #913 mergan.
+  Odprto: e2e `session 154 · players tab renders` je enkrat padel v vzporednem
+  teku (locator ni bil viden v 10 s) in prešel sam ter v ponovitvi — flaky pod
+  obremenitvijo, ni vezan na to spremembo; `RoleBoard` kaže top 5 → igralci s
+  `hold_pct: null` se filtrirajo, a plošča ne pove, koliko jih je izpustila
+  (majhna vrzel besednjaka; ob r. 3). Rate limit 5/min na camp-profile enak
+  lurkerju — šest zaporednih poizvedb iz enega IP-ja da 429 (izmerjeno).
 - (Fable 5.1, 2026-09-05) Doc 22 rezina 1 IZMERJENA (7 map × mreži 512/256 +
   identifikacija; 13 min + 5 min + 1 min tekov): osebnost poti obstaja
   (identifikacija 81–91 % proti 10 %), je časovna utež in ne kraj, prag 25

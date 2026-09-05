@@ -665,6 +665,165 @@
     "title": "Body_upload_greatshot_api_greatshot_upload_post",
     "type": "object"
    },
+   "CampProfileCoverage": {
+    "additionalProperties": false,
+    "properties": {
+     "tracks_fetched": {
+      "title": "Tracks Fetched",
+      "type": "integer"
+     },
+     "tracks_skipped": {
+      "title": "Tracks Skipped",
+      "type": "integer"
+     },
+     "tracks_used": {
+      "title": "Tracks Used",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "tracks_fetched",
+     "tracks_used",
+     "tracks_skipped"
+    ],
+    "title": "CampProfileCoverage",
+    "type": "object"
+   },
+   "CampProfilePlayer": {
+    "additionalProperties": false,
+    "description": "One player's camp profile (docs/design/22 slice 2).\n\n`hold_pct` / `still_pct` are None when the player was alive for less than\n`thresholds.min_alive_s` — too little telemetry to call a share, and an\nabsence is not a zero. `top_cells` are `[cell_x, cell_y, hold_seconds]`\non the 512 u grid, spawn wait excluded.",
+    "properties": {
+     "alive_s": {
+      "title": "Alive S",
+      "type": "number"
+     },
+     "coverage": {
+      "title": "Coverage",
+      "type": "string"
+     },
+     "guid_short": {
+      "title": "Guid Short",
+      "type": "string"
+     },
+     "hold_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Hold Pct"
+     },
+     "hold_time_s": {
+      "title": "Hold Time S",
+      "type": "number"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "still_pct": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Still Pct"
+     },
+     "still_time_s": {
+      "title": "Still Time S",
+      "type": "number"
+     },
+     "top_cells": {
+      "items": {
+       "items": {
+        "type": "number"
+       },
+       "type": "array"
+      },
+      "title": "Top Cells",
+      "type": "array"
+     },
+     "tracks": {
+      "title": "Tracks",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "guid_short",
+     "name",
+     "hold_pct",
+     "still_pct",
+     "hold_time_s",
+     "still_time_s",
+     "alive_s",
+     "tracks",
+     "coverage",
+     "top_cells"
+    ],
+    "title": "CampProfilePlayer",
+    "type": "object"
+   },
+   "CampProfileResponse": {
+    "additionalProperties": false,
+    "properties": {
+     "coverage": {
+      "$ref": "#/components/schemas/CampProfileCoverage"
+     },
+     "description": {
+      "title": "Description",
+      "type": "string"
+     },
+     "metric": {
+      "title": "Metric",
+      "type": "string"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/CampProfilePlayer"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "scope": {
+      "additionalProperties": true,
+      "title": "Scope",
+      "type": "object"
+     },
+     "session_date": {
+      "title": "Session Date",
+      "type": "string"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "thresholds": {
+      "additionalProperties": {
+       "type": "number"
+      },
+      "title": "Thresholds",
+      "type": "object"
+     }
+    },
+    "required": [
+     "status",
+     "session_date",
+     "metric",
+     "description",
+     "thresholds",
+     "coverage",
+     "players",
+     "scope"
+    ],
+    "title": "CampProfileResponse",
+    "type": "object"
+   },
    "ClientErrorReport": {
     "properties": {
      "message": {
@@ -21051,6 +21210,76 @@
      }
     },
     "summary": "Get Box Score",
+    "tags": [
+     "Storytelling"
+    ]
+   }
+  },
+  "/api/storytelling/camp-profile": {
+   "get": {
+    "description": "Camp Profile: share of alive time spent holding one spot (hold) or\nstanding still (still) — the position tracker's answer to \"who camps\",\ndistinct from the lurker profile (distance from teammates).",
+    "operationId": "get_camp_profile_api_storytelling_camp_profile_get",
+    "parameters": [
+     {
+      "description": "Session date (YYYY-MM-DD) — legacy lookup; a date spanning more than one gaming session returns 409 with candidates. Prefer gaming_session_id.",
+      "in": "query",
+      "name": "session_date",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Session date (YYYY-MM-DD) — legacy lookup; a date spanning more than one gaming session returns 409 with candidates. Prefer gaming_session_id.",
+       "title": "Session Date"
+      }
+     },
+     {
+      "description": "Canonical gaming session id (preferred over session_date).",
+      "in": "query",
+      "name": "gaming_session_id",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "integer"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Canonical gaming session id (preferred over session_date).",
+       "title": "Gaming Session Id"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/CampProfileResponse"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Camp Profile",
     "tags": [
      "Storytelling"
     ]

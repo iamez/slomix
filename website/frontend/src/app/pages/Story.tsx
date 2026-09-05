@@ -8,7 +8,7 @@ import {
   useComposite,
   useStoryBoxScore, useStoryEnabler, useStoryGravity,
   useStoryEscorts, useStoryKillImpact, useStoryKillMatrix, useStoryKisDetails, useStoryKisFormula,
-  useStoryLurker, useStoryMoments, useStoryMomentum, useStoryMomentumSession,
+  useStoryCamp, useStoryLurker, useStoryMoments, useStoryMomentum, useStoryMomentumSession,
   useStoryMovement, useStoryNarrative, useStoryPlayerNarratives, useStoryPwcFormula,
   useStorySpace, useStorySynergy, useStoryUselessDefense,
   useStoryWinContribution,
@@ -27,9 +27,10 @@ import type {
  * The legacy page (js/story.js, 2,081 lines) reads thirteen endpoints and
  * prints what each returns. The thing it never does is say where one number
  * ends and the next begins, and this page's whole reason to exist is that
- * these thirteen are NOT one measurement: the narrative is generated prose
- * over aggregates, the box score is the scoreboard, PWC is a per-round share
- * model, and gravity/space/enabler/lurker come off the 200 ms position
+ * these fourteen (the legacy thirteen plus the camp profile) are NOT one
+ * measurement: the narrative is generated prose over aggregates, the box
+ * score is the scoreboard, PWC is a per-round share model, and
+ * gravity/space/enabler/lurker/camp come off the 200 ms position
  * tracker and exist only for rounds the tracker covered. Mixing them into
  * one ranked list — which is what a single table would do — invents a
  * comparison the data cannot support.
@@ -1034,9 +1035,10 @@ function Roles({ gsid }: { gsid: number }) {
   const space = useStorySpace(gsid);
   const enabler = useStoryEnabler(gsid);
   const lurker = useStoryLurker(gsid);
-  const boards = [gravity, space, enabler, lurker];
+  const camp = useStoryCamp(gsid);
+  const boards = [gravity, space, enabler, lurker, camp];
 
-  // The four tracker boards share a fate — they read the same telemetry — so
+  // The five tracker boards share a fate — they read the same telemetry — so
   // they answer together. The fifth board does NOT: it is counted from kill
   // outcomes, and gating it on the tracker's silence would hide a measurement
   // that is perfectly available.
@@ -1050,7 +1052,7 @@ function Roles({ gsid }: { gsid: number }) {
     <Stack gap={3} parity="story.roles">
       <SectionHead
         label="roles"
-        aside={<span className="lbl">four from the 200 ms position tracker · one from kill outcomes</span>}
+        aside={<span className="lbl">five from the 200 ms position tracker · one from kill outcomes</span>}
       />
       <Cluster gap={5} align="start" style={{ flexWrap: 'wrap' }}>
         {trackerBoards}
@@ -1084,6 +1086,15 @@ function Roles({ gsid }: { gsid: number }) {
             note="share of samples with no teammate nearby"
             rows={lurker.data.players}
             value={(r) => r.solo_pct ?? 0}
+            unit="%"
+          />
+        )}
+        {camp.data && (
+          <RoleBoard
+            label="holds position"
+            note="share of alive time within 96 u of one spot for 4 s or more · players alive under a minute are left out, not ranked as 0"
+            rows={camp.data.players.filter((r) => r.hold_pct != null)}
+            value={(r) => r.hold_pct ?? 0}
             unit="%"
           />
         )}
@@ -1187,7 +1198,7 @@ export function SessionStory({ gsid }: { gsid: number }) {
   // for a comparison the page does not draw.
   const [openKis, setOpenKis] = useState<string | null>(null);
 
-  // All thirteen endpoints resolve the same scope, so they 404 together:
+  // All fourteen endpoints resolve the same scope, so they 404 together:
   // "gaming_session_id=151 has no accepted rounds". Rendering that as nine
   // separate `unavailable` lines describes nine broken panels instead of one
   // fact about the session — measured on 151, 146, 145 and 128, which is

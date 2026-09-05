@@ -80,6 +80,16 @@ test('the story tab lists the objective escorts on the full night and says why t
   await expect(page.locator('[data-parity="story.escorts"]')).toContainText('no round in this session had a vehicle');
 });
 
+test('the story tab has the fifth tracker board — who holds position — with a share per player', async ({ page }) => {
+  await page.goto('/app/session-detail/154/story', { waitUntil: 'networkidle' });
+  const roles = page.locator('[data-parity="story.roles"]');
+  await expect(roles).toBeVisible();
+  await expect(roles).toContainText('holds position');
+  await expect(roles).toContainText('five from the 200 ms position tracker');
+  // A real share, not a placeholder: the recording of 154 tops out at 18.4 %.
+  await expect(roles).toContainText(/\d+(\.\d)?%/);
+});
+
 for (const s of SESSIONS) {
   test(`session ${s.id} (${s.note}) · the expanded player row opens with its five instruments`, async ({ page }) => {
     const errors = watch(page);
