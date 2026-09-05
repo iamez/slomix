@@ -16,8 +16,14 @@ it, the path points are binned on the backend's 512-unit grid
                the same chokepoints and "his route" would be the map's route.
 
 A second, independent path to the same conclusion: the mean distance from a
-player's points to the nearest point of the other player (`nearest`), which
-does not depend on the grid at all. Both must agree in direction.
+player's points to the nearest point of the other player (`nearest`), on a
+32 u lattice (location-weighted: WHERE a player goes, not how long he stays).
+A third, the most direct: identification — does a player's half A find HIS
+OWN half B among all players' half Bs (chance 1/n)? Cross compares halves
+against halves, like self, so sample size cannot masquerade as distinctness.
+Measured 5. 9. 2026 (docs/design/22 §5): identification 81 % @512 / 91 %
+@256 against 10 % chance, control 0–20 %; nearest-point 2–6 u — everyone
+visits the same places, the personality is the TIME weighting.
 
 Control that must fail: with the sessions randomly reassigned among the
 players (`--seed`), self-split and cross must collapse together (distinct
@@ -81,19 +87,38 @@ def js_divergence(p: dict[Cell, float], q: dict[Cell, float]) -> float:
     return 0.5 * kl(p) + 0.5 * kl(q)
 
 
-def nearest_point_distance(a: list[Point], b: list[Point], step: int = 5, grid: int = GRID) -> float:
-    """Mean distance from every `step`-th point of `a` to the nearest point of
-    `b` (units). Bucketed by grid cell so it is O(n) not O(n²); the search
-    covers the 3×3 cells around the point, so a nearest point further than
-    one cell away reads as `grid` (a floor, said in the report)."""
+def nearest_point_distance(a: list[Point], b: list[Point], step: int = 5, grid: int = GRID,
+                           snap: int = 32, max_queries: int = 3000) -> float:
+    """Mean distance from a sample of `a` to the nearest point of `b` (units).
+
+    Both sides are snapped to a `snap`-unit lattice first (the answer is read
+    in hundreds of units; a 32 u lattice quantises it, it does not move it) —
+    that turns a player's 50 sessions of 1 s samples into a few hundred unique
+    points per grid cell instead of tens of thousands, which is what made the
+    first corpus run take > 30 min on te_escape2. Queries: every `step`-th
+    point of `a` as UNIQUE snapped locations (so this path is location-weighted,
+    unlike the time-weighted JS histogram), thinned evenly to at most
+    `max_queries`. Bucketed by
+    grid cell; the search covers the 3×3 cells around the point, so a nearest
+    point further than one cell away reads as `grid` (a floor, said in the
+    report)."""
     if not a or not b:
         return float("nan")
-    buckets: dict[Cell, list[tuple[float, float]]] = defaultdict(list)
+
+    def snapped(x: float, y: float) -> tuple[float, float]:
+        return (math.floor(x / snap) * snap, math.floor(y / snap) * snap)
+
+    buckets: dict[Cell, set[tuple[float, float]]] = defaultdict(set)
     for x, y, _ in b:
-        buckets[cell(x, y, grid)].append((x, y))
+        sx, sy = snapped(x, y)
+        buckets[cell(sx, sy, grid)].add((sx, sy))
+    queries = sorted({snapped(x, y) for x, y, _ in a[::step]})
+    if len(queries) > max_queries:
+        stride = len(queries) / max_queries
+        queries = [queries[int(i * stride)] for i in range(max_queries)]
     total = 0.0
     n = 0
-    for x, y, _ in a[::step]:
+    for x, y in queries:
         cx, cy = cell(x, y, grid)
         best = float("inf")
         for dx in (-1, 0, 1):
@@ -135,41 +160,56 @@ def shuffle_labels(rows: list[tuple[str, str, list[Point]]], seed: int) -> list[
     return [(players[i], s, pts) for i, (_, s, pts) in enumerate(rows)]
 
 
-def measure_map(rows: list[tuple[str, str, list[Point]]], grid: int = GRID, dwell_speed: float = 10.0) -> dict:
+def measure_map(rows: list[tuple[str, str, list[Point]]], grid: int = GRID, dwell_speed: float = 10.0,
+                with_np: bool = True) -> dict:
     """rows: (player, session_date, points) per life. Returns the per-map
     figures: self-split, cross (both by JS), nearest-point (units), dwell."""
     by_player: dict[str, dict[str, list[Point]]] = defaultdict(lambda: defaultdict(list))
     for player, session, pts in rows:
         by_player[player][session].extend(pts)
     players = sorted(by_player)
-    hist = {p: normalize(histogram([pt for s in by_player[p].values() for pt in s], grid)) for p in players}
     allpts = {p: [pt for s in by_player[p].values() for pt in s] for p in players}
 
-    self_js: dict[str, float] = {}
+    # Halves by session (odd/even dates). Self compares a player's two halves;
+    # cross compares one player's half A with the other's half B — the SAME
+    # sample size on both sides, otherwise the fuller cross histograms would
+    # be smoother than the self halves and "distinct" would carry a bias.
+    halves: dict[str, tuple[list[Point], list[Point]]] = {}
     for p in players:
         a, b = split_sessions(list(by_player[p]))
-        pa = [pt for s in a for pt in by_player[p][s]]
-        pb = [pt for s in b for pt in by_player[p][s]]
-        self_js[p] = js_divergence(normalize(histogram(pa, grid)), normalize(histogram(pb, grid)))
+        halves[p] = ([pt for s in a for pt in by_player[p][s]], [pt for s in b for pt in by_player[p][s]])
+    half_hist = {p: (normalize(histogram(halves[p][0], grid)), normalize(histogram(halves[p][1], grid))) for p in players}
+
+    self_js: dict[str, float] = {}
+    self_np: dict[str, float] = {}
+    for p in players:
+        pa, pb = halves[p]
+        self_js[p] = js_divergence(half_hist[p][0], half_hist[p][1])
+        self_np[p] = (0.5 * (nearest_point_distance(pa, pb, grid=grid) + nearest_point_distance(pb, pa, grid=grid))
+                      if with_np else float("nan"))
 
     cross_js: dict[tuple[str, str], float] = {}
     cross_np: dict[tuple[str, str], float] = {}
     for i, p in enumerate(players):
         for q in players[i + 1:]:
-            cross_js[(p, q)] = js_divergence(hist[p], hist[q])
-            cross_np[(p, q)] = 0.5 * (nearest_point_distance(allpts[p], allpts[q], grid=grid)
-                                      + nearest_point_distance(allpts[q], allpts[p], grid=grid))
-    self_np = {}
-    for p in players:
-        a, b = split_sessions(list(by_player[p]))
-        pa = [pt for s in a for pt in by_player[p][s]]
-        pb = [pt for s in b for pt in by_player[p][s]]
-        self_np[p] = 0.5 * (nearest_point_distance(pa, pb, grid=grid) + nearest_point_distance(pb, pa, grid=grid))
+            cross_js[(p, q)] = 0.5 * (js_divergence(half_hist[p][0], half_hist[q][1])
+                                      + js_divergence(half_hist[p][1], half_hist[q][0]))
+            if with_np:
+                cross_np[(p, q)] = 0.5 * (nearest_point_distance(halves[p][0], halves[q][1], grid=grid)
+                                          + nearest_point_distance(halves[q][0], halves[p][1], grid=grid))
 
     nearest_other = {}
     for p in players:
         cands = [(cross_js[(min(p, q), max(p, q))], q) for q in players if q != p]
         nearest_other[p] = min(cands) if cands else (float("nan"), None)
+
+    # Identification: does a player's half A find HIS OWN half B among all
+    # players' half Bs (nearest by JS)? Chance = 1/n. The most direct reading
+    # of "is there a personality a twin could carry".
+    identified: dict[str, bool] = {}
+    for p in players:
+        best = min(players, key=lambda q: js_divergence(half_hist[p][0], half_hist[q][1]))
+        identified[p] = best == p
 
     def med(vals):
         vals = [v for v in vals if not math.isnan(v)]
@@ -186,6 +226,8 @@ def measure_map(rows: list[tuple[str, str, list[Point]]], grid: int = GRID, dwel
         "cross_np_median": med(cross_np.values()),
         "distinct_np": med(cross_np.values()) - med(self_np.values()),
         "nearest_other": nearest_other,
+        "identified": identified,
+        "identification_rate": (sum(identified.values()) / len(players)) if players else float("nan"),
         "dwell": {p: dwell_share(allpts[p], dwell_speed) for p in players},
         "dwell_cells": {p: dwell_by_cell(allpts[p], dwell_speed, grid) for p in players},
     }
@@ -231,6 +273,7 @@ async def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dwell-speed", type=float, default=10.0)
     ap.add_argument("--seed", type=int, default=7)
     ap.add_argument("--json", type=Path, default=None)
+    ap.add_argument("--no-np", action="store_true", help="skip the (slow) nearest-point path; JS + identification only")
     args = ap.parse_args(argv)
 
     import asyncpg  # noqa: PLC0415
@@ -241,24 +284,27 @@ async def main(argv: list[str] | None = None) -> int:
     db = Shim(conn)
     report: dict[str, dict] = {}
     print(f"route distinctiveness · grid {args.grid} u · players with >= {args.min_sessions} sessions · humans only")
-    print(f"{'map':16} {'n':>3} {'self JS':>8} {'cross JS':>9} {'distinct':>9} | {'self np':>8} {'cross np':>9} {'distinct':>9} | {'control':>8}")
+    print(f"{'map':16} {'n':>3} {'self JS':>8} {'cross JS':>9} {'distinct':>9} | {'self np':>8} {'cross np':>9} {'distinct':>9} | {'control':>8} | {'ident':>5} {'ctrl':>5}")
     for m in args.maps:
         rows = await load_rows(db, m, args.min_sessions)
         if not rows:
             print(f"{m:16}   0  (no player clears the session floor)")
             continue
-        real = measure_map(rows, args.grid, args.dwell_speed)
-        ctrl = measure_map(shuffle_labels(rows, args.seed), args.grid, args.dwell_speed)
-        report[m] = {"real": real, "control_distinct_js": ctrl["distinct_js"], "control_distinct_np": ctrl["distinct_np"]}
+        real = measure_map(rows, args.grid, args.dwell_speed, with_np=not args.no_np)
+        ctrl = measure_map(shuffle_labels(rows, args.seed), args.grid, args.dwell_speed, with_np=not args.no_np)
+        report[m] = {"real": real, "control_distinct_js": ctrl["distinct_js"], "control_distinct_np": ctrl["distinct_np"],
+                     "control_identification_rate": ctrl["identification_rate"]}
         print(f"{m:16} {len(real['players']):>3} {real['self_js_median']:8.3f} {real['cross_js_median']:9.3f} {real['distinct_js']:9.3f} | "
-              f"{real['self_np_median']:8.0f} {real['cross_np_median']:9.0f} {real['distinct_np']:9.0f} | {ctrl['distinct_js']:8.3f}")
+              f"{real['self_np_median']:8.0f} {real['cross_np_median']:9.0f} {real['distinct_np']:9.0f} | {ctrl['distinct_js']:8.3f} | "
+              f"{real['identification_rate']:5.2f} {ctrl['identification_rate']:5.2f}")
     print()
     print(f"per player (dwell = share of samples with speed < {args.dwell_speed:.0f}; nearest other = smallest cross JS):")
     for m, r in report.items():
         real = r["real"]
         for p in real["players"]:
             no = real["nearest_other"][p]
-            print(f"  {m:16} {p:8} sessions={real['sessions'][p]:>2} self={real['self_js'][p]:.3f} nearest={no[0]:.3f} ({no[1]}) dwell={real['dwell'][p]*100:5.1f} % top={real['dwell_cells'][p][:2]}")
+            print(f"  {m:16} {p:8} sessions={real['sessions'][p]:>2} self={real['self_js'][p]:.3f} nearest={no[0]:.3f} ({no[1]}) "
+                  f"id={'Y' if real['identified'][p] else 'n'} dwell={real['dwell'][p]*100:5.1f} % top={real['dwell_cells'][p][:2]}")
     await conn.close()
     if args.json:
         args.json.write_text(json.dumps(report, default=str, indent=1), encoding="utf-8")

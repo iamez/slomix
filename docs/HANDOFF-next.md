@@ -16,17 +16,17 @@
 - **Docs 19/20/21/22** (lokalno v `docs/design/`, NE v repu): per-user pogled,
   match moments, runtime v2 (šele po ultra pregledu), digitalni dvojčki botov.
 
-## V teku (NEZAKLJUČENO) — veja `feat/bot-twins-route-distinctiveness`
+## Doc 22 rezina 1 — IZMERJENA (5. 9.), veja `feat/bot-twins-route-distinctiveness`
 - `scripts/backtest_route_distinctiveness.py` + `tests/unit/test_route_distinctiveness.py`
-  (9 testov zeleno, 5 mutacij videnih pasti) = doc 22 rezina 1: ali se poti
-  igralcev na isti mapi razlikujejo (JS divergenca self-split proti cross,
-  druga pot nearest-point, kontrola s premešanimi oznakami, dwell).
-- **Korpusni tek še ni dal številk** (ob predaji je tekel v ozadju; izpis v
-  scratchpadu seje je začasen). Ponovi:
-  `venv/bin/python scripts/backtest_route_distinctiveness.py --json /tmp/route_distinct.json`
-  (read-only, ~10+ min; 1-sekundni vzorci). Nato: številke v doc 22 §5/§6 in
-  PLAN (proga doc 22, rezina 1), PR, ownerjev merge. Odločitev za ownerja:
-  ali gre v rezino 2 (dwell metrika) in 3 (per-bot `.gm` profil).
+  (11 testov; mutacije videne pasti: KL namesto JS, cross na celotah namesto
+  polovicah = −0,127 pristranskost, 2 igralca v kontroli identifikacije).
+- Korpus: 7 map, 69 igralec×mapa; identifikacija lastne polovice 56/69 @512,
+  63/69 @256 (naključje 1/10, kontrola 0–2/10); JS razlika cross−self
+  0,021–0,052 @512, kontrola ±0,007; najbližja točka 2–6 u (vsi obiščejo iste
+  kraje). Prag sej 25. Številke v `docs/design/22` §5 (lokalno) in PLAN.
+- Teki: `--no-np` ≈ 1 min (JS + identifikacija), s NP ≈ 13 min @512.
+- PR odprt; ownerjev merge; nato odločitev r. 2 (dwell brez spawn čakanja) /
+  r. 3 (per-bot `.gm` profil) / doc 19 / moments r. 2.
 
 ## Odprte ownerjeve odločitve
 - Vrstni red po rezini 1: doc 19 (per-user pogled) ali moments r. 2 (Lua časi

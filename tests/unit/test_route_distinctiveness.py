@@ -98,3 +98,32 @@ def test_nan_when_a_side_is_empty():
     assert math.isnan(rd.js_divergence({}, {(0, 0): 1.0}))
     assert math.isnan(rd.nearest_point_distance([], [(0, 0, 0.0)]))
     assert math.isnan(rd.dwell_share([]))
+
+
+def test_cross_compares_halves_so_sample_size_does_not_masquerade_as_distinctness():
+    # Same geometry for both players, but few points per session spread over
+    # many cells: the self halves are noisy. If cross compared FULL corpora
+    # (smoother) against those noisy self halves, "distinct" would come out
+    # clearly negative (measured -0.127 on the first version); halves against
+    # halves keeps it at zero within noise.
+    rows = []
+    for i in range(8):
+        rows.append(("A", f"2026-03-{i + 1:02d}", cloud(0, 0, n=20, spread=1500, seed=500 + i)))
+        rows.append(("B", f"2026-03-{i + 1:02d}", cloud(0, 0, n=20, spread=1500, seed=600 + i)))
+    r = rd.measure_map(rows)
+    assert r["self_js_median"] > 0.15  # the halves really are noisy
+    assert abs(r["distinct_js"]) < 0.05
+
+
+def test_identification_is_perfect_for_six_personalities_and_near_chance_after_shuffling():
+    rows = [(chr(65 + k), f"2026-01-{i + 1:02d}", cloud(3000 * k, 0, seed=100 * (k + 1) + i))
+            for i in range(8) for k in range(6)]
+    real = rd.measure_map(rows, with_np=False)
+    assert real["identification_rate"] == 1.0 and all(real["identified"].values())
+    assert math.isnan(real["self_np_median"])  # with_np=False really skips that path
+    # Shuffled labels: each "player" is a mix of all six clouds on both halves,
+    # so half A finds its own half B about 1 in 6 times (seeds 1–7 measured
+    # 0.00–0.33). With two players the control would be a coin flip and could
+    # land on 1.0 — hence six.
+    ctrl = rd.measure_map(rd.shuffle_labels(rows, seed=3), with_np=False)
+    assert ctrl["identification_rate"] <= 0.5

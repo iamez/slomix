@@ -55,6 +55,13 @@ deploy NI naloga.
      0.91 na puranu = en `.way` graf na mapo, per-bot le `OnBotJoin` +
      `bot.SetRoles` + kamp čas + tempo → **»njegovi cilji, njegova kamp mesta,
      njegov tempo«**, ne dobesedna pot; rezine 1–5 v docu; odločitve za ownerja.
+     **Rezina 1 izmerjena 5. 9.** (`scripts/backtest_route_distinctiveness.py`,
+     veja `feat/bot-twins-route-distinctiveness`): polovica igralca najde
+     SVOJO drugo polovico med desetimi v 81 % (@512) / 91 % (@256) proti 10 %
+     naključja, kontrola 0–20 %; a »najbližja točka« da 2–6 u → osebnost je
+     ČASOVNA UTEŽ, ne kraj; prag sej 25 (pod njim 63 %); dwell 10–22 %, top
+     celice skupne (spawn čakanje) → rezina 2 ga izloči. Naslednje: r. 2
+     (dwell metrika brez spawna) ali r. 3 (per-bot `.gm` profil) — owner.
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -94,7 +101,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-04 (Fable 5.1, r. 1 in r. 5 mergani; naslednja doc 22)
+**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, doc 22 r. 1 izmerjena; PR odprt)
 
 | rezina | vsebina | stanje |
 |---|---|---|
