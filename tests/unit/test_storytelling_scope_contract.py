@@ -100,6 +100,14 @@ class _FakeStorytellingService:
     async def compute_lurker_profile(self, scope):
         return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
+    async def compute_camp_profile(self, scope):
+        return {
+            "status": "ok", "session_date": scope.dates[0], "metric": "camp_profile",
+            "description": "", "thresholds": {},
+            "coverage": {"tracks_fetched": 0, "tracks_used": 0, "tracks_skipped": 0},
+            "players": [],
+        }
+
     async def compute_useless_defense_deaths(self, scope, *, min_killer_health=80, min_reinf_seconds=25):
         return {"status": "ok", "session_date": scope.dates[0], "players": []}
 
@@ -122,6 +130,7 @@ _CONTRACT_ENDPOINTS: list[tuple[str, dict]] = [
     ("/api/storytelling/space-created", {}),
     ("/api/storytelling/enabler", {}),
     ("/api/storytelling/lurker-profile", {}),
+    ("/api/storytelling/camp-profile", {}),
     ("/api/storytelling/useless-defense-deaths", {}),
     ("/api/storytelling/player-narratives", {}),
 ]

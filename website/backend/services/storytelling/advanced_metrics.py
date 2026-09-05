@@ -28,6 +28,30 @@ if TYPE_CHECKING:
 _LURKER_SOLO_RADIUS = 500     # units from nearest teammate = "solo"
 _LURKER_DOWNSAMPLE_MS = 1000  # 1s sampling for performance
 
+# Camp-profile tuning (docs/design/22 slice 2, measured 2026-09-05 on the dev
+# corpus, players with >= 25 sessions on supply / adlernest / te_escape2):
+#   - "hold": the player stays within _CAMP_HOLD_RADIUS of an anchor for at
+#     least _CAMP_HOLD_MIN_MS (strafing and peeking allowed) — 10–24 % of
+#     alive time, a stable player trait (Spearman between odd/even session
+#     halves +0.61 / +0.76 / +0.81);
+#   - "still": speed < _CAMP_STILL_SPEED for at least _CAMP_STILL_MIN_MS —
+#     0.8–6.4 %, Spearman +0.82 / +0.93 / +0.76. 90 % of slow samples are
+#     stops under 1.2 s (aiming, cornering), which is why a plain "share of
+#     slow samples" is NOT camping and the metric is episodic.
+#   - The first _CAMP_SPAWN_SKIP_MS of a life are skipped for the SPOT list
+#     only (waiting at spawn halves the shared top cell on supply); the
+#     shares keep them, so they stay comparable with lurker's alive time.
+#   - Below _CAMP_MIN_ALIVE_MS of alive time a player's shares are None:
+#     absence is not a zero.
+_CAMP_HOLD_RADIUS = 96.0
+_CAMP_HOLD_MIN_MS = 4000
+_CAMP_STILL_SPEED = 10.0
+_CAMP_STILL_MIN_MS = 3000
+_CAMP_SPAWN_SKIP_MS = 3000
+_CAMP_MIN_ALIVE_MS = 60_000
+_CAMP_CELL = 512  # proximity_positions.py: FLOOR(x / 512.0)
+_CAMP_TOP_CELLS = 3
+
 
 def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
     """CPU-heavy solo-time computation — runs in a worker thread.
@@ -132,6 +156,106 @@ def _compute_lurker_solo(track_rows: list) -> tuple[dict, dict]:
             player_stats[guid_short]["alive_ms"] += track["duration_ms"]
             player_stats[guid_short]["tracks"] += 1
 
+    return player_stats, name_by_guid
+
+
+def _camp_episodes(points: list[tuple[int, float, float, float]]) -> tuple[int, int, dict[tuple[int, int], int]]:
+    """Pure per-life camp math over time-sorted ``(t_ms, x, y, speed)`` samples.
+
+    Returns ``(hold_ms, still_ms, hold_cells)``:
+      hold_ms   — time inside windows where the player stayed within
+                  _CAMP_HOLD_RADIUS of the window's first sample for at least
+                  _CAMP_HOLD_MIN_MS. Single pass: the anchor advances to the
+                  first sample that leaves the radius (a window is closed by the
+                  sample that breaks it), so it is O(points), not O(points²).
+      still_ms  — time inside runs of speed < _CAMP_STILL_SPEED lasting at
+                  least _CAMP_STILL_MIN_MS.
+      hold_cells — ms of hold time per 512 u cell, counting only windows that
+                  start after the first _CAMP_SPAWN_SKIP_MS of the life.
+    Durations are the sample timestamps' spans, not sample counts, so a
+    200 ms and a 1 s recording agree.
+    """
+    n = len(points)
+    hold_ms = 0
+    hold_cells: dict[tuple[int, int], int] = defaultdict(int)
+    if n:
+        t_first = points[0][0]
+        i = 0
+        while i < n:
+            t0, ax, ay, _ = points[i]
+            j = i + 1
+            while j < n and math.hypot(points[j][1] - ax, points[j][2] - ay) <= _CAMP_HOLD_RADIUS:
+                j += 1
+            span = points[j - 1][0] - t0 if j - 1 > i else 0
+            if span >= _CAMP_HOLD_MIN_MS:
+                hold_ms += span
+                if t0 - t_first >= _CAMP_SPAWN_SKIP_MS:
+                    cell = (math.floor(ax / _CAMP_CELL), math.floor(ay / _CAMP_CELL))
+                    hold_cells[cell] += span
+                i = j
+            else:
+                i += 1
+
+    still_ms = 0
+    run_start: int | None = None
+    last_t = points[0][0] if n else 0
+    for t, _, _, speed in points:
+        if speed < _CAMP_STILL_SPEED:
+            if run_start is None:
+                run_start = t
+        elif run_start is not None:
+            if last_t - run_start >= _CAMP_STILL_MIN_MS:
+                still_ms += last_t - run_start
+            run_start = None
+        last_t = t
+    if run_start is not None and last_t - run_start >= _CAMP_STILL_MIN_MS:
+        still_ms += last_t - run_start
+    return hold_ms, still_ms, dict(hold_cells)
+
+
+def _compute_camp_profile(track_rows: list) -> tuple[dict, dict]:
+    """CPU-bound camp-profile worker — runs in a worker thread.
+
+    Pure function over pre-fetched ``player_track`` rows in the lurker
+    column order (player_guid, player_name, team, round_start_unix,
+    spawn_time_ms, death_time_ms, duration_ms, path). Returns
+    ``(player_stats, name_by_guid)`` keyed by the 8-char guid prefix, the
+    same key `_compute_lurker_solo` uses. Tracks with an empty or
+    unparseable path are skipped (the caller reports them as coverage).
+    """
+    name_by_guid: dict[str, str] = {}
+    player_stats: dict[str, dict] = defaultdict(lambda: {
+        "hold_ms": 0, "still_ms": 0, "alive_ms": 0, "tracks": 0, "cells": defaultdict(int),
+    })
+    for r in track_rows:
+        path_data = r[7]
+        if not path_data:
+            continue
+        if isinstance(path_data, str):
+            try:
+                path_data = _json.loads(path_data)
+            except (ValueError, TypeError):
+                continue
+        points: list[tuple[int, float, float, float]] = []
+        for p in path_data:
+            if "x" not in p or "y" not in p:
+                continue
+            points.append((int(p.get("time", 0)), float(p["x"]), float(p["y"]), float(p.get("speed") or 0.0)))
+        if not points:
+            continue
+        gshort = (r[0] or "")[:8]
+        if r[1] and gshort not in name_by_guid:
+            name_by_guid[gshort] = strip_et_colors(r[1])
+        hold_ms, still_ms, cells = _camp_episodes(points)
+        stats = player_stats[gshort]
+        stats["hold_ms"] += hold_ms
+        stats["still_ms"] += still_ms
+        # Alive time from the samples' span, like the episode durations, so
+        # the share is a ratio of two measurements of the same clock.
+        stats["alive_ms"] += points[-1][0] - points[0][0]
+        stats["tracks"] += 1
+        for cell, ms in cells.items():
+            stats["cells"][cell] += ms
     return player_stats, name_by_guid
 
 
@@ -614,6 +738,93 @@ class _AdvancedMetricsMixin:
             "description": f"Percentage of alive time spent >={SOLO_RADIUS}u from nearest teammate.",
             "solo_radius": SOLO_RADIUS,
             "downsample_ms": DOWNSAMPLE_MS,
+            "coverage": {
+                "tracks_fetched": len(track_rows),
+                "tracks_used": tracks_used,
+                "tracks_skipped": len(track_rows) - tracks_used,
+            },
+            "players": players,
+        }
+
+    async def compute_camp_profile(self, scope: GamingSessionScope) -> dict:
+        """Compute the camp profile: share of alive time spent holding a
+        position (docs/design/22 slice 2; the metric the per-bot twin will
+        read its camp spots and camp times from).
+
+        Same telemetry, scope and skip rules as ``compute_lurker_profile``:
+        ``player_track.path`` (200 ms samples, spawn-to-death), the gaming
+        session's dates + canonical round keys, ``round_start_unix > 0``.
+        Episode math in ``_camp_episodes`` (constants ``_CAMP_*``); the
+        worker is offloaded to a thread under a per-session lock.
+        """
+        sd_str = scope.dates[0]
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+
+        track_rows = await self.db.fetch_all(f"""
+            SELECT player_guid, player_name, team, round_start_unix,
+                   spawn_time_ms, death_time_ms, duration_ms, path
+            FROM player_track
+            WHERE session_date = ANY($1)
+              AND duration_ms > $2
+              AND path IS NOT NULL
+              AND round_start_unix IS NOT NULL
+              AND round_start_unix > 0
+              AND {scope.round_key_filter_sql(3)}
+            ORDER BY round_start_unix, player_guid
+        """, (dates, LURKER_MIN_DURATION_MS, starts, maps, rnums))
+
+        thresholds = {
+            "hold_radius_u": _CAMP_HOLD_RADIUS,
+            "hold_min_s": _CAMP_HOLD_MIN_MS / 1000,
+            "still_speed_lt": _CAMP_STILL_SPEED,
+            "still_min_s": _CAMP_STILL_MIN_MS / 1000,
+            "spawn_skip_s": _CAMP_SPAWN_SKIP_MS / 1000,
+            "min_alive_s": _CAMP_MIN_ALIVE_MS / 1000,
+            "cell_u": _CAMP_CELL,
+        }
+        base = {
+            "status": "ok",
+            "session_date": sd_str,
+            "metric": "camp_profile",
+            "description": (
+                f"Share of alive time spent within {_CAMP_HOLD_RADIUS:.0f}u of one spot for "
+                f">={_CAMP_HOLD_MIN_MS / 1000:.0f}s (hold) and standing still for "
+                f">={_CAMP_STILL_MIN_MS / 1000:.0f}s (still). Not lurker: that one measures "
+                f"distance from teammates."
+            ),
+            "thresholds": thresholds,
+        }
+        if not track_rows:
+            return {**base, "coverage": {"tracks_fetched": 0, "tracks_used": 0, "tracks_skipped": 0}, "players": []}
+
+        async with _compute_locks.get(f"camp:{scope.gaming_session_id}"):
+            player_stats, name_by_guid = await asyncio.to_thread(_compute_camp_profile, track_rows)
+
+        players = []
+        for guid, stats in player_stats.items():
+            alive = stats["alive_ms"]
+            thin = alive < _CAMP_MIN_ALIVE_MS
+            top = sorted(stats["cells"].items(), key=lambda kv: kv[1], reverse=True)[:_CAMP_TOP_CELLS]
+            players.append({
+                "guid_short": guid,
+                "name": name_by_guid.get(guid, f"#{guid}"),
+                "hold_pct": None if thin else round(stats["hold_ms"] / alive * 100, 1),
+                "still_pct": None if thin else round(stats["still_ms"] / alive * 100, 1),
+                "hold_time_s": round(stats["hold_ms"] / 1000, 1),
+                "still_time_s": round(stats["still_ms"] / 1000, 1),
+                "alive_s": round(alive / 1000, 1),
+                "tracks": stats["tracks"],
+                "coverage": "thin" if thin else "ok",
+                "top_cells": [[cx, cy, round(ms / 1000, 1)] for (cx, cy), ms in top],
+            })
+        # Highest hold share first; players too short to measure last, not
+        # sorted in as zeros.
+        players.sort(key=lambda p: (p["hold_pct"] is None, -(p["hold_pct"] or 0.0), p["name"]))
+
+        tracks_used = sum(s["tracks"] for s in player_stats.values())
+        return {
+            **base,
             "coverage": {
                 "tracks_fetched": len(track_rows),
                 "tracks_used": tracks_used,

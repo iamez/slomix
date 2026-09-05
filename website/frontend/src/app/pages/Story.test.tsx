@@ -17,6 +17,7 @@ import gravity from './__fixtures__/api_storytelling_gravity.json';
 import space from './__fixtures__/api_storytelling_space_created.json';
 import enabler from './__fixtures__/api_storytelling_enabler.json';
 import lurker from './__fixtures__/api_storytelling_lurker_profile.json';
+import camp from './__fixtures__/api_storytelling_camp_profile.json';
 import playerNarratives from './__fixtures__/api_storytelling_player_narratives.json';
 import momentumSession from './__fixtures__/api_storytelling_momentum_session.json';
 import killMatrix from './__fixtures__/api_storytelling_kill_matrix.json';
@@ -54,6 +55,7 @@ const BODIES: [string, unknown][] = [
   ['/storytelling/space-created', space],
   ['/storytelling/enabler', enabler],
   ['/storytelling/lurker-profile', lurker],
+  ['/storytelling/camp-profile', camp],
   ['/storytelling/player-narratives', playerNarratives],
 ];
 
@@ -464,18 +466,35 @@ describe('SessionStory (the session page story tab)', () => {
   });
 
   it('keeps the defensive board when the tracker boards are all unavailable', async () => {
-    // The four role boards read the position tracker; this one is counted
+    // The five role boards read the position tracker; this one is counted
     // from kill outcomes, so a tracker outage must not take it down with
     // them — that would hide a measurement that is perfectly available.
     const fail = () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
     renderPage((input: RequestInfo | URL) => {
       const p = new URL(String(input), 'http://test.local').pathname.replace(/^\/api/, '');
-      return ['/storytelling/gravity', '/storytelling/space-created', '/storytelling/enabler', '/storytelling/lurker-profile'].includes(p)
+      return ['/storytelling/gravity', '/storytelling/space-created', '/storytelling/enabler', '/storytelling/lurker-profile', '/storytelling/camp-profile'].includes(p)
         ? fail()
         : fixtureFetch(input);
     });
     await waitFor(() => expect(screen.getByText(/roles: unavailable/)).toBeInTheDocument());
     expect(screen.getByText(/free\s+objective time, no trade/)).toBeInTheDocument();
+  });
+
+  it('ranks the camp board by hold share and leaves thin players out instead of ranking them as 0', async () => {
+    // A recorded 154 has six players with a share; add one the server could
+    // not measure (alive under a minute → hold_pct null). The board must not
+    // print him as 0 % — that would make "unmeasured" look like "never camps".
+    const thin = { ...camp, players: [...camp.players, { guid_short: 'AB12CD34', name: 'brief', hold_pct: null, still_pct: null, hold_time_s: 4, still_time_s: 0, alive_s: 20, tracks: 1, coverage: 'thin', top_cells: [] }] };
+    renderPage((input: RequestInfo | URL) => {
+      const p = new URL(String(input), 'http://test.local').pathname.replace(/^\/api/, '');
+      return p === '/storytelling/camp-profile'
+        ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(thin) } as Response)
+        : fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText('holds position')).toBeInTheDocument());
+    expect(screen.getByText('18.4%')).toBeInTheDocument(); // kanii, the top holder in the recording
+    expect(screen.queryByText('brief')).toBeNull();
+    expect(screen.getByText(/five from the 200 ms position tracker/)).toBeInTheDocument();
   });
 
   it('fetches a formula only when the reader opens it', async () => {
