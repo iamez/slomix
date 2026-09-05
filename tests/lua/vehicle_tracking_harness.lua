@@ -117,6 +117,14 @@ truck.health = 0
 frame(500)
 truck.health = 800
 frame(500)
+-- The same start state through the hook: goldrush's map script breaks the
+-- tank with G_Damage itself (attacker = world 1022, no player) before
+-- anyone escorted it. Not a destruction either.
+et_Damage(64, 1022, 9999, 0, 36)
+truck.health = 0
+frame(500)
+truck.health = 800
+frame(500)
 far = true  -- nobody near the truck for its first move: not an escort
 truck.x = truck.x + 120; frame(500)
 local t_first = level_time

@@ -2872,6 +2872,16 @@ local function recordVehicleDamage(target, attacker, damage, meansOfDeath)
             name = getPlayerName(attacker) or ""
             team = getPlayerTeam(attacker) or ""
         end
+        -- Same rule as the poll: a death with NO player behind it before
+        -- anyone escorted the mover is its start state. Live (goldrush) the
+        -- map script "kills" the tank at ~1.0 s through G_Damage itself
+        -- (attacker = world, mod 36, take >= 1200) — it begins broken, to
+        -- be repaired. A player's kill counts at any time.
+        if guid == "" and veh.first_escort_time == 0 then
+            veh.last_health = 0
+            vehdmg.ms = vehdmg.ms + (fh_now() - t0)
+            return
+        end
         veh.destroyed_count = veh.destroyed_count + 1
         veh.destroyed[#veh.destroyed + 1] = {
             time = gameTime(),
