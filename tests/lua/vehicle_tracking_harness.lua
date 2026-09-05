@@ -108,7 +108,14 @@ check(veh, "init scan registered the truck (ent 64)")
 -- First sample: the truck appears at its real place (spawn jump, not a
 -- move). Then one standing sample, then three moving ones.
 truck.x, truck.y, truck.z = 1000, 2000, 10
-frame(500); frame(500)
+frame(500); frame(500)   -- the poll runs every 500 ms of gameTime: the spawn resync lands here
+-- Goldrush-style start: the mover reads 0 HP before it has ever moved
+-- (broken at the line, to be repaired). That is its start state, not a
+-- destruction — nothing may be counted.
+truck.health = 0
+frame(500)
+truck.health = 800
+frame(500)
 far = true  -- nobody near the truck for its first move: not an escort
 truck.x = truck.x + 120; frame(500)
 local t_first = level_time
@@ -129,6 +136,12 @@ truck.health = 0
 et_Damage(64, 3, 900, 0, 5)
 -- Two more polls: health stays 0, last_health is 0 → no second count.
 frame(500); frame(500)
+-- Repaired and later killed by a script (no hit): after it has moved, the
+-- poll's own detection DOES count — attacker empty.
+truck.health = 800
+frame(500)
+truck.health = 0
+frame(500)
 
 -- Round end: gamestate 0 → 3 schedules the delayed output; advance past it.
 gamestate = "3"
@@ -154,7 +167,7 @@ local fields = {}
 for f in (vp_line .. ";"):gmatch("([^;]*);") do fields[#fields + 1] = f end
 check(#fields == 16, "VEHICLE_PROGRESS row has 16 fields (got " .. #fields .. ")")
 check(tonumber(fields[9]) == 360.0, "total_distance counts the three real moves only, not the spawn jump from (0,0,0) (got " .. fields[9] .. ")")
-check(tonumber(fields[12]) == 1, "destroyed_count is exactly 1 (poll did not double-count), got " .. fields[12])
+check(tonumber(fields[12]) == 2, "destroyed_count is exactly 2: the hit and the later poll-seen death; not the broken-at-start read, not a double count (got " .. fields[12] .. ")")
 -- gameTime() is level time minus the round's start, and the tracker
 -- re-anchors that start on the first PLAYING frame (the warmup→play
 -- transition), which here is the first frame at level time 500.
@@ -181,6 +194,15 @@ local truck_rows = 0
 for line in out:gmatch("[^\n]+") do
     if line:sub(1, 6) == "truck;" then truck_rows = truck_rows + 1 end
 end
-check(truck_rows == 2, "exactly one progress row and one destroyed row for the truck (got " .. truck_rows .. ")")
+check(truck_rows == 3, "one progress row and two destroyed rows for the truck (got " .. truck_rows .. ")")
+-- The second destroyed row is the poll's: attacker empty, health_before 800.
+local rows = {}
+local in_vd = false
+for line in out:gmatch("[^\n]+") do
+    if line == "# VEHICLE_DESTROYED" then in_vd = true
+    elseif in_vd and line:match("^# [A-Z_]+$") then in_vd = false      -- next section
+    elseif in_vd and line:sub(1, 1) ~= "#" then rows[#rows + 1] = line end
+end
+check(#rows == 2 and rows[2]:match("^truck;%d+;;;;0;800$") ~= nil, "poll-seen death row has no attacker and the last healthy reading (" .. tostring(rows[2]) .. ")")
 
 print("vehicle_tracking_harness: all checks passed")

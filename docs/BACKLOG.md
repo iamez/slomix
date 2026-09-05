@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-05, pozno) Moments r. 2 — dve živi pasti iz lokalnega ET:
+  (a) supply truck se sam odpelje pri 0,6 s → `first_move_time` ni čas escorta
+  → dodana `first/last_escort_time` (premik z igralcem na/ob vozilu), detektor
+  bere te; (b) goldrush tank začne POKVARJEN → poll je vsako rundo štel
+  »uničenje« ob 1,2 s brez napadalca → poll šteje šele po prvem premiku;
+  ⚠️ **kontrakt `destroyed_count` se spremeni** (korpus pred v6.14 nosi
+  fantomsko 1 na vsaki goldrush rundi — detektorjev »destroyed 1×« je bil
+  lažen; popravek korpusa = ločena naloga, če owner hoče).
 - (Fable 5.1, 2026-09-05, večer) SKOK na moments r. 2 (ownerjeva izbira po
   #914, ki je mergan): veja `feat/moments-mover-times`; Lua v6.14 + parser +
   migracija 082 (na devu aplicirana kot `etlegacy_user` — ⚠️ `apply_migrations.py`

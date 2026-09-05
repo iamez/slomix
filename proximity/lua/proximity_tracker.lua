@@ -2762,14 +2762,23 @@ sampleVehiclePositions = function()
         -- Track health changes
         local health = tonumber(safe_gentity_get(entNum, "health")) or 0
         if health <= 0 and veh.last_health > 0 then
-            -- The 500 ms poll saw it die without a hit on it (script kill,
-            -- or a hit below min_damage). Record it without an attacker so
-            -- destroyed_count and the VEHICLE_DESTROYED rows stay one set.
-            veh.destroyed_count = veh.destroyed_count + 1
-            veh.destroyed[#veh.destroyed + 1] = {
-                time = now, attacker_guid = "", attacker_name = "", attacker_team = "",
-                means_of_death = 0, health_before = veh.last_health,
-            }
+            if veh.first_move_time > 0 then
+                -- The 500 ms poll saw it die without a hit on it (script
+                -- kill, or a hit below min_damage). Record it without an
+                -- attacker so destroyed_count and the VEHICLE_DESTROYED rows
+                -- stay one set.
+                veh.destroyed_count = veh.destroyed_count + 1
+                veh.destroyed[#veh.destroyed + 1] = {
+                    time = now, attacker_guid = "", attacker_name = "", attacker_team = "",
+                    means_of_death = 0, health_before = veh.last_health,
+                }
+            end
+            -- else: a mover that has never moved and reads 0 HP is in its
+            -- START state (goldrush's tank begins broken and must be
+            -- repaired; the init scan read 1200 before the map script
+            -- disabled it). Live: every goldrush round used to log a
+            -- "destruction" at 1.2 s with no attacker. Not a destruction —
+            -- and no longer counted in destroyed_count either.
         end
         if health > veh.max_health then veh.max_health = health end
         veh.last_health = health
