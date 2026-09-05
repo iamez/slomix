@@ -4,6 +4,9 @@ A server-side Lua module that makes a 1v1 on `dots_arena` actually fair, plus
 the config that switches it on. Optional lifesteal, unlimited ammo, unlimited
 sprint. Tested on **ET:Legacy v2.84.0**.
 
+**Version 1.1.0** — the Lua module, this README and `dots_arena_1v1.config`
+carry the same number, and a test refuses to let them drift apart.
+
 - [English](#english) · [Français](#français) · [Slovensko](#slovensko)
 
 > **Repo note.** In this repository the Lua module lives one level up, at
@@ -76,12 +79,12 @@ the config format has no "append". If you already run wolfadmin or anything
 else, add it to that line in `init`, or it stops working the moment this config
 loads. Measured on a server with six modules: loading this config took it to one.
 
-The module is loaded on every map on purpose and gates itself on the map name:
-its first hook line is `if not active then return end`, and on a foreign map it
-writes nothing, logs nothing and touches no cvar — verified live, including
-that `g_forcerespawn` goes back to its old value when you leave the arena. That
-is safer than clearing `lua_modules` in a `map default` block, which would take
-your other modules down with it on every map.
+⭐ The line in `init` is **for your maps, not for the arena**: the arena module
+is named again in the `map dots_arena` block, which overrides `init` on that one
+map. So put your own modules on the `init` line and your rotation keeps them
+everywhere else. (The module also gates itself on the map name — its first hook
+line is `if not active then return end` — but that is belt and braces now, not
+the mechanism.)
 
 ### Player commands
 
@@ -120,9 +123,10 @@ one and says so — the duel-length numbers below only speak for those points.
 | Pool | Median duel |
 |---|---|
 | 250 HP | **6 s** (n=13) |
-| 300 HP | 7 s (n=11) |
 | 500 HP | 14 s (n=7) |
 | 1000 HP | **one duel in 120 s** |
+
+⛔ 300 HP was measured too (median 7 s, n=11) and is not listed: `nearest_preset` snaps it to 250, so no operator can ask for it. A row naming an unreachable setting is a lie about the interface, however true it is about the past.
 
 With lifesteal the pool and the duel length are **not** proportional — the
 fight becomes a race between two drains, so the curve bends hard. 1000 HP is
@@ -279,13 +283,13 @@ déjà wolfadmin ou autre chose, ajoutez-le sur cette ligne dans `init`, sinon i
 cessera de fonctionner dès le chargement de cette config. Mesuré sur un serveur
 avec six modules : le chargement de cette config l'a ramené à un.
 
-Le module est chargé sur toutes les cartes volontairement, et se verrouille
-lui-même sur le nom de la carte : sa toute première ligne de hook est
-`if not active then return end`, et sur une autre carte il n'écrit rien, ne
-journalise rien et ne touche aucune cvar — vérifié en direct, y compris le
-retour de `g_forcerespawn` à son ancienne valeur en quittant l'arène. C'est
-plus sûr que de vider `lua_modules` dans un bloc `map default`, ce qui
-emporterait vos autres modules sur toutes les cartes.
+⭐ La ligne dans `init` est **pour vos cartes, pas pour l'arène** : le module
+d'arène est nommé de nouveau dans le bloc `map dots_arena`, qui remplace `init`
+sur cette seule carte. Mettez donc vos propres modules sur la ligne `init` et
+votre rotation les conserve partout ailleurs. (Le module se verrouille aussi
+sur le nom de la carte — sa première ligne de hook est
+`if not active then return end` — mais c'est désormais une ceinture et des
+bretelles, plus le mécanisme.)
 
 ### Commandes joueur
 
@@ -325,9 +329,10 @@ trois points.
 | Réserve | Durée médiane |
 |---|---|
 | 250 HP | **6 s** (n=13) |
-| 300 HP | 7 s (n=11) |
 | 500 HP | 14 s (n=7) |
 | 1000 HP | **un seul duel en 120 s** |
+
+⛔ 300 HP a également été mesuré (médiane 7 s, n=11) et n'est pas listé : `nearest_preset` le ramène à 250, donc personne ne peut le demander. Une ligne qui nomme un réglage inatteignable ment sur l'interface, aussi vraie soit-elle sur le passé.
 
 Avec le vol de vie, la réserve et la durée ne sont **pas** proportionnelles :
 le combat devient une course entre deux fuites, et la courbe se casse. 1000 HP
@@ -489,12 +494,11 @@ karkoli drugega, ga dopiši v to vrstico v `init`, sicer neha delovati v
 trenutku, ko se ta config naloži. Izmerjeno na strežniku s šestimi moduli:
 nalaganje tega configa ga je spravilo na enega.
 
-Modul je namenoma naložen na vsaki mapi in se sam zapre po imenu mape: prva
-vrstica njegovega hooka je `if not active then return end`, na tuji mapi pa ne
-zapiše ničesar, ne beleži ničesar in se ne dotakne nobenega cvara — preverjeno
-v živo, vključno s tem, da se `g_forcerespawn` ob odhodu z arene vrne na staro
-vrednost. To je varneje kot praznjenje `lua_modules` v bloku `map default`, ki
-bi s sabo potegnil tvoje druge module na vseh mapah.
+⭐ Vrstica v `init` je **za tvoje mape, ne za areno**: arena modul je znova
+naveden v bloku `map dots_arena`, ki `init` prepiše samo na tej eni mapi. Na
+vrstico v `init` torej daj svoje module in rotacija jih obdrži povsod drugod.
+(Modul se tudi sam zapre po imenu mape — prva vrstica hooka je
+`if not active then return end` — a to je zdaj varovalka, ne mehanizem.)
 
 ### Ukazi za igralce
 
@@ -533,9 +537,10 @@ tri točke.
 | Zalogovnik | Mediana dvoboja |
 |---|---|
 | 250 HP | **6 s** (n=13) |
-| 300 HP | 7 s (n=11) |
 | 500 HP | 14 s (n=7) |
 | 1000 HP | **en sam dvoboj v 120 s** |
+
+⛔ 300 HP je bil prav tako izmerjen (mediana 7 s, n=11) in ni naveden: `nearest_preset` ga prilepi na 250, zato ga nihče ne more nastaviti. Vrstica, ki imenuje nedosegljivo nastavitev, laže o vmesniku, pa naj bo o preteklosti še tako resnična.
 
 Z lifestealom zalogovnik in dolžina dvoboja **nista** sorazmerna — boj postane
 dirka med dvema odtokoma in krivulja se zlomi. 1000 HP je natanko tista

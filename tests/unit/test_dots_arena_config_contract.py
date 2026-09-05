@@ -221,3 +221,83 @@ def test_every_cvar_the_readme_calls_a_knob_is_set_not_setl() -> None:
         f"{sorted(clash)} are documented as runtime knobs but declared `setl`; "
         "changing one unloads the entire config (g_config.c:516)"
     )
+
+
+def _lua_source() -> str:
+    return LUA.read_text(encoding="utf-8")
+
+
+def test_one_version_for_the_whole_bundle() -> None:
+    """Three files, three visible version numbers, nothing holding them together.
+
+    The module's `VERSION` reaches an admin through `lua_status`; the config's
+    `version` is centre-printed to **every player** when the config loads
+    (g_config.c:442); the README is what a recipient reads before either. They
+    said `1.1.0`, `1.0` and nothing at all, so a bug report could not say which
+    build it came from — the same "one name, two measurements" shape this repo
+    keeps finding, this time in the artefact we hand to strangers.
+
+    ⚠️ Deliberately an EQUALITY between the three, not a literal. The repo has
+    already learned that lesson once: test_proximity_lua_v7_guard pins a series
+    rather than a point because "asserting 6.10 exactly made every patch bump
+    edit a test that is not about the patch". A version bump should touch three
+    files and no test.
+    """
+    lua = re.search(r'^local VERSION\s*=\s*"([^"]+)"', _lua_source(), re.M)
+    cfg = re.search(r'^version\s+"([^"]+)"', CONFIG.read_text(encoding="utf-8"), re.M)
+    doc = re.search(r"\*\*Version\s+([0-9][^*\s]*)\*\*", README.read_text(encoding="utf-8"))
+    assert lua and cfg and doc, (
+        f"a version string is missing: lua={bool(lua)} config={bool(cfg)} readme={bool(doc)}"
+    )
+    assert lua.group(1) == cfg.group(1) == doc.group(1), (
+        f"bundle versions disagree: lua={lua.group(1)} "
+        f"config={cfg.group(1)} readme={doc.group(1)}"
+    )
+
+
+def test_the_readme_table_matches_the_modules_own_defaults() -> None:
+    """The defaults live in three places and nothing kept them equal.
+
+    `cvar_num(name, default)` in the Lua is what the module actually does; the
+    README table is what a recipient believes; the config is what a server gets.
+    They agree today — this is a ratchet against the day they stop.
+
+    ⚠️ `arena_hp` is excluded and that is not laziness: the Lua uses `-1` as an
+    internal "nobody set it" sentinel and `configured_pool` turns both -1 and 0
+    into the same behaviour, so the EFFECTIVE default is 0 and the raw literal
+    is not the thing to compare. A test that flagged it would be measuring the
+    sentinel, not the default. Same for `arena_vamp_hp`, the compat alias the
+    README does not document at all.
+    """
+    sentinels = {"arena_hp", "arena_vamp_hp"}
+    lua_defaults = {
+        m.group(1): m.group(2).strip()
+        for m in re.finditer(r'cvar_num\("(arena_[a-z0-9_]+)",\s*([^)]+)\)', _lua_source())
+        if m.group(1) not in sentinels
+    }
+    assert len(lua_defaults) >= 8, (
+        f"only {len(lua_defaults)} defaults parsed out of the module — the "
+        "cvar_num call shape changed and this contract is measuring nothing"
+    )
+    # ⛔ A SET per cvar, not a dict entry. The README carries the same table
+    # three times (English, French, Slovenian), and a dict keyed by cvar name
+    # silently keeps only the LAST language — so a default drifting in one
+    # translation was invisible. Caught by mutating the English row and
+    # watching this test pass, which is the whole reason mutations get run.
+    doc_rows: dict[str, set[str]] = {}
+    for m in re.finditer(r"^\|\s*`(arena_[a-z0-9_]+)`\s*\|\s*`([^`]*)`\s*\|",
+                         README.read_text(encoding="utf-8"), re.M):
+        doc_rows.setdefault(m.group(1), set()).add(m.group(2))
+
+    inconsistent = {n: sorted(v) for n, v in doc_rows.items() if len(v) > 1}
+    assert not inconsistent, (
+        f"the three language tables disagree with each other: {inconsistent}"
+    )
+    disagree = {
+        name: (val, sorted(doc_rows[name]))
+        for name, val in lua_defaults.items()
+        if name in doc_rows and doc_rows[name] != {val}
+    }
+    assert not disagree, (
+        f"the README documents a different default than the module uses: {disagree}"
+    )

@@ -21,7 +21,17 @@ local cvars  = {sv_maxclients="2", arena_1v1="1", arena_1v1_map="dots_arena",
                 arena_1v1_test="1", arena_1v1_log="1", g_forcerespawn="0",
                 mapname="dots_arena"}
 local argv   = {}
+-- Every gentity field this module is allowed to name. The real API raises on
+-- anything else; so does this stub.
+local KNOWN_FIELDS = {
+  ["pers.connected"]=true, ["pers.netname"]=true, ["sess.sessionTeam"]=true,
+  ["ps.stats"]=true, ["ps.powerups"]=true, ["health"]=true,
+  ["pers.playerStats.selfkills"]=true,
+}
 local damage_lands = true
+local fs_open_fails = false
+local fs_len = 0
+local fs_renames = {}
 local serverinfo = "\\mapname\\dots_arena"
 et = {
   TEAM_AXIS=1, TEAM_ALLIES=2, STAT_HEALTH=0, CS_SERVERINFO=0, PW_INVULNERABLE=1,
@@ -29,7 +39,11 @@ et = {
   -- za menjavo moštva, medtem ko je stub predpostavljal 38. Varovalo je
   -- vseeno delovalo (primerja se s konstanto), a stub, ki laže o številki,
   -- je natanko tisto, kar prikrije napačen indeks drugje.
-  MOD_SUICIDE=37, MOD_SWITCHTEAM=59, FS_APPEND=2, PW_NOFATIGUE=4,
+  -- ⛔ FS_READ=0 je manjkal in rotacija je zato brala dolžino 0 — ista past
+  -- kot manjkajoča STAT_SPRINTTIME. Vse štiri načine ima motor
+  -- registrirane (g_lua.c:3291-3294), zato jih ima tudi stub.
+  MOD_SUICIDE=37, MOD_SWITCHTEAM=59, PW_NOFATIGUE=4,
+  FS_READ=0, FS_WRITE=1, FS_APPEND=2, FS_APPEND_SYNC=3,
   STAT_MAX_HEALTH=3, STAT_SPRINTTIME=8,
   RegisterModname=function() end, G_Print=function() end,
   trap_Cvar_Get=function(n) return cvars[n] or "" end,
@@ -41,10 +55,27 @@ et = {
   trap_GetConfigstring=function() return serverinfo end,
   Info_ValueForKey=function(s,k) return s:match("\\"..k.."\\([^\\]*)") end,
   trap_Argv=function(i) return argv[i+1] or "" end,
-  trap_FS_FOpenFile=function() return 7, 0 end,
+  -- ⛔ The stub used to answer `7, 0` for every mode, so the log's open-failure
+  -- branch was never executed and FS_READ never reported a size. Both are now
+  -- modelled: FS_READ returns the length (files.c:5259), the append modes
+  -- return 0 or -1, and fs_open_fails drives the failure branch.
+  trap_FS_FOpenFile=function(name, mode)
+    if fs_open_fails then return 0, -1 end
+    if mode == 0 then return 7, fs_len end     -- FS_READ -> length
+    return 7, 0                                 -- FS_APPEND -> 0 on success
+  end,
+  trap_FS_Rename=function(old, new) fs_renames[#fs_renames+1] = old .. " -> " .. new end,
   trap_FS_Write=function(line) logged[#logged+1]=line:gsub("\n","") end,
   trap_FS_FCloseFile=function() end,
+  -- ⛔⛔ The real binding RAISES on an unknown field name (luaL_error,
+  -- g_lua.c:2032/:2130). A stub that answers nil for a typo lets that typo
+  -- pass every test here and then abort the whole hook on a live server —
+  -- the same shape as the unconditionally-lethal G_Damage this stub used to
+  -- have, and as the constants it used to be missing.
   gentity_get=function(cn, field, idx)
+    if not KNOWN_FIELDS[field] then
+      error(("Lua API: unknown field \"%s\""):format(tostring(field)), 0)
+    end
     if field=="pers.connected" then return conn[cn] end
     if field=="pers.netname" then return ({[0]="^1alpha",[1]="^2bravo",[2]="^3charlie",[3]="^4delta"})[cn] end
     if field=="sess.sessionTeam" then return team[cn] end
@@ -74,6 +105,9 @@ et = {
   GetCurrentWeapon=function(cn) return current_wp[cn] or 0, ammo_of[cn] or 0, clip_of[cn] or 0 end,
   trap_SendServerCommand=function(cn, cmd) sent[#sent+1]=cmd end,
   gentity_set=function(cn, field, idx, val)
+    if not KNOWN_FIELDS[field] then
+      error(("Lua API: unknown field \"%s\""):format(tostring(field)), 0)
+    end
     if field=="ps.powerups" and idx==1 then shield[cn]=val end
     if field=="ps.powerups" and idx==4 then nofatigue[cn]=val end
     if field=="health" then health[cn]=idx end
@@ -236,6 +270,7 @@ cvars.arena_vamp_grace = "90"; cvars.arena_vamp_decay = "30"
 et_InitGame(0,0,false)
 health[0]=100; health[1]=100
 argv = {"vampiric"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "vampiric") == 1, "svoj ukaz mora prevzeti")
 et_Damage(1, 0, 40, 0, 8)
 assert(health[0] == 100, "⛔ vklop ne sme veljati sredi dvoboja: "..health[0])
@@ -262,6 +297,7 @@ et_Damage(0, 1022, 100, 0, 37)
 assert(health[1022] == nil, "⛔ svet (1022) ne sme dobiti zdravja: "..tostring(health[1022]))
 assert(health[0] == 500, "žrtev se ne sme spremeniti: "..health[0])
 argv = {"say", "hi"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "say") == 0, "⛔ tuj ukaz mora vrniti 0, sicer ga požremo")
 print("✅ svet ne zdravi, tuj ukaz ni požrt")
 
@@ -349,6 +385,7 @@ health[0]=100; health[1]=100
 et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
 assert(health[0] == 1000, "izhodišče 1000: "..health[0])
 argv = {"arenahp", "250"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
 assert(health[0] == 1000, "⛔ sprememba ne sme poseči v tekoč dvoboj: "..health[0])
 et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
@@ -362,16 +399,19 @@ assert(health[0] == 250 and health[1] == 250, "od naslednjega spawna: "..health[
 --    cvar mimo ukaza brez učinka in mutacija »beri živo« je prešla: test je
 --    premikal vzvod, ki ni bil priklopljen.
 argv = {"arenahp", "1000"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
 health[0] = 245
 et_Damage(1, 0, 40, 0, 8)
 assert(health[0] == 250, "⛔ strop mora ostati posnet na 250: "..health[0])
 argv = {"arenahp", "250"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 et_ClientCommand(0, "arenahp")
 -- ⛔ Ukazna pot mora prilepiti prav tako kot bralna. Prvi zapis tega primera je
 --    uporabljal 250, ki JE preset — mutacija »ne prilepi« je zato prešla, ker
 --    se vhod in izhod nista razlikovala. Vzemi vrednost, ki se MORA premakniti.
 argv = {"arenahp", "700"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
 assert(cvars.arena_hp == "500", "⛔ 700 se mora prilepiti na 500, dobil "..tostring(cvars.arena_hp))
 argv = {"arena_hp_set", "1000"}
@@ -446,6 +486,7 @@ et_InitGame(0,0,false)
 cvars.arena_hp = "1000"; cvars.arena_vamp = "1"; cvars.arena_symmetric = "0"
 et_InitGame(0,0,false)
 argv = {"arenahp", "250"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
 health[0]=100; health[1]=100
 et_ClientSpawn(0,0,0,0); et_ClientSpawn(1,0,0,0)
@@ -661,6 +702,7 @@ cvars.sv_maxclients = "2"
 cvars.arena_hp = ""; cvars.arena_vamp = "0"; cvars.g_forcerespawn = "0"
 et_InitGame(0,0,false)
 argv = {"arenahp", "1000"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
 assert(et_ClientCommand(0, "arenahp") == 1, "svoj ukaz mora prevzeti")
 assert(cvars.arena_hp == "1000", "predpogoj: ukaz je zapisal cvar")
 et_ShutdownGame(false)
@@ -679,3 +721,195 @@ et_ShutdownGame(false)
 assert(cvars.arena_hp == "500",
        "⛔ modul ne sme povrniti vrednosti, ki je ni sam nastavil: "..tostring(cvars.arena_hp))
 print("✅ povrne se le tisto, kar je modul res spremenil")
+
+-- 31) ⛔⛔ MEJA ZA ODJEMALCE. `arena_kill -1` je bilo sesutje strežnika:
+--     `et.G_Damage` in `et.gentity_set` tvorita `g_entities + n` BREZ vsakega
+--     preverjanja (g_lua.c:918, :2119), medtem ko `et.GetCurrentWeapon`
+--     preverja (:1195). Iz ene vezave sem sklepal na politiko celega API-ja.
+et_InitGame(0,0,false)
+cvars.arena_1v1_test = "1"; cvars.sv_maxclients = "2"
+-- ⚠️ 1.5 je tu namenoma: pri sv_maxclients 2 je ŠTEVILČNO v obsegu (0 <= 1.5 < 2),
+--    zato ga ujame samo `math.type`, ne pa preverba obsega. Brez njega je
+--    mutacija »math.type -> type« preživela, ker so vse ostale vrednosti padle
+--    že na obsegu.
+for _, bad in ipairs({-1, 5000, 3.5, 1.5, 0/0}) do
+  calls = {}
+  argv = {"arena_kill", tostring(bad)}
+  assert(et_ConsoleCommand() == 1, "ukaz mora ostati prevzet")
+  for _, c in ipairs(calls) do
+    assert(not c:match("G_Damage"), "⛔ "..tostring(bad).." je prišel do vezave: "..c)
+    assert(not c:match("^set%("), "⛔ "..tostring(bad).." je pisal v entiteto: "..c)
+  end
+end
+-- kontrola: veljavna številka MORA delovati, sicer varovalo samo ubije funkcijo
+calls = {}
+argv = {"arena_kill", "1"}
+et_ConsoleCommand()
+local hit = false
+for _, c in ipairs(calls) do if c:match("G_Damage%(1,") then hit = true end end
+assert(hit, "⛔ kontrola: veljaven cn mora priti skozi: "..table.concat(calls," | "))
+print("✅ arena_kill: -1, 5000, 3.5 in nan zavrnjeni, veljaven cn dela")
+
+-- 32) ⛔ `sv_maxclients` motor omeji na 64 šele ob zagonu mape
+--     (SV_BoundMaxClients, sv_init.c:355-361). Med `set sv_maxclients 9999` in
+--     naslednjo mapo bi zanka brala g_entities[1024…] — izven polja.
+local seen_max = 0
+local real_get = et.gentity_get
+et.gentity_get = function(cn, field, idx)
+  if type(cn) == "number" and cn > seen_max then seen_max = cn end
+  return real_get(cn, field, idx)
+end
+cvars.sv_maxclients = "9999"
+et_InitGame(0,0,false)
+health[1] = 0
+et_Obituary(1, 0, 7)
+et.gentity_get = real_get
+assert(seen_max < 64, "⛔ zanka je šla čez MAX_CLIENTS: največji cn = "..seen_max)
+cvars.sv_maxclients = "2"
+print("✅ sv_maxclients 9999 ne odnese zanke čez MAX_CLIENTS")
+
+-- 33) ⛔ `inf`, `nan` in negativna tiho postanejo 250: vsak `gap` je `inf`,
+--     `inf < math.huge` je za vse tri presete false, zato `best` ostane
+--     inicializator. Nesmiseln vhod postane VELJAVEN bazen.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"
+for _, bad in ipairs({"1e999", "-500"}) do
+  argv = {"arenahp", bad}
+  cvars.arena_hp = ""
+  now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
+  et_ClientCommand(0, "arenahp")
+  assert(cvars.arena_hp == "" or cvars.arena_hp == nil,
+         "⛔ "..bad.." ne sme postati bazen, cvar je zdaj "..tostring(cvars.arena_hp))
+end
+-- kontrola: 700 se MORA prilepiti na 500
+argv = {"arenahp", "700"}
+now_ms = now_ms + 5000   -- ⛔ ukazi imajo 3 s cooldown; ura se mora premakniti
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "500", "kontrola: 700 -> 500, dobil "..tostring(cvars.arena_hp))
+print("✅ inf/nan/negativno zavrnjeno, veljavna vrednost se še vedno prilepi")
+
+-- 34) ⛔⛔ Motor tega NE bo naredil namesto nas. `ClientCommand` pokliče Lua hook
+--     PRVI (g_cmds.c:5240) in do `G_commandCheck`, kjer živi
+--     `G_ClientIsFlooding` (g_cmds_ext.c:233), pride šele, če ukaza ni prevzel
+--     noben modul. Ukaz, ki ga obravnavamo mi, se torej zaščite pred poplavo
+--     nikoli ne dotakne, in nič od njenega stanja Lui ni izpostavljeno.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"; cvars.sv_maxclients = "4"
+et_InitGame(0,0,false)
+conn[2]=2; team[2]=3                       -- gledalec (TEAM_SPECTATOR)
+sent = {}
+now_ms = now_ms + 5000
+argv = {"arenahp", "250"}
+assert(et_ClientCommand(2, "arenahp") == 1, "ukaz mora ostati prevzet")
+assert(cvars.arena_hp ~= "250", "⛔ gledalec ne sme spreminjati bazena")
+local refused = false
+for _, m in ipairs(sent) do if m:match("only the two players") then refused = true end end
+assert(refused, "⛔ in mora izvedeti, zakaj: "..table.concat(sent," | "))
+-- igralec na moštvu SME
+now_ms = now_ms + 5000
+argv = {"arenahp", "250"}
+assert(et_ClientCommand(0, "arenahp") == 1)
+assert(cvars.arena_hp == "250", "kontrola: igralec na moštvu sme: "..tostring(cvars.arena_hp))
+-- a ne dvakrat v treh sekundah
+now_ms = now_ms + 500
+sent = {}
+argv = {"arenahp", "1000"}
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "250", "⛔ cooldown mora ustaviti drugi ukaz: "..tostring(cvars.arena_hp))
+local slowed = false
+for _, m in ipairs(sent) do if m:match("slow down") then slowed = true end end
+assert(slowed, "⛔ in mora povedati, da je prehitro")
+-- po izteku spet sme
+now_ms = now_ms + 5000
+argv = {"arenahp", "1000"}
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "1000", "po izteku cooldowna spet sme: "..tostring(cvars.arena_hp))
+-- in odklop mora zapis počistiti (sicer je to nov primerek istega razreda)
+et_ClientDisconnect(0)
+now_ms = now_ms + 100
+argv = {"arenahp", "500"}
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "500", "⛔ odklop mora počistiti cooldown: "..tostring(cvars.arena_hp))
+conn[2]=nil; team[2]=nil; cvars.sv_maxclients = "2"
+print("✅ pooblastilo in cooldown; odklop počisti tudi ta zapis")
+
+-- 35) ⛔ `trap_Milliseconds` je Sys_Milliseconds kot C int in se po ~24,8 dneh
+--     uptimea prelije v negativno. Naiven `now - prev < COOLDOWN` bi po
+--     prelivu dal ogromno negativno razliko … ali pa igralca zaklenil za
+--     vedno, odvisno od predznaka. Skok nazaj mora uro ponastaviti, ne ujeti.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"
+now_ms = 2000000000
+argv = {"arenahp", "250"}
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "250", "predpogoj: prvi ukaz gre skozi")
+now_ms = -2000000000          -- ura se je prelila
+argv = {"arenahp", "1000"}
+et_ClientCommand(0, "arenahp")
+assert(cvars.arena_hp == "1000",
+       "⛔ po prelivu ure igralec ne sme ostati zaklenjen: "..tostring(cvars.arena_hp))
+now_ms = 100000
+print("✅ preliv ure ne zaklene igralca")
+
+-- 36) ⛔⛔ Stub mora biti strog tam, kjer je vezava stroga. Prava
+--     `gentity_get`/`gentity_set` ob NEZNANEM imenu polja vrže
+--     (`luaL_error`, g_lua.c:2032/:2130). Stub, ki na tipkarsko napako odgovori
+--     z `nil`, tako napako spusti skozi VSE teste, v živo pa prekine cel hook.
+--     Isti razred kot brezpogojno smrtonosni G_Damage in kot manjkajoči
+--     konstanti — oboje je ta harness danes že popravil.
+local ok_get = pcall(function() return et.gentity_get(0, "ps.stat") end)   -- tipkarska napaka
+assert(not ok_get, "⛔ stub mora vreči ob neznanem imenu polja pri branju")
+local ok_set = pcall(function() et.gentity_set(0, "healht", 100) end)      -- tipkarska napaka
+assert(not ok_set, "⛔ stub mora vreči ob neznanem imenu polja pri pisanju")
+-- in znana polja morajo še naprej delovati
+assert(pcall(function() return et.gentity_get(0, "ps.stats", 0) end),
+       "kontrola: znano polje mora iti skozi")
+print("✅ stub vrže ob neznanem polju, kot vrže vezava")
+
+-- 37) ⛔ Log je po dveh dneh testiranja imel 303 KB in 5311 vrstic, prva vrstica
+--     pa se je glasila `03:56:59` — brez dneva. Dva dneva prepletena v eni
+--     datoteki, brez načina, da ju ločiš.
+--     ⭐ Rotacija je sploh mogoča zato, ker `et.trap_FS_Rename` V 2.84 OBSTAJA
+--     (g_lua.c:734) — Lua FS sloj ni samo za dodajanje, kot se običajno
+--     predpostavlja. Velikost pove FS_READ; FS_APPEND vrne 0/-1, ne dolžine.
+serverinfo = "\\mapname\\dots_arena"; cvars.mapname = "dots_arena"
+fs_len = 10
+et_InitGame(0,0,false)
+assert(#fs_renames == 0, "majhen log se ne sme rotirati")
+logged = {}
+health[0]=100; health[1]=100
+et_ClientSpawn(0,0,0,0)                    -- karkoli, kar zapiše vrstico
+assert(logged[1] and logged[1]:match("^%d%d%d%d%-%d%d%-%d%d "),
+       "⛔ vrstica mora nositi DATUM: "..tostring(logged[1]))
+fs_renames = {}
+fs_len = 900000                     -- čez mejo
+et_InitGame(0,0,false)
+assert(#fs_renames == 1, "⛔ velik log se mora rotirati, prejmenovanj: "..#fs_renames)
+assert(fs_renames[1]:match("arena_1v1%.log %-> arena_1v1%-%d%d%d%d%-%d%d%-%d%d"),
+       "⛔ novo ime mora nositi datum: "..fs_renames[1])
+-- odpiranje lahko tudi odpove in to ne sme vreči
+fs_open_fails = true
+local ok = pcall(function() et_InitGame(0,0,false) end)
+fs_open_fails = false
+assert(ok, "⛔ neuspelo odpiranje loga ne sme vreči")
+fs_len = 0; fs_renames = {}
+print("✅ log: datum v vrstici, rotacija prek trap_FS_Rename, neuspeh ne vrže")
+
+-- 38) ⛔ Omejitev vrstic na en zagon mape: ena ponorela runda ne sme napolniti
+--     diska. Hišna številka je 3000 (frame_health v6.13), z izmerjeno
+--     utemeljitvijo v proximity: »300 cut a 2 h storm on 2026-09-02«.
+et_InitGame(0,0,false)
+logged = {}
+for i = 1, 3200 do
+  health[0] = 100
+  et_ClientSpawn(0,0,0,0)
+end
+assert(#logged <= 3000,
+       "⛔ log ni omejen na zagon mape: "..#logged.." vrstic")
+assert(#logged >= 2900, "kontrola: pisati mora skoraj do meje, ne prej nehati: "..#logged)
+-- nov zagon mape mora števec ponastaviti
+et_InitGame(0,0,false)
+logged = {}
+et_ClientSpawn(0,0,0,0)
+assert(#logged > 0, "⛔ nov zagon mape mora števec ponastaviti")
+print("✅ log je omejen na zagon mape in se ob novi mapi ponastavi")

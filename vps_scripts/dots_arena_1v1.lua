@@ -45,9 +45,15 @@ VERIFIED AGAINST THIS SERVER'S BINARY (legacy/qagame.mp.x86_64.so, ET:L 2.84)
 ----------------------------------------------------------------------------
 Read out of the module's own registration tables, not from memory:
 
-  * Callbacks present: et_InitGame, et_ShutdownGame, et_Quit, et_RunFrame,
-    et_Obituary,
-    et_ClientSpawn, et_ClientCommand, et_ConsoleCommand.
+  * Callbacks this module implements: et_InitGame, et_ShutdownGame, et_Quit,
+    et_ClientDisconnect, et_Obituary, et_ClientSpawn, et_Damage,
+    et_ClientCommand, et_ConsoleCommand.
+    ⛔ This list used to be wrong in BOTH directions — it omitted et_Damage,
+    which this very file implements, and named et_RunFrame, which it
+    deliberately does not. It claimed to be "read out of the module's own
+    registration tables"; it was not read out of anything. 2.84 also offers
+    et_ClientConnect, et_ClientBegin, et_ClientUserinfoChanged, et_Print,
+    et_Revive and et_WeaponFire, none of which this module wants.
   * There is NO Lua binding that kills or respawns a client. et.G_Damage is
     the only way to end a life from a script.
   * `health` IS exposed and IS writable — g_lua.c:1397, flags 0 — and the
@@ -135,11 +141,17 @@ USAGE
 
 HOW LONG A DUEL LASTS (measured, local 2.84, two bots, 2026-09-04)
 ------------------------------------------------------------------
-  250 HP -> median  6 s (n=13)    300 HP -> median  7 s (n=11)
-  500 HP -> median 14 s (n=7)     1000 HP -> ONE duel in 120 s
+  250 HP -> median  6 s (n=13)
+  500 HP -> median 14 s (n=7)
+  1000 HP -> ONE duel in 120 s
 
 250 was an interpolation when it was added; it is a reading now (2026-09-04,
 local 2.84), and it landed where the interpolation said it would.
+
+⛔ The 300 HP row (median 7 s, n=11) is gone from this table on purpose. It was
+a real reading, but nearest_preset snaps 300 to 250, so no operator can ask for
+it — a row in an operator-facing table that names an unreachable setting is a
+lie about the interface, however true it is about the past.
 
 ⚠️ Every one of these points was measured with MIXED loadouts — Omni-bot picks
 its own class and this module cannot make it stop (see arena_loadout below).
@@ -162,7 +174,7 @@ local ENTITYNUM_WORLD      = 1022
 local MAX_CLIENTS          = 64    -- entity numbers below this are players
 local WP_MP40              = 3     -- bg_public.h:848+ ; Axis SMG
 local WP_THOMPSON          = 8     -- ; Allies SMG
-local DAMAGE_NO_PROTECTION = 0x00000020  -- g_local.h:1671
+local DAMAGE_NO_PROTECTION = 0x00000020  -- g_local.h:1669
 local LETHAL_DAMAGE        = 1000        -- far past GIB_HEALTH from any health
 
 local active        = false   -- armed on this map?
@@ -186,6 +198,11 @@ local saved_arena_hp     = nil   -- what arena_hp was before anyone typed /arena
 --- previous map's teardown. Restore what we changed; leave alone what we did
 --- not.
 local pool_typed         = false
+--- Last time each client used one of the two arena commands.
+--- ⛔ Keyed by clientNum, so et_ClientDisconnect must clear it — otherwise this
+--- is a fresh instance of the very class this review exists to remove.
+local last_cmd           = {}
+local CMD_COOLDOWN_MS    = 3000
 --- Whether the module last saw a real 1v1. Only used to announce TRANSITIONS,
 --- so a three-player warm-up does not spam the chat every death.
 local was_armed_pair     = false
@@ -247,12 +264,47 @@ end
 -- with the numbers that decide it, so the verdict is a file rather than
 -- somebody's memory of the console.
 local LOG = "arena_1v1.log"
+--- ⛔ 303 KB and 5311 lines after two days of testing, and the first line read
+--- `03:56:59` with no date — two days interleaved in one file with no way to
+--- separate them. Both halves of that are fixed here.
+local LOG_MAX_BYTES        = 512 * 1024
+local LOG_MAX_LINES_PER_MAP = 3000   -- house figure: frame_health v6.13
+local log_writes            = 0
+
+--- Rotate when the file is over the cap. ⭐ This is possible at all because
+--- `et.trap_FS_Rename(old, new)` IS registered in 2.84 (g_lua.c:734, table
+--- entry :2489) — the Lua FS layer is not append-only, which is the usual
+--- assumption. Size comes from FS_READ, whose second return value is the file
+--- length (files.c:5259); FS_APPEND returns 0/-1 and NOT a length, so the file
+--- has to be probed with a separate read-open.
+---
+--- ⛔ `trap_FS_Rename` returns nothing at all — there is no success indication,
+--- so this cannot verify itself. If it fails the log simply keeps growing,
+--- which is the same failure we started from and never worse.
+local function rotate_log_if_large()
+  local fd, len = et.trap_FS_FOpenFile(LOG, et.FS_READ)
+  if fd and fd ~= 0 and fd ~= -1 then
+    et.trap_FS_FCloseFile(fd)
+  end
+  if type(len) == "number" and len > LOG_MAX_BYTES then
+    et.trap_FS_Rename(LOG, "arena_1v1-" .. os.date("%Y-%m-%d-%H%M%S") .. ".log")
+  end
+end
 
 local function log(fmt, ...)
   if cvar_num("arena_1v1_log", 1) == 0 then return end
-  local line = os.date("%H:%M:%S ") .. string.format(fmt, ...) .. "\n"
+  -- ⛔ One runaway map must not be able to fill a disk. The cap is per map
+  -- load (log_writes is reset in et_InitGame), which is the house pattern from
+  -- frame_health v6.13 — `max_lines_per_state = 3000`, and proximity records
+  -- the measurement behind it: "300 cut a 2 h storm on 2026-09-02".
+  if log_writes >= LOG_MAX_LINES_PER_MAP then return end
+  -- ⛔ The DATE, not just the time. Everything else in this file is written so
+  -- a reading can be re-checked later; a timestamp without a day is a reading
+  -- you cannot place.
+  local line = os.date("%Y-%m-%d %H:%M:%S ") .. string.format(fmt, ...) .. "\n"
   local fd, len = et.trap_FS_FOpenFile(LOG, et.FS_APPEND)
   if not fd or fd == -1 or fd == 0 or len == -1 then return end
+  log_writes = log_writes + 1
   et.trap_FS_Write(line, string.len(line), fd)
   et.trap_FS_FCloseFile(fd)
 end
@@ -266,9 +318,44 @@ local function reading(cn)
 end
 
 --- Clients that are connected and on a playing team, as a list of numbers.
+--- ⛔⛔ ONE BOUNDARY, AND IT HAS TO BE MINE.
+---
+--- Seventeen bindings in g_lua.c build a `gentity_t*` as `g_entities + n`
+--- straight from a Lua integer with NO range check — twelve of them without
+--- even an `ent->client` guard — while `et.GetCurrentWeapon` (g_lua.c:1195)
+--- DOES check. `et.gentity_set` on a FIELD_INT_ARRAY (g_lua.c:2184) is an
+--- unbounded arbitrary-offset WRITE.
+---
+--- `arena_kill -1` was a server crash for exactly one reason: I read the
+--- binding that validates, inferred a policy from it, and treated "checked"
+--- as a property of the API rather than of that one function. The engine is
+--- inconsistent here; the consistency has to come from this file.
+local function max_clients()
+  -- ⛔ The cvar is NOT trustworthy on its own. SV_BoundMaxClients clamps it to
+  -- MAX_CLIENTS (sv_init.c:355-361) only when the server spawns, so between a
+  -- `set sv_maxclients 9999` and the next map load the cvar reads 9999 while
+  -- g_entities is still 1024 entries — and the loop below would walk straight
+  -- off the end of it. Shape copied from proximity_tracker.lua:552-556.
+  local n = cvar_num("sv_maxclients", MAX_CLIENTS)
+  if n <= 0 or n > MAX_CLIENTS then n = MAX_CLIENTS end
+  return n
+end
+
+--- ⛔ `math.type`, not a plain `type(cn) == "number"`. In Lua 5.4
+--- `luaL_checkinteger` RAISES on a non-integral float ("number has no integer
+--- representation") rather than truncating, and a raise inside a hook unwinds
+--- the rest of it — half-applied state and one console line. The house helper
+--- (proximity_tracker.lua:558-561) tests only `type(...) == "number"`, so 3.5
+--- passes it and blows up one call later. Measured: tonumber("3") is an
+--- integer, tonumber("3.0") and tonumber("1e999") are floats.
+local function valid_client(cn)
+  if math.type(cn) ~= "integer" then return false end
+  return cn >= 0 and cn < max_clients()
+end
+
 local function players_on_teams()
   local out = {}
-  for cn = 0, cvar_num("sv_maxclients", 64) - 1 do
+  for cn = 0, max_clients() - 1 do
     if et.gentity_get(cn, "pers.connected") == 2 then
       local team = et.gentity_get(cn, "sess.sessionTeam")
       if team == et.TEAM_AXIS or team == et.TEAM_ALLIES then
@@ -363,6 +450,14 @@ local pool_state       = nil    -- what a command asked for, this map
 --- silently honoured: a typo would create a regime nobody has measured, and
 --- the curve above only speaks for these three points.
 local function nearest_preset(want)
+  -- ⛔ `inf` and `nan` walk straight through the comparison below: every gap is
+  -- `inf`, `inf < math.huge` is false for all three presets, so `best` keeps
+  -- its initialiser and a nonsense pool silently becomes a VALID one — 250,
+  -- indistinguishable from someone typing /arenahp 260. `nan` is worse still:
+  -- every comparison with it is false. Reject them where they arrive.
+  if want ~= want or want == math.huge or want == -math.huge or want < 0 then
+    return nil
+  end
   local best, best_gap = HP_PRESETS[1], math.huge
   for _, preset in ipairs(HP_PRESETS) do
     local gap = math.abs(preset - want)
@@ -395,6 +490,16 @@ local function configured_pool()
     if want == preset then return preset end
   end
   local snapped = nearest_preset(want)
+  if snapped == nil then
+    -- Not a number we can honour and not a number we can snap: fall back to
+    -- the engine's own health rather than inventing a pool.
+    if hp_warned ~= want then
+      hp_warned = want
+      log("HPWARN  arena_hp=%s is not a finite non-negative number -> ignored",
+          tostring(want))
+    end
+    return vamp_active and VAMP_FALLBACK_HP or 0
+  end
   if hp_warned ~= want then
     hp_warned = want
     -- ⛔ %s, not %d. cvar_num is tonumber, and tonumber("750.5") is a FLOAT;
@@ -418,6 +523,11 @@ local function set_pool(want, cn)
   local applied = want
   if want ~= 0 then
     applied = nearest_preset(want)
+    if applied == nil then
+      log("POOL    cn=%s want=%s REFUSED (not finite / negative)",
+          tostring(cn), tostring(want))
+      return nil
+    end
   end
   pool_state = applied
   pool_typed = true
@@ -510,6 +620,12 @@ end
 --- survivor died 2.8-3.4 s later — i.e. the first duel after every spawn, the
 --- start of every series, was the unfair one.
 local function force_reset(cn, mod, why)
+  -- ⛔ NO second bounds check here, deliberately. One belongs at the entry
+  -- point (arena_kill), and the only other callers pass a clientNum that came
+  -- from players_on_teams(), which max_clients() already bounds. A copy here
+  -- would be unreachable — and this file's own standard is that a guard nobody
+  -- can see fail is decoration, not a guard. It was written, its mutation
+  -- survived because the entry-point check masks it, and it was removed.
   local hp, shield, selfkills = reading(cn)
   log("FORCE   cn=%d why=%s health=%d shield=%d selfkills=%d",
       cn, why, hp, shield, selfkills)
@@ -560,6 +676,9 @@ function et_InitGame(levelTime, randomSeed, restart)
   relevel_pending = false
   was_armed_pair = false
   pool_typed = false
+  last_cmd = {}
+  log_writes = 0
+  rotate_log_if_large()
   -- A new map starts from the server's configuration, not from what somebody
   -- typed on the last one.
   pool_state = nil
@@ -673,6 +792,7 @@ function et_ClientDisconnect(clientNum)
   forced[clientNum]       = nil
   spawn_shield[clientNum] = nil
   score[clientNum]        = nil
+  last_cmd[clientNum]     = nil
   score_pair              = nil
 
   if was_duelling then
@@ -1220,6 +1340,37 @@ function et_ClientCommand(clientNum, command)
     return 0
   end
   local cmd = string.lower(et.trap_Argv(0))
+  if cmd ~= "arenahp" and cmd ~= "arena_hp"
+     and cmd ~= "vampiric" and cmd ~= "vamp" then
+    return 0
+  end
+
+  -- ⛔⛔ THE ENGINE WILL NOT DO THIS FOR US. ClientCommand runs the Lua hook
+  -- FIRST (g_cmds.c:5240) and only reaches G_commandCheck — where
+  -- G_ClientIsFlooding lives (g_cmds_ext.c:233) — if no module claimed the
+  -- command. A command this module handles therefore never touches flood
+  -- protection at all, and none of the engine's rate-limit state
+  -- (sess.nextReliableTime, sess.numReliableCommands, pers.cmd_debounce) is
+  -- exposed to Lua. Both gates below have to be ours.
+  local team = et.gentity_get(clientNum, "sess.sessionTeam")
+  if team ~= et.TEAM_AXIS and team ~= et.TEAM_ALLIES then
+    et.trap_SendServerCommand(clientNum,
+      'print "^7arena: only the two players in the duel can change the mode\n"')
+    return 1
+  end
+
+  local now = et.trap_Milliseconds()
+  local prev = last_cmd[clientNum]
+  -- ⚠️ trap_Milliseconds is Sys_Milliseconds as a C int and wraps after ~24.8
+  -- days of uptime; `now < prev` after a wrap would lock a player out forever,
+  -- so a backwards jump resets the timer instead of trapping on it.
+  if prev ~= nil and now >= prev and now - prev < CMD_COOLDOWN_MS then
+    et.trap_SendServerCommand(clientNum,
+      'print "^7arena: slow down — one change every 3 seconds\n"')
+    return 1
+  end
+  last_cmd[clientNum] = now
+
   -- The pool, without touching lifesteal. 250 / 500 / 1000 are the measured
   -- points; 0 hands health back to the engine. It lands at the next spawn for
   -- the same reason the switch does — changing the pool mid-duel would give
@@ -1292,15 +1443,29 @@ function et_ConsoleCommand()
       return 1
     end
     local applied = set_pool(want, nil)
+    if applied == nil then
+      -- ⛔ set_pool now refuses inf/nan/negative, and this line used to
+      -- concatenate its return value straight into a string — a nil there
+      -- would have thrown inside the console handler, i.e. the refusal path
+      -- would itself have been a defect.
+      et.G_Print(MODNAME .. ": refused " .. tostring(want) ..
+                 " (needs a finite value: 0, 250, 500 or 1000)\n")
+      return 1
+    end
     et.G_Print(MODNAME .. ": pool " .. applied .. " from the next spawn\n")
     return 1
   end
   if cmd ~= "arena_kill" then
     return 0
   end
+  -- ⛔⛔ THIS is where the crash was. `tonumber` accepts -1, 5000 and 3.5, and
+  -- et.G_Damage hands all three to `g_entities + n` unchecked (g_lua.c:918).
+  -- A negative or oversized index is an out-of-bounds read AND, one line
+  -- earlier in force_reset, an out-of-bounds WRITE through gentity_set.
   local cn = tonumber(et.trap_Argv(1))
-  if cn == nil then
-    et.G_Print(MODNAME .. ": usage: arena_kill <clientnum>\n")
+  if not valid_client(cn) then
+    et.G_Print(MODNAME .. ": usage: arena_kill <clientnum 0.." ..
+               (max_clients() - 1) .. ">, got " .. tostring(et.trap_Argv(1)) .. "\n")
     return 1
   end
   log("TESTCMD arena_kill cn=%s", tostring(cn))
