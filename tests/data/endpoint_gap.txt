@@ -37,6 +37,42 @@
 # A write endpoint is verified by the call it REFUSES; calling it for real
 # would have opened a market in the dev database to prove a route exists.
 # /api/bets stays: bets.js still holds the base string.
+#
+# 2026-09-05: 3 -> 19. Not a regression — a correction, and the second one of
+# this kind (see the 64 -> 120 note above). The legacy extractor stopped at the
+# first `${`, so `wrapped.js`'s `${API_BASE}/players/${guid}/wrapped` was read
+# as the prefix `/api/players`. A truncated prefix counts as covered the moment
+# the new app calls anything deeper, and it does call
+# `/api/players/{identifier}/profile` — so a DIFFERENT, unbuilt operation
+# counted as migrated. Measured: 29 legacy calls carry an interpolation with a
+# segment behind it and 16 of them were invisible this way.
+#
+# The extractor now reads THROUGH interpolations and writes each as `{}`, so a
+# call is required as a shape (`/api/players/{}/wrapped`) that only a real call
+# to that shape can clear. Every one of the 16 was verified twice: it resolves
+# to a live path in docs/api/openapi.json, and `src/app` contains no call to it
+# (the two `graphs` hits in the app are prose in comments).
+#
+# ⚠️ These 16 are NOT phase-7 scope by themselves. Some belong to pages already
+# built (player profile calls four of them), which means those pages are
+# thinner than the ratchet claimed — that is the finding, and it is the owner's
+# call what to do about it.
+/api/greatshot/{}/crossref
+/api/greatshot/{}/highlights/render
+/api/player/{}/vs-stats
+/api/players/{}/awards
+/api/players/{}/card
+/api/players/{}/memory-card
+/api/players/{}/wrapped
+/api/rounds/{}/awards
+/api/rounds/{}/player/{}/details
+/api/rounds/{}/vs-stats
+/api/sessions/{}/graphs
+/api/skill/player/{}/form
+/api/skill/player/{}/history
+/api/stats/player/{}/form
+/api/stats/player/{}/rounds
+/api/uploads/{}/download
 /api/bets
 /api/diagnostics
 /api/stats/sessions

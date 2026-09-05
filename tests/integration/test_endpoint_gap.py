@@ -13,14 +13,16 @@ extraction anomalies there were real bugs, one was a comment.
 """
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
 from tests.integration.test_route_contract import (
     _API_BASE_PREFIX,
     _EXCLUDED_JS_FILES,
+    _FE_FULL_PATH_RE,
     _FE_LITERAL_API_RE,
-    _FE_PATH_RE,
+    _normalise_call,
     WEBSITE_JS_DIR,
     _extract_frontend_api_paths,
 )
@@ -133,11 +135,16 @@ def _extract_legacy_paths_tagged() -> tuple[set[str], set[str]]:
         if js_file.name in _EXCLUDED_JS_FILES:
             continue
         text = js_file.read_text(encoding="utf-8")
-        for match in _FE_PATH_RE.finditer(text):
-            path = match.group(1).rstrip("/")
-            if path:
-                target = dynamic if text[match.end():match.end() + 2] == "${" else exact
-                target.add(_API_BASE_PREFIX + path)
+        for match in _FE_FULL_PATH_RE.finditer(text):
+            # `_normalise_call` decides the tag now, not a two-character
+            # lookahead: a call that ends in an interpolation is still a
+            # truncated prefix, but one with a literal segment behind it is a
+            # fully-known SHAPE and must be required exactly. See the long note
+            # on _FE_FULL_PATH_RE — the lookahead version hid 16 endpoints.
+            path, truncated = _normalise_call(
+                match.group(1), text[match.end():match.end() + 2] == "${")
+            if path.strip("/"):
+                (dynamic if truncated else exact).add(path)
         for match in _FE_LITERAL_API_RE.finditer(text):
             path = match.group(0).rstrip("/")
             if path:
@@ -380,3 +387,53 @@ def test_templated_write_does_not_register_its_truncated_prefix(tmp_path: Path):
     assert not old_wrapper.search(text)
     literal_hits = {m.group(0).rstrip("/") for m in _NEW_LITERAL_RE.finditer(text)}
     assert "/api/bets/market" in literal_hits, "control: the old extraction no longer misreads — retire this test"
+
+
+def test_a_midpath_interpolation_registers_the_whole_shape_not_a_prefix():
+    """The control for the 2026-09-05 correction, and it must be able to fail.
+
+    Before that change the legacy extractor stopped at the first `${`, so a
+    call like `${API_BASE}/players/${guid}/wrapped` registered `/api/players`
+    — a truncated prefix that `_covered` clears as soon as the new app calls
+    ANY deeper path. Sixteen endpoints were invisible that way.
+
+    Revert `_FE_FULL_PATH_RE` to the old stop-at-interpolation regex and this
+    fails on the first assertion; drop the `glued` argument and it fails on the
+    third.
+    """
+    exact, dynamic = _extract_legacy_paths_tagged()
+
+    # 1. A tail behind the interpolation is KNOWN, so the shape is required
+    #    exactly — the prefix alone must not stand in for it.
+    assert "/api/players/{}/wrapped" in exact, (
+        "wrapped.js's call is not being read through its interpolation — "
+        "the extractor is truncating again"
+    )
+
+    # 2. A call that ENDS in an interpolation is still only a prefix: there is
+    #    genuinely nothing behind it to know.
+    assert "/api/stats/player" in dynamic, (
+        "a call ending in an interpolation must stay a truncated prefix"
+    )
+
+    # 3. ⛔ An interpolation GLUED to a segment (availability.js:1592 writes
+    #    `${API_BASE}/planning${path}`) looks complete to a regex that needs a
+    #    '/' to start a segment. It is not complete, and calling it exact moved
+    #    /api/planning from covered to missing — a phantom the first draft of
+    #    this change produced.
+    assert "/api/planning" in dynamic and "/api/planning" not in exact, (
+        "a glued interpolation must be treated as a truncated prefix, not a "
+        "complete path"
+    )
+
+
+def test_the_sixteen_shapes_resolve_to_real_endpoints():
+    """Anti-phantom: every templated line in the gap file must name a path the
+    API actually serves. A shape nobody can build is a line nobody can delete,
+    and it would sit in the ratchet forever looking like work."""
+    spec = json.loads((REPO_ROOT / "docs" / "api" / "openapi.json").read_text(encoding="utf-8"))
+    live = {re.sub(r"\{[^}]*\}", "{}", p) for p in spec.get("paths", {})}
+    templated = sorted(p for p in _read_path_list(GAP_FILE) if "{}" in p)
+    assert templated, "no templated lines left — this control has stopped watching anything"
+    unknown = [p for p in templated if p not in live]
+    assert not unknown, f"gap lines name paths the API does not serve: {unknown}"
