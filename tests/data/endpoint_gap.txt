@@ -65,6 +65,23 @@
 # So each of the 16 needs the same triage `/api/stats/sessions` already got
 # above: superseded (delete with the reason written down) or genuinely missing
 # (build it). Nobody should read this block as sixteen pieces of work.
+#
+# TRIAGE DONE 2026-09-05, by calling the endpoints, not by reading their names.
+# Result: ZERO deletions. All three candidates turned out to be distinct
+# content, and each was misjudged from its name first:
+#   * /api/players/{}/awards -> {status, guid, awards}: ENGRAVED SEASON AWARDS
+#     on the legacy History tab (player-profile.js:772-796), not the
+#     "milestones" the new page reads out of /api/stats/player/{name}.
+#   * /api/stats/player/{}/rounds -> {rounds: [{label, date, dpm}], avg_dpm}:
+#     a DPM series feeding a canvas sparkline (player-profile.js:391). The new
+#     page's "last rounds" table comes from /api/player/{name}/matches, which
+#     returns full round rows (round_id, map, kills, damage...). Same word,
+#     different data.
+#   * /api/players/{}/card -> {rating, archetype, percentiles, sparkline_dpm,
+#     badges, career, ...}: the hover/summary card (player-card.js:141). The
+#     composite profile does not carry it, and
+#     /api/proximity/competitive/player-card is a different endpoint.
+# The lesson is the file's own: a path is identified by what it RETURNS.
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/player/{}/vs-stats

@@ -54,6 +54,19 @@ deploy NI naloga.
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
 4. **Faza 7**: wrapped, compare, Clips.
+   ✅ **Clips + Renders + Highlights huba ZGRAJENI (5. 9.)** — ruta
+   `/greatshot/:section?` je param nosila že od faze 6, stran pa ga je
+   ignorirala: `/greatshot/clips` in `/greatshot/renders` sta bila dosegljiva
+   URL-ja, ki sta risala seznam demov. ⭐ Brez novega endpointa —
+   `GreatshotItem` že nosi `highlight_count`/`render_job_count`/
+   `rendered_count`, torej so huba filtrirani pogledi na že pridobljen seznam.
+   Upload je za pariteto skrit izven `demos` (legacy ga ima v `data-greatshot-
+   panel="demos"`, index.html:3450).
+   ⛔ **Triaža 16 skritih endpointov: NIČ izbrisov.** Vsi trije kandidati za
+   »nadomeščene« so ob klicu izkazali drugačno vsebino (`awards` = engraved
+   season awards, `stats/player/{}/rounds` = DPM serija za graf, `card` =
+   hover kartica z badges/percentiles). Klasificiral sem po imenu; pot se
+   identificira po tem, kar VRNE.
    ✅ `/rounds` je ŽE upokojen (Stats 2.0 R4, #902 — `PARAM_REDIRECTS` na
    `/sessions`, rounds je zavihek seje). Postavka je bila zastarela.
    ⛔ **PRED gradnjo faze 7 preberi popravek merilnika (5. 9.):** legacy
