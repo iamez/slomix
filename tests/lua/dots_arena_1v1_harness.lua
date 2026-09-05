@@ -42,7 +42,11 @@ et = {
   -- ⛔ FS_READ=0 je manjkal in rotacija je zato brala dolžino 0 — ista past
   -- kot manjkajoča STAT_SPRINTTIME. Vse štiri načine ima motor
   -- registrirane (g_lua.c:3291-3294), zato jih ima tudi stub.
-  MOD_SUICIDE=37, MOD_SWITCHTEAM=59, PW_NOFATIGUE=4,
+  -- ⛔ 33 in 59 sta IZMERJENA v živo (/kill in /team s), ne prešteta iz
+  -- bg_public.h — naivno štetje enuma da 26 in 46 in je napačno.
+  -- MOD_GRENADE je poljubna vrednost: logika je ne primerja, rabi jo le
+  -- kot »neki orožni mod, ki NI samomor«.
+  MOD_SUICIDE=33, MOD_SWITCHTEAM=59, MOD_GRENADE=4, PW_NOFATIGUE=4,
   FS_READ=0, FS_WRITE=1, FS_APPEND=2, FS_APPEND_SYNC=3,
   STAT_MAX_HEALTH=3, STAT_SPRINTTIME=8,
   RegisterModname=function() end, G_Print=function() end,
@@ -137,7 +141,7 @@ health[1]=0; et_Obituary(1, 0, 7)
 local iset, idmg
 for i, c in ipairs(calls) do
   if c:match("^set%(0,ps%.powerups,1,0%)$") then iset = i end
-  if c:match("^G_Damage%(0,1022,1022,1000,0x20,37%)$") then idmg = i end
+  if c:match("^G_Damage%(0,1022,1022,1000,0x20,33%)$") then idmg = i end
 end
 assert(iset, "ščit ni bil počiščen: "..table.concat(calls," | "))
 assert(idmg, "G_Damage ni bil klican: "..table.concat(calls," | "))
@@ -225,7 +229,7 @@ et_InitGame(0,0,false)
 sent = {}; health[0]=100; health[1]=100; shield[0]=0; shield[1]=0
 health[1] = 0; et_Obituary(1, 0, 7)          -- 0 ubije 1
 health[1] = 100; health[0] = 0; et_Obituary(0, 1, 7)  -- 1 ubije 0
-health[0] = 100; health[1] = 0; et_Obituary(1, 1, 37) -- 1 se ubije sam
+health[0] = 100; health[1] = 0; et_Obituary(1, 1, 33) -- 1 natipka /kill
 local last = sent[#sent] or ""
 -- ⛔ `^` je v Lua vzorcih poseben SAMO na prvem mestu; prvi zapis
 -- ("alpha ^%^3") je zato iskal DVA stršična znaka in ni ujel ničesar, assert
@@ -913,3 +917,31 @@ logged = {}
 et_ClientSpawn(0,0,0,0)
 assert(#logged > 0, "⛔ nov zagon mape mora števec ponastaviti")
 print("✅ log je omejen na zagon mape in se ob novi mapi ponastavi")
+
+-- 39) ⛔⛔ `victim == killer` NI »natipkal /kill«. Lastna granata, lasten
+--     panzer in lastna dinamit pridejo z attacker == self in ORODNIM modom —
+--     to so legitimni načini, kako izgubiti dvoboj, in nasprotnik si je točko
+--     zaslužil. Preverba same identitete jih je vse pogoltnila kot »pošten
+--     reset brez točke«. Našel drug model ob branju zasnove, ne test.
+et_InitGame(0,0,false)
+cvars.arena_hp = ""; cvars.arena_vamp = "0"
+et_InitGame(0,0,false)
+health[0]=100; health[1]=100; shield[0]=0; shield[1]=0
+sent = {}
+health[1] = 0
+et_Obituary(1, 1, et.MOD_GRENADE)      -- ubil se je z lastno granato
+local last = sent[#sent] or ""
+local a = tonumber(last:match("alpha %^3(%d+)"))
+local b = tonumber(last:match("bravo %^3(%d+)"))
+assert(a and b, "objava mora priti: "..tostring(last))
+assert(a == 1 and b == 0,
+       "⛔ samoubijstvo z orožjem MORA prinesti točko nasprotniku: "..a.."-"..b)
+-- /kill pa še vedno ne
+sent = {}
+health[0] = 100; health[1] = 100
+health[1] = 0
+et_Obituary(1, 1, et.MOD_SUICIDE)
+last = sent[#sent] or ""
+a = tonumber(last:match("alpha %^3(%d+)"))
+assert(a == 1, "⛔ /kill ne sme prinesti točke, izid je zdaj "..tostring(a))
+print("✅ lastna granata šteje, /kill ne")

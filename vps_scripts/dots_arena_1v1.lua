@@ -890,13 +890,22 @@ function et_Obituary(victim, killer, mod)
   end
   was_armed_pair = true
 
-  -- ⛔ A point and a reset are NOT the same decision. `victim == killer` is
-  -- precisely a self-inflicted death (/kill, MOD_SUICIDE); world damage such
-  -- as falling arrives with killer = ENTITYNUM_WORLD, so it is not caught
-  -- here and still scores, which is right — the world killing you is a way of
-  -- losing the duel. Typing /kill is not, and paying a point for it would
-  -- make "kill yourself when you are behind" a tactic.
-  local self_inflicted = (victim == killer)
+  -- ⛔⛔ THE MOD, NOT THE IDENTITY. `victim == killer` is not "typed /kill" —
+  -- it is also every self-frag: your own grenade, your own panzerfaust, your
+  -- own dynamite all arrive with attacker == self and a WEAPON mod. Those are
+  -- legitimate ways to lose a duel and the opponent has earned the point;
+  -- testing identity alone swallowed all of them as "fair reset, no point".
+  -- (Found by a second model reading the design, not by any test here.)
+  --
+  -- ⭐ The measured values matter more than the header enum: a live /kill
+  -- logged `mod=33` and a live /team s logged `mod=59`, while a naive read of
+  -- bg_public.h counts MOD_SUICIDE at 26. Cmd_Kill_f settles it —
+  -- `player_die(ent, ent, ent, ..., MOD_SUICIDE)` — so 33 IS MOD_SUICIDE and
+  -- the enum count was wrong. The comparison stays symbolic either way.
+  --
+  -- Falling is not caught here at all and should not be: MOD_FALLING arrives
+  -- with killer = ENTITYNUM_WORLD, so it scores, which is right.
+  local self_inflicted = (victim == killer and mod == et.MOD_SUICIDE)
 
   ensure_pair(players)
   if self_inflicted then

@@ -78,8 +78,12 @@ mutate "leaving for spectator scores a point again" \
 '  if false then'
 
 mutate "a self-inflicted death scores a point again" \
-'  local self_inflicted = (victim == killer)' \
+'  local self_inflicted = (victim == killer and mod == et.MOD_SUICIDE)' \
 '  local self_inflicted = false'
+
+mutate "a self-frag is swallowed as /kill again (identity, not mod)" \
+'  local self_inflicted = (victim == killer and mod == et.MOD_SUICIDE)' \
+'  local self_inflicted = (victim == killer)'
 
 mutate "disconnect stops clearing the slot" \
 '  forced[clientNum]       = nil
