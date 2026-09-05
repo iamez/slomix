@@ -7,6 +7,16 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-05) Doc 22 rezina 1 IZMERJENA (7 map × mreži 512/256 +
+  identifikacija; 13 min + 5 min + 1 min tekov): osebnost poti obstaja
+  (identifikacija 81–91 % proti 10 %), je časovna utež in ne kraj, prag 25
+  sej; PR odprt na veji `feat/bot-twins-route-distinctiveness`. Odprto za
+  rezino 2: dwell mora izločiti spawn čakanje (top celica je pri vseh ista);
+  NP pot je krajevno utežena (unikatne 32 u točke) — v poročilu imenovano.
+- (Fable 5.1, 2026-09-04, PAVZA zaradi limitov) Ostal sem pri doc 22 rezini 1:
+  skripta + testi na veji `feat/bot-twins-route-distinctiveness` (commitano,
+  potisnjeno, BREZ PR-ja), korpusni tek še brez številk → glej
+  `docs/HANDOFF-next.md`.
 - (Fable 5.1, 2026-09-04) Match moments r. 1 (#908) in r. 5 (#909) MERGANI; watchdog
   v6.13 deployan; owner: naslednja **doc 22 (digitalni dvojčki botov)** —
   raziskava teče (agent + puran read-only), nato `docs/design/22`; potem doc 19
