@@ -265,7 +265,8 @@ jobs:
         # docs/design/20 slice 2: a stubbed script_mover stands, moves, stands,
         # takes the killing hit from client 3. Pins first/last_move_time in
         # gameTime, one destruction credited to the attacker, no double count
-        # by the poll, the 14-field VEHICLE_PROGRESS row and the new
+        # by the poll, the 16-field VEHICLE_PROGRESS row (move + escort times)
+        # and the new
         # VEHICLE_DESTROYED section. Three mutations watched failing
         # (branch removed, last_health reset removed, first_move overwritten).
         run: lua5.4 tests/lua/vehicle_tracking_harness.lua

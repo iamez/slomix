@@ -29,12 +29,12 @@ END = START + 612
 def row(*, rn=1, start=START, end=END, map_name="supply", vehicle="truck", vtype="script_mover",
         total=12744.3, destroyed=0, guid="9F2B3930797D7D142795B1B6EE194722", name="^6[^2T^6W^2K^6]^2I^6mb3ci^2L",
         team="allies", credit=2799.5, total_escort=5095.1, mounted=0, prox=36000, samples=72,
-        first_move=None, last_move=None, destroyed_events=None):
-    # Columns 17-19 (v6.14 / migration 082) are appended so the first 17
+        first_move=None, last_move=None, destroyed_events=None, first_escort=None, last_escort=None):
+    # Columns 17-21 (v6.14 / migration 082) are appended so the first 17
     # keep their indices; None is what every pre-v6.14 row carries.
     return ("2026-08-27", rn, start, end, map_name, vehicle, vtype, total, destroyed,
             guid, name, team, credit, total_escort, mounted, prox, samples,
-            first_move, last_move, destroyed_events)
+            first_move, last_move, destroyed_events, first_escort, last_escort)
 
 
 class _StubDB:
@@ -165,11 +165,14 @@ def test_a_v614_recording_places_the_moment_at_the_first_move_and_names_who_dest
         {"time": 300000, "attacker_guid": "", "attacker_name": "", "attacker_team": "", "means_of_death": 0,
          "health_before": 350},
     ])
-    _svc, moments = _run([row(destroyed=2, credit=4000.0, first_move=61000, last_move=118500, destroyed_events=events)])
+    _svc, moments = _run([row(destroyed=2, credit=4000.0, first_move=600, last_move=118500,
+                              first_escort=61000, last_escort=110000, destroyed_events=events)])
     assert len(moments) == 1
     m = moments[0]
-    assert m["time_ms"] == 61000 and m["detail"]["timestamp_source"] == "first_move"
-    assert m["detail"]["move_window_s"] == 57.5
+    # The truck's own first move (600 ms, it drives itself off the line) is
+    # not the escort; the escorted move is.
+    assert m["time_ms"] == 61000 and m["detail"]["timestamp_source"] == "first_escort"
+    assert m["detail"]["move_window_s"] == 117.9 and m["detail"]["escort_window_s"] == 49.0
     assert m["detail"]["destroyed_by"] == [
         {"name": "kanii", "team": "axis", "attacker_guid": "GUID3ABCDEF", "time_s": 118.9},
         {"name": "", "team": "", "attacker_guid": "", "time_s": 300.0},
@@ -190,3 +193,10 @@ def test_a_zero_first_move_is_no_time_not_t0():
     # a 0 that slipped through must not pin the moment to the round's start.
     _svc, moments = _run([row(credit=4000.0, first_move=0, last_move=0)])
     assert moments[0]["detail"]["timestamp_source"] == "round_end"
+
+
+def test_a_recording_with_a_mover_that_moved_but_was_never_escorted_falls_back_to_the_first_move():
+    _svc, moments = _run([row(credit=4000.0, first_move=600, last_move=30000)])
+    m = moments[0]
+    assert m["time_ms"] == 600 and m["detail"]["timestamp_source"] == "first_move"
+    assert m["detail"]["escort_window_s"] is None

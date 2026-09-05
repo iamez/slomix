@@ -654,10 +654,12 @@ class _MomentsMixin:
 
         time_ms: the tables know the round's end but not when the push
         happened, so the moment is placed at the round's end and says so in
-        detail.timestamp_source: "first_move" when the v6.14 tracker recorded
-        when the mover first moved (gameTime() ms since round start, stored
-        unconverted — migration 082), else "round_end" (older recordings),
-        else "unknown". detail.destroyed_by lists who took the mover down
+        detail.timestamp_source: "first_escort" when the v6.14 tracker
+        recorded the first moving tick with a player mounted or within
+        escort_radius (gameTime() ms since round start, unconverted —
+        migration 082); "first_move" when only the mover's own motion is
+        known (a supply truck drives itself at round start, so this can be
+        0:00); else "round_end" (older recordings), else "unknown". detail.destroyed_by lists who took the mover down
         when the recording carries it (v6.14 VEHICLE_DESTROYED)."""
         dates = [date.fromisoformat(d) for d in scope.dates]
         starts, maps, rnums = scope.round_key_arrays()
@@ -668,7 +670,8 @@ class _MomentsMixin:
                    ec.player_guid, ec.player_name, ec.player_team,
                    ec.credit_distance, ec.total_escort_distance,
                    ec.mounted_time_ms, ec.proximity_time_ms, ec.samples,
-                   vp.first_move_time, vp.last_move_time, vp.destroyed_events
+                   vp.first_move_time, vp.last_move_time, vp.destroyed_events,
+                   vp.first_escort_time, vp.last_escort_time
             FROM proximity_vehicle_progress vp
             JOIN proximity_escort_credit ec
               ON ec.session_date = vp.session_date
@@ -705,9 +708,16 @@ class _MomentsMixin:
             round_end = int(top[3] or 0)
             first_move = int(top[17] or 0) if len(top) > 17 else 0
             last_move = int(top[18] or 0) if len(top) > 18 else 0
-            if first_move > 0:
-                # Already ms since round start (the tracker's gameTime()),
-                # the same base every other moment's time_ms uses.
+            first_escort = int(top[20] or 0) if len(top) > 20 else 0
+            last_escort = int(top[21] or 0) if len(top) > 21 else 0
+            if first_escort > 0:
+                # The escorted move, ms since round start (the tracker's
+                # gameTime()) — the base every other moment's time_ms uses.
+                # A supply truck drives itself at round start, so the raw
+                # first move would date the escort to 0:00.
+                time_ms = first_escort
+                timestamp_source = "first_escort"
+            elif first_move > 0:
                 time_ms = first_move
                 timestamp_source = "first_move"
             elif round_start > 0 and round_end > round_start:
@@ -755,6 +765,7 @@ class _MomentsMixin:
                     ],
                     "timestamp_source": timestamp_source,
                     "move_window_s": round((last_move - first_move) / 1000, 1) if first_move > 0 and last_move >= first_move else None,
+                    "escort_window_s": round((last_escort - first_escort) / 1000, 1) if first_escort > 0 and last_escort >= first_escort else None,
                     "destroyed_by": destroyed_by,
                 },
             })

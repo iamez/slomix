@@ -3425,6 +3425,8 @@ CREATE TABLE public.proximity_vehicle_progress (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     first_move_time integer,
     last_move_time integer,
+    first_escort_time integer,
+    last_escort_time integer,
     destroyed_events jsonb
 );
 

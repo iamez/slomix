@@ -141,10 +141,13 @@ When syncing or auditing game-server Lua:
 byte-identical across the six modules). Two additions, both under the
 existing `vehicle_tracking` flag (docs/design/20 slice 2):
 
-- `# VEHICLE_PROGRESS` rows carry two trailing fields, `first_move_time;
-  last_move_time` — `gameTime()` ms since round start (the carrier
-  `kill_time` base), `0` = never moved. The parser keeps its 12-field floor,
-  so pre-v6.14 files still import; migration 082 adds the columns.
+- `# VEHICLE_PROGRESS` rows carry four trailing fields, `first_move_time;
+  last_move_time;first_escort_time;last_escort_time` — `gameTime()` ms since
+  round start (the carrier `kill_time` base), `0` = never. Move = the mover's
+  own motion (a supply truck drives itself off the line at ~0.6 s); escort =
+  motion with a player mounted or within `escort_radius`, i.e. when the
+  escort happened — the moment's timestamp. The parser keeps its 12-field
+  floor, so pre-v6.14 files still import; migration 082 adds the columns.
 - `# VEHICLE_DESTROYED` — one row per destruction of a tracked mover:
   `vehicle_name;time;attacker_guid;attacker_name;attacker_team;means_of_death;
   health_before`. Source: a branch at the top of `et_Damage`, BEFORE the

@@ -529,6 +529,11 @@ class VehicleProgress:
     # fields (12-column line) or the mover never moved (Lua writes 0).
     first_move_time: int | None = None
     last_move_time: int | None = None
+    # First/last moving tick with a player mounted or within escort_radius —
+    # when the escort happened (a supply truck drives itself at round start,
+    # so the raw first move is not it). Fields 15-16.
+    first_escort_time: int | None = None
+    last_escort_time: int | None = None
 
 
 @dataclass
@@ -2836,6 +2841,8 @@ class ProximityParserV4:
                 # Lua writes 0 for "never moved" — that is no time, not t=0.
                 first_move_time=(int(parts[12].strip()) or None) if len(parts) > 13 else None,
                 last_move_time=(int(parts[13].strip()) or None) if len(parts) > 13 else None,
+                first_escort_time=(int(parts[14].strip()) or None) if len(parts) > 15 else None,
+                last_escort_time=(int(parts[15].strip()) or None) if len(parts) > 15 else None,
             ))
         except (ValueError, IndexError) as e:
             self.logger.debug(f"Skip vehicle_progress line: {e}")
@@ -3296,9 +3303,9 @@ class ProximityParserV4:
                 vp.total_distance, vp.max_health, vp.final_health, vp.destroyed_count,
             ]
             if supports_move_times:
-                columns += ["first_move_time", "last_move_time", "destroyed_events"]
+                columns += ["first_move_time", "last_move_time", "first_escort_time", "last_escort_time", "destroyed_events"]
                 values += [
-                    vp.first_move_time, vp.last_move_time,
+                    vp.first_move_time, vp.last_move_time, vp.first_escort_time, vp.last_escort_time,
                     json.dumps(destroyed_by_vehicle.get(vp.vehicle_name, [])),
                 ]
             if supports_round_end:

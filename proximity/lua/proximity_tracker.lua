@@ -2678,6 +2678,13 @@ local function scanVehicleEntities()
                     -- 0 = never moved (the parser reads 0 as "no time").
                     first_move_time = 0,
                     last_move_time = 0,
+                    -- first/last moving tick with a player mounted or within
+                    -- escort_radius: WHEN THE ESCORT HAPPENED. A supply truck
+                    -- drives itself for the first seconds of a round, so the
+                    -- raw first move is round start on that map — the escort
+                    -- moment needs the escorted move.
+                    first_escort_time = 0,
+                    last_escort_time = 0,
                     destroyed = {},
                 }
                 -- %.0f, not %d: ox/oy/oz/health come from tonumber() and are
@@ -2797,6 +2804,8 @@ sampleVehiclePositions = function()
                         if is_moving then
                             credit.credit_distance = credit.credit_distance + delta
                             credit.total_escort_distance = credit.total_escort_distance + delta
+                            if veh.first_escort_time == 0 then veh.first_escort_time = now end
+                            veh.last_escort_time = now
                         end
                     else
                         -- Check proximity while vehicle is moving
@@ -2805,6 +2814,8 @@ sampleVehiclePositions = function()
                             if player_pos then
                                 local d = distance3D(player_pos, current_pos)
                                 if d <= config.vehicle.escort_radius then
+                                    if veh.first_escort_time == 0 then veh.first_escort_time = now end
+                                    veh.last_escort_time = now
                                     credit.proximity_ms = credit.proximity_ms + config.vehicle.sample_interval_ms
                                     credit.samples = credit.samples + 1
                                     credit.total_escort_distance = credit.total_escort_distance + delta
@@ -3849,7 +3860,7 @@ local function outputDataInner()
             local vp_header = "\n# VEHICLE_PROGRESS\n" ..
                 "# vehicle_name;vehicle_type;start_x;start_y;start_z;end_x;end_y;end_z;" ..
                 "total_distance;max_health;final_health;destroyed_count;" ..
-                "first_move_time;last_move_time\n"
+                "first_move_time;last_move_time;first_escort_time;last_escort_time\n"
             et.trap_FS_Write(vp_header, string.len(vp_header), fd)
             -- Coordinates and health come from tonumber() and are floats;
             -- Lua 5.4 %d throws on a non-integral float. This is a FILE
@@ -3868,15 +3879,16 @@ local function outputDataInner()
                 return math.type(n) == "integer" and n or 0
             end
             for _, veh in ipairs(vp_items) do
-                -- v6.14: two trailing fields (the parser keeps its 12-field
+                -- v6.14: four trailing fields (the parser keeps its 12-field
                 -- floor and reads them only when present). gameTime() values
                 -- are integers, but they pass through trunc like the rest.
-                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d;%d;%d\n",
+                local line = string.format("%s;%s;%d;%d;%d;%d;%d;%d;%.1f;%d;%d;%d;%d;%d;%d;%d\n",
                     veh.name, veh.type,
                     trunc(veh.start_pos.x), trunc(veh.start_pos.y), trunc(veh.start_pos.z),
                     trunc(veh.last_pos.x), trunc(veh.last_pos.y), trunc(veh.last_pos.z),
                     veh.total_distance, trunc(veh.max_health), trunc(veh.last_health),
-                    veh.destroyed_count, trunc(veh.first_move_time), trunc(veh.last_move_time))
+                    veh.destroyed_count, trunc(veh.first_move_time), trunc(veh.last_move_time),
+                    trunc(veh.first_escort_time), trunc(veh.last_escort_time))
                 et.trap_FS_Write(line, string.len(line), fd)
             end
 

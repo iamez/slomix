@@ -11,7 +11,7 @@
 -- Asserts: first/last_move_time are the sample times of the first and last
 -- moving tick; exactly ONE destruction, credited to client 3's guid; the
 -- poll does not count the death a second time; the VEHICLE_PROGRESS line
--- carries 14 fields; a VEHICLE_DESTROYED section follows; a hit on a client
+-- carries 16 fields; a VEHICLE_DESTROYED section follows; a hit on a client
 -- never enters the vehicle branch (the control).
 
 local now_ms = 100000          -- wall clock (trap_Milliseconds)
@@ -24,7 +24,9 @@ local written = {}
 local prints = {}
 local client_hits = 0
 
+local far = false
 local function origin_of(cn)
+    if far then return { 9000, 9000, 10 } end
     return { 1000 + cn * 50, 2000, 10 }
 end
 
@@ -107,9 +109,12 @@ check(veh, "init scan registered the truck (ent 64)")
 -- move). Then one standing sample, then three moving ones.
 truck.x, truck.y, truck.z = 1000, 2000, 10
 frame(500); frame(500)
+far = true  -- nobody near the truck for its first move: not an escort
 truck.x = truck.x + 120; frame(500)
 local t_first = level_time
+far = false
 truck.x = truck.x + 120; frame(500)
+local t_first_escort = level_time
 truck.x = truck.x + 120; frame(500)
 local t_last = level_time
 frame(500); frame(500)
@@ -147,7 +152,7 @@ local vp_line = first_row_after("# VEHICLE_PROGRESS")
 check(vp_line ~= nil, "truck row present")
 local fields = {}
 for f in (vp_line .. ";"):gmatch("([^;]*);") do fields[#fields + 1] = f end
-check(#fields == 14, "VEHICLE_PROGRESS row has 14 fields (got " .. #fields .. ")")
+check(#fields == 16, "VEHICLE_PROGRESS row has 16 fields (got " .. #fields .. ")")
 check(tonumber(fields[9]) == 360.0, "total_distance counts the three real moves only, not the spawn jump from (0,0,0) (got " .. fields[9] .. ")")
 check(tonumber(fields[12]) == 1, "destroyed_count is exactly 1 (poll did not double-count), got " .. fields[12])
 -- gameTime() is level time minus the round's start, and the tracker
@@ -157,6 +162,9 @@ local base = 500
 check(tonumber(fields[13]) == t_first - base, "first_move_time = first moving sample in gameTime (" .. fields[13] .. " vs " .. (t_first - base) .. ")")
 check(tonumber(fields[14]) == t_last - base, "last_move_time = last moving sample in gameTime (" .. fields[14] .. " vs " .. (t_last - base) .. ")")
 check(tonumber(fields[14]) - tonumber(fields[13]) == t_last - t_first, "the move window is base-independent")
+check(tonumber(fields[15]) == t_first_escort - base, "first_escort_time = first moving tick WITH a player near (" .. fields[15] .. " vs " .. (t_first_escort - base) .. ")")
+check(tonumber(fields[16]) == t_last - base, "last_escort_time = last escorted moving tick (" .. fields[16] .. ")")
+check(tonumber(fields[15]) > tonumber(fields[13]), "the unescorted first move is NOT the first escort")
 
 check(out:find("# VEHICLE_DESTROYED", 1, true) ~= nil, "VEHICLE_DESTROYED section written")
 local vd_line = first_row_after("# VEHICLE_DESTROYED")
