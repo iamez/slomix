@@ -4166,6 +4166,24 @@ export interface UploadDeleteResponse {
 // whole surface is auth-gated (401 anonymous = a state). Shapes from a
 // LIVE recording: a real demo uploaded and analyzed on this branch.
 
+/** GET /api/players/{identifier}/wrapped?season=current — the shareable
+ *  season card's data. Measured live: 8 cards for an active player.
+ *
+ *  ⚠️ `sub` is optional and the live sample did not carry it, but legacy draws
+ *  it when present (wrapped.js:155-159), so the type keeps it rather than
+ *  pretending the field does not exist. A fixture cannot fail on a value it
+ *  does not contain — the schema is the arbiter, not the sample. */
+export interface WrappedCard { key: string; label: string; value: string; sub?: string | null }
+
+export interface WrappedSeason {
+  status: string;
+  guid: string;
+  season_id: string | null;
+  season_name: string | null;
+  player_name: string | null;
+  cards: WrappedCard[];
+}
+
 export interface GreatshotItem {
   id: string;
   filename: string;

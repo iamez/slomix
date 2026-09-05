@@ -16,6 +16,7 @@ import type {
   BetPlaceResponse,
   BetsMarketCurrent,
   MarketOpenResponse,
+  WrappedSeason,
   MarketSettleResponse,
   BetsWallet,
   BuildInfo,
@@ -2018,6 +2019,21 @@ export async function deleteUpload(uploadId: string) {
 
 
 // Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
+
+/** The season card behind /wrapped/:guid. `season=current` is the only value
+ *  legacy ever sends (wrapped.js:69) and the only one this asks for. */
+export function useWrapped(guid: string | undefined) {
+  return useQuery({
+    queryKey: ['wrapped', guid],
+    enabled: guid != null && guid !== '',
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/wrapped', {
+      pathParams: { identifier: guid as string },
+      query: { season: 'current' },
+    }) as Promise<WrappedSeason>,
+    staleTime: 60 * 1000,
+  });
+}
 
 export function useGreatshotList() {
   return useQuery({

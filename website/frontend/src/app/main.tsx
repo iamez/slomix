@@ -32,6 +32,7 @@ import { SpiderWebPage } from './pages/SpiderWebPage';
 import { AvailabilityPage } from './pages/AvailabilityPage';
 import { UploadsPage, UploadDetailPage } from './pages/UploadsPage';
 import { GreatshotPage, GreatshotDemoPage } from './pages/GreatshotPage';
+import { WrappedPage } from './pages/WrappedPage';
 import { LivePage } from './pages/LivePage';
 import { SkillRating } from './pages/SkillRating';
 import { makeQueryClient } from './lib/queries';
@@ -100,6 +101,7 @@ const PAGES: Record<string, React.ReactElement> = {
   design: <DesignCatalog />,
   rivalries: <Rivalries />,
   'skill-rating': <SkillRating />,
+  wrapped: <WrappedPage />,
   proximity: <Proximity />,
   'proximity-player': <ProximityPlayerPage />,
   'proximity-replay': <ProximityReplayPage />,

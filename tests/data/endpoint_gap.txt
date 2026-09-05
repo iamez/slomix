@@ -82,13 +82,21 @@
 #     composite profile does not carry it, and
 #     /api/proximity/competitive/player-card is a different endpoint.
 # The lesson is the file's own: a path is identified by what it RETURNS.
+#
+# 2026-09-05, /api/players/{}/wrapped DELETED: phase 7 built the season card
+# as the route /wrapped/:guid, reached from the profile where legacy puts its
+# chip (player-profile.js:683). A PAGE, not the overlay legacy uses, because
+# docs/design/12 states that convention twice — the story details modal became
+# a page and so did upload-detail — which is also why the new app has no
+# overlay primitive in 32 routes. Verified per docs/design/07 §C.1: the path
+# is in the live /openapi.json and was called once (8 cards, 2026 Fall (Q3));
+# the response is the committed fixture.
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/player/{}/vs-stats
 /api/players/{}/awards
 /api/players/{}/card
 /api/players/{}/memory-card
-/api/players/{}/wrapped
 /api/rounds/{}/awards
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats

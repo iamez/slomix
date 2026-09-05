@@ -112,6 +112,17 @@ function Header({ p }: { p: Profile }) {
             {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
             {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
             <IdentityLink link={id.identity_link} />
+            {/* Legacy puts a "🎁 Season Wrapped" chip here
+              * (player-profile.js:683). Same place, same reach — the card is a
+              * page now, per docs/design/12's modal→page convention. */}
+            {(id.guid ?? p.guid) && (
+              <>
+                {' · '}
+                <Link to={`/wrapped/${id.guid ?? p.guid}`} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
+                  season wrapped →
+                </Link>
+              </>
+            )}
           </div>
         ) : (
           <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="identity" /></div>

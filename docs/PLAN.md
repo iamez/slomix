@@ -67,6 +67,14 @@ deploy NI naloga.
    season awards, `stats/player/{}/rounds` = DPM serija za graf, `card` =
    hover kartica z badges/percentiles). Klasificiral sem po imenu; pot se
    identificira po tem, kar VRNE.
+   ✅ **wrapped ZGRAJEN (5. 9.)** — ruta `/wrapped/:guid`, dosegljiva s
+   profila, kjer legacy postavi svoj chip (`player-profile.js:683`). **STRAN,
+   ne overlay**: `docs/design/12` to konvencijo navede dvakrat (story details
+   modal → stran, upload-detail → stran), in prav zato nova aplikacija v 32
+   rutah nima nobenega overlay primitiva. Canvas 1080×1920 ostane (smisel
+   Wrapped je slika za Discord), a številke so ZDAJ tudi besedilo — canvas je
+   bralniku zaslona slika, legacy pa jih ni izpisal nikjer drugje.
+   Gap 19 → **18**.
    ✅ `/rounds` je ŽE upokojen (Stats 2.0 R4, #902 — `PARAM_REDIRECTS` na
    `/sessions`, rounds je zavihek seje). Postavka je bila zastarela.
    ⛔ **PRED gradnjo faze 7 preberi popravek merilnika (5. 9.):** legacy
@@ -106,7 +114,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | ⛔ **19** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija) |
+| endpoint gap | ⛔ **18** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
