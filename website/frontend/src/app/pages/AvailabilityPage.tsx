@@ -27,6 +27,7 @@ import { Absent, Chip, Lbl, Meta, Pending, SectionHead, Unavailable, figure } fr
 import { ApiError } from '../lib/api';
 import {
   deleteSubscription, postAvailabilitySettings, postBet, postCampaign, postLinkToken,
+  postOpenMarket, postSettleMarket,
   postMyAvailability, useAvailabilityAccess, useAvailabilitySettings,
   useAvailabilitySubscriptions, useAvailabilityWeek, useBetsMarketCurrent, useBetsWallet,
   usePlanningToday, usePromotionCampaign, usePromotionPreferences, usePromotionPreview,
@@ -100,6 +101,70 @@ const inputStyle = {
 function multiplier(total: number, side: number): string {
   if (side <= 0) return '—';
   return `${(total / side).toFixed(2)}×`;
+}
+
+// Admin market controls — the half of the market legacy availability.js kept
+// (:2234-2241 for open, :2284-2290 for settle) and slice 2 deliberately left
+// behind. Two operations, one gate: `is_admin` from /api/availability/access.
+//
+// ⛔ A non-admin sees NOTHING here, not a disabled button and not an
+// explanation. That is the legacy behaviour (`if (!isAdmin) { host.textContent
+// = ''; return; }`) and it is the right one: a control you cannot use is noise,
+// and naming the operation tells every visitor the surface exists. The backend
+// refuses anyway — both paths answer 401 to an anonymous POST, measured before
+// this was written — so the hiding is courtesy, not the security boundary.
+function AdminMarketControls({ market, onOpen, onSettle }: {
+  market: BetsMarket | null;
+  onOpen: () => Promise<void>;
+  onSettle: (outcome: 'team_a' | 'team_b' | 'void') => Promise<void>;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const run = async (what: string, fn: () => Promise<void>) => {
+    setBusy(true); setNote(null);
+    try {
+      await fn();
+      setNote(what);
+    } catch (e) {
+      setNote(wordsOf(e, 'the server did not accept it'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // A settled market has nothing left to administer: the payouts are done and
+  // settling again is a 400 from the backend. Legacy gates on `!settled` too.
+  if (market && market.status === 'settled') return null;
+
+  return (
+    <Stack gap={2} style={{ marginTop: 'var(--space-3)' }}>
+      <Lbl>admin</Lbl>
+      {market == null ? (
+        <Cluster gap={3}>
+          <button type="button" style={actionStyle} disabled={busy}
+            onClick={() => { void run('market opened', onOpen); }}
+            aria-label="open session market" title="open session market">
+            open session market
+          </button>
+        </Cluster>
+      ) : (
+        <Cluster gap={3} style={{ flexWrap: 'wrap' }}>
+          {([['team_a', market.team_a_label], ['team_b', market.team_b_label], ['void', 'void']] as const).map(
+            ([outcome, label]) => (
+              <button key={outcome} type="button" style={actionStyle} disabled={busy}
+                onClick={() => { void run(outcome === 'void' ? 'market voided — stakes refunded' : `settled — ${label} won`, () => onSettle(outcome)); }}
+                aria-label={outcome === 'void' ? 'void market' : `settle: ${label}`}
+                title={outcome === 'void' ? 'void market' : `settle: ${label}`}>
+                {outcome === 'void' ? 'void' : `settle: ${label}`}
+              </button>
+            ),
+          )}
+        </Cluster>
+      )}
+      {note && <Absent reason={note} />}
+    </Stack>
+  );
 }
 
 function MarketPanel({ market, wallet, authed, onBet }: {
@@ -385,6 +450,7 @@ export function AvailabilityPage() {
   const authed = access.data?.authenticated === true;
   const linked = authed && access.data?.linked_discord === true;
   const canPromote = authed && access.data?.can_promote === true;
+  const isAdmin = authed && access.data?.is_admin === true;
   const from = useMemo(() => isoPlus(0), []);
   const to = useMemo(() => isoPlus(7), []);
   const week = useAvailabilityWeek(from, to, authed);
@@ -444,7 +510,26 @@ export function AvailabilityPage() {
     await postBet(market.data.market.id, choice, amount);
     await qc.invalidateQueries({ queryKey: ['bets-market-current'] });
     await qc.invalidateQueries({ queryKey: ['bets-wallet'] });
+  }
+  // Both admin writes refetch the market rather than patching it locally: open
+  // returns only an id, settle returns the payout summary, and neither is the
+  // market shape the panel renders. Reading it back is also the only way the
+  // page learns what the SERVER decided — a settle can resolve an outcome we
+  // did not send.
+  const openMarket = async () => {
+    await postOpenMarket();
+    await qc.invalidateQueries({ queryKey: ['bets-market-current'] });
   };
+
+  const settleMarket = async (outcome: 'team_a' | 'team_b' | 'void') => {
+    if (!market.data?.market) return;
+    await postSettleMarket(market.data.market.id, outcome);
+    // The wallet moves too: settling pays winners, so a stale balance would
+    // show the admin their pre-payout figure.
+    await qc.invalidateQueries({ queryKey: ['bets-market-current'] });
+    await qc.invalidateQueries({ queryKey: ['bets-wallet'] });
+  };
+;
 
   const schedule = async (flags: { include_available: boolean; include_maybe: boolean; dry_run: boolean }) => {
     const r = await postCampaign(flags);
@@ -537,6 +622,9 @@ export function AvailabilityPage() {
         {market.data && (market.data.market == null
           ? <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="no market is open right now" /></div>
           : <MarketPanel market={market.data.market} wallet={wallet.data} authed={authed} onBet={bet} />)}
+        {market.data && isAdmin && (
+          <AdminMarketControls market={market.data.market} onOpen={openMarket} onSettle={settleMarket} />
+        )}
         {authed && wallet.isError && <TierNote error={wallet.error} what="your wallet" />}
       </div>
 

@@ -21,14 +21,22 @@
 #
 # 2026-09-02, /api/bets and /api/bets/market: availability slice 2 built the
 # BETTOR surface (wallet, pools, my bet, the stake POST on
-# /api/bets/market/{market_id}/bet). Neither line closes by that:
+# /api/bets/market/{market_id}/bet). Neither line closed by that:
 # /api/bets is legacy bets.js's `${API_BASE}/bets` base string — no such
 # endpoint exists (docs/design/07 §C.1 calls it an abbreviation), so it goes
 # when bets.js retires; /api/bets/market is the ADMIN market-open POST, which
-# the owner kept out of slice 2 (open/settle stay in legacy availability.js).
+# the owner kept out of slice 2 (open/settle stayed in legacy availability.js).
 # The templated bet call must NOT clear it — test_templated_write_does_not_
-# register_its_truncated_prefix pins that. Both close in a later slice.
+# register_its_truncated_prefix pins that.
+#
+# 2026-09-05, /api/bets/market DELETED: slice 3 built the admin half —
+# postOpenMarket() posts the bare path, so the extractor sees it without the
+# truncation hazard above. Verified per docs/design/07 §C.1 before deleting:
+# the path is in the LIVE /openapi.json as a POST, and one call was made — an
+# anonymous POST answers 401 "Not authenticated" (so does the settle sibling).
+# A write endpoint is verified by the call it REFUSES; calling it for real
+# would have opened a market in the dev database to prove a route exists.
+# /api/bets stays: bets.js still holds the base string.
 /api/bets
-/api/bets/market
 /api/diagnostics
 /api/stats/sessions

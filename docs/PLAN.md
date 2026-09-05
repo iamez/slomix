@@ -39,9 +39,17 @@ deploy NI naloga.
 
 ## Naslednji koraki (vrstni red)
 
-1. **Faza 6 — preostanek**: `/api/diagnostics`; availability rezina 3 = admin market kontrole
-   (`/api/bets/market`, settle) — ownerjeva odločitev, kdaj; `/api/bets` in
-   `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
+1. **Faza 6 — preostanek**: `/api/diagnostics` (#911, odprt).
+   ✅ **Availability rezina 3 MERGE-READY (5. 9., veja
+   `feat/availability-admin-market`)** — admin market kontrole: `open session
+   market` (POST `/api/bets/market`, prazno telo kot legacy) in settle/void
+   (POST `/api/bets/market/{id}/settle`). Gap **4 → 3**.
+   ⛔ Admin fixture NE more uporabiti hišnega testnega uporabnika: `-1` ne more
+   biti admin, ker `configured_admin_ids` obdrži žeton le ob `token.isdigit()`
+   (`auth_helpers.py:53-64`) — fixture z običajnim idjem bi vrnil
+   `is_admin: false` in vsi UI testi bi prehajali iz razloga, ki nima zveze s
+   kodo pod njimi. Pripeto s `test_the_house_test_user_can_never_be_admin`.
+   `/api/bets` in `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
@@ -75,7 +83,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | 4 na tej veji (5 na mainu; 74 ob začetku 1. 9.) |
+| endpoint gap | **3** na `feat/availability-admin-market` (4 na mainu; 74 ob začetku 1. 9.) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)

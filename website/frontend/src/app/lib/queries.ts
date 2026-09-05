@@ -15,6 +15,8 @@ import type {
   AwardsPage,
   BetPlaceResponse,
   BetsMarketCurrent,
+  MarketOpenResponse,
+  MarketSettleResponse,
   BetsWallet,
   BuildInfo,
   CampaignCreateResponse,
@@ -1927,6 +1929,30 @@ export async function postBet(marketId: number, choice: 'team_a' | 'team_b', amo
   return apiPost('/api/bets/market/{market_id}/bet', { choice, amount }, {
     pathParams: { market_id: marketId },
   }) as Promise<BetPlaceResponse>;
+}
+
+/** Open tonight's session-winner market (admin). The body is empty on purpose:
+ *  the backend fills every column from defaults (bets_router.py:353-362), which
+ *  is exactly what legacy availability.js posts — `JSON.stringify({})` at
+ *  :2357-2358. Sending labels or a session id from here would be a NEW
+ *  behaviour, not parity, so slice 3 does not.
+ *
+ *  ⭐ This is the call that closes the `/api/bets/market` ratchet line. The
+ *  templated stake POST above could not: its path carries `{market_id}` and the
+ *  extractor's charset stops at '{', so it registered the truncated prefix —
+ *  a DIFFERENT operation. Pinned by
+ *  test_templated_write_does_not_register_its_truncated_prefix. */
+export async function postOpenMarket() {
+  return apiPost('/api/bets/market', {}) as Promise<MarketOpenResponse>;
+}
+
+/** Settle a market and pay out (admin). `outcome` is 'team_a' | 'team_b' |
+ *  'void'; the backend also accepts no override and resolves from
+ *  session_results, but legacy only ever sends an explicit one and so do we. */
+export async function postSettleMarket(marketId: number, outcome: 'team_a' | 'team_b' | 'void') {
+  return apiPost('/api/bets/market/{market_id}/settle', { outcome }, {
+    pathParams: { market_id: marketId },
+  }) as Promise<MarketSettleResponse>;
 }
 
 
