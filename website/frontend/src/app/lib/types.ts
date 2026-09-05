@@ -1540,9 +1540,11 @@ export interface StorySynergy {
   defaulted_players_count?: number;
 }
 
-/** The four role boards (gravity / space-created / enabler / lurker-profile)
- *  return one players[] each with a shared identity and their own score
- *  field, so one row type carries all four rather than four near-copies. */
+/** The five role boards (gravity / space-created / enabler / lurker-profile /
+ *  camp-profile) return one players[] each with a shared identity and their
+ *  own score field, so one row type carries all five rather than five
+ *  near-copies. `hold_pct` is the one that can be null: a player alive under
+ *  a minute has no share, and the server says so instead of writing 0. */
 export interface StoryRolePlayer {
   name: string;
   guid?: string;
@@ -1551,6 +1553,7 @@ export interface StoryRolePlayer {
   space_score?: number;
   enabler_score?: number;
   solo_pct?: number;
+  hold_pct?: number | null;
 }
 
 export interface StoryRoleBoard {

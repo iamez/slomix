@@ -60,8 +60,16 @@ deploy NI naloga.
      SVOJO drugo polovico med desetimi v 81 % (@512) / 91 % (@256) proti 10 %
      naključja, kontrola 0–20 %; a »najbližja točka« da 2–6 u → osebnost je
      ČASOVNA UTEŽ, ne kraj; prag sej 25 (pod njim 63 %); dwell 10–22 %, top
-     celice skupne (spawn čakanje) → rezina 2 ga izloči. Naslednje: r. 2
-     (dwell metrika brez spawna) ali r. 3 (per-bot `.gm` profil) — owner.
+     celice skupne (spawn čakanje) → rezina 2 ga izloči. #913 mergan 5. 9.
+     **Rezina 2 zgrajena 5. 9.** (veja `feat/bot-twins-camp-profile`): metrika
+     »drži položaj« = `GET /storytelling/camp-profile` (tipizirana; hold =
+     ≤ 96 u od sidra ≥ 4 s, still = speed < 10 ≥ 3 s; prvih 3 s življenja
+     izven SEZNAMA mest; < 60 s živ → `null`, ne 0) + peta plošča vlog na
+     Story strani. Izmerjeno pred gradnjo: 90 % počasnih točk so postanki
+     < 1,2 s (delež počasnih točk NI kemp → epizodna metrika); obe definiciji
+     stabilna lastnost igralca (Spearman polovic +0,61…+0,95). Živ dokaz:
+     seja 154 hold 11–18 %, seja 120 16–23 %, hladno 0,9–1,1 s, toplo 3 ms.
+     Naslednje: r. 3 (per-bot `.gm` profil iz `top_cells` + tempa) — owner.
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -101,7 +109,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, doc 22 r. 1 izmerjena; PR odprt)
+**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, doc 22 r. 1 mergana #913, r. 2 v PR-ju)
 
 | rezina | vsebina | stanje |
 |---|---|---|
