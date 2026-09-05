@@ -7,6 +7,26 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-05, 11:30) **SKOK: ownerjeva nova prošnja** — boti na
+  dots_arena naj bodo samo medic/fieldops (drugi razredi se ne premikajo), naj
+  strejfajo levo-desno in dodgajo; + raziskava izvorne kode ET:Legacy: **zakaj
+  ni hitsounda**, čeprav je crosshair na tarči (prvih nekaj headshotov da zvok,
+  potem tišina), ali gre za neregistrirane strele (owner ocenjuje 30–60 %) in
+  ali te ob zadetku »vrže« strele vstran; + ločeni research docsi »kako postati
+  unkillable v ET/Legacy«.
+  **KJE SEM OSTAL:** PR #912 (`feat/lua-dots-arena`, 15 commitov, CI zelen,
+  `OPEN CLEAN`). P0/P1/P2 zaprti, zadnji commit `67785c84` je bratova najdba
+  (self-frag mora šteti — `mod`, ne identiteta). 39 primerov harnessa, 17
+  mutacij v `scripts/mutate_dots_arena.sh`, 6.227 testov.
+  ⏳ **TEČEJO TRIJE MOJI AGENTI** (napadalni pregled, pregled današnjega diffa,
+  pregled testov samih) — izsledke je treba pobrati in obdelati, preden se PR
+  šteje za pregledan.
+  ⛔ **Kode ni pregledal nihče** (Copilot in Codex sta zadela kvoto) → owner naj
+  požene `/code-review ultra`, preden gre paket neznancem.
+  ⛔ Odprto brez meritve: `/team s` ko si ŽIV, `sv_maxclients` v živo, rotacija
+  loga v živo, gledalčev gate in cooldown v živo, `arena_symmetric` proti
+  človeku, paket v pk3, dva človeka hkrati.
+
 - (Opus 5, 2026-09-05, 01:15) **Arena: trioosni pregled + popravki P0/P1** —
   `2b21828a` na `feat/lua-dots-arena` (PR #912). Tri visoke, vse dosegljive z
   navadno igro:
