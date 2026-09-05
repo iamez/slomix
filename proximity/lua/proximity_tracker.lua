@@ -4864,7 +4864,11 @@ function et_Damage(target, attacker, damage, damageFlags, meansOfDeath)
     -- v6.14: a tracked vehicle is not a client; attribute the hit and stop.
     -- pcall: an unguarded throw here would fire on every hit of the round.
     if isFeatureEnabled("vehicle_tracking") and tracker.vehicles.entities[target] then
-        pcall(recordVehicleDamage, target, attacker, damage, meansOfDeath)
+        -- Play only, like every other branch below: a tank shelled during
+        -- warmup is not a round event.
+        if (tonumber(et.trap_Cvar_Get("gamestate")) or -1) == 0 then
+            pcall(recordVehicleDamage, target, attacker, damage, meansOfDeath)
+        end
         return
     end
     if not isValidClient(target) or not isValidClient(attacker) then return end

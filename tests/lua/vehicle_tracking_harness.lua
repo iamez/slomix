@@ -131,6 +131,14 @@ local before = #prints
 et_Damage(1, 3, 40, 0, 5)
 check(client_hits == 0 and #prints == before, "a hit on client 1 does not touch the vehicle branch")
 
+-- Control: the same killing hit during WARMUP (gamestate 1) is not a
+-- round event — nothing recorded, the truck stays "alive" for the poll.
+gamestate = "1"
+truck.health = 0
+et_Damage(64, 3, 900, 0, 5)
+truck.health = 800
+gamestate = "0"
+frame(500)
 -- The engine has already subtracted the damage when the hook runs.
 truck.health = 0
 et_Damage(64, 3, 900, 0, 5)
