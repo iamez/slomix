@@ -109,9 +109,9 @@ check(veh, "init scan registered the truck (ent 64)")
 -- move). Then one standing sample, then three moving ones.
 truck.x, truck.y, truck.z = 1000, 2000, 10
 frame(500); frame(500)   -- the poll runs every 500 ms of gameTime: the spawn resync lands here
--- Goldrush-style start: the mover reads 0 HP before it has ever moved
--- (broken at the line, to be repaired). That is its start state, not a
--- destruction — nothing may be counted.
+-- Goldrush-style start: the init scan read 800, the first poll reads 0 HP
+-- (broken at the line, to be repaired). The mover was never READ alive, so
+-- this is its start state, not a destruction — nothing may be counted.
 truck.health = 0
 frame(500)
 truck.health = 800

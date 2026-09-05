@@ -11,7 +11,7 @@
   (a) supply truck se sam odpelje pri 0,6 s → `first_move_time` ni čas escorta
   → dodana `first/last_escort_time` (premik z igralcem na/ob vozilu), detektor
   bere te; (b) goldrush tank začne POKVARJEN → poll je vsako rundo štel
-  »uničenje« ob 1,2 s brez napadalca → poll šteje šele po prvem premiku;
+  »uničenje« ob 1,2 s brez napadalca → vozilo je »živo« šele, ko ga poll PREBERE živega (`last_health` začne na 0, ne na init scanu — vrata »po prvem premiku« so v živo padla, ker se tank skriptno premakne ob 600 ms);
   ⚠️ **kontrakt `destroyed_count` se spremeni** (korpus pred v6.14 nosi
   fantomsko 1 na vsaki goldrush rundi — detektorjev »destroyed 1×« je bil
   lažen; popravek korpusa = ločena naloga, če owner hoče).

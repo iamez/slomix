@@ -156,9 +156,11 @@ existing `vehicle_tracking` flag (docs/design/20 slice 2):
   by then the engine has already subtracted the damage, so "dead now" is
   read from the entity and "health before" from the 500 ms poll's cache.
   An empty attacker means the poll saw the death without a hit (script
-  kill, sub-threshold damage). ⚠️ The poll's own detection counts only once
-  the mover has moved: goldrush's tank begins BROKEN (0 HP until repaired),
-  and every round used to log a "destruction" at 1.2 s with no attacker —
+  kill, sub-threshold damage). ⚠️ A mover is alive only once a poll has READ
+  it alive (`last_health` starts at 0, not at the init scan's reading):
+  goldrush's tank begins BROKEN (0 HP until repaired) while the init scan
+  reads 1200 before the map script disables it, and every round used to log
+  a "destruction" at 1.2 s with no attacker —
   `destroyed_count` no longer counts that start state (a contract change
   for that column: the corpus before v6.14 carries the phantom 1 on every
   goldrush round). Its per-frame cost shows up in the FM line as the
