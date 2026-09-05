@@ -210,3 +210,33 @@
   ALIVE%, mora to vedeti.
 - ⛔ `docs/GAMESERVER_LIVE_LUA_MAP.md:74` in `deployed_lua/README.md`
   navajata 4 module; živih je 6.
+
+## 2026-09-05 popoldne — faza 6 r. 3 + popravek merilnika (PR #915)
+
+**Narejeno:**
+- availability rezina 3: admin market kontrole (open / settle / void), gap 4 → 3
+- ⛔⛔ popravek ekstraktorja: gap merjen **3, resnica 19** — 16 endpointov je
+  bilo nevidnih, ker se je zajem ustavil pri prvi `${` in odrezan prefiks
+  velja za pokritega. Vsak od 16 preverjen dvakrat (živ openapi + odsotnost
+  klica v `src/app`).
+
+**⚠️ ČAKA OWNERJEVO ODLOČITEV (vprašano, brez odgovora):** ali graditi
+wrapped/compare (2 od 16), ali najprej zapolniti štiri luknje na profilni
+strani (`players/{}/awards`, `players/{}/card`, `skill/player/{}/form`,
+`skill/player/{}/history`, `stats/player/{}/form`, `stats/player/{}/rounds`),
+ki jih je merilnik skrival in zaradi katerih je ta stran tanjša od številke.
+
+**Odprto zraven:**
+- `/api/greatshot/{}/crossref` in `/highlights/render` — greatshot stran ne
+  pozna sekcij `clips`/`renders`, legacy ima štiri hube, nova stran ignorira
+  `:section` param (ruta ga ima).
+- `/api/rounds/{}/player/{}/details`, `/api/rounds/{}/awards`,
+  `/api/rounds/{}/vs-stats`, `/api/player/{}/vs-stats` — matches.js in
+  session-detail.js.
+- `/api/sessions/{}/graphs` — Landing.tsx v komentarju že priznava, da ni
+  migriran.
+- `/api/uploads/{}/download`.
+- ⚠️ V glavnem worktreeju delata dve drugi seji (`opus-backend`, `sonet`) na
+  moments/doc 22 — njihovega drevesa se ne dotikam, delam v
+  `/home/samba/share/slomix-market`.
+- ⛔ #911 (diagnostics), #912 (arena), #882 (release 1.45.0) čakajo ownerja.

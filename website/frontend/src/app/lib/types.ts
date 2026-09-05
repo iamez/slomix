@@ -3927,6 +3927,25 @@ export interface BetPlaceResponse {
   pool: BetsPool;
 }
 
+/** POST /api/bets/market (bets_router.py:342-372) — admin only. Returns the id
+ *  of the market it just created, nothing else; the page refetches
+ *  /api/bets/market/current rather than trying to build a market from this. */
+export interface MarketOpenResponse { status: string; market_id: number }
+
+/** POST /api/bets/market/{market_id}/settle (bets_router.py:486) — admin only.
+ *  The shape is settle_market_locked's return (bets_router.py:482-483).
+ *  `refunded` is true on a void or when nobody backed the winner: both pay the
+ *  stakes back, and the two are one field because the payout code treats them
+ *  as one case. */
+export interface MarketSettleResponse {
+  status: string;
+  outcome: string;
+  total_pool: number;
+  winning_pool: number;
+  refunded: boolean;
+  bets: number;
+}
+
 /** availability.py:_campaign_payload (:1367-1435) — aggregate-only campaign
  *  metadata; the recipient snapshot never leaves the server. */
 export interface PromotionCampaignJob {

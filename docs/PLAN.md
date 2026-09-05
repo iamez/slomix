@@ -39,13 +39,44 @@ deploy NI naloga.
 
 ## Naslednji koraki (vrstni red)
 
-1. **Faza 6 — preostanek**: `/api/diagnostics`; availability rezina 3 = admin market kontrole
-   (`/api/bets/market`, settle) — ownerjeva odločitev, kdaj; `/api/bets` in
-   `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
+1. **Faza 6 — preostanek**: `/api/diagnostics` (#911, odprt).
+   ✅ **Availability rezina 3 MERGE-READY (5. 9., veja
+   `feat/availability-admin-market`)** — admin market kontrole: `open session
+   market` (POST `/api/bets/market`, prazno telo kot legacy) in settle/void
+   (POST `/api/bets/market/{id}/settle`). Gap **4 → 3**.
+   ⛔ Admin fixture NE more uporabiti hišnega testnega uporabnika: `-1` ne more
+   biti admin, ker `configured_admin_ids` obdrži žeton le ob `token.isdigit()`
+   (`auth_helpers.py:53-64`) — fixture z običajnim idjem bi vrnil
+   `is_admin: false` in vsi UI testi bi prehajali iz razloga, ki nima zveze s
+   kodo pod njimi. Pripeto s `test_the_house_test_user_can_never_be_admin`.
+   `/api/bets` in `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
-4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
+4. **Faza 7**: wrapped, compare, Clips.
+   ✅ **Clips + Renders + Highlights huba ZGRAJENI (5. 9.)** — ruta
+   `/greatshot/:section?` je param nosila že od faze 6, stran pa ga je
+   ignorirala: `/greatshot/clips` in `/greatshot/renders` sta bila dosegljiva
+   URL-ja, ki sta risala seznam demov. ⭐ Brez novega endpointa —
+   `GreatshotItem` že nosi `highlight_count`/`render_job_count`/
+   `rendered_count`, torej so huba filtrirani pogledi na že pridobljen seznam.
+   Upload je za pariteto skrit izven `demos` (legacy ga ima v `data-greatshot-
+   panel="demos"`, index.html:3450).
+   ⛔ **Triaža 16 skritih endpointov: NIČ izbrisov.** Vsi trije kandidati za
+   »nadomeščene« so ob klicu izkazali drugačno vsebino (`awards` = engraved
+   season awards, `stats/player/{}/rounds` = DPM serija za graf, `card` =
+   hover kartica z badges/percentiles). Klasificiral sem po imenu; pot se
+   identificira po tem, kar VRNE.
+   ✅ `/rounds` je ŽE upokojen (Stats 2.0 R4, #902 — `PARAM_REDIRECTS` na
+   `/sessions`, rounds je zavihek seje). Postavka je bila zastarela.
+   ⛔ **PRED gradnjo faze 7 preberi popravek merilnika (5. 9.):** legacy
+   ekstraktor se je ustavil pri prvi `${`, zato je `wrapped.js`-jev
+   `${API_BASE}/players/${guid}/wrapped` beležil kot prefiks `/api/players`,
+   ta pa velja za pokritega, brž ko nova stran kliče karkoli globljega. **16
+   endpointov je bilo tako nevidnih**, med njimi štirje, ki jih kliče
+   `player-profile.js` — torej je profilna stran tanjša, kot je merilnik
+   trdil. Gap 3 → **19**. Kaj s tem, je ownerjeva odločitev: wrapped in
+   compare sta le 2 od 16.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
@@ -83,7 +114,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | 4 na tej veji (5 na mainu; 74 ob začetku 1. 9.) |
+| endpoint gap | ⛔ **19** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)

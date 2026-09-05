@@ -21,14 +21,83 @@
 #
 # 2026-09-02, /api/bets and /api/bets/market: availability slice 2 built the
 # BETTOR surface (wallet, pools, my bet, the stake POST on
-# /api/bets/market/{market_id}/bet). Neither line closes by that:
+# /api/bets/market/{market_id}/bet). Neither line closed by that:
 # /api/bets is legacy bets.js's `${API_BASE}/bets` base string — no such
 # endpoint exists (docs/design/07 §C.1 calls it an abbreviation), so it goes
 # when bets.js retires; /api/bets/market is the ADMIN market-open POST, which
-# the owner kept out of slice 2 (open/settle stay in legacy availability.js).
+# the owner kept out of slice 2 (open/settle stayed in legacy availability.js).
 # The templated bet call must NOT clear it — test_templated_write_does_not_
-# register_its_truncated_prefix pins that. Both close in a later slice.
+# register_its_truncated_prefix pins that.
+#
+# 2026-09-05, /api/bets/market DELETED: slice 3 built the admin half —
+# postOpenMarket() posts the bare path, so the extractor sees it without the
+# truncation hazard above. Verified per docs/design/07 §C.1 before deleting:
+# the path is in the LIVE /openapi.json as a POST, and one call was made — an
+# anonymous POST answers 401 "Not authenticated" (so does the settle sibling).
+# A write endpoint is verified by the call it REFUSES; calling it for real
+# would have opened a market in the dev database to prove a route exists.
+# /api/bets stays: bets.js still holds the base string.
+#
+# 2026-09-05: 3 -> 19. Not a regression — a correction, and the second one of
+# this kind (see the 64 -> 120 note above). The legacy extractor stopped at the
+# first `${`, so `wrapped.js`'s `${API_BASE}/players/${guid}/wrapped` was read
+# as the prefix `/api/players`. A truncated prefix counts as covered the moment
+# the new app calls anything deeper, and it does call
+# `/api/players/{identifier}/profile` — so a DIFFERENT, unbuilt operation
+# counted as migrated. Measured: 29 legacy calls carry an interpolation with a
+# segment behind it and 16 of them were invisible this way.
+#
+# The extractor now reads THROUGH interpolations and writes each as `{}`, so a
+# call is required as a shape (`/api/players/{}/wrapped`) that only a real call
+# to that shape can clear. Every one of the 16 was verified twice: it resolves
+# to a live path in docs/api/openapi.json, and `src/app` contains no call to it
+# (the two `graphs` hits in the app are prose in comments).
+#
+# ⚠️⚠️ VISIBLE IS NOT MISSING, and the first draft of this note got that wrong.
+# It said the player profile page "is thinner than the ratchet claimed"
+# because seven of its legacy calls appear here. Checked afterwards: it is not.
+# `/api/players/{identifier}/profile` is a COMPOSITE — its own docstring says
+# it "assembles every profile section in a single round-trip-parallel call" —
+# and the page reads milestones from `/api/stats/player/{name}` and recent
+# rounds from `/api/player/{name}/matches`. Several of these lines are
+# SUPERSEDED, not unbuilt.
+#
+# So each of the 16 needs the same triage `/api/stats/sessions` already got
+# above: superseded (delete with the reason written down) or genuinely missing
+# (build it). Nobody should read this block as sixteen pieces of work.
+#
+# TRIAGE DONE 2026-09-05, by calling the endpoints, not by reading their names.
+# Result: ZERO deletions. All three candidates turned out to be distinct
+# content, and each was misjudged from its name first:
+#   * /api/players/{}/awards -> {status, guid, awards}: ENGRAVED SEASON AWARDS
+#     on the legacy History tab (player-profile.js:772-796), not the
+#     "milestones" the new page reads out of /api/stats/player/{name}.
+#   * /api/stats/player/{}/rounds -> {rounds: [{label, date, dpm}], avg_dpm}:
+#     a DPM series feeding a canvas sparkline (player-profile.js:391). The new
+#     page's "last rounds" table comes from /api/player/{name}/matches, which
+#     returns full round rows (round_id, map, kills, damage...). Same word,
+#     different data.
+#   * /api/players/{}/card -> {rating, archetype, percentiles, sparkline_dpm,
+#     badges, career, ...}: the hover/summary card (player-card.js:141). The
+#     composite profile does not carry it, and
+#     /api/proximity/competitive/player-card is a different endpoint.
+# The lesson is the file's own: a path is identified by what it RETURNS.
+/api/greatshot/{}/crossref
+/api/greatshot/{}/highlights/render
+/api/player/{}/vs-stats
+/api/players/{}/awards
+/api/players/{}/card
+/api/players/{}/memory-card
+/api/players/{}/wrapped
+/api/rounds/{}/awards
+/api/rounds/{}/player/{}/details
+/api/rounds/{}/vs-stats
+/api/sessions/{}/graphs
+/api/skill/player/{}/form
+/api/skill/player/{}/history
+/api/stats/player/{}/form
+/api/stats/player/{}/rounds
+/api/uploads/{}/download
 /api/bets
-/api/bets/market
 /api/diagnostics
 /api/stats/sessions
