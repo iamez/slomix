@@ -116,6 +116,15 @@
   "built": true
  },
  {
+  "key": "compare",
+  "path": "/compare",
+  "label": "Compare",
+  "nav": "hidden",
+  "phase": 7,
+  "note": "Legacy's compare modal (compare.js:11) as a page, per docs/design/12's modal-to-page convention. The two names live in `?a=&b=` so a comparison is a link \u2014 the one thing the overlay could not do. `hidden` in nav: you reach it from a player, as legacy does.",
+  "built": true
+ },
+ {
   "key": "skill-rating",
   "path": "/skill-rating",
   "label": "ET Rating",

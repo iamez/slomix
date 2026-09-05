@@ -75,6 +75,16 @@ deploy NI naloga.
    Wrapped je slika za Discord), a številke so ZDAJ tudi besedilo — canvas je
    bralniku zaslona slika, legacy pa jih ni izpisal nikjer drugje.
    Gap 19 → **18**.
+   ✅ **compare ZGRAJEN (6. 9.)** — ruta `/compare?a=&b=`. Gap se NE spremeni:
+   `/api/stats/player/{name}` je bil že pokrit, to je čisto UI delo.
+   ⭐ Imeni sta v URL-ju, torej je primerjava povezava, ki se da prilepiti —
+   edino, česar legacy overlay ni zmogel.
+   ⛔ **Ena namerna razlika od legacyja:** `compare.js:69` da Playtime
+   `higherIsBetter: false`, torej 🏆 dobi tisti, ki je igral MANJ, izrisano
+   enako kot K/D, kjer 🏆 pomeni bolje. Kot prikazano je to napačna trditev
+   (205 h proti 183 h z značko na 183 h se bere kot »183 ur je boljša
+   številka«). Ure so kontekst za vrstice nad njimi, ne tekma — vrstica ostane,
+   značko izgubi. Za ownerja: če hoče legacy vedenje, je to ena vrstica.
    ✅ `/rounds` je ŽE upokojen (Stats 2.0 R4, #902 — `PARAM_REDIRECTS` na
    `/sessions`, rounds je zavihek seje). Postavka je bila zastarela.
    ⛔ **PRED gradnjo faze 7 preberi popravek merilnika (5. 9.):** legacy
