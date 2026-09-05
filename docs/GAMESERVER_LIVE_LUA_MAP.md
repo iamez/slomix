@@ -152,9 +152,12 @@ existing `vehicle_tracking` flag (docs/design/20 slice 2):
   `vehicle_name;time;attacker_guid;attacker_name;attacker_team;means_of_death;
   health_before`. Source: a branch at the top of `et_Damage`, BEFORE the
   `isValidClient(target)` line that used to reject every non-client target.
-  The engine's hook (`g_combat.c:1857`) fires for every damaged entity, and
-  by then the engine has already subtracted the damage, so "dead now" is
-  read from the entity and "health before" from the 500 ms poll's cache.
+  The engine's hook (`g_combat.c:1857`) fires for every damaged entity and
+  BEFORE the engine subtracts the damage (`targ->health -= take` at :1915),
+  so the entity still reads its pre-hit health in the hook: dead =
+  health − damage ≤ 0, `health_before` = that reading. (Live, the first
+  build assumed the opposite: the killing hit recorded nothing and the poll
+  logged the death without an attacker.)
   An empty attacker means the poll saw the death without a hit (script
   kill, sub-threshold damage). ⚠️ The poll's own detection counts only once
   someone has escorted the mover (`first_escort_time > 0`): goldrush's map
