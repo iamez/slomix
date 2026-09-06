@@ -98,7 +98,10 @@ def load_config(repo_root: Path = REPO, environ: dict | None = None) -> dict[str
             from dotenv import dotenv_values
             values.update({k: v for k, v in (dotenv_values(root_env) or {}).items() if v is not None})
         except ImportError:
-            pass
+            # python-dotenv is in requirements.txt; without it the process
+            # environment is the only source and the caller sees that in the
+            # empty POSTGRES_* keys (the db check then reports a connect error).
+            values.setdefault("WATCHDOG_CONFIG_NOTE", "python-dotenv missing: root .env not read")
     values.update({k: v for k, v in environ.items() if k.startswith(("WATCHDOG_", "POSTGRES_", "BOT_LOG_DIR", "MONITORING_"))})
     logs_dir = Path(values.get("BOT_LOG_DIR") or (repo_root / "logs"))
     values.setdefault("WATCHDOG_DB_USER", "etlegacy_user")
@@ -224,7 +227,9 @@ def collect_disk(path: str = "/") -> dict[str, Any]:
                              timeout=10, check=False).stdout
         journal_bytes = parse_journal_usage(raw)
     except (OSError, subprocess.SubprocessError):
-        pass
+        # journalctl missing or hanging: the journal size stays None, which
+        # check_disk renders as "unknown" rather than as zero.
+        journal_bytes = None
     return {"used_pct": round(usage.used / usage.total * 100, 1), "free_gb": round(usage.free / 2**30, 2),
             "journal_bytes": journal_bytes}
 
