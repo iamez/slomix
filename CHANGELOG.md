@@ -6,6 +6,54 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.45.0](https://github.com/iamez/slomix/compare/v1.44.0...v1.45.0) (2026-09-06)
+
+
+### Features
+
+* **db:** mute the past, not the rule — arming replaces three acknowledgements ([#900](https://github.com/iamez/slomix/issues/900)) ([eea9b61](https://github.com/iamez/slomix/commit/eea9b617edb642fe43831bd85824ce59b3405e0f))
+* **db:** the audit can see a distribution move, not just an impossible row ([#895](https://github.com/iamez/slomix/issues/895)) ([c213346](https://github.com/iamez/slomix/commit/c213346f4f993d692d03e9b2a467a21413cd6a7a))
+* **db:** the plausibility audit can see the time fields now ([#892](https://github.com/iamez/slomix/issues/892)) ([75ebdee](https://github.com/iamez/slomix/commit/75ebdeeee37db908810ded2954232bafbc9c055a))
+* **lua:** frame-health v6.13 — every module measures its own frame, one log, attribution offline ([#905](https://github.com/iamez/slomix/issues/905)) ([3312621](https://github.com/iamez/slomix/commit/33126213ab4449a348a02c79e8fbc56221b892da))
+* **lua:** v6.14 — when the mover moved and who took it down; escort moments get a real timestamp (doc 20 slice 2) ([a5ca847](https://github.com/iamez/slomix/commit/a5ca847073e5021e8ad5aed54d8c8e835cae8255))
+* **ops:** a watchdog that observes and alerts, and never starts anything ([01e703e](https://github.com/iamez/slomix/commit/01e703e867ddacf966d424860d5be269eb8761d0))
+* **scripts:** bot twins — a bot named after a player gets his spots, camp times and tempo (doc 22 slice 3) ([447fef2](https://github.com/iamez/slomix/commit/447fef2c0f91ec44f9bb02722f5a1855af4b0f2d))
+* **scripts:** route distinctiveness measurement — are routes a personality or the map (doc 22 slice 1) ([73beda6](https://github.com/iamez/slomix/commit/73beda626b2eaed9232b796ebf43555497ce50e4))
+* **website:** camp profile — who holds position, as the fifth role board (doc 22 slice 2) ([d2ae818](https://github.com/iamez/slomix/commit/d2ae818fdc41243eca85f24cb3f1c1fe1a21c732))
+* **website:** greatshot on the new surface — your demos, read closely ([7d92e46](https://github.com/iamez/slomix/commit/7d92e46cdecb61534927c5dd0cc9e7cd7758e4f3))
+* **website:** moments can be asked for by type, and the story tab lists the objective escorts ([#909](https://github.com/iamez/slomix/issues/909)) ([6d61805](https://github.com/iamez/slomix/commit/6d61805d3232afa9964a41296935943e3828e1b9))
+* **website:** moments detector L — escort of the truck or tank, read from tables nobody read ([#908](https://github.com/iamez/slomix/issues/908)) ([bd8561e](https://github.com/iamez/slomix/commit/bd8561e791fbb31d1821f921f3462dd156bfe377))
+* **website:** phase 5 — the outcome instruments ([#881](https://github.com/iamez/slomix/issues/881)) ([31b1214](https://github.com/iamez/slomix/commit/31b1214bc855c57d23df5952e9311115f6a7061b))
+* **website:** phase 5 — the player page additions ([#884](https://github.com/iamez/slomix/issues/884)) ([5f98fd2](https://github.com/iamez/slomix/commit/5f98fd269443a8ea8e748cd660e26d53fcc26e69))
+* **website:** phase 6 — availability slice 3, the admin's half of the market ([ea278ec](https://github.com/iamez/slomix/commit/ea278ec102181cce9ded84d0160b4b389ac00d5d))
+* **website:** phase 6 — availability, slice 1 ([#887](https://github.com/iamez/slomix/issues/887)) ([5f8b7cd](https://github.com/iamez/slomix/commit/5f8b7cdbd77b1f16d32c2648964b1285c39170b3))
+* **website:** phase 6 — availability, slice 2: the linked forms and the bettor's market ([#894](https://github.com/iamez/slomix/issues/894)) ([69c110d](https://github.com/iamez/slomix/commit/69c110db3eae359283b89a11f917df76d998c38e))
+* **website:** phase 6 — the upload library, slice 1 ([#888](https://github.com/iamez/slomix/issues/888)) ([c053b47](https://github.com/iamez/slomix/commit/c053b477318c3cc5e23501c63da4e8898f7376e5))
+* **website:** phase 6 — uploads, slice 2: uploading and deleting ([#896](https://github.com/iamez/slomix/issues/896)) ([91ca599](https://github.com/iamez/slomix/commit/91ca59986213a2a5882aef21bb49524231fc91d9))
+* **website:** phase 7 — compare and wrapped as routes, not modals ([80a1128](https://github.com/iamez/slomix/commit/80a1128474dd386938e5b5ca57f6e016107038f3))
+* **website:** site debt — a truthful parity keymap, /replay redirects, diagnostics on the About page ([a96b187](https://github.com/iamez/slomix/commit/a96b187f948ec648d5db74fd406ff11ca8cd3cf2))
+* **website:** stats 2.0, slice 1 — one archive of the evenings ([#897](https://github.com/iamez/slomix/issues/897)) ([f6c2289](https://github.com/iamez/slomix/commit/f6c2289f017f25fddf0b6645fc14ea9b42a57cfe))
+* **website:** stats 2.0, slice 2 — the basics table and the evening's awards, typed ([#898](https://github.com/iamez/slomix/issues/898)) ([ace66e3](https://github.com/iamez/slomix/commit/ace66e3d9bbd7dde2dc1b77d52743c4a6f72bcd8))
+* **website:** stats 2.0, slice 3 — the session page opens on what a player reads first ([#899](https://github.com/iamez/slomix/issues/899)) ([965c292](https://github.com/iamez/slomix/commit/965c2928049ec458b225619cd0d5e83eeb0eaab3))
+* **website:** stats 2.0, slice 4 — the session page's four tabs: players, rounds, teamplay, story ([#902](https://github.com/iamez/slomix/issues/902)) ([f3f06cd](https://github.com/iamez/slomix/commit/f3f06cdc54125b05ddcd4667b5ddea233d91b2ad))
+* **website:** stats 2.0, slice 5 — the expanded player row: links, per-map, best life, form, kill impact, weapons ([#903](https://github.com/iamez/slomix/issues/903)) ([e3b0a70](https://github.com/iamez/slomix/commit/e3b0a70cdc7b02c84d44c16003b5827806f9237b))
+* **website:** the dataset register — one typed list of what the site can show ([f732dca](https://github.com/iamez/slomix/commit/f732dca717393f3fd6f0230815fd7c13b4e29046))
+* **website:** the live surface — a quiet server said plainly, and watchers watched ([18cc9c4](https://github.com/iamez/slomix/commit/18cc9c4a2fe1c02f8ad1396693a6d2437c047ed9))
+
+
+### Bug Fixes
+
+* **bot:** a library's traceback stops drowning the log the owner greps ([#950](https://github.com/iamez/slomix/issues/950)) ([4053fd5](https://github.com/iamez/slomix/commit/4053fd5d250fb38f841effa66b3c1409f6213f3f))
+* **bot:** the SSH monitor says what it knows, and its streaks survive a restart ([#923](https://github.com/iamez/slomix/issues/923)) ([5aca4a7](https://github.com/iamez/slomix/commit/5aca4a76c1074675826fe979f3d7f6f62a8be4dd))
+* **ci:** review slices get a head branch — GitHub refuses a PR whose head is an ancestor of its base ([ed0dfe2](https://github.com/iamez/slomix/commit/ed0dfe2259fbd97fefd4510b16e85238ee4f6743))
+* **db:** backfill time_played_percent where the import left a zero ([#886](https://github.com/iamez/slomix/issues/886)) ([fb35e09](https://github.com/iamez/slomix/commit/fb35e09be0a3491248ae01b3a593fbcda339b93e))
+* **db:** reconstruct the historical dead time, and watch the sensor go quiet ([#904](https://github.com/iamez/slomix/issues/904)) ([860113d](https://github.com/iamez/slomix/commit/860113d868430847915056c441a45f6d1b26b0f1))
+* **db:** the live import path never wrote time_played_percent ([#885](https://github.com/iamez/slomix/issues/885)) ([f71906a](https://github.com/iamez/slomix/commit/f71906ac8492b0600ef03033b53dba024da17ac0))
+* **ops:** the backup picks its role on purpose, not by accident ([#906](https://github.com/iamez/slomix/issues/906)) ([2e50f50](https://github.com/iamez/slomix/commit/2e50f50abe5a442ccaa009fdb010931eddec5c40))
+* **proximity:** the endpoints accept the 8-character guid the session page carries ([7c790ad](https://github.com/iamez/slomix/commit/7c790adae4a00f502f874438cf4c18fbb70d3b4a))
+* **website:** the diagnostics panel reads the error before the count, and says why a number is missing ([b66034a](https://github.com/iamez/slomix/commit/b66034a3bc22990a2d27c499c220963990a7332d))
+* **website:** the session's proximity link reaches a page with capture; final parity sweep findings and the handoff ([95af9fd](https://github.com/iamez/slomix/commit/95af9fdc26add7a8c2f1b5002790077d0001ce04))
+
 ## [1.44.0](https://github.com/iamez/slomix/compare/v1.43.0...v1.44.0) (2026-09-02)
 
 
