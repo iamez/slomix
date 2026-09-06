@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
-from website.backend.routers.proximity_helpers import logger
+from website.backend.routers.proximity_helpers import logger, resolve_player_guid
 
 router = APIRouter()
 
@@ -20,6 +20,10 @@ async def get_proximity_player_profile(
 ):
     """Aggregated player proximity stats for profile page."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
+    # The session page keys players on the 8-char prefix; the tables store
+    # the full guid. Resolve once, bind the full form in every query below.
+    requested_guid = guid
+    guid = await resolve_player_guid(db, guid) or guid
     try:
         # All 7 queries below hit different tables with no ordering
         # dependency. Parallelising them turns 7 × RTT into 1 × RTT
@@ -98,6 +102,7 @@ async def get_proximity_player_profile(
         return {
             "player_name": player_name,
             "guid": guid,
+            "requested_guid": requested_guid,
             "total_engagements": int(eng_stats[0] or 0) if eng_stats else 0,
             "escapes": int(eng_stats[1] or 0) if eng_stats else 0,
             "deaths": int(eng_stats[2] or 0) if eng_stats else 0,
@@ -132,6 +137,7 @@ async def get_proximity_player_radar(
     Mechanical left the radar with the 2026-07-25 validity pass; it and the
     raw reaction times are returned under `unscored`."""
     since = datetime.now(timezone.utc).replace(tzinfo=None).date() - timedelta(days=max(1, min(range_days, 3650)))
+    guid = await resolve_player_guid(db, guid) or guid
     try:
         # 5 independent axis queries — parallelise. Teamplay axis stays
         # below since it branches on awareness_row's engagement count and

@@ -12,6 +12,11 @@
   panelu po mergu #946; `docs/design/19` status vrstica (lokalno). Naslednje:
   (1) watchdog r. 1 (`scripts/slomix_watchdog.py`, obseg doc 24). PR-ji #945,
   #946 v vratih (ownerjev DA za oba). Zvečer #882 → `review_slices.sh cut --push`.
+- (Fable 5.1, 2026-09-06, 17:30) Proga (2) guid prefiks narejena (veja
+  `feat/proximity-guid-prefix`, PR). Naslednje po planu: (3) About diagnostics
+  stanja degradacije (#911 prenos), (4) doc 19 r. 1, (1) watchdog r. 1. Zvečer:
+  #882 → `review_slices.sh cut --push`. ⚠️ Sestra dela #923 (SSH monitor nizi):
+  svetoval datoteko `logs/bot_error_streaks.json`, ne migracijo; watchdog jo bo bral.
 - (Fable 5.1, 2026-09-06, 14:45) Ultra + Astra pripravljena (veja
   `docs/ultra-ready`): ultra meja 8 000 vrstic → 20 rezin
   (`scripts/review_slices.sh`, rez = meritev 20/20); `19c61847` NI prednik
