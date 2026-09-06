@@ -59,7 +59,8 @@ deploy NI naloga.
    owner (c) → Clips strani NI** (33. zaslon odpade; 32 rut). `/rounds` že
    preusmerjen. Ostane: končni paritetni prelet (SPA, vse rute × 4 viewporti
    × anon/owner — `scripts/audit_website_browser.mjs --app --manifest`), potem
-   pregledni PR (baza `19c61847` = #802 merge, glava main) za ultra.
+   pregledni PR-ji za ultra (glej točko 5 — rezine; ⛔ `19c61847` je bil hash
+   iz stare zgodovine).
 
 2. **Faza 6 r. 3 + popravek merilnika (6. 9., veja `feat/availability-admin-market`, PR #915):**
    admin market kontrole (open / settle / void, `POST /api/bets/market`);
@@ -74,8 +75,21 @@ deploy NI naloga.
    z zapisanim razlogom, ne kot tiha zamenjava števila.
    ⚠️ `compare` in `wrapped` iz te veje sta bila ODSTRANJENA: #920 ju je
    mergal medtem, in mainovi različici sta ostali.
-5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
-   produkciji.
+5. **Ultra pregled = 20 rezin (6. 9.)**: meja ≤ 8 000 vrstic / 500 datotek na
+   pregled, koda od proda 93 k → `scripts/review_slices.sh` (obratna baza:
+   `review-base/NN-<območje>` = main z območjem na v1.39.0; glava `review/NN` z
+   mainovim drevesom — GitHub zavrne glavo, ki je prednik baze; draft
+   PR-ji »review: … — NEVER MERGE«, telesa `docs/review/SLICES.md`, vodnik
+   `docs/REVIEW_GUIDE.md`, spiderweb `docs/SPIDERWEB_STATUS.md`). Rez = meritev
+   20/20. Vrstni red (owner): 01 proximity+spiderweb+Lua (5 301) → 02 backend
+   routerji (6 411) → 03 SPA lib (7 708) 7. 9. opoldne; ostale po dnevih.
+   ⛔ po #882 (v1.45.0) `cut --push` znova. Nato triaža najdb (Astra, zanka
+   `docs/process/MANDELBROT_RCA.md`) → 1–2 tedna teka na dev → pogovor o
+   produkciji. **Astra predaja**: `AGENTS.md`, `docs/prompts/astra_kickoff.md`,
+   `docs/AGENT_LOG.md`, `~/.codex/*` (memory `astra_codex_handoff_2026-09-06`).
+   **Watchdog proga** (Astra, po triaži): obseg `docs/design/24_WATCHDOG.md`
+   (lokalno) — opazovalec + Discord alarmi z dedupom, nikoli zaganjalnik;
+   dokaz = simuliran izpad → alarm ≤ 2 min, noč brez izpada → 0 alarmov.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
    - `docs/design/22` (lokalno, **napisan 4. 9.**) — **»digitalni dvojčki« botov**:
      `player_track.path` (200 ms, 74 480 življenj, regularji 28–63 sej/mapo)
