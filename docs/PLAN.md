@@ -40,8 +40,8 @@ deploy NI naloga.
 ## Proga: štiri točke do Astre (6. 9. popoldne)
 
 Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
-degradacije → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1 (obseg
-`docs/design/24`, lokalno).
+degradacije (PR #946) → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1
+(obseg `docs/design/24`, lokalno).
 
 - **(2) proximity guid prefiks — NAREJENO 6. 9.** Izmerjeno: 34 polnih guidov →
   23 prefiksov; edini kolizijski prefiksi so botovski (`OMNIBOT0` ×9, `OMNIBOT1`
@@ -67,6 +67,26 @@ degradacije → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1 (obseg
   response_model −1. Fixture `api_diagnostics_degraded.json` (konstruiran, z
   `_note`). Mutacija (vrstni red `count`/`error`) videna pasti; oba posnetka
   brez izgube skozi model (`test_diagnostics_response_model.py`).
+- **(4) doc 19 r. 1 — register datasetov — NAREJENO 6. 9.** Ni greenfield:
+  poenotenje treh obstoječih stvari — `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` z
+  IZMERJENIMI stroški (aim 16 887 ms, advanced 11 077 ms hladno) v profilnem
+  routerju, oblika `formula_registry.py` (vnos = stvar + status + surface, brez
+  tipa) in `routes.data.json` kot imenski prostor `page_key`.
+  `services/dataset_registry.py` (34 vnosov: 14 profilnih sekcij, 8 sejnih,
+  12 proximity/derived) + `GET /api/datasets` (tipiziran, javen, read-only,
+  `DatasetRegistry{registry_version,count,datasets}`); profilni router
+  IZPELJE `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` iz registra (en vir; »heavy« =
+  ≥ 5 s hladno). Pravila, ki jih testi pinnajo proti VIRU, ne kopiji:
+  `default_visible_on` ⊆ ključi `routes.data.json`, `depends_on` ⊆ ključi,
+  `parity_key` = `data-parity`, ki ga SPA res renderira, `collection_toggle` =
+  Lua `isFeatureEnabled` sekcija ali bot `*_ENABLED` (nikoli web-layer zastava,
+  doc 19 §5). Kontrola: lažen `page_key` → test pade (videno, obnova `cmp`).
+  SPA: tip `DatasetDescriptor`/`DatasetRegistry`, hook `useDatasets`
+  (`staleTime: Infinity`), fixture `api_datasets.json` (GENERIRAN iz registra,
+  z `_note`), e2e `datasets.spec.ts` (Playwright doseže endpoint, ≥ 30 vnosov,
+  `aim` ni na profilu). Openapi posnetek osvežen (+148 vrstic). Brez UI —
+  vrstica na About panelu pride po mergu #946 (isti panel). R. 2 (tabela
+  `user_page_layouts`, column picker) po doc 19 §9 — ownerjeva odločitev.
 
 ## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 

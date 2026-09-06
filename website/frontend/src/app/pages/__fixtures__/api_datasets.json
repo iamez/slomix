@@ -1,0 +1,559 @@
+{
+  "registry_version": "1.0",
+  "count": 34,
+  "datasets": [
+    {
+      "key": "identity",
+      "label": "identity and aliases",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.header"
+    },
+    {
+      "key": "skill",
+      "label": "rating and its components",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.rating-components"
+    },
+    {
+      "key": "streaks",
+      "label": "kill and death streaks",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.streaks"
+    },
+    {
+      "key": "weapons",
+      "label": "weapon breakdown",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.weapons"
+    },
+    {
+      "key": "hit_regions",
+      "label": "hit regions",
+      "collected_by": "lua",
+      "collection_toggle": "hit_region_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.hit-regions"
+    },
+    {
+      "key": "movement",
+      "label": "movement",
+      "collected_by": "lua",
+      "collection_toggle": "engagement_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.movement"
+    },
+    {
+      "key": "relationships",
+      "label": "rivals and duos",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.relationships"
+    },
+    {
+      "key": "maps",
+      "label": "per-map record",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.maps"
+    },
+    {
+      "key": "recent_matches",
+      "label": "recent rounds",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "profile"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": "profile.recent"
+    },
+    {
+      "key": "aim",
+      "label": "aim summary",
+      "collected_by": "lua",
+      "collection_toggle": "shot_fired",
+      "display_toggle_default": false,
+      "user_overridable": true,
+      "default_visible_on": [],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": 16887,
+      "parity_key": null
+    },
+    {
+      "key": "advanced",
+      "label": "advanced timing",
+      "collected_by": "lua",
+      "collection_toggle": "spawn_timing",
+      "display_toggle_default": false,
+      "user_overridable": true,
+      "default_visible_on": [],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": 11077,
+      "parity_key": null
+    },
+    {
+      "key": "gather_summary",
+      "label": "gather summary",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": false,
+      "user_overridable": true,
+      "default_visible_on": [],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "nick_history",
+      "label": "nick history",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": false,
+      "user_overridable": true,
+      "default_visible_on": [],
+      "depends_on": [],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "combat_timing",
+      "label": "combat timing",
+      "collected_by": "lua",
+      "collection_toggle": "engagement_tracking",
+      "display_toggle_default": false,
+      "user_overridable": true,
+      "default_visible_on": [],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": "/api/players/{identifier}/profile",
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "session_basics",
+      "label": "basics table",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+      "cost_ms_cold": null,
+      "parity_key": "session.basics"
+    },
+    {
+      "key": "session_awards",
+      "label": "session awards",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/awards",
+      "cost_ms_cold": null,
+      "parity_key": "session.awards"
+    },
+    {
+      "key": "session_scoreboard",
+      "label": "map-by-map scoreboard",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/detail",
+      "cost_ms_cold": null,
+      "parity_key": "session.scoreboard"
+    },
+    {
+      "key": "session_teams",
+      "label": "team attribution",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/detail",
+      "cost_ms_cold": null,
+      "parity_key": "session.teams"
+    },
+    {
+      "key": "session_story",
+      "label": "the session story",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [
+        "kill_impact"
+      ],
+      "endpoint": "/api/storytelling/session",
+      "cost_ms_cold": null,
+      "parity_key": "session.story"
+    },
+    {
+      "key": "session_players",
+      "label": "per-player drilldown",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+      "cost_ms_cold": null,
+      "parity_key": "session.players"
+    },
+    {
+      "key": "session_lives",
+      "label": "lives and spawns",
+      "collected_by": "bot_parser",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/detail",
+      "cost_ms_cold": null,
+      "parity_key": "session.lives"
+    },
+    {
+      "key": "session_mvp",
+      "label": "mvp and verdicts",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [],
+      "endpoint": "/api/stats/session/{gaming_session_id}/detail",
+      "cost_ms_cold": null,
+      "parity_key": "session.mvp"
+    },
+    {
+      "key": "proximity_capture",
+      "label": "proximity capture (200 ms samples)",
+      "collected_by": "lua",
+      "collection_toggle": "PROXIMITY_ENABLED",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity",
+        "proximity-player",
+        "proximity-replay",
+        "proximity-teams",
+        "spider-web"
+      ],
+      "depends_on": [],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "engagements",
+      "label": "combat engagements",
+      "collected_by": "lua",
+      "collection_toggle": "engagement_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity",
+        "proximity-player"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "kill_outcomes",
+      "label": "kill outcomes (gib / revive / tapout)",
+      "collected_by": "lua",
+      "collection_toggle": "kill_outcome_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity",
+        "proximity-player"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "hit_regions_capture",
+      "label": "hit regions",
+      "collected_by": "lua",
+      "collection_toggle": "hit_region_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity-player"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "spawn_timing",
+      "label": "spawn timing",
+      "collected_by": "lua",
+      "collection_toggle": "spawn_timing",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "reactions",
+      "label": "reaction metrics",
+      "collected_by": "lua",
+      "collection_toggle": "reaction_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "crossfire",
+      "label": "crossfire opportunities",
+      "collected_by": "lua",
+      "collection_toggle": "crossfire_opportunities",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity-teams"
+      ],
+      "depends_on": [
+        "proximity_capture",
+        "engagements"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "shots_fired",
+      "label": "shots fired",
+      "collected_by": "lua",
+      "collection_toggle": "shot_fired",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity-player"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "aim_lock",
+      "label": "aim lock windows",
+      "collected_by": "lua",
+      "collection_toggle": "aim_lock",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "proximity"
+      ],
+      "depends_on": [
+        "proximity_capture",
+        "shots_fired"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "vehicle_progress",
+      "label": "vehicle progress and escorts",
+      "collected_by": "lua",
+      "collection_toggle": "objective_run_tracking",
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": null,
+      "cost_ms_cold": null,
+      "parity_key": null
+    },
+    {
+      "key": "kill_impact",
+      "label": "kill impact (KIS)",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "session-detail",
+        "session-detail-date"
+      ],
+      "depends_on": [
+        "proximity_capture",
+        "kill_outcomes"
+      ],
+      "endpoint": "/api/storytelling/kill-impact",
+      "cost_ms_cold": null,
+      "parity_key": "session.player.kis"
+    },
+    {
+      "key": "spider_web",
+      "label": "spider web (round reconstruction)",
+      "collected_by": "derived",
+      "collection_toggle": null,
+      "display_toggle_default": true,
+      "user_overridable": true,
+      "default_visible_on": [
+        "spider-web"
+      ],
+      "depends_on": [
+        "proximity_capture"
+      ],
+      "endpoint": "/api/replay/round/{round_id}/web",
+      "cost_ms_cold": null,
+      "parity_key": null
+    }
+  ],
+  "_note": "GENERATED from website/backend/services/dataset_registry.py via the router (2026-09-06); regenerate when the register changes."
+}
