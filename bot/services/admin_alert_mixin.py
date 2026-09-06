@@ -161,6 +161,7 @@ class _AdminAlertMixin:
                 severity="critical"
             )
 
+        self._persist_error_streaks()
         return count
 
     async def reset_error_tracking(self, error_key: str):
@@ -194,13 +195,24 @@ class _AdminAlertMixin:
             self._consecutive_errors[error_key] = 0
         self._alerted_keys.discard(error_key)
 
+        # ⛔ Persist BEFORE the early return. A reset that is not written is a
+        # reset a restart undoes — the counter would come back from disk and
+        # the next single failure would look like the third one.
+        self._persist_error_streaks()
+
         if not had_alerted:
             return
 
+        boot_time = getattr(self, "_boot_time", None)
         if started is not None:
             elapsed = datetime.now(timezone.utc) - started
             minutes = max(1, round(elapsed.total_seconds() / 60))
             span = f"after {minutes} minute{'s' if minutes != 1 else ''}"
+            # A streak older than this process survived a restart. Saying so
+            # matters: without it, an admin reading "back to normal after 95
+            # minutes" would assume one continuous process watched all 95.
+            if boot_time is not None and started < boot_time:
+                span += " (the streak crossed a bot restart)"
         else:
             # The streak began before this process did (the counters live in
             # memory only), so the duration is genuinely unknown — say so
@@ -213,3 +225,52 @@ class _AdminAlertMixin:
             f"{count} consecutive failure{'s' if count != 1 else ''} before this cycle succeeded.",
             severity="info",
         )
+
+    # =====================================================================
+    # Persistence — the streaks survive a restart
+    # =====================================================================
+
+    def _persist_error_streaks(self) -> bool:
+        """Write the current streaks to disk. Never raises, never blocks alerts.
+
+        ⛔ Guarded with getattr because the store is optional. Test harnesses
+        and any embedder that builds this mixin without a store keep the exact
+        behaviour they had before persistence existed: counting in memory.
+        """
+        store = getattr(self, "_streak_store", None)
+        if store is None:
+            return False
+        return store.save(
+            boot_time=getattr(self, "_boot_time", None) or datetime.now(timezone.utc),
+            consecutive=self._consecutive_errors,
+            started=self._error_streak_started,
+            last_seen=self._error_last_seen,
+            alerted=self._alerted_keys,
+        )
+
+    def load_error_streaks(self) -> int:
+        """Restore streaks left by the previous process. Returns how many.
+
+        ⛔⛔ THE REASON THIS EXISTS. The counters used to live only in RAM, so
+        restarting the bot set every streak to zero. That does not merely lose
+        history: if the service is still broken, the bot now needs three FRESH
+        failures before it will page anyone again. A restart therefore delayed
+        the next alert — which is the opposite of what an operator restarting a
+        failing bot expects.
+        """
+        store = getattr(self, "_streak_store", None)
+        if store is None:
+            return 0
+        loaded = store.load(STREAK_WINDOW)
+        self._consecutive_errors.update(loaded["consecutive"])
+        self._error_streak_started.update(loaded["started"])
+        self._error_last_seen.update(loaded["last_seen"])
+        self._alerted_keys.update(loaded["alerted"])
+
+        restored = len(loaded["consecutive"])
+        if restored or loaded["expired"]:
+            logger.info(
+                f"Restored {restored} failure streak(s) from disk "
+                f"({loaded['expired']} dropped as older than {STREAK_WINDOW})"
+            )
+        return restored

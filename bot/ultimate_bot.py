@@ -10,7 +10,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -30,6 +30,7 @@ from bot.core.utils import sanitize_error_message
 from bot.repositories import FileRepository
 from bot.services.admin_alert_mixin import _AdminAlertMixin
 from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+from bot.services.error_streak_store import ErrorStreakStore
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
 from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 from bot.services.round_publisher_service import RoundPublisherService
@@ -330,6 +331,14 @@ class UltimateETLegacyBot(
         self._error_streak_started: dict[str, datetime] = {}
         # When each key last failed — an idle gap ends the streak (STREAK_WINDOW).
         self._error_last_seen: dict[str, datetime] = {}
+        # ⛔⛔ The four dicts above used to be the whole story, which meant a
+        # restart wiped every streak. That is worse than losing history: with
+        # the counters back at zero, a service that is STILL failing needs a
+        # fresh full threshold before it pages anyone, so restarting a broken
+        # bot postponed its next alert. The store below carries them across.
+        self._boot_time: datetime = datetime.now(timezone.utc)
+        self._streak_store = ErrorStreakStore()
+        self.load_error_streaks()
 
     # =========================================================================
     # 🚨 ADMIN NOTIFICATION SYSTEM
