@@ -3,6 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Infra Handoff:** Read `docs/INFRA_HANDOFF_2026-02-18.md` before making infra/CI/deployment changes.
+>
+> **Any agent (Codex, Claude, Copilot):** the distilled contract is the root `AGENTS.md`; the working loop is `docs/process/MANDELBROT_RCA.md`; reviewers start at `docs/REVIEW_GUIDE.md`; durable lessons go to `docs/AGENT_LOG.md`.
 
 ---
 
@@ -179,7 +181,7 @@ AUTOMATION_ENABLED=true
 ## Infrastructure Services
 
 - **PostgreSQL**: Primary database (17 in production, 14 in dev)
-- **Redis**: v7.4.2 (caching, session data) — running on localhost:6379; CI uses the same image (`redis:7.4.2-alpine` in `.github/workflows/tests.yml`)
+- **Redis**: 6.0.16 on the dev box (`redis-server --version`, 2026-09-06), 7.4.2 only in CI (`redis:7.4.2-alpine` in `.github/workflows/tests.yml`); used solely by `RedisCacheBackend` and only when `CACHE_BACKEND=redis` (unset on dev → memory)
 - **Website**: FastAPI backend on port 8000
 
 ---
