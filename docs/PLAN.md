@@ -77,7 +77,8 @@ deploy NI naloga.
    mergal medtem, in mainovi različici sta ostali.
 5. **Ultra pregled = 20 rezin (6. 9.)**: meja ≤ 8 000 vrstic / 500 datotek na
    pregled, koda od proda 93 k → `scripts/review_slices.sh` (obratna baza:
-   `review-base/NN-<območje>` = main z območjem na v1.39.0; glava main; draft
+   `review-base/NN-<območje>` = main z območjem na v1.39.0; glava `review/NN` z
+   mainovim drevesom — GitHub zavrne glavo, ki je prednik baze; draft
    PR-ji »review: … — NEVER MERGE«, telesa `docs/review/SLICES.md`, vodnik
    `docs/REVIEW_GUIDE.md`, spiderweb `docs/SPIDERWEB_STATUS.md`). Rez = meritev
    20/20. Vrstni red (owner): 01 proximity+spiderweb+Lua (5 301) → 02 backend

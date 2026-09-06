@@ -4,9 +4,11 @@
 # WHY: the review accepts <= 8 000 changed lines and <= 500 files per run, and
 # the code changed since production (v1.39.0) is ~93 k lines. So each area
 # gets its own base branch: `main` with that area's paths put back to their
-# v1.39.0 state. A PR from that base to `main` shows exactly the area's change
-# since production, while the reviewer's checkout (the PR head = main) is the
-# full current repository. These PRs are NEVER merged.
+# v1.39.0 state, and a head branch `review/<area>` whose tree is exactly
+# main's (parent = the base; GitHub refuses a PR whose head is an ancestor
+# of its base, which main would be). The PR shows exactly the area's change
+# since production, while the reviewer's checkout is byte-identical to main.
+# These PRs are NEVER merged.
 #
 # Usage:
 #   scripts/review_slices.sh measure            # sizes per slice against origin/main
@@ -88,25 +90,35 @@ case "$cmd" in
           | xargs -0 -r git checkout -q "$BASE_TAG" --
         git commit -q -m "review-base: $name reverted to $BASE_TAG (never merge)" --allow-empty
         git branch -f "$br" HEAD
-        printf "%-28s %s  " "$br" "$(git rev-parse --short "$br")"
-        git diff --numstat "$br" "$HEAD_REF" -- . "${GLOBAL_EXCL[@]}" | awk '$1!="-"{l+=$1+$2; f++} END{printf "files=%d lines=%d\n", f+0, l+0}'
+        # The PR head cannot be main itself: main is an ancestor of the base,
+        # and GitHub refuses a PR with "no commits between". So the head is a
+        # commit whose TREE is exactly main's and whose parent is the base —
+        # the diff is the area's change in the right direction, and the
+        # checkout a reviewer works in is byte-identical to main.
+        head=$(git commit-tree "$HEAD_REF^{tree}" -p "$br" -m "review: $name — main's tree on top of the review base (never merge)")
+        git branch -f "review/$name" "$head"
+        printf "%-28s base=%s head=%s  " "$name" "$(git rev-parse --short "$br")" "$(git rev-parse --short "$head")"
+        git diff --numstat "$br" "review/$name" -- . "${GLOBAL_EXCL[@]}" | awk '$1!="-"{l+=$1+$2; f++} END{printf "files=%d lines=%d\n", f+0, l+0}'
       )
       # --no-verify: the pre-push guard caps a push at 25 files because a real
       # PR should fit one reviewer's attention; a review-base commit is a
       # mechanical revert of a whole area (up to ~40 files) and is never
       # merged. The credential scan is not skipped in spirit: the revert
       # restores v1.39.0 content, which the 2026-08-27 history rewrite scrubbed.
-      [ $push -eq 1 ] && git push -q --force --no-verify origin "refs/heads/$br:refs/heads/$br"
+      if [ $push -eq 1 ]; then
+        git push -q --force --no-verify origin "refs/heads/$br:refs/heads/$br"
+        git push -q --force --no-verify origin "refs/heads/review/$name:refs/heads/review/$name"
+      fi
     done
     git worktree remove --force "$tmp" ;;
   prs)
     for s in "${SLICES[@]}"; do
       name="${s%%|*}"; br="review-base/$name"
-      n=$(gh pr list --base "$br" --head main --state open --json number -q '.[0].number')
+      n=$(gh pr list --base "$br" --head "review/$name" --state open --json number -q '.[0].number')
       if [ -n "$n" ]; then echo "$br -> #$n (exists)"; continue; fi
       body=$(awk -v s="## $name" 'BEGIN{p=0} /^## /{p=($0==s)} p' docs/review/SLICES.md | tail -n +2)
       [ -n "$body" ] || { echo "no body for $name in docs/review/SLICES.md" >&2; continue; }
-      gh pr create --draft --base "$br" --head main \
+      gh pr create --draft --base "$br" --head "review/$name" \
         --title "review: $name — NEVER MERGE" \
         --body "$body" >/dev/null && echo "$br -> opened"
     done ;;

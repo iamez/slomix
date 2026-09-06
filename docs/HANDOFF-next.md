@@ -63,7 +63,8 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    vrstic in ≤ 500 datotek na pregled (dokumentirano); koda od proda
    (v1.39.0) je 93 k vrstic. `scripts/review_slices.sh measure|cut --push|prs`
    seka veje `review-base/NN-<območje>` (= main z območjem vrnjenim na
-   v1.39.0) in odpre draft PR-je z glavo `main` (telesa v
+   v1.39.0) in `review/NN-<območje>` (drevo = main, starš = baza; GitHub
+   zavrne PR, katerega glava je prednik baze) in odpre draft PR-je (telesa v
    `docs/review/SLICES.md`, vodnik `docs/REVIEW_GUIDE.md`); **nikoli
    mergati**. ⛔ Ob vsakem premiku maina (#882!) `cut --push` znova. Owner
    požene `/code-review ultra <PR#>` (7. 9. opoldne) po vrsti: 01
