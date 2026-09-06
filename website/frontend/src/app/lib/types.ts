@@ -1540,9 +1540,11 @@ export interface StorySynergy {
   defaulted_players_count?: number;
 }
 
-/** The four role boards (gravity / space-created / enabler / lurker-profile)
- *  return one players[] each with a shared identity and their own score
- *  field, so one row type carries all four rather than four near-copies. */
+/** The five role boards (gravity / space-created / enabler / lurker-profile /
+ *  camp-profile) return one players[] each with a shared identity and their
+ *  own score field, so one row type carries all five rather than five
+ *  near-copies. `hold_pct` is the one that can be null: a player alive under
+ *  a minute has no share, and the server says so instead of writing 0. */
 export interface StoryRolePlayer {
   name: string;
   guid?: string;
@@ -1551,6 +1553,7 @@ export interface StoryRolePlayer {
   space_score?: number;
   enabler_score?: number;
   solo_pct?: number;
+  hold_pct?: number | null;
 }
 
 export interface StoryRoleBoard {
@@ -4166,13 +4169,6 @@ export interface UploadDeleteResponse {
 // whole surface is auth-gated (401 anonymous = a state). Shapes from a
 // LIVE recording: a real demo uploaded and analyzed on this branch.
 
-/** GET /api/players/{identifier}/wrapped?season=current — the shareable
- *  season card's data. Measured live: 8 cards for an active player.
- *
- *  ⚠️ `sub` is optional and the live sample did not carry it, but legacy draws
- *  it when present (wrapped.js:155-159), so the type keeps it rather than
- *  pretending the field does not exist. A fixture cannot fail on a value it
- *  does not contain — the schema is the arbiter, not the sample. */
 /** GET /api/skill/player/{identifier}/form — this player's last session
  *  against THEIR OWN recent-session average. `baseline_desc` says so in the
  *  server's words ("rank-vs-self"), and the page prints it rather than
@@ -4238,17 +4234,6 @@ export interface SkillPlayerHistory {
   range_days: number;
   sessions: SkillHistorySession[];
   total_sessions: number;
-}
-
-export interface WrappedCard { key: string; label: string; value: string; sub?: string | null }
-
-export interface WrappedSeason {
-  status: string;
-  guid: string;
-  season_id: string | null;
-  season_name: string | null;
-  player_name: string | null;
-  cards: WrappedCard[];
 }
 
 export interface GreatshotItem {
@@ -4345,4 +4330,53 @@ export interface ApiHealth {
   status: string;
   service: string;
   database: string;
+}
+
+// ---------------------------------------------------------------------------
+// Admin — GET /api/diagnostics (legacy diagnostics.js printed this to the
+// console; the About page shows it). Admin-only: anonymous gets 401, so the
+// page asks only when /api/availability/access says is_admin.
+
+export interface DiagnosticsTable {
+  name: string;
+  status: 'ok' | 'permission_denied' | 'not_found' | 'error' | string;
+  required: boolean;
+  /** Present when the count query succeeded. */
+  row_count?: number | null;
+  /** Present when it did not. */
+  error?: string;
+}
+
+export interface Diagnostics {
+  status: string;
+  timestamp: string | null;
+  database: { status: string; tests: unknown[] };
+  tables: DiagnosticsTable[];
+  issues: string[];
+  warnings: string[];
+  /** Free-form counters the backend adds; shown as key/value rows. */
+  time: Record<string, number | string | null>;
+  monitoring: Record<string, { count?: number; last_recorded_at?: string | null } | unknown>;
+  pool?: Record<string, unknown>;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Wrapped (legacy wrapped.js): GET /api/players/{identifier}/wrapped
+// ?season=current|YYYY-QN. Season-scoped highlights for a share card.
+
+export interface WrappedCard {
+  key: string;
+  label: string;
+  value: string;
+  sub?: string;
+}
+
+export interface Wrapped {
+  status: string;
+  guid: string;
+  season_id: string;
+  season_name: string;
+  player_name: string;
+  /** Empty when the player has no rounds in the season — the page says so. */
+  cards: WrappedCard[];
 }

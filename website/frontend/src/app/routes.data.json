@@ -107,24 +107,6 @@
   "built": true
  },
  {
-  "key": "wrapped",
-  "path": "/wrapped/:guid",
-  "label": "Wrapped",
-  "nav": "hidden",
-  "phase": 7,
-  "note": "Legacy opens this as a canvas overlay from the profile (wrapped.js:21, triggered by player-profile.js:683). It is a PAGE here because that is this migration's standing convention for legacy modals \u2014 docs/design/12 says it twice, for the story details modal and for upload-detail. `hidden` in nav for the same reason legacy has no menu entry: you reach it from a player, not from the site.",
-  "built": true
- },
- {
-  "key": "compare",
-  "path": "/compare",
-  "label": "Compare",
-  "nav": "hidden",
-  "phase": 7,
-  "note": "Legacy's compare modal (compare.js:11) as a page, per docs/design/12's modal-to-page convention. The two names live in `?a=&b=` so a comparison is a link \u2014 the one thing the overlay could not do. `hidden` in nav: you reach it from a player, as legacy does.",
-  "built": true
- },
- {
   "key": "skill-rating",
   "path": "/skill-rating",
   "label": "ET Rating",
@@ -139,13 +121,6 @@
   "nav": "stats",
   "phase": 3,
   "built": true
- },
- {
-  "key": "replay",
-  "path": "/replay",
-  "label": "Replay",
-  "nav": "stats",
-  "phase": 5
  },
  {
   "key": "smart-stats-diag",
@@ -269,5 +244,23 @@
   "phase": 1,
   "note": "The component workshop (docs/design/11, plan A3). Deliberately `hidden`: it is a surface for whoever is reworking layout, not a page for readers, and it calls no endpoint so it cannot break with the data.",
   "built": true
+ },
+ {
+  "key": "compare",
+  "path": "/compare/:a?/:b?",
+  "label": "Compare",
+  "nav": "hidden",
+  "phase": 7,
+  "built": true,
+  "note": "phase 7: legacy compare.js was a modal inside the profile, not a route; two guids in the URL make the comparison shareable"
+ },
+ {
+  "key": "wrapped",
+  "path": "/profile/:id/wrapped",
+  "label": "Wrapped",
+  "nav": "hidden",
+  "phase": 7,
+  "built": true,
+  "note": "phase 7: legacy wrapped.js was an overlay opened from the profile; a route makes the season card linkable"
  }
 ]

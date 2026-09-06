@@ -21,6 +21,8 @@ import { WeaponsPage } from './pages/WeaponsPage';
 import { FormPage } from './pages/FormPage';
 import { RetroViz } from './pages/RetroViz';
 import { PlayerProfilePage } from './pages/PlayerProfile';
+import { ComparePage } from './pages/ComparePage';
+import { WrappedPage } from './pages/WrappedPage';
 import { DesignCatalog } from './pages/DesignCatalog';
 import { Rivalries } from './pages/Rivalries';
 import { SessionDetail } from './pages/SessionDetail';
@@ -32,8 +34,6 @@ import { SpiderWebPage } from './pages/SpiderWebPage';
 import { AvailabilityPage } from './pages/AvailabilityPage';
 import { UploadsPage, UploadDetailPage } from './pages/UploadsPage';
 import { GreatshotPage, GreatshotDemoPage } from './pages/GreatshotPage';
-import { WrappedPage } from './pages/WrappedPage';
-import { ComparePage } from './pages/ComparePage';
 import { LivePage } from './pages/LivePage';
 import { SkillRating } from './pages/SkillRating';
 import { makeQueryClient } from './lib/queries';
@@ -99,11 +99,11 @@ const PAGES: Record<string, React.ReactElement> = {
   form: <FormPage />,
   'retro-viz': <RetroViz />,
   profile: <PlayerProfilePage />,
+  compare: <ComparePage />,
+  wrapped: <WrappedPage />,
   design: <DesignCatalog />,
   rivalries: <Rivalries />,
   'skill-rating': <SkillRating />,
-  wrapped: <WrappedPage />,
-  compare: <ComparePage />,
   proximity: <Proximity />,
   'proximity-player': <ProximityPlayerPage />,
   'proximity-replay': <ProximityReplayPage />,

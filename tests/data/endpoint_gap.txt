@@ -19,90 +19,64 @@
 # are retired, not before. Do not delete it to make the number smaller — the
 # test recomputes the set and would fail anyway, which is the ratchet working.
 #
-# 2026-09-02, /api/bets and /api/bets/market: availability slice 2 built the
-# BETTOR surface (wallet, pools, my bet, the stake POST on
-# /api/bets/market/{market_id}/bet). Neither line closed by that:
-# /api/bets is legacy bets.js's `${API_BASE}/bets` base string — no such
-# endpoint exists (docs/design/07 §C.1 calls it an abbreviation), so it goes
-# when bets.js retires; /api/bets/market is the ADMIN market-open POST, which
-# the owner kept out of slice 2 (open/settle stayed in legacy availability.js).
-# The templated bet call must NOT clear it — test_templated_write_does_not_
-# register_its_truncated_prefix pins that.
+# 2026-09-02,
 #
-# 2026-09-05, /api/bets/market DELETED: slice 3 built the admin half —
-# postOpenMarket() posts the bare path, so the extractor sees it without the
-# truncation hazard above. Verified per docs/design/07 §C.1 before deleting:
-# the path is in the LIVE /openapi.json as a POST, and one call was made — an
-# anonymous POST answers 401 "Not authenticated" (so does the settle sibling).
-# A write endpoint is verified by the call it REFUSES; calling it for real
-# would have opened a market in the dev database to prove a route exists.
-# /api/bets stays: bets.js still holds the base string.
+# 2026-09-06: 3 -> 15. A CORRECTION, the second of its kind (see 64 -> 120
+# above), and it is about the RATCHET, not about new work appearing.
 #
-# 2026-09-05: 3 -> 19. Not a regression — a correction, and the second one of
-# this kind (see the 64 -> 120 note above). The legacy extractor stopped at the
-# first `${`, so `wrapped.js`'s `${API_BASE}/players/${guid}/wrapped` was read
-# as the prefix `/api/players`. A truncated prefix counts as covered the moment
-# the new app calls anything deeper, and it does call
-# `/api/players/{identifier}/profile` — so a DIFFERENT, unbuilt operation
-# counted as migrated. Measured: 29 legacy calls carry an interpolation with a
-# segment behind it and 16 of them were invisible this way.
+# The legacy extractor captured "up to the first `?`, quote or `${`". So
+# `wrapped.js`'s `${API_BASE}/players/${guid}/wrapped` was read as the prefix
+# `/api/players` — and `_covered()` treats a truncated prefix as covered the
+# moment the new app calls anything deeper. It does call
+# `/api/players/{identifier}/profile`, so a DIFFERENT, unbuilt operation
+# cleared it. Measured: 29 legacy calls carry an interpolation with at least
+# one segment behind it. The extractor now reads THROUGH interpolations and
+# writes each as `{}`, so a call is required as a SHAPE only a real call to
+# that shape can clear (test_route_contract._FE_FULL_PATH_RE).
 #
-# The extractor now reads THROUGH interpolations and writes each as `{}`, so a
-# call is required as a shape (`/api/players/{}/wrapped`) that only a real call
-# to that shape can clear. Every one of the 16 was verified twice: it resolves
-# to a live path in docs/api/openapi.json, and `src/app` contains no call to it
-# (the two `graphs` hits in the app are prose in comments).
+# Every line below was verified twice: it resolves to a live path in
+# docs/api/openapi.json, and `src/app` contains no call to it.
 #
-# ⚠️⚠️ VISIBLE IS NOT MISSING, and the first draft of this note got that wrong.
-# It said the player profile page "is thinner than the ratchet claimed"
-# because seven of its legacy calls appear here. Checked afterwards: it is not.
-# `/api/players/{identifier}/profile` is a COMPOSITE — its own docstring says
-# it "assembles every profile section in a single round-trip-parallel call" —
-# and the page reads milestones from `/api/stats/player/{name}` and recent
-# rounds from `/api/player/{name}/matches`. Several of these lines are
-# SUPERSEDED, not unbuilt.
+# TRIAGE, by CALLING the endpoints rather than reading their names — three
+# lines look superseded and are not:
+#   * players/{}/awards -> {status, guid, awards}: ENGRAVED SEASON AWARDS on
+#     the legacy History tab, not the "milestones" the profile already shows.
+#   * stats/player/{}/rounds -> {rounds:[{label,date,dpm}], avg_dpm}: a DPM
+#     series feeding a canvas sparkline. The profile's "last rounds" TABLE
+#     comes from /api/player/{name}/matches. Same word, different data.
+#   * players/{}/card -> {rating, archetype, percentiles, sparkline_dpm,
+#     badges, career}: the hover card. Its percentiles are NOT the ET rating
+#     components' — measured on one player, card dpm 57 / survival 64 /
+#     revives 79 against components 58.9 / 83.9 / 44.6. Different pool,
+#     different window.
 #
-# So each of the 16 needs the same triage `/api/stats/sessions` already got
-# above: superseded (delete with the reason written down) or genuinely missing
-# (build it). Nobody should read this block as sixteen pieces of work.
+# ⛔⛔ TWO LINES THAT SHOULD NOT BE MIGRATED AS THEY STAND:
+#   * rounds/{}/vs-stats — the handler (records_matches.py:491) selects from
+#     round_vs_stats with NO GROUP BY and drops subject_guid. That table holds
+#     one row per duel pairing, so the response is a raw dump. Measured on
+#     round 11425: 18 rows for 6 players, `vid` three times. Legacy's own "VS
+#     Stats" table already shows the same player several times. Fix the
+#     handler (GROUP BY player_guid, subject_guid) or delete the line when
+#     matches.js retires — porting it verbatim moves the bug into the new app.
+#   * greatshot/{}/highlights/render — a POST that queues a render job. The
+#     renderer is NOT configured here: no ffmpeg, no GREATSHOT_RENDER_COMMAND,
+#     no .env. Hard evidence: greatshot_renders holds exactly ONE row ever
+#     (2026-02-15), status 'failed', with that configuration error — against
+#     622 highlights. The button would always produce queued -> failed.
 #
-# TRIAGE DONE 2026-09-05, by calling the endpoints, not by reading their names.
-# Result: ZERO deletions. All three candidates turned out to be distinct
-# content, and each was misjudged from its name first:
-#   * /api/players/{}/awards -> {status, guid, awards}: ENGRAVED SEASON AWARDS
-#     on the legacy History tab (player-profile.js:772-796), not the
-#     "milestones" the new page reads out of /api/stats/player/{name}.
-#   * /api/stats/player/{}/rounds -> {rounds: [{label, date, dpm}], avg_dpm}:
-#     a DPM series feeding a canvas sparkline (player-profile.js:391). The new
-#     page's "last rounds" table comes from /api/player/{name}/matches, which
-#     returns full round rows (round_id, map, kills, damage...). Same word,
-#     different data.
-#   * /api/players/{}/card -> {rating, archetype, percentiles, sparkline_dpm,
-#     badges, career, ...}: the hover/summary card (player-card.js:141). The
-#     composite profile does not carry it, and
-#     /api/proximity/competitive/player-card is a different endpoint.
-# The lesson is the file's own: a path is identified by what it RETURNS.
+# ⚠️ uploads/{}/download is FUNCTIONALLY COVERED already: the server hands the
+# page `download_url` (uploads.py:736) and UploadsPage.tsx:325 renders it, so
+# the path never appears as a literal in `src/app` and the extractor cannot
+# see it. The line stays because the ratchet measures literals, like
+# /api/stats/sessions above. What IS missing there is smaller and separate: no
+# download button on the list card, and no inline player (`is_playable` /
+# `poster_url` are unused).
 #
-# 2026-09-05, /api/players/{}/wrapped DELETED: phase 7 built the season card
-# as the route /wrapped/:guid, reached from the profile where legacy puts its
-# chip (player-profile.js:683). A PAGE, not the overlay legacy uses, because
-# docs/design/12 states that convention twice — the story details modal became
-# a page and so did upload-detail — which is also why the new app has no
-# overlay primitive in 32 routes. Verified per docs/design/07 §C.1: the path
-# is in the live /openapi.json and was called once (8 cards, 2026 Fall (Q3));
-# the response is the committed fixture.
-#
-# 2026-09-05, /api/skill/player/{}/form and /history DELETED: the profile
-# showed an ET rating with no history behind it. Both are now sections on the
-# player page, where legacy has them (loadPlayerForm :696, loadCareerHistory
-# :772). Verified per docs/design/07 §C.1: both answer 200 on the live server
-# and both responses are committed as fixtures — history WITH its `components`
-# block, because stripping it to keep the file small would have left the app
-# testing a response the server never sends.
-#
-# /api/stats/player/{}/form stays: it is the DPM/KD series (`{sessions:
-# [{label, date, dpm, rounds, kd}], avg_dpm, trend}`), a different chart from
-# either of these, and unbuilt.
+# ⚠️ sessions/{}/graphs counts `round_number IN (1,2)` with its own status
+# filter, while the Stats 2.0 endpoints use `counts_toward_totals`. Any panel
+# built on it must say which gate it used, or the site will show two different
+# kill totals for one evening.
+/api/bets
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/player/{}/vs-stats
@@ -115,7 +89,5 @@
 /api/sessions/{}/graphs
 /api/stats/player/{}/form
 /api/stats/player/{}/rounds
-/api/uploads/{}/download
-/api/bets
-/api/diagnostics
 /api/stats/sessions
+/api/uploads/{}/download

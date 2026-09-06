@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **4** na tej veji (5 na mainu po #894; uploads r. 2 zapre `/api/uploads/resumable`) |
+| endpoint gap (H1) | **3** (dolg r. 1 zapre `/api/diagnostics`; ostanejo `/api/bets`, `/api/bets/market` = ownerjeva odločitev, `/api/stats/sessions` = z upokojitvijo legacy JS) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -37,74 +37,43 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
-## Naslednji koraki (vrstni red)
+## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
-1. **Faza 6 — preostanek**: `/api/diagnostics` (#911, odprt).
-   ✅ **Availability rezina 3 MERGE-READY (5. 9., veja
-   `feat/availability-admin-market`)** — admin market kontrole: `open session
-   market` (POST `/api/bets/market`, prazno telo kot legacy) in settle/void
-   (POST `/api/bets/market/{id}/settle`). Gap **4 → 3**.
-   ⛔ Admin fixture NE more uporabiti hišnega testnega uporabnika: `-1` ne more
-   biti admin, ker `configured_admin_ids` obdrži žeton le ob `token.isdigit()`
-   (`auth_helpers.py:53-64`) — fixture z običajnim idjem bi vrnil
-   `is_admin: false` in vsi UI testi bi prehajali iz razloga, ki nima zveze s
-   kodo pod njimi. Pripeto s `test_the_house_test_user_can_never_be_admin`.
-   `/api/bets` in `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
+0. **Dolg r. 1 (6. 9., MERGAN #919)**: keymap 7 rut zares preslikanih (guard:
+   zgrajena ruta ne sme nositi `phase-N` — videti pasti na starem keymapu),
+   `/replay` → preusmeritev na `/proximity` (edina nezgrajena ruta umaknjena
+   iz `routes.data.json`), `/api/diagnostics` kot admin panel na `/admin`
+   (anonimni ne pošlje zahteve) → **vrzel endpointov 4 → 3**.
+1. **Faza 6 — preostanek**: availability rezina 3 = admin market kontrole
+   (`/api/bets/market`, settle) — ownerjeva odločitev, kdaj; `/api/bets` in
+   `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
-4. **Faza 7**: wrapped, compare, Clips.
-   ✅ **Clips + Renders + Highlights huba ZGRAJENI (5. 9.)** — ruta
-   `/greatshot/:section?` je param nosila že od faze 6, stran pa ga je
-   ignorirala: `/greatshot/clips` in `/greatshot/renders` sta bila dosegljiva
-   URL-ja, ki sta risala seznam demov. ⭐ Brez novega endpointa —
-   `GreatshotItem` že nosi `highlight_count`/`render_job_count`/
-   `rendered_count`, torej so huba filtrirani pogledi na že pridobljen seznam.
-   Upload je za pariteto skrit izven `demos` (legacy ga ima v `data-greatshot-
-   panel="demos"`, index.html:3450).
-   ⛔ **Triaža 16 skritih endpointov: NIČ izbrisov.** Vsi trije kandidati za
-   »nadomeščene« so ob klicu izkazali drugačno vsebino (`awards` = engraved
-   season awards, `stats/player/{}/rounds` = DPM serija za graf, `card` =
-   hover kartica z badges/percentiles). Klasificiral sem po imenu; pot se
-   identificira po tem, kar VRNE.
-   ✅ **wrapped ZGRAJEN (5. 9.)** — ruta `/wrapped/:guid`, dosegljiva s
-   profila, kjer legacy postavi svoj chip (`player-profile.js:683`). **STRAN,
-   ne overlay**: `docs/design/12` to konvencijo navede dvakrat (story details
-   modal → stran, upload-detail → stran), in prav zato nova aplikacija v 32
-   rutah nima nobenega overlay primitiva. Canvas 1080×1920 ostane (smisel
-   Wrapped je slika za Discord), a številke so ZDAJ tudi besedilo — canvas je
-   bralniku zaslona slika, legacy pa jih ni izpisal nikjer drugje.
-   Gap 19 → **18**.
-   ✅ **compare ZGRAJEN (6. 9.)** — ruta `/compare?a=&b=`. Gap se NE spremeni:
-   `/api/stats/player/{name}` je bil že pokrit, to je čisto UI delo.
-   ⭐ Imeni sta v URL-ju, torej je primerjava povezava, ki se da prilepiti —
-   edino, česar legacy overlay ni zmogel.
-   ⛔ **Ena namerna razlika od legacyja:** `compare.js:69` da Playtime
-   `higherIsBetter: false`, torej 🏆 dobi tisti, ki je igral MANJ, izrisano
-   enako kot K/D, kjer 🏆 pomeni bolje. Kot prikazano je to napačna trditev
-   (205 h proti 183 h z značko na 183 h se bere kot »183 ur je boljša
-   številka«). Ure so kontekst za vrstice nad njimi, ne tekma — vrstica ostane,
-   značko izgubi. Za ownerja: če hoče legacy vedenje, je to ena vrstica.
-   ✅ **Rating trendi na profilu (6. 9.)** — dve sekciji: »your form«
-   (`/skill/player/{}/form`, zadnja seja proti LASTNEMU povprečju, s
-   strežnikovim `baseline_desc` dobesedno) in »rating over time«
-   (`/skill/player/{}/history`, kumulativa po sejah, najnovejša prva).
-   Gap 18 → **16**. `/api/stats/player/{}/form` ostane: to je DPM/KD serija,
-   drug graf.
-   ⭐ `sparkPath` je bil v DVEH kopijah (FormPage, Home) in **nista bili
-   duplikata**: FormPage normalizira na min–max (oblika), Home od ničle
-   (velikost). Združitev bi eni vsilila pomen druge. Izluščena je le prva
-   (`lib/spark.ts`, `sparkPathRanged`); Home ostane s komentarjem, zakaj.
-   ✅ `/rounds` je ŽE upokojen (Stats 2.0 R4, #902 — `PARAM_REDIRECTS` na
-   `/sessions`, rounds je zavihek seje). Postavka je bila zastarela.
-   ⛔ **PRED gradnjo faze 7 preberi popravek merilnika (5. 9.):** legacy
-   ekstraktor se je ustavil pri prvi `${`, zato je `wrapped.js`-jev
-   `${API_BASE}/players/${guid}/wrapped` beležil kot prefiks `/api/players`,
-   ta pa velja za pokritega, brž ko nova stran kliče karkoli globljega. **16
-   endpointov je bilo tako nevidnih**, med njimi štirje, ki jih kliče
-   `player-profile.js` — torej je profilna stran tanjša, kot je merilnik
-   trdil. Gap 3 → **19**. Kaj s tem, je ownerjeva odločitev: wrapped in
-   compare sta le 2 od 16.
+4. **Faza 7**: r. 1 (6. 9., **MERGANA #920**) = `compare` (`/compare/:a?/:b?`, šest
+   legacy vrstic iz profilnega endpointa, barva = boljša stran) in `wrapped`
+   (`/profile/:id/wrapped`, canvas 1080×1920 v žetonih — brez gradienta,
+   radius 0, pravilo pripeto v testu — + dejstva kot besedilo, copy/download);
+   obe kot RUTI (dizajn sistem nima modalov), povezavi v glavi profila;
+   `PickPlayer` seljen iz Rivalries v `components/`. **O1 zaprta 6. 9.:
+   owner (c) → Clips strani NI** (33. zaslon odpade; 32 rut). `/rounds` že
+   preusmerjen. Ostane: končni paritetni prelet (SPA, vse rute × 4 viewporti
+   × anon/owner — `scripts/audit_website_browser.mjs --app --manifest`), potem
+   pregledni PR (baza `19c61847` = #802 merge, glava main) za ultra.
+
+2. **Faza 6 r. 3 + popravek merilnika (6. 9., veja `feat/availability-admin-market`, PR #915):**
+   admin market kontrole (open / settle / void, `POST /api/bets/market`);
+   greatshot sekcije highlights/clips/renders (ruta je `:section?` nosila od
+   faze 6, stran ga je ignorirala — brez novega endpointa); rating trendi na
+   profilu (`skill/player/{}/form` + `/history`).
+   ⛔⛔ **Popravek ekstraktorja:** legacy zajem se je ustavil pri prvi `${`,
+   zato je odrezan prefiks (`/api/players`) veljal za pokritega, brž ko nova
+   stran kliče karkoli globljega. 29 legacy klicev nosi interpolacijo s
+   segmentom za njo. Merodajno število po mergu izpiše
+   `pytest tests/integration/test_endpoint_gap.py` — vsaka nova vrstica pride
+   z zapisanim razlogom, ne kot tiha zamenjava števila.
+   ⚠️ `compare` in `wrapped` iz te veje sta bila ODSTRANJENA: #920 ju je
+   mergal medtem, in mainovi različici sta ostali.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
@@ -119,8 +88,41 @@ deploy NI naloga.
      SVOJO drugo polovico med desetimi v 81 % (@512) / 91 % (@256) proti 10 %
      naključja, kontrola 0–20 %; a »najbližja točka« da 2–6 u → osebnost je
      ČASOVNA UTEŽ, ne kraj; prag sej 25 (pod njim 63 %); dwell 10–22 %, top
-     celice skupne (spawn čakanje) → rezina 2 ga izloči. Naslednje: r. 2
-     (dwell metrika brez spawna) ali r. 3 (per-bot `.gm` profil) — owner.
+     celice skupne (spawn čakanje) → rezina 2 ga izloči. #913 mergan 5. 9.
+     **Rezina 2 zgrajena 5. 9.** (veja `feat/bot-twins-camp-profile`): metrika
+     »drži položaj« = `GET /storytelling/camp-profile` (tipizirana; hold =
+     ≤ 96 u od sidra ≥ 4 s, still = speed < 10 ≥ 3 s; prvih 3 s življenja
+     izven SEZNAMA mest; < 60 s živ → `null`, ne 0) + peta plošča vlog na
+     Story strani. Izmerjeno pred gradnjo: 90 % počasnih točk so postanki
+     < 1,2 s (delež počasnih točk NI kemp → epizodna metrika); obe definiciji
+     stabilna lastnost igralca (Spearman polovic +0,61…+0,95). Živ dokaz:
+     seja 154 hold 11–18 %, seja 120 16–23 %, hladno 0,9–1,1 s, toplo 3 ms.
+     #914 mergan 5. 9. Naslednje: r. 3 (per-bot `.gm` profil iz `top_cells`
+     + tempa) — owner je 5. 9. izbral **najprej moments r. 2** (spodaj).
+   - **Moments r. 2 (doc 20 §7.2) — MERGANA #916 in DEPLOYANA na puran
+     5. 9. 23:16** (sha256 = main, `FH watcher version=6.14`; migracija 082
+     na prod ob naslednjem release deployu; odprto: en večer
+     `frame_health.log`). Vsebina: Lua v6.14 (`first/last_move_time` na
+     `VEHICLE_PROGRESS`, nova sekcija `VEHICLE_DESTROYED` iz `et_Damage`
+     veje pred `isValidClient` — izvor g_combat.c:1857 kljuko sproži za vsako
+     entiteto), parser + migracija 082 (3 stolpci na `proximity_vehicle_progress`,
+     JSONB seznam uničenj, brez nove tabele), detektor `escort_mover` z
+     `timestamp_source: "first_move"` in `destroyed_by`. Testi: harness
+     `tests/lua/vehicle_tracking_harness.lua` v CI (3 mutacije padle), parser 5,
+     escort 13. Runtime: lokalni ET 2.85 (:27961) z boti, 5 rund — dve pasti
+     v živo (supply truck se sam odpelje ob 0,6 s → `first_escort_time`;
+     goldrush skript tank ob 1,0 s »ubije« prek `G_Damage` → smrt brez
+     igralca šteje šele po prvem escortu) in ena o motorju (kljuka teče PRED
+     odštetjem zdravja). ⚠️ Kontrakt `destroyed_count`: korpus pred v6.14
+     nosi fantomsko +1 na goldrush rundah (popravek = odprta naloga).
+   - **Dvojčki r. 3 — zgrajena 6. 9.** (veja `feat/bot-twins-profile-generator`):
+     `scripts/build_bot_twin_profiles.py` → `server/omnibot/twins/` (profil na
+     bota z `ReactionTime`, `<mapa>_twins.gm` z vlogami + kamp časi na
+     njegovih razločevalnih ciljih, tabela imen s `profile=` in pravim
+     razredom) + `docs/design/23_TWINS_REPORT.md` (lokalno). 5 dvojčkov,
+     43 ciljev; ⚠️ kontrola (premešane seje) preživi ≈ 21 % — pragi iz
+     kontrole, številka je v poročilu. Deploy na puran + bot test = owner;
+     r. 4 = harness bot proti človeku (+ kontrola proti tujemu profilu).
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -160,7 +162,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-05 (Fable 5.1, doc 22 r. 1 izmerjena; PR odprt)
+**Zadnja posodobitev:** 2026-09-06 (Fable 5.1, dvojčki r. 3 v PR-ju)
 
 | rezina | vsebina | stanje |
 |---|---|---|

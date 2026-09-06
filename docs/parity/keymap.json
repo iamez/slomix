@@ -11,7 +11,8 @@
     "route, missing piece). tests/unit/test_parity_keymap.py enforces the",
     "shape, the existence of every referenced parity key in the SPA source,",
     "and pins the unmapped count so debt cannot grow silently.",
-    "'Built' means the NEW app tree (website/frontend/src/app) and nothing else: the OLD React tree (website/frontend/src/pages) does register proximity/greatshot/uploads/availability modules, but it is the tree being replaced and counting it as coverage is the exact miscount the endpoint ratchet made before #838. In src/app these routes exist only as phase-gated placeholders (routes.data.json), which is what phase-5/phase-6 says."
+    "'Built' means the NEW app tree (website/frontend/src/app) and nothing else: the OLD React tree (website/frontend/src/pages) does register proximity/greatshot/uploads/availability modules, but it is the tree being replaced and counting it as coverage is the exact miscount the endpoint ratchet made before #838. In src/app these routes exist only as phase-gated placeholders (routes.data.json), which is what phase-5/phase-6 says.",
+    "Refreshed 2026-09-06: phases 5 and 6 landed, the seven routes that still carried a phase status are mapped (replay retired into proximity-replay); tests/unit/test_parity_keymap.py now refuses a phase status on a built route."
   ],
   "routes": {
     "home": {
@@ -271,8 +272,8 @@
       "panels": {}
     },
     "replay": {
-      "status": "phase-5",
-      "note": "docs/design/08 phase 5"
+      "status": "retired",
+      "note": "legacy dual-pane replay viewer (replay.js) with its own round select; the SPA replays a round at proximity-replay (/proximity/round/:roundId) and a bare /replay redirects to /proximity, where rounds are picked (2026-09-06)"
     },
     "proximity": {
       "spa_route": "proximity",
@@ -303,28 +304,77 @@
       "note": "slices one and two built (leaderboards 31. 8., instruments 1. 9.); table-0 (the roster table) is a later slice, pinned as pending in proximity_inventory.json"
     },
     "proximity-player": {
-      "status": "phase-5",
-      "note": "docs/design/08 phase 5"
+      "spa_route": "proximity-player",
+      "panels": {}
     },
     "proximity-replay": {
-      "status": "phase-5",
-      "note": "docs/design/08 phase 5"
+      "spa_route": "proximity-replay",
+      "panels": {}
     },
     "proximity-teams": {
-      "status": "phase-5",
-      "note": "docs/design/08 phase 5"
+      "spa_route": "proximity-teams",
+      "panels": {}
     },
     "greatshot": {
-      "status": "phase-6",
-      "note": "docs/design/08 phase 6"
+      "spa_route": "greatshot",
+      "panels": {
+        "Demos": {
+          "parity": "greatshot.list"
+        },
+        "Highlights": {
+          "parity": "greatshot.highlights"
+        },
+        "Renders": {
+          "parity": "greatshot.list"
+        },
+        "Clips": {
+          "status": "phase-7",
+          "note": "clips is the 33rd screen, blocked on owner decision O1 (Greatshot video visibility); the greatshot list carries no clips tab until then"
+        }
+      }
     },
     "uploads": {
-      "status": "phase-6",
-      "note": "docs/design/08 phase 6"
+      "spa_route": "uploads",
+      "panels": {
+        "All": {
+          "parity": "uploads.list"
+        },
+        "Archives": {
+          "parity": "uploads.list"
+        },
+        "Clips": {
+          "parity": "uploads.list"
+        },
+        "Configs": {
+          "parity": "uploads.list"
+        },
+        "HUDs": {
+          "parity": "uploads.list"
+        }
+      }
     },
     "availability": {
-      "status": "phase-6",
-      "note": "docs/design/08 phase 6"
+      "spa_route": "availability",
+      "panels": {
+        "#ETL": {
+          "parity": "availability.channels"
+        },
+        "How should we ping you?": {
+          "parity": "availability.settings"
+        },
+        "Thursday, August 27": {
+          "parity": "availability.week"
+        },
+        "Today & Tomorrow": {
+          "parity": "availability.planning-today"
+        },
+        "Tonight’s Queue": {
+          "parity": "availability.promotions"
+        },
+        "Upcoming days": {
+          "parity": "availability.week"
+        }
+      }
     },
     "admin": {
       "spa_route": "admin",

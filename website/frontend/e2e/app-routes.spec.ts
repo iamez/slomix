@@ -43,7 +43,13 @@ import routes from '../src/app/routes.data.json' with { type: 'json' };
  *  data, so a difference between them is a difference in the pages. */
 const SAMPLES = new Map<string, string>([
   [':id?', 'D8423F90'],
-  [':guid', 'D8423F90'],
+  // wrapped's `:id`, compare's `:a?`/`:b?`; without them the sweep visited
+  // pages for players named "id", "a" and "b" (found 2026-09-06)
+  [':id', 'D8423F90'],
+  [':a?', 'D8423F90'],
+  [':b?', 'E587CA5F'],
+  // the tracker's full guid: the proximity endpoints do not match a prefix
+  [':guid', 'D8423F90F045D9D3E2C0550811C5A899'],
   [':roundId', '11365'],
   [':sessionId', '154'],
   [':sessionDate', '2026-08-04'],
@@ -81,6 +87,9 @@ const SAMPLES = new Map<string, string>([
 // 151's short-form mvp/verdicts/good-night stay pinned in the unit test.
 const SAMPLES_THIN = new Map<string, string>([
   [':id?', '3C89435D'],
+  [':id', '3C89435D'],
+  [':a?', '3C89435D'],
+  [':b?', '1C747DF1'],
   [':guid', '3C89435D'],
   [':roundId', '11306'],
   [':sessionId', '80'],
@@ -219,3 +228,39 @@ for (const route of routes.filter((r) => r.path.includes(':'))) {
     ).toEqual([]);
   });
 }
+
+test('the legacy replay page lands where rounds are picked, and never asks an anonymous visitor for diagnostics', async ({ page }) => {
+  const asked: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('/api/diagnostics')) asked.push(r.url()); });
+  // The proximity page keeps its backbone requests going for a while, so
+  // the redirect is asserted on the URL, not on network idle.
+  await page.goto('/app/replay', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/app\/proximity$/);
+  await page.goto('/app/#/replay', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/app\/proximity$/);
+  await page.goto('/app/admin', { waitUntil: 'networkidle' });
+  await expect(page.locator('[data-parity="admin.probes"]')).toBeVisible();
+  expect(page.locator('[data-parity="admin.diagnostics"]')).toHaveCount(0);
+  expect(asked.filter((u) => /\/api\/diagnostics(\?|$)/.test(u))).toEqual([]);
+});
+
+test('phase 7: compare shows the six lifetime rows for two players, wrapped lists eight facts beside the card', async ({ page }) => {
+  await page.goto('/app/compare/D8423F90/E587CA5F', { waitUntil: 'domcontentloaded' });
+  const table = page.locator('[data-parity="compare.table"]');
+  await expect(table).toBeVisible();
+  // Two profiles, both possibly cold (a first hit measured > 5 s): wait for
+  // the rows, not for the default 5 s.
+  await expect(table.locator('.row')).toHaveCount(6, { timeout: 30_000 });
+  await expect(table).toContainText('lower wins');
+  await page.goto('/app/profile/D8423F90/wrapped', { waitUntil: 'domcontentloaded' });
+  const facts = page.locator('[data-parity="wrapped.facts"]');
+  await expect(facts).toBeVisible({ timeout: 30_000 });
+  await expect(facts.locator('.row')).toHaveCount(8);
+  // The card is drawn in the browser: the export buttons unlock.
+  await expect(page.getByRole('button', { name: 'download png' })).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'download png' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^slomix-wrapped-.+\.png$/);
+});

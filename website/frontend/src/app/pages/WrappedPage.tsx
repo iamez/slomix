@@ -1,199 +1,121 @@
-/**
- * Phase 7 — the season card (route `wrapped`).
- *
- * Legacy draws this into a 1080×1920 canvas inside a full-screen overlay
- * (wrapped.js:21-102), opened by a chip on the player profile
- * (player-profile.js:683). Here it is a PAGE: docs/design/12 states the
- * convention twice — the story details modal became a page, and so did
- * upload-detail — and the new app has no overlay primitive anywhere in 32
- * routes precisely because of that decision.
- *
- * ⭐ The canvas stays. The point of Wrapped is an image you paste into
- * Discord, so the page renders the same 1080×1920 card and keeps both
- * exports. What changes is that the numbers are ALSO readable as text: a
- * canvas is invisible to a screen reader, and legacy offered no other way to
- * read them.
- */
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable } from '../components/ui';
+import { Link, useParams, useSearchParams } from 'react-router';
+import { Stack } from '../components/layout';
+import { Absent, ActLink, Lbl, Pending, SectionHead, Unavailable } from '../components/ui';
 import { useWrapped } from '../lib/queries';
-import type { WrappedSeason } from '../lib/types';
+import { CARD_H, CARD_W, drawWrapped, paletteFromDocument } from '../lib/wrappedCard';
 
-const W = 1080;
-const H = 1920;
-
-/** Legacy's rounded-rect helper (wrapped.js:167), unchanged. */
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/** A faithful port of `_drawWrapped` (wrapped.js:104-165), including every
- *  truncation: the name at 22 characters, a label at 22, a value at 16, a sub
- *  at 26, and at most 8 cards in two columns. Those caps are what keep the
- *  card from overflowing, so they are behaviour, not styling. */
-export function drawWrapped(canvas: HTMLCanvasElement, data: WrappedSeason): boolean {
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext('2d');
-  // jsdom has no 2d context unless `canvas` is installed, and the render must
-  // survive that — the page still shows every number as text.
-  if (!ctx) return false;
-
-  const g = ctx.createLinearGradient(0, 0, 0, H);
-  g.addColorStop(0, '#0b1220');
-  g.addColorStop(1, '#1e1b4b');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#22d3ee';
-  ctx.font = 'bold 56px sans-serif';
-  ctx.fillText('SLOMIX WRAPPED', W / 2, 150);
-
-  ctx.fillStyle = '#ffffff';
-  ctx.font = 'bold 72px sans-serif';
-  ctx.fillText(String(data.player_name ?? '').slice(0, 22), W / 2, 250);
-
-  ctx.fillStyle = '#94a3b8';
-  ctx.font = '40px sans-serif';
-  ctx.fillText(String(data.season_name ?? data.season_id ?? ''), W / 2, 320);
-
-  const cards = data.cards.slice(0, 8);
-  const cols = 2;
-  const padX = 70;
-  const tileW = (W - padX * 2 - 40) / cols;
-  const tileH = 300;
-  const top = 420;
-  ctx.textAlign = 'left';
-  cards.forEach((c, i) => {
-    const x = padX + (i % cols) * (tileW + 40);
-    const y = top + Math.floor(i / cols) * (tileH + 30);
-    ctx.fillStyle = 'rgba(255,255,255,0.05)';
-    roundRect(ctx, x, y, tileW, tileH, 24);
-    ctx.fill();
-    ctx.fillStyle = '#64748b';
-    ctx.font = 'bold 30px sans-serif';
-    ctx.fillText(String(c.label ?? '').toUpperCase().slice(0, 22), x + 36, y + 70);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 64px sans-serif';
-    ctx.fillText(String(c.value ?? '').slice(0, 16), x + 36, y + 160);
-    if (c.sub) {
-      ctx.fillStyle = '#22d3ee';
-      ctx.font = '32px sans-serif';
-      ctx.fillText(String(c.sub).slice(0, 26), x + 36, y + 220);
-    }
-  });
-
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#64748b';
-  ctx.font = '34px sans-serif';
-  ctx.fillText('slomix.fyi', W / 2, H - 80);
-  return true;
-}
-
-const actionStyle = {
-  all: 'unset' as const, cursor: 'pointer', fontSize: 'var(--fs-caption)',
-  letterSpacing: '0.06em', textTransform: 'uppercase' as const, color: 'var(--color-accent)',
-};
-
+/**
+ * Slomix Wrapped (phase 7; legacy wrapped.js) — a season card a player can
+ * paste into Discord. The legacy was an overlay opened from the profile;
+ * this is a route, so the card has a link. The facts are drawn on a
+ * 1080×1920 canvas (lib/wrappedCard.ts, the design rules pinned in its
+ * test) AND listed as text beside it — the text is what a screen reader,
+ * a test runner without a canvas, and a search engine get.
+ *
+ * Copy/download stay disabled until the card is drawn: a button that does
+ * nothing must not look actionable (the legacy learned that the hard way).
+ */
 export function WrappedPage() {
-  const { guid } = useParams();
-  const wrapped = useWrapped(guid);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const { id = '' } = useParams();
+  const [params] = useSearchParams();
+  const season = params.get('season') || 'current';
+  const wrapped = useWrapped(id, season);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [drawn, setDrawn] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const data = wrapped.data;
-  const hasCards = data != null && data.cards.length > 0;
+  const [status, setStatus] = useState<string | null>(null);
+  const data = wrapped.isError ? undefined : wrapped.data;
+  const hasCards = (data?.cards.length ?? 0) > 0;
 
   useEffect(() => {
-    if (!hasCards || canvasRef.current == null || data == null) return;
-    setDrawn(drawWrapped(canvasRef.current, data));
+    if (!data || !hasCards) { setDrawn(false); return; }
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) { setDrawn(false); return; }
+    let cancelled = false;
+    const paint = () => {
+      if (cancelled) return;
+      canvas.width = CARD_W;
+      canvas.height = CARD_H;
+      drawWrapped(ctx, data, paletteFromDocument(document));
+      setDrawn(true);
+    };
+    // The card uses the page's fonts; drawing before they load bakes the
+    // fallback face into the PNG.
+    const fonts = (document as Document & { fonts?: { ready: Promise<unknown> } }).fonts;
+    if (fonts?.ready) { void fonts.ready.then(paint); } else { paint(); }
+    return () => { cancelled = true; };
   }, [data, hasCards]);
 
-  // ⛔ Exports stay disabled until the canvas actually holds a card. Legacy
-  // learnt this the same way (`_setExportEnabled(false)` before the fetch,
-  // wrapped.js:65): a Download that produces a blank PNG is worse than no
-  // button, because the user only finds out after pasting it.
-  const canExport = hasCards && drawn;
-
+  const fileName = `slomix-wrapped-${(data?.player_name || id || 'player').replace(/\s+/g, '_')}.png`;
   const download = () => {
     const canvas = canvasRef.current;
-    if (canvas == null || data == null) return;
-    const a = document.createElement('a');
-    a.download = `slomix-wrapped-${(data.player_name ?? 'player').replace(/\s+/g, '_')}.png`;
-    a.href = canvas.toDataURL('image/png');
-    a.click();
+    if (!canvas) return;
+    const link = document.createElement('a');
+    link.download = fileName;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+    setStatus(`saved ${fileName}`);
   };
-
   const copy = async () => {
     const canvas = canvasRef.current;
-    if (canvas == null) return;
+    if (!canvas) return;
     try {
-      const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, 'image/png'));
-      if (blob == null) { setNote('could not export the image — use download instead'); return; }
+      const blob = await new Promise<Blob | null>((res) => { canvas.toBlob(res, 'image/png'); });
+      if (!blob || typeof ClipboardItem === 'undefined') { setStatus('copy not supported here — use download'); return; }
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      setNote('copied — paste it into Discord');
+      setStatus('copied — paste it into Discord');
     } catch {
-      setNote('copy is not supported in this browser — use download instead');
+      setStatus('copy not supported here — use download');
     }
   };
 
   return (
-    <Stack gap={6} style={{ paddingTop: 'var(--space-7)' }}>
-      <Stack gap={2}>
-        <Lbl>wrapped · season card</Lbl>
-        <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: 'var(--track-title)', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
-          {data?.player_name ?? 'a season, on one card'}
-        </h1>
-        {data?.season_name != null && <Meta>{data.season_name}</Meta>}
-      </Stack>
-
+    <Stack gap={5} style={{ paddingTop: 'var(--space-6)' }}>
+      <SectionHead
+        label="wrapped"
+        aside={<span className="lbl">{data?.season_name ?? season} · <Link to={`/profile/${encodeURIComponent(id)}`} style={{ color: 'inherit' }}>{data?.player_name ?? id}</Link></span>}
+      />
       {wrapped.isPending && <Pending label="season card" />}
       {wrapped.isError && <Unavailable what="season card" />}
-      {data != null && !hasCards && (
-        <Absent block reason="no season data for this player yet — the card needs rounds played this season" />
+      {data && !hasCards && (
+        <Absent block reason={`no season data for ${data.player_name || id} yet — the card needs at least one round in ${data.season_name || season}`} />
       )}
-
-      {hasCards && (
-        <>
-          {/* ⭐ The numbers as TEXT, first. A canvas is a picture to a screen
-              reader; legacy offered no other way to read these. */}
-          <div data-parity="wrapped.cards">
-            <SectionHead label="the season" />
-            <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+      {data && hasCards && (
+        <div style={{ display: 'flex', gap: 'var(--space-7)', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+          <div data-parity="wrapped.card" style={{ flex: '0 1 360px' }}>
+            <canvas
+              ref={canvasRef}
+              width={CARD_W}
+              height={CARD_H}
+              role="img"
+              aria-label={`Slomix Wrapped card for ${data.player_name}`}
+              style={{ width: '100%', height: 'auto', display: 'block', border: '1px solid var(--color-rule-700)' }}
+            />
+          </div>
+          <Stack gap={3} style={{ flex: '1 1 280px' }}>
+            <Stack gap={1} className="rows" parity="wrapped.facts">
               {data.cards.map((c) => (
-                <Cluster key={c.key} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
-                  <Lbl>{c.label}</Lbl>
-                  <Cluster gap={3} align="baseline">
-                    <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{c.value}</span>
-                    {c.sub != null && c.sub !== '' && <Meta>{c.sub}</Meta>}
-                  </Cluster>
-                </Cluster>
+                <div key={c.key} className="row" style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-3)', padding: 'var(--space-2) 0', borderBottom: '1px solid var(--color-rule-800)' }}>
+                  <Lbl style={{ minWidth: 140 }}>{c.label}</Lbl>
+                  <span className="m" style={{ fontSize: 'var(--fs-row-lg)' }}>{c.value}</span>
+                  {c.sub && <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-accent)' }}>{c.sub}</span>}
+                </div>
               ))}
             </Stack>
-          </div>
-
-          <div data-parity="wrapped.card">
-            <SectionHead label="the shareable card" />
-            <canvas ref={canvasRef} aria-label="Slomix Wrapped season card"
-              style={{ width: '100%', maxWidth: 360, marginTop: 'var(--space-3)', borderRadius: 12, display: 'block' }} />
-            <Cluster gap={4} align="baseline" style={{ marginTop: 'var(--space-3)', flexWrap: 'wrap' }}>
-              <button type="button" style={actionStyle} disabled={!canExport} onClick={() => { void copy(); }}>copy image</button>
-              <button type="button" style={actionStyle} disabled={!canExport} onClick={download}>download</button>
-              {data.guid != null && <Link to={`/profile/${data.guid}`} style={actionStyle}>back to profile →</Link>}
-            </Cluster>
-            {!drawn && <Meta>the image could not be drawn here — the numbers above are the same card</Meta>}
-            {note != null && <div style={{ marginTop: 'var(--space-2)' }}><Absent reason={note} /></div>}
-          </div>
-        </>
+            <div data-parity="wrapped.actions" style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'baseline' }}>
+              <button type="button" onClick={() => { void copy(); }} disabled={!drawn} className="lbl" style={{ background: 'none', border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)', padding: 'var(--space-2) var(--space-3)', cursor: drawn ? 'pointer' : 'not-allowed', opacity: drawn ? 1 : 0.4 }}>
+                copy image
+              </button>
+              <button type="button" onClick={download} disabled={!drawn} className="lbl" style={{ background: 'none', border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)', padding: 'var(--space-2) var(--space-3)', cursor: drawn ? 'pointer' : 'not-allowed', opacity: drawn ? 1 : 0.4 }}>
+                download png
+              </button>
+              <ActLink to={`/profile/${encodeURIComponent(id)}`}>profile →</ActLink>
+            </div>
+            {status && <Lbl>{status}</Lbl>}
+            {!drawn && <Lbl>drawing the card…</Lbl>}
+          </Stack>
+        </div>
       )}
     </Stack>
   );

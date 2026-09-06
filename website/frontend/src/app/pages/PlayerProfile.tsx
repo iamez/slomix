@@ -11,7 +11,7 @@ import type {
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
-import { Absent, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * The player (docs/design/08 phase 3, docs/design/12 row 18). One endpoint
@@ -117,21 +117,16 @@ function Header({ p }: { p: Profile }) {
             {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
             {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
             <IdentityLink link={id.identity_link} />
-            {/* Legacy puts a "🎁 Season Wrapped" chip here
-              * (player-profile.js:683). Same place, same reach — the card is a
-              * page now, per docs/design/12's modal→page convention. */}
-            {(id.guid ?? p.guid) && (
-              <>
-                {' · '}
-                <Link to={`/wrapped/${id.guid ?? p.guid}`} style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>
-                  season wrapped →
-                </Link>
-              </>
-            )}
           </div>
         ) : (
           <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="identity" /></div>
         )}
+        {/* Phase 7: the two legacy profile actions that were modals/overlays
+          * (compare.js, wrapped.js) are routes now — linkable, no overlay. */}
+        <div style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-4)' }}>
+          <ActLink to={`/compare/${encodeURIComponent(id.guid ?? p.guid)}`}>compare →</ActLink>
+          <ActLink to={`/profile/${encodeURIComponent(id.guid ?? p.guid)}/wrapped`}>wrapped →</ActLink>
+        </div>
       </div>
       {/* An unrated player gets {available:false, reason:"not rated"} — the
         * rating area must say that, not vanish (Codex, #822 wave 4): a

@@ -18,7 +18,6 @@ import type {
   MarketOpenResponse,
   SkillPlayerForm,
   SkillPlayerHistory,
-  WrappedSeason,
   MarketSettleResponse,
   BetsWallet,
   BuildInfo,
@@ -177,6 +176,8 @@ import type {
   WeaponRow,
   WeaponsByPlayer,
   WeaponsHallOfFame,
+  Diagnostics,
+  Wrapped,
 } from './types';
 
 /**
@@ -200,7 +201,7 @@ export function makeQueryClient(): QueryClient {
         // the page's honest "unavailable" by a round trip. On the
         // rate-limited routes it is actively harmful — the storytelling
         // endpoints allow 10 requests a minute EACH, the story page issues
-        // thirteen per session, and retrying a 429 doubles precisely the
+        // fourteen per session, and retrying a 429 doubles precisely the
         // traffic that caused it. 5xx and network failures keep their retry.
         retry: (failureCount: number, error: Error) => {
           if (error instanceof ApiError && error.status < 500) return false;
@@ -259,6 +260,21 @@ export function usePlayerProfile(playerId: string) {
         // for panels nobody sees.
         query: { sections: PROFILE_SECTIONS },
       }) as Promise<PlayerProfile>,
+  });
+}
+
+/** Phase 7: the season card's facts. `season` is 'current' or YYYY-QN; the
+ *  backend answers 400 for anything else, which the page shows as unavailable. */
+export function useWrapped(playerId: string, season: string) {
+  return useQuery({
+    queryKey: ['wrapped', playerId, season],
+    enabled: playerId.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      apiGet('/api/players/{identifier}/wrapped', {
+        pathParams: { identifier: playerId },
+        query: { season },
+      }) as Promise<Wrapped>,
   });
 }
 
@@ -703,7 +719,7 @@ export function useSsr(enabled: boolean) {
 }
 
 // ---------------------------------------------------------------------------
-// Smart Stats. Thirteen endpoints, one session key.
+// Smart Stats. Fourteen endpoints, one session key.
 //
 // Every one is rate-limited to 10/minute on the server and several are slow
 // (the role boards read the position tracker), so they share the gsid in
@@ -745,6 +761,7 @@ type StoryPath =
   | '/api/storytelling/space-created'
   | '/api/storytelling/enabler'
   | '/api/storytelling/lurker-profile'
+  | '/api/storytelling/camp-profile'
   | '/api/storytelling/player-narratives'
   | '/api/storytelling/momentum-session'
   | '/api/storytelling/kill-matrix'
@@ -803,6 +820,13 @@ export function useStoryEnabler(gsid: number) {
 
 export function useStoryLurker(gsid: number) {
   return useQuery(storyQuery<StoryRoleBoard>('story-lurker', '/api/storytelling/lurker-profile', gsid));
+}
+
+/** Fifth tracker board (docs/design/22 slice 2): share of alive time holding
+ *  one spot. `hold_pct` is null for players alive under a minute — the page
+ *  leaves those out rather than ranking them as zeros. */
+export function useStoryCamp(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-camp', '/api/storytelling/camp-profile', gsid));
 }
 
 export function useStoryPlayerNarratives(gsid: number) {
@@ -1783,6 +1807,18 @@ export function useProxPlayerAim(sessionDate: string | null, mapName: string | n
 // noise, so these queries never retry on them (the global retry already
 // stops below 500).
 
+/** Admin backend diagnostics (About page). `enabled` is the caller's
+ *  is_admin: the route answers 401 to everyone else, and an anonymous
+ *  visitor must not fire a request whose only outcome is an error row. */
+export function useDiagnostics(enabled: boolean) {
+  return useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: () => apiGet('/api/diagnostics') as Promise<Diagnostics>,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useAvailabilityAccess() {
   return useQuery({
     queryKey: ['availability-access'],
@@ -2022,8 +2058,7 @@ export async function deleteUpload(uploadId: string) {
 
 // Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
 
-/** The season card behind /wrapped/:guid. `season=current` is the only value
- *  legacy ever sends (wrapped.js:69) and the only one this asks for. */
+
 /** The player's own form: last session against their own recent average. */
 export function useSkillPlayerForm(guid: string | null) {
   return useQuery({
@@ -2045,19 +2080,6 @@ export function useSkillPlayerHistory(guid: string | null) {
     queryFn: () => apiGet('/api/skill/player/{identifier}/history', {
       pathParams: { identifier: guid! },
     }) as Promise<SkillPlayerHistory>,
-  });
-}
-
-export function useWrapped(guid: string | undefined) {
-  return useQuery({
-    queryKey: ['wrapped', guid],
-    enabled: guid != null && guid !== '',
-    retry: false,
-    queryFn: () => apiGet('/api/players/{identifier}/wrapped', {
-      pathParams: { identifier: guid as string },
-      query: { season: 'current' },
-    }) as Promise<WrappedSeason>,
-    staleTime: 60 * 1000,
   });
 }
 

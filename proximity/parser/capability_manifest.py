@@ -125,6 +125,7 @@ SECTION_GATES: dict[str, str | None] = {
     "CARRIER_RETURNS": "carrier_returns",
     "VEHICLE_PROGRESS": "vehicle_tracking",
     "ESCORT_CREDIT": "vehicle_tracking",
+    "VEHICLE_DESTROYED": "vehicle_tracking",
     "CONSTRUCTION_EVENTS": "construction_tracking",
     "OBJECTIVE_RUNS": "objective_run_tracking",
 }

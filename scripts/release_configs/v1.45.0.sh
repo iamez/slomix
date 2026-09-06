@@ -88,6 +88,7 @@ MIGRATIONS=(
   # 081 ships with this tag: the flag that marks a reconstructed dead time.
   # Adding a nullable column, no default, no rewrite of existing rows.
   "081_time_dead_reconstructed_flag.sql"
+  "082_vehicle_progress_move_times.sql"
 )
 FLAGS=(
   "TRUSTED_HOSTS=www.slomix.fyi,slomix.fyi,localhost,127.0.0.1"
