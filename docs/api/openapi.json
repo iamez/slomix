@@ -978,6 +978,118 @@
       "type": "string"
      },
      "collection_toggle": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Collection Toggle"
+     },
+     "cost_ms_cold": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cost Ms Cold"
+     },
+     "default_visible_on": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Default Visible On",
+      "type": "array"
+     },
+     "depends_on": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Depends On",
+      "type": "array"
+     },
+     "display_toggle_default": {
+      "default": true,
+      "title": "Display Toggle Default",
+      "type": "boolean"
+     },
+     "endpoint": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Endpoint"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "parity_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parity Key"
+     },
+     "user_overridable": {
+      "default": true,
+      "title": "User Overridable",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "key",
+     "label",
+     "collected_by",
+     "default_visible_on"
+    ],
+    "title": "DatasetDescriptor",
+    "type": "object"
+   },
+   "DatasetRegistry": {
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "datasets": {
+      "items": {
+       "$ref": "#/components/schemas/DatasetDescriptor"
+      },
+      "title": "Datasets",
+      "type": "array"
+     },
+     "registry_version": {
+      "title": "Registry Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "registry_version",
+     "count",
+     "datasets"
+    ],
+    "title": "DatasetRegistry",
+    "type": "object"
+   },
    "DiagnosticsMonitoringTable": {
     "description": "`server_status_history` / `voice_status_history`. On failure the\nhandler sends count 0, last_recorded_at null AND `error` — read `error`\nfirst, or the failure prints as \"0 rows\".",
     "properties": {
@@ -994,11 +1106,6 @@
         "type": "null"
        }
       ],
-<<<<<<< HEAD
-      "title": "Collection Toggle"
-     },
-     "cost_ms_cold": {
-=======
       "title": "Error"
      },
      "last_recorded_at": {
@@ -1127,7 +1234,6 @@
       "type": "boolean"
      },
      "row_count": {
->>>>>>> origin/main
       "anyOf": [
        {
         "type": "integer"
@@ -1136,112 +1242,19 @@
         "type": "null"
        }
       ],
-<<<<<<< HEAD
-      "title": "Cost Ms Cold"
-     },
-     "default_visible_on": {
-      "items": {
-       "type": "string"
-      },
-      "title": "Default Visible On",
-      "type": "array"
-     },
-     "depends_on": {
-      "default": [],
-      "items": {
-       "type": "string"
-      },
-      "title": "Depends On",
-      "type": "array"
-     },
-     "display_toggle_default": {
-      "default": true,
-      "title": "Display Toggle Default",
-      "type": "boolean"
-     },
-     "endpoint": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Endpoint"
-     },
-     "key": {
-      "title": "Key",
-      "type": "string"
-     },
-     "label": {
-      "title": "Label",
-      "type": "string"
-     },
-     "parity_key": {
-      "anyOf": [
-       {
-        "type": "string"
-       },
-       {
-        "type": "null"
-       }
-      ],
-      "title": "Parity Key"
-     },
-     "user_overridable": {
-      "default": true,
-      "title": "User Overridable",
-      "type": "boolean"
-     }
-    },
-    "required": [
-     "key",
-     "label",
-     "collected_by",
-     "default_visible_on"
-    ],
-    "title": "DatasetDescriptor",
-    "type": "object"
-   },
-   "DatasetRegistry": {
-    "properties": {
-     "count": {
-      "title": "Count",
-      "type": "integer"
-     },
-     "datasets": {
-      "items": {
-       "$ref": "#/components/schemas/DatasetDescriptor"
-      },
-      "title": "Datasets",
-      "type": "array"
-     },
-     "registry_version": {
-      "title": "Registry Version",
-=======
       "title": "Row Count"
      },
      "status": {
       "title": "Status",
->>>>>>> origin/main
       "type": "string"
      }
     },
     "required": [
-<<<<<<< HEAD
-     "registry_version",
-     "count",
-     "datasets"
-    ],
-    "title": "DatasetRegistry",
-=======
      "name",
      "status",
      "required"
     ],
     "title": "DiagnosticsTableCheck",
->>>>>>> origin/main
     "type": "object"
    },
    "DpmLeaderRow": {
