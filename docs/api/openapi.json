@@ -966,6 +966,7 @@
    },
    "DatasetDescriptor": {
     "additionalProperties": false,
+    "description": "Every field is REQUIRED on the wire: the register is a closed list the\nSPA types by hand, and the manual-type drift guard reads the OpenAPI\n`required` list — a Python default would make the schema say \"optional\"\nfor a key that is always sent. Defaults live in the constructors below.",
     "properties": {
      "collected_by": {
       "enum": [
@@ -1007,7 +1008,6 @@
       "type": "array"
      },
      "depends_on": {
-      "default": [],
       "items": {
        "type": "string"
       },
@@ -1015,7 +1015,6 @@
       "type": "array"
      },
      "display_toggle_default": {
-      "default": true,
       "title": "Display Toggle Default",
       "type": "boolean"
      },
@@ -1050,7 +1049,6 @@
       "title": "Parity Key"
      },
      "user_overridable": {
-      "default": true,
       "title": "User Overridable",
       "type": "boolean"
      }
@@ -1059,7 +1057,14 @@
      "key",
      "label",
      "collected_by",
-     "default_visible_on"
+     "collection_toggle",
+     "display_toggle_default",
+     "user_overridable",
+     "default_visible_on",
+     "depends_on",
+     "endpoint",
+     "cost_ms_cold",
+     "parity_key"
     ],
     "title": "DatasetDescriptor",
     "type": "object"

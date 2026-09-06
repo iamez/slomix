@@ -36,6 +36,10 @@ CollectedBy = Literal["lua", "bot_parser", "importer", "derived"]
 
 
 class DatasetDescriptor(BaseModel):
+    """Every field is REQUIRED on the wire: the register is a closed list the
+    SPA types by hand, and the manual-type drift guard reads the OpenAPI
+    `required` list — a Python default would make the schema say "optional"
+    for a key that is always sent. Defaults live in the constructors below."""
     model_config = ConfigDict(extra="forbid")
 
     key: str
@@ -44,23 +48,23 @@ class DatasetDescriptor(BaseModel):
     #: The switch that turns COLLECTION off, at the origin: a Lua section
     #: name (`isFeatureEnabled("...")` in proximity_tracker.lua) or a bot
     #: env key. None = always collected (parser/importer output).
-    collection_toggle: str | None = None
+    collection_toggle: str | None
     #: Whether the designer default shows it (doc 19 §3: anonymous visitors
     #: always see the designer default).
-    display_toggle_default: bool = True
+    display_toggle_default: bool
     #: Whether a signed-in user may hide/show it (slice 3).
-    user_overridable: bool = True
+    user_overridable: bool
     #: Page keys from routes.data.json where it is shown by default.
     default_visible_on: list[str]
     #: Other dataset keys that must be collected for this one to mean
     #: anything (the informal "KIS needs proximity" rule, made checkable).
-    depends_on: list[str] = []
+    depends_on: list[str]
     #: The endpoint that serves it, when one endpoint does.
-    endpoint: str | None = None
+    endpoint: str | None
     #: Measured cold cost of the section, in ms — only where it was timed.
-    cost_ms_cold: int | None = None
+    cost_ms_cold: int | None
     #: The `data-parity` attribute the SPA renders it under, when it does.
-    parity_key: str | None = None
+    parity_key: str | None
 
 
 PROFILE_ENDPOINT = "/api/players/{identifier}/profile"
@@ -74,7 +78,8 @@ def _profile(key: str, label: str, *, collected_by: CollectedBy = "bot_parser",
              toggle: str | None = None, depends: list[str] | None = None) -> DatasetDescriptor:
     return DatasetDescriptor(
         key=key, label=label, collected_by=collected_by, collection_toggle=toggle,
-        display_toggle_default=shown, default_visible_on=["profile"] if shown else [],
+        display_toggle_default=shown, user_overridable=True,
+        default_visible_on=["profile"] if shown else [],
         depends_on=depends or [], endpoint=PROFILE_ENDPOINT, cost_ms_cold=cost,
         parity_key=parity,
     )
@@ -84,8 +89,9 @@ def _session(key: str, label: str, *, endpoint: str, parity: str, collected_by: 
              depends: list[str] | None = None, toggle: str | None = None) -> DatasetDescriptor:
     return DatasetDescriptor(
         key=key, label=label, collected_by=collected_by, collection_toggle=toggle,
+        display_toggle_default=True, user_overridable=True,
         default_visible_on=["session-detail", "session-detail-date"], depends_on=depends or [],
-        endpoint=endpoint, parity_key=parity,
+        endpoint=endpoint, cost_ms_cold=None, parity_key=parity,
     )
 
 
@@ -93,7 +99,9 @@ def _lua(key: str, label: str, toggle: str, *, shown_on: list[str], parity: str 
          depends: list[str] | None = None) -> DatasetDescriptor:
     return DatasetDescriptor(
         key=key, label=label, collected_by="lua", collection_toggle=toggle,
-        default_visible_on=shown_on, depends_on=depends or [], parity_key=parity,
+        display_toggle_default=True, user_overridable=True,
+        default_visible_on=shown_on, depends_on=depends or [], endpoint=None,
+        cost_ms_cold=None, parity_key=parity,
     )
 
 
@@ -166,15 +174,17 @@ PROXIMITY_DATASETS: tuple[DatasetDescriptor, ...] = (
     _lua("vehicle_progress", "vehicle progress and escorts", "objective_run_tracking",
          shown_on=["session-detail"], depends=["proximity_capture"]),
     DatasetDescriptor(
-        key="kill_impact", label="kill impact (KIS)", collected_by="derived",
+        key="kill_impact", label="kill impact (KIS)", collected_by="derived", collection_toggle=None,
+        display_toggle_default=True, user_overridable=True,
         default_visible_on=["session-detail", "session-detail-date"],
         depends_on=["proximity_capture", "kill_outcomes"],
-        endpoint="/api/storytelling/kill-impact", parity_key="session.player.kis",
+        endpoint="/api/storytelling/kill-impact", cost_ms_cold=None, parity_key="session.player.kis",
     ),
     DatasetDescriptor(
-        key="spider_web", label="spider web (round reconstruction)", collected_by="derived",
+        key="spider_web", label="spider web (round reconstruction)", collected_by="derived", collection_toggle=None,
+        display_toggle_default=True, user_overridable=True,
         default_visible_on=["spider-web"], depends_on=["proximity_capture"],
-        endpoint="/api/replay/round/{round_id}/web",
+        endpoint="/api/replay/round/{round_id}/web", cost_ms_cold=None, parity_key=None,
     ),
 )
 

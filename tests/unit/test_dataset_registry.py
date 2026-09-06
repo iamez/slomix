@@ -121,5 +121,8 @@ def test_the_endpoint_publishes_the_register_typed():
 def test_control_an_unknown_page_key_is_caught():
     """The rule has to be able to fail: a dataset on a page that does not
     exist must not pass the route-key check."""
-    bogus = DatasetDescriptor(key="x", label="x", collected_by="derived", default_visible_on=["no-such-page"])
+    bogus = DatasetDescriptor(key="x", label="x", collected_by="derived", collection_toggle=None,
+                              display_toggle_default=True, user_overridable=True,
+                              default_visible_on=["no-such-page"], depends_on=[], endpoint=None,
+                              cost_ms_cold=None, parity_key=None)
     assert set(bogus.default_visible_on) - _route_keys() == {"no-such-page"}
