@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAvailabilityAccess, useBuildInfo, useDiagnostics, useOverview, useSystemOverview } from '../lib/queries';
 import { API_PROBES, runProbes, type ProbeResult } from '../lib/probes';
-import { Lbl, Pending, StatusDot, Unavailable, figure, lblStyle, rowStyle } from '../components/ui';
+import { Absent, Lbl, Pending, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { DiagnosticsReport } from '../components/DiagnosticsReport';
+import { ApiError } from '../lib/api';
 
 /**
  * About (docs/design/12 row 21, route /admin) — the about.dc.html transfer.
@@ -211,7 +213,10 @@ function Health() {
  *  panel. Admin-only on the server (401 otherwise), so the request goes out
  *  only once /api/availability/access says is_admin; for everyone else the
  *  panel simply is not there (a decision before the request, not a fact
- *  about the data — docs/design/19 §5). */
+ *  about the data — docs/design/19 §5). The report itself lives in
+ *  components/DiagnosticsReport (carried over from #911 on 2026-09-06): a
+ *  table without a count is a reason, an empty time block is a query that
+ *  did not run, a failed monitoring table is unavailable — not "0 rows". */
 function DiagnosticsPanel() {
   const access = useAvailabilityAccess();
   const isAdmin = access.data?.is_admin === true;
@@ -219,40 +224,22 @@ function DiagnosticsPanel() {
   if (!isAdmin) return null;
   const d = diag.isError ? undefined : diag.data;
   const verdict = d ? (d.issues.length === 0 ? (d.warnings.length === 0 ? 'all systems go' : `${d.warnings.length} warning${d.warnings.length === 1 ? '' : 's'}`) : `${d.issues.length} issue${d.issues.length === 1 ? '' : 's'}`) : null;
+  // 401 and 403 are ANSWERS, not failures. The access check said admin a
+  // moment ago, so a 401 here means the session ended between the two
+  // calls; a 403 means the two admin checks disagree (they read the
+  // session in opposite key order — see dependencies.py vs auth_helpers).
+  const status = diag.error instanceof ApiError ? diag.error.status : 0;
   return (
     <div data-parity="admin.diagnostics" style={{ marginTop: 'var(--space-6)' }}>
-      <Lbl>backend diagnostics · admin · {d?.timestamp ? d.timestamp.replace('T', ' ').slice(0, 19) : 'live'}</Lbl>
+      <Lbl>backend diagnostics · admin · {d?.timestamp ? d.timestamp.replace('T', ' ').slice(0, 19) : 'live'}{verdict ? ` · ${verdict}` : ''}</Lbl>
       <div style={{ marginTop: 'var(--space-3)' }}>
         {diag.isPending && <Pending label="diagnostics" />}
-        {diag.isError && <Unavailable what="diagnostics" />}
-        {d?.tables.map((t) => (
-          <div key={t.name} style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
-            <StatusDot state={t.status === 'ok' ? 'ok' : t.required ? 'error' : 'warn'} />
-            <span className="m" style={{ fontSize: 'var(--fs-row)', color: 'var(--color-text-300)' }}>{t.name}</span>
-            {!t.required && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>optional</Lbl>}
-            <span className="m" style={{ marginLeft: 'auto', fontSize: 'var(--fs-small)', textAlign: 'right' }}>
-              {t.status === 'ok' ? figure(t.row_count ?? 0) : t.status.replace('_', ' ')}
-            </span>
-          </div>
-        ))}
+        {diag.isError && status === 401 && <Absent block reason="the session ended between the access check and this request — sign in again" />}
+        {diag.isError && status === 403 && <Absent block reason="signed in, but the diagnostics endpoint does not count this account as an admin" />}
+        {diag.isError && status !== 401 && status !== 403 && <Unavailable what="diagnostics" />}
+        {diag.isSuccess && !d && <Absent block reason="the backend answered with no body" />}
+        {d && <DiagnosticsReport d={d} />}
       </div>
-      {d && (
-        <div style={{ marginTop: 'var(--space-3)' }}>
-          {d.issues.map((i) => (
-            <div key={i} style={{ fontSize: 'var(--fs-small)', color: 'var(--color-neg)' }}>{i}</div>
-          ))}
-          {d.warnings.map((w) => (
-            <div key={w} style={{ fontSize: 'var(--fs-small)', color: 'var(--color-accent-warm)' }}>{w}</div>
-          ))}
-          <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
-            {verdict} · database {d.database.status}
-            {Object.entries(d.monitoring).map(([k, v]) => {
-              const m = v as { count?: number; last_recorded_at?: string | null };
-              return m && typeof m === 'object' && 'count' in m ? ` · ${k} ${figure(m.count ?? 0)} rows` : '';
-            }).join('')}
-          </Lbl>
-        </div>
-      )}
     </div>
   );
 }

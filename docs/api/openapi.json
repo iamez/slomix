@@ -978,6 +978,14 @@
       "type": "string"
      },
      "collection_toggle": {
+   "DiagnosticsMonitoringTable": {
+    "description": "`server_status_history` / `voice_status_history`. On failure the\nhandler sends count 0, last_recorded_at null AND `error` — read `error`\nfirst, or the failure prints as \"0 rows\".",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "error": {
       "anyOf": [
        {
         "type": "string"
@@ -986,9 +994,140 @@
         "type": "null"
        }
       ],
+<<<<<<< HEAD
       "title": "Collection Toggle"
      },
      "cost_ms_cold": {
+=======
+      "title": "Error"
+     },
+     "last_recorded_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Recorded At"
+     }
+    },
+    "required": [
+     "count",
+     "last_recorded_at"
+    ],
+    "title": "DiagnosticsMonitoringTable",
+    "type": "object"
+   },
+   "DiagnosticsReport": {
+    "additionalProperties": true,
+    "description": "GET /api/diagnostics. `time` is `{}` when its query raised or returned\nno row; `pool` always carries `connected`; monitoring and pool never\nchange `status` (computed from issues/warnings before they are read).\nNested dicts stay open so an adapter-specific pool key is not dropped.",
+    "properties": {
+     "database": {
+      "additionalProperties": true,
+      "title": "Database",
+      "type": "object"
+     },
+     "issues": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Issues",
+      "type": "array"
+     },
+     "monitoring": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/DiagnosticsMonitoringTable"
+      },
+      "title": "Monitoring",
+      "type": "object"
+     },
+     "pool": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pool"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "tables": {
+      "items": {
+       "$ref": "#/components/schemas/DiagnosticsTableCheck"
+      },
+      "title": "Tables",
+      "type": "array"
+     },
+     "time": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Time",
+      "type": "object"
+     },
+     "timestamp": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Timestamp"
+     },
+     "warnings": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+     }
+    },
+    "required": [
+     "status",
+     "database",
+     "tables",
+     "issues",
+     "warnings",
+     "time",
+     "monitoring"
+    ],
+    "title": "DiagnosticsReport",
+    "type": "object"
+   },
+   "DiagnosticsTableCheck": {
+    "description": "One table the API reads. `row_count` is present only on `status: \"ok\"`\n(every query is a COUNT, so it is an integer or absent — never null); the\nother statuses carry `error` instead. A missing count is a reason, not a\nzero, and the About panel renders it as one.",
+    "properties": {
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "title": "Required",
+      "type": "boolean"
+     },
+     "row_count": {
+>>>>>>> origin/main
       "anyOf": [
        {
         "type": "integer"
@@ -997,6 +1136,7 @@
         "type": "null"
        }
       ],
+<<<<<<< HEAD
       "title": "Cost Ms Cold"
      },
      "default_visible_on": {
@@ -1079,15 +1219,29 @@
      },
      "registry_version": {
       "title": "Registry Version",
+=======
+      "title": "Row Count"
+     },
+     "status": {
+      "title": "Status",
+>>>>>>> origin/main
       "type": "string"
      }
     },
     "required": [
+<<<<<<< HEAD
      "registry_version",
      "count",
      "datasets"
     ],
     "title": "DatasetRegistry",
+=======
+     "name",
+     "status",
+     "required"
+    ],
+    "title": "DiagnosticsTableCheck",
+>>>>>>> origin/main
     "type": "object"
    },
    "DpmLeaderRow": {
@@ -8973,7 +9127,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/DiagnosticsReport"
+        }
        }
       },
       "description": "Successful Response"
