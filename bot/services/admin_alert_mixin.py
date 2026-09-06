@@ -6,11 +6,22 @@ All methods live on UltimateETLegacyBot via mixin inheritance.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import discord
 
 from bot.logging_config import get_logger
+
+#: How long a failure streak may be idle before the next failure starts a new
+#: one. Six of the nine tracked keys have no success path that clears their
+#: counter, so without a window "3 consecutive failures" means "the 3rd failure
+#: since the bot booted" — which can span days, and which is not what anyone
+#: reads it as.
+#:
+#: ⚠️ Not free: a service failing once every 40 minutes will now never reach a
+#: threshold. That is deliberate. A fault that rare is not an outage, and the
+#: right instrument for it is the log, not a pager.
+STREAK_WINDOW = timedelta(minutes=30)
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -102,8 +113,32 @@ class _AdminAlertMixin:
         Returns:
             Current consecutive error count for this key
         """
+        now = datetime.now(timezone.utc)
+
+        # ⛔⛔ A STREAK THAT NEVER ENDS IS NOT A STREAK. `ssh_monitor`,
+        # `file_processing` and `proximity_ssh` clear their counters on
+        # success; the other six — discord_posting, endstats_processing,
+        # webhook_processing, stats_ready_webhook, stats_ready_worker,
+        # voice_session — have no success path that calls the reset at all, so
+        # their counters were monotonic for the life of the process. An idle
+        # gap longer than STREAK_WINDOW ends the streak here, which fixes all
+        # nine at one place rather than inventing six notions of "success" in
+        # six unrelated subsystems.
+        last = self._error_last_seen.get(error_key)
+        if last is not None and now - last > STREAK_WINDOW:
+            self._consecutive_errors[error_key] = 0
+            self._alerted_keys.discard(error_key)
+            self._error_streak_started.pop(error_key, None)
+
+        self._error_last_seen[error_key] = now
         self._consecutive_errors[error_key] = self._consecutive_errors.get(error_key, 0) + 1
         count = self._consecutive_errors[error_key]
+
+        # When a streak begins, remember when — the recovery notice says how
+        # long the service was down, and "it is back" without "for how long"
+        # is barely more useful than silence.
+        if count == 1:
+            self._error_streak_started[error_key] = now
 
         if count == max_consecutive:
             await self.alert_admins(
@@ -113,6 +148,10 @@ class _AdminAlertMixin:
                 f"This service may need attention.",
                 severity="error"
             )
+            # ⛔ Only a key that actually woke somebody may announce recovery.
+            # Without this, every quiet reset would page the admins to say
+            # nothing happened.
+            self._alerted_keys.add(error_key)
         elif count > max_consecutive and count % 10 == 0:
             # Reminder every 10 failures after threshold
             await self.alert_admins(
@@ -122,9 +161,116 @@ class _AdminAlertMixin:
                 severity="critical"
             )
 
+        self._persist_error_streaks()
         return count
 
-    def reset_error_tracking(self, error_key: str):
-        """Reset consecutive error count for a key (call on success)."""
+    async def reset_error_tracking(self, error_key: str):
+        """Clear the counter and, if this key alerted, say that it recovered.
+
+        ⛔⛔ THE MISSING HALF OF THE STATE MACHINE. Until 2026-09-06 this
+        method was silent: it set the counter to 0 and told nobody. The owner
+        therefore saw an ERROR at 14:56 and never learnt that the service was
+        healthy again by 15:02 — from Discord alone, the outage is still
+        running. An alerting path with only the failing edge instrumented does
+        not report a service's state; it reports a monotonically growing list
+        of complaints.
+
+        ⛔ Recovery is announced ONLY for a key that actually alerted. A reset
+        happens on every healthy cycle, and pinging admins to say nothing
+        happened would train them to ignore the channel — which costs more
+        than the missing notice did.
+        """
+        count = self._consecutive_errors.get(error_key, 0)
+        started = self._error_streak_started.pop(error_key, None)
+        self._error_last_seen.pop(error_key, None)
+        had_alerted = error_key in self._alerted_keys
+
+        # ⛔ Only zero a key that exists. A reset for a key never tracked must
+        # NOT create an entry — resets run on every healthy cycle for several
+        # services, and inventing keys would grow this dict without bound.
+        # (Pinned since before this change: test_reset_error_tracking_no_op_
+        # for_unknown_key. I dropped the guard while adding recovery and the
+        # test caught it.)
         if error_key in self._consecutive_errors:
             self._consecutive_errors[error_key] = 0
+        self._alerted_keys.discard(error_key)
+
+        # ⛔ Persist BEFORE the early return. A reset that is not written is a
+        # reset a restart undoes — the counter would come back from disk and
+        # the next single failure would look like the third one.
+        self._persist_error_streaks()
+
+        if not had_alerted:
+            return
+
+        boot_time = getattr(self, "_boot_time", None)
+        if started is not None:
+            elapsed = datetime.now(timezone.utc) - started
+            minutes = max(1, round(elapsed.total_seconds() / 60))
+            span = f"after {minutes} minute{'s' if minutes != 1 else ''}"
+            # A streak older than this process survived a restart. Saying so
+            # matters: without it, an admin reading "back to normal after 95
+            # minutes" would assume one continuous process watched all 95.
+            if boot_time is not None and started < boot_time:
+                span += " (the streak crossed a bot restart)"
+        else:
+            # The streak began before this process did (the counters live in
+            # memory only), so the duration is genuinely unknown — say so
+            # rather than print a number that would be a guess.
+            span = "after an unknown period"
+
+        await self.alert_admins(
+            f"{error_key.replace('_', ' ').title()} Recovered",
+            f"**Back to normal {span}.**\n\n"
+            f"{count} consecutive failure{'s' if count != 1 else ''} before this cycle succeeded.",
+            severity="info",
+        )
+
+    # =====================================================================
+    # Persistence — the streaks survive a restart
+    # =====================================================================
+
+    def _persist_error_streaks(self) -> bool:
+        """Write the current streaks to disk. Never raises, never blocks alerts.
+
+        ⛔ Guarded with getattr because the store is optional. Test harnesses
+        and any embedder that builds this mixin without a store keep the exact
+        behaviour they had before persistence existed: counting in memory.
+        """
+        store = getattr(self, "_streak_store", None)
+        if store is None:
+            return False
+        return store.save(
+            boot_time=getattr(self, "_boot_time", None) or datetime.now(timezone.utc),
+            consecutive=self._consecutive_errors,
+            started=self._error_streak_started,
+            last_seen=self._error_last_seen,
+            alerted=self._alerted_keys,
+        )
+
+    def load_error_streaks(self) -> int:
+        """Restore streaks left by the previous process. Returns how many.
+
+        ⛔⛔ THE REASON THIS EXISTS. The counters used to live only in RAM, so
+        restarting the bot set every streak to zero. That does not merely lose
+        history: if the service is still broken, the bot now needs three FRESH
+        failures before it will page anyone again. A restart therefore delayed
+        the next alert — which is the opposite of what an operator restarting a
+        failing bot expects.
+        """
+        store = getattr(self, "_streak_store", None)
+        if store is None:
+            return 0
+        loaded = store.load(STREAK_WINDOW)
+        self._consecutive_errors.update(loaded["consecutive"])
+        self._error_streak_started.update(loaded["started"])
+        self._error_last_seen.update(loaded["last_seen"])
+        self._alerted_keys.update(loaded["alerted"])
+
+        restored = len(loaded["consecutive"])
+        if restored or loaded["expired"]:
+            logger.info(
+                f"Restored {restored} failure streak(s) from disk "
+                f"({loaded['expired']} dropped as older than {STREAK_WINDOW})"
+            )
+        return restored

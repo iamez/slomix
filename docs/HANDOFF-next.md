@@ -88,8 +88,7 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    (preklop `build:app` v deploy skripti; migracija 082 na prod).
 5. Vzporedno po ownerjevi izbiri: dvojčki r. 4 (rabi puran bot test), doc 19
    r. 1 (register datasetov + tipiziran `GET /api/datasets`), popravek korpusa
-   `destroyed_count`, proximity endpointi s sprejemom 8-znakovnega guida (10
-   endpointov). ~~availability r. 3~~ = narejena v #915.
+   `destroyed_count`, ~~proximity endpointi s sprejemom 8-znakovnega guida~~ = narejeno 6. 9. (resolver v `proximity_helpers.resolve_player_guid`, 17 handlerjev + AST varovalo). ~~availability r. 3~~ = narejena v #915.
 6. **Preostalih 13 vrzeli, po izmerjenem trudu** (raziskave 6. 9.; podrobnosti
    in pasti so v komentarjih `tests/data/endpoint_gap.txt`):
    - `players/{}/card` (M) — arhetip + 90-dnevni form; ⚠️ njegovi percentili

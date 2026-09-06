@@ -48,7 +48,8 @@ const SAMPLES = new Map<string, string>([
   [':id', 'D8423F90'],
   [':a?', 'D8423F90'],
   [':b?', 'E587CA5F'],
-  // the tracker's full guid: the proximity endpoints do not match a prefix
+  // the tracker's full guid; the thin set below sends the 8-character key
+  // on purpose — the endpoints resolve a prefix since 2026-09-06
   [':guid', 'D8423F90F045D9D3E2C0550811C5A899'],
   [':roundId', '11365'],
   [':sessionId', '154'],

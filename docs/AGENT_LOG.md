@@ -22,6 +22,13 @@ data here.
   production `slomix-*`. Why: "inactive" invited starting a second copy by
   hand (2026-08-05). Apply: never derive "not running" from `is-active`
   alone; the watchdog never starts anything, it proposes the command.
+- **2026-09-06 · Guid prefix collisions exist only among bots.** Across every
+  proximity guid source, 34 full guids map to 23 prefixes and the two shared
+  prefixes are `OMNIBOT0`/`OMNIBOT1`; every human prefix is unique. Why: an
+  8-char key is therefore a lossless lookup for humans and an honest 400 for
+  bots. Apply: `resolve_player_guid` in `proximity_helpers`; never push
+  `LEFT(guid,8)=` or `LIKE` into a main query (seq scan, en_US collation) —
+  resolve once through the indexed `*_guid_canonical` column, then bind `=`.
 - **2026-09-06 · Scripted edits: count the token before adding an offset.**
   `s.index("\n  };") + 4` on a five-character token slid a `;` past the
   inserted block: one statement lost it, an empty statement appeared later.

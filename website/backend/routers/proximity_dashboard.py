@@ -29,6 +29,7 @@ from website.backend.routers.proximity_helpers import (
     _round_quality_gate_sql,
     _timed_section,
     logger,
+    resolve_player_guid,
 )
 from website.backend.routers.proximity_movement import get_proximity_movers, get_proximity_reactions
 from website.backend.routers.proximity_objectives import (
@@ -586,6 +587,7 @@ async def get_proximity_kill_outcomes(
     is registered by proximity_positions but this local version is used
     only for internal dashboard calls.
     """
+    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["victim_guid", "killer_guid"],
