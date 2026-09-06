@@ -70,6 +70,46 @@
 # already exist for 12 of the 13 (checked against the router decorators), so
 # the remaining work is frontend, not API.
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 2026-09-07 — ORDER OF WORK for the 12 that remain, and what each costs.
+#
+# Row counts separate the first group; for the composites they separate
+# nothing, since all of them read player_comprehensive_stats. What separates
+# THOSE is whether the port can copy legacy or has to fix it on the way.
+#
+# DEAD — do not build UI until the data exists:
+#   /api/bets                            0 rows, and an owner decision anyway
+#   /api/players/{}/awards               2 rows, 2 players, 1 season
+#   /api/greatshot/{}/highlights/render  greatshot_renders: 1 row, 2026-02-15
+#
+# ALIVE, small, per-user:
+#   /api/greatshot/{}/crossref           23 demos to 2026-09-02, but behind
+#                                        `_require_user` + WHERE user_id, so
+#                                        each visitor sees only their own
+#   /api/uploads/{}/download             8 rows
+#
+# ⛔ CANNOT BE COPIED AS-IS — the legacy call carries a bug:
+#   /api/sessions/{}/graphs              The path parameter is a DATE. The
+#     handler accepts an optional `gaming_session_id` query param and prefers
+#     it, but 2 of the 3 legacy call sites omit it (diagnostics.js:296,
+#     sessions.js:2025; only sessions.js:881 passes one). CLAUDE.md forbids
+#     date-based session queries for exactly this reason: measured 2026-09-07,
+#     13 of 176 days (7.4%) hold more than one session, up to 4. On those days
+#     the two bare calls MERGE sessions into one graph. Porting this means
+#     passing gaming_session_id always — not reproducing the legacy call.
+#
+# COMPOSITES over player_comprehensive_stats — data is not the question:
+#   /api/players/{}/card                 rating + 90-day form + percentiles
+#   /api/rounds/{}/player/{}/details
+#   /api/rounds/{}/vs-stats              ⚠️ note /player/{guid}/vs-stats is a
+#                                        DIFFERENT endpoint (records_player.py)
+#   /api/stats/player/{}/form
+#   /api/stats/player/{}/rounds
+#
+# OWNER DECISION, closes with legacy retirement:
+#   /api/stats/sessions                  (see the 2026-08-30 note above)
+# ---------------------------------------------------------------------------
 #
 # 2026-09-02,
 #
