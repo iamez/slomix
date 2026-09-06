@@ -120,6 +120,7 @@ import type {
   RecentPrediction,
   RecentRound,
   RivalryLeaderboard,
+  RoundAwards,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -612,6 +613,23 @@ export function useRecentRounds() {
   return useQuery({
     queryKey: ['recent-rounds'],
     queryFn: () => apiGet('/api/rounds/recent', { query: { limit: 50 } }) as Promise<RecentRound[]>,
+  });
+}
+
+/** Awards for one round, grouped by category.
+ *
+ * ⛔ `enabled` keeps this from firing until a round is actually picked — the
+ * rounds table lists up to 18 of them and eagerly fetching each one would be
+ * 18 calls to answer a question nobody asked.
+ */
+export function useRoundAwards(roundId: number | null) {
+  return useQuery({
+    queryKey: ['round-awards', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/awards', {
+        pathParams: { round_id: roundId! },
+      }) as Promise<RoundAwards>,
   });
 }
 

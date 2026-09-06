@@ -97,7 +97,6 @@
 /api/greatshot/{}/highlights/render
 /api/players/{}/awards
 /api/players/{}/card
-/api/rounds/{}/awards
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats
 /api/sessions/{}/graphs

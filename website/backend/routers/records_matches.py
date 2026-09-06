@@ -438,10 +438,24 @@ async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db))
         raise HTTPException(status_code=404, detail="Round not found")
 
     # Get awards
+    #
+    # ⛔⛔ THE BOT FILTER IS NOT DECORATION — it is what the session-level
+    # aggregate over this same table already does
+    # (`sessions_router.py:2634`), and without it the two views of one fact
+    # disagree: 2120 of the 27269 award rows are bots, spread over 83 rounds,
+    # and a person opening a round saw names the session summary had hidden.
+    #
+    # ⭐ Measured before changing anything: 2059 of those 2120 (97%) sit in
+    # rounds that contain NO human award at all. So this does not thin a mixed
+    # round's list — it empties an all-bot round, which is the right answer.
+    # An award won against nobody is not an award, and the empty-state copy
+    # already says "no awards for this round".
     awards_query = """
         SELECT award_name, player_name, player_guid, award_value, award_value_numeric
         FROM round_awards
         WHERE round_id = $1
+          AND (player_guid IS NULL OR UPPER(player_guid) NOT LIKE 'OMNIBOT%')
+          AND player_name NOT LIKE '%[BOT]%'
         ORDER BY id
     """
     awards_rows = await db.fetch_all(awards_query, (round_id,))
