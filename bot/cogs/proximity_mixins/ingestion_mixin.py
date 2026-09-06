@@ -6,9 +6,11 @@ All methods live on ProximityCog via mixin inheritance.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
+import random
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -285,6 +287,11 @@ class _ProximityIngestionMixin:
     async def before_scan(self):
         """Wait for bot to be ready before starting scan task"""
         await self.bot.wait_until_ready()
+        # ⛔ Break the alignment with the other SSH pollers. All of them start
+        # from `wait_until_ready`, so they tick on the same second and open
+        # their handshakes simultaneously — and MaxStartups counts CONCURRENT
+        # unauthenticated connections. See _stagger in monitor_tasks_mixin.
+        await asyncio.sleep(random.uniform(0, 12))  # noqa: S311 - jitter, not a secret
 
     async def _resolve_session_date(
         self, file_date: str, file_time: str, parts: list, filename: str

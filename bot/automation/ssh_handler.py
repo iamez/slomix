@@ -16,6 +16,7 @@ import asyncio
 import logging
 import os
 import posixpath
+import random
 import re
 import socket
 import time
@@ -36,6 +37,18 @@ SAFE_GAMETIME_FILENAME_PATTERN = re.compile(
 #: turns a noisy alarm into a silent degradation, and the slowness itself is a
 #: useful signal about the game host.
 SLOW_HANDSHAKE_SECONDS = 3.0
+
+#: The two labels `_describe_ssh_failure` attaches. `REMOTE_SLOW_MARK` is the
+#: only failure a retry can help with — see `list_remote_files`.
+REMOTE_SLOW_MARK = "[banner/read timed out — remote slow]"
+LOCAL_CLOSED_MARK = "[socket closed under the read — local]"
+
+#: Full Jitter (AWS Architecture Blog, "Exponential Backoff And Jitter"):
+#: sleep(random(0, base * 2**attempt)). A fixed backoff keeps a synchronised
+#: herd synchronised — it survives, just at wider intervals; randomising the
+#: whole window spreads the retries into a trickle instead.
+RETRY_BASE_SECONDS = 1.0
+MAX_LIST_ATTEMPTS = 2
 
 
 def _log_slow_handshake(what: str, started: float) -> None:
@@ -69,9 +82,9 @@ def _describe_ssh_failure(exc: Exception) -> str:
         root = nxt
 
     if isinstance(root, socket.timeout | TimeoutError):
-        return f"{exc} [banner/read timed out — remote slow]"
+        return f"{exc} {REMOTE_SLOW_MARK}"
     if isinstance(root, OSError) and root.errno == 9:
-        return f"{exc} [socket closed under the read — local]"
+        return f"{exc} {LOCAL_CLOSED_MARK}"
     if isinstance(root, OSError):
         return f"{exc} [{type(root).__name__}: {root}]"
     return str(exc)
@@ -194,29 +207,63 @@ class SSHHandler:
         Returns:
             List of matching filenames
         """
-        try:
-            # Run in executor to avoid blocking event loop, with 30s timeout
-            loop = asyncio.get_running_loop()
-            files = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    SSHHandler._list_files_sync,
-                    ssh_config,
-                    extensions,
-                    exclude_suffixes,
-                ),
-                timeout=30,
-            )
-            return files
+        for attempt in range(MAX_LIST_ATTEMPTS):
+            try:
+                # Run in executor to avoid blocking event loop, with 30s timeout
+                loop = asyncio.get_running_loop()
+                files = await asyncio.wait_for(
+                    loop.run_in_executor(
+                        None,
+                        SSHHandler._list_files_sync,
+                        ssh_config,
+                        extensions,
+                        exclude_suffixes,
+                    ),
+                    timeout=30,
+                )
+                return files
 
-        except TimeoutError:
-            logger.error("❌ SSH list files timed out after 30 seconds")
-            raise SSHConnectionError("SSH list files timed out after 30 seconds")
+            except TimeoutError:
+                # ⚠️ ONE CLASS, TWO MEANINGS. Since Python 3.10 `socket.timeout`
+                # IS `TimeoutError` — the same object, not a subclass — so this
+                # branch cannot tell the outer 30s `wait_for` from a socket read
+                # that gave up at 15. In practice paramiko wraps the latter in
+                # SSHException, so it reaches the handler below and gets named
+                # correctly; a bare one would be misreported here as "30
+                # seconds" when it was fifteen. Left as-is rather than guessed
+                # at: narrowing it needs a reproduction we do not have.
+                logger.error("❌ SSH list files timed out after 30 seconds")
+                raise SSHConnectionError("SSH list files timed out after 30 seconds")
 
-        except Exception as e:
-            detail = _describe_ssh_failure(e)
-            logger.error(f"❌ SSH list files failed: {detail}")
-            raise SSHConnectionError(f"SSH list files failed: {detail}") from e
+            except Exception as e:
+                detail = _describe_ssh_failure(e)
+
+                # ⛔⛔ RETRY ONLY WHAT A RETRY CAN FIX. A banner that arrived
+                # too slowly is worth asking again for — the host was busy for
+                # a moment, and on 2026-09-06 the successful polls either side
+                # of each failure prove it recovered within seconds. A socket
+                # closed under the read, or a rejected key, will fail exactly
+                # the same way twice; retrying those only doubles the load on
+                # a host that is already struggling.
+                #
+                # ⭐ This is the first concrete return on separating the two
+                # causes in #923. While they shared one message, no retry could
+                # tell them apart, so no retry was safe to add.
+                retriable = REMOTE_SLOW_MARK in detail
+                last_attempt = attempt == MAX_LIST_ATTEMPTS - 1
+
+                if not retriable or last_attempt:
+                    logger.error(f"❌ SSH list files failed: {detail}")
+                    raise SSHConnectionError(f"SSH list files failed: {detail}") from e
+
+                delay = random.uniform(0, RETRY_BASE_SECONDS * (2 ** attempt))  # noqa: S311 - jitter, not a secret
+                logger.warning(
+                    f"⏳ SSH list files: {detail} — retrying after {delay:.1f}s"
+                )
+                await asyncio.sleep(delay)
+
+        # Unreachable: the loop either returns or raises on its last attempt.
+        raise SSHConnectionError("SSH list files failed: retries exhausted")
 
     @staticmethod
     def _list_files_sync(

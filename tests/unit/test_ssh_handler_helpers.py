@@ -294,3 +294,135 @@ def test_a_slow_handshake_is_logged_and_a_fast_one_is_not(caplog):
         )
         assert len(caplog.records) == 1
         assert "handshake took" in caplog.records[0].message
+
+
+def _paramiko_banner_error(cause: Exception) -> Exception:
+    """What paramiko actually raises, not a bare cause.
+
+    ⚠️ The first version of these tests raised the cause directly, and every
+    one of them failed — a bare `TimeoutError` is caught by the outer
+    `except TimeoutError` (the 30s wait_for guard), because since Python 3.10
+    `socket.timeout` IS `TimeoutError`, the same object. paramiko wraps the
+    read failure in SSHException, which is why the real code reaches the
+    handler that can tell the two causes apart. A test that raises the cause
+    bare tests a path production never takes."""
+    try:
+        try:
+            raise cause
+        except Exception as inner:
+            raise Exception("Error reading SSH protocol banner") from inner
+    except Exception as outer:
+        return outer
+
+
+def _record(sink):
+    """An awaitable stand-in for asyncio.sleep that records instead of waiting.
+
+    ⚠️ Never let a real sleep into these tests: a jittered delay would make
+    the suite's runtime random, which is precisely the class of defect this
+    change is about."""
+    async def _sleep(delay):
+        sink.append(delay)
+    return _sleep
+
+
+# ---------------------------------------------------------------------------
+# retry — Full Jitter, and only for the failure a retry can fix
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_slow_banner_is_retried_once_and_can_succeed(monkeypatch):
+    """The 2026-09-06 log shows successful polls either side of every failure:
+    the host was busy for a moment, not broken. Asking again is the whole fix
+    for that shape."""
+    from bot.automation import ssh_handler
+
+    calls = []
+
+    def _flaky(*_args):
+        calls.append(1)
+        if len(calls) == 1:
+            raise _paramiko_banner_error(TimeoutError())
+        return ["a.txt"]
+
+    slept = []
+    monkeypatch.setattr(ssh_handler.SSHHandler, "_list_files_sync", staticmethod(_flaky))
+    monkeypatch.setattr(ssh_handler.asyncio, "sleep", _record(slept))
+
+    files = await ssh_handler.SSHHandler.list_remote_files({"host": "h"})
+    assert files == ["a.txt"]
+    assert len(calls) == 2
+    assert len(slept) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_closed_socket_is_NOT_retried(monkeypatch):
+    """⛔⛔ THE POINT. `[Errno 9]` and a rejected key fail identically twice;
+    retrying them only doubles the load on a host already struggling. This is
+    the first concrete return on separating the two causes in #923 — while
+    they shared one message, no retry could tell them apart."""
+    from bot.automation import ssh_handler
+    from bot.automation.ssh_handler import SSHConnectionError
+
+    calls = []
+
+    def _closed(*_args):
+        calls.append(1)
+        raise _paramiko_banner_error(OSError(9, "Bad file descriptor"))
+
+    monkeypatch.setattr(ssh_handler.SSHHandler, "_list_files_sync", staticmethod(_closed))
+    monkeypatch.setattr(ssh_handler.asyncio, "sleep", _record([]))
+
+    with pytest.raises(SSHConnectionError):
+        await ssh_handler.SSHHandler.list_remote_files({"host": "h"})
+    assert len(calls) == 1, "a local failure must not be asked again"
+
+
+@pytest.mark.asyncio
+async def test_the_delay_is_full_jitter_not_a_fixed_backoff(monkeypatch):
+    """⛔ A fixed delay keeps a synchronised herd synchronised — it survives,
+    just at wider intervals. Full Jitter draws from the whole window
+    (AWS: sleep(random(0, base * 2**attempt))), which spreads retries into a
+    trickle. The test pins the DRAW, not a number, because a number would make
+    this test the flaky thing it exists to prevent."""
+    from bot.automation import ssh_handler
+
+    drawn = []
+
+    def _uniform(lo, hi):
+        drawn.append((lo, hi))
+        return 0.0
+
+    def _slow(*_args):
+        raise _paramiko_banner_error(TimeoutError())
+
+    monkeypatch.setattr(ssh_handler.SSHHandler, "_list_files_sync", staticmethod(_slow))
+    monkeypatch.setattr(ssh_handler.random, "uniform", _uniform)
+    monkeypatch.setattr(ssh_handler.asyncio, "sleep", _record([]))
+
+    with pytest.raises(Exception):
+        await ssh_handler.SSHHandler.list_remote_files({"host": "h"})
+
+    assert drawn == [(0, ssh_handler.RETRY_BASE_SECONDS * 1)]
+
+
+@pytest.mark.asyncio
+async def test_retries_are_bounded(monkeypatch):
+    """A host that stays slow must not be hammered forever inside one cycle —
+    the loop ticks again in a minute anyway."""
+    from bot.automation import ssh_handler
+    from bot.automation.ssh_handler import SSHConnectionError
+
+    calls = []
+
+    def _always_slow(*_args):
+        calls.append(1)
+        raise _paramiko_banner_error(TimeoutError())
+
+    monkeypatch.setattr(ssh_handler.SSHHandler, "_list_files_sync", staticmethod(_always_slow))
+    monkeypatch.setattr(ssh_handler.asyncio, "sleep", _record([]))
+
+    with pytest.raises(SSHConnectionError):
+        await ssh_handler.SSHHandler.list_remote_files({"host": "h"})
+    assert len(calls) == ssh_handler.MAX_LIST_ATTEMPTS

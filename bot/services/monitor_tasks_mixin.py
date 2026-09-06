@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 import re
 import time
 from datetime import datetime
@@ -40,6 +41,24 @@ from bot.core.dead_hours import DEAD_HOURS_END, is_dead_hour
 from bot.logging_config import get_logger
 
 logger = get_logger("bot.core")
+
+async def _stagger(interval_seconds: float) -> None:
+    """Offset a task loop's first tick by a random slice of its own interval.
+
+    ⛔⛔ THE POLLERS WERE ALIGNED. endstats (60s), the proximity scan (120s)
+    and the console sentinel (120s) all start from `wait_until_ready`, so they
+    tick together — on 2026-09-06 every successful connection in the log lands
+    on the same second (`:01`). Each one opens its own SSH connection, and
+    OpenSSH's MaxStartups limits CONCURRENT unauthenticated connections
+    (paramiko #874, #664: a refused one surfaces as "Error reading SSH
+    protocol banner"). Three simultaneous handshakes against a host that is
+    already slow is a self-inflicted burst on top of somebody else's load.
+
+    A tenth of the interval is enough to break the alignment without moving
+    any loop meaningfully off its cadence.
+    """
+    await asyncio.sleep(random.uniform(0, interval_seconds * 0.1))  # noqa: S311 - jitter, not a secret
+
 
 
 class _MonitorTasksMixin:
@@ -326,6 +345,7 @@ class _MonitorTasksMixin:
     async def before_endstats_monitor(self):
         """Wait for bot to be ready before starting SSH monitoring"""
         await self.wait_until_ready()
+        await _stagger(60)
         logger.info("✅ SSH monitoring task ready (optimized with voice detection)")
 
     @tasks.loop(seconds=30)
@@ -1051,6 +1071,7 @@ class _MonitorTasksMixin:
     @lua_console_sentinel.before_loop
     async def before_lua_console_sentinel(self):
         await self.wait_until_ready()
+        await _stagger(120)
 
     # ── Daily data-plausibility sentinel (Data Trust pillar B, permanent) ────
     #
