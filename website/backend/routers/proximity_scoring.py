@@ -17,6 +17,7 @@ from website.backend.routers.proximity_helpers import (
     _round_quality_gate_sql,
     attribution_breakdown,
     logger,
+    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -1006,6 +1007,7 @@ async def get_prox_scores(
         compute_prox_scores,
     )
     parsed_date = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
+    player_guid = await resolve_player_guid(db, player_guid)
     try:
         result = await compute_prox_scores(
             db, range_days, player_guid,
@@ -1068,6 +1070,7 @@ async def get_proximity_weapon_accuracy(
 ):
     """Weapon accuracy leaderboard or per-player breakdown."""
     safe_limit = max(1, min(limit, 50))
+    player_guid = await resolve_player_guid(db, player_guid)
     # Input validation BEFORE the try: the broad `except Exception` below
     # would otherwise convert these client errors into a 500 plus a noisy
     # error log (review on #548).
@@ -1214,6 +1217,7 @@ async def get_proximity_revives(
     # "revives computation failed" — an input error reported as a server
     # fault, which sends the reader to the wrong place entirely.
     parsed_sd = _parse_iso_date(session_date)
+    player_guid = await resolve_player_guid(db, player_guid)
     try:
         clauses: list[str] = []
         params: list = []

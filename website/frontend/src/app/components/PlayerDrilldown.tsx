@@ -184,23 +184,21 @@ function VsStats({ sessionId, guid8 }: { sessionId: number; guid8: string }) {
 
 export function PlayerDrilldown({ sessionId, guid8, name }: { sessionId: number; guid8: string; name: string }) {
   const key = guidKey(guid8);
-  // The proximity endpoints compare the FULL 32-character guid (the
-  // tracker's key); the session page only has the 8-character one. The
-  // kill-impact list (fetched below for the KIS section anyway) carries the
-  // full guids of everyone the tracker scored — the parity sweep of
-  // 2026-09-06 found every "proximity →" link landing on "no capture"
-  // because it sent the short one.
+  // The proximity tables hold the tracker's FULL 32-character guid; the
+  // session page only has the 8-character key. Since 2026-09-06 the
+  // proximity endpoints resolve a prefix themselves (every human prefix is
+  // unique in the corpus; bot prefixes are a 400), so the link is always
+  // offered. The kill-impact list (fetched below for the KIS section anyway)
+  // still supplies the full guid when it has it — one lookup fewer on the
+  // other side, and the href the e2e test pins.
   const kis = useStoryKillImpact(sessionId);
   const full = kis.data?.players.find((p) => guidKey(p.guid) === key)?.guid;
+  const proximityTarget = full ?? key;
   return (
     <Stack gap={4} parity="session.player" style={{ padding: 'var(--space-3) 0 var(--space-4) var(--space-5)' }}>
       <Cluster gap={4} align="baseline" parity="session.player.links">
         <Link to={`/profile/${key}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>profile →</Link>
-        {full ? (
-          <Link to={`/proximity/player/${full}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>proximity →</Link>
-        ) : (
-          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>proximity: {kis.isPending ? 'resolving…' : 'not tracked this session'}</Lbl>
-        )}
+        <Link to={`/proximity/player/${proximityTarget}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>proximity →</Link>
       </Cluster>
       <Stack gap={2} parity="session.player.maps">
         <SectionHead label="by map" aside={<span className="lbl">counted rounds · summed from the rounds tab</span>} />

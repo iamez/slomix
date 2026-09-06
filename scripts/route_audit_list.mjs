@@ -108,8 +108,8 @@ export function appRoutes() {
         // segment "id", so the manifest read those pages for a player named
         // "id" and saw no panels (found 2026-09-06).
         [':id?', 'D8423F90'], [':id', 'D8423F90'], [':a?', 'D8423F90'], [':b?', 'E587CA5F'],
-        // proximity keys on the tracker's FULL guid; the 8-character sample
-        // rendered the page's "no capture" branch for everyone (2026-09-06)
+        // the tracker's FULL guid (the 8-character key is accepted since
+        // 2026-09-06, but the sweep pins the form the tables store)
         [':guid', 'D8423F90F045D9D3E2C0550811C5A899'], [':roundId', '11365'],
         [':sessionId', '154'], [':sessionDate', '2026-08-04'], [':gsid', '154'],
         [':date', '2026-08-27'], [':section?', 'demos'],
