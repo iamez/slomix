@@ -3217,7 +3217,12 @@ export interface ProxEngagements {
 
 export interface ProxPlayerProfile {
   player_name: string;
+  /** The tracker's full 32-character guid — the one the tables store. */
   guid: string;
+  /** What the caller sent: the same as `guid`, or the 8-character key the
+   *  session page carries, which the endpoint resolved (2026-09-06). Older
+   *  recordings do not have it. */
+  requested_guid?: string;
   /** ⚠️ An unknown guid answers 200 with every number 0 and player_name
    *  echoing the guid — 0 engagements means "nothing captured", never a
    *  real profile of zeros. */

@@ -121,3 +121,13 @@ test('the players drilldown links the proximity profile with the tracker\'s full
   await page.goto(href!, { waitUntil: 'domcontentloaded' });
   await expect(page.locator('[data-parity="proximity-player.profile"]')).toBeVisible({ timeout: 30_000 });
 });
+
+test('the proximity player page accepts the 8-character key the session page carries', async ({ page }) => {
+  // Every proximity endpoint compared the full guid with `=` until
+  // 2026-09-06; a prefix rendered a valid "no capture" page for everyone,
+  // which a "renders without errors" sweep cannot see. The prefix is now
+  // resolved server-side (every human prefix is unique in the corpus).
+  await page.goto('/app/proximity/player/D8423F90');
+  await expect(page.locator('[data-parity="proximity-player.profile"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/no proximity capture for this player/)).toHaveCount(0);
+});

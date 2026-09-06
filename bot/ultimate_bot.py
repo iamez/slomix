@@ -10,7 +10,7 @@ import os
 import re
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import commands
@@ -30,6 +30,7 @@ from bot.core.utils import sanitize_error_message
 from bot.repositories import FileRepository
 from bot.services.admin_alert_mixin import _AdminAlertMixin
 from bot.services.endstats_pipeline_mixin import _EndstatsPipelineMixin
+from bot.services.error_streak_store import ErrorStreakStore
 from bot.services.lua_round_storage_mixin import _LuaRoundStorageMixin
 from bot.services.monitor_tasks_mixin import _MonitorTasksMixin
 from bot.services.round_publisher_service import RoundPublisherService
@@ -323,6 +324,21 @@ class UltimateETLegacyBot(
 
         # 🚨 Error tracking for admin notifications
         self._consecutive_errors = {}
+        # Which keys have actually paged the admins, and when each failure
+        # streak began — both needed so recovery can be announced once, with a
+        # duration, and only for a key somebody was told about.
+        self._alerted_keys: set[str] = set()
+        self._error_streak_started: dict[str, datetime] = {}
+        # When each key last failed — an idle gap ends the streak (STREAK_WINDOW).
+        self._error_last_seen: dict[str, datetime] = {}
+        # ⛔⛔ The four dicts above used to be the whole story, which meant a
+        # restart wiped every streak. That is worse than losing history: with
+        # the counters back at zero, a service that is STILL failing needs a
+        # fresh full threshold before it pages anyone, so restarting a broken
+        # bot postponed its next alert. The store below carries them across.
+        self._boot_time: datetime = datetime.now(timezone.utc)
+        self._streak_store = ErrorStreakStore()
+        self.load_error_streaks()
 
     # =========================================================================
     # 🚨 ADMIN NOTIFICATION SYSTEM
@@ -930,6 +946,11 @@ class UltimateETLegacyBot(
                     posted = await self.round_publisher.publish_round_stats(filename, result)
                     if posted:
                         logger.info(f"✅ WebSocket-triggered import complete and posted: {filename}")
+                        # A post that landed ends the posting streak. `discord_posting` alerts at
+                        # TWO and is incremented from four unrelated paths, so without this the
+                        # second failure since boot pages the owner — even if a thousand posts
+                        # succeeded in between.
+                        await self.reset_error_tracking("discord_posting")
                     else:
                         logger.info(f"✅ WebSocket-triggered import complete; round stats autopost skipped: {filename}")
                 except Exception as post_err:
@@ -1004,7 +1025,9 @@ class UltimateETLegacyBot(
                     port=ssh_config['port'],
                     username=ssh_config['user'],
                     key_filename=os.path.expanduser(ssh_config['key_path']),
-                    timeout=10
+                    timeout=10,
+                    banner_timeout=45,
+                    auth_timeout=45,
                 )
 
                 safe_path = shlex.quote(ssh_config['remote_path'])
@@ -1151,7 +1174,7 @@ class UltimateETLegacyBot(
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
 
                 # Reset error tracking on success
-                self.reset_error_tracking("file_processing")
+                await self.reset_error_tracking("file_processing")
 
                 # Apply override metadata from Lua webhook if provided
                 # This gives us accurate timing even on surrenders
@@ -1198,7 +1221,7 @@ class UltimateETLegacyBot(
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
 
                 # Reset error tracking on success
-                self.reset_error_tracking("file_processing")
+                await self.reset_error_tracking("file_processing")
 
                 # Live achievements: announce new milestones (non-blocking)
                 if stats_data:

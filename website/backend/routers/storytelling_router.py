@@ -410,6 +410,12 @@ async def get_kill_impact_details(
         await svc.compute_session_kis_for_gsid(scope.gaming_session_id)
     dates = [date.fromisoformat(d) for d in scope.dates]
     starts, maps, rnums = scope.round_key_arrays()
+    # Both forms are accepted: the full 32-char guid (killer_guid) and the
+    # 8-char key the session page carries (killer_guid_canonical, indexed;
+    # for humans it is exactly the prefix). Bots keep matching through the
+    # first arm, which is why this is an OR and not a swap.
+    player_guid = (player_guid or "").strip().upper()
+    guid_key = player_guid[:8]
     rows = await db.fetch_all(
         f"""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
@@ -423,10 +429,10 @@ async def get_kill_impact_details(
                COALESCE(axis_alive, 0), COALESCE(allies_alive, 0)
         FROM storytelling_kill_impact
         WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
-          AND killer_guid = $5
+          AND (killer_guid = $5 OR killer_guid_canonical = $6)
         ORDER BY total_impact DESC
     """,
-        (dates, starts, maps, rnums, player_guid),
+        (dates, starts, maps, rnums, player_guid, guid_key),
     )
 
     kills = [
@@ -470,8 +476,9 @@ async def get_kill_impact_details(
     if kills:
         name_row = await db.fetch_one(
             f"SELECT MAX(killer_name) FROM storytelling_kill_impact "
-            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND killer_guid = $5",
-            (dates, starts, maps, rnums, player_guid),
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} "
+            f"AND (killer_guid = $5 OR killer_guid_canonical = $6)",
+            (dates, starts, maps, rnums, player_guid, guid_key),
         )
         player_name = strip_et_colors((name_row[0] if name_row else "") or short_guid(player_guid))
 
