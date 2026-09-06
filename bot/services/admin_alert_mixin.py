@@ -6,11 +6,22 @@ All methods live on UltimateETLegacyBot via mixin inheritance.
 """
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import discord
 
 from bot.logging_config import get_logger
+
+#: How long a failure streak may be idle before the next failure starts a new
+#: one. Six of the nine tracked keys have no success path that clears their
+#: counter, so without a window "3 consecutive failures" means "the 3rd failure
+#: since the bot booted" — which can span days, and which is not what anyone
+#: reads it as.
+#:
+#: ⚠️ Not free: a service failing once every 40 minutes will now never reach a
+#: threshold. That is deliberate. A fault that rare is not an outage, and the
+#: right instrument for it is the log, not a pager.
+STREAK_WINDOW = timedelta(minutes=30)
 
 logger = get_logger("bot.core")
 webhook_logger = get_logger("bot.webhook")
@@ -102,6 +113,24 @@ class _AdminAlertMixin:
         Returns:
             Current consecutive error count for this key
         """
+        now = datetime.now(timezone.utc)
+
+        # ⛔⛔ A STREAK THAT NEVER ENDS IS NOT A STREAK. `ssh_monitor`,
+        # `file_processing` and `proximity_ssh` clear their counters on
+        # success; the other six — discord_posting, endstats_processing,
+        # webhook_processing, stats_ready_webhook, stats_ready_worker,
+        # voice_session — have no success path that calls the reset at all, so
+        # their counters were monotonic for the life of the process. An idle
+        # gap longer than STREAK_WINDOW ends the streak here, which fixes all
+        # nine at one place rather than inventing six notions of "success" in
+        # six unrelated subsystems.
+        last = self._error_last_seen.get(error_key)
+        if last is not None and now - last > STREAK_WINDOW:
+            self._consecutive_errors[error_key] = 0
+            self._alerted_keys.discard(error_key)
+            self._error_streak_started.pop(error_key, None)
+
+        self._error_last_seen[error_key] = now
         self._consecutive_errors[error_key] = self._consecutive_errors.get(error_key, 0) + 1
         count = self._consecutive_errors[error_key]
 
@@ -109,7 +138,7 @@ class _AdminAlertMixin:
         # long the service was down, and "it is back" without "for how long"
         # is barely more useful than silence.
         if count == 1:
-            self._error_streak_started[error_key] = datetime.now(timezone.utc)
+            self._error_streak_started[error_key] = now
 
         if count == max_consecutive:
             await self.alert_admins(
@@ -152,6 +181,7 @@ class _AdminAlertMixin:
         """
         count = self._consecutive_errors.get(error_key, 0)
         started = self._error_streak_started.pop(error_key, None)
+        self._error_last_seen.pop(error_key, None)
         had_alerted = error_key in self._alerted_keys
 
         # ⛔ Only zero a key that exists. A reset for a key never tracked must

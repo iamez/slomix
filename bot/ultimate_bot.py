@@ -328,6 +328,8 @@ class UltimateETLegacyBot(
         # duration, and only for a key somebody was told about.
         self._alerted_keys: set[str] = set()
         self._error_streak_started: dict[str, datetime] = {}
+        # When each key last failed — an idle gap ends the streak (STREAK_WINDOW).
+        self._error_last_seen: dict[str, datetime] = {}
 
     # =========================================================================
     # 🚨 ADMIN NOTIFICATION SYSTEM
@@ -935,6 +937,11 @@ class UltimateETLegacyBot(
                     posted = await self.round_publisher.publish_round_stats(filename, result)
                     if posted:
                         logger.info(f"✅ WebSocket-triggered import complete and posted: {filename}")
+                        # A post that landed ends the posting streak. `discord_posting` alerts at
+                        # TWO and is incremented from four unrelated paths, so without this the
+                        # second failure since boot pages the owner — even if a thousand posts
+                        # succeeded in between.
+                        await self.reset_error_tracking("discord_posting")
                     else:
                         logger.info(f"✅ WebSocket-triggered import complete; round stats autopost skipped: {filename}")
                 except Exception as post_err:

@@ -41,6 +41,7 @@ class _StubBot(_AdminAlertMixin):
         self._consecutive_errors: dict[str, int] = {}
         self._alerted_keys: set[str] = set()
         self._error_streak_started: dict[str, object] = {}
+        self._error_last_seen: dict[str, object] = {}
 
     def get_channel(self, channel_id):
         if self._channels:
@@ -426,3 +427,73 @@ async def test_recovery_says_unknown_when_the_streak_predates_the_process():
     await bot.reset_error_tracking("svc")
     embed = ch.send.await_args.kwargs["embed"]
     assert "unknown period" in embed.description
+
+
+# ---------------------------------------------------------------------------
+# STREAK_WINDOW — "consecutive" finally means consecutive
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_idle_gap_ends_the_streak():
+    """⛔⛔ Six of the nine tracked keys have no success path that clears their
+    counter, so before this their counters were monotonic for the life of the
+    process: `discord_posting` alerts at 2, and "2 consecutive" meant "the 2nd
+    failure since the bot booted" — which can be days apart."""
+    from datetime import timedelta
+
+    from bot.services.admin_alert_mixin import STREAK_WINDOW
+
+    ch = _channel_with_send()
+    bot = _StubBot(admin_channel_id=1, channel=ch)
+
+    assert await bot.track_error("svc", "x", max_consecutive=3) == 1
+    assert await bot.track_error("svc", "x", max_consecutive=3) == 2
+
+    # Two failures, then a long quiet period, then a third.
+    bot._error_last_seen["svc"] -= STREAK_WINDOW + timedelta(seconds=1)
+    assert await bot.track_error("svc", "x", max_consecutive=3) == 1
+    assert ch.send.await_count == 0, "an isolated failure must not page anybody"
+
+
+@pytest.mark.asyncio
+async def test_failures_inside_the_window_still_count_together():
+    """⛔ THE CONTROL, and it must fail if the window is made too aggressive:
+    a real outage produces failures minutes apart, and those must still add
+    up. A window that ended the streak on every gap would silence the alert
+    entirely — the opposite defect, and a quieter one to miss."""
+    from datetime import timedelta
+
+    from bot.services.admin_alert_mixin import STREAK_WINDOW
+
+    ch = _channel_with_send()
+    bot = _StubBot(admin_channel_id=1, channel=ch)
+
+    for _ in range(2):
+        await bot.track_error("svc", "x", max_consecutive=3)
+        # A gap well inside the window — the endstats loop polls every 60s.
+        bot._error_last_seen["svc"] -= STREAK_WINDOW / 3
+
+    assert await bot.track_error("svc", "x", max_consecutive=3) == 3
+    assert ch.send.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_window_expiry_also_forgets_that_it_alerted():
+    """If the streak is gone, so is the obligation to announce its recovery —
+    otherwise the next healthy cycle would report the end of an outage nobody
+    is still watching."""
+    from datetime import timedelta
+
+    from bot.services.admin_alert_mixin import STREAK_WINDOW
+
+    ch = _channel_with_send()
+    bot = _StubBot(admin_channel_id=1, channel=ch)
+    for _ in range(3):
+        await bot.track_error("svc", "x")
+    assert ch.send.await_count == 1
+
+    bot._error_last_seen["svc"] -= STREAK_WINDOW + timedelta(seconds=1)
+    await bot.track_error("svc", "x")          # starts a fresh streak at 1
+    await bot.reset_error_tracking("svc")
+    assert ch.send.await_count == 1, "no recovery notice for a forgotten streak"
