@@ -433,11 +433,14 @@ failures / Error reading SSH protocol banner«.
    Datoteka in ne tabela: alarmna pot ne sme viseti na tem, o čemer alarmira;
    brez migracije torej brez prod deploya.
 
-**Stanje:** CI zelen (Codacy `fail` s 3 issues je bil identičen že pred
-rezino 4). ⛔ **Ni mergano** — ownerjeva beseda.
+**Stanje: MERGANO** 6. 9. ob 18:02 (`5aca4a76`, squash), z ownerjevim
+dovoljenjem. Vseh 8 zahtevanih checkov zeleno; Codacy `fail` s 3 issues ni
+zahtevan in je bil identičen že pred rezino 4.
 
-⚠️ **Restart brez merga ne pobere ničesar:** ownerjev restart 6. 9. ob 17:17 je
-zagnal `origin/main`, kjer od #923 ni nobene vrstice.
+⚠️ **Na dev botu še ne teče.** Ownerjev restart 6. 9. ob 17:17 je bil PRED
+mergem in je zagnal `ed0dfe22`, kjer od #923 ni nobene vrstice. Popravki
+stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
+`sudo systemctl restart etlegacy-bot.service` na devu.
 
 **Odprto, izrecno nedokončano:** ena povezava na cikel namesto ena na datoteko
 (predelava produkcijske poti, svoja rezina in svoj pogovor).
