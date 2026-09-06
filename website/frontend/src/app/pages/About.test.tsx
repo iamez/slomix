@@ -10,6 +10,7 @@ import build from './__fixtures__/api_build.json';
 import systemOverview from './__fixtures__/api_system_overview.json';
 import access from './__fixtures__/api_availability_access.json';
 import diagnostics from './__fixtures__/api_diagnostics.json';
+import datasetsFixture from './__fixtures__/api_datasets.json';
 
 /**
  * Rendered against RECORDED responses. The About page is the widest consumer
@@ -24,6 +25,8 @@ const DATA = new Map<string, unknown>([
   ['/api/system/overview', systemOverview],
   // Anonymous access: the diagnostics panel must not even ask.
   ['/api/availability/access', access],
+  // GENERATED from the register; the admin panel prints one line from it.
+  ['/api/datasets', datasetsFixture],
 ]);
 const PROBE_PATHS = new Set(API_PROBES.map((p) => p.endpoint.split('?')[0]));
 
@@ -234,5 +237,32 @@ describe('About — diagnostics panel, degraded states', () => {
     vi.stubGlobal('fetch', vi.fn(adminFetchWith({ detail: 'boom' }, 500)));
     renderPage();
     await waitFor(() => expect(screen.getByText(/diagnostics: unavailable/)).toBeInTheDocument());
+  });
+});
+
+describe('About — watchdog line and dataset register', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('says the watchdog has not run here when the report is null, and prints the register line', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith({ ...diagnostics, watchdog: null })));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/the watchdog has not run on this host/)).toBeInTheDocument());
+    expect(screen.getByText(/dataset register v1\.0 · 34 datasets/)).toBeInTheDocument();
+  });
+
+  it('summarises a real watchdog run: age, non-ok checks, alerts', async () => {
+    const watchdog = {
+      ran_at: '2026-09-06T18:00:00+00:00', age_seconds: 240, host: 'samba', dry_run: false, alerts: 1,
+      levels: { web: 'ok', db: 'ok', collector: 'fail', bot_streaks: 'unknown' },
+    };
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith({ ...diagnostics, watchdog })));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/watchdog · 4 min ago · 4 checks · collector fail, bot_streaks unknown · 1 alert/)).toBeInTheDocument());
+  });
+
+  it('an unreadable watchdog file is unavailable, not silence', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith({ ...diagnostics, watchdog: { error: 'unreadable' } })));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/watchdog report \(unreadable\): unavailable/)).toBeInTheDocument());
   });
 });

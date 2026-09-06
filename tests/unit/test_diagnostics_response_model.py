@@ -68,3 +68,31 @@ def test_control_exclude_none_would_have_dropped_the_written_null():
     payload = _load("api_diagnostics_degraded.json")
     out = DiagnosticsReport.model_validate(payload).model_dump(mode="json", exclude_none=True)
     assert "last_recorded_at" not in out["monitoring"]["voice"]
+
+
+def test_watchdog_summary_reads_the_last_report_or_says_it_never_ran(tmp_path):
+    from website.backend.routers.diagnostics_router import read_watchdog_last
+    assert read_watchdog_last(str(tmp_path / "missing.json")) is None
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not json", encoding="utf-8")
+    assert read_watchdog_last(str(bad)) == {"error": "unreadable"}
+    good = tmp_path / "watchdog_last.json"
+    good.write_text(json.dumps({
+        "version": 1, "ran_at": "2026-09-06T18:00:00+00:00", "host": "samba", "dry_run": False,
+        "findings": [{"key": "web", "level": "ok"}, {"key": "collector", "level": "fail"}],
+        "alerts": [{"kind": "fail", "key": "collector"}],
+    }), encoding="utf-8")
+    import datetime as dt
+    ran = dt.datetime(2026, 9, 6, 18, 0, tzinfo=dt.timezone.utc).timestamp()
+    out = read_watchdog_last(str(good), now=ran + 240)
+    assert out["levels"] == {"web": "ok", "collector": "fail"}
+    assert out["alerts"] == 1 and out["host"] == "samba" and out["dry_run"] is False
+    assert out["age_seconds"] == 240.0
+
+
+def test_the_model_carries_the_watchdog_key_without_touching_status():
+    payload = _load("api_diagnostics.json")
+    payload["watchdog"] = {"ran_at": "2026-09-06T18:00:00+00:00", "age_seconds": 12.0, "levels": {"web": "ok"}, "alerts": 0}
+    out = DiagnosticsReport.model_validate(payload).model_dump(mode="json", exclude_unset=True)
+    assert out["watchdog"]["levels"] == {"web": "ok"}
+    assert out["status"] == payload["status"]
