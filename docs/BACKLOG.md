@@ -7,6 +7,20 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, 14:45) Ultra + Astra pripravljena (veja
+  `docs/ultra-ready`): ultra meja 8 000 vrstic → 20 rezin
+  (`scripts/review_slices.sh`, rez = meritev 20/20); `19c61847` NI prednik
+  maina (stara zgodovina) → veja izbrisana; #915 mergan (dve podpičji: CodeQL
+  nit + osirotela vrstica 532, sestrin `index(token)+4`), #911 zaprt kot
+  dvojnik #919 — **prenos v About panel še odprt**: stanja degradacije
+  (tabela brez štetja = razlog, prazen časovni blok = poizvedba ni tekla,
+  padla monitoring tabela = unavailable, 401 proti 403) + fixture
+  `api_diagnostics_degraded.json` na veji `feat/diagnostics-on-the-new-surface`.
+  ComparePage `played` = več igranja zmaga (owner). Prelet SPA po #921 NI
+  ponovljen (RAM 329 MB). Naslednje: PR → ownerjev merge → `cut --push` +
+  `prs` (20 draft PR-jev) → zvečer #882 → `cut --push` znova. Opomba:
+  `scripts/codex_audit_prompt.md` je untracked dvojnik
+  `docs/prompts/codex_audit_prompt.md` (run_codex_audit.sh bere prvega).
 - (Fable 5.1, 2026-09-06, 11:30) Prelet: 1. tek 256 preverb (najdbe v PR #921),
   2. tek 108 čistih in merilnik padel ob timeoutu `admin` (popravljeno), 3. tek
   PREKINJEN — RAM 1,8 GB, na voljo 196 MB; owner: razen `:8000` nič ne streže.

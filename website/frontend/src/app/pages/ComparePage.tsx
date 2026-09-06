@@ -31,7 +31,11 @@ export const COMPARE_ROWS: Row[] = [
   { label: 'kills', value: (p) => (p.lifetime.available ? p.lifetime.kills : null), format: figure, higherIsBetter: true },
   { label: 'win rate', value: (p) => (p.lifetime.available ? p.lifetime.win_rate : null), format: (v) => `${v.toFixed(1)}%`, higherIsBetter: true },
   { label: 'rounds', value: (p) => (p.lifetime.available ? p.lifetime.rounds : null), format: figure, higherIsBetter: true },
-  { label: 'played', value: (p) => (p.lifetime.available ? p.lifetime.time_played_seconds / 3600 : null), format: (v) => `${v.toFixed(1)} h`, higherIsBetter: false },
+  // Legacy compare.js:69 scored playtime the other way (fewer hours won) and
+  // painted it like k:d, so the table claimed the player who played LESS was
+  // better. Owner, 2026-09-06: more time played wins; the direction flag stays
+  // so a genuinely lower-is-better row can still be expressed.
+  { label: 'played', value: (p) => (p.lifetime.available ? p.lifetime.time_played_seconds / 3600 : null), format: (v) => `${v.toFixed(1)} h`, higherIsBetter: true },
 ];
 
 /** Which side wins a row: 'a', 'b', or null for a tie / missing value. */

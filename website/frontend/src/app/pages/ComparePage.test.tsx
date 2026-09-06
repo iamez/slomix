@@ -20,7 +20,7 @@ const B: PlayerProfile = {
     kills: A.lifetime.kills + 100,
     win_rate: A.lifetime.win_rate + 5,
     rounds: A.lifetime.rounds - 1,
-    time_played_seconds: A.lifetime.time_played_seconds * 2,   // played more: LOSES the playtime row
+    time_played_seconds: A.lifetime.time_played_seconds * 2,   // played more: WINS the playtime row
     damage_given: A.lifetime.damage_given * 2,                 // …but with the same dpm → tie
   },
 };
@@ -66,7 +66,7 @@ describe('ComparePage', () => {
     expect(screen.getByLabelText('player b')).toBeInTheDocument();
   });
 
-  it('renders the legacy six rows and colours the better side per row, playtime lower-wins', async () => {
+  it('renders the legacy six rows and colours the better side per row, more playtime wins', async () => {
     renderAt(`/compare/${A.guid}/B0B0B0B0`);
     await waitFor(() => expect(screen.getByText('bee')).toBeInTheDocument());
     const table = document.querySelector('[data-parity="compare.table"]')!;
@@ -74,15 +74,19 @@ describe('ComparePage', () => {
     expect(rows).toHaveLength(6);
     expect(COMPARE_ROWS.map((r) => r.label)).toEqual(['k:d', 'dpm', 'kills', 'win rate', 'rounds', 'played']);
     const winnersBySide = (row: Element) => Array.from(row.querySelectorAll('[data-wins="true"]')).length;
-    // k:d — A (twice B's); dpm — tie (no winner); kills — B; win rate — B; rounds — A; played — A (fewer hours)
+    // k:d — A (twice B's); dpm — tie (no winner); kills — B; win rate — B; rounds — A; played — B (more hours)
     expect(Array.from(rows).map(winnersBySide)).toEqual([1, 0, 1, 1, 1, 1]);
-    expect(rows[5].textContent).toMatch(/lower wins/);
+    // Owner, 2026-09-06: playtime is no longer scored lower-wins (legacy compare.js:69 had it
+    // backwards), so no row carries the 'lower wins' note and the played winner is B.
+    expect(rows[5].textContent).not.toMatch(/lower wins/);
+    expect(rows[5].querySelector('[data-wins="true"]')?.textContent).toMatch(/h$/);
+    expect(COMPARE_ROWS.every((r) => r.higherIsBetter)).toBe(true);
     expect(rows[1].querySelectorAll('[data-wins="true"]')).toHaveLength(0);
   });
 
   it('winner() reads the direction', () => {
     const higher = COMPARE_ROWS[0];
-    const lower = COMPARE_ROWS[5];
+    const lower = { ...COMPARE_ROWS[5], higherIsBetter: false };
     expect(winner(higher, 2, 1)).toBe('a');
     expect(winner(higher, 1, 2)).toBe('b');
     expect(winner(lower, 2, 1)).toBe('b');

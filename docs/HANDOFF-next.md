@@ -34,7 +34,7 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 | faze 0–6 | zgrajene (32 rut v `routes.data.json`, vse `built`) |
 | dolg r. 1 (#919, mergan) | keymap 7 rut resničen + guard (zgrajena ruta ne sme imeti `phase-N`), `/replay` → `/proximity`, `/api/diagnostics` admin panel na `/admin`; **vrzel endpointov 3** (`/api/bets`, `/api/bets/market` = ownerjeva odločitev; `/api/stats/sessions` = z upokojitvijo legacy JS) |
 | faza 7 r. 1 (#920, mergan) | `compare` (`/compare/:a?/:b?`) in `wrapped` (`/profile/:id/wrapped`) kot ruti; **O1 zaprta: Clips strani NI** |
-| faza 6 r. 3 + faza 7 r. 2 (#915, **odprt**) | availability admin market (open/settle/void); greatshot sekcije highlights/clips/renders (ruta je `:section?` nosila od faze 6, stran ga je ignorirala — brez novega endpointa); profil: rating trendi (`skill/…/form` + `/history`), serije po metriki (podatek je bil ŽE na strani, le nihče ga ni risal), memory card; `PlayerDrilldown` 6. instrument = dueli seje. ⚠️ `compare`/`wrapped` iz te veje ODSTRANJENA — #920 ju je mergal medtem |
+| faza 6 r. 3 + faza 7 r. 2 (#915, **mergan 6. 9. 14:40**) | availability admin market (open/settle/void); greatshot sekcije highlights/clips/renders (ruta je `:section?` nosila od faze 6, stran ga je ignorirala — brez novega endpointa); profil: rating trendi (`skill/…/form` + `/history`), serije po metriki (podatek je bil ŽE na strani, le nihče ga ni risal), memory card; `PlayerDrilldown` 6. instrument = dueli seje. ⚠️ `compare`/`wrapped` iz te veje ODSTRANJENA — #920 ju je mergal medtem |
 | ⛔⛔ vrzel endpointov | **3 → 13, in to je KOREKCIJA, ne novo delo.** Legacy ekstraktor se je ustavil pri prvi `${`, zato je odrezan prefiks (`/api/players`) veljal za pokritega, brž ko nova stran kliče karkoli globljega — 29 legacy klicev nosi interpolacijo s segmentom za njo. Popravljeno v `test_route_contract._FE_FULL_PATH_RE`; vsaka vrstica v `tests/data/endpoint_gap.txt` ima zdaj zapisan razlog. #915 je od 15 zaprl dve (`bets/market`, `skill/…/form`+`/history`) in nato še tri (memory-card, player vs-stats) |
 | končni paritetni prelet | veja `docs/phase7-sweep`: `scripts/audit_website_browser.mjs --app` čez 32 rut × 4 viewporti × anon/owner (256 preverb). Prava napaka: **»proximity →« s seje je nosil 8-znakovni guid → vsak skok na »ni zajema«** (popravljeno + e2e dokaz v tej veji); popravljeni audit/e2e vzorci (`:id/:a?/:b?/:guid`) in SPA-zavedna zaznava praznih pogledov; `admin` networkidle timeout kot owner = stran polla (artefakt merilnika); greatshot anon 401 = načrtovano stanje. Drugi tek z vsemi popravki: izid v `docs/PLAN.md`. |
 | prod | **zamrznjen v1.39.0**; SPA na prod NI; preklop = `build:app` v `scripts/deploy_release.sh` (ownerjev dan); pred tem ultra pregled + 1–2 tedna soaka |
@@ -55,20 +55,38 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
   -S /home/et/.et-console-285.sock run-shell "cp /tmp/x.lua …"`, map load,
   `lua_status` SHA1 = `sha1sum`; po testu `scripts/local_et.sh -v 2.85.0 stop`.
 
-## 2. Naslednji koraki (vrstni red, owner 6. 9.: dolg → faza 7 → pregledni PR)
-1. **Ta veja (`docs/phase7-sweep`) → PR → ownerjev merge.**
-2. **Pregledni PR za ultra**: ultra pregleduje PR, ne repozitorija → odpri PR z
-   bazo `19c61847` (merge commit #802 = začetek nove strani) in glavo `main`;
-   **nikoli mergati**. Prej ownerjeva odločitev o `docs/design` (commit
-   podmnožice 00/05/06/09/12/17 ali lokalni `/code-review`). Ultra sproži
-   OWNER (`/code-review ultra <PR#>`); agent ga ne more.
-3. Popravki iz pregleda → 1–2 tedna soaka na dev → pogovor o produkciji
+## 2. Naslednji koraki (vrstni red, owner 6. 9.: ultra rezine → Astra)
+1. ~~`docs/phase7-sweep`~~ = #921 mergan; ~~#915~~ mergan; #911 zaprt (dvojnik
+   #919; razlike v BACKLOG); #912 ostane sestri; #882 (release 1.45.0) owner
+   merga zadnjega → tag v1.45.0 = glava pregledov.
+2. **Ultra pregled = 20 rezin, ne en PR.** Ultra sprejme ≤ 8 000 spremenjenih
+   vrstic in ≤ 500 datotek na pregled (dokumentirano); koda od proda
+   (v1.39.0) je 93 k vrstic. `scripts/review_slices.sh measure|cut --push|prs`
+   seka veje `review-base/NN-<območje>` (= main z območjem vrnjenim na
+   v1.39.0) in odpre draft PR-je z glavo `main` (telesa v
+   `docs/review/SLICES.md`, vodnik `docs/REVIEW_GUIDE.md`); **nikoli
+   mergati**. ⛔ Ob vsakem premiku maina (#882!) `cut --push` znova. Owner
+   požene `/code-review ultra <PR#>` (7. 9. opoldne) po vrsti: 01
+   proximity+spiderweb+Lua → 02 backend routerji → 03 SPA lib; ostale po
+   dnevih. ⛔ Stara baza `19c61847` je bila hash iz PRE-prepisne zgodovine
+   (pravi #802 merge = `87a7063d`); veja izbrisana.
+3. **Astra (Codex CLI, od 7. 9.)**: vstop = `AGENTS.md` (Codex ga naloži sam;
+   preveri s `codex debug prompt-input "ping"`), kickoff
+   `docs/prompts/astra_kickoff.md`, zanka `docs/process/MANDELBROT_RCA.md`,
+   dnevnik `docs/AGENT_LOG.md`. Vrstni red (owner): triaža najdb ultra →
+   odprte rezine (§2.5, §4) → watchdog (obseg `docs/design/24`, lokalno:
+   opazovalec + alarmi, NE zaganjalnik) → runtime v2 r. 1 (doc 21 §8) šele
+   na ownerjev DA. Zunaj repa: `~/.codex/config.toml`, `~/.codex/AGENTS.md`,
+   `~/.codex/rules/slomix-guard.rules`, `~/.codex/hooks.json` + hooka
+   (`slomix-guard.py`: port `block-git-sweep`; surov stdin v
+   `~/.codex/hooks/last_input.json` — obliko preveri po prvi seji).
+4. Popravki iz pregleda → 1–2 tedna soaka na dev → pogovor o produkciji
    (preklop `build:app` v deploy skripti; migracija 082 na prod).
-4. Vzporedno po ownerjevi izbiri: dvojčki r. 4 (rabi puran bot test), doc 19
+5. Vzporedno po ownerjevi izbiri: dvojčki r. 4 (rabi puran bot test), doc 19
    r. 1 (register datasetov + tipiziran `GET /api/datasets`), popravek korpusa
    `destroyed_count`, proximity endpointi s sprejemom 8-znakovnega guida (10
    endpointov). ~~availability r. 3~~ = narejena v #915.
-5. **Preostalih 13 vrzeli, po izmerjenem trudu** (raziskave 6. 9.; podrobnosti
+6. **Preostalih 13 vrzeli, po izmerjenem trudu** (raziskave 6. 9.; podrobnosti
    in pasti so v komentarjih `tests/data/endpoint_gap.txt`):
    - `players/{}/card` (M) — arhetip + 90-dnevni form; ⚠️ njegovi percentili
      NISO percentili ET komponent (drug bazen, drugo okno — izmerjeno);
@@ -118,7 +136,9 @@ VELJAVEN render — prelet »renders without errors« ne ujame strani, ki vedno
 pravi »ni podatkov« (zato je vzorčni guid v preletu polni, 32-znakovni).
 
 ## 4. Odprte ownerjeve odločitve
-- `docs/design` za ultra: commit podmnožice ali lokalni pregled.
+- ~~`docs/design` za ultra~~: podmnožica 00/05/06/09/12/17 + README commitana 6. 9.
+- Po uvajanju Astre (O-3): rotacija DB gesla (194 vrstic v `~/.codex/rules/default.rules` ga nosi), čiščenje `default.rules` (`ssh`, `systemctl restart`), ali `.codex/rules`+`hooks.json` v javni repo.
+- Watchdog oblika (O-2): samostojna skripta + systemd timer (priporočeno) ali oživitev `HealthMonitor`.
 - Popravek korpusa `destroyed_count` — da/ne.
 - Dvojčki: deploy `server/omnibot/twins/*` na puran + bot test (r. 4).
 - Availability r. 3 (admin kontrole trga) — kdaj. Doc 19 — kdaj.
