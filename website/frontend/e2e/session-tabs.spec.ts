@@ -108,3 +108,16 @@ for (const s of SESSIONS) {
     expect(errors, `session ${s.id} drilldown logged console errors`).toEqual([]);
   });
 }
+
+test('the players drilldown links the proximity profile with the tracker\'s full guid, and that page has capture', async ({ page }) => {
+  await page.goto('/app/session-detail/154/players', { waitUntil: 'networkidle' });
+  const table = page.locator('[data-parity="session.players"]');
+  await expect(table).toBeVisible();
+  await table.getByRole('button', { name: /^details for/ }).first().click();
+  const link = page.getByRole('link', { name: /proximity →/ }).first();
+  await expect(link).toBeVisible({ timeout: 15_000 });
+  const href = await link.getAttribute('href');
+  expect(href).toMatch(/\/proximity\/player\/[0-9A-F]{32}$/);
+  await page.goto(href!, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-parity="proximity-player.profile"]')).toBeVisible({ timeout: 30_000 });
+});
