@@ -42,6 +42,8 @@ deploy NI naloga.
 Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
 degradacije (PR #946) → (4) doc 19 r. 1 register datasetov (PR #947) → (1)
 watchdog r. 1 (obseg `docs/design/24`, lokalno).
+degradacije (PR #946) → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1
+(obseg `docs/design/24`, lokalno).
 
 - **(2) proximity guid prefiks — NAREJENO 6. 9.** Izmerjeno: 34 polnih guidov →
   23 prefiksov; edini kolizijski prefiksi so botovski (`OMNIBOT0` ×9, `OMNIBOT1`
@@ -56,6 +58,37 @@ watchdog r. 1 (obseg `docs/design/24`, lokalno).
   klicati resolver ali biti v seznamu izjem z razlogom; mutacija videna pasti).
   SPA: drilldown vedno ponudi »proximity →«; e2e trdi, da `/proximity/player/D8423F90`
   pokaže profil. Odprto: `response_model` za `/profile` in `/radar` (ni v tem PR).
+- **(3) diagnostics stanja degradacije — NAREJENO 6. 9.** Prenos iz zaprtega
+  #911 v About panel (`components/DiagnosticsReport.tsx`): tabela brez štetja =
+  razlog (pravi 0 ostane »0 rows«), prazen `time` = poizvedba ni tekla, padla
+  monitoring tabela = `unavailable` (⛔ main je za `{count:0, error:"query
+  failed"}` izpisoval »voice 0 rows« — živ hrošč, popravljen), 401/403 = odgovor
+  (potekla seja / endpoint ne šteje računa za admina), sekciji `time` in `pool`
+  novi. Backend: `response_model=DiagnosticsReport` z `exclude_unset` (odsotno
+  ostane odsotno; `exclude_none` je varovalo pinnalo na eno ruto) → gap
+  response_model −1. Fixture `api_diagnostics_degraded.json` (konstruiran, z
+  `_note`). Mutacija (vrstni red `count`/`error`) videna pasti; oba posnetka
+  brez izgube skozi model (`test_diagnostics_response_model.py`).
+- **(4) doc 19 r. 1 — register datasetov — NAREJENO 6. 9.** Ni greenfield:
+  poenotenje treh obstoječih stvari — `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` z
+  IZMERJENIMI stroški (aim 16 887 ms, advanced 11 077 ms hladno) v profilnem
+  routerju, oblika `formula_registry.py` (vnos = stvar + status + surface, brez
+  tipa) in `routes.data.json` kot imenski prostor `page_key`.
+  `services/dataset_registry.py` (34 vnosov: 14 profilnih sekcij, 8 sejnih,
+  12 proximity/derived) + `GET /api/datasets` (tipiziran, javen, read-only,
+  `DatasetRegistry{registry_version,count,datasets}`); profilni router
+  IZPELJE `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` iz registra (en vir; »heavy« =
+  ≥ 5 s hladno). Pravila, ki jih testi pinnajo proti VIRU, ne kopiji:
+  `default_visible_on` ⊆ ključi `routes.data.json`, `depends_on` ⊆ ključi,
+  `parity_key` = `data-parity`, ki ga SPA res renderira, `collection_toggle` =
+  Lua `isFeatureEnabled` sekcija ali bot `*_ENABLED` (nikoli web-layer zastava,
+  doc 19 §5). Kontrola: lažen `page_key` → test pade (videno, obnova `cmp`).
+  SPA: tip `DatasetDescriptor`/`DatasetRegistry`, hook `useDatasets`
+  (`staleTime: Infinity`), fixture `api_datasets.json` (GENERIRAN iz registra,
+  z `_note`), e2e `datasets.spec.ts` (Playwright doseže endpoint, ≥ 30 vnosov,
+  `aim` ni na profilu). Openapi posnetek osvežen (+148 vrstic). Brez UI —
+  vrstica na About panelu pride po mergu #946 (isti panel). R. 2 (tabela
+  `user_page_layouts`, column picker) po doc 19 §9 — ownerjeva odločitev.
 - **(1) watchdog r. 1 — NAREJENO 6. 9.** `scripts/slomix_watchdog.py`:
   opazovalec, nikoli zaganjalnik (systemd ima `Restart=always`; ročni zagon
   zmaga v tekmi za vrata — 2026-08-05). 9 preverb kot ČISTE funkcije nad

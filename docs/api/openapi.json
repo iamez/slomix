@@ -964,6 +964,304 @@
     "title": "CurrentSeason",
     "type": "object"
    },
+   "DatasetDescriptor": {
+    "additionalProperties": false,
+    "description": "Every field is REQUIRED on the wire: the register is a closed list the\nSPA types by hand, and the manual-type drift guard reads the OpenAPI\n`required` list — a Python default would make the schema say \"optional\"\nfor a key that is always sent. Defaults live in the constructors below.",
+    "properties": {
+     "collected_by": {
+      "enum": [
+       "lua",
+       "bot_parser",
+       "importer",
+       "derived"
+      ],
+      "title": "Collected By",
+      "type": "string"
+     },
+     "collection_toggle": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Collection Toggle"
+     },
+     "cost_ms_cold": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Cost Ms Cold"
+     },
+     "default_visible_on": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Default Visible On",
+      "type": "array"
+     },
+     "depends_on": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Depends On",
+      "type": "array"
+     },
+     "display_toggle_default": {
+      "title": "Display Toggle Default",
+      "type": "boolean"
+     },
+     "endpoint": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Endpoint"
+     },
+     "key": {
+      "title": "Key",
+      "type": "string"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "parity_key": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parity Key"
+     },
+     "user_overridable": {
+      "title": "User Overridable",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "key",
+     "label",
+     "collected_by",
+     "collection_toggle",
+     "display_toggle_default",
+     "user_overridable",
+     "default_visible_on",
+     "depends_on",
+     "endpoint",
+     "cost_ms_cold",
+     "parity_key"
+    ],
+    "title": "DatasetDescriptor",
+    "type": "object"
+   },
+   "DatasetRegistry": {
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "datasets": {
+      "items": {
+       "$ref": "#/components/schemas/DatasetDescriptor"
+      },
+      "title": "Datasets",
+      "type": "array"
+     },
+     "registry_version": {
+      "title": "Registry Version",
+      "type": "string"
+     }
+    },
+    "required": [
+     "registry_version",
+     "count",
+     "datasets"
+    ],
+    "title": "DatasetRegistry",
+    "type": "object"
+   },
+   "DiagnosticsMonitoringTable": {
+    "description": "`server_status_history` / `voice_status_history`. On failure the\nhandler sends count 0, last_recorded_at null AND `error` — read `error`\nfirst, or the failure prints as \"0 rows\".",
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "last_recorded_at": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Last Recorded At"
+     }
+    },
+    "required": [
+     "count",
+     "last_recorded_at"
+    ],
+    "title": "DiagnosticsMonitoringTable",
+    "type": "object"
+   },
+   "DiagnosticsReport": {
+    "additionalProperties": true,
+    "description": "GET /api/diagnostics. `time` is `{}` when its query raised or returned\nno row; `pool` always carries `connected`; monitoring and pool never\nchange `status` (computed from issues/warnings before they are read).\nNested dicts stay open so an adapter-specific pool key is not dropped.",
+    "properties": {
+     "database": {
+      "additionalProperties": true,
+      "title": "Database",
+      "type": "object"
+     },
+     "issues": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Issues",
+      "type": "array"
+     },
+     "monitoring": {
+      "additionalProperties": {
+       "$ref": "#/components/schemas/DiagnosticsMonitoringTable"
+      },
+      "title": "Monitoring",
+      "type": "object"
+     },
+     "pool": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Pool"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "tables": {
+      "items": {
+       "$ref": "#/components/schemas/DiagnosticsTableCheck"
+      },
+      "title": "Tables",
+      "type": "array"
+     },
+     "time": {
+      "additionalProperties": {
+       "type": "integer"
+      },
+      "title": "Time",
+      "type": "object"
+     },
+     "timestamp": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Timestamp"
+     },
+     "warnings": {
+      "items": {
+       "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
+     }
+    },
+    "required": [
+     "status",
+     "database",
+     "tables",
+     "issues",
+     "warnings",
+     "time",
+     "monitoring"
+    ],
+    "title": "DiagnosticsReport",
+    "type": "object"
+   },
+   "DiagnosticsTableCheck": {
+    "description": "One table the API reads. `row_count` is present only on `status: \"ok\"`\n(every query is a COUNT, so it is an integer or absent — never null); the\nother statuses carry `error` instead. A missing count is a reason, not a\nzero, and the About panel renders it as one.",
+    "properties": {
+     "error": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Error"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "required": {
+      "title": "Required",
+      "type": "boolean"
+     },
+     "row_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Row Count"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "name",
+     "status",
+     "required"
+    ],
+    "title": "DiagnosticsTableCheck",
+    "type": "object"
+   },
    "DpmLeaderRow": {
     "description": "One row of the DPM board. ⚠️ Its participation field is `sessions`.\n\n⛔ A SEPARATE MODEL, not one row type with both fields optional. The two\nboards genuinely differ, and a shared model with `rounds?`/`sessions?`\nwould let either board claim the other's shape — a client could then read\n`rounds` off a DPM row and get `undefined` with the type system's blessing.",
     "properties": {
@@ -8817,6 +9115,28 @@
     ]
    }
   },
+  "/api/datasets": {
+   "get": {
+    "description": "Every dataset the site can show, with its collector, its collection\nswitch, the pages it is shown on by default, what it depends on and its\nmeasured cold cost where one exists.",
+    "operationId": "list_datasets_api_datasets_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DatasetRegistry"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Datasets",
+    "tags": [
+     "Datasets"
+    ]
+   }
+  },
   "/api/diagnostics": {
    "get": {
     "description": "Run comprehensive diagnostics on the website backend.\nChecks database connectivity, table permissions, and data availability.",
@@ -8825,7 +9145,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/DiagnosticsReport"
+        }
        }
       },
       "description": "Successful Response"

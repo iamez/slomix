@@ -1,0 +1,73 @@
+{
+  "_note": "CONSTRUCTED, not recorded. A healthy database cannot produce these branches, and a fixture cannot fail on a value it does not contain. Every field below is a branch of website/backend/routers/diagnostics_router.py get_diagnostics(): table status permission_denied / not_found / error, an empty time block (its query raised), a monitoring table that failed, a pool with no stats, and the overall status the handler sets from issues/warnings.",
+  "status": "error",
+  "timestamp": "2026-09-04T07:00:00",
+  "database": {
+    "status": "connected",
+    "tests": []
+  },
+  "tables": [
+    {
+      "name": "rounds",
+      "status": "ok",
+      "row_count": 3243,
+      "required": true
+    },
+    {
+      "name": "player_comprehensive_stats",
+      "status": "permission_denied",
+      "error": "permission denied for table player_comprehensive_stats",
+      "required": true
+    },
+    {
+      "name": "gaming_sessions",
+      "status": "ok",
+      "row_count": 0,
+      "required": false
+    },
+    {
+      "name": "processed_files",
+      "status": "not_found",
+      "error": "relation \"processed_files\" does not exist",
+      "required": true
+    },
+    {
+      "name": "lua_round_teams",
+      "status": "error",
+      "error": "connection to server was lost",
+      "required": false
+    },
+    {
+      "name": "round_correlations",
+      "status": "not_found",
+      "error": "relation \"round_correlations\" does not exist",
+      "required": false
+    }
+  ],
+  "issues": [
+    "Required table processed_files not found",
+    "Error checking lua_round_teams: connection to server was lost"
+  ],
+  "warnings": [
+    "No permission to read player_comprehensive_stats",
+    "Optional table round_correlations not found",
+    "No player stats in database",
+    "Time metrics unavailable: permission denied for table player_comprehensive_stats"
+  ],
+  "time": {},
+  "monitoring": {
+    "server": {
+      "count": 8831,
+      "last_recorded_at": "2026-09-03T23:11:30.405917+00:00"
+    },
+    "voice": {
+      "count": 0,
+      "last_recorded_at": null,
+      "error": "query failed"
+    }
+  },
+  "pool": {
+    "connected": false,
+    "reason": "adapter has no pool_stats"
+  }
+}

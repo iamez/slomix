@@ -137,7 +137,8 @@ describe('About', () => {
     // The recording: eight tables, none missing, no issues.
     await waitFor(() => expect(screen.getByText('player_comprehensive_stats')).toBeInTheDocument());
     expect(screen.getByText('lua_round_teams')).toBeInTheDocument();
-    expect(screen.getByText(/all systems go · database connected/)).toBeInTheDocument();
+    expect(screen.getByText(/all systems go/)).toBeInTheDocument();
+    expect(screen.getByText(/database connected/)).toBeInTheDocument();
     expect(calls.filter((c) => c === '/api/diagnostics')).toHaveLength(1);
   });
 
@@ -152,5 +153,86 @@ describe('About', () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(calls).not.toContain('/api/diagnostics');
     expect(screen.queryByText(/backend diagnostics/)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The degraded report (carried over from the closed #911, 2026-09-06). The
+// fixture is CONSTRUCTED from the handler's branches and says so in its own
+// `_note`: a healthy database cannot produce a permission-denied table or an
+// empty time block, and a fixture cannot fail on a value it does not contain.
+
+import degraded from './__fixtures__/api_diagnostics_degraded.json';
+
+function adminFetchWith(diagBody: unknown, diagStatus = 200) {
+  return (input: RequestInfo | URL): Promise<Response> => {
+    const pathname = String(input).split('?')[0];
+    if (pathname === '/api/availability/access') {
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ...access, authenticated: true, is_admin: true }) } as Response);
+    }
+    if (pathname === '/api/diagnostics') {
+      return Promise.resolve({ ok: diagStatus < 400, status: diagStatus, json: () => Promise.resolve(diagBody) } as Response);
+    }
+    return fixtureFetch(input);
+  };
+}
+
+describe('About — diagnostics panel, degraded states', () => {
+  afterEach(() => { vi.restoreAllMocks(); });
+
+  it('says why a table has no count instead of printing zero, and keeps a real zero', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith(degraded)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('player_comprehensive_stats')).toBeInTheDocument());
+    // once as the table's reason, once inside the handler's own time warning
+    expect(screen.getAllByText(/permission denied for table player_comprehensive_stats/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText(/relation "processed_files" does not exist/)).toBeInTheDocument();
+    // the table's reason and the handler's own issue line both carry it
+    expect(screen.getAllByText(/connection to server was lost/).length).toBeGreaterThanOrEqual(1);
+    // gaming_sessions really has 0 rows — that is a count, not an absence
+    expect(screen.getByText('0 rows')).toBeInTheDocument();
+    expect(screen.getByText(/2 issues/)).toBeInTheDocument();
+  });
+
+  it('reports an empty time block as a query that did not run', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith(degraded)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/the timing query did not run/)).toBeInTheDocument());
+    expect(screen.queryByText('dead time, as stored')).toBeNull();
+  });
+
+  it('shows a monitoring table that failed as unavailable, not as zero rows', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith(degraded)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/query failed: unavailable/)).toBeInTheDocument());
+    // the payload literally carries count: 0 for voice; the panel must not say so
+    expect(screen.queryByText(/voice 0 rows/)).toBeNull();
+    expect(screen.getByText(/8,831 rows/)).toBeInTheDocument();
+    expect(screen.getByText(/adapter has no pool_stats/)).toBeInTheDocument();
+  });
+
+  it('renders the recorded healthy report with the time and pool sections', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith(diagnostics)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('dead time, as stored')).toBeInTheDocument());
+    expect(screen.getByText(/all systems go/)).toBeInTheDocument();
+    expect(screen.getByText(/in use, .* idle of/)).toBeInTheDocument();
+  });
+
+  it('tells an admin whose session ended to sign in again, and a 403 that the endpoint disagrees', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith({ detail: 'Authentication required' }, 401)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/the session ended between the access check/)).toBeInTheDocument());
+    expect(screen.queryByText(/diagnostics: unavailable/)).toBeNull();
+    vi.restoreAllMocks();
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith({ detail: 'Admin privileges required' }, 403)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/does not count this account as an admin/)).toBeInTheDocument());
+  });
+
+  it('still reports a real failure as a failure', async () => {
+    vi.stubGlobal('fetch', vi.fn(adminFetchWith({ detail: 'boom' }, 500)));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/diagnostics: unavailable/)).toBeInTheDocument());
   });
 });

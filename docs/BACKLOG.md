@@ -12,6 +12,15 @@
   vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.
   Owner: webhook URL + namestitev timerja. Zvečer #882 → `review_slices.sh cut
   --push`. Astra jutri: triaža ultra najdb (#924–#926) po `astra_kickoff.md`.
+- (Fable 5.1, 2026-09-06, 19:10) Proga (4) doc 19 r. 1 narejena (veja
+  `feat/dataset-registry-r1`, PR). Odprto iz nje: vrstica »N datasets« na About
+  panelu po mergu #946; `docs/design/19` status vrstica (lokalno). Naslednje:
+  (1) watchdog r. 1 (`scripts/slomix_watchdog.py`, obseg doc 24). PR-ji #945,
+  #946 v vratih (ownerjev DA za oba). Zvečer #882 → `review_slices.sh cut --push`.
+- (Fable 5.1, 2026-09-06, 18:20) Proga (3) diagnostics narejena (veja
+  `feat/about-diagnostics-degraded`, PR); dolg za #911 zaprt. Proga (2) guid
+  prefiks = PR #945. Naslednje: (4) doc 19 r. 1 register datasetov, potem (1)
+  watchdog r. 1. Zvečer #882 → `review_slices.sh cut --push`.
 - (Fable 5.1, 2026-09-06, 17:30) Proga (2) guid prefiks narejena (veja
   `feat/proximity-guid-prefix`, PR). Naslednje po planu: (3) About diagnostics
   stanja degradacije (#911 prenos), (4) doc 19 r. 1, (1) watchdog r. 1. Zvečer:
