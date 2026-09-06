@@ -4436,3 +4436,32 @@ export interface Wrapped {
   /** Empty when the player has no rounds in the season — the page says so. */
   cards: WrappedCard[];
 }
+
+// ---------------------------------------------------------------------------
+// Datasets — GET /api/datasets (docs/design/19 §5, slice 1). The register of
+// what the site can show: read-only, public, one entry per dataset. Nothing
+// stores a user's choices yet (slice 2).
+
+export interface DatasetDescriptor {
+  key: string;
+  label: string;
+  collected_by: 'lua' | 'bot_parser' | 'importer' | 'derived';
+  /** The switch that turns COLLECTION off at the origin (a Lua section or a
+   *  bot env key); null when it is always collected. */
+  collection_toggle: string | null;
+  display_toggle_default: boolean;
+  user_overridable: boolean;
+  /** routes.data.json keys the dataset is shown on by default. */
+  default_visible_on: string[];
+  depends_on: string[];
+  endpoint: string | null;
+  /** Measured cold cost in ms — only where it was timed. */
+  cost_ms_cold: number | null;
+  parity_key: string | null;
+}
+
+export interface DatasetRegistry {
+  registry_version: string;
+  count: number;
+  datasets: DatasetDescriptor[];
+}

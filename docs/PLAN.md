@@ -37,6 +37,33 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
+## Proga: štiri točke do Astre (6. 9. popoldne)
+
+Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
+degradacije (PR #946) → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1
+(obseg `docs/design/24`, lokalno).
+
+- **(4) doc 19 r. 1 — register datasetov — NAREJENO 6. 9.** Ni greenfield:
+  poenotenje treh obstoječih stvari — `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` z
+  IZMERJENIMI stroški (aim 16 887 ms, advanced 11 077 ms hladno) v profilnem
+  routerju, oblika `formula_registry.py` (vnos = stvar + status + surface, brez
+  tipa) in `routes.data.json` kot imenski prostor `page_key`.
+  `services/dataset_registry.py` (34 vnosov: 14 profilnih sekcij, 8 sejnih,
+  12 proximity/derived) + `GET /api/datasets` (tipiziran, javen, read-only,
+  `DatasetRegistry{registry_version,count,datasets}`); profilni router
+  IZPELJE `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` iz registra (en vir; »heavy« =
+  ≥ 5 s hladno). Pravila, ki jih testi pinnajo proti VIRU, ne kopiji:
+  `default_visible_on` ⊆ ključi `routes.data.json`, `depends_on` ⊆ ključi,
+  `parity_key` = `data-parity`, ki ga SPA res renderira, `collection_toggle` =
+  Lua `isFeatureEnabled` sekcija ali bot `*_ENABLED` (nikoli web-layer zastava,
+  doc 19 §5). Kontrola: lažen `page_key` → test pade (videno, obnova `cmp`).
+  SPA: tip `DatasetDescriptor`/`DatasetRegistry`, hook `useDatasets`
+  (`staleTime: Infinity`), fixture `api_datasets.json` (GENERIRAN iz registra,
+  z `_note`), e2e `datasets.spec.ts` (Playwright doseže endpoint, ≥ 30 vnosov,
+  `aim` ni na profilu). Openapi posnetek osvežen (+148 vrstic). Brez UI —
+  vrstica na About panelu pride po mergu #946 (isti panel). R. 2 (tabela
+  `user_page_layouts`, column picker) po doc 19 §9 — ownerjeva odločitev.
+
 ## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
 0. **Dolg r. 1 (6. 9., MERGAN #919)**: keymap 7 rut zares preslikanih (guard:
