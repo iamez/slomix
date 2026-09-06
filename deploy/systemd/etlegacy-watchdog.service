@@ -1,0 +1,21 @@
+# slomix watchdog — an observer that alerts, never a supervisor that starts.
+# Installed by the OWNER (writing into /etc/systemd/system is not NOPASSWD):
+#   sudo cp deploy/systemd/etlegacy-watchdog.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now etlegacy-watchdog.timer
+# Prove it first, without installing anything:
+#   venv/bin/python scripts/slomix_watchdog.py --once --dry-run
+[Unit]
+Description=slomix watchdog (read-only checks, Discord alerts with dedup)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=samba
+WorkingDirectory=/home/samba/share/slomix_discord
+ExecStart=/home/samba/share/slomix_discord/venv/bin/python scripts/slomix_watchdog.py --once
+# The owner's .env is read by the script itself (root .env, dotenv_values);
+# only the alert channel is passed here so a rotated URL needs no code change.
+EnvironmentFile=-/home/samba/share/slomix_discord/.env
+TimeoutStartSec=120
+Nice=10

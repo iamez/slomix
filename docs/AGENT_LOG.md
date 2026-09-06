@@ -6,6 +6,12 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-06 · `systemctl is-active` on a unit that does not exist says
+  "inactive".** The watchdog reads `LoadState` first: a unit that is not
+  installed on this host is `unknown`, not down — dev runs `etlegacy-*`,
+  production `slomix-*`. Why: "inactive" invited starting a second copy by
+  hand (2026-08-05). Apply: never derive "not running" from `is-active`
+  alone; the watchdog never starts anything, it proposes the command.
 - **2026-09-06 · Scripted edits: count the token before adding an offset.**
   `s.index("\n  };") + 4` on a five-character token slid a `;` past the
   inserted block: one statement lost it, an empty statement appeared later.

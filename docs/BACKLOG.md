@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
+  `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
+  vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.
+  Owner: webhook URL + namestitev timerja. Zvečer #882 → `review_slices.sh cut
+  --push`. Astra jutri: triaža ultra najdb (#924–#926) po `astra_kickoff.md`.
 - (Fable 5.1, 2026-09-06, 14:45) Ultra + Astra pripravljena (veja
   `docs/ultra-ready`): ultra meja 8 000 vrstic → 20 rezin
   (`scripts/review_slices.sh`, rez = meritev 20/20); `19c61847` NI prednik

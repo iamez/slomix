@@ -37,6 +37,42 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
+## Proga: štiri točke do Astre (6. 9. popoldne)
+
+Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
+degradacije (PR #946) → (4) doc 19 r. 1 register datasetov (PR #947) → (1)
+watchdog r. 1 (obseg `docs/design/24`, lokalno).
+
+- **(1) watchdog r. 1 — NAREJENO 6. 9.** `scripts/slomix_watchdog.py`:
+  opazovalec, nikoli zaganjalnik (systemd ima `Restart=always`; ročni zagon
+  zmaga v tekmi za vrata — 2026-08-05). 9 preverb kot ČISTE funkcije nad
+  zbranimi vhodi (enote `systemctl show` z `LoadState` — neobstoječa enota je
+  `unknown`, ne »inactive«; `/health`; DB `SELECT 1` + `pg_stat_activity`;
+  runde proti kadenci `server_status_history` (300 s = »bot živi«); `/api/live/
+  status` `newest_age_seconds`; mtime kolektorja `~/slomix-server-logs`;
+  `frame_health` stalli ≥ 500 ms v 30 min prek `frame_health_report`; disk +
+  journald; `lua_round_teams` proti `rounds`; + `logs/bot_error_streaks.json`
+  sestre (#923: `version`, `written_at`, `alerted`)). Ravni ok/warn/fail/
+  **unknown** (ni meritve ≠ ok). Politika (`decide`, čista): alarm ob prehodu v
+  fail (web in lua_webhook šele ob 2. zaporednem), dedup 1×/h na ključ,
+  »recovered« enkrat, dnevni heartbeat po 09:00. Stanje `logs/watchdog_state.json`
+  (`version`), poročilo `logs/watchdog_last.json`, Discord webhook
+  `WATCHDOG_WEBHOOK_URL` (samo https; brez njega izpis). Config iz KORENSKEGA
+  `.env` (`dotenv_values`, nikoli `website/.env`), `WATCHDOG_DB_USER` privzeto
+  `etlegacy_user`. Enoti `deploy/systemd/etlegacy-watchdog.{service,timer}`
+  (oneshot, 5 min) — namesti OWNER. **Dokazi:** 24 unit testov (kontrole:
+  odstranjena enota = unknown; brez dedupa dvojni alarm); živ `--once --dry-run`
+  na dev: vseh 9 `ok` (disk 84,7 %, tik pod 85), `bot_streaks` unknown (bot še
+  ni pisal datoteke); simuliran izpad (`WATCHDOG_WEB_URL=http://127.0.0.1:1`,
+  ločeno stanje): tek 1 = `live`+heartbeat, tek 2 = `web` alarm (2× zapored),
+  tek 3 = tišina (dedup), obnova = `recovered` ×2 enkrat, tek 5 = tišina.
+  **Ownerjeva dejanja:** Discord webhook → `WATCHDOG_WEBHOOK_URL` v `.env`;
+  `sudo cp deploy/systemd/etlegacy-watchdog.* /etc/systemd/system/ && sudo
+  systemctl daemon-reload && sudo systemctl enable --now etlegacy-watchdog.timer`.
+  R. 2 (ni tu): SSH sonde na puran (tailer `pgrep`, `ls -t stats/`), `watchdog`
+  ključ v `/api/diagnostics` + vrstica na About panelu (po #946), popravek poti
+  v `~/slomix-server-logs/bin/pull_puran_console_log.sh` (zunaj repa, owner).
+
 ## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
 0. **Dolg r. 1 (6. 9., MERGAN #919)**: keymap 7 rut zares preslikanih (guard:
