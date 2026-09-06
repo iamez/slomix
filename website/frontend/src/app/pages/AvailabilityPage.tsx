@@ -529,7 +529,6 @@ export function AvailabilityPage() {
     await qc.invalidateQueries({ queryKey: ['bets-market-current'] });
     await qc.invalidateQueries({ queryKey: ['bets-wallet'] });
   };
-;
 
   const schedule = async (flags: { include_available: boolean; include_maybe: boolean; dry_run: boolean }) => {
     const r = await postCampaign(flags);
