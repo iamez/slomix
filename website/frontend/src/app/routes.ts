@@ -60,6 +60,10 @@ export const REDIRECTS: readonly { from: string; to: string }[] = Object.freeze(
   // A bare /rounds or /story names no session, so they land on the list.
   { from: '/rounds', to: '/sessions' },
   { from: '/story', to: '/sessions' },
+  // The legacy replay page picked a round itself; the SPA replays a round
+  // at /proximity/round/:roundId, so a bare /replay lands where rounds are
+  // picked (the one route routes.data.json still listed as unbuilt, 2026-09-06).
+  { from: '/replay', to: '/proximity' },
 ]);
 
 /** Retired paths that CARRY a parameter: `to` is a react-router pattern the
@@ -114,6 +118,9 @@ export function hashToPath(hash: string): string {
   switch (seg[0]) {
     case 'tonight':
       return `/live${q}`;
+    case 'replay':
+      // The legacy replay page picked its own round; rounds are picked on /proximity.
+      return `/proximity${q}`;
     case 'records':
       return withTab('/record-book', 'records', query);
     case 'hall-of-fame':

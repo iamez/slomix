@@ -123,13 +123,6 @@
     "built": true
   },
   {
-    "key": "replay",
-    "path": "/replay",
-    "label": "Replay",
-    "nav": "stats",
-    "phase": 5
-  },
-  {
     "key": "smart-stats-diag",
     "path": "/smart-stats-diag",
     "label": "Smart Stats — Diag",

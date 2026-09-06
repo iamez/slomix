@@ -219,3 +219,18 @@ for (const route of routes.filter((r) => r.path.includes(':'))) {
     ).toEqual([]);
   });
 }
+
+test('the legacy replay page lands where rounds are picked, and never asks an anonymous visitor for diagnostics', async ({ page }) => {
+  const asked: string[] = [];
+  page.on('request', (r) => { if (r.url().includes('/api/diagnostics')) asked.push(r.url()); });
+  // The proximity page keeps its backbone requests going for a while, so
+  // the redirect is asserted on the URL, not on network idle.
+  await page.goto('/app/replay', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/app\/proximity$/);
+  await page.goto('/app/#/replay', { waitUntil: 'domcontentloaded' });
+  await expect(page).toHaveURL(/\/app\/proximity$/);
+  await page.goto('/app/admin', { waitUntil: 'networkidle' });
+  await expect(page.locator('[data-parity="admin.probes"]')).toBeVisible();
+  expect(page.locator('[data-parity="admin.diagnostics"]')).toHaveCount(0);
+  expect(asked.filter((u) => /\/api\/diagnostics(\?|$)/.test(u))).toEqual([]);
+});

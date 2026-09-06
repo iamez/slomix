@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06) SKOK: owner → »dokončajva novo stran« (dolg → faza
+  7 → pregledni PR). Doc 19 (per-user pogled) pavziran v plan modu, ničesar
+  napisanega. Dolg r. 1 (veja `feat/site-debt-keymap-replay-diagnostics`):
+  keymap, `/replay`, `/api/diagnostics` panel. ⚠️ E2E rig NIMA adminskega
+  nivoja: admin = env allowlist Discord id-jev (`_configured_admin_ids`),
+  sentinel id −1 ga ne prestane → adminski prikaz je dokazan v vitestu s
+  posnetkom, narejenim kot pravi admin; Playwright dokaže le vrata (prijavljen
+  ne-admin brez panela in brez zahteve). Naslednje: faza 7 (compare, wrapped;
+  clips čaka O1), pregledni PR #802→main za ultra.
 - (Fable 5.1, 2026-09-06) Dvojčki r. 3 zgrajena (generator + 11 testov, 7
   mutacij padlo, tek čez 6 map). ⚠️ Kontrola NE pade na nič: premešane seje
   preživijo ≈ 21 % (14/67) razločevalnih ciljev — s 7 regularji je skupinsko

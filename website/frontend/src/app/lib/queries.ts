@@ -172,6 +172,7 @@ import type {
   WeaponRow,
   WeaponsByPlayer,
   WeaponsHallOfFame,
+  Diagnostics,
 } from './types';
 
 /**
@@ -1785,6 +1786,18 @@ export function useProxPlayerAim(sessionDate: string | null, mapName: string | n
 // Phase 6 — availability. 401/403 are auth-tier STATES: retry would be
 // noise, so these queries never retry on them (the global retry already
 // stops below 500).
+
+/** Admin backend diagnostics (About page). `enabled` is the caller's
+ *  is_admin: the route answers 401 to everyone else, and an anonymous
+ *  visitor must not fire a request whose only outcome is an error row. */
+export function useDiagnostics(enabled: boolean) {
+  return useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: () => apiGet('/api/diagnostics') as Promise<Diagnostics>,
+    enabled,
+    staleTime: 60_000,
+  });
+}
 
 export function useAvailabilityAccess() {
   return useQuery({
