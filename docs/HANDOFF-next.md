@@ -63,12 +63,13 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    vrstic in ≤ 500 datotek na pregled (dokumentirano); koda od proda
    (v1.39.0) je 93 k vrstic. `scripts/review_slices.sh measure|cut --push|prs`
    seka veje `review-base/NN-<območje>` (= main z območjem vrnjenim na
-   v1.39.0) in odpre draft PR-je z glavo `main` (telesa v
+   v1.39.0) in `review/NN-<območje>` (drevo = main, starš = baza; GitHub
+   zavrne PR, katerega glava je prednik baze) in odpre draft PR-je (telesa v
    `docs/review/SLICES.md`, vodnik `docs/REVIEW_GUIDE.md`); **nikoli
    mergati**. ⛔ Ob vsakem premiku maina (#882!) `cut --push` znova. Owner
-   požene `/code-review ultra <PR#>` (7. 9. opoldne) po vrsti: 01
-   proximity+spiderweb+Lua → 02 backend routerji → 03 SPA lib; ostale po
-   dnevih. ⛔ Stara baza `19c61847` je bila hash iz PRE-prepisne zgodovine
+   požene `/code-review ultra <PR#>` (7. 9. opoldne) po vrsti: **#924** (01
+   proximity+spiderweb+Lua) → **#925** (02 backend routerji) → **#926** (03 SPA
+   lib); ostali #927–#943 po dnevih (odprti 6. 9. kot draft). ⛔ Stara baza `19c61847` je bila hash iz PRE-prepisne zgodovine
    (pravi #802 merge = `87a7063d`); veja izbrisana.
 3. **Astra (Codex CLI, od 7. 9.)**: vstop = `AGENTS.md` (Codex ga naloži sam;
    preveri s `codex debug prompt-input "ping"`), kickoff
