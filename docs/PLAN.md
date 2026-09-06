@@ -85,6 +85,16 @@ deploy NI naloga.
    (205 h proti 183 h z značko na 183 h se bere kot »183 ur je boljša
    številka«). Ure so kontekst za vrstice nad njimi, ne tekma — vrstica ostane,
    značko izgubi. Za ownerja: če hoče legacy vedenje, je to ena vrstica.
+   ✅ **Rating trendi na profilu (6. 9.)** — dve sekciji: »your form«
+   (`/skill/player/{}/form`, zadnja seja proti LASTNEMU povprečju, s
+   strežnikovim `baseline_desc` dobesedno) in »rating over time«
+   (`/skill/player/{}/history`, kumulativa po sejah, najnovejša prva).
+   Gap 18 → **16**. `/api/stats/player/{}/form` ostane: to je DPM/KD serija,
+   drug graf.
+   ⭐ `sparkPath` je bil v DVEH kopijah (FormPage, Home) in **nista bili
+   duplikata**: FormPage normalizira na min–max (oblika), Home od ničle
+   (velikost). Združitev bi eni vsilila pomen druge. Izluščena je le prva
+   (`lib/spark.ts`, `sparkPathRanged`); Home ostane s komentarjem, zakaj.
    ✅ `/rounds` je ŽE upokojen (Stats 2.0 R4, #902 — `PARAM_REDIRECTS` na
    `/sessions`, rounds je zavihek seje). Postavka je bila zastarela.
    ⛔ **PRED gradnjo faze 7 preberi popravek merilnika (5. 9.):** legacy
@@ -124,7 +134,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | ⛔ **18** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija) |
+| endpoint gap | ⛔ **16** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija), nato 19 → 16 (faza 7) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
