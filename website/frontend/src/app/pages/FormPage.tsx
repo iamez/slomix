@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useFormMovers } from '../lib/queries';
+import { sparkPathRanged as sparkPath } from '../lib/spark';
 import type { SkillMoverRow } from '../lib/types';
 import { Lbl, Pending, SectionHead, Unavailable, lblStyle, rowStyle } from '../components/ui';
 
@@ -21,20 +22,6 @@ const METRICS: { key: string; label: string }[] = [
   { key: 'kills', label: 'Kills' },
   { key: 'impact', label: 'Impact' },
 ];
-
-function sparkPath(values: number[], w: number, h: number, pad: number): string {
-  if (values.length < 2) return '';
-  const min = Math.min(...values);
-  const max = Math.max(...values);
-  const span = max - min || 1;
-  return values
-    .map((v, i) => {
-      const x = pad + (i / (values.length - 1)) * (w - 2 * pad);
-      const y = h - pad - ((v - min) / span) * (h - 2 * pad);
-      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`;
-    })
-    .join(' ');
-}
 
 function MoverRow({ row, metric, tone }: { row: SkillMoverRow; metric: string; tone: 'up' | 'down' | 'new' }) {
   const color = tone === 'up' ? 'var(--color-pos)' : tone === 'down' ? 'var(--color-neg)' : 'var(--color-text-400)';

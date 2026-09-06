@@ -1,266 +1,266 @@
 [
-  {
-    "key": "home",
-    "path": "/",
-    "label": "Home",
-    "nav": "primary",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "landing",
-    "path": "/welcome",
-    "label": "Welcome",
-    "nav": "hidden",
-    "phase": 1,
-    "built": true
-  },
-  {
-    "key": "sessions",
-    "path": "/sessions",
-    "label": "Sessions",
-    "nav": "stats",
-    "phase": 2,
-    "note": "Stats sub-navigation (STATS_VIEWS in the legacy registry). ONE archive since stats 2.0 (docs/design/18): the BOX view is the view; /sessions2 redirects here.",
-    "built": true
-  },
-  {
-    "key": "session-detail",
-    "path": "/session-detail/:sessionId/:tab?",
-    "label": "Session Detail",
-    "nav": "hidden",
-    "phase": 4,
-    "built": true,
-    "note": "Stats 2.0 R4: tabs summary/players/rounds/teamplay/story (SESSION_DETAIL_TABS in routes.ts). /rounds and /story* retired into these tabs — see REDIRECTS and PARAM_REDIRECTS."
-  },
-  {
-    "key": "session-detail-date",
-    "path": "/session-detail/date/:sessionDate/:tab?",
-    "label": "Session Detail",
-    "nav": "hidden",
-    "phase": 4,
-    "built": true
-  },
-  {
-    "key": "leaderboards",
-    "path": "/leaderboards",
-    "label": "Leaderboards",
-    "nav": "stats",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "maps",
-    "path": "/maps",
-    "label": "Maps",
-    "nav": "stats",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "weapons",
-    "path": "/weapons",
-    "label": "Weapons",
-    "nav": "stats",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "form",
-    "path": "/form",
-    "label": "Form",
-    "nav": "stats",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "awards",
-    "path": "/awards",
-    "label": "Awards",
-    "nav": "stats",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "record-book",
-    "path": "/record-book",
-    "label": "Record Book",
-    "nav": "stats",
-    "phase": 2,
-    "note": "records + hall-of-fame are tabs of one route; their legacy hashes land on ?tab= via hashToPath (grammar: route-registry.js parseHash for both keys).",
-    "built": true
-  },
-  {
-    "key": "retro-viz",
-    "path": "/retro-viz",
-    "label": "Retro Viz",
-    "nav": "stats",
-    "phase": 2,
-    "built": true
-  },
-  {
-    "key": "profile",
-    "path": "/profile/:id?",
-    "label": "Profile",
-    "nav": "stats",
-    "phase": 3,
-    "built": true
-  },
-  {
-    "key": "skill-rating",
-    "path": "/skill-rating",
-    "label": "ET Rating",
-    "nav": "stats",
-    "phase": 3,
-    "built": true
-  },
-  {
-    "key": "rivalries",
-    "path": "/rivalries",
-    "label": "Rivalries",
-    "nav": "stats",
-    "phase": 3,
-    "built": true
-  },
-  {
-    "key": "smart-stats-diag",
-    "path": "/smart-stats-diag",
-    "label": "Smart Stats — Diag",
-    "nav": "footer",
-    "phase": 1,
-    "built": true
-  },
-  {
-    "key": "live",
-    "path": "/live",
-    "label": "Live",
-    "nav": "primary",
-    "phase": 6,
-    "built": true
-  },
-  {
-    "key": "proximity",
-    "path": "/proximity",
-    "label": "Proximity",
-    "nav": "telemetry",
-    "phase": 5,
-    "note": "Telemetry sub-navigation.",
-    "built": true
-  },
-  {
-    "key": "proximity-player",
-    "path": "/proximity/player/:guid",
-    "label": "Player Profile",
-    "nav": "hidden",
-    "phase": 5,
-    "built": true
-  },
-  {
-    "key": "proximity-replay",
-    "path": "/proximity/round/:roundId",
-    "label": "Round Replay",
-    "nav": "hidden",
-    "phase": 5,
-    "built": true
-  },
-  {
-    "key": "proximity-teams",
-    "path": "/proximity/round/:roundId/teams",
-    "label": "Team Comparison",
-    "nav": "hidden",
-    "phase": 5,
-    "built": true
-  },
-  {
-    "key": "spider-web",
-    "path": "/spider-web/round/:roundId",
-    "label": "Spider Web",
-    "nav": "hidden",
-    "phase": 5,
-    "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 §3.5).",
-    "built": true
-  },
-  {
-    "key": "greatshot",
-    "path": "/greatshot/:section?",
-    "label": "Greatshot",
-    "nav": "primary",
-    "phase": 6,
-    "built": true
-  },
-  {
-    "key": "greatshot-demo",
-    "path": "/greatshot/demo/:demoId",
-    "label": "Greatshot Demo",
-    "nav": "hidden",
-    "phase": 6,
-    "built": true
-  },
-  {
-    "key": "uploads",
-    "path": "/uploads",
-    "label": "Uploads",
-    "nav": "primary",
-    "phase": 6,
-    "built": true
-  },
-  {
-    "key": "upload-detail",
-    "path": "/uploads/:uploadId",
-    "label": "Upload Detail",
-    "nav": "hidden",
-    "phase": 6,
-    "built": true
-  },
-  {
-    "key": "availability",
-    "path": "/availability",
-    "label": "#ETL",
-    "nav": "primary",
-    "phase": 6,
-    "built": true
-  },
-  {
-    "key": "admin",
-    "path": "/admin",
-    "label": "About",
-    "nav": "primary",
-    "phase": 1,
-    "built": true
-  },
-  {
-    "key": "system",
-    "path": "/system",
-    "label": "System",
-    "nav": "footer",
-    "phase": 1,
-    "built": true
-  },
-  {
-    "key": "design",
-    "path": "/design",
-    "label": "Design",
-    "nav": "hidden",
-    "phase": 1,
-    "note": "The component workshop (docs/design/11, plan A3). Deliberately `hidden`: it is a surface for whoever is reworking layout, not a page for readers, and it calls no endpoint so it cannot break with the data.",
-    "built": true
-  },
-  {
-    "key": "compare",
-    "path": "/compare/:a?/:b?",
-    "label": "Compare",
-    "nav": "hidden",
-    "phase": 7,
-    "built": true,
-    "note": "phase 7: legacy compare.js was a modal inside the profile, not a route; two guids in the URL make the comparison shareable"
-  },
-  {
-    "key": "wrapped",
-    "path": "/profile/:id/wrapped",
-    "label": "Wrapped",
-    "nav": "hidden",
-    "phase": 7,
-    "built": true,
-    "note": "phase 7: legacy wrapped.js was an overlay opened from the profile; a route makes the season card linkable"
-  }
+ {
+  "key": "home",
+  "path": "/",
+  "label": "Home",
+  "nav": "primary",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "landing",
+  "path": "/welcome",
+  "label": "Welcome",
+  "nav": "hidden",
+  "phase": 1,
+  "built": true
+ },
+ {
+  "key": "sessions",
+  "path": "/sessions",
+  "label": "Sessions",
+  "nav": "stats",
+  "phase": 2,
+  "note": "Stats sub-navigation (STATS_VIEWS in the legacy registry). ONE archive since stats 2.0 (docs/design/18): the BOX view is the view; /sessions2 redirects here.",
+  "built": true
+ },
+ {
+  "key": "session-detail",
+  "path": "/session-detail/:sessionId/:tab?",
+  "label": "Session Detail",
+  "nav": "hidden",
+  "phase": 4,
+  "built": true,
+  "note": "Stats 2.0 R4: tabs summary/players/rounds/teamplay/story (SESSION_DETAIL_TABS in routes.ts). /rounds and /story* retired into these tabs \u2014 see REDIRECTS and PARAM_REDIRECTS."
+ },
+ {
+  "key": "session-detail-date",
+  "path": "/session-detail/date/:sessionDate/:tab?",
+  "label": "Session Detail",
+  "nav": "hidden",
+  "phase": 4,
+  "built": true
+ },
+ {
+  "key": "leaderboards",
+  "path": "/leaderboards",
+  "label": "Leaderboards",
+  "nav": "stats",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "maps",
+  "path": "/maps",
+  "label": "Maps",
+  "nav": "stats",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "weapons",
+  "path": "/weapons",
+  "label": "Weapons",
+  "nav": "stats",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "form",
+  "path": "/form",
+  "label": "Form",
+  "nav": "stats",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "awards",
+  "path": "/awards",
+  "label": "Awards",
+  "nav": "stats",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "record-book",
+  "path": "/record-book",
+  "label": "Record Book",
+  "nav": "stats",
+  "phase": 2,
+  "note": "records + hall-of-fame are tabs of one route; their legacy hashes land on ?tab= via hashToPath (grammar: route-registry.js parseHash for both keys).",
+  "built": true
+ },
+ {
+  "key": "retro-viz",
+  "path": "/retro-viz",
+  "label": "Retro Viz",
+  "nav": "stats",
+  "phase": 2,
+  "built": true
+ },
+ {
+  "key": "profile",
+  "path": "/profile/:id?",
+  "label": "Profile",
+  "nav": "stats",
+  "phase": 3,
+  "built": true
+ },
+ {
+  "key": "skill-rating",
+  "path": "/skill-rating",
+  "label": "ET Rating",
+  "nav": "stats",
+  "phase": 3,
+  "built": true
+ },
+ {
+  "key": "rivalries",
+  "path": "/rivalries",
+  "label": "Rivalries",
+  "nav": "stats",
+  "phase": 3,
+  "built": true
+ },
+ {
+  "key": "smart-stats-diag",
+  "path": "/smart-stats-diag",
+  "label": "Smart Stats \u2014 Diag",
+  "nav": "footer",
+  "phase": 1,
+  "built": true
+ },
+ {
+  "key": "live",
+  "path": "/live",
+  "label": "Live",
+  "nav": "primary",
+  "phase": 6,
+  "built": true
+ },
+ {
+  "key": "proximity",
+  "path": "/proximity",
+  "label": "Proximity",
+  "nav": "telemetry",
+  "phase": 5,
+  "note": "Telemetry sub-navigation.",
+  "built": true
+ },
+ {
+  "key": "proximity-player",
+  "path": "/proximity/player/:guid",
+  "label": "Player Profile",
+  "nav": "hidden",
+  "phase": 5,
+  "built": true
+ },
+ {
+  "key": "proximity-replay",
+  "path": "/proximity/round/:roundId",
+  "label": "Round Replay",
+  "nav": "hidden",
+  "phase": 5,
+  "built": true
+ },
+ {
+  "key": "proximity-teams",
+  "path": "/proximity/round/:roundId/teams",
+  "label": "Team Comparison",
+  "nav": "hidden",
+  "phase": 5,
+  "built": true
+ },
+ {
+  "key": "spider-web",
+  "path": "/spider-web/round/:roundId",
+  "label": "Spider Web",
+  "nav": "hidden",
+  "phase": 5,
+  "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 \u00a73.5).",
+  "built": true
+ },
+ {
+  "key": "greatshot",
+  "path": "/greatshot/:section?",
+  "label": "Greatshot",
+  "nav": "primary",
+  "phase": 6,
+  "built": true
+ },
+ {
+  "key": "greatshot-demo",
+  "path": "/greatshot/demo/:demoId",
+  "label": "Greatshot Demo",
+  "nav": "hidden",
+  "phase": 6,
+  "built": true
+ },
+ {
+  "key": "uploads",
+  "path": "/uploads",
+  "label": "Uploads",
+  "nav": "primary",
+  "phase": 6,
+  "built": true
+ },
+ {
+  "key": "upload-detail",
+  "path": "/uploads/:uploadId",
+  "label": "Upload Detail",
+  "nav": "hidden",
+  "phase": 6,
+  "built": true
+ },
+ {
+  "key": "availability",
+  "path": "/availability",
+  "label": "#ETL",
+  "nav": "primary",
+  "phase": 6,
+  "built": true
+ },
+ {
+  "key": "admin",
+  "path": "/admin",
+  "label": "About",
+  "nav": "primary",
+  "phase": 1,
+  "built": true
+ },
+ {
+  "key": "system",
+  "path": "/system",
+  "label": "System",
+  "nav": "footer",
+  "phase": 1,
+  "built": true
+ },
+ {
+  "key": "design",
+  "path": "/design",
+  "label": "Design",
+  "nav": "hidden",
+  "phase": 1,
+  "note": "The component workshop (docs/design/11, plan A3). Deliberately `hidden`: it is a surface for whoever is reworking layout, not a page for readers, and it calls no endpoint so it cannot break with the data.",
+  "built": true
+ },
+ {
+  "key": "compare",
+  "path": "/compare/:a?/:b?",
+  "label": "Compare",
+  "nav": "hidden",
+  "phase": 7,
+  "built": true,
+  "note": "phase 7: legacy compare.js was a modal inside the profile, not a route; two guids in the URL make the comparison shareable"
+ },
+ {
+  "key": "wrapped",
+  "path": "/profile/:id/wrapped",
+  "label": "Wrapped",
+  "nav": "hidden",
+  "phase": 7,
+  "built": true,
+  "note": "phase 7: legacy wrapped.js was an overlay opened from the profile; a route makes the season card linkable"
+ }
 ]

@@ -275,3 +275,72 @@
   ALIVE%, mora to vedeti.
 - ⛔ `docs/GAMESERVER_LIVE_LUA_MAP.md:74` in `deployed_lua/README.md`
   navajata 4 module; živih je 6.
+
+## 2026-09-05 popoldne — faza 6 r. 3 + popravek merilnika (PR #915)
+
+**Narejeno:**
+- availability rezina 3: admin market kontrole (open / settle / void), gap 4 → 3
+- ⛔⛔ popravek ekstraktorja: gap merjen **3, resnica 19** — 16 endpointov je
+  bilo nevidnih, ker se je zajem ustavil pri prvi `${` in odrezan prefiks
+  velja za pokritega. Vsak od 16 preverjen dvakrat (živ openapi + odsotnost
+  klica v `src/app`).
+
+**⚠️ ČAKA OWNERJEVO ODLOČITEV (vprašano, brez odgovora):** ali graditi
+wrapped/compare (2 od 16), ali najprej zapolniti štiri luknje na profilni
+strani (`players/{}/awards`, `players/{}/card`, `skill/player/{}/form`,
+`skill/player/{}/history`, `stats/player/{}/form`, `stats/player/{}/rounds`),
+ki jih je merilnik skrival in zaradi katerih je ta stran tanjša od številke.
+
+**Odprto zraven:**
+- `/api/greatshot/{}/crossref` in `/highlights/render` — greatshot stran ne
+  pozna sekcij `clips`/`renders`, legacy ima štiri hube, nova stran ignorira
+  `:section` param (ruta ga ima).
+- `/api/rounds/{}/player/{}/details`, `/api/rounds/{}/awards`,
+  `/api/rounds/{}/vs-stats`, `/api/player/{}/vs-stats` — matches.js in
+  session-detail.js.
+- `/api/sessions/{}/graphs` — Landing.tsx v komentarju že priznava, da ni
+  migriran.
+- `/api/uploads/{}/download`.
+- ⚠️ V glavnem worktreeju delata dve drugi seji (`opus-backend`, `sonet`) na
+  moments/doc 22 — njihovega drevesa se ne dotikam, delam v
+  `/home/samba/share/slomix-market`.
+- ⛔ #911 (diagnostics), #912 (arena), #882 (release 1.45.0) čakajo ownerja.
+
+## 2026-09-06 — pozicija pred restartom seje (posodobitev Claude CLI)
+
+**Veja `feat/availability-admin-market`, PR #915, 9 commitov, vse potisnjeno.**
+Gap **4 → 3 → 19 (korekcija) → 16**.
+
+Narejeno v tem bloku:
+1. availability rezina 3 (admin market: open / settle / void)
+2. ⛔⛔ popravek ekstraktorja: 16 endpointov je bilo nevidnih, ker se je zajem
+   ustavil pri prvi `${`; odrezan prefiks velja za pokritega
+3. greatshot: sekcije highlights / clips / renders (ruta je param nosila od
+   faze 6, stran ga je ignorirala); brez novega endpointa
+4. wrapped kot STRAN (`/wrapped/:guid`) — konvencija modal→stran iz `design/12`
+5. compare kot STRAN (`/compare?a=&b=`), z eno namerno razliko: playtime ni
+   tekma (legacy da 🏆 tistemu, ki je igral MANJ)
+6. rating trendi na profilu (`your form` + `rating over time`)
+
+**Preostali gap (16), po razredih:**
+- profil: `players/{}/card`, `players/{}/memory-card`, `stats/player/{}/form`
+  (DPM/KD serija, drug graf od skill/form)
+- runde: `rounds/{}/awards`, `rounds/{}/vs-stats`, `rounds/{}/player/{}/details`,
+  `player/{}/vs-stats`
+- greatshot: `{}/crossref`, `{}/highlights/render` (oboje na demo strani)
+- drugo: `sessions/{}/graphs` (Landing.tsx to v komentarju že priznava),
+  `uploads/{}/download`
+- ne zaprejo se z gradnjo: `/api/bets`, `/api/stats/sessions` (šele ob
+  upokojitvi legacy js), `/api/diagnostics` (#911)
+
+**⚠️ Okolje po čiščenju 6. 9.:** ET strežnik USTAVLJEN, uvicorn `:8056`
+ustavljen (bil sosedov e2e), 240 MB chromium ostankov pobitih. **Teče samo
+`:8000`** (preview, `/app/` → 200). Stroj ima 1,8 GB RAM; dve Claude seji sta
+skupaj ~900 MB.
+
+**⚠️ Sočasne seje:** `opus-backend` in `sonet` delata v glavnem worktreeju
+(`/home/samba/share/slomix_discord`) — PR #921, paritetni prelet. Njihovega
+drevesa se ne dotikam; jaz delam v `/home/samba/share/slomix-market`.
+
+**Čaka ownerja:** merge #911, #912, #915, #921, #882; ⛔ `/code-review ultra`
+pred deljenjem arena paketa; odločitev, kateri razred iz gapa naprej.

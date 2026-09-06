@@ -3927,6 +3927,25 @@ export interface BetPlaceResponse {
   pool: BetsPool;
 }
 
+/** POST /api/bets/market (bets_router.py:342-372) — admin only. Returns the id
+ *  of the market it just created, nothing else; the page refetches
+ *  /api/bets/market/current rather than trying to build a market from this. */
+export interface MarketOpenResponse { status: string; market_id: number }
+
+/** POST /api/bets/market/{market_id}/settle (bets_router.py:486) — admin only.
+ *  The shape is settle_market_locked's return (bets_router.py:482-483).
+ *  `refunded` is true on a void or when nobody backed the winner: both pay the
+ *  stakes back, and the two are one field because the payout code treats them
+ *  as one case. */
+export interface MarketSettleResponse {
+  status: string;
+  outcome: string;
+  total_pool: number;
+  winning_pool: number;
+  refunded: boolean;
+  bets: number;
+}
+
 /** availability.py:_campaign_payload (:1367-1435) — aggregate-only campaign
  *  metadata; the recipient snapshot never leaves the server. */
 export interface PromotionCampaignJob {
@@ -4149,6 +4168,129 @@ export interface UploadDeleteResponse {
 // Phase 6 — greatshot (legacy greatshot.js): per-user demo analysis. The
 // whole surface is auth-gated (401 anonymous = a state). Shapes from a
 // LIVE recording: a real demo uploaded and analyzed on this branch.
+
+/** GET /api/skill/player/{identifier}/form — this player's last session
+ *  against THEIR OWN recent-session average. `baseline_desc` says so in the
+ *  server's words ("rank-vs-self"), and the page prints it rather than
+ *  paraphrasing: a form number that looks like a ladder position is the one
+ *  misreading this endpoint exists to avoid.
+ *
+ *  `is_new` is the newcomer case — a player with no baseline yet. Their
+ *  `delta_pct` is null, which is NOT zero: "no comparison" and "no change"
+ *  are different facts. */
+export interface SkillFormMetric {
+  label: string;
+  unit?: string | null;
+  latest: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  series: number[];
+}
+
+export interface SkillFormComposite {
+  latest: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  series: number[];
+  breakdown: { metric: string; label: string; delta_pct: number | null; latest: number | null; baseline: number | null }[];
+  is_new: boolean;
+}
+
+/** GET /api/players/{identifier}/memory-card — a keepsake, measured against
+ *  this player's own past. Legacy calls it "never a ladder" and the page keeps
+ *  that sentence.
+ *
+ *  ⚠️ `signature_map` and `best_round` also exist as WRAPPED cards, and they
+ *  are NOT the same numbers. Wrapped is per SEASON (signature = most played
+ *  with a win %, best round = best DPM); this is CAREER (signature = the map
+ *  with the biggest lift over the player's own average, best round = most
+ *  kills). Same two words, different data — measured on one player before
+ *  writing this.
+ *
+ *  `facts` is 2-5 entries: the last three are conditional on the player
+ *  having a best round, a spree and a signature map at all. */
+/** GET /api/player/{guid}/vs-stats — who this player fed, and who fed on them.
+ *
+ *  ⛔ `scope` needs its id or it SILENTLY MEANS ALL-TIME: the handler's branch
+ *  is `elif scope == "session" and session_id` (records_player.py:36), so a
+ *  scope without its id falls through to the all-time query. Measured on one
+ *  player: session 156 gives 51 kills against the top prey, all-time gives
+ *  938. A panel labelled "tonight" showing the 938 would be a lie the code
+ *  never announces, so the hook takes the id as a required argument.
+ *
+ *  Both lists are the same table read from opposite ends, so an opponent
+ *  usually appears in both — as a prey with kd 0.74 and as an enemy with
+ *  1.35. That is not a duplicate; it is the same duel from each side. */
+export interface VsOpponent {
+  opponent_name: string;
+  opponent_guid: string;
+  kills: number;
+  deaths: number;
+  kd: number;
+}
+
+export interface PlayerVsStats {
+  guid: string;
+  scope: string;
+  round_id: number | null;
+  session_id: number | null;
+  easiest_preys: VsOpponent[];
+  worst_enemies: VsOpponent[];
+}
+
+export interface MemoryFact { key: string; label: string; value: string; sub?: string | null }
+
+export interface MemoryCard {
+  status: string;
+  guid: string;
+  player_name: string | null;
+  playing_since: string | null;
+  last_seen: string | null;
+  nights: number;
+  rounds: number;
+  signature_map: { map_name: string; rounds: number; lift_pct: number } | null;
+  facts: MemoryFact[];
+}
+
+export interface SkillPlayerForm {
+  status: string;
+  player_guid: string;
+  player_name: string | null;
+  session_id: number | null;
+  session_date: string | null;
+  baseline_desc: string | null;
+  composite: SkillFormComposite | null;
+  metrics: Record<string, SkillFormMetric>;
+}
+
+/** GET /api/skill/player/{identifier}/history — the rating over recent
+ *  sessions. `session_rating` is that night; `cumulative_rating` is the
+ *  running figure the profile header shows; `delta` is null on the first
+ *  session because there is nothing to subtract from — again, not zero. */
+export interface SkillHistorySession {
+  session_date: string;
+  rounds: number;
+  maps: number;
+  session_rating: number | null;
+  cumulative_rating: number | null;
+  delta: number | null;
+  /** The per-metric contributions behind `session_rating` — 15 metrics per
+   *  session, several carrying `note: "proximity_data_unavailable"`. Declared
+   *  because the endpoint sends it and the fixture keeps it: a type that
+   *  omitted it would make the recorded response fail `satisfies`, and the
+   *  tempting fix (strip the field from the fixture) would leave the app
+   *  testing a response the server never sends. The profile does not read it;
+   *  `rating, taken apart` already carries that story from the composite. */
+  components?: Record<string, unknown>;
+}
+
+export interface SkillPlayerHistory {
+  status: string;
+  player_guid: string;
+  range_days: number;
+  sessions: SkillHistorySession[];
+  total_sessions: number;
+}
 
 export interface GreatshotItem {
   id: string;

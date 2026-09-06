@@ -60,6 +60,20 @@ deploy NI naloga.
    preusmerjen. Ostane: končni paritetni prelet (SPA, vse rute × 4 viewporti
    × anon/owner — `scripts/audit_website_browser.mjs --app --manifest`), potem
    pregledni PR (baza `19c61847` = #802 merge, glava main) za ultra.
+
+2. **Faza 6 r. 3 + popravek merilnika (6. 9., veja `feat/availability-admin-market`, PR #915):**
+   admin market kontrole (open / settle / void, `POST /api/bets/market`);
+   greatshot sekcije highlights/clips/renders (ruta je `:section?` nosila od
+   faze 6, stran ga je ignorirala — brez novega endpointa); rating trendi na
+   profilu (`skill/player/{}/form` + `/history`).
+   ⛔⛔ **Popravek ekstraktorja:** legacy zajem se je ustavil pri prvi `${`,
+   zato je odrezan prefiks (`/api/players`) veljal za pokritega, brž ko nova
+   stran kliče karkoli globljega. 29 legacy klicev nosi interpolacijo s
+   segmentom za njo. Merodajno število po mergu izpiše
+   `pytest tests/integration/test_endpoint_gap.py` — vsaka nova vrstica pride
+   z zapisanim razlogom, ne kot tiha zamenjava števila.
+   ⚠️ `compare` in `wrapped` iz te veje sta bila ODSTRANJENA: #920 ju je
+   mergal medtem, in mainovi različici sta ostali.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
@@ -122,7 +136,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | 4 na tej veji (5 na mainu; 74 ob začetku 1. 9.) |
+| endpoint gap | ⛔ **16** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija), nato 19 → 16 (faza 7) |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)

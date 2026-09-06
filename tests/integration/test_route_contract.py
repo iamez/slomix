@@ -92,6 +92,66 @@ _FE_PATH_RE = re.compile(
     r"(?:scopedUrl\(['\"]|\$\{API(?:_BASE)?\})(/[a-zA-Z0-9/_-]+)"
 )
 
+# ⛔⛔ THE ABOVE STOPS AT THE FIRST `${`, AND THAT LOST 16 ENDPOINTS.
+#
+# `_FE_PATH_RE`'s comment is honest that the dynamic tail is "opaque to static
+# analysis" — but a tail is only opaque if you stop there. `wrapped.js` calls
+# `${API_BASE}/players/${guid}/wrapped`; the old capture was `/api/players`,
+# a truncated prefix, and `_covered()` treats a truncated prefix as covered as
+# soon as the new app calls ANYTHING deeper. The new app calls
+# `/api/players/{identifier}/profile`, so `/api/players/{identifier}/wrapped`
+# — a different operation, unbuilt — counted as migrated.
+#
+# Measured 2026-09-05: 29 legacy calls carry an interpolation with at least one
+# more segment behind it, and 16 of them are endpoints the new app does not
+# call and the gap file did not list. The ratchet read 3; the truth was 19.
+#
+# This is the same defect the gap file already documents for the OTHER
+# extractor — a capture whose charset stops at '{' registering a stump that
+# means a different operation — in the direction that HIDES work instead of
+# inventing it.
+#
+# So: keep going across the interpolation and write each one as `{}`. The
+# result is a shape, not a URL: `/api/players/{}/wrapped` can be matched
+# against a spec template (`/api/players/{identifier}/wrapped`) segment by
+# segment, which is exactly what `_template_matches` already does for the new
+# tree. A call that ENDS in an interpolation still yields a truncated prefix,
+# because there genuinely is nothing behind it to know.
+_INTERPOLATION_RE = re.compile(r"\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}")
+_FE_FULL_PATH_RE = re.compile(
+    r"(?:scopedUrl\(['\"]|\$\{API(?:_BASE)?\})"
+    r"((?:/(?:[a-zA-Z0-9_-]+|\$\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}))+)"
+)
+
+
+def _normalise_call(raw: str, glued: bool = False) -> tuple[str, bool]:
+    """Return (path, is_truncated_prefix) for one captured call.
+
+    A path whose last segment was an interpolation keeps the old meaning: we
+    know a prefix and nothing more, so it is a DYNAMIC prefix. A path with a
+    literal segment behind the interpolation is fully known as a shape.
+
+    ⛔ `glued` is not a detail. `availability.js:1592` writes
+    `${API_BASE}/planning${path}` — the interpolation is stuck to the segment
+    with no '/' between them, so the regex (which needs a '/' to start a
+    segment) stops after `/planning` and the result LOOKS like a complete
+    two-segment path. It is not: the tail is opaque, exactly like a trailing
+    interpolation. Called with glued=True the caller says "the source
+    continues into an interpolation here", and this reports a prefix.
+    Without it the first version of this change moved /api/planning from
+    covered to missing and would have had someone hunting a phantom.
+    """
+    path = _API_BASE_PREFIX + _INTERPOLATION_RE.sub("{}", raw).rstrip("/")
+    if glued:
+        return path, True
+    if path.endswith("/{}"):
+        # Nothing is known behind the last interpolation. Strip every trailing
+        # one and report a prefix — the old behaviour, still correct here.
+        while path.endswith("/{}"):
+            path = path[: -len("/{}")]
+        return path, True
+    return path, False
+
 # Matches a hardcoded `/api/...` literal wherever it appears — covers call
 # sites that skip the API_BASE constant entirely, e.g. auth.js's
 # `fetch('/api/availability/link-token', ...)` and diagnostics.js's endpoint
@@ -122,10 +182,10 @@ def _extract_frontend_api_paths() -> set[str]:
         if js_file.name in _EXCLUDED_JS_FILES:
             continue
         text = js_file.read_text(encoding="utf-8")
-        for match in _FE_PATH_RE.finditer(text):
-            path = match.group(1).rstrip("/")
-            if path:
-                paths.add(_API_BASE_PREFIX + path)
+        for match in _FE_FULL_PATH_RE.finditer(text):
+            path, _ = _normalise_call(match.group(1), text[match.end():match.end() + 2] == "${")
+            if path.strip("/"):
+                paths.add(path)
         for match in _FE_LITERAL_API_RE.finditer(text):
             path = match.group(0).rstrip("/")
             if path:
@@ -152,7 +212,10 @@ def _backend_route_has_prefix(route_path: str, fe_prefix_segments: list[str]) ->
     if len(route_segments) < len(fe_prefix_segments):
         return False
     for fe_seg, route_seg in zip(fe_prefix_segments, route_segments):
-        if _is_param_segment(route_seg):
+        # Either side may be a parameter: the backend registers `{round_id}`,
+        # and since the extractor started reading THROUGH interpolations the
+        # frontend side carries `{}` for the same segment.
+        if _is_param_segment(route_seg) or _is_param_segment(fe_seg):
             continue
         if fe_seg != route_seg:
             return False

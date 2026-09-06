@@ -32,6 +32,10 @@ import {
  * and render as plain SVG polylines — the DATA is the parity, not Chart.js.
  */
 
+// ⛔ NOT the same function as lib/spark.ts's `sparkPathRanged`, and it must
+// not be replaced by it: this one is ZERO-BASED, so a value near zero draws
+// near the floor. The ranged one shows a series' shape within its own
+// min-max, which for these bars would hide exactly the thing they report.
 function sparkPath(values: number[], w: number, h: number, pad: number): string {
   if (values.length < 2) return '';
   const max = Math.max(...values, 1);

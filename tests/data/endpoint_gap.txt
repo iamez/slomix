@@ -19,15 +19,89 @@
 # are retired, not before. Do not delete it to make the number smaller — the
 # test recomputes the set and would fail anyway, which is the ratchet working.
 #
-# 2026-09-02, /api/bets and /api/bets/market: availability slice 2 built the
-# BETTOR surface (wallet, pools, my bet, the stake POST on
-# /api/bets/market/{market_id}/bet). Neither line closes by that:
-# /api/bets is legacy bets.js's `${API_BASE}/bets` base string — no such
-# endpoint exists (docs/design/07 §C.1 calls it an abbreviation), so it goes
-# when bets.js retires; /api/bets/market is the ADMIN market-open POST, which
-# the owner kept out of slice 2 (open/settle stay in legacy availability.js).
-# The templated bet call must NOT clear it — test_templated_write_does_not_
-# register_its_truncated_prefix pins that. Both close in a later slice.
+# 2026-09-02,
+#
+# 2026-09-06: 3 -> 15. A CORRECTION, the second of its kind (see 64 -> 120
+# above), and it is about the RATCHET, not about new work appearing.
+#
+# The legacy extractor captured "up to the first `?`, quote or `${`". So
+# `wrapped.js`'s `${API_BASE}/players/${guid}/wrapped` was read as the prefix
+# `/api/players` — and `_covered()` treats a truncated prefix as covered the
+# moment the new app calls anything deeper. It does call
+# `/api/players/{identifier}/profile`, so a DIFFERENT, unbuilt operation
+# cleared it. Measured: 29 legacy calls carry an interpolation with at least
+# one segment behind it. The extractor now reads THROUGH interpolations and
+# writes each as `{}`, so a call is required as a SHAPE only a real call to
+# that shape can clear (test_route_contract._FE_FULL_PATH_RE).
+#
+# Every line below was verified twice: it resolves to a live path in
+# docs/api/openapi.json, and `src/app` contains no call to it.
+#
+# TRIAGE, by CALLING the endpoints rather than reading their names — three
+# lines look superseded and are not:
+#   * players/{}/awards -> {status, guid, awards}: ENGRAVED SEASON AWARDS on
+#     the legacy History tab, not the "milestones" the profile already shows.
+#   * stats/player/{}/rounds -> {rounds:[{label,date,dpm}], avg_dpm}: a DPM
+#     series feeding a canvas sparkline. The profile's "last rounds" TABLE
+#     comes from /api/player/{name}/matches. Same word, different data.
+#   * players/{}/card -> {rating, archetype, percentiles, sparkline_dpm,
+#     badges, career}: the hover card. Its percentiles are NOT the ET rating
+#     components' — measured on one player, card dpm 57 / survival 64 /
+#     revives 79 against components 58.9 / 83.9 / 44.6. Different pool,
+#     different window.
+#
+# ⛔⛔ TWO LINES THAT SHOULD NOT BE MIGRATED AS THEY STAND:
+#   * rounds/{}/vs-stats — the handler (records_matches.py:491) selects from
+#     round_vs_stats with NO GROUP BY and drops subject_guid. That table holds
+#     one row per duel pairing, so the response is a raw dump. Measured on
+#     round 11425: 18 rows for 6 players, `vid` three times. Legacy's own "VS
+#     Stats" table already shows the same player several times. Fix the
+#     handler (GROUP BY player_guid, subject_guid) or delete the line when
+#     matches.js retires — porting it verbatim moves the bug into the new app.
+#   * greatshot/{}/highlights/render — a POST that queues a render job. The
+#     renderer is NOT configured here: no ffmpeg, no GREATSHOT_RENDER_COMMAND,
+#     no .env. Hard evidence: greatshot_renders holds exactly ONE row ever
+#     (2026-02-15), status 'failed', with that configuration error — against
+#     622 highlights. The button would always produce queued -> failed.
+#
+# ⚠️ uploads/{}/download is FUNCTIONALLY COVERED already: the server hands the
+# page `download_url` (uploads.py:736) and UploadsPage.tsx:325 renders it, so
+# the path never appears as a literal in `src/app` and the extractor cannot
+# see it. The line stays because the ratchet measures literals, like
+# /api/stats/sessions above. What IS missing there is smaller and separate: no
+# download button on the list card, and no inline player (`is_playable` /
+# `poster_url` are unused).
+#
+# ⚠️ sessions/{}/graphs counts `round_number IN (1,2)` with its own status
+# filter, while the Stats 2.0 endpoints use `counts_toward_totals`. Any panel
+# built on it must say which gate it used, or the site will show two different
+# kill totals for one evening.
+#
+# 2026-09-06, /api/players/{}/memory-card DELETED: built as a profile section.
+# Verified per docs/design/07 §C.1 — 200 on the live server, response
+# committed as a fixture. ⚠️ It is NOT the wrapped card of the same two names:
+# wrapped is per season (signature = most played + win %, best round = best
+# DPM), this is career (signature = biggest lift over the player own average,
+# best round = most kills). Measured on one player before building.
+#
+# 2026-09-06, /api/player/{}/vs-stats DELETED: built as the sixth instrument
+# in PlayerDrilldown, session-scoped. Rivalries already answers "who is my
+# nemesis" ALL-TIME; this answers "who did I feed tonight", and the numbers
+# differ by an order of magnitude (51 kills against the top prey this session,
+# 938 all-time on the same pair). ⛔ The call must send scope AND session_id:
+# the handler branch is `elif scope == "session" and session_id`
+# (records_player.py:36), so a scope without its id silently returns all-time.
+# Pinned by a test that reads the request URL.
 /api/bets
-/api/bets/market
+/api/greatshot/{}/crossref
+/api/greatshot/{}/highlights/render
+/api/players/{}/awards
+/api/players/{}/card
+/api/rounds/{}/awards
+/api/rounds/{}/player/{}/details
+/api/rounds/{}/vs-stats
+/api/sessions/{}/graphs
+/api/stats/player/{}/form
+/api/stats/player/{}/rounds
 /api/stats/sessions
+/api/uploads/{}/download
