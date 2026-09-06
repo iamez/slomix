@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
@@ -12,7 +13,68 @@ from website.backend.routers.proximity_helpers import logger, resolve_player_gui
 router = APIRouter()
 
 
-@router.get("/proximity/player/{guid}/profile")
+class ProxPlayerProfile(BaseModel):
+    """GET /proximity/player/{guid}/profile — the flat shape the SPA's
+    ProximityPlayerPage reads. Counts are integers, rates and speeds floats;
+    an unknown guid answers 200 with every number 0 and player_name echoing
+    the guid (0 engagements = nothing captured, never a real profile of
+    zeros). `requested_guid` is what the caller sent (the 8-char key the
+    session page carries, or the full guid); `guid` is the resolved full one."""
+    player_name: str
+    guid: str
+    #: Absent on recordings made before 2026-09-06; always sent since.
+    requested_guid: str | None = None
+    total_engagements: int
+    escapes: int
+    deaths: int
+    escape_rate: float
+    avg_duration_ms: int
+    total_kills: int
+    crossfire_count: int
+    avg_speed: float
+    sprint_pct: float
+    avg_distance_per_life: int
+    avg_return_fire_ms: int
+    avg_dodge_ms: int
+    avg_support_reaction_ms: int
+    spawn_avg_score: float
+    timed_kills: int
+    avg_denial_ms: int
+    trades_made: int
+
+
+class RadarAxis(BaseModel):
+    label: str
+    value: float
+
+
+class ProxRadarUnscored(BaseModel):
+    """Measured but deliberately outside the radar and the composite; all
+    three are null on the degraded form (recorded live)."""
+    mechanical: float | None
+    avg_return_fire_ms: int | None
+    avg_dodge_reaction_ms: int | None
+
+
+class ProxPlayerRadar(BaseModel):
+    """GET /proximity/player/{guid}/radar — four axes plus the teamplay
+    formula contract (IMP-003). The two `teamplay_*` fields with defaults
+    exist only on the CF/TR fallback form (recorded both ways)."""
+    axes: list[RadarAxis]
+    unscored: ProxRadarUnscored
+    formula_version: str
+    axis_definitions_from: str
+    composite: float
+    teamplay_source: str
+    teamplay_observation_window_days: int
+    teamplay_formula_version: str | None
+    teamplay_degraded: bool
+    teamplay_sample_count: int | None = None
+    teamplay_fallback_reason: str | None = None
+
+
+
+@router.get("/proximity/player/{guid}/profile", response_model=ProxPlayerProfile, response_model_exclude_unset=True)
 async def get_proximity_player_profile(
     guid: str,
     range_days: int = 90,
@@ -126,7 +188,7 @@ async def get_proximity_player_profile(
         raise HTTPException(status_code=500, detail="Proximity endpoint error")
 
 
-@router.get("/proximity/player/{guid}/radar")
+@router.get("/proximity/player/{guid}/radar", response_model=ProxPlayerRadar, response_model_exclude_unset=True)
 async def get_proximity_player_radar(
     guid: str,
     range_days: int = 90,

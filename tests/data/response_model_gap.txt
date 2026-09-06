@@ -131,8 +131,6 @@ proximity_objectives.py::GET /proximity/objective-focus
 proximity_objectives.py::GET /proximity/objective-pressure
 proximity_objectives.py::GET /proximity/objective-runs
 proximity_objectives.py::GET /proximity/vehicle-progress
-proximity_player.py::GET /proximity/player/{guid}/profile
-proximity_player.py::GET /proximity/player/{guid}/radar
 proximity_positions.py::GET /proximity/combat-position-stats
 proximity_positions.py::GET /proximity/combat-positions/danger-zones
 proximity_positions.py::GET /proximity/combat-positions/heatmap

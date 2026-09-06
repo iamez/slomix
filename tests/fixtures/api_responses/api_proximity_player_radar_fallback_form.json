@@ -1,0 +1,34 @@
+{
+    "axes": [
+        {
+            "label": "Aggression",
+            "value": 0.0
+        },
+        {
+            "label": "Awareness",
+            "value": 0.0
+        },
+        {
+            "label": "Teamplay",
+            "value": 0.0
+        },
+        {
+            "label": "Timing",
+            "value": 0.0
+        }
+    ],
+    "unscored": {
+        "mechanical": null,
+        "avg_return_fire_ms": null,
+        "avg_dodge_reaction_ms": null
+    },
+    "formula_version": "player-radar-v2",
+    "axis_definitions_from": "power-v2",
+    "composite": 0.0,
+    "teamplay_source": "unavailable",
+    "teamplay_observation_window_days": 90,
+    "teamplay_formula_version": null,
+    "teamplay_sample_count": 0,
+    "teamplay_fallback_reason": "no_participation_data",
+    "teamplay_degraded": true
+}

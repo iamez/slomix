@@ -2866,6 +2866,206 @@
     "title": "ProxMetricBreakdownRetired",
     "type": "object"
    },
+   "ProxPlayerProfile": {
+    "description": "GET /proximity/player/{guid}/profile — the flat shape the SPA's\nProximityPlayerPage reads. Counts are integers, rates and speeds floats;\nan unknown guid answers 200 with every number 0 and player_name echoing\nthe guid (0 engagements = nothing captured, never a real profile of\nzeros). `requested_guid` is what the caller sent (the 8-char key the\nsession page carries, or the full guid); `guid` is the resolved full one.",
+    "properties": {
+     "avg_denial_ms": {
+      "title": "Avg Denial Ms",
+      "type": "integer"
+     },
+     "avg_distance_per_life": {
+      "title": "Avg Distance Per Life",
+      "type": "integer"
+     },
+     "avg_dodge_ms": {
+      "title": "Avg Dodge Ms",
+      "type": "integer"
+     },
+     "avg_duration_ms": {
+      "title": "Avg Duration Ms",
+      "type": "integer"
+     },
+     "avg_return_fire_ms": {
+      "title": "Avg Return Fire Ms",
+      "type": "integer"
+     },
+     "avg_speed": {
+      "title": "Avg Speed",
+      "type": "number"
+     },
+     "avg_support_reaction_ms": {
+      "title": "Avg Support Reaction Ms",
+      "type": "integer"
+     },
+     "crossfire_count": {
+      "title": "Crossfire Count",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "escape_rate": {
+      "title": "Escape Rate",
+      "type": "number"
+     },
+     "escapes": {
+      "title": "Escapes",
+      "type": "integer"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "player_name": {
+      "title": "Player Name",
+      "type": "string"
+     },
+     "requested_guid": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Requested Guid"
+     },
+     "spawn_avg_score": {
+      "title": "Spawn Avg Score",
+      "type": "number"
+     },
+     "sprint_pct": {
+      "title": "Sprint Pct",
+      "type": "number"
+     },
+     "timed_kills": {
+      "title": "Timed Kills",
+      "type": "integer"
+     },
+     "total_engagements": {
+      "title": "Total Engagements",
+      "type": "integer"
+     },
+     "total_kills": {
+      "title": "Total Kills",
+      "type": "integer"
+     },
+     "trades_made": {
+      "title": "Trades Made",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "player_name",
+     "guid",
+     "total_engagements",
+     "escapes",
+     "deaths",
+     "escape_rate",
+     "avg_duration_ms",
+     "total_kills",
+     "crossfire_count",
+     "avg_speed",
+     "sprint_pct",
+     "avg_distance_per_life",
+     "avg_return_fire_ms",
+     "avg_dodge_ms",
+     "avg_support_reaction_ms",
+     "spawn_avg_score",
+     "timed_kills",
+     "avg_denial_ms",
+     "trades_made"
+    ],
+    "title": "ProxPlayerProfile",
+    "type": "object"
+   },
+   "ProxPlayerRadar": {
+    "description": "GET /proximity/player/{guid}/radar — four axes plus the teamplay\nformula contract (IMP-003). The two `teamplay_*` fields with defaults\nexist only on the CF/TR fallback form (recorded both ways).",
+    "properties": {
+     "axes": {
+      "items": {
+       "$ref": "#/components/schemas/RadarAxis"
+      },
+      "title": "Axes",
+      "type": "array"
+     },
+     "axis_definitions_from": {
+      "title": "Axis Definitions From",
+      "type": "string"
+     },
+     "composite": {
+      "title": "Composite",
+      "type": "number"
+     },
+     "formula_version": {
+      "title": "Formula Version",
+      "type": "string"
+     },
+     "teamplay_degraded": {
+      "title": "Teamplay Degraded",
+      "type": "boolean"
+     },
+     "teamplay_fallback_reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Teamplay Fallback Reason"
+     },
+     "teamplay_formula_version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Teamplay Formula Version"
+     },
+     "teamplay_observation_window_days": {
+      "title": "Teamplay Observation Window Days",
+      "type": "integer"
+     },
+     "teamplay_sample_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Teamplay Sample Count"
+     },
+     "teamplay_source": {
+      "title": "Teamplay Source",
+      "type": "string"
+     },
+     "unscored": {
+      "$ref": "#/components/schemas/ProxRadarUnscored"
+     }
+    },
+    "required": [
+     "axes",
+     "unscored",
+     "formula_version",
+     "axis_definitions_from",
+     "composite",
+     "teamplay_source",
+     "teamplay_observation_window_days",
+     "teamplay_formula_version",
+     "teamplay_degraded"
+    ],
+    "title": "ProxPlayerRadar",
+    "type": "object"
+   },
    "ProxPlayerScore": {
     "description": "One player's proximity score, with the arithmetic that produced it.",
     "properties": {
@@ -2983,6 +3183,51 @@
      "value"
     ],
     "title": "ProxRadarPoint",
+    "type": "object"
+   },
+   "ProxRadarUnscored": {
+    "description": "Measured but deliberately outside the radar and the composite; all\nthree are null on the degraded form (recorded live).",
+    "properties": {
+     "avg_dodge_reaction_ms": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avg Dodge Reaction Ms"
+     },
+     "avg_return_fire_ms": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Avg Return Fire Ms"
+     },
+     "mechanical": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Mechanical"
+     }
+    },
+    "required": [
+     "mechanical",
+     "avg_return_fire_ms",
+     "avg_dodge_reaction_ms"
+    ],
+    "title": "ProxRadarUnscored",
     "type": "object"
    },
    "ProxScores": {
@@ -3368,6 +3613,24 @@
      "errors"
     ],
     "title": "QuickLeaders",
+    "type": "object"
+   },
+   "RadarAxis": {
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "value": {
+      "title": "Value",
+      "type": "number"
+     }
+    },
+    "required": [
+     "label",
+     "value"
+    ],
+    "title": "RadarAxis",
     "type": "object"
    },
    "RecentRound": {
@@ -16094,7 +16357,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProxPlayerProfile"
+        }
        }
       },
       "description": "Successful Response"
@@ -16145,7 +16410,9 @@
      "200": {
       "content": {
        "application/json": {
-        "schema": {}
+        "schema": {
+         "$ref": "#/components/schemas/ProxPlayerRadar"
+        }
        }
       },
       "description": "Successful Response"
