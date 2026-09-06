@@ -75,9 +75,12 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    preveri s `codex debug prompt-input "ping"`), kickoff
    `docs/prompts/astra_kickoff.md`, zanka `docs/process/MANDELBROT_RCA.md`,
    dnevnik `docs/AGENT_LOG.md`. Vrstni red (owner): triaža najdb ultra →
-   odprte rezine (§2.5, §4) → watchdog (obseg `docs/design/24`, lokalno:
-   opazovalec + alarmi, NE zaganjalnik) → runtime v2 r. 1 (doc 21 §8) šele
-   na ownerjev DA. Zunaj repa: `~/.codex/config.toml`, `~/.codex/AGENTS.md`,
+   odprte rezine (§2.5, §4) → watchdog r. 2 (r. 1 = `scripts/slomix_watchdog.py`
+   + `deploy/systemd/etlegacy-watchdog.timer`, 6. 9.; r. 2 = SSH sonde na
+   puran, `watchdog` ključ v `/api/diagnostics`, vrstica na About) → runtime
+   v2 r. 1 (doc 21 §8) šele na ownerjev DA. Štiri proge 6. 9. popoldne: guid
+   prefiks #945, diagnostics stanja #946, register datasetov #947, watchdog —
+   podrobnosti v `docs/PLAN.md` »Proga: štiri točke do Astre«. Zunaj repa: `~/.codex/config.toml`, `~/.codex/AGENTS.md`,
    `~/.codex/rules/slomix-guard.rules`, `~/.codex/hooks.json` + hooka
    (`slomix-guard.py`: port `block-git-sweep`; surov stdin v
    `~/.codex/hooks/last_input.json` — obliko preveri po prvi seji).

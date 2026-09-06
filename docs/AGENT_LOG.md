@@ -6,6 +6,22 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-06 · One row's age carries two meanings; say both.** (Review of
+  #949 by the sister session.) `server_status_history` stops moving when the
+  bot is down AND when its monitor loop fails on every tick (the loop survives
+  its own exceptions, `monitoring_service.py:277-279`); it never moves at all
+  when `MONITORING_ENABLED` is off; and `logs/bot_error_streaks.json`'s
+  `written_at` moves only on errors and resets (the idle endstats loop returns
+  before its SSH call nine ticks in ten), so it is not a heartbeat either.
+  Apply: a liveness finding names every cause the signal cannot separate, an
+  empty table is `unknown`, a database that cannot be asked is `unknown`, and
+  a threshold is read from the config that sets the cadence, not hard-coded.
+- **2026-09-06 · `systemctl is-active` on a unit that does not exist says
+  "inactive".** The watchdog reads `LoadState` first: a unit that is not
+  installed on this host is `unknown`, not down — dev runs `etlegacy-*`,
+  production `slomix-*`. Why: "inactive" invited starting a second copy by
+  hand (2026-08-05). Apply: never derive "not running" from `is-active`
+  alone; the watchdog never starts anything, it proposes the command.
 - **2026-09-06 · A register is three existing lists made one, not a fourth
   list.** The profile endpoint's section allowlist (with measured costs), the
   formula registry's entry shape and routes.data.json's page keys already
