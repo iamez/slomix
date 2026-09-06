@@ -15,7 +15,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 18 files, 5301 changed lines (limit 500 / 8 000).
+Size at cut time: 18 files, 5312 changed lines (limit 500 / 8 000).
 
 **Area: proximity capture (Lua v6.14), parser, storytelling/moments services, the spider-web layer 1 and replay.**
 Context: `docs/SPIDERWEB_STATUS.md`, `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md` §4–§8, `docs/design/17_PROXIMITY_POPIS.md`.
@@ -38,7 +38,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 30 files, 6411 changed lines (limit 500 / 8 000).
+Size at cut time: 33 files, 6628 changed lines (limit 500 / 8 000).
 
 **Area: FastAPI routers (except proximity/storytelling/replay).**
 - The `response_model` layer added in phase 2–4 (220 handlers still untyped are listed in `tests/data/response_model_gap.txt`; the file is a ratchet). Typed handlers must not drop fields the legacy JS reads — `docs/parity/keymap.json` is the map.
@@ -61,7 +61,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 13 files, 7708 changed lines (limit 500 / 8 000).
+Size at cut time: 11 files, 7695 changed lines (limit 500 / 8 000).
 
 **Area: the new SPA's data layer — `src/app/lib` (queries, types, api client, formatting, wrapped card).**
 Context: `docs/design/06_ARHITEKTURA.md`, `09_KAKO_DOKAZEMO_PARITETO.md`.
@@ -84,7 +84,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 15 files, 2829 changed lines (limit 500 / 8 000).
+Size at cut time: 21 files, 3613 changed lines (limit 500 / 8 000).
 
 **Area: the SPA shell — components, layout primitives, routes, main entry, CSS tokens.**
 Context: `docs/design/11` (local) is summarised in `website/frontend/AGENTS.md`.
@@ -107,7 +107,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 20 files, 7212 changed lines (limit 500 / 8 000).
+Size at cut time: 20 files, 7369 changed lines (limit 500 / 8 000).
 
 **Area: SPA pages — home, players, leaderboards, records, rivalries, matchups, team comparison, compare, wrapped, about/admin, awards, maps.**
 Context: `docs/design/12_PRESLIKAVA_ROUT.md`, `docs/parity/keymap.json` (`data-parity` keys).
@@ -151,7 +151,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 4 files, 1282 changed lines (limit 500 / 8 000).
+Size at cut time: 4 files, 1470 changed lines (limit 500 / 8 000).
 
 **Area: SPA pages — availability (polls, market, admin half), uploads (library, resumable), greatshot, live.**
 - Availability: linked forms via link token, promotions, betting pool/wallet, admin open/settle (#915); Discord ids as strings.
@@ -172,7 +172,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 18 files, 7042 changed lines (limit 500 / 8 000).
+Size at cut time: 19 files, 7250 changed lines (limit 500 / 8 000).
 
 **Area: backend services, middleware, main, dependencies, caching (everything outside routers and proximity/storytelling/replay).**
 - `dependencies.py`: DB pool init, admin allowlist, the adapter that must THROW on outage (11 endpoints once returned 200 with empty bodies).
@@ -194,7 +194,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 38 files, 3239 changed lines (limit 500 / 8 000).
+Size at cut time: 45 files, 3942 changed lines (limit 500 / 8 000).
 
 **Area: legacy JS (production frontend), Discord bot changes, migrations 078–082, tools, CI workflows, install/deploy scripts, root files.**
 - Legacy JS gets fixes only (design decision 2026-08-23); `fetchJSON` throws on any non-2xx.
@@ -234,7 +234,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 7 files, 670 changed lines (limit 500 / 8 000).
+Size at cut time: 8 files, 703 changed lines (limit 500 / 8 000).
 
 **Area: Playwright e2e, vite/vitest/tsconfig/eslint configuration, public assets.**
 - e2e runs against a live backend (`SMOKE_BASE_URL`); the owner project is a signed-in NON-admin (sentinel id −1); `SAMPLES`/`SAMPLES_THIN` must fill every `:param` with a real id (8-char for pages, 32-char for proximity).
@@ -253,7 +253,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 25 files, 6381 changed lines (limit 500 / 8 000).
+Size at cut time: 25 files, 6798 changed lines (limit 500 / 8 000).
 
 **Area: SPA page tests and fixtures.**
 - A test must be able to SEE its subject: count carriers, not `x in text`; fixtures are recordings (union of shapes); a fixture cannot fail on a value it does not contain — look for tests that pass on an empty collection.
@@ -272,7 +272,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 20 files, 2368 changed lines (limit 500 / 8 000).
+Size at cut time: 21 files, 2479 changed lines (limit 500 / 8 000).
 
 **Area: SPA lib/component tests, vocabulary/token/route/fixture-coverage ratchets.**
 - Ratchets use `toBe` on a budget, never `toBeLessThanOrEqual`; the budget only goes down.
@@ -313,7 +313,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 18 files, 4286 changed lines (limit 500 / 8 000).
+Size at cut time: 21 files, 5263 changed lines (limit 500 / 8 000).
 
 **Area: scripts m–z (record_api_corpus, repair_playtime, route audit list, validation family, review_slices, twins generator).**
 - `validation_family.py`: shared draws for family-wise claims; `nan` comparisons must not pass silently.
@@ -333,7 +333,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 19 files, 2566 changed lines (limit 500 / 8 000).
+Size at cut time: 20 files, 2769 changed lines (limit 500 / 8 000).
 
 **Area: integration, Lua, smoke and data tests (everything under `tests/` except `tests/unit`).**
 - `test_endpoint_gap.py`: the extractor must not count a truncated prefix as covered; templated writes must not register their prefix.
@@ -352,7 +352,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 22 files, 4257 changed lines (limit 500 / 8 000).
+Size at cut time: 27 files, 5048 changed lines (limit 500 / 8 000).
 
 **Area: unit tests a–h.**
 - Look for tests that cannot see their subject (grep-shaped assertions), controls that never fail, and `pytest` fixtures that mask a DB outage as empty data.
@@ -370,7 +370,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 16 files, 7188 changed lines (limit 500 / 8 000).
+Size at cut time: 17 files, 7315 changed lines (limit 500 / 8 000).
 
 **Area: unit tests i–o.**
 - Same lens as 17: a guarantee check must not be able to CAUSE the failure it detects (the empty-collection case); mutation evidence per guard.
@@ -388,7 +388,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 25 files, 7314 changed lines (limit 500 / 8 000).
+Size at cut time: 27 files, 7674 changed lines (limit 500 / 8 000).
 
 **Area: unit tests p–r (parity keymap, pre-push secret guard, proximity, response models, round time).**
 - `test_pre_push_secret_guard.py` fixtures document the four credential shapes the hook still misses.
@@ -407,7 +407,7 @@ bugs and are deliberate, the items already known to be open, and how proofs
 are run here. Findings are triaged with `docs/process/MANDELBROT_RCA.md`;
 please tag each with the checklist item it belongs to (1–12).
 
-Size at cut time: 26 files, 5204 changed lines (limit 500 / 8 000).
+Size at cut time: 28 files, 5665 changed lines (limit 500 / 8 000).
 
 **Area: unit tests s–z and non-test helpers under `tests/unit`.**
 - Session scoring, skill rating, storytelling, time fields, twins, upload validation. Same lens as 17.
