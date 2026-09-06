@@ -995,7 +995,8 @@
      }
     },
     "required": [
-     "count"
+     "count",
+     "last_recorded_at"
     ],
     "title": "DiagnosticsMonitoringTable",
     "type": "object"

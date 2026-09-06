@@ -452,7 +452,9 @@ class DiagnosticsMonitoringTable(BaseModel):
     handler sends count 0, last_recorded_at null AND `error` — read `error`
     first, or the failure prints as "0 rows"."""
     count: int
-    last_recorded_at: str | None = None
+    #: Always written by the handler (null when nothing was recorded), so it
+    #: is required-and-nullable on the wire, not optional.
+    last_recorded_at: str | None
     error: str | None = None
 
 

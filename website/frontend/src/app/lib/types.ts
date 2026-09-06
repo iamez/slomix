@@ -4427,7 +4427,10 @@ export interface DiagnosticsTime {
 export interface DiagnosticsMonitoringTable {
   count: number;
   last_recorded_at: string | null;
-  error?: string;
+  /** Present (and a string) only when the query failed; the schema says
+   *  nullable because the model's default is None, the handler never
+   *  writes null here. */
+  error?: string | null;
 }
 
 /** Every branch carries `connected`; the rest depends on the adapter. */
