@@ -4402,23 +4402,60 @@ export interface DiagnosticsTable {
   name: string;
   status: 'ok' | 'permission_denied' | 'not_found' | 'error' | string;
   required: boolean;
-  /** Present when the count query succeeded. */
-  row_count?: number | null;
+  /** Present only when the count query succeeded (`status: "ok"`). The
+   *  handler cannot send `null`: every query is a COUNT, so the key is an
+   *  integer or absent — a missing count is a reason, not a zero. */
+  row_count?: number;
   /** Present when it did not. */
   error?: string;
 }
 
+/** Five aggregates over player_comprehensive_stats; `{}` when the query
+ *  raised (the handler leaves the block empty and warns) or returned no
+ *  row (then it does not even warn). */
+export interface DiagnosticsTime {
+  raw_dead_seconds?: number;
+  agg_dead_seconds?: number;
+  cap_seconds?: number;
+  cap_hits?: number;
+  raw_denied_seconds?: number;
+}
+
+/** One of the two history tables; on failure the handler sends
+ *  `{count: 0, last_recorded_at: null, error: "query failed"}` — read
+ *  `error` before `count`. */
+export interface DiagnosticsMonitoringTable {
+  count: number;
+  last_recorded_at: string | null;
+  /** Present (and a string) only when the query failed; the schema says
+   *  nullable because the model's default is None, the handler never
+   *  writes null here. */
+  error?: string | null;
+}
+
+/** Every branch carries `connected`; the rest depends on the adapter. */
+export interface DiagnosticsPool {
+  connected: boolean;
+  reason?: string;
+  error?: string;
+  size?: number;
+  idle?: number;
+  in_use?: number;
+  min_size?: number;
+  max_size?: number;
+  utilisation_pct?: number;
+}
+
 export interface Diagnostics {
-  status: string;
+  status: 'ok' | 'warning' | 'error' | string;
   timestamp: string | null;
-  database: { status: string; tests: unknown[] };
+  database: { status: string; tests: unknown[]; error?: string };
   tables: DiagnosticsTable[];
   issues: string[];
   warnings: string[];
-  /** Free-form counters the backend adds; shown as key/value rows. */
-  time: Record<string, number | string | null>;
-  monitoring: Record<string, { count?: number; last_recorded_at?: string | null } | unknown>;
-  pool?: Record<string, unknown>;
+  time: DiagnosticsTime;
+  monitoring: { server?: DiagnosticsMonitoringTable; voice?: DiagnosticsMonitoringTable };
+  pool?: DiagnosticsPool;
 }
 
 // ---------------------------------------------------------------------------
@@ -4440,4 +4477,33 @@ export interface Wrapped {
   player_name: string;
   /** Empty when the player has no rounds in the season — the page says so. */
   cards: WrappedCard[];
+}
+
+// ---------------------------------------------------------------------------
+// Datasets — GET /api/datasets (docs/design/19 §5, slice 1). The register of
+// what the site can show: read-only, public, one entry per dataset. Nothing
+// stores a user's choices yet (slice 2).
+
+export interface DatasetDescriptor {
+  key: string;
+  label: string;
+  collected_by: 'lua' | 'bot_parser' | 'importer' | 'derived';
+  /** The switch that turns COLLECTION off at the origin (a Lua section or a
+   *  bot env key); null when it is always collected. */
+  collection_toggle: string | null;
+  display_toggle_default: boolean;
+  user_overridable: boolean;
+  /** routes.data.json keys the dataset is shown on by default. */
+  default_visible_on: string[];
+  depends_on: string[];
+  endpoint: string | null;
+  /** Measured cold cost in ms — only where it was timed. */
+  cost_ms_cold: number | null;
+  parity_key: string | null;
+}
+
+export interface DatasetRegistry {
+  registry_version: string;
+  count: number;
+  datasets: DatasetDescriptor[];
 }

@@ -47,7 +47,6 @@ bets_router.py::POST /market/{market_id}/settle
 challenges_router.py::GET /challenges
 challenges_router.py::POST /challenges
 client_error_router.py::POST /client-error
-diagnostics_router.py::GET /diagnostics
 diagnostics_router.py::GET /diagnostics/kis-shadow-audit
 diagnostics_router.py::GET /diagnostics/lua-webhook
 diagnostics_router.py::GET /diagnostics/round-linkage

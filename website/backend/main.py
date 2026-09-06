@@ -77,6 +77,7 @@ from website.backend.routers import (
     bets_router,
     challenges_router,
     client_error_router,
+    datasets_router,
     diagnostics_router,
     greatshot,
     greatshot_topshots,
@@ -376,6 +377,7 @@ app.include_router(season_awards_router.router, prefix="/api", tags=["Season Awa
 app.include_router(bets_router.router, prefix="/api/bets", tags=["Parimutuel"])
 app.include_router(proximity_router.router, prefix="/api", tags=["Proximity"])
 app.include_router(diagnostics_router.router, prefix="/api", tags=["Diagnostics"])
+app.include_router(datasets_router.router, prefix="/api", tags=["Datasets"])
 app.include_router(sessions_router.router, prefix="/api", tags=["Sessions"])
 app.include_router(players_router.router, prefix="/api", tags=["Players"])
 app.include_router(players_profile_router.router, prefix="/api", tags=["Players"])

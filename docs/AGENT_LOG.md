@@ -6,6 +6,25 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-06 · A register is three existing lists made one, not a fourth
+  list.** The profile endpoint's section allowlist (with measured costs), the
+  formula registry's entry shape and routes.data.json's page keys already
+  existed; `services/dataset_registry.py` unifies them and the profile router
+  now derives its allowlist from it. Why: two lists of the same thing drift
+  the day one is edited. Apply: before adding a registry/allowlist, grep for
+  `frozenset({` and `get_registry` — derive, then pin the derivation in a test.
+- **2026-09-06 · A window must apply on READ, not only in memory** (sister
+  session, #923). Persisted error streaks without the 30-minute window on
+  load woke up with yesterday's streak and announced a recovery for an outage
+  that ended before the restart. Apply: any persisted counter carries its
+  window into the loader; absent key = never failed OR recovered OR expired.
+- **2026-09-06 · A payload can carry a zero AND an error; read the error
+  first.** `/api/diagnostics` reports a failed monitoring table as
+  `{count: 0, last_recorded_at: null, error: "query failed"}`; the About panel
+  checked `'count' in m` and printed "voice 0 rows". Why: the zero is a
+  placeholder, the error is the fact. Apply: in every reader, branch on
+  `error` before any count; keep a constructed degraded fixture next to the
+  recorded healthy one so the branch has something to fail on.
 - **2026-09-06 · Guid prefix collisions exist only among bots.** Across every
   proximity guid source, 34 full guids map to 23 prefixes and the two shared
   prefixes are `OMNIBOT0`/`OMNIBOT1`; every human prefix is unique. Why: an

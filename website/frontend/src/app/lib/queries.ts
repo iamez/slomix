@@ -3,6 +3,7 @@ import type { paths } from '../../api/generated/openapi.d';
 import { ApiError, apiDelete, apiGet, apiPost, apiUpload, apiUploadWithProgress } from './api';
 import type {
   ActivityCalendar,
+  DatasetRegistry,
   ActivityHistory,
   AdjustedLifetime,
   ApiHealth,
@@ -2200,5 +2201,17 @@ export function useApiHealth() {
     queryFn: () => apiGet('/api/status') as Promise<ApiHealth>,
     refetchInterval: 60 * 1000,
     staleTime: 60 * 1000,
+  });
+}
+
+/** The dataset register (docs/design/19 §5): what the site can show, what
+ * collects it, what it costs. Static for the life of a build, so it is
+ * fetched once and never considered stale. */
+export function useDatasets(enabled = true) {
+  return useQuery({
+    queryKey: ['datasets'],
+    queryFn: () => apiGet('/api/datasets') as Promise<DatasetRegistry>,
+    enabled,
+    staleTime: Infinity,
   });
 }

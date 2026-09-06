@@ -37,10 +37,11 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
-## Proga: štiri točke do Astre (6. 9. popoldne; načrt v `~/.claude/plans`, vir tu)
+## Proga: štiri točke do Astre (6. 9. popoldne)
 
-Vrstni red: (2) proximity guid prefiks → (3) diagnostics stanja degradacije →
-(4) doc 19 r. 1 register datasetov → (1) watchdog r. 1 (obseg `docs/design/24`).
+Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
+degradacije (PR #946) → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1
+(obseg `docs/design/24`, lokalno).
 
 - **(2) proximity guid prefiks — NAREJENO 6. 9.** Izmerjeno: 34 polnih guidov →
   23 prefiksov; edini kolizijski prefiksi so botovski (`OMNIBOT0` ×9, `OMNIBOT1`
@@ -55,6 +56,37 @@ Vrstni red: (2) proximity guid prefiks → (3) diagnostics stanja degradacije �
   klicati resolver ali biti v seznamu izjem z razlogom; mutacija videna pasti).
   SPA: drilldown vedno ponudi »proximity →«; e2e trdi, da `/proximity/player/D8423F90`
   pokaže profil. Odprto: `response_model` za `/profile` in `/radar` (ni v tem PR).
+- **(3) diagnostics stanja degradacije — NAREJENO 6. 9.** Prenos iz zaprtega
+  #911 v About panel (`components/DiagnosticsReport.tsx`): tabela brez štetja =
+  razlog (pravi 0 ostane »0 rows«), prazen `time` = poizvedba ni tekla, padla
+  monitoring tabela = `unavailable` (⛔ main je za `{count:0, error:"query
+  failed"}` izpisoval »voice 0 rows« — živ hrošč, popravljen), 401/403 = odgovor
+  (potekla seja / endpoint ne šteje računa za admina), sekciji `time` in `pool`
+  novi. Backend: `response_model=DiagnosticsReport` z `exclude_unset` (odsotno
+  ostane odsotno; `exclude_none` je varovalo pinnalo na eno ruto) → gap
+  response_model −1. Fixture `api_diagnostics_degraded.json` (konstruiran, z
+  `_note`). Mutacija (vrstni red `count`/`error`) videna pasti; oba posnetka
+  brez izgube skozi model (`test_diagnostics_response_model.py`).
+- **(4) doc 19 r. 1 — register datasetov — NAREJENO 6. 9.** Ni greenfield:
+  poenotenje treh obstoječih stvari — `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` z
+  IZMERJENIMI stroški (aim 16 887 ms, advanced 11 077 ms hladno) v profilnem
+  routerju, oblika `formula_registry.py` (vnos = stvar + status + surface, brez
+  tipa) in `routes.data.json` kot imenski prostor `page_key`.
+  `services/dataset_registry.py` (34 vnosov: 14 profilnih sekcij, 8 sejnih,
+  12 proximity/derived) + `GET /api/datasets` (tipiziran, javen, read-only,
+  `DatasetRegistry{registry_version,count,datasets}`); profilni router
+  IZPELJE `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` iz registra (en vir; »heavy« =
+  ≥ 5 s hladno). Pravila, ki jih testi pinnajo proti VIRU, ne kopiji:
+  `default_visible_on` ⊆ ključi `routes.data.json`, `depends_on` ⊆ ključi,
+  `parity_key` = `data-parity`, ki ga SPA res renderira, `collection_toggle` =
+  Lua `isFeatureEnabled` sekcija ali bot `*_ENABLED` (nikoli web-layer zastava,
+  doc 19 §5). Kontrola: lažen `page_key` → test pade (videno, obnova `cmp`).
+  SPA: tip `DatasetDescriptor`/`DatasetRegistry`, hook `useDatasets`
+  (`staleTime: Infinity`), fixture `api_datasets.json` (GENERIRAN iz registra,
+  z `_note`), e2e `datasets.spec.ts` (Playwright doseže endpoint, ≥ 30 vnosov,
+  `aim` ni na profilu). Openapi posnetek osvežen (+148 vrstic). Brez UI —
+  vrstica na About panelu pride po mergu #946 (isti panel). R. 2 (tabela
+  `user_page_layouts`, column picker) po doc 19 §9 — ownerjeva odločitev.
 
 ## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
@@ -370,11 +402,14 @@ failures / Error reading SSH protocol banner«.
    Datoteka in ne tabela: alarmna pot ne sme viseti na tem, o čemer alarmira;
    brez migracije torej brez prod deploya.
 
-**Stanje:** CI zelen (Codacy `fail` s 3 issues je bil identičen že pred
-rezino 4). ⛔ **Ni mergano** — ownerjeva beseda.
+**Stanje: MERGANO** 6. 9. ob 18:02 (`5aca4a76`, squash), z ownerjevim
+dovoljenjem. Vseh 8 zahtevanih checkov zeleno; Codacy `fail` s 3 issues ni
+zahtevan in je bil identičen že pred rezino 4.
 
-⚠️ **Restart brez merga ne pobere ničesar:** ownerjev restart 6. 9. ob 17:17 je
-zagnal `origin/main`, kjer od #923 ni nobene vrstice.
+⚠️ **Na dev botu še ne teče.** Ownerjev restart 6. 9. ob 17:17 je bil PRED
+mergem in je zagnal `ed0dfe22`, kjer od #923 ni nobene vrstice. Popravki
+stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
+`sudo systemctl restart etlegacy-bot.service` na devu.
 
 **Odprto, izrecno nedokončano:** ena povezava na cikel namesto ena na datoteko
 (predelava produkcijske poti, svoja rezina in svoj pogovor).
