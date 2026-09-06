@@ -7,6 +7,12 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, 11:30) Prelet: 1. tek 256 preverb (najdbe v PR #921),
+  2. tek 108 čistih in merilnik padel ob timeoutu `admin` (popravljeno), 3. tek
+  PREKINJEN — RAM 1,8 GB, na voljo 196 MB; owner: razen `:8000` nič ne streže.
+  Ponovi prelet, ko je RAM prost: `HANDOFF-next.md` §3 (moj uvicorn :8056 +
+  `audit_website_browser.mjs --app`). ⛔ prelet požene chromium (240 MB
+  ostankov) — po njem preveri `ps` in pobij po PID (ne `pkill -f`).
 - (Fable 5.1, 2026-09-06, prelet) Najdbe končnega paritetnega preleta SPA
   (manifest 32 rut): (1) ⛔ **»proximity →« s seje je vodil v »ni zajema« za
   VSAKEGA igralca** — povezava je nosila 8-znakovni guid, proximity endpointi
