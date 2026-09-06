@@ -7,6 +7,10 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, 18:20) Proga (3) diagnostics narejena (veja
+  `feat/about-diagnostics-degraded`, PR); dolg za #911 zaprt. Proga (2) guid
+  prefiks = PR #945. Naslednje: (4) doc 19 r. 1 register datasetov, potem (1)
+  watchdog r. 1. Zvečer #882 → `review_slices.sh cut --push`.
 - (Fable 5.1, 2026-09-06, 14:45) Ultra + Astra pripravljena (veja
   `docs/ultra-ready`): ultra meja 8 000 vrstic → 20 rezin
   (`scripts/review_slices.sh`, rez = meritev 20/20); `19c61847` NI prednik

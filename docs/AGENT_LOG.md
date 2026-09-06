@@ -6,6 +6,13 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-06 · A payload can carry a zero AND an error; read the error
+  first.** `/api/diagnostics` reports a failed monitoring table as
+  `{count: 0, last_recorded_at: null, error: "query failed"}`; the About panel
+  checked `'count' in m` and printed "voice 0 rows". Why: the zero is a
+  placeholder, the error is the fact. Apply: in every reader, branch on
+  `error` before any count; keep a constructed degraded fixture next to the
+  recorded healthy one so the branch has something to fail on.
 - **2026-09-06 · Scripted edits: count the token before adding an offset.**
   `s.index("\n  };") + 4` on a five-character token slid a `;` past the
   inserted block: one statement lost it, an empty statement appeared later.
