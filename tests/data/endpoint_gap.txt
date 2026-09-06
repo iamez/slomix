@@ -19,6 +19,38 @@
 # are retired, not before. Do not delete it to make the number smaller — the
 # test recomputes the set and would fail anyway, which is the ratchet working.
 #
+# ---------------------------------------------------------------------------
+# 2026-09-06 — TRIAGE BY DATA, not by line count.
+#
+# The ratchet counts PATHS. It cannot see that these 13 are wildly unequal in
+# what they would actually show a visitor. Measured against the live dev
+# database that evening, so the next person picks up the ones that pay:
+#
+#   /api/rounds/{}/awards                  round_awards          27269 rows
+#   /api/greatshot/{}/highlights/render    greatshot_highlights    622 rows
+#                                          greatshot_renders         1 row
+#   /api/greatshot/{}/crossref             greatshot_demos          23 rows
+#   /api/uploads/{}/download               uploads                   8 rows
+#   /api/players/{}/awards                 season_awards             2 rows
+#   /api/bets                              parimutuel_bets           0 rows
+#
+# The rest (/card, /vs-stats, /graphs, /stats/player/{}/form and /rounds,
+# /rounds/{}/player/{}/details, /stats/sessions) are composites over
+# player_comprehensive_stats, where the data is not in question.
+#
+# ⛔ Two of these would ship an empty page. `/api/bets` has no rows at all and
+# is an owner decision anyway; `/api/players/{}/awards` has 2 rows across 2
+# players and 1 season. Building UI for them closes a ratchet line and shows a
+# visitor nothing — the repo already has a name for that shape (a mechanism
+# without a consumer), and the ratchet is exactly the kind of number that
+# invites it, because 0 rows and 27269 rows cost the same to close.
+#
+# ⚠️ This is a note about VALUE, not about correctness. Every line here is
+# genuinely uncovered; none may be deleted for being small. Backend handlers
+# already exist for 12 of the 13 (checked against the router decorators), so
+# the remaining work is frontend, not API.
+# ---------------------------------------------------------------------------
+#
 # 2026-09-02,
 #
 # 2026-09-06: 3 -> 15. A CORRECTION, the second of its kind (see 64 -> 120
