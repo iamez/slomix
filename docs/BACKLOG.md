@@ -7,6 +7,29 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, 11:30) Prelet: 1. tek 256 preverb (najdbe v PR #921),
+  2. tek 108 čistih in merilnik padel ob timeoutu `admin` (popravljeno), 3. tek
+  PREKINJEN — RAM 1,8 GB, na voljo 196 MB; owner: razen `:8000` nič ne streže.
+  Ponovi prelet, ko je RAM prost: `HANDOFF-next.md` §3 (moj uvicorn :8056 +
+  `audit_website_browser.mjs --app`). ⛔ prelet požene chromium (240 MB
+  ostankov) — po njem preveri `ps` in pobij po PID (ne `pkill -f`).
+- (Fable 5.1, 2026-09-06, prelet) Najdbe končnega paritetnega preleta SPA
+  (manifest 32 rut): (1) ⛔ **»proximity →« s seje je vodil v »ni zajema« za
+  VSAKEGA igralca** — povezava je nosila 8-znakovni guid, proximity endpointi
+  primerjajo polni 32-znakovni (`combat_engagement.target_guid = $1`); Absent
+  je veljaven render, zato ga prelet »renders without errors« ni ujel →
+  popravek: drilldown vzame polni guid iz KIS seznama; vzorci preleta/e2e na
+  polni guid. (2) audit/e2e vzorci niso zapolnili `:id`/`:a?`/`:b?` (strani
+  za igralce »id«/»a«/»b«; e2e vzorci so se izgubili pri rebase #920) →
+  popravljeno. (3) `session.teams`, `record-book.hof`, `session.players`
+  niso na privzetem zavihku/podatkih 154 — zavihki, ne napake. Odprto:
+  proximity endpointi bi lahko sprejeli 8-znakovni prefiks (10 endpointov,
+  ločen PR, če owner hoče).
+- (Fable 5.1, 2026-09-06, jutro) #919 in #920 MERGANA; O1 = (c) Clips strani ni.
+  Teče končni paritetni prelet SPA na :8056 (izid v PLAN, ko se konča).
+  Naslednje: pregledni PR #802→main za ultra (ownerjeva odločitev: commit
+  podmnožice docs/design ali lokalni pregled) → soak → produkcija (preklop =
+  `build:app` v `deploy_release.sh`).
 - (Fable 5.1, 2026-09-06, noč) Faza 7 r. 1 (compare + wrapped) zgrajena na
   veji `feat/site-phase7-compare-wrapped` (od dolga r. 1, #919 — ta je v CI
   padel na Python job: preveri). Odprto v fazi 7: clips (O1), končni prelet.

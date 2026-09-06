@@ -43,7 +43,13 @@ import routes from '../src/app/routes.data.json' with { type: 'json' };
  *  data, so a difference between them is a difference in the pages. */
 const SAMPLES = new Map<string, string>([
   [':id?', 'D8423F90'],
-  [':guid', 'D8423F90'],
+  // wrapped's `:id`, compare's `:a?`/`:b?`; without them the sweep visited
+  // pages for players named "id", "a" and "b" (found 2026-09-06)
+  [':id', 'D8423F90'],
+  [':a?', 'D8423F90'],
+  [':b?', 'E587CA5F'],
+  // the tracker's full guid: the proximity endpoints do not match a prefix
+  [':guid', 'D8423F90F045D9D3E2C0550811C5A899'],
   [':roundId', '11365'],
   [':sessionId', '154'],
   [':sessionDate', '2026-08-04'],
@@ -81,6 +87,9 @@ const SAMPLES = new Map<string, string>([
 // 151's short-form mvp/verdicts/good-night stay pinned in the unit test.
 const SAMPLES_THIN = new Map<string, string>([
   [':id?', '3C89435D'],
+  [':id', '3C89435D'],
+  [':a?', '3C89435D'],
+  [':b?', '1C747DF1'],
   [':guid', '3C89435D'],
   [':roundId', '11306'],
   [':sessionId', '80'],

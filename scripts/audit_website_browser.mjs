@@ -212,7 +212,10 @@ async function collectPageFindings(page) {
         // the view rendered NOTHING, and a stuck panel is reported separately
         // with the element that owns it.
         out.stuckPanels = [];
-        const active = document.querySelector('.view-section.active');
+        // `.view-section.active` is the legacy shell's view; the SPA (--app)
+        // renders into #root > main. Without this, every app route read as
+        // "no .view-section.active" = DEAD (found 2026-09-06).
+        const active = document.querySelector('.view-section.active') ?? document.querySelector('#root main');
         if (!active) {
             out.deadState = 'no .view-section.active';
         } else {
@@ -417,8 +420,15 @@ async function auditRoute(context, route, viewport, pass, outDir) {
         navError = String(err.message).split('\n')[0];
     }
     // Legacy loaders run after networkidle (the router discards their promise),
-    // so give them a beat before reading the DOM.
-    await page.waitForTimeout(1800);
+    // so give them a beat before reading the DOM. A navigation that timed out
+    // can leave the page closed; that is a finding for this route, not a
+    // reason to abort the whole sweep (it killed a 256-check run at 108 on
+    // 2026-09-06).
+    try {
+        await page.waitForTimeout(1800);
+    } catch (err) {
+        navError = navError ?? String(err.message).split('\n')[0];
+    }
     const loadMs = Date.now() - started;
 
     const findings = navError
