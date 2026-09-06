@@ -4209,6 +4209,35 @@ export interface SkillFormComposite {
  *
  *  `facts` is 2-5 entries: the last three are conditional on the player
  *  having a best round, a spree and a signature map at all. */
+/** GET /api/player/{guid}/vs-stats — who this player fed, and who fed on them.
+ *
+ *  ⛔ `scope` needs its id or it SILENTLY MEANS ALL-TIME: the handler's branch
+ *  is `elif scope == "session" and session_id` (records_player.py:36), so a
+ *  scope without its id falls through to the all-time query. Measured on one
+ *  player: session 156 gives 51 kills against the top prey, all-time gives
+ *  938. A panel labelled "tonight" showing the 938 would be a lie the code
+ *  never announces, so the hook takes the id as a required argument.
+ *
+ *  Both lists are the same table read from opposite ends, so an opponent
+ *  usually appears in both — as a prey with kd 0.74 and as an enemy with
+ *  1.35. That is not a duplicate; it is the same duel from each side. */
+export interface VsOpponent {
+  opponent_name: string;
+  opponent_guid: string;
+  kills: number;
+  deaths: number;
+  kd: number;
+}
+
+export interface PlayerVsStats {
+  guid: string;
+  scope: string;
+  round_id: number | null;
+  session_id: number | null;
+  easiest_preys: VsOpponent[];
+  worst_enemies: VsOpponent[];
+}
+
 export interface MemoryFact { key: string; label: string; value: string; sub?: string | null }
 
 export interface MemoryCard {

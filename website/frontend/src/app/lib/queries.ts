@@ -17,6 +17,7 @@ import type {
   BetsMarketCurrent,
   MarketOpenResponse,
   MemoryCard,
+  PlayerVsStats,
   SkillPlayerForm,
   SkillPlayerHistory,
   MarketSettleResponse,
@@ -2059,6 +2060,21 @@ export async function deleteUpload(uploadId: string) {
 
 // Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
 
+
+/** Duel breakdown for one player within ONE session.
+ *  ⛔ `sessionId` is required, not optional: see PlayerVsStats — a scope
+ *  without its id quietly becomes all-time. */
+export function usePlayerVsStats(guid: string, sessionId: number) {
+  return useQuery({
+    queryKey: ['player-vs-stats', guid, sessionId],
+    enabled: guid.length > 0 && Number.isFinite(sessionId),
+    retry: false,
+    queryFn: () => apiGet('/api/player/{guid}/vs-stats', {
+      pathParams: { guid },
+      query: { scope: 'session', session_id: sessionId, limit: 5 },
+    }) as Promise<PlayerVsStats>,
+  });
+}
 
 /** The career keepsake behind the profile's "memory card" section. */
 export function useMemoryCard(guid: string | null) {

@@ -83,10 +83,18 @@
 # wrapped is per season (signature = most played + win %, best round = best
 # DPM), this is career (signature = biggest lift over the player own average,
 # best round = most kills). Measured on one player before building.
+#
+# 2026-09-06, /api/player/{}/vs-stats DELETED: built as the sixth instrument
+# in PlayerDrilldown, session-scoped. Rivalries already answers "who is my
+# nemesis" ALL-TIME; this answers "who did I feed tonight", and the numbers
+# differ by an order of magnitude (51 kills against the top prey this session,
+# 938 all-time on the same pair). ⛔ The call must send scope AND session_id:
+# the handler branch is `elif scope == "session" and session_id`
+# (records_player.py:36), so a scope without its id silently returns all-time.
+# Pinned by a test that reads the request URL.
 /api/bets
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
-/api/player/{}/vs-stats
 /api/players/{}/awards
 /api/players/{}/card
 /api/rounds/{}/awards
