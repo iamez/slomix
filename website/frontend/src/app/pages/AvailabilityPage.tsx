@@ -510,7 +510,7 @@ export function AvailabilityPage() {
     await postBet(market.data.market.id, choice, amount);
     await qc.invalidateQueries({ queryKey: ['bets-market-current'] });
     await qc.invalidateQueries({ queryKey: ['bets-wallet'] });
-  }
+  };
   // Both admin writes refetch the market rather than patching it locally: open
   // returns only an id, settle returns the payout summary, and neither is the
   // market shape the panel renders. Reading it back is also the only way the
