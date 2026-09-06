@@ -4173,6 +4173,73 @@ export interface UploadDeleteResponse {
  *  it when present (wrapped.js:155-159), so the type keeps it rather than
  *  pretending the field does not exist. A fixture cannot fail on a value it
  *  does not contain — the schema is the arbiter, not the sample. */
+/** GET /api/skill/player/{identifier}/form — this player's last session
+ *  against THEIR OWN recent-session average. `baseline_desc` says so in the
+ *  server's words ("rank-vs-self"), and the page prints it rather than
+ *  paraphrasing: a form number that looks like a ladder position is the one
+ *  misreading this endpoint exists to avoid.
+ *
+ *  `is_new` is the newcomer case — a player with no baseline yet. Their
+ *  `delta_pct` is null, which is NOT zero: "no comparison" and "no change"
+ *  are different facts. */
+export interface SkillFormMetric {
+  label: string;
+  unit?: string | null;
+  latest: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  series: number[];
+}
+
+export interface SkillFormComposite {
+  latest: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  series: number[];
+  breakdown: { metric: string; label: string; delta_pct: number | null; latest: number | null; baseline: number | null }[];
+  is_new: boolean;
+}
+
+export interface SkillPlayerForm {
+  status: string;
+  player_guid: string;
+  player_name: string | null;
+  session_id: number | null;
+  session_date: string | null;
+  baseline_desc: string | null;
+  composite: SkillFormComposite | null;
+  metrics: Record<string, SkillFormMetric>;
+}
+
+/** GET /api/skill/player/{identifier}/history — the rating over recent
+ *  sessions. `session_rating` is that night; `cumulative_rating` is the
+ *  running figure the profile header shows; `delta` is null on the first
+ *  session because there is nothing to subtract from — again, not zero. */
+export interface SkillHistorySession {
+  session_date: string;
+  rounds: number;
+  maps: number;
+  session_rating: number | null;
+  cumulative_rating: number | null;
+  delta: number | null;
+  /** The per-metric contributions behind `session_rating` — 15 metrics per
+   *  session, several carrying `note: "proximity_data_unavailable"`. Declared
+   *  because the endpoint sends it and the fixture keeps it: a type that
+   *  omitted it would make the recorded response fail `satisfies`, and the
+   *  tempting fix (strip the field from the fixture) would leave the app
+   *  testing a response the server never sends. The profile does not read it;
+   *  `rating, taken apart` already carries that story from the composite. */
+  components?: Record<string, unknown>;
+}
+
+export interface SkillPlayerHistory {
+  status: string;
+  player_guid: string;
+  range_days: number;
+  sessions: SkillHistorySession[];
+  total_sessions: number;
+}
+
 export interface WrappedCard { key: string; label: string; value: string; sub?: string | null }
 
 export interface WrappedSeason {

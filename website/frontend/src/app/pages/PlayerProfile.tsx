@@ -1,5 +1,10 @@
 import { Link, useParams } from 'react-router';
-import { usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer } from '../lib/queries';
+import {
+  usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
+  useSkillPlayerForm, useSkillPlayerHistory,
+} from '../lib/queries';
+import { sparkPathRanged } from '../lib/spark';
+import { Cluster, Stack } from '../components/layout';
 import type {
   PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
@@ -437,6 +442,115 @@ function Recent({ rows: raw, available }: { rows: ProfileMatchRow[] | undefined;
  * labels the rating it repeats as the same number, not a second opinion.
  * "Not rated" arrives as {status:'error'} inside a 200 — a fact about the
  * player (needs 5+ rounds), rendered as one, never as a failure. */
+/** Δ as the server means it: null is "no comparison", zero is "no change",
+ *  and the two must not render the same. Legacy printed nothing for null
+ *  (player-profile.js:698-709) rather than "—% vs 100%". */
+function Delta({ pct }: { pct: number | null }) {
+  if (pct == null) return <Meta>no baseline yet</Meta>;
+  if (pct === 0) return <Meta>±0%</Meta>;
+  const up = pct > 0;
+  return (
+    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: up ? 'var(--color-pos)' : 'var(--color-neg)' }}>
+      {up ? '▲ +' : '▼ '}{Math.abs(pct)}%
+    </span>
+  );
+}
+
+function Spark({ values, w = 110, h = 26 }: { values: number[]; w?: number; h?: number }) {
+  const d = sparkPathRanged(values, w, h, 2);
+  // Fewer than two points is not a trend. Saying so beats an empty box the
+  // reader has to interpret.
+  if (d === '') return <Meta>one session so far</Meta>;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="trend" style={{ display: 'block' }}>
+      <path d={d} fill="none" stroke="var(--color-accent)" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+/** "Your form" — the last session against this player's OWN recent average
+ *  (legacy loadPlayerForm, player-profile.js:696). Rank-vs-self, and the page
+ *  prints the server's own `baseline_desc` so nobody reads it as a ladder. */
+function PlayerForm({ playerId }: { playerId: string }) {
+  const form = useSkillPlayerForm(playerId);
+  const d = form.data;
+  const comp = d?.composite;
+  return (
+    <div data-parity="profile.form" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="your form" />
+      {form.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="form" /></div>}
+      {form.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="form" /></div>}
+      {d != null && comp == null && (
+        <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="no form yet — it needs a session to compare against" /></div>
+      )}
+      {d != null && comp != null && (
+        <Stack gap={2} style={{ marginTop: 'var(--space-2)' }}>
+          <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{comp.latest ?? '—'}</span>
+            <Delta pct={comp.delta_pct} />
+            <Spark values={comp.series} />
+            {d.session_date != null && <Meta>last session {d.session_date}</Meta>}
+          </Cluster>
+          {/* The server's sentence, not a paraphrase of it. */}
+          {d.baseline_desc != null && <Meta>{d.baseline_desc}</Meta>}
+          <Stack gap={1} className="rows">
+            {comp.breakdown.map((b) => (
+              <Cluster key={b.metric} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
+                <Lbl>{b.label}</Lbl>
+                <Cluster gap={4} align="baseline">
+                  <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{b.latest ?? '—'}</span>
+                  <Meta>vs {b.baseline ?? '—'}</Meta>
+                  <Delta pct={b.delta_pct} />
+                </Cluster>
+              </Cluster>
+            ))}
+          </Stack>
+        </Stack>
+      )}
+    </div>
+  );
+}
+
+/** The rating over recent sessions — the trend behind the header's single
+ *  number (legacy loadCareerHistory, player-profile.js:772). */
+function RatingHistory({ playerId }: { playerId: string }) {
+  const hist = useSkillPlayerHistory(playerId);
+  const sessions = hist.data?.sessions ?? [];
+  const rated = sessions.filter((s) => s.cumulative_rating != null);
+  return (
+    <div data-parity="profile.rating-history" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="rating over time" aside={hist.data != null ? <span className="lbl">{figure(hist.data.total_sessions)} sessions · {hist.data.range_days}d</span> : undefined} />
+      {hist.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="rating history" /></div>}
+      {hist.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="rating history" /></div>}
+      {hist.data != null && rated.length === 0 && (
+        <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="no rated sessions in this window" /></div>
+      )}
+      {rated.length > 0 && (
+        <Stack gap={2} style={{ marginTop: 'var(--space-2)' }}>
+          <Spark values={rated.map((s) => s.cumulative_rating as number)} w={320} h={44} />
+          <Stack gap={1} className="rows">
+            {/* Newest first: the last night is the one being asked about. */}
+            {[...rated].reverse().slice(0, 10).map((s) => (
+              <Cluster key={s.session_date} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
+                <Lbl>{s.session_date}</Lbl>
+                <Cluster gap={4} align="baseline">
+                  <Meta>{figure(s.rounds)} rounds · {figure(s.maps)} maps</Meta>
+                  <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{s.cumulative_rating}</span>
+                  {/* ⛔ A null delta is the FIRST session, not a flat one. */}
+                  {s.delta == null ? <Meta>first</Meta>
+                    : <span className="m" style={{ fontSize: 'var(--fs-micro)', color: s.delta > 0 ? 'var(--color-pos)' : s.delta < 0 ? 'var(--color-neg)' : 'var(--color-text-500)' }}>
+                        {s.delta > 0 ? '+' : ''}{s.delta}
+                      </span>}
+                </Cluster>
+              </Cluster>
+            ))}
+          </Stack>
+        </Stack>
+      )}
+    </div>
+  );
+}
+
 function RatingComponents({ playerId }: { playerId: string }) {
   const skill = useSkillPlayer(playerId);
   return (
@@ -611,6 +725,8 @@ export function PlayerProfilePage() {
           <Header p={p} />
           <Lifetime p={p} />
           <RatingComponents playerId={playerId} />
+          <PlayerForm playerId={playerId} />
+          <RatingHistory playerId={playerId} />
           <Streaks p={p} />
           <Achievements playerId={playerId} />
           <Weapons rows={p.weapons.weapons} available={p.weapons.available} />

@@ -1,16 +1,25 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { PlayerProfilePage } from './PlayerProfile';
 import profile from './__fixtures__/api_players_identifier_profile.json';
+import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
+import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 
 /** The player page against the RECORDED profile (vid, sections=all). */
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   const path = String(input).split('?')[0];
   if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(profile) } as Response);
+  }
+  // Phase 7: the two rating trends, recorded from the dev server.
+  if (/^\/api\/skill\/player\/[^/]+\/form$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(skillForm) } as Response);
+  }
+  if (/^\/api\/skill\/player\/[^/]+\/history$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(skillHistory) } as Response);
   }
   return Promise.reject(new Error(`unexpected endpoint: ${path}`));
 }
@@ -307,5 +316,101 @@ describe('PlayerProfilePage', () => {
       view.unmount();
       vi.restoreAllMocks();
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// phase 7 — the two rating trends
+//
+// The header showed a rating with no history behind it: legacy has both a
+// "your form" block (player-profile.js:696) and an ET-Rating timeline
+// (:772), and neither had been migrated.
+
+describe('PlayerProfile — rating trends', () => {
+  it('form is rank-vs-self, and says so in the server\'s own words', async () => {
+    renderProfile('AAAA1111');
+    // 86.5 against a 100 baseline: the composite headline and its delta.
+    await waitFor(() => expect(screen.getByText('86.5')).toBeInTheDocument());
+    expect(screen.getByText('▼ 13.5%')).toBeInTheDocument();
+    // ⛔ The sentence is the server's, not a paraphrase. A form number that
+    // reads as a ladder position is the single misreading this endpoint
+    // exists to prevent, and the page must not invent softer wording for it.
+    expect(screen.getByText(/rank-vs-self/)).toBeInTheDocument();
+    // Every breakdown row, with its own baseline beside it.
+    expect(screen.getByText('Damage / min')).toBeInTheDocument();
+    expect(screen.getByText('vs 276')).toBeInTheDocument();
+  });
+
+  it('the rating timeline is newest first and shows the running figure', async () => {
+    renderProfile('AAAA1111');
+    // ⚠️ Wait on the DATA, not on the heading: the SectionHead renders while
+    // the query is still in flight, so waiting for it proves nothing and the
+    // assertions below then run against an empty section.
+    await waitFor(() => expect(screen.getByText('0.6042')).toBeInTheDocument());  // last session
+    expect(screen.getByText('-0.0077')).toBeInTheDocument();  // its delta
+    expect(screen.getByText('6 sessions · 30d')).toBeInTheDocument();
+  });
+
+  it('⛔ the timeline is newest first — an order nobody asserted is an order that drifts', async () => {
+    // The previous test only proved both figures EXIST. Reversing the list
+    // leaves both on the page, so it survived a mutation until this ran.
+    const { container } = renderProfile('AAAA1111');
+    await waitFor(() => expect(screen.getByText('0.6042')).toBeInTheDocument());
+    // ⚠️ Scoped to the section: the profile shows dates elsewhere too (last
+    // seen, the recent-rounds table), and a page-wide query silently mixed
+    // them in — the first version of this assertion failed on a date from
+    // another panel, which is a false alarm, not a finding.
+    const section = container.querySelector('[data-parity="profile.rating-history"]');
+    expect(section).not.toBeNull();
+    const dates = within(section as HTMLElement)
+      .getAllByText(/^2026-\d\d-\d\d$/).map((el) => el.textContent);
+    expect(dates[0]).toBe('2026-09-01');
+    expect(dates[dates.length - 1]).toBe('2026-08-17');
+  });
+
+  it('⛔ a newcomer has NO baseline, which is not a zero delta', async () => {
+    // ⚠️ SYNTHETIC, and deliberately so: the recorded player has a baseline
+    // for every metric, so the recording cannot exercise `delta_pct: null` —
+    // the state the type documents and `is_new` names. A corpus that contains
+    // only one side of a two-sided field cannot fail on the other, which is
+    // exactly how "±0%" survived a mutation here.
+    const newcomer = {
+      ...skillForm,
+      composite: { ...skillForm.composite, delta_pct: null, baseline: null, is_new: true },
+    };
+    renderProfile('AAAA1111', (input) => {
+      const path = String(input).split('?')[0];
+      if (/skill\/player\/[^/]+\/form$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(newcomer) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText('no baseline yet')).toBeInTheDocument());
+    expect(screen.queryByText('±0%')).not.toBeInTheDocument();
+  });
+
+  it('⛔ a null delta is the FIRST session, not a flat one', async () => {
+    // The oldest row carries delta: null. Rendering it as 0 would claim the
+    // player's rating did not move that night, which is a different fact from
+    // "there was nothing to move from" — the same null-is-not-zero split the
+    // form's `no baseline yet` makes one section above.
+    renderProfile('AAAA1111');
+    await waitFor(() => expect(screen.getByText('2026-08-17')).toBeInTheDocument());
+    expect(screen.getByText('first')).toBeInTheDocument();
+    expect(screen.queryByText('+0')).not.toBeInTheDocument();
+  });
+
+  it('a failed trend is unavailable and does not take the page with it', async () => {
+    renderProfile('AAAA1111', (input) => {
+      const path = String(input).split('?')[0];
+      if (/skill\/player/.test(path)) {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ detail: 'x' }) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/form: unavailable/i)).toBeInTheDocument());
+    expect(screen.getByText(/rating history: unavailable/i)).toBeInTheDocument();
+    // The rest of the profile is untouched — five instruments, five states.
+    expect(screen.getByText('rating over time')).toBeInTheDocument();
   });
 });

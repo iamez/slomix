@@ -16,6 +16,8 @@ import type {
   BetPlaceResponse,
   BetsMarketCurrent,
   MarketOpenResponse,
+  SkillPlayerForm,
+  SkillPlayerHistory,
   WrappedSeason,
   MarketSettleResponse,
   BetsWallet,
@@ -2022,6 +2024,30 @@ export async function deleteUpload(uploadId: string) {
 
 /** The season card behind /wrapped/:guid. `season=current` is the only value
  *  legacy ever sends (wrapped.js:69) and the only one this asks for. */
+/** The player's own form: last session against their own recent average. */
+export function useSkillPlayerForm(guid: string | null) {
+  return useQuery({
+    queryKey: ['skill-player-form', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/skill/player/{identifier}/form', {
+      pathParams: { identifier: guid! },
+    }) as Promise<SkillPlayerForm>,
+  });
+}
+
+/** The rating over recent sessions — the trend behind the header's number. */
+export function useSkillPlayerHistory(guid: string | null) {
+  return useQuery({
+    queryKey: ['skill-player-history', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/skill/player/{identifier}/history', {
+      pathParams: { identifier: guid! },
+    }) as Promise<SkillPlayerHistory>,
+  });
+}
+
 export function useWrapped(guid: string | undefined) {
   return useQuery({
     queryKey: ['wrapped', guid],

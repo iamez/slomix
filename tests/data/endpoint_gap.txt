@@ -91,6 +91,18 @@
 # overlay primitive in 32 routes. Verified per docs/design/07 §C.1: the path
 # is in the live /openapi.json and was called once (8 cards, 2026 Fall (Q3));
 # the response is the committed fixture.
+#
+# 2026-09-05, /api/skill/player/{}/form and /history DELETED: the profile
+# showed an ET rating with no history behind it. Both are now sections on the
+# player page, where legacy has them (loadPlayerForm :696, loadCareerHistory
+# :772). Verified per docs/design/07 §C.1: both answer 200 on the live server
+# and both responses are committed as fixtures — history WITH its `components`
+# block, because stripping it to keep the file small would have left the app
+# testing a response the server never sends.
+#
+# /api/stats/player/{}/form stays: it is the DPM/KD series (`{sessions:
+# [{label, date, dpm, rounds, kd}], avg_dpm, trend}`), a different chart from
+# either of these, and unbuilt.
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/player/{}/vs-stats
@@ -101,8 +113,6 @@
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats
 /api/sessions/{}/graphs
-/api/skill/player/{}/form
-/api/skill/player/{}/history
 /api/stats/player/{}/form
 /api/stats/player/{}/rounds
 /api/uploads/{}/download
