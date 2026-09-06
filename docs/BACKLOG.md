@@ -232,3 +232,42 @@ ki jih je merilnik skrival in zaradi katerih je ta stran tanjša od številke.
   moments/doc 22 — njihovega drevesa se ne dotikam, delam v
   `/home/samba/share/slomix-market`.
 - ⛔ #911 (diagnostics), #912 (arena), #882 (release 1.45.0) čakajo ownerja.
+
+## 2026-09-06 — pozicija pred restartom seje (posodobitev Claude CLI)
+
+**Veja `feat/availability-admin-market`, PR #915, 9 commitov, vse potisnjeno.**
+Gap **4 → 3 → 19 (korekcija) → 16**.
+
+Narejeno v tem bloku:
+1. availability rezina 3 (admin market: open / settle / void)
+2. ⛔⛔ popravek ekstraktorja: 16 endpointov je bilo nevidnih, ker se je zajem
+   ustavil pri prvi `${`; odrezan prefiks velja za pokritega
+3. greatshot: sekcije highlights / clips / renders (ruta je param nosila od
+   faze 6, stran ga je ignorirala); brez novega endpointa
+4. wrapped kot STRAN (`/wrapped/:guid`) — konvencija modal→stran iz `design/12`
+5. compare kot STRAN (`/compare?a=&b=`), z eno namerno razliko: playtime ni
+   tekma (legacy da 🏆 tistemu, ki je igral MANJ)
+6. rating trendi na profilu (`your form` + `rating over time`)
+
+**Preostali gap (16), po razredih:**
+- profil: `players/{}/card`, `players/{}/memory-card`, `stats/player/{}/form`
+  (DPM/KD serija, drug graf od skill/form)
+- runde: `rounds/{}/awards`, `rounds/{}/vs-stats`, `rounds/{}/player/{}/details`,
+  `player/{}/vs-stats`
+- greatshot: `{}/crossref`, `{}/highlights/render` (oboje na demo strani)
+- drugo: `sessions/{}/graphs` (Landing.tsx to v komentarju že priznava),
+  `uploads/{}/download`
+- ne zaprejo se z gradnjo: `/api/bets`, `/api/stats/sessions` (šele ob
+  upokojitvi legacy js), `/api/diagnostics` (#911)
+
+**⚠️ Okolje po čiščenju 6. 9.:** ET strežnik USTAVLJEN, uvicorn `:8056`
+ustavljen (bil sosedov e2e), 240 MB chromium ostankov pobitih. **Teče samo
+`:8000`** (preview, `/app/` → 200). Stroj ima 1,8 GB RAM; dve Claude seji sta
+skupaj ~900 MB.
+
+**⚠️ Sočasne seje:** `opus-backend` in `sonet` delata v glavnem worktreeju
+(`/home/samba/share/slomix_discord`) — PR #921, paritetni prelet. Njihovega
+drevesa se ne dotikam; jaz delam v `/home/samba/share/slomix-market`.
+
+**Čaka ownerja:** merge #911, #912, #915, #921, #882; ⛔ `/code-review ultra`
+pred deljenjem arena paketa; odločitev, kateri razred iz gapa naprej.
