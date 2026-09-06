@@ -36,6 +36,21 @@
 #                                          greatshot_renders         1 row
 #   /api/greatshot/{}/crossref             greatshot_demos          23 rows
 #   /api/uploads/{}/download               uploads                   8 rows
+#
+# ⭐ ROW COUNTS ALONE PICKED WRONG. Adding the dates changed the order:
+#
+#   greatshot_demos       23 rows   2026-02-08 .. 2026-09-02   alive
+#   greatshot_highlights 622 rows   2026-02-08 .. 2026-09-02   alive
+#   greatshot_renders      1 row    2026-02-15 .. 2026-02-15   used ONCE, 7
+#                                                              months ago
+#
+# So /highlights/render sits on 622 rows and looks like the bigger prize,
+# while the feature it drives has been used exactly once since February. Its
+# neighbour /crossref has a quarter of the rows and is still in use. A count
+# says how much data exists; only a date says whether anyone wants it.
+#
+# ⚠️ /crossref is also per-user (`_require_user`, `WHERE user_id = $2`), so
+# those 23 demos are split across accounts — each visitor sees a slice.
 #   /api/players/{}/awards                 season_awards             2 rows
 #   /api/bets                              parimutuel_bets           0 rows
 #
