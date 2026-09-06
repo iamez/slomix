@@ -37,6 +37,37 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
+## Proga: štiri točke do Astre (6. 9. popoldne)
+
+Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
+degradacije → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1 (obseg
+`docs/design/24`, lokalno).
+
+- **(2) proximity guid prefiks — NAREJENO 6. 9.** Izmerjeno: 34 polnih guidov →
+  23 prefiksov; edini kolizijski prefiksi so botovski (`OMNIBOT0` ×9, `OMNIBOT1`
+  ×4), ljudje 21 → 21. `LEFT(guid,8)=` je seq scan (61 ms, en_US collation);
+  `storytelling_kill_impact.killer_guid_canonical` je indeksiran → resolver
+  `proximity_helpers.resolve_player_guid` (canonical → `player_track` fallback →
+  cache 10 min; 32 znakov passthrough; bot prefiks in slaba oblika = 400; miss =
+  prefiks nazaj = prazen izid, ne 500). Vezan v 17 handlerjev (15 query-param +
+  `/proximity/player/{guid}/profile|radar`), `/storytelling/kill-impact/details`
+  primerja `killer_guid OR killer_guid_canonical`. AST varovalo v
+  `tests/unit/test_proximity_guid_prefix.py` (vsak handler s `player_guid` mora
+  klicati resolver ali biti v seznamu izjem z razlogom; mutacija videna pasti).
+  SPA: drilldown vedno ponudi »proximity →«; e2e trdi, da `/proximity/player/D8423F90`
+  pokaže profil. Odprto: `response_model` za `/profile` in `/radar` (ni v tem PR).
+- **(3) diagnostics stanja degradacije — NAREJENO 6. 9.** Prenos iz zaprtega
+  #911 v About panel (`components/DiagnosticsReport.tsx`): tabela brez štetja =
+  razlog (pravi 0 ostane »0 rows«), prazen `time` = poizvedba ni tekla, padla
+  monitoring tabela = `unavailable` (⛔ main je za `{count:0, error:"query
+  failed"}` izpisoval »voice 0 rows« — živ hrošč, popravljen), 401/403 = odgovor
+  (potekla seja / endpoint ne šteje računa za admina), sekciji `time` in `pool`
+  novi. Backend: `response_model=DiagnosticsReport` z `exclude_unset` (odsotno
+  ostane odsotno; `exclude_none` je varovalo pinnalo na eno ruto) → gap
+  response_model −1. Fixture `api_diagnostics_degraded.json` (konstruiran, z
+  `_note`). Mutacija (vrstni red `count`/`error`) videna pasti; oba posnetka
+  brez izgube skozi model (`test_diagnostics_response_model.py`).
+
 ## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
 0. **Dolg r. 1 (6. 9., MERGAN #919)**: keymap 7 rut zares preslikanih (guard:

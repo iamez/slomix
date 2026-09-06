@@ -12,6 +12,7 @@ from website.backend.routers.proximity_helpers import (
     _load_scoped_guid_name_map,
     _proximity_stub_meta,
     logger,
+    resolve_player_guid,
 )
 from website.backend.routers.proximity_positions import ProximityScope
 
@@ -32,6 +33,7 @@ async def get_proximity_engagements(
     Engagement timeline buckets.
     """
     payload = _proximity_stub_meta(range_days)
+    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days,
         session_date,
@@ -157,6 +159,7 @@ async def get_proximity_hotzones(
     """
     payload = _proximity_stub_meta(range_days)
     normalized_map = (map_name or "").strip() or None
+    player_guid = await resolve_player_guid(db, player_guid)
 
     where_sql, params, scope = _build_proximity_where_clause(
         range_days,

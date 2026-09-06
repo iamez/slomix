@@ -3217,7 +3217,12 @@ export interface ProxEngagements {
 
 export interface ProxPlayerProfile {
   player_name: string;
+  /** The tracker's full 32-character guid — the one the tables store. */
   guid: string;
+  /** What the caller sent: the same as `guid`, or the 8-character key the
+   *  session page carries, which the endpoint resolved (2026-09-06). Older
+   *  recordings do not have it. */
+  requested_guid?: string;
   /** ⚠️ An unknown guid answers 200 with every number 0 and player_name
    *  echoing the guid — 0 engagements means "nothing captured", never a
    *  real profile of zeros. */
@@ -4397,23 +4402,60 @@ export interface DiagnosticsTable {
   name: string;
   status: 'ok' | 'permission_denied' | 'not_found' | 'error' | string;
   required: boolean;
-  /** Present when the count query succeeded. */
-  row_count?: number | null;
+  /** Present only when the count query succeeded (`status: "ok"`). The
+   *  handler cannot send `null`: every query is a COUNT, so the key is an
+   *  integer or absent — a missing count is a reason, not a zero. */
+  row_count?: number;
   /** Present when it did not. */
   error?: string;
 }
 
+/** Five aggregates over player_comprehensive_stats; `{}` when the query
+ *  raised (the handler leaves the block empty and warns) or returned no
+ *  row (then it does not even warn). */
+export interface DiagnosticsTime {
+  raw_dead_seconds?: number;
+  agg_dead_seconds?: number;
+  cap_seconds?: number;
+  cap_hits?: number;
+  raw_denied_seconds?: number;
+}
+
+/** One of the two history tables; on failure the handler sends
+ *  `{count: 0, last_recorded_at: null, error: "query failed"}` — read
+ *  `error` before `count`. */
+export interface DiagnosticsMonitoringTable {
+  count: number;
+  last_recorded_at: string | null;
+  /** Present (and a string) only when the query failed; the schema says
+   *  nullable because the model's default is None, the handler never
+   *  writes null here. */
+  error?: string | null;
+}
+
+/** Every branch carries `connected`; the rest depends on the adapter. */
+export interface DiagnosticsPool {
+  connected: boolean;
+  reason?: string;
+  error?: string;
+  size?: number;
+  idle?: number;
+  in_use?: number;
+  min_size?: number;
+  max_size?: number;
+  utilisation_pct?: number;
+}
+
 export interface Diagnostics {
-  status: string;
+  status: 'ok' | 'warning' | 'error' | string;
   timestamp: string | null;
-  database: { status: string; tests: unknown[] };
+  database: { status: string; tests: unknown[]; error?: string };
   tables: DiagnosticsTable[];
   issues: string[];
   warnings: string[];
-  /** Free-form counters the backend adds; shown as key/value rows. */
-  time: Record<string, number | string | null>;
-  monitoring: Record<string, { count?: number; last_recorded_at?: string | null } | unknown>;
-  pool?: Record<string, unknown>;
+  time: DiagnosticsTime;
+  monitoring: { server?: DiagnosticsMonitoringTable; voice?: DiagnosticsMonitoringTable };
+  pool?: DiagnosticsPool;
 }
 
 // ---------------------------------------------------------------------------
