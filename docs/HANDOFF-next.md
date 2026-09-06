@@ -34,6 +34,8 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 | faze 0–6 | zgrajene (32 rut v `routes.data.json`, vse `built`) |
 | dolg r. 1 (#919, mergan) | keymap 7 rut resničen + guard (zgrajena ruta ne sme imeti `phase-N`), `/replay` → `/proximity`, `/api/diagnostics` admin panel na `/admin`; **vrzel endpointov 3** (`/api/bets`, `/api/bets/market` = ownerjeva odločitev; `/api/stats/sessions` = z upokojitvijo legacy JS) |
 | faza 7 r. 1 (#920, mergan) | `compare` (`/compare/:a?/:b?`) in `wrapped` (`/profile/:id/wrapped`) kot ruti; **O1 zaprta: Clips strani NI** |
+| faza 6 r. 3 + faza 7 r. 2 (#915, **odprt**) | availability admin market (open/settle/void); greatshot sekcije highlights/clips/renders (ruta je `:section?` nosila od faze 6, stran ga je ignorirala — brez novega endpointa); profil: rating trendi (`skill/…/form` + `/history`), serije po metriki (podatek je bil ŽE na strani, le nihče ga ni risal), memory card; `PlayerDrilldown` 6. instrument = dueli seje. ⚠️ `compare`/`wrapped` iz te veje ODSTRANJENA — #920 ju je mergal medtem |
+| ⛔⛔ vrzel endpointov | **3 → 13, in to je KOREKCIJA, ne novo delo.** Legacy ekstraktor se je ustavil pri prvi `${`, zato je odrezan prefiks (`/api/players`) veljal za pokritega, brž ko nova stran kliče karkoli globljega — 29 legacy klicev nosi interpolacijo s segmentom za njo. Popravljeno v `test_route_contract._FE_FULL_PATH_RE`; vsaka vrstica v `tests/data/endpoint_gap.txt` ima zdaj zapisan razlog. #915 je od 15 zaprl dve (`bets/market`, `skill/…/form`+`/history`) in nato še tri (memory-card, player vs-stats) |
 | končni paritetni prelet | veja `docs/phase7-sweep`: `scripts/audit_website_browser.mjs --app` čez 32 rut × 4 viewporti × anon/owner (256 preverb). Prava napaka: **»proximity →« s seje je nosil 8-znakovni guid → vsak skok na »ni zajema«** (popravljeno + e2e dokaz v tej veji); popravljeni audit/e2e vzorci (`:id/:a?/:b?/:guid`) in SPA-zavedna zaznava praznih pogledov; `admin` networkidle timeout kot owner = stran polla (artefakt merilnika); greatshot anon 401 = načrtovano stanje. Drugi tek z vsemi popravki: izid v `docs/PLAN.md`. |
 | prod | **zamrznjen v1.39.0**; SPA na prod NI; preklop = `build:app` v `scripts/deploy_release.sh` (ownerjev dan); pred tem ultra pregled + 1–2 tedna soaka |
 
@@ -65,7 +67,35 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
 4. Vzporedno po ownerjevi izbiri: dvojčki r. 4 (rabi puran bot test), doc 19
    r. 1 (register datasetov + tipiziran `GET /api/datasets`), popravek korpusa
    `destroyed_count`, proximity endpointi s sprejemom 8-znakovnega guida (10
-   endpointov), availability r. 3 (admin kontrole trga).
+   endpointov). ~~availability r. 3~~ = narejena v #915.
+5. **Preostalih 13 vrzeli, po izmerjenem trudu** (raziskave 6. 9.; podrobnosti
+   in pasti so v komentarjih `tests/data/endpoint_gap.txt`):
+   - `players/{}/card` (M) — arhetip + 90-dnevni form; ⚠️ njegovi percentili
+     NISO percentili ET komponent (drug bazen, drugo okno — izmerjeno);
+     dobesedni port FUT kartice bi trčil ob tipografski dizajn.
+   - `rounds/{}/player/{}/details` (M) — objectives in sprees niso nikjer;
+     ⚠️ `matches.js:970` bere polji, ki ju handler NE vrne (`combat.useful_kills`,
+     `w.weapon_name`) — legacy modal že izpisuje `undefined`, ne prenesi napake.
+   - `rounds/{}/awards` (S, blokirano na odločitvi o mestu — površine za
+     posamezno rundo še ni; surov `value`, `session_awards_service` zna lepše).
+   - `greatshot/{}/crossref` (S) — GET, auth+lastništvo, 23 analiziranih demotov.
+   - `stats/player/{}/form` (S–M) — DPM/KD serija je že narisana iz
+     `skill/…/form`; ta endpoint ima le datume, rounds/sejo, `avg_dpm`, `trend`.
+   - `sessions/{}/graphs` (**L**) — osem osi `playstyle` + `dpm_timeline` ne
+     obstajata nikjer; ni grafičnega primitiva (edini precedens `RetroViz.tsx`);
+     ⚠️ šteje `round_number IN (1,2)`, Stats 2.0 pa `counts_toward_totals` —
+     številke se NE bodo ujemale, panel mora povedati, katera vrata je uporabil.
+   - ⛔⛔ `rounds/{}/vs-stats` — **NE migriraj**: handler nima `GROUP BY` in
+     zavrže `subject_guid` (18 vrstic za 6 igralcev na rundi 11425). Popravi
+     handler ali izbriši vrstico ob upokojitvi `matches.js`.
+   - ⛔⛔ `greatshot/{}/highlights/render` — POST; renderer na tem stroju NI
+     konfiguriran (ni ffmpeg, ni `GREATSHOT_RENDER_COMMAND`); `greatshot_renders`
+     ima ENO vrstico ever, `failed`, ob 622 highlightih. Gumb bi vedno dal
+     `queued → failed` — ownerjeva odločitev, ne samoumevna gradnja.
+   - `uploads/{}/download` — **funkcionalno že pokrit** prek `download_url`
+     (`UploadsPage.tsx:325`); vrstica ostane, ker literala v `src/app` ni.
+     Res manjkata: gumb za prenos na kartici seznama in inline predvajalnik.
+   - `/api/bets`, `/api/stats/sessions` — zapre ju šele upokojitev legacy JS.
 
 ## 3. Kako preveriti stanje (agent to lahko požene sam)
 ```bash

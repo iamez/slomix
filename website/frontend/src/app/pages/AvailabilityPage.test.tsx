@@ -7,12 +7,14 @@ import { AvailabilityPage } from './AvailabilityPage';
 import type {
   AvailabilityAccess, AvailabilityOverview, AvailabilitySettings, AvailabilitySubscriptions,
   BetPlaceResponse, BetsMarketCurrent, BetsWallet, CampaignCreateResponse, LinkTokenResponse,
+  MarketOpenResponse, MarketSettleResponse,
   PlanningToday, PromotionCampaign, PromotionPreferences, PromotionPreview,
   SubscriptionUnlinkResponse, SubscriptionWriteResponse,
 } from '../lib/types';
 import accessAnon from './__fixtures__/api_availability_access.json';
 import accessAuthed from './__fixtures__/api_availability_access_authed_form.json';
 import accessLinked from './__fixtures__/api_availability_access_linked.json';
+import accessAdmin from './__fixtures__/api_availability_access_admin.json';
 import weekAnon from './__fixtures__/api_availability.json';
 import weekAuthed from './__fixtures__/api_availability_authed_form.json';
 import planningToday from './__fixtures__/api_planning_today.json';
@@ -21,6 +23,8 @@ import marketOpen from './__fixtures__/api_bets_market_current_open.json';
 import marketOpenNoBet from './__fixtures__/api_bets_market_current_open_no_bet.json';
 import marketSettled from './__fixtures__/api_bets_market_current_settled.json';
 import betPlaced from './__fixtures__/api_bets_market_market_id_bet.json';
+import marketOpened from './__fixtures__/api_bets_market_open.json';
+import marketSettleDone from './__fixtures__/api_bets_market_settle.json';
 import walletLinked from './__fixtures__/api_bets_wallet_linked.json';
 import promoPrefs from './__fixtures__/api_availability_promotion_preferences.json';
 import promoCampaign from './__fixtures__/api_availability_promotions_campaign.json';
@@ -40,6 +44,7 @@ import linkToken from './__fixtures__/api_availability_link_token.json';
 const anonAccess = accessAnon satisfies AvailabilityAccess;
 const authedAccess = accessAuthed satisfies AvailabilityAccess;
 const linkedAccess = accessLinked satisfies AvailabilityAccess;
+const adminAccess = accessAdmin satisfies AvailabilityAccess;
 const anonWeek = weekAnon satisfies AvailabilityOverview;
 const authedWeek = weekAuthed satisfies AvailabilityOverview;
 const planning = planningToday satisfies PlanningToday;
@@ -48,6 +53,8 @@ const openMarket = marketOpen satisfies BetsMarketCurrent;
 const openMarketNoBet = marketOpenNoBet satisfies BetsMarketCurrent;
 const settledMarket = marketSettled satisfies BetsMarketCurrent;
 const placed = betPlaced satisfies BetPlaceResponse;
+const opened = marketOpened satisfies MarketOpenResponse;
+const settleDone = marketSettleDone satisfies MarketSettleResponse;
 const wallet = walletLinked satisfies BetsWallet;
 const prefs = promoPrefs satisfies PromotionPreferences;
 const campaign = promoCampaign satisfies PromotionCampaign;
@@ -417,4 +424,75 @@ describe('AvailabilityPage', () => {
     expect(screen.getByText(/betting is settled for this market/)).toBeInTheDocument();
     expect(screen.queryByLabelText('stake')).toBeNull();
   });
+
+  // -------------------------------------------------------------------------
+  // slice 3 — the admin's half of the market
+
+  const ADMIN_BASE = { ...LINKED_BASE, '/api/availability/access': { body: adminAccess },
+    '/api/availability/promotions/preview': { body: preview } };
+
+  it('admin, no market: the open control appears and POSTs an empty body to /api/bets/market', async () => {
+    const spy = stub({ ...ADMIN_BASE, 'POST /api/bets/market': { body: opened } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/no market is open right now/)).toBeInTheDocument());
+    const btn = await screen.findByRole('button', { name: 'open session market' });
+    fireEvent.click(btn);
+    await waitFor(() => expect(screen.getByText(/market opened/)).toBeInTheDocument());
+    // Empty body on purpose — legacy availability.js:2357-2358 posts {} and the
+    // backend fills every column from defaults. Sending labels would be a new
+    // behaviour, not parity.
+    expect(bodyOf(spy, 'POST', '/api/bets/market')).toEqual({});
+  });
+
+  it('admin, open market: settle controls carry each label, and the click sends that outcome', async () => {
+    const spy = stub({ ...ADMIN_BASE, '/api/bets/market/current': { body: openMarket },
+      'POST /api/bets/market/7/settle': { body: settleDone } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/pool 120 · bets 3/)).toBeInTheDocument());
+    // The buttons name the TEAMS, not 'team_a' — an admin settling the wrong
+    // side pays out the wrong people and it cannot be undone.
+    expect(await screen.findByRole('button', { name: 'settle: Axis side' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'settle: Allied side' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'settle: Allied side' }));
+    await waitFor(() => expect(screen.getByText(/settled — Allied side won/)).toBeInTheDocument());
+    expect(bodyOf(spy, 'POST', '/api/bets/market/7/settle')).toEqual({ outcome: 'team_b' });
+  });
+
+  it('admin, open market: void sends void and says the stakes come back', async () => {
+    const spy = stub({ ...ADMIN_BASE, '/api/bets/market/current': { body: openMarket },
+      'POST /api/bets/market/7/settle': { body: settleDone } });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'void market' }));
+    await waitFor(() => expect(screen.getByText(/stakes refunded/)).toBeInTheDocument());
+    expect(bodyOf(spy, 'POST', '/api/bets/market/7/settle')).toEqual({ outcome: 'void' });
+  });
+
+  it('admin, settled market: nothing left to administer', async () => {
+    stub({ ...ADMIN_BASE, '/api/bets/market/current': { body: settledMarket } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/betting is settled/)).toBeInTheDocument());
+    // Settling twice is a 400 from the backend; offering the button would be
+    // an affordance for an error.
+    expect(screen.queryByRole('button', { name: /^settle: / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'void market' })).not.toBeInTheDocument();
+  });
+
+  it('⛔ the control: a linked NON-admin sees no admin surface at all', async () => {
+    // Without this the four cases above would still pass if `isAdmin` were
+    // hardwired true — and the page would show every visitor a control that
+    // only 401s. `is_admin` is false in every other access fixture, and it can
+    // never be true for the house test user (-1 fails isdigit in
+    // configured_admin_ids), which is why the admin fixture exists at all.
+    stub({ ...LINKED_BASE, '/api/bets/market/current': { body: openMarket },
+      '/api/availability/promotions/preview': { body: preview } });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/pool 120 · bets 3/)).toBeInTheDocument());
+    expect(screen.queryByRole('button', { name: 'open session market' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^settle: / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'void market' })).not.toBeInTheDocument();
+    // Not a disabled button and not an explanation: nothing. Naming the
+    // operation would tell every visitor the surface exists.
+    expect(screen.queryByText(/^admin$/)).not.toBeInTheDocument();
+  });
+
 });

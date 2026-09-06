@@ -15,6 +15,12 @@ import type {
   AwardsPage,
   BetPlaceResponse,
   BetsMarketCurrent,
+  MarketOpenResponse,
+  MemoryCard,
+  PlayerVsStats,
+  SkillPlayerForm,
+  SkillPlayerHistory,
+  MarketSettleResponse,
   BetsWallet,
   BuildInfo,
   CampaignCreateResponse,
@@ -1966,6 +1972,30 @@ export async function postBet(marketId: number, choice: 'team_a' | 'team_b', amo
   }) as Promise<BetPlaceResponse>;
 }
 
+/** Open tonight's session-winner market (admin). The body is empty on purpose:
+ *  the backend fills every column from defaults (bets_router.py:353-362), which
+ *  is exactly what legacy availability.js posts — `JSON.stringify({})` at
+ *  :2357-2358. Sending labels or a session id from here would be a NEW
+ *  behaviour, not parity, so slice 3 does not.
+ *
+ *  ⭐ This is the call that closes the `/api/bets/market` ratchet line. The
+ *  templated stake POST above could not: its path carries `{market_id}` and the
+ *  extractor's charset stops at '{', so it registered the truncated prefix —
+ *  a DIFFERENT operation. Pinned by
+ *  test_templated_write_does_not_register_its_truncated_prefix. */
+export async function postOpenMarket() {
+  return apiPost('/api/bets/market', {}) as Promise<MarketOpenResponse>;
+}
+
+/** Settle a market and pay out (admin). `outcome` is 'team_a' | 'team_b' |
+ *  'void'; the backend also accepts no override and resolves from
+ *  session_results, but legacy only ever sends an explicit one and so do we. */
+export async function postSettleMarket(marketId: number, outcome: 'team_a' | 'team_b' | 'void') {
+  return apiPost('/api/bets/market/{market_id}/settle', { outcome }, {
+    pathParams: { market_id: marketId },
+  }) as Promise<MarketSettleResponse>;
+}
+
 
 // Phase 6 — uploads.
 
@@ -2029,6 +2059,58 @@ export async function deleteUpload(uploadId: string) {
 
 
 // Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
+
+
+/** Duel breakdown for one player within ONE session.
+ *  ⛔ `sessionId` is required, not optional: see PlayerVsStats — a scope
+ *  without its id quietly becomes all-time. */
+export function usePlayerVsStats(guid: string, sessionId: number) {
+  return useQuery({
+    queryKey: ['player-vs-stats', guid, sessionId],
+    enabled: guid.length > 0 && Number.isFinite(sessionId),
+    retry: false,
+    queryFn: () => apiGet('/api/player/{guid}/vs-stats', {
+      pathParams: { guid },
+      query: { scope: 'session', session_id: sessionId, limit: 5 },
+    }) as Promise<PlayerVsStats>,
+  });
+}
+
+/** The career keepsake behind the profile's "memory card" section. */
+export function useMemoryCard(guid: string | null) {
+  return useQuery({
+    queryKey: ['memory-card', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/memory-card', {
+      pathParams: { identifier: guid! },
+    }) as Promise<MemoryCard>,
+  });
+}
+
+/** The player's own form: last session against their own recent average. */
+export function useSkillPlayerForm(guid: string | null) {
+  return useQuery({
+    queryKey: ['skill-player-form', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/skill/player/{identifier}/form', {
+      pathParams: { identifier: guid! },
+    }) as Promise<SkillPlayerForm>,
+  });
+}
+
+/** The rating over recent sessions — the trend behind the header's number. */
+export function useSkillPlayerHistory(guid: string | null) {
+  return useQuery({
+    queryKey: ['skill-player-history', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/skill/player/{identifier}/history', {
+      pathParams: { identifier: guid! },
+    }) as Promise<SkillPlayerHistory>,
+  });
+}
 
 export function useGreatshotList() {
   return useQuery({
