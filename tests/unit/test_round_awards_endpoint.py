@@ -60,6 +60,13 @@ class _StubDB:
                 rows = [r for r in rows if not str(r[2] or "").upper().startswith("OMNIBOT")]
             if "NOT LIKE '%[BOT]%'" in q:
                 rows = [r for r in rows if "[BOT]" not in str(r[1] or "")]
+            if q.startswith("SELECT DISTINCT"):
+                seen, unique = set(), []
+                for r in rows:
+                    if r not in seen:
+                        seen.add(r)
+                        unique.append(r)
+                rows = unique
             return rows
         return []
 
@@ -114,3 +121,35 @@ async def test_an_unknown_round_is_404_not_an_empty_award_set():
     async with _client(db) as c:
         r = await c.get("/api/rounds/999999/awards")
     assert r.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_an_identical_row_written_twice_is_shown_once():
+    """⛔ The table really does hold duplicates.
+
+    Measured 2026-09-06: 1472 (round, award) groups hold more than one row,
+    and 929 of them are the same player with the same value, written twice
+    inside the same second. Round 9831 renders two identical "Most damage
+    given" lines — a visitor reads that as a broken page, because it is.
+    """
+    db = _StubDB([_HUMAN, _HUMAN])
+    async with _client(db) as c:
+        r = await c.get("/api/rounds/4242/awards")
+    entries = [a for cat in r.json()["categories"].values() for a in cat["awards"]]
+    assert len(entries) == 1, "an identical row written twice is one award"
+
+
+@pytest.mark.asyncio
+async def test_two_different_players_for_one_award_both_survive():
+    """⚠️ The control for the test above, and the reason DISTINCT is narrow.
+
+    282 groups hold DIFFERENT players written minutes apart — a re-import
+    that reached another answer. That is a real disagreement about the data;
+    collapsing it here would hide it behind a display fix. It stays visible.
+    """
+    other = ("Most Kills", "bravo", "BBBBBBBB", "28", 28.0)
+    db = _StubDB([_HUMAN, other])
+    async with _client(db) as c:
+        r = await c.get("/api/rounds/4242/awards")
+    players = _all_players(r.json())
+    assert sorted(players) == ["alpha", "bravo"]

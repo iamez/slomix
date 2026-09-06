@@ -393,6 +393,39 @@ print(len(names), 'archetypes' in names)"   # → 23 False
 
 ---
 
+## Open — round_awards holds duplicate rows (found 2026-09-06)
+
+Found while building the per-round award panel (#955): 1472 `(round_id,
+award_name)` groups hold more than one row. They are **two different faults
+wearing one shape**, and only the first is fixed.
+
+| kind | groups | what it is |
+|---|---|---|
+| identical, same second | **929** | the same player and value written twice — pure duplication |
+| different players, minutes apart | **282** | two imports that reached different answers |
+| identical, minutes apart | 3 | |
+| different players, same second | 258 | possibly deliberate (a per-team award?) — unverified |
+
+**Fixed:** `/api/rounds/{round_id}/awards` now selects `DISTINCT`, which
+removes the 929 identical rows. A visitor was otherwise reading the same
+award twice and concluding the page was broken.
+
+⛔ **Not fixed, deliberately:** the 282 groups where two imports disagree.
+Round 9831 carries "Most damage given → bronze 4953" and "Most damage given
+→ SuperBoyy 3910", written 21:34:28 and 21:45:37 on 2026-02-11. `DISTINCT`
+leaves both, because collapsing them would hide a real disagreement about
+the data behind a display fix — and nothing here establishes which import
+was right.
+
+⚠️ The session-level award view aggregates the same table, so it carries the
+same duplication. It was not touched by #955.
+
+**Open questions for whoever picks this up:** what re-ran those imports 11
+minutes apart; whether the 258 same-second/different-player groups are a
+per-team award (in which case they are correct and the UI should label them
+as such); and whether the historical rows should be de-duplicated at rest or
+only at read time.
+
 ## Note — errors.log line counts changed on 2026-09-06
 
 Not an issue; recorded so nobody reads the drop as a broken log.

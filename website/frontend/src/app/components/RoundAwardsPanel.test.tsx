@@ -13,6 +13,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RoundAwardsPanel } from './RoundsTab';
 import { makeQueryClient } from '../lib/queries';
 import type { RoundAwards } from '../lib/types';
+import recorded from '../pages/__fixtures__/api_rounds_round_id_awards.json';
+
+// ⛔ THE HAND-WRITTEN TYPE IS CHECKED AGAINST A LIVE ANSWER, not only against
+// fixtures I invented. A type built from a sample sees only the branches that
+// sample happened to take; one built from a schema can be wrong in the other
+// direction. This line makes a real recorded response the arbiter of the
+// interface — 7 categories, 58 awards, taken from round 9831.
+//
+// ⚠️ It does NOT cover the nullable fields: this recording contains no null
+// `guid` and no null `numeric`, because that round has none. A fixture cannot
+// fail on a value it does not contain, which is why the constructed cases
+// below carry both — and why they are not redundant with this one.
+const live = recorded satisfies RoundAwards;
 
 const withAwards: RoundAwards = {
   round_id: 4242,
@@ -72,6 +85,19 @@ describe('RoundAwardsPanel', () => {
     // null, while `numeric` exists for sorting and is frequently absent.
     expect(await screen.findByText('7 in a row')).toBeTruthy();
     expect(screen.getByText('nameless')).toBeTruthy();
+  });
+
+  it('renders a recorded live response end to end', async () => {
+    renderPanel(ok(live));
+    // 7 categories on round 9831; combat is the one every round has.
+    expect(await screen.findByText(/Combat/)).toBeTruthy();
+    // ⚠️ getAllByText, not getByText — and the reason is a data fact, not a
+    // test convenience. Round 9831 carries TWO "Most damage given" awards
+    // naming different players with different figures (bronze 4953,
+    // SuperBoyy 3910), written eleven minutes apart by two separate imports.
+    // 282 such groups exist. The panel shows both because both are in the
+    // table; deciding which is right is not a rendering question.
+    expect(screen.getAllByText('Most damage given').length).toBeGreaterThan(0);
   });
 
   it('reports a failed request as unavailable, not as empty', async () => {

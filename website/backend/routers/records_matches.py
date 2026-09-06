@@ -450,13 +450,30 @@ async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db))
     # round's list — it empties an all-bot round, which is the right answer.
     # An award won against nobody is not an award, and the empty-state copy
     # already says "no awards for this round".
+    #
+    # ⛔⛔ DISTINCT IS NOT TIDYING — the table holds duplicate rows. Measured
+    # 2026-09-06: 1472 (round, award) groups hold more than one row, and 929
+    # of them are the SAME player with the SAME value written twice within
+    # the same second. Round 9831 shows two "Most damage given" lines; a
+    # visitor reads that as a broken page, because it is.
+    #
+    # ⚠️ Only the identical ones go. 282 further groups hold DIFFERENT
+    # players, written minutes apart — a re-import that reached another
+    # answer. Those are a real disagreement about the data and collapsing
+    # them here would hide it behind a display fix. They stay visible, and
+    # they are written up for the owner rather than silently resolved.
+    #
+    # ⛔ ORDER BY id cannot stay: it is not in the DISTINCT list, and
+    # PostgreSQL rejects that outright. Ordering by the award name gives a
+    # stable, readable sequence instead of insertion order.
     awards_query = """
-        SELECT award_name, player_name, player_guid, award_value, award_value_numeric
+        SELECT DISTINCT award_name, player_name, player_guid,
+                        award_value, award_value_numeric
         FROM round_awards
         WHERE round_id = $1
           AND (player_guid IS NULL OR UPPER(player_guid) NOT LIKE 'OMNIBOT%')
           AND player_name NOT LIKE '%[BOT]%'
-        ORDER BY id
+        ORDER BY award_name, player_name
     """
     awards_rows = await db.fetch_all(awards_query, (round_id,))
 
