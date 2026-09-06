@@ -136,11 +136,23 @@ function Kis({ sessionId, guid8, name }: { sessionId: number; guid8: string; nam
 
 export function PlayerDrilldown({ sessionId, guid8, name }: { sessionId: number; guid8: string; name: string }) {
   const key = guidKey(guid8);
+  // The proximity endpoints compare the FULL 32-character guid (the
+  // tracker's key); the session page only has the 8-character one. The
+  // kill-impact list (fetched below for the KIS section anyway) carries the
+  // full guids of everyone the tracker scored — the parity sweep of
+  // 2026-09-06 found every "proximity →" link landing on "no capture"
+  // because it sent the short one.
+  const kis = useStoryKillImpact(sessionId);
+  const full = kis.data?.players.find((p) => guidKey(p.guid) === key)?.guid;
   return (
     <Stack gap={4} parity="session.player" style={{ padding: 'var(--space-3) 0 var(--space-4) var(--space-5)' }}>
       <Cluster gap={4} align="baseline" parity="session.player.links">
         <Link to={`/profile/${key}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>profile →</Link>
-        <Link to={`/proximity/player/${key}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>proximity →</Link>
+        {full ? (
+          <Link to={`/proximity/player/${full}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>proximity →</Link>
+        ) : (
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>proximity: {kis.isPending ? 'resolving…' : 'not tracked this session'}</Lbl>
+        )}
       </Cluster>
       <Stack gap={2} parity="session.player.maps">
         <SectionHead label="by map" aside={<span className="lbl">counted rounds · summed from the rounds tab</span>} />

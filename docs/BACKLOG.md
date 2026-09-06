@@ -7,6 +7,18 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, prelet) Najdbe končnega paritetnega preleta SPA
+  (manifest 32 rut): (1) ⛔ **»proximity →« s seje je vodil v »ni zajema« za
+  VSAKEGA igralca** — povezava je nosila 8-znakovni guid, proximity endpointi
+  primerjajo polni 32-znakovni (`combat_engagement.target_guid = $1`); Absent
+  je veljaven render, zato ga prelet »renders without errors« ni ujel →
+  popravek: drilldown vzame polni guid iz KIS seznama; vzorci preleta/e2e na
+  polni guid. (2) audit/e2e vzorci niso zapolnili `:id`/`:a?`/`:b?` (strani
+  za igralce »id«/»a«/»b«; e2e vzorci so se izgubili pri rebase #920) →
+  popravljeno. (3) `session.teams`, `record-book.hof`, `session.players`
+  niso na privzetem zavihku/podatkih 154 — zavihki, ne napake. Odprto:
+  proximity endpointi bi lahko sprejeli 8-znakovni prefiks (10 endpointov,
+  ločen PR, če owner hoče).
 - (Fable 5.1, 2026-09-06, jutro) #919 in #920 MERGANA; O1 = (c) Clips strani ni.
   Teče končni paritetni prelet SPA na :8056 (izid v PLAN, ko se konča).
   Naslednje: pregledni PR #802→main za ultra (ownerjeva odločitev: commit

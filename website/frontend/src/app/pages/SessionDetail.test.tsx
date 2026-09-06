@@ -662,7 +662,13 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
     }
     const key = top.player_guid.slice(0, 8).toUpperCase();
     expect(screen.getByRole('link', { name: /profile →/ })).toHaveAttribute('href', `/profile/${key}`);
-    expect(screen.getByRole('link', { name: /proximity →/ })).toHaveAttribute('href', `/proximity/player/${key}`);
+    // The proximity link carries the tracker's FULL guid, resolved from the
+    // kill-impact list: with the 8-character key every such link landed on
+    // "no capture" (parity sweep, 2026-09-06).
+    const full = (killImpact as { players: { guid: string }[] }).players
+      .find((p) => p.guid.slice(0, 8).toUpperCase() === key)?.guid;
+    expect(full).toHaveLength(32);
+    await waitFor(() => expect(screen.getByRole('link', { name: /proximity →/ })).toHaveAttribute('href', `/proximity/player/${full}`));
   });
 
   it('sums the per-map rows from the rounds already on the page, counted rounds only', async () => {
