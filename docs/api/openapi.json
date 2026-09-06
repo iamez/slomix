@@ -1202,6 +1202,18 @@
       },
       "title": "Warnings",
       "type": "array"
+     },
+     "watchdog": {
+      "anyOf": [
+       {
+        "additionalProperties": true,
+        "type": "object"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Watchdog"
      }
     },
     "required": [

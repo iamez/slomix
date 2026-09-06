@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { useAvailabilityAccess, useBuildInfo, useDiagnostics, useOverview, useSystemOverview } from '../lib/queries';
+import { useAvailabilityAccess, useBuildInfo, useDatasets, useDiagnostics, useOverview, useSystemOverview } from '../lib/queries';
+import type { DiagnosticsWatchdog } from '../lib/types';
 import { API_PROBES, runProbes, type ProbeResult } from '../lib/probes';
 import { Absent, Lbl, Pending, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
 import { DiagnosticsReport } from '../components/DiagnosticsReport';
@@ -221,6 +222,7 @@ function DiagnosticsPanel() {
   const access = useAvailabilityAccess();
   const isAdmin = access.data?.is_admin === true;
   const diag = useDiagnostics(isAdmin);
+  const datasets = useDatasets(isAdmin);
   if (!isAdmin) return null;
   const d = diag.isError ? undefined : diag.data;
   const verdict = d ? (d.issues.length === 0 ? (d.warnings.length === 0 ? 'all systems go' : `${d.warnings.length} warning${d.warnings.length === 1 ? '' : 's'}`) : `${d.issues.length} issue${d.issues.length === 1 ? '' : 's'}`) : null;
@@ -239,7 +241,42 @@ function DiagnosticsPanel() {
         {diag.isError && status !== 401 && status !== 403 && <Unavailable what="diagnostics" />}
         {diag.isSuccess && !d && <Absent block reason="the backend answered with no body" />}
         {d && <DiagnosticsReport d={d} />}
+        {d && <WatchdogLine w={d.watchdog} />}
       </div>
+      <div data-parity="admin.datasets" style={{ marginTop: 'var(--space-3)' }}>
+        {datasets.isPending && <Pending label="dataset register" />}
+        {datasets.isError && <Unavailable what="dataset register" />}
+        {datasets.data && (
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+            dataset register v{datasets.data.registry_version} · {datasets.data.count} datasets ·{' '}
+            {datasets.data.datasets.filter((x) => x.collection_toggle).length} with a collection switch ·{' '}
+            {datasets.data.datasets.filter((x) => x.cost_ms_cold != null).length} with a measured cost
+          </Lbl>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The host watchdog's last run (scripts/slomix_watchdog.py writes
+ *  logs/watchdog_last.json; /api/diagnostics summarises it). Three states
+ *  by design: never ran here, unreadable, ran — and its levels are shown
+ *  beside the backend's own verdict, never merged into it. */
+function WatchdogLine({ w }: { w: DiagnosticsWatchdog | null | undefined }) {
+  if (w == null) {
+    return <Absent reason="the watchdog has not run on this host — deploy/systemd/etlegacy-watchdog.timer is the owner's to install" />;
+  }
+  if (w.error) return <Unavailable what={`watchdog report (${w.error})`} />;
+  const levels = w.levels ?? {};
+  const bad = Object.entries(levels).filter(([, l]) => l !== 'ok');
+  const age = w.age_seconds == null ? 'age unknown' : w.age_seconds < 90 ? `${Math.round(w.age_seconds)} s ago` : `${Math.round(w.age_seconds / 60)} min ago`;
+  return (
+    <div data-parity="admin.watchdog" style={{ display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
+      <StatusDot state={bad.some(([, l]) => l === 'fail') ? 'error' : bad.length > 0 ? 'warn' : 'ok'} />
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+        watchdog · {age}{w.dry_run ? ' · dry run' : ''} · {Object.keys(levels).length} checks ·{' '}
+        {bad.length === 0 ? 'all ok' : bad.map(([k, l]) => `${k} ${l}`).join(', ')} · {w.alerts ?? 0} alert{w.alerts === 1 ? '' : 's'}
+      </Lbl>
     </div>
   );
 }

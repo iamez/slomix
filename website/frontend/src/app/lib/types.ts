@@ -4456,6 +4456,20 @@ export interface Diagnostics {
   time: DiagnosticsTime;
   monitoring: { server?: DiagnosticsMonitoringTable; voice?: DiagnosticsMonitoringTable };
   pool?: DiagnosticsPool;
+  /** The last run of the host watchdog (scripts/slomix_watchdog.py), null
+   *  when it has never run on this host; `{error}` when its file is
+   *  unreadable. Never part of `status`. */
+  watchdog?: DiagnosticsWatchdog | null;
+}
+
+export interface DiagnosticsWatchdog {
+  ran_at?: string | null;
+  age_seconds?: number | null;
+  host?: string | null;
+  levels?: Record<string, 'ok' | 'warn' | 'fail' | 'unknown' | string>;
+  alerts?: number;
+  dry_run?: boolean;
+  error?: string;
 }
 
 // ---------------------------------------------------------------------------
