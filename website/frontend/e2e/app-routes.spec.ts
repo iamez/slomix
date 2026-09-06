@@ -239,11 +239,13 @@ test('phase 7: compare shows the six lifetime rows for two players, wrapped list
   await page.goto('/app/compare/D8423F90/E587CA5F', { waitUntil: 'domcontentloaded' });
   const table = page.locator('[data-parity="compare.table"]');
   await expect(table).toBeVisible();
-  await expect(table.locator('.row')).toHaveCount(6);
+  // Two profiles, both possibly cold (a first hit measured > 5 s): wait for
+  // the rows, not for the default 5 s.
+  await expect(table.locator('.row')).toHaveCount(6, { timeout: 30_000 });
   await expect(table).toContainText('lower wins');
   await page.goto('/app/profile/D8423F90/wrapped', { waitUntil: 'domcontentloaded' });
   const facts = page.locator('[data-parity="wrapped.facts"]');
-  await expect(facts).toBeVisible();
+  await expect(facts).toBeVisible({ timeout: 30_000 });
   await expect(facts.locator('.row')).toHaveCount(8);
   // The card is drawn in the browser: the export buttons unlock.
   await expect(page.getByRole('button', { name: 'download png' })).toBeEnabled();
