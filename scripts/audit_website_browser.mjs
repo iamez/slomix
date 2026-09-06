@@ -212,7 +212,10 @@ async function collectPageFindings(page) {
         // the view rendered NOTHING, and a stuck panel is reported separately
         // with the element that owns it.
         out.stuckPanels = [];
-        const active = document.querySelector('.view-section.active');
+        // `.view-section.active` is the legacy shell's view; the SPA (--app)
+        // renders into #root > main. Without this, every app route read as
+        // "no .view-section.active" = DEAD (found 2026-09-06).
+        const active = document.querySelector('.view-section.active') ?? document.querySelector('#root main');
         if (!active) {
             out.deadState = 'no .view-section.active';
         } else {
