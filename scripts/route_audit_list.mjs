@@ -103,7 +103,12 @@ export function appRoutes() {
     // indexed by a value read from data is an injection sink to every
     // scanner in this repo's CI (same reason layout.tsx's SPACE is a Map).
     const samples = new Map([
-        [':id?', 'D8423F90'], [':guid', 'D8423F90'], [':roundId', '11365'],
+        // `:id` (no `?`) is the wrapped route's parameter; `:a?`/`:b?` are
+        // compare's. An unfilled parameter turned into the literal
+        // segment "id", so the manifest read those pages for a player named
+        // "id" and saw no panels (found 2026-09-06).
+        [':id?', 'D8423F90'], [':id', 'D8423F90'], [':a?', 'D8423F90'], [':b?', 'E587CA5F'],
+        [':guid', 'D8423F90'], [':roundId', '11365'],
         [':sessionId', '154'], [':sessionDate', '2026-08-04'], [':gsid', '154'],
         [':date', '2026-08-27'], [':section?', 'demos'],
         [':demoId', '7dc01a5727344cd8afece44a1cc572e6'],

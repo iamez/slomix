@@ -39,7 +39,7 @@ deploy NI naloga.
 
 ## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
 
-0. **Dolg r. 1 (6. 9., v PR-ju)**: keymap 7 rut zares preslikanih (guard:
+0. **Dolg r. 1 (6. 9., MERGAN #919)**: keymap 7 rut zares preslikanih (guard:
    zgrajena ruta ne sme nositi `phase-N` — videti pasti na starem keymapu),
    `/replay` → preusmeritev na `/proximity` (edina nezgrajena ruta umaknjena
    iz `routes.data.json`), `/api/diagnostics` kot admin panel na `/admin`
@@ -50,13 +50,16 @@ deploy NI naloga.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
-4. **Faza 7**: r. 1 (6. 9., v PR-ju) = `compare` (`/compare/:a?/:b?`, šest
+4. **Faza 7**: r. 1 (6. 9., **MERGANA #920**) = `compare` (`/compare/:a?/:b?`, šest
    legacy vrstic iz profilnega endpointa, barva = boljša stran) in `wrapped`
    (`/profile/:id/wrapped`, canvas 1080×1920 v žetonih — brez gradienta,
    radius 0, pravilo pripeto v testu — + dejstva kot besedilo, copy/download);
    obe kot RUTI (dizajn sistem nima modalov), povezavi v glavi profila;
-   `PickPlayer` seljen iz Rivalries v `components/`. Ostane: Clips (O1),
-   upokojitev `/rounds` (že preusmerjen), končni paritetni prelet.
+   `PickPlayer` seljen iz Rivalries v `components/`. **O1 zaprta 6. 9.:
+   owner (c) → Clips strani NI** (33. zaslon odpade; 32 rut). `/rounds` že
+   preusmerjen. Ostane: končni paritetni prelet (SPA, vse rute × 4 viewporti
+   × anon/owner — `scripts/audit_website_browser.mjs --app --manifest`), potem
+   pregledni PR (baza `19c61847` = #802 merge, glava main) za ultra.
 5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
    produkciji.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**

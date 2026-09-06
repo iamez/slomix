@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, jutro) #919 in #920 MERGANA; O1 = (c) Clips strani ni.
+  Teče končni paritetni prelet SPA na :8056 (izid v PLAN, ko se konča).
+  Naslednje: pregledni PR #802→main za ultra (ownerjeva odločitev: commit
+  podmnožice docs/design ali lokalni pregled) → soak → produkcija (preklop =
+  `build:app` v `deploy_release.sh`).
 - (Fable 5.1, 2026-09-06, noč) Faza 7 r. 1 (compare + wrapped) zgrajena na
   veji `feat/site-phase7-compare-wrapped` (od dolga r. 1, #919 — ta je v CI
   padel na Python job: preveri). Odprto v fazi 7: clips (O1), končni prelet.
