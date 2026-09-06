@@ -76,13 +76,19 @@
 # filter, while the Stats 2.0 endpoints use `counts_toward_totals`. Any panel
 # built on it must say which gate it used, or the site will show two different
 # kill totals for one evening.
+#
+# 2026-09-06, /api/players/{}/memory-card DELETED: built as a profile section.
+# Verified per docs/design/07 §C.1 — 200 on the live server, response
+# committed as a fixture. ⚠️ It is NOT the wrapped card of the same two names:
+# wrapped is per season (signature = most played + win %, best round = best
+# DPM), this is career (signature = biggest lift over the player own average,
+# best round = most kills). Measured on one player before building.
 /api/bets
 /api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/player/{}/vs-stats
 /api/players/{}/awards
 /api/players/{}/card
-/api/players/{}/memory-card
 /api/rounds/{}/awards
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats

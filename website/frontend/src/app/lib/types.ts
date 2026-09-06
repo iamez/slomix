@@ -4196,6 +4196,33 @@ export interface SkillFormComposite {
   is_new: boolean;
 }
 
+/** GET /api/players/{identifier}/memory-card — a keepsake, measured against
+ *  this player's own past. Legacy calls it "never a ladder" and the page keeps
+ *  that sentence.
+ *
+ *  ⚠️ `signature_map` and `best_round` also exist as WRAPPED cards, and they
+ *  are NOT the same numbers. Wrapped is per SEASON (signature = most played
+ *  with a win %, best round = best DPM); this is CAREER (signature = the map
+ *  with the biggest lift over the player's own average, best round = most
+ *  kills). Same two words, different data — measured on one player before
+ *  writing this.
+ *
+ *  `facts` is 2-5 entries: the last three are conditional on the player
+ *  having a best round, a spree and a signature map at all. */
+export interface MemoryFact { key: string; label: string; value: string; sub?: string | null }
+
+export interface MemoryCard {
+  status: string;
+  guid: string;
+  player_name: string | null;
+  playing_since: string | null;
+  last_seen: string | null;
+  nights: number;
+  rounds: number;
+  signature_map: { map_name: string; rounds: number; lift_pct: number } | null;
+  facts: MemoryFact[];
+}
+
 export interface SkillPlayerForm {
   status: string;
   player_guid: string;

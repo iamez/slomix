@@ -16,6 +16,7 @@ import type {
   BetPlaceResponse,
   BetsMarketCurrent,
   MarketOpenResponse,
+  MemoryCard,
   SkillPlayerForm,
   SkillPlayerHistory,
   MarketSettleResponse,
@@ -2058,6 +2059,18 @@ export async function deleteUpload(uploadId: string) {
 
 // Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
 
+
+/** The career keepsake behind the profile's "memory card" section. */
+export function useMemoryCard(guid: string | null) {
+  return useQuery({
+    queryKey: ['memory-card', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/memory-card', {
+      pathParams: { identifier: guid! },
+    }) as Promise<MemoryCard>,
+  });
+}
 
 /** The player's own form: last session against their own recent average. */
 export function useSkillPlayerForm(guid: string | null) {

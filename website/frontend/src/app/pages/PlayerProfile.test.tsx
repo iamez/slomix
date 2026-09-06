@@ -7,6 +7,7 @@ import { PlayerProfilePage } from './PlayerProfile';
 import profile from './__fixtures__/api_players_identifier_profile.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
+import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';
 
 /** The player page against the RECORDED profile (vid, sections=all). */
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
@@ -20,6 +21,9 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   }
   if (/^\/api\/skill\/player\/[^/]+\/history$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(skillHistory) } as Response);
+  }
+  if (/^\/api\/players\/[^/]+\/memory-card$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(memoryCard) } as Response);
   }
   return Promise.reject(new Error(`unexpected endpoint: ${path}`));
 }
@@ -341,6 +345,19 @@ describe('PlayerProfile — rating trends', () => {
     expect(screen.getByText('vs 276')).toBeInTheDocument();
   });
 
+  it('⛔ each breakdown row draws its OWN series, not just the composite', async () => {
+    // The series arrived on every load and went nowhere: the page read
+    // `composite` and ignored the `metrics` block beside it. One sparkline for
+    // the composite plus one per breakdown row that has a series.
+    const { container } = renderProfile('AAAA1111');
+    await waitFor(() => expect(screen.getByText('86.5')).toBeInTheDocument());
+    const section = container.querySelector('[data-parity="profile.form"]');
+    expect(section).not.toBeNull();
+    const sparks = within(section as HTMLElement).getAllByRole('img', { name: 'trend' });
+    // composite + the six metrics the recording carries.
+    expect(sparks.length).toBe(1 + skillForm.composite.breakdown.length);
+  });
+
   it('the rating timeline is newest first and shows the running figure', async () => {
     renderProfile('AAAA1111');
     // ⚠️ Wait on the DATA, not on the heading: the SectionHead renders while
@@ -412,5 +429,44 @@ describe('PlayerProfile — rating trends', () => {
     expect(screen.getByText(/rating history: unavailable/i)).toBeInTheDocument();
     // The rest of the profile is untouched — five instruments, five states.
     expect(screen.getByText('rating over time')).toBeInTheDocument();
+  });
+});
+
+describe('PlayerProfile — memory card', () => {
+  it('renders every fact the server sends, with its sub-line', async () => {
+    renderProfile('AAAA1111');
+    await waitFor(() => expect(screen.getByText('Best round ever')).toBeInTheDocument());
+    expect(screen.getByText('28 kills')).toBeInTheDocument();
+    expect(screen.getByText('etl_sp_delivery · 2025-03-23')).toBeInTheDocument();
+    expect(screen.getByText('Longest killing spree')).toBeInTheDocument();
+    expect(screen.getByText(/never a ladder/)).toBeInTheDocument();
+  });
+
+  it('⛔ these are CAREER facts, not the season ones wrapped shows', async () => {
+    // The recorded career best round is 28 KILLS on etl_sp_delivery; wrapped's
+    // same-named card is a best DPM for the season. If someone ever wires this
+    // section to the wrapped payload because the labels match, this fails.
+    const { container } = renderProfile('AAAA1111');
+    await waitFor(() => expect(screen.getByText('Signature map')).toBeInTheDocument());
+    // ⚠️ Scoped: the Maps section lists `supply` too, so a page-wide query
+    // finds two and fails on the ambiguity rather than on the code.
+    const section = container.querySelector('[data-parity="profile.memory-card"]');
+    expect(within(section as HTMLElement).getByText('supply')).toBeInTheDocument();
+    // career signature = lift over the player's own average, not win rate
+    expect(screen.getByText('+50% vs your average · 218 rounds')).toBeInTheDocument();
+  });
+
+  it('a failed keepsake says so instead of vanishing', async () => {
+    // ⛔ Legacy renders nothing at all on failure. A section that disappears
+    // silently is indistinguishable from one that has no data, and the new
+    // convention is that a missing thing names itself.
+    renderProfile('AAAA1111', (input) => {
+      const path = String(input).split('?')[0];
+      if (/memory-card$/.test(path)) {
+        return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({ detail: 'x' }) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/memory card: unavailable/i)).toBeInTheDocument());
   });
 });

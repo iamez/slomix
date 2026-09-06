@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router';
 import {
   usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
-  useSkillPlayerForm, useSkillPlayerHistory,
+  useMemoryCard, useSkillPlayerForm, useSkillPlayerHistory,
 } from '../lib/queries';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
@@ -463,6 +463,48 @@ function Spark({ values, w = 110, h = 26 }: { values: number[]; w?: number; h?: 
   );
 }
 
+/** The memory card — a career keepsake, measured against this player's own
+ *  past (legacy loadMemoryCard, player-profile.js:812).
+ *
+ *  ⚠️ Two of its facts share their names with WRAPPED cards and are not the
+ *  same numbers: wrapped's are per season (signature = most played with a
+ *  win %, best round = best DPM), these are career (signature = biggest lift
+ *  over the player's own average, best round = most kills). Measured before
+ *  writing, because the names alone say "already covered".
+ *
+ *  ⛔ Legacy renders NOTHING on failure — "optional keepsake, never block the
+ *  profile". The new convention says a missing thing names itself, so a 404
+ *  becomes a reason, not a silence: a keepsake that vanishes without a word is
+ *  indistinguishable from one that broke. */
+function MemoryCardSection({ playerId }: { playerId: string }) {
+  const card = useMemoryCard(playerId);
+  const facts = card.data?.facts ?? [];
+  return (
+    <div data-parity="profile.memory-card" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="memory card" />
+      <Meta>a keepsake of your slomix history — measured against your own past, never a ladder</Meta>
+      {card.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="memory card" /></div>}
+      {card.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="memory card" /></div>}
+      {card.data != null && facts.length === 0 && (
+        <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="nothing to keep yet — the card needs rounds behind it" /></div>
+      )}
+      {facts.length > 0 && (
+        <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+          {facts.map((f) => (
+            <Cluster key={f.key} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
+              <Lbl>{f.label}</Lbl>
+              <Cluster gap={3} align="baseline">
+                <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{f.value}</span>
+                {f.sub != null && f.sub !== '' && <Meta>{f.sub}</Meta>}
+              </Cluster>
+            </Cluster>
+          ))}
+        </Stack>
+      )}
+    </div>
+  );
+}
+
 /** "Your form" — the last session against this player's OWN recent average
  *  (legacy loadPlayerForm, player-profile.js:696). Rank-vs-self, and the page
  *  prints the server's own `baseline_desc` so nobody reads it as a ladder. */
@@ -493,6 +535,22 @@ function PlayerForm({ playerId }: { playerId: string }) {
               <Cluster key={b.metric} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
                 <Lbl>{b.label}</Lbl>
                 <Cluster gap={4} align="baseline">
+                  {/* ⭐ The per-metric SERIES, which this page already had and
+                    * was not drawing. `/api/skill/player/{guid}/form` returns a
+                    * `metrics` block alongside `composite`, and the page read
+                    * only the composite — so the DPM and K/D curves arrived on
+                    * every load and went nowhere.
+                    *
+                    * Measured against `/api/stats/player/{name}/form`, whose
+                    * ratchet line this does NOT close: the last eleven points
+                    * agree to rounding (275.36 / 257.69 / 265.57 … against
+                    * 275.4 / 257.7 / 265.6 …). What only that endpoint has is
+                    * a date per point, rounds per session, an average line and
+                    * a 6-session trend — so the line stays, and this draws the
+                    * shape we were already paying for. */}
+                  {d.metrics[b.metric] != null && d.metrics[b.metric].series.length > 1 && (
+                    <Spark values={d.metrics[b.metric].series} w={72} h={18} />
+                  )}
                   <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{b.latest ?? '—'}</span>
                   <Meta>vs {b.baseline ?? '—'}</Meta>
                   <Delta pct={b.delta_pct} />
@@ -720,6 +778,7 @@ export function PlayerProfilePage() {
           <Header p={p} />
           <Lifetime p={p} />
           <RatingComponents playerId={playerId} />
+          <MemoryCardSection playerId={playerId} />
           <PlayerForm playerId={playerId} />
           <RatingHistory playerId={playerId} />
           <Streaks p={p} />
