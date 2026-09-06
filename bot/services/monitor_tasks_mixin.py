@@ -204,6 +204,14 @@ class _MonitorTasksMixin:
 
             if not remote_files:
                 logger.debug("📂 No remote files found or SSH connection failed")
+                # ⛔⛔ THE SSH CALL SUCCEEDED. An empty listing is a healthy
+                # cycle — the server simply has nothing new — so the failure
+                # streak ends here, exactly as it would three lines further
+                # down. Without this the counter survives every quiet evening
+                # and "3 consecutive failures" comes to mean "3 since the bot
+                # last had files to fetch", which can be days apart. On
+                # 2026-09-06 this was the most-taken early return in the loop.
+                await self.reset_error_tracking("ssh_monitor")
                 return
 
             logger.debug(f"📂 Found {len(remote_files)} total files on remote server")
@@ -302,7 +310,7 @@ class _MonitorTasksMixin:
                 logger.info(f"🎉 Processed {new_files_count} new file(s) this check")
 
             # Reset error tracking on successful cycle
-            self.reset_error_tracking("ssh_monitor")
+            await self.reset_error_tracking("ssh_monitor")
 
         except Exception as e:
             logger.error(f"❌ endstats_monitor error: {e}", exc_info=True)
@@ -934,6 +942,8 @@ class _MonitorTasksMixin:
                 # authenticates only when the config happens to be absolute
                 key_filename=_os.path.expanduser(self.config.ssh_key_path),
                 timeout=10,
+                banner_timeout=45,
+                auth_timeout=45,
             )
             sftp = ssh.open_sftp()
             # a hung remote read would otherwise block the worker thread

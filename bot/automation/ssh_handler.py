@@ -17,6 +17,8 @@ import logging
 import os
 import posixpath
 import re
+import socket
+import time
 
 logger = logging.getLogger("bot.automation.ssh")
 
@@ -27,6 +29,52 @@ SAFE_STATS_FILENAME_PATTERN = re.compile(
 SAFE_GAMETIME_FILENAME_PATTERN = re.compile(
     r"^gametime-[A-Za-z0-9_.+-]+-R\d+-\d+\.json$"
 )
+
+
+#: A handshake slower than this is worth a line in the log. Set below the
+#: banner ceiling on purpose: raising a timeout without measuring what it hides
+#: turns a noisy alarm into a silent degradation, and the slowness itself is a
+#: useful signal about the game host.
+SLOW_HANDSHAKE_SECONDS = 3.0
+
+
+def _log_slow_handshake(what: str, started: float) -> None:
+    """Record a handshake that took long enough to be worth knowing about."""
+    elapsed = time.monotonic() - started
+    if elapsed >= SLOW_HANDSHAKE_SECONDS:
+        logger.warning(f"⏱️ SSH {what} handshake took {elapsed:.1f}s")
+
+
+def _describe_ssh_failure(exc: Exception) -> str:
+    """Name which failure this is, because paramiko gives two of them one name.
+
+    ⛔⛔ ONE MESSAGE, TWO CAUSES. Both of these surface as
+    ``SSHException("Error reading SSH protocol banner")``:
+
+    * the banner did not arrive in time — the server is slow or overloaded;
+    * ``OSError: [Errno 9] Bad file descriptor`` — the socket was closed while
+      paramiko was reading it, which is a local problem, not a slow server.
+
+    On 2026-09-06 the bot logged **11 of each** inside one 30-minute window and
+    reported them identically, so nobody could tell that two different things
+    were happening — and the April timeout fix therefore aimed at only one of
+    them. A cause that shares a name with another cause cannot be counted,
+    graphed, or fixed separately.
+    """
+    root = exc
+    while root.__cause__ is not None or root.__context__ is not None:
+        nxt = root.__cause__ or root.__context__
+        if nxt is root:
+            break
+        root = nxt
+
+    if isinstance(root, socket.timeout | TimeoutError):
+        return f"{exc} [banner/read timed out — remote slow]"
+    if isinstance(root, OSError) and root.errno == 9:
+        return f"{exc} [socket closed under the read — local]"
+    if isinstance(root, OSError):
+        return f"{exc} [{type(root).__name__}: {root}]"
+    return str(exc)
 
 
 class SSHConnectionError(Exception):
@@ -166,8 +214,9 @@ class SSHHandler:
             raise SSHConnectionError("SSH list files timed out after 30 seconds")
 
         except Exception as e:
-            logger.error(f"❌ SSH list files failed: {e}")
-            raise SSHConnectionError(f"SSH list files failed: {e}") from e
+            detail = _describe_ssh_failure(e)
+            logger.error(f"❌ SSH list files failed: {detail}")
+            raise SSHConnectionError(f"SSH list files failed: {detail}") from e
 
     @staticmethod
     def _list_files_sync(
@@ -185,17 +234,34 @@ class SSHHandler:
         sftp = None
 
         try:
-            # 20s connect timeout (was 10s) — EU peak latency can push SSH
-            # auth handshake past 10s on shared links. Paired with the 30s
-            # asyncio.wait_for outer timeout so a hung handshake cannot keep
-            # the event loop waiting indefinitely.
+            # ⛔⛔ THREE SEPARATE TIMEOUTS, AND `timeout` IS NOT THE ONE THAT
+            # WAS FAILING. paramiko's `timeout` is the TCP connect budget;
+            # reading the server's SSH banner has its own `banner_timeout`
+            # (default 15) and authentication a third, `auth_timeout`.
+            #
+            # 6545797c (2026-04-20) raised `timeout` 10 -> 20 in response to
+            # exactly the failure seen on 2026-09-06 — "the SSH auth handshake
+            # alone can exceed 10s … observed in prod during EU evening peak".
+            # It could not help: the banner read gives up at 15s, which is
+            # BELOW the 20 it set. Five months of looking fixed.
+            #
+            # Measured that day: the banner latency distribution shifted right
+            # (2026-09-05: 1492 polls answered within a second, thin tail;
+            # 2026-09-06: 875 within a second and a tail out past 13s), and the
+            # 15s ceiling clipped it. 45s is above the observed tail with room,
+            # and _connect_timing below records what the handshake actually
+            # cost so a longer ceiling does not simply hide the slowness.
+            handshake_started = time.monotonic()
             ssh.connect(
                 hostname=ssh_config["host"],
                 port=ssh_config["port"],
                 username=ssh_config["user"],
                 key_filename=key_path,
                 timeout=20,
+                banner_timeout=45,
+                auth_timeout=45,
             )
+            _log_slow_handshake("list", handshake_started)
 
             sftp = ssh.open_sftp()
 
@@ -279,15 +345,18 @@ class SSHHandler:
         sftp = None
 
         try:
-            # 20s connect timeout (was 10s) — EU peak latency can push SSH
-            # auth handshake past 10s on shared links.
+            # Same three-timeout story as the listing path above.
+            handshake_started = time.monotonic()
             ssh.connect(
                 hostname=ssh_config["host"],
                 port=ssh_config["port"],
                 username=ssh_config["user"],
                 key_filename=key_path,
                 timeout=20,
+                banner_timeout=45,
+                auth_timeout=45,
             )
+            _log_slow_handshake("download", handshake_started)
 
             sftp = ssh.open_sftp()
 

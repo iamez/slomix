@@ -229,3 +229,68 @@ def test_parse_date_and_time_are_strings():
     )
     assert out["date"] == "2026-01-12"
     assert out["time"] == "100000"
+
+
+# ---------------------------------------------------------------------------
+# _describe_ssh_failure — one paramiko message, two different failures
+# ---------------------------------------------------------------------------
+
+
+def _banner_error(cause: Exception) -> Exception:
+    """Rebuild what paramiko raises: SSHException chained onto a root cause
+    (transport.py:2218 wraps whatever the socket read threw)."""
+    from bot.automation.ssh_handler import SSHConnectionError  # noqa: F401
+    try:
+        try:
+            raise cause
+        except Exception as inner:
+            raise Exception("Error reading SSH protocol banner") from inner
+    except Exception as outer:
+        return outer
+
+
+def test_a_slow_server_and_a_closed_socket_stop_sharing_one_name():
+    """⛔⛔ THE POINT OF THIS HELPER. On 2026-09-06 the bot logged 11 socket
+    timeouts and 11 `[Errno 9] Bad file descriptor` inside one 30-minute
+    window, and reported both as the same sentence — so nobody could see that
+    two different things were happening, and the April timeout fix aimed at
+    only one of them."""
+    from bot.automation.ssh_handler import _describe_ssh_failure
+
+    slow = _describe_ssh_failure(_banner_error(TimeoutError()))
+    closed = _describe_ssh_failure(_banner_error(OSError(9, "Bad file descriptor")))
+
+    assert "remote slow" in slow
+    assert "local" in closed
+    assert slow != closed, "the two causes must not render identically"
+    # The original sentence survives — it is what operators grep for.
+    assert "Error reading SSH protocol banner" in slow
+    assert "Error reading SSH protocol banner" in closed
+
+
+def test_an_unrecognised_failure_keeps_its_own_words():
+    """A cause this helper has no label for must pass through unchanged rather
+    than be forced into one of the two known buckets."""
+    from bot.automation.ssh_handler import _describe_ssh_failure
+
+    plain = Exception("Authentication failed.")
+    assert _describe_ssh_failure(plain) == "Authentication failed."
+
+
+def test_a_slow_handshake_is_logged_and_a_fast_one_is_not(caplog):
+    """⛔ Raising a ceiling without measuring what it hides turns a noisy alarm
+    into a silent degradation. The banner ceiling went 15 -> 45; this is what
+    keeps the slowness visible."""
+    import time
+
+    from bot.automation import ssh_handler
+
+    with caplog.at_level("WARNING", logger="bot.automation.ssh"):
+        ssh_handler._log_slow_handshake("list", time.monotonic())
+        assert caplog.records == []
+
+        ssh_handler._log_slow_handshake(
+            "list", time.monotonic() - (ssh_handler.SLOW_HANDSHAKE_SECONDS + 1)
+        )
+        assert len(caplog.records) == 1
+        assert "handshake took" in caplog.records[0].message

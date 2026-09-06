@@ -6,7 +6,7 @@ All methods live on UltimateETLegacyBot via mixin inheritance.
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 import discord
 
@@ -105,6 +105,12 @@ class _AdminAlertMixin:
         self._consecutive_errors[error_key] = self._consecutive_errors.get(error_key, 0) + 1
         count = self._consecutive_errors[error_key]
 
+        # When a streak begins, remember when — the recovery notice says how
+        # long the service was down, and "it is back" without "for how long"
+        # is barely more useful than silence.
+        if count == 1:
+            self._error_streak_started[error_key] = datetime.now(timezone.utc)
+
         if count == max_consecutive:
             await self.alert_admins(
                 f"{error_key.replace('_', ' ').title()} Failing",
@@ -113,6 +119,10 @@ class _AdminAlertMixin:
                 f"This service may need attention.",
                 severity="error"
             )
+            # ⛔ Only a key that actually woke somebody may announce recovery.
+            # Without this, every quiet reset would page the admins to say
+            # nothing happened.
+            self._alerted_keys.add(error_key)
         elif count > max_consecutive and count % 10 == 0:
             # Reminder every 10 failures after threshold
             await self.alert_admins(
@@ -124,7 +134,52 @@ class _AdminAlertMixin:
 
         return count
 
-    def reset_error_tracking(self, error_key: str):
-        """Reset consecutive error count for a key (call on success)."""
+    async def reset_error_tracking(self, error_key: str):
+        """Clear the counter and, if this key alerted, say that it recovered.
+
+        ⛔⛔ THE MISSING HALF OF THE STATE MACHINE. Until 2026-09-06 this
+        method was silent: it set the counter to 0 and told nobody. The owner
+        therefore saw an ERROR at 14:56 and never learnt that the service was
+        healthy again by 15:02 — from Discord alone, the outage is still
+        running. An alerting path with only the failing edge instrumented does
+        not report a service's state; it reports a monotonically growing list
+        of complaints.
+
+        ⛔ Recovery is announced ONLY for a key that actually alerted. A reset
+        happens on every healthy cycle, and pinging admins to say nothing
+        happened would train them to ignore the channel — which costs more
+        than the missing notice did.
+        """
+        count = self._consecutive_errors.get(error_key, 0)
+        started = self._error_streak_started.pop(error_key, None)
+        had_alerted = error_key in self._alerted_keys
+
+        # ⛔ Only zero a key that exists. A reset for a key never tracked must
+        # NOT create an entry — resets run on every healthy cycle for several
+        # services, and inventing keys would grow this dict without bound.
+        # (Pinned since before this change: test_reset_error_tracking_no_op_
+        # for_unknown_key. I dropped the guard while adding recovery and the
+        # test caught it.)
         if error_key in self._consecutive_errors:
             self._consecutive_errors[error_key] = 0
+        self._alerted_keys.discard(error_key)
+
+        if not had_alerted:
+            return
+
+        if started is not None:
+            elapsed = datetime.now(timezone.utc) - started
+            minutes = max(1, round(elapsed.total_seconds() / 60))
+            span = f"after {minutes} minute{'s' if minutes != 1 else ''}"
+        else:
+            # The streak began before this process did (the counters live in
+            # memory only), so the duration is genuinely unknown — say so
+            # rather than print a number that would be a guess.
+            span = "after an unknown period"
+
+        await self.alert_admins(
+            f"{error_key.replace('_', ' ').title()} Recovered",
+            f"**Back to normal {span}.**\n\n"
+            f"{count} consecutive failure{'s' if count != 1 else ''} before this cycle succeeded.",
+            severity="info",
+        )

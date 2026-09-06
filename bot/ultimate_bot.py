@@ -323,6 +323,11 @@ class UltimateETLegacyBot(
 
         # 🚨 Error tracking for admin notifications
         self._consecutive_errors = {}
+        # Which keys have actually paged the admins, and when each failure
+        # streak began — both needed so recovery can be announced once, with a
+        # duration, and only for a key somebody was told about.
+        self._alerted_keys: set[str] = set()
+        self._error_streak_started: dict[str, datetime] = {}
 
     # =========================================================================
     # 🚨 ADMIN NOTIFICATION SYSTEM
@@ -1004,7 +1009,9 @@ class UltimateETLegacyBot(
                     port=ssh_config['port'],
                     username=ssh_config['user'],
                     key_filename=os.path.expanduser(ssh_config['key_path']),
-                    timeout=10
+                    timeout=10,
+                    banner_timeout=45,
+                    auth_timeout=45,
                 )
 
                 safe_path = shlex.quote(ssh_config['remote_path'])
@@ -1151,7 +1158,7 @@ class UltimateETLegacyBot(
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
 
                 # Reset error tracking on success
-                self.reset_error_tracking("file_processing")
+                await self.reset_error_tracking("file_processing")
 
                 # Apply override metadata from Lua webhook if provided
                 # This gives us accurate timing even on surrenders
@@ -1198,7 +1205,7 @@ class UltimateETLegacyBot(
                     logger.debug(f"Failed to mark {filename} as processed: {e}")
 
                 # Reset error tracking on success
-                self.reset_error_tracking("file_processing")
+                await self.reset_error_tracking("file_processing")
 
                 # Live achievements: announce new milestones (non-blocking)
                 if stats_data:
