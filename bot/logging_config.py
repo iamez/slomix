@@ -71,6 +71,40 @@ class GroupWritableRotatingFileHandler(logging.handlers.RotatingFileHandler):
         self._fix_permissions()
 
 # Custom formatter with more context
+#: Third-party loggers that report a failure by emitting its whole traceback,
+#: one ERROR record per line. Our own code already logs these failures in a
+#: single line with a cause it has unwrapped, so the library's copy is a
+#: duplicate — an expensive one.
+#:
+#: ⛔⛔ MEASURED, not guessed. In one 2026-09-06 SSH incident the owner's
+#: `journalctl -u etlegacy-bot | grep -iE "warn|error"` showed 48 ERROR lines.
+#: Two of them were events. The other 46 were paramiko.transport printing two
+#: tracebacks — a 24x inflation that made a pair of failures read as an
+#: outage, and buried the SLOW QUERY and KIS-RECONCILE lines that mattered.
+NOISY_TRACEBACK_LOGGERS = ("paramiko.transport",)
+
+
+class SuppressNoisyTracebacks(logging.Filter):
+    """Drop records from libraries that duplicate what our own logger says.
+
+    ⛔ Attached to HANDLERS, never to the logger, and deliberately not to
+    bot.log. Setting the level on `paramiko.transport` itself would stop the
+    record from ever being created, and the full traceback is exactly what a
+    concurrency bug needs: `[Errno 9] Bad file descriptor` means a socket was
+    closed under paramiko's thread, and that is diagnosed from frames, not
+    from a summary. So the traceback stays whole in bot.log; only the two
+    surfaces a human reads for triage — the console (which is what journalctl
+    shows) and errors.log — are spared the copy.
+    """
+
+    def __init__(self, prefixes=NOISY_TRACEBACK_LOGGERS):
+        super().__init__()
+        self.prefixes = tuple(prefixes)
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not record.name.startswith(self.prefixes)
+
+
 class DetailedFormatter(logging.Formatter):
     """Custom formatter with color support for console and detailed info for files"""
 
@@ -140,6 +174,9 @@ def setup_logging(log_level=logging.INFO):
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level)
     console_handler.setFormatter(DetailedFormatter(use_colors=True))
+    # The console is what `journalctl -u etlegacy-bot` prints, so this is the
+    # surface the owner actually greps.
+    console_handler.addFilter(SuppressNoisyTracebacks())
     root_logger.addHandler(console_handler)
 
     # ==================== MAIN BOT LOG FILE ====================
@@ -167,6 +204,7 @@ def setup_logging(log_level=logging.INFO):
     error_file_handler._fix_permissions()  # noqa: SLF001 - own subclass, fixing perms right after creation matters here
     error_file_handler.setLevel(logging.WARNING)  # Changed from ERROR to WARNING
     error_file_handler.setFormatter(DetailedFormatter(use_colors=False))
+    error_file_handler.addFilter(SuppressNoisyTracebacks())
     root_logger.addHandler(error_file_handler)
 
     def _reset_child_logger(logger_obj):
