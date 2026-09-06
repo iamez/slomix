@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **3** (dolg r. 1 zapre `/api/diagnostics`; ostanejo `/api/bets`, `/api/bets/market` = ownerjeva odločitev, `/api/stats/sessions` = z upokojitvijo legacy JS) |
+| endpoint gap (H1) | **13** — prešteto v `tests/data/endpoint_gap.txt` 6. 9. ob 20:40 |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -42,8 +42,6 @@ deploy NI naloga.
 Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
 degradacije (PR #946) → (4) doc 19 r. 1 register datasetov (PR #947) → (1)
 watchdog r. 1 (obseg `docs/design/24`, lokalno).
-degradacije (PR #946) → (4) doc 19 r. 1 register datasetov → (1) watchdog r. 1
-(obseg `docs/design/24`, lokalno).
 
 - **(2) proximity guid prefiks — NAREJENO 6. 9.** Izmerjeno: 34 polnih guidov →
   23 prefiksov; edini kolizijski prefiksi so botovski (`OMNIBOT0` ×9, `OMNIBOT1`
@@ -232,7 +230,7 @@ degradacije (PR #946) → (4) doc 19 r. 1 register datasetov → (1) watchdog r.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | ⛔ **16** — merjeno 3, dokler ekstraktor ni bral čez interpolacije (popravek 5. 9.; 16 endpointov je bilo nevidnih). Popravek: 4 → 3 (rezina 3), nato 3 → 19 (korekcija), nato 19 → 16 (faza 7) |
+| endpoint gap | **13** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
