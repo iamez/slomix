@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAvailabilityAccess, useBuildInfo, useDiagnostics, useOverview, useSystemOverview } from '../lib/queries';
 import { API_PROBES, runProbes, type ProbeResult } from '../lib/probes';
-import { Absent, Lbl, Pending, StatusDot, Unavailable, figure, lblStyle, rowStyle } from '../components/ui';
+import { Absent, Lbl, Pending, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
 import { DiagnosticsReport } from '../components/DiagnosticsReport';
 import { ApiError } from '../lib/api';
 
