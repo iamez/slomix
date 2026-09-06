@@ -7,6 +7,9 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, noč) Faza 7 r. 1 (compare + wrapped) zgrajena na
+  veji `feat/site-phase7-compare-wrapped` (od dolga r. 1, #919 — ta je v CI
+  padel na Python job: preveri). Odprto v fazi 7: clips (O1), končni prelet.
 - (Fable 5.1, 2026-09-06) SKOK: owner → »dokončajva novo stran« (dolg → faza
   7 → pregledni PR). Doc 19 (per-user pogled) pavziran v plan modu, ničesar
   napisanega. Dolg r. 1 (veja `feat/site-debt-keymap-replay-diagnostics`):

@@ -244,5 +244,23 @@
     "phase": 1,
     "note": "The component workshop (docs/design/11, plan A3). Deliberately `hidden`: it is a surface for whoever is reworking layout, not a page for readers, and it calls no endpoint so it cannot break with the data.",
     "built": true
+  },
+  {
+    "key": "compare",
+    "path": "/compare/:a?/:b?",
+    "label": "Compare",
+    "nav": "hidden",
+    "phase": 7,
+    "built": true,
+    "note": "phase 7: legacy compare.js was a modal inside the profile, not a route; two guids in the URL make the comparison shareable"
+  },
+  {
+    "key": "wrapped",
+    "path": "/profile/:id/wrapped",
+    "label": "Wrapped",
+    "nav": "hidden",
+    "phase": 7,
+    "built": true,
+    "note": "phase 7: legacy wrapped.js was an overlay opened from the profile; a route makes the season card linkable"
   }
 ]

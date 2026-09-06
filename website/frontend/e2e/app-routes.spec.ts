@@ -234,3 +234,24 @@ test('the legacy replay page lands where rounds are picked, and never asks an an
   expect(page.locator('[data-parity="admin.diagnostics"]')).toHaveCount(0);
   expect(asked.filter((u) => /\/api\/diagnostics(\?|$)/.test(u))).toEqual([]);
 });
+
+test('phase 7: compare shows the six lifetime rows for two players, wrapped lists eight facts beside the card', async ({ page }) => {
+  await page.goto('/app/compare/D8423F90/E587CA5F', { waitUntil: 'domcontentloaded' });
+  const table = page.locator('[data-parity="compare.table"]');
+  await expect(table).toBeVisible();
+  // Two profiles, both possibly cold (a first hit measured > 5 s): wait for
+  // the rows, not for the default 5 s.
+  await expect(table.locator('.row')).toHaveCount(6, { timeout: 30_000 });
+  await expect(table).toContainText('lower wins');
+  await page.goto('/app/profile/D8423F90/wrapped', { waitUntil: 'domcontentloaded' });
+  const facts = page.locator('[data-parity="wrapped.facts"]');
+  await expect(facts).toBeVisible({ timeout: 30_000 });
+  await expect(facts.locator('.row')).toHaveCount(8);
+  // The card is drawn in the browser: the export buttons unlock.
+  await expect(page.getByRole('button', { name: 'download png' })).toBeEnabled();
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'download png' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(/^slomix-wrapped-.+\.png$/);
+});

@@ -19,6 +19,8 @@ const FOLDED = new Map<string, string>([
 /** Sample params so buildHash() emits its non-empty shape per key. */
 const SAMPLE_PARAMS = new Map<string, Record<string, unknown>>(Object.entries({
   profile: { id: 'E587CA5F' },
+  compare: { a: 'E587CA5F', b: 'D8423F90' },
+  wrapped: { id: 'E587CA5F' },
   'proximity-player': { guid: '1C747DF1' },
   'proximity-replay': { roundId: '11277' },
   'proximity-teams': { roundId: '11277' },

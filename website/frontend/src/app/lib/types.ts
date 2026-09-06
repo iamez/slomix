@@ -4273,3 +4273,24 @@ export interface Diagnostics {
   monitoring: Record<string, { count?: number; last_recorded_at?: string | null } | unknown>;
   pool?: Record<string, unknown>;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Wrapped (legacy wrapped.js): GET /api/players/{identifier}/wrapped
+// ?season=current|YYYY-QN. Season-scoped highlights for a share card.
+
+export interface WrappedCard {
+  key: string;
+  label: string;
+  value: string;
+  sub?: string;
+}
+
+export interface Wrapped {
+  status: string;
+  guid: string;
+  season_id: string;
+  season_name: string;
+  player_name: string;
+  /** Empty when the player has no rounds in the season — the page says so. */
+  cards: WrappedCard[];
+}
