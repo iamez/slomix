@@ -312,6 +312,40 @@ zmaga v 83,2 %, pri hudih (n=41) v 97,6 %.
 ⭐ **Nova najdba 2. 9.:** `revives_given` je 0 na vseh 5.538 vrsticah pred
 2025-12 — vsaka vseskozna revive lestvica se tiho začne decembra 2025.
 
+## Proga: SSH monitor / alarmiranje (Opus 5) — PR #923, ODPRT
+
+Sprožil ownerjev alarm na #privat 6. 9.: »Ssh Monitor Failing / 3 consecutive
+failures / Error reading SSH protocol banner«.
+
+**Štiri rezine, vse na veji `fix/ssh-monitor-says-what-it-knows`:**
+
+1. `55a0e555` — monitor pove, kar ve: dva vzroka pod enim imenom ločena
+   (`[banner/read timed out — remote slow]` proti `[socket closed under the
+   read — local]`), `banner_timeout/auth_timeout=45` na vseh petih mestih,
+   okrevanje se objavi, proximity dobi glas.
+2. `d909fb68` — »consecutive« končno pomeni zaporedne: `STREAK_WINDOW` 30 min
+   na **enem** mestu velja za vseh devet ključev (šest jih ni imelo reseta —
+   ⚠️ ne sedem od osmih, prešteto je šest od devetih).
+3. `7f3dba7a` — Full Jitter razmik pollerjev + **en** ponoven poskus listinga,
+   samo za `remote slow`. ⛔ Iskanje je prvo postavko obrnilo iz »zgradi pool«
+   v **ne gradi poola**: `connect()` ni thread-safe (paramiko #1904), naše
+   operacije tečejo v nitih izvajalca.
+4. `443818b7` — nizi preživijo restart (`logs/bot_error_streaks.json`).
+   ⛔⛔ Restart ni izgubil le zgodovine, **odložil je naslednji alarm**.
+   ⛔⛔ `STREAK_WINDOW` velja tudi ob **branju**, sicer bi trajnost ustvarila
+   lažni »Recovered« za izpad, ki je minil pred restartom.
+   Datoteka in ne tabela: alarmna pot ne sme viseti na tem, o čemer alarmira;
+   brez migracije torej brez prod deploya.
+
+**Stanje:** CI zelen (Codacy `fail` s 3 issues je bil identičen že pred
+rezino 4). ⛔ **Ni mergano** — ownerjeva beseda.
+
+⚠️ **Restart brez merga ne pobere ničesar:** ownerjev restart 6. 9. ob 17:17 je
+zagnal `origin/main`, kjer od #923 ni nobene vrstice.
+
+**Odprto, izrecno nedokončano:** ena povezava na cikel namesto ena na datoteko
+(predelava produkcijske poti, svoja rezina in svoj pogovor).
+
 ## Odprte ownerjeve odločitve
 
 - doc 19 (per-user pogled): zajem globalno ali per-server; zgodovina ob
