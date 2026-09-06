@@ -80,11 +80,36 @@ def test_db_connection_pressure_is_a_warning():
     assert wd.check_db({"connections": 5, "max_connections": 100}).level == "ok"
 
 
-def test_rounds_fail_when_the_bots_monitor_stopped_writing():
+def test_rounds_fail_when_the_bots_monitor_stopped_writing_and_say_both_causes():
     db = {"newest_server_status": wd.dt.datetime.fromtimestamp(NOW - 3600, wd.dt.timezone.utc).isoformat(),
           "players_now": 0, "newest_round": None}
     f = wd.check_rounds(db, NOW)
-    assert f.level == "fail" and "300 s monitor" in f.reason
+    assert f.level == "fail"
+    # the loop survives its own exceptions (monitoring_service.py:277-279), so
+    # a stale row is not proof the event loop is dead — the finding says both
+    assert "bot is down, or its monitor loop is failing" in f.reason
+    assert "event loop is not running" not in f.reason
+
+
+def test_rounds_threshold_follows_the_configured_interval():
+    db = {"newest_server_status": wd.dt.datetime.fromtimestamp(NOW - 1500, wd.dt.timezone.utc).isoformat(),
+          "players_now": 0, "newest_round": None}
+    assert wd.check_rounds(db, NOW, server_interval_s=300).level == "fail"     # 3×300 → 900 floor
+    assert wd.check_rounds(db, NOW, server_interval_s=600).level == "ok"       # 3×600 = 1800
+
+
+def test_rounds_no_rows_at_all_is_unknown_not_a_dead_bot():
+    """MONITORING_ENABLED=false starts no MonitoringService and the start is
+    wrapped in a logged try/except (ultimate_bot.py:2164-2175): an empty
+    table is 'never wrote', not 'died'."""
+    f = wd.check_rounds({"newest_server_status": None, "players_now": 0, "newest_round": None}, NOW)
+    assert f.level == "unknown" and "MONITORING_ENABLED" in f.reason
+
+
+def test_rounds_is_unknown_when_the_database_cannot_be_asked():
+    """Reading liveness from the database must not turn a database outage
+    into 'the bot is dead' — the db finding owns that alert."""
+    assert wd.check_rounds({"error": "connect: OSError"}, NOW).level == "unknown"
 
 
 def test_rounds_warn_only_when_players_are_on_and_no_round_lands():

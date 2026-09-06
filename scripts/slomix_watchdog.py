@@ -99,7 +99,7 @@ def load_config(repo_root: Path = REPO, environ: dict | None = None) -> dict[str
             values.update({k: v for k, v in (dotenv_values(root_env) or {}).items() if v is not None})
         except ImportError:
             pass
-    values.update({k: v for k, v in environ.items() if k.startswith(("WATCHDOG_", "POSTGRES_", "BOT_LOG_DIR"))})
+    values.update({k: v for k, v in environ.items() if k.startswith(("WATCHDOG_", "POSTGRES_", "BOT_LOG_DIR", "MONITORING_"))})
     logs_dir = Path(values.get("BOT_LOG_DIR") or (repo_root / "logs"))
     values.setdefault("WATCHDOG_DB_USER", "etlegacy_user")
     values.setdefault("WATCHDOG_WEB_URL", "http://127.0.0.1:8000")
@@ -303,17 +303,28 @@ def check_db(db: dict[str, Any]) -> Finding:
     return Finding("db", "ok", value={"connections": conns, "max": maxc})
 
 
-def check_rounds(db: dict[str, Any], now: float) -> Finding:
+def check_rounds(db: dict[str, Any], now: float, server_interval_s: int = 300) -> Finding:
     """A round file that never became a row. Gated on activity: the bot's
-    monitoring cadence (server 300 s / voice 60 s) says whether the bot is
-    alive, and players_now says whether anyone is playing."""
+    MonitoringService writes server_status_history every `server_interval_s`
+    (MONITORING_SERVER_INTERVAL_SECONDS, default 300) with no gate of its own,
+    so a stale MAX(recorded_at) means the bot is down OR its monitor loop is
+    failing every tick (it survives its own exceptions and sleeps 60 s) — the
+    finding says both, never "the event loop is dead". No row at all means the
+    service was never started (MONITORING_ENABLED), which is unknown, not a
+    failure. A database that cannot be asked is `unknown` upstream."""
     if "error" in db:
-        return Finding("rounds", "unknown", reason="no database")
+        return Finding("rounds", "unknown", reason="no database — the bot's liveness cannot be read from it")
+    if not db.get("newest_server_status"):
+        return Finding("rounds", "unknown",
+                       reason="server_status_history has no rows — MonitoringService never wrote here (MONITORING_ENABLED?)",
+                       suggest="grep -n MONITORING_ENABLED .env ; journalctl --no-pager -u etlegacy-bot -n 50")
+    threshold = max(900, 3 * int(server_interval_s))
     server_age = _age(db.get("newest_server_status"), now)
-    if server_age is None or server_age > 900:
-        return Finding("rounds", "fail", value=server_age, threshold=900,
-                       reason=f"server_status_history has not been written for {_fmt_age(server_age)} — the bot's event loop is not running its 300 s monitor",
-                       suggest="sudo systemctl status etlegacy-bot ; journalctl --no-pager -u etlegacy-bot -n 100")
+    if server_age is None or server_age > threshold:
+        return Finding("rounds", "fail", value=server_age, threshold=threshold,
+                       reason=f"server_status_history last written {_fmt_age(server_age)} ago (monitor interval {server_interval_s} s): "
+                              "the bot is down, or its monitor loop is failing on every tick (UDP status or DB write)",
+                       suggest="sudo systemctl status etlegacy-bot ; journalctl --no-pager -u etlegacy-bot -n 100 | grep -i monitor")
     players = db.get("players_now") or 0
     round_age = _age(db.get("newest_round"), now)
     if players >= 2 and (round_age is None or round_age > 2 * 3600):
@@ -584,7 +595,7 @@ async def run(cfg: dict[str, str], *, dry_run: bool, now: float | None = None) -
     findings += check_units(unit_props, state.get("snapshot"), units)
     findings.append(check_web(web_status, web_body))
     findings.append(check_db(db))
-    findings.append(check_rounds(db, now))
+    findings.append(check_rounds(db, now, int(cfg.get("MONITORING_SERVER_INTERVAL_SECONDS") or 300)))
     findings.append(check_live(live_status, live_body, players_now))
     findings.append(check_collector(mtimes, now, players_now))
     findings.append(check_lua(fh))
