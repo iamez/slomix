@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, lblStyle } from '../components/ui';
+import { Panel } from '../components/Panel';
 import { ApiError } from '../lib/api';
 import { isFailureStatus } from '../lib/responseStatus';
 import { stripEtColors } from '../lib/names';
@@ -123,16 +124,18 @@ function formatClock(seconds: number | null): string {
 function Escorts({ gsid }: { gsid: number }) {
   const q = useStoryEscorts(gsid);
   return (
-    <Stack gap={3} parity="story.escorts">
-      <SectionHead label="objective escorts" aside={<span className="lbl">truck / tank · who stayed with it while it moved · placed at round end</span>} />
-      {q.isPending && <Pending label="escorts" />}
-      {q.isError && <Unavailable what="escorts" />}
-      {q.data && q.data.moments.length === 0 && (
-        <Absent reason="no round in this session had a vehicle moving ≥ 1 000 u with an escort covering ≥ 25 % of its way within 500 u — or the night has no truck/tank map" />
-      )}
-      {q.data && q.data.moments.length > 0 && (
+    <Panel
+      gap={3}
+      parity="story.escorts"
+      label="objective escorts"
+      aside="truck / tank · who stayed with it while it moved · placed at round end"
+      q={q}
+      empty="no round in this session had a vehicle moving ≥ 1 000 u with an escort covering ≥ 25 % of its way within 500 u — or the night has no truck/tank map"
+      isEmpty={(d) => d.moments.length === 0}
+    >
+      {(d) => (
         <Stack gap={1} className="rows">
-          {q.data.moments.map((m, i) => (
+          {d.moments.map((m, i) => (
             <Stack key={`${m.round_number}:${m.time_ms}:${i}`} gap={1} className="row" style={{ padding: 'var(--space-2) 0' }}>
               <Cluster gap={3} justify="between" align="baseline">
                 <span style={{ fontSize: 'var(--fs-row)' }}>{m.player}</span>
@@ -150,7 +153,7 @@ function Escorts({ gsid }: { gsid: number }) {
           ))}
         </Stack>
       )}
-    </Stack>
+    </Panel>
   );
 }
 
@@ -1233,28 +1236,30 @@ export function SessionStory({ gsid }: { gsid: number }) {
 
       <Escorts gsid={gsid} />
 
-      <Stack gap={3} parity="story.momentum">
-        <SectionHead
-          label="momentum"
-          aside={
-            <span className="lbl">
-              <span style={{ color: 'var(--color-neg)' }}>axis</span>
-              {' · '}
-              <span style={{ color: 'var(--color-accent)' }}>allies</span>
-              {' · one drawing per round'}
-            </span>
-          }
-        />
-        {momentum.isPending && <Pending label="momentum" />}
-        {momentum.isError && <Unavailable what="momentum" />}
-        {momentum.data && (
+      <Panel
+        gap={3}
+        parity="story.momentum"
+        label="momentum"
+        aside={
+          <span className="lbl">
+            <span style={{ color: 'var(--color-neg)' }}>axis</span>
+            {' · '}
+            <span style={{ color: 'var(--color-accent)' }}>allies</span>
+            {' · one drawing per round'}
+          </span>
+        }
+        q={momentum}
+        empty="no round in this session has a momentum curve"
+        isEmpty={(d) => d.rounds.length === 0}
+      >
+        {(d) => (
           <Stack gap={1} className="rows">
-            {momentum.data.rounds.map((r) => (
+            {d.rounds.map((r) => (
               <Momentum key={`${r.map_name}:${r.round_number}`} round={r} />
             ))}
           </Stack>
         )}
-      </Stack>
+      </Panel>
 
       <Stack gap={3} parity="story.momentum-session">
         <SectionHead
@@ -1267,12 +1272,17 @@ export function SessionStory({ gsid }: { gsid: number }) {
       <WinContribution gsid={gsid} />
 
       <Stack gap={3} parity="story.kis">
-        <SectionHead label="kill impact" aside={<span className="lbl">kis · kills · carrier · clutch</span>} />
-        {kis.isPending && <Pending label="kill impact" />}
-        {kis.isError && <Unavailable what="kill impact" />}
-        {kis.data && (
+        <Panel
+          gap={3}
+          label="kill impact"
+          aside="kis · kills · carrier · clutch"
+          q={kis}
+          empty="no scored kills in this session"
+          isEmpty={(d) => d.players.length === 0}
+        >
+          {(d) => (
           <Stack gap={1} className="rows">
-            {kis.data.players.slice(0, 10).map((p) => (
+            {d.players.slice(0, 10).map((p) => (
               <Stack key={p.guid} gap={1} className="row" style={{ padding: 'var(--space-2) 0' }}>
                 <Cluster gap={3} justify="between" align="center">
                   <button
@@ -1295,7 +1305,8 @@ export function SessionStory({ gsid }: { gsid: number }) {
               </Stack>
             ))}
           </Stack>
-        )}
+          )}
+        </Panel>
         <KisFormula />
       </Stack>
 
@@ -1310,23 +1321,25 @@ export function SessionStory({ gsid }: { gsid: number }) {
       </Stack>
 
       <Stack gap={3} parity="story.synergy">
-        <SectionHead label="synergy" aside={<span className="lbl">two groups, one composite</span>} />
-        {synergy.isPending && <Pending label="synergy" />}
-        {synergy.isError && <Unavailable what="synergy" />}
         {/* `no_data` / `partial_data` answer `groups: {}` (session 80) —
           * a bare read of group_a was a crash on such a night; the tab's
           * teamplay panel says why, this panel only stays honest. */}
-        {synergy.data && (!synergy.data.groups.group_a || !synergy.data.groups.group_b) && (
-          <Absent reason={synergy.data.status === 'partial_data' ? 'insufficient data — no R1 rows to build the groups from' : 'no synergy rows for this session'} />
-        )}
-        {synergy.data && synergy.data.groups.group_a && synergy.data.groups.group_b && (
+        <Panel
+          gap={3}
+          label="synergy"
+          aside="two groups, one composite"
+          q={synergy}
+          empty={(d) => (d.status === 'partial_data' ? 'insufficient data — no R1 rows to build the groups from' : 'no synergy rows for this session')}
+          isEmpty={(d) => !d.groups.group_a || !d.groups.group_b}
+        >
+          {(d) => (
           <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>
             {/* Named, not indexed: the two groups are a pair, not a list,
               * and an object read by a computed key is a finding in this
               * repo's scanners even when the key is a literal. */}
             {[
-              { key: 'group_a', group: synergy.data.groups.group_a },
-              { key: 'group_b', group: synergy.data.groups.group_b },
+              { key: 'group_a', group: d.groups.group_a! },
+              { key: 'group_b', group: d.groups.group_b! },
             ].map(({ key, group: g }) => {
               return (
                 <Stack key={key} gap={1} style={{ minWidth: 240 }}>
@@ -1341,7 +1354,8 @@ export function SessionStory({ gsid }: { gsid: number }) {
               );
             })}
           </Cluster>
-        )}
+          )}
+        </Panel>
         {synergy.data && (synergy.data.defaulted_players_count ?? 0) > 0 && (
           <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
             {synergy.data.defaulted_players_count} player(s) had no telemetry and were scored at the default — the composite is that much less measured
@@ -1349,22 +1363,32 @@ export function SessionStory({ gsid }: { gsid: number }) {
         )}
       </Stack>
 
-      <Stack gap={3} parity="story.composite">
-        <SectionHead label="composite five" aside={<span className="lbl">tir · ci · kpi · sds · cp — proximity instruments</span>} />
-        {composite.isPending && <Pending label="composite" />}
-        {composite.isError && <Unavailable what="composite" />}
-        {composite.data && <CompositeFive data={composite.data} />}
-      </Stack>
+      <Panel
+        gap={3}
+        parity="story.composite"
+        label="composite five"
+        aside="tir · ci · kpi · sds · cp — proximity instruments"
+        q={composite}
+        empty="no composite for this session"
+        isEmpty={() => false}
+      >
+        {(d) => <CompositeFive data={d} />}
+      </Panel>
 
       <Roles gsid={gsid} />
 
-      <Stack gap={3} parity="story.players">
-        <SectionHead label="players" aside={<span className="lbl">archetype · generated</span>} />
-        {narratives.isPending && <Pending label="player notes" />}
-        {narratives.isError && <Unavailable what="player notes" />}
-        {narratives.data && (
+      <Panel
+        gap={3}
+        parity="story.players"
+        label="players"
+        aside="archetype · generated"
+        q={narratives}
+        empty="no player notes were generated for this session"
+        isEmpty={(d) => d.player_narratives.length === 0}
+      >
+        {(d) => (
           <Stack gap={3} className="rows">
-            {narratives.data.player_narratives.map((p) => (
+            {d.player_narratives.map((p) => (
               <Stack key={p.guid_short} gap={1} className="row" style={{ padding: 'var(--space-2) 0' }}>
                 <Cluster gap={2} align="baseline">
                   <span style={{ fontSize: 'var(--fs-row)' }}>{p.name}</span>
@@ -1377,7 +1401,7 @@ export function SessionStory({ gsid }: { gsid: number }) {
             ))}
           </Stack>
         )}
-      </Stack>
+      </Panel>
     </Stack>
   );
 }

@@ -11,30 +11,38 @@
  * `panels.test.ts` holds the hand-written count so it can only fall
  * (docs/SPA_MODULARITY.md, slice 1).
  */
-import { Stack } from './layout';
+import { Stack, type Space } from './layout';
 import { Absent, Pending, SectionHead, Unavailable } from './ui';
 import { isFailureStatus } from '../lib/responseStatus';
 
 export type PanelQuery<T> = { isPending: boolean; isError: boolean; data: T | undefined };
 
-export function Panel<T extends object>({ label, aside, q, empty, isEmpty, children }: {
+export function Panel<T extends object>({ label, aside, q, empty, isEmpty, children, gap = 2, parity }: {
   label: string;
-  aside?: string;
+  aside?: React.ReactNode;
   q: PanelQuery<T>;
-  /** Names what a truthful emptiness means for THIS instrument. */
-  empty: string;
+  /** Names what a truthful emptiness means for THIS instrument — a sentence,
+   *  or a function of the answer when the answer itself says why (a status
+   *  of `partial_data` reads differently from `no_data`). */
+  empty: string | ((data: T) => string);
   isEmpty: (data: T) => boolean;
   children: (data: T) => React.ReactNode;
+  /** The Stack's step between head and body; the proximity panels use 2,
+   *  the story panels 3. Same frame, one knob, so a conversion is not a
+   *  visual change. */
+  gap?: Space;
+  /** `data-parity="page.panel"` for the parity inventory. */
+  parity?: string;
 }) {
   return (
-    <Stack gap={2}>
-      <SectionHead label={label} aside={aside ? <span className="lbl">{aside}</span> : undefined} />
+    <Stack gap={gap} parity={parity}>
+      <SectionHead label={label} aside={typeof aside === 'string' ? <span className="lbl">{aside}</span> : aside} />
       {q.isPending && <Pending label={label} />}
       {q.isError && <Unavailable what={label} />}
       {q.data && (isFailureStatus((q.data as { status?: unknown }).status) ? (
         <Unavailable what={label} />
       ) : isEmpty(q.data) ? (
-        <Absent reason={empty} />
+        <Absent reason={typeof empty === 'function' ? empty(q.data) : empty} />
       ) : (
         children(q.data)
       ))}
