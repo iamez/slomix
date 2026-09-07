@@ -4623,3 +4623,18 @@ export interface GreatshotCrossrefComparison {
 export type GreatshotCrossref =
   | { matched: false; reason: string }
   | { matched: true; round: GreatshotCrossrefRound; db_player_stats: Record<string, GreatshotCrossrefStats>; comparison: GreatshotCrossrefComparison[] };
+/** `/api/stats/player/{player_name}/rounds` — per-round DPM, oldest first,
+ *  one point per counted half with more than a minute played
+ *  (`players_router.get_player_rounds`; R1/R2 only since #970). `label` is
+ *  the map name cut to twelve characters by the server. Recorded 2026-09-07
+ *  from dev before #970 was deployed there, so the recorded values still
+ *  include the R0 copy; the shape is the same. */
+export interface PlayerRoundPoint {
+  label: string;
+  date: string;
+  dpm: number;
+}
+export interface PlayerRoundsSeries {
+  rounds: PlayerRoundPoint[];
+  avg_dpm: number;
+}

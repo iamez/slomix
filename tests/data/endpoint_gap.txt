@@ -191,6 +191,5 @@
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats
 /api/sessions/{}/graphs
-/api/stats/player/{}/rounds
 /api/stats/sessions
 /api/uploads/{}/download

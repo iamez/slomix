@@ -3,6 +3,7 @@ import {
   usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
   useMemoryCard, useSkillPlayerForm, useSkillPlayerHistory,
   usePlayerSessionForm,
+  usePlayerRoundsSeries,
 } from '../lib/queries';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
@@ -11,6 +12,7 @@ import type {
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
   PlayerSessionForm,
+  PlayerRoundsSeries,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
 import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
@@ -619,6 +621,42 @@ function SessionForm({ playerId }: { playerId: string }) {
   );
 }
 
+/** The last thirty counted halves as one curve, with the map under the
+ *  newest five — the grain below SessionForm. Legacy drew this on a canvas
+ *  sparkline (player-profile.js loadRecentRounds); here it is the same
+ *  <Spark> the rating card uses. */
+function RoundsSeries({ playerId }: { playerId: string }) {
+  const q = usePlayerRoundsSeries(playerId);
+  return (
+    <div data-parity="profile.rounds-series" style={{ marginTop: 'var(--space-6)' }}>
+      <Panel<PlayerRoundsSeries>
+        label="round by round"
+        aside={q.data != null && q.data.rounds.length > 0 ? `avg ${figure(q.data.avg_dpm)} dpm · ${q.data.rounds.length} halves` : undefined}
+        q={q}
+        empty="no counted half with more than a minute played"
+        isEmpty={(d) => d.rounds.length === 0}
+      >
+        {(d) => (
+          <Stack gap={2}>
+            <Spark values={d.rounds.map((r) => r.dpm)} w={220} h={32} />
+            <Stack gap={1} className="rows">
+              {d.rounds.slice(-5).reverse().map((r, i) => (
+                <Cluster key={`${r.date}:${r.label}:${i}`} gap={4} justify="between" align="baseline" className="row" style={rowStyle}>
+                  <Cluster gap={3} align="baseline">
+                    <span style={{ fontSize: 'var(--fs-row)' }}>{r.label}</span>
+                    <Meta>{r.date}</Meta>
+                  </Cluster>
+                  <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{figure(r.dpm)} dpm</span>
+                </Cluster>
+              ))}
+            </Stack>
+          </Stack>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
 /** The rating over recent sessions — the trend behind the header's single
  *  number (legacy loadCareerHistory, player-profile.js:772). */
 function RatingHistory({ playerId }: { playerId: string }) {
@@ -837,6 +875,7 @@ export function PlayerProfilePage() {
           <PlayerForm playerId={playerId} />
           <RatingHistory playerId={playerId} />
           <SessionForm playerId={playerId} />
+          <RoundsSeries playerId={playerId} />
           <Streaks p={p} />
           <Achievements playerId={playerId} />
           <Weapons rows={p.weapons.weapons} available={p.weapons.available} />
