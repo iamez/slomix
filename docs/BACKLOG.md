@@ -26,9 +26,22 @@
   drevesu). Izid: `scratchpad/audit-anon/results.json` (lokalno).
   PR #970: `components/Panel.tsx` (modularnost rezina 1) + ratchet
   `panels.test.ts` (61) + profil »form by session« → endpoint gap **11**.
-  NASLEDNJE: rezina 2 (Story/Home/SessionDetail/Availability/SkillRating
-  trojice → Panel); gap S: `greatshot/{}/crossref`, `stats/player/{}/rounds`;
-  owner prelet iz primarnega drevesa; dedup dvojnih klicev.
+  OWNER PRELET (prijavljen sentinel, isti bundle, 128 preverb, 21:20): **0
+  padlih**, 7 opomb — greatshot 401 izginejo; `admin` ruta na VSEH štirih
+  pogledih `page.goto` 30 s timeout z dvojnima klicema `/api/stats/overview`
+  in `/api/system/overview` (kandidat: polling brez `networkidle` ali počasen
+  endpoint za neadminskega prijavljenega uporabnika — preveri `refetchInterval`
+  in odziv obeh endpointov za `website_user_id = -1`); `proximity` 1920 hladen
+  timeout (40 s), prelivanje 20–32 px na 390 (retro-viz sidra, proximity svg)
+  kot pri anonimnem. Mediana nalaganja 2,65 s. Izid `scratchpad/audit-owner/`.
+  R0 NAJDBA (glej `docs/KNOWN_ISSUES.md` »R0 summary rows counted again«):
+  `stats/player/{}/form|rounds` in `skill_router._form_rows` so sešteli R0
+  vrstice → DPM serija ~30 % previsoka; popravki v #970 + veja
+  `fix/skill-form-skips-r0`; razred (api_helpers, season_awards, auth,
+  session_matrix, greatshot_crossref brez filtra) čaka per-query audit.
+  NASLEDNJE: PR-ji po mergu #970: `feat/panel-slice-2` (ratchet 61 → 49),
+  `fix/skill-form-skips-r0`, `feat/greatshot-crossref-panel` (gap 11 → 10);
+  potem `stats/player/{}/rounds` (S), dedup dvojnih klicev, admin timeout.
   ⚠️ Ultra na #924 do 19:20 ni oddal ničesar (0 pregledov); rezin ne sekam,
   dokler owner ne potrdi, da pregled ni v teku.
 - (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
