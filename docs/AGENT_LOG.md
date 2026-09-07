@@ -103,3 +103,10 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+- **2026-09-07 · Review snapshots are not exempt from publishing guards.**
+  Restoring a historical baseline can reintroduce a credential even when the
+  source is already public. Apply: SHA-versioned review refs, at most 25 files
+  and 8,000 changed lines per part, normal Git push with the real hook; scanner
+  rejection blocks publication. Never refresh old review PR refs or bypass a
+  scanner because a snapshot will not be merged. Local integration tests prove
+  historical literal rejection; they do not certify all repository history.
