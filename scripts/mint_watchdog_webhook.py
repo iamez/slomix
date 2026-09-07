@@ -46,9 +46,9 @@ def write_key(path: Path, key: str, value: str) -> str:
     if not done:
         if out and out[-1].strip():
             out.append("")
-        out.append(f"# watchdog alerts (scripts/mint_watchdog_webhook.py, {dt.date.today().isoformat()})")
+        out.append(f"# watchdog alerts (scripts/mint_watchdog_webhook.py, {dt.datetime.now(dt.timezone.utc).date().isoformat()})")
         out.append(f"{key}={value}")
-    backup = path.with_name(path.name + ".bak-" + dt.datetime.now().strftime("%Y%m%d-%H%M%S"))
+    backup = path.with_name(path.name + ".bak-" + dt.datetime.now(dt.timezone.utc).strftime("%Y%m%d-%H%M%S"))
     shutil.copy2(path, backup)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_text("\n".join(out) + "\n", encoding="utf-8")
