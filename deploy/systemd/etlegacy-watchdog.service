@@ -1,0 +1,20 @@
+# slomix watchdog — an observer that alerts, never a supervisor that starts.
+# Runs from the RUN directory (a clone kept on main); the script reads the
+# root .env itself through dotenv, so no EnvironmentFile is needed (systemd
+# would mis-parse the trailing comments that file carries).
+[Unit]
+Description=slomix watchdog (read-only checks, Discord alerts with dedup)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=samba
+Group=samba
+WorkingDirectory=/home/samba/share/slomix-dev-run
+ExecStart=/home/samba/share/slomix-dev-run/venv/bin/python scripts/slomix_watchdog.py --once
+TimeoutStartSec=120
+Nice=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=etlegacy-watchdog

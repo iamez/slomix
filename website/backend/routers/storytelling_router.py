@@ -3,8 +3,10 @@ Storytelling Stats API — Kill Impact Score (KIS) endpoints.
 """
 
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, ConfigDict
 from starlette.requests import Request
 
 from shared.guid_utils import short_guid
@@ -408,6 +410,12 @@ async def get_kill_impact_details(
         await svc.compute_session_kis_for_gsid(scope.gaming_session_id)
     dates = [date.fromisoformat(d) for d in scope.dates]
     starts, maps, rnums = scope.round_key_arrays()
+    # Both forms are accepted: the full 32-char guid (killer_guid) and the
+    # 8-char key the session page carries (killer_guid_canonical, indexed;
+    # for humans it is exactly the prefix). Bots keep matching through the
+    # first arm, which is why this is an OR and not a swap.
+    player_guid = (player_guid or "").strip().upper()
+    guid_key = player_guid[:8]
     rows = await db.fetch_all(
         f"""
         SELECT kill_outcome_id, round_number, round_start_unix, map_name,
@@ -421,10 +429,10 @@ async def get_kill_impact_details(
                COALESCE(axis_alive, 0), COALESCE(allies_alive, 0)
         FROM storytelling_kill_impact
         WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)}
-          AND killer_guid = $5
+          AND (killer_guid = $5 OR killer_guid_canonical = $6)
         ORDER BY total_impact DESC
     """,
-        (dates, starts, maps, rnums, player_guid),
+        (dates, starts, maps, rnums, player_guid, guid_key),
     )
 
     kills = [
@@ -468,8 +476,9 @@ async def get_kill_impact_details(
     if kills:
         name_row = await db.fetch_one(
             f"SELECT MAX(killer_name) FROM storytelling_kill_impact "
-            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} AND killer_guid = $5",
-            (dates, starts, maps, rnums, player_guid),
+            f"WHERE session_date = ANY($1) AND {scope.round_key_filter_sql(2)} "
+            f"AND (killer_guid = $5 OR killer_guid_canonical = $6)",
+            (dates, starts, maps, rnums, player_guid, guid_key),
         )
         player_name = strip_et_colors((name_row[0] if name_row else "") or short_guid(player_guid))
 
@@ -876,6 +885,65 @@ async def get_lurker_profile(
     """Lurker Profile: solo time and team separation analysis."""
     svc = StorytellingService(db)
     result = await svc.compute_lurker_profile(scope)
+    result["scope"] = scope.to_metadata()
+    return result
+
+
+class CampProfilePlayer(BaseModel):
+    """One player's camp profile (docs/design/22 slice 2).
+
+    `hold_pct` / `still_pct` are None when the player was alive for less than
+    `thresholds.min_alive_s` — too little telemetry to call a share, and an
+    absence is not a zero. `top_cells` are `[cell_x, cell_y, hold_seconds]`
+    on the 512 u grid, spawn wait excluded."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    guid_short: str
+    name: str
+    hold_pct: float | None
+    still_pct: float | None
+    hold_time_s: float
+    still_time_s: float
+    alive_s: float
+    tracks: int
+    coverage: str
+    top_cells: list[list[float]]
+
+
+class CampProfileCoverage(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tracks_fetched: int
+    tracks_used: int
+    tracks_skipped: int
+
+
+class CampProfileResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    session_date: str
+    metric: str
+    description: str
+    thresholds: dict[str, float]
+    coverage: CampProfileCoverage
+    players: list[CampProfilePlayer]
+    scope: dict[str, Any]
+
+
+@router.get("/storytelling/camp-profile", response_model=CampProfileResponse)
+@limiter.limit("5/minute")
+async def get_camp_profile(
+    request: Request,
+    scope: GamingSessionScope = Depends(resolve_story_scope),
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """Camp Profile: share of alive time spent holding one spot (hold) or
+    standing still (still) — the position tracker's answer to "who camps",
+    distinct from the lurker profile (distance from teammates)."""
+    svc = StorytellingService(db)
+    result = await svc.compute_camp_profile(scope)
     result["scope"] = scope.to_metadata()
     return result
 

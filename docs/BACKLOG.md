@@ -7,6 +7,122 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
+  `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
+  vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.
+  Owner: webhook URL + namestitev timerja. Zvečer #882 → `review_slices.sh cut
+  --push`. Astra jutri: triaža ultra najdb (#924–#926) po `astra_kickoff.md`.
+- (Fable 5.1, 2026-09-06, 19:10) Proga (4) doc 19 r. 1 narejena (veja
+  `feat/dataset-registry-r1`, PR). Odprto iz nje: vrstica »N datasets« na About
+  panelu po mergu #946; `docs/design/19` status vrstica (lokalno). Naslednje:
+  (1) watchdog r. 1 (`scripts/slomix_watchdog.py`, obseg doc 24). PR-ji #945,
+  #946 v vratih (ownerjev DA za oba). Zvečer #882 → `review_slices.sh cut --push`.
+- (Fable 5.1, 2026-09-06, 18:20) Proga (3) diagnostics narejena (veja
+  `feat/about-diagnostics-degraded`, PR); dolg za #911 zaprt. Proga (2) guid
+  prefiks = PR #945. Naslednje: (4) doc 19 r. 1 register datasetov, potem (1)
+  watchdog r. 1. Zvečer #882 → `review_slices.sh cut --push`.
+- (Fable 5.1, 2026-09-06, 17:30) Proga (2) guid prefiks narejena (veja
+  `feat/proximity-guid-prefix`, PR). Naslednje po planu: (3) About diagnostics
+  stanja degradacije (#911 prenos), (4) doc 19 r. 1, (1) watchdog r. 1. Zvečer:
+  #882 → `review_slices.sh cut --push`. ⚠️ Sestra dela #923 (SSH monitor nizi):
+  svetoval datoteko `logs/bot_error_streaks.json`, ne migracijo; watchdog jo bo bral.
+- (Fable 5.1, 2026-09-06, 14:45) Ultra + Astra pripravljena (veja
+  `docs/ultra-ready`): ultra meja 8 000 vrstic → 20 rezin
+  (`scripts/review_slices.sh`, rez = meritev 20/20); `19c61847` NI prednik
+  maina (stara zgodovina) → veja izbrisana; #915 mergan (dve podpičji: CodeQL
+  nit + osirotela vrstica 532, sestrin `index(token)+4`), #911 zaprt kot
+  dvojnik #919 — **prenos v About panel še odprt**: stanja degradacije
+  (tabela brez štetja = razlog, prazen časovni blok = poizvedba ni tekla,
+  padla monitoring tabela = unavailable, 401 proti 403) + fixture
+  `api_diagnostics_degraded.json` na veji `feat/diagnostics-on-the-new-surface`.
+  ComparePage `played` = več igranja zmaga (owner). Prelet SPA po #921 NI
+  ponovljen (RAM 329 MB). Naslednje: PR → ownerjev merge → `cut --push` +
+  `prs` (20 draft PR-jev) → zvečer #882 → `cut --push` znova. Opomba:
+  `scripts/codex_audit_prompt.md` je untracked dvojnik
+  `docs/prompts/codex_audit_prompt.md` (run_codex_audit.sh bere prvega).
+- (Fable 5.1, 2026-09-06, 11:30) Prelet: 1. tek 256 preverb (najdbe v PR #921),
+  2. tek 108 čistih in merilnik padel ob timeoutu `admin` (popravljeno), 3. tek
+  PREKINJEN — RAM 1,8 GB, na voljo 196 MB; owner: razen `:8000` nič ne streže.
+  Ponovi prelet, ko je RAM prost: `HANDOFF-next.md` §3 (moj uvicorn :8056 +
+  `audit_website_browser.mjs --app`). ⛔ prelet požene chromium (240 MB
+  ostankov) — po njem preveri `ps` in pobij po PID (ne `pkill -f`).
+- (Fable 5.1, 2026-09-06, prelet) Najdbe končnega paritetnega preleta SPA
+  (manifest 32 rut): (1) ⛔ **»proximity →« s seje je vodil v »ni zajema« za
+  VSAKEGA igralca** — povezava je nosila 8-znakovni guid, proximity endpointi
+  primerjajo polni 32-znakovni (`combat_engagement.target_guid = $1`); Absent
+  je veljaven render, zato ga prelet »renders without errors« ni ujel →
+  popravek: drilldown vzame polni guid iz KIS seznama; vzorci preleta/e2e na
+  polni guid. (2) audit/e2e vzorci niso zapolnili `:id`/`:a?`/`:b?` (strani
+  za igralce »id«/»a«/»b«; e2e vzorci so se izgubili pri rebase #920) →
+  popravljeno. (3) `session.teams`, `record-book.hof`, `session.players`
+  niso na privzetem zavihku/podatkih 154 — zavihki, ne napake. Odprto:
+  proximity endpointi bi lahko sprejeli 8-znakovni prefiks (10 endpointov,
+  ločen PR, če owner hoče).
+- (Fable 5.1, 2026-09-06, jutro) #919 in #920 MERGANA; O1 = (c) Clips strani ni.
+  Teče končni paritetni prelet SPA na :8056 (izid v PLAN, ko se konča).
+  Naslednje: pregledni PR #802→main za ultra (ownerjeva odločitev: commit
+  podmnožice docs/design ali lokalni pregled) → soak → produkcija (preklop =
+  `build:app` v `deploy_release.sh`).
+- (Fable 5.1, 2026-09-06, noč) Faza 7 r. 1 (compare + wrapped) zgrajena na
+  veji `feat/site-phase7-compare-wrapped` (od dolga r. 1, #919 — ta je v CI
+  padel na Python job: preveri). Odprto v fazi 7: clips (O1), končni prelet.
+- (Fable 5.1, 2026-09-06) SKOK: owner → »dokončajva novo stran« (dolg → faza
+  7 → pregledni PR). Doc 19 (per-user pogled) pavziran v plan modu, ničesar
+  napisanega. Dolg r. 1 (veja `feat/site-debt-keymap-replay-diagnostics`):
+  keymap, `/replay`, `/api/diagnostics` panel. ⚠️ E2E rig NIMA adminskega
+  nivoja: admin = env allowlist Discord id-jev (`_configured_admin_ids`),
+  sentinel id −1 ga ne prestane → adminski prikaz je dokazan v vitestu s
+  posnetkom, narejenim kot pravi admin; Playwright dokaže le vrata (prijavljen
+  ne-admin brez panela in brez zahteve). Naslednje: faza 7 (compare, wrapped;
+  clips čaka O1), pregledni PR #802→main za ultra.
+- (Fable 5.1, 2026-09-06) Dvojčki r. 3 zgrajena (generator + 11 testov, 7
+  mutacij padlo, tek čez 6 map). ⚠️ Kontrola NE pade na nič: premešane seje
+  preživijo ≈ 21 % (14/67) razločevalnih ciljev — s 7 regularji je skupinsko
+  povprečje šumna osnovnica. Možni naslednji koraki: z-score proti razpršenosti
+  drugih igralcev, ali več sej; do takrat poročilo tiska kontrolo ob vsakem
+  teku. Odprto: `botnames` je bral `DB_*` env (ni v `.env`) → vedno fallback
+  imena (popravljeno s `POSTGRES_*` rezervo, a živa tabela na puranu je še
+  fallback); `carniee` ima 2 guida; Olympus = olz (isti igralec, dva bota).
+- (Fable 5.1, 2026-09-05, 23:20) #916 MERGAN in v6.14 DEPLOYAN na puran
+  (dokazano). Odprto: (1) en večer `frame_health.log` na puranu brez novega
+  `self` stroška; (2) migracija 082 na prod ob release deployu; (3) popravek
+  korpusa `destroyed_count` (fantomska +1 na goldrush rundah pred v6.14) —
+  ownerjeva odločitev; (4) naslednja proga: dvojčki r. 3 ali doc 19.
+- (Fable 5.1, 2026-09-05, pozno) Moments r. 2 — dve živi pasti iz lokalnega ET:
+  (a) supply truck se sam odpelje pri 0,6 s → `first_move_time` ni čas escorta
+  → dodana `first/last_escort_time` (premik z igralcem na/ob vozilu), detektor
+  bere te; (b) goldrush tank začne POKVARJEN → poll je vsako rundo štel
+  »uničenje« ob 1,2 s brez napadalca → smrt iz polla šteje šele, ko je vozilo kdo ESCORTIRAL (`first_escort_time > 0`); dve prejšnji vrati sta v živo padli (»po prvem premiku«: tank se skriptno premakne ob 0,6 s; »ne zaupaj init scanu«: poll ga JE prebral živega ob 0,7 s, skript ga pokvari ob 1,2 s);
+  ⚠️ **kontrakt `destroyed_count` se spremeni** (korpus pred v6.14 nosi
+  fantomsko 1 na vsaki goldrush rundi — detektorjev »destroyed 1×« je bil
+  lažen; popravek korpusa = ločena naloga, če owner hoče).
+- (Fable 5.1, 2026-09-05, večer) SKOK na moments r. 2 (ownerjeva izbira po
+  #914, ki je mergan): veja `feat/moments-mover-times`; Lua v6.14 + parser +
+  migracija 082 (na devu aplicirana kot `etlegacy_user` — ⚠️ `apply_migrations.py`
+  iz `website/.env` pobere `website_app` in pade z »must be owner«; obvod
+  `POSTGRES_USER=… POSTGRES_PASSWORD=…`) + detektor. Lokalni ET: `local_et.sh
+  deploy` pade na scp (ključ ni v et-jevem authorized_keys) → kopija prek
+  `sudo -n -u et tmux -S …-285.sock run-shell "cp /tmp/x.lua …"` (sestra),
+  nato `map` load in `lua_status` SHA1 = `sha1sum` datoteke. Pred-obstoječi
+  ruff DTZ001/DTZ007 v `parser.py:713/1579` nista moja (enako na mainu).
+- (Fable 5.1, 2026-09-05, popoldne) Doc 22 rezina 2 zgrajena (camp-profile +
+  peta plošča vlog), PR odprt z veje `feat/bot-twins-camp-profile`; #913 mergan.
+  Odprto: e2e `session 154 · players tab renders` je enkrat padel v vzporednem
+  teku (locator ni bil viden v 10 s) in prešel sam ter v ponovitvi — flaky pod
+  obremenitvijo, ni vezan na to spremembo; `RoleBoard` kaže top 5 → igralci s
+  `hold_pct: null` se filtrirajo, a plošča ne pove, koliko jih je izpustila
+  (majhna vrzel besednjaka; ob r. 3). Rate limit 5/min na camp-profile enak
+  lurkerju — šest zaporednih poizvedb iz enega IP-ja da 429 (izmerjeno).
+- (Fable 5.1, 2026-09-05) Doc 22 rezina 1 IZMERJENA (7 map × mreži 512/256 +
+  identifikacija; 13 min + 5 min + 1 min tekov): osebnost poti obstaja
+  (identifikacija 81–91 % proti 10 %), je časovna utež in ne kraj, prag 25
+  sej; PR odprt na veji `feat/bot-twins-route-distinctiveness`. Odprto za
+  rezino 2: dwell mora izločiti spawn čakanje (top celica je pri vseh ista);
+  NP pot je krajevno utežena (unikatne 32 u točke) — v poročilu imenovano.
+- (Fable 5.1, 2026-09-04, PAVZA zaradi limitov) Ostal sem pri doc 22 rezini 1:
+  skripta + testi na veji `feat/bot-twins-route-distinctiveness` (commitano,
+  potisnjeno, BREZ PR-ja), korpusni tek še brez številk → glej
+  `docs/HANDOFF-next.md`.
 - (Opus 5, 2026-09-05, 11:30) **SKOK: ownerjeva nova prošnja** — boti na
   dots_arena naj bodo samo medic/fieldops (drugi razredi se ne premikajo), naj
   strejfajo levo-desno in dodgajo; + raziskava izvorne kode ET:Legacy: **zakaj
@@ -303,6 +419,74 @@
 - ⛔ `docs/GAMESERVER_LIVE_LUA_MAP.md:74` in `deployed_lua/README.md`
   navajata 4 module; živih je 6.
 
+## 2026-09-05 popoldne — faza 6 r. 3 + popravek merilnika (PR #915)
+
+**Narejeno:**
+- availability rezina 3: admin market kontrole (open / settle / void), gap 4 → 3
+- ⛔⛔ popravek ekstraktorja: gap merjen **3, resnica 19** — 16 endpointov je
+  bilo nevidnih, ker se je zajem ustavil pri prvi `${` in odrezan prefiks
+  velja za pokritega. Vsak od 16 preverjen dvakrat (živ openapi + odsotnost
+  klica v `src/app`).
+
+**⚠️ ČAKA OWNERJEVO ODLOČITEV (vprašano, brez odgovora):** ali graditi
+wrapped/compare (2 od 16), ali najprej zapolniti štiri luknje na profilni
+strani (`players/{}/awards`, `players/{}/card`, `skill/player/{}/form`,
+`skill/player/{}/history`, `stats/player/{}/form`, `stats/player/{}/rounds`),
+ki jih je merilnik skrival in zaradi katerih je ta stran tanjša od številke.
+
+**Odprto zraven:**
+- `/api/greatshot/{}/crossref` in `/highlights/render` — greatshot stran ne
+  pozna sekcij `clips`/`renders`, legacy ima štiri hube, nova stran ignorira
+  `:section` param (ruta ga ima).
+- `/api/rounds/{}/player/{}/details`, `/api/rounds/{}/awards`,
+  `/api/rounds/{}/vs-stats`, `/api/player/{}/vs-stats` — matches.js in
+  session-detail.js.
+- `/api/sessions/{}/graphs` — Landing.tsx v komentarju že priznava, da ni
+  migriran.
+- `/api/uploads/{}/download`.
+- ⚠️ V glavnem worktreeju delata dve drugi seji (`opus-backend`, `sonet`) na
+  moments/doc 22 — njihovega drevesa se ne dotikam, delam v
+  `/home/samba/share/slomix-market`.
+- ⛔ #911 (diagnostics), #912 (arena), #882 (release 1.45.0) čakajo ownerja.
+
+## 2026-09-06 — pozicija pred restartom seje (posodobitev Claude CLI)
+
+**Veja `feat/availability-admin-market`, PR #915, 9 commitov, vse potisnjeno.**
+Gap **4 → 3 → 19 (korekcija) → 16**.
+
+Narejeno v tem bloku:
+1. availability rezina 3 (admin market: open / settle / void)
+2. ⛔⛔ popravek ekstraktorja: 16 endpointov je bilo nevidnih, ker se je zajem
+   ustavil pri prvi `${`; odrezan prefiks velja za pokritega
+3. greatshot: sekcije highlights / clips / renders (ruta je param nosila od
+   faze 6, stran ga je ignorirala); brez novega endpointa
+4. wrapped kot STRAN (`/wrapped/:guid`) — konvencija modal→stran iz `design/12`
+5. compare kot STRAN (`/compare?a=&b=`), z eno namerno razliko: playtime ni
+   tekma (legacy da 🏆 tistemu, ki je igral MANJ)
+6. rating trendi na profilu (`your form` + `rating over time`)
+
+**Preostali gap (16), po razredih:**
+- profil: `players/{}/card`, `players/{}/memory-card`, `stats/player/{}/form`
+  (DPM/KD serija, drug graf od skill/form)
+- runde: `rounds/{}/awards`, `rounds/{}/vs-stats`, `rounds/{}/player/{}/details`,
+  `player/{}/vs-stats`
+- greatshot: `{}/crossref`, `{}/highlights/render` (oboje na demo strani)
+- drugo: `sessions/{}/graphs` (Landing.tsx to v komentarju že priznava),
+  `uploads/{}/download`
+- ne zaprejo se z gradnjo: `/api/bets`, `/api/stats/sessions` (šele ob
+  upokojitvi legacy js), `/api/diagnostics` (#911)
+
+**⚠️ Okolje po čiščenju 6. 9.:** ET strežnik USTAVLJEN, uvicorn `:8056`
+ustavljen (bil sosedov e2e), 240 MB chromium ostankov pobitih. **Teče samo
+`:8000`** (preview, `/app/` → 200). Stroj ima 1,8 GB RAM; dve Claude seji sta
+skupaj ~900 MB.
+
+**⚠️ Sočasne seje:** `opus-backend` in `sonet` delata v glavnem worktreeju
+(`/home/samba/share/slomix_discord`) — PR #921, paritetni prelet. Njihovega
+drevesa se ne dotikam; jaz delam v `/home/samba/share/slomix-market`.
+
+**Čaka ownerja:** merge #911, #912, #915, #921, #882; ⛔ `/code-review ultra`
+pred deljenjem arena paketa; odločitev, kateri razred iz gapa naprej.
 ## 2026-09-05 — arena PR #912, odprto po pregledu testov
 
 Pregledni agent za testno zbirko je našel 22 postavk. Popravljene so 4

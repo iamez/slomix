@@ -3,6 +3,7 @@ import type { paths } from '../../api/generated/openapi.d';
 import { ApiError, apiDelete, apiGet, apiPost, apiUpload, apiUploadWithProgress } from './api';
 import type {
   ActivityCalendar,
+  DatasetRegistry,
   ActivityHistory,
   AdjustedLifetime,
   ApiHealth,
@@ -15,6 +16,12 @@ import type {
   AwardsPage,
   BetPlaceResponse,
   BetsMarketCurrent,
+  MarketOpenResponse,
+  MemoryCard,
+  PlayerVsStats,
+  SkillPlayerForm,
+  SkillPlayerHistory,
+  MarketSettleResponse,
   BetsWallet,
   BuildInfo,
   CampaignCreateResponse,
@@ -172,6 +179,8 @@ import type {
   WeaponRow,
   WeaponsByPlayer,
   WeaponsHallOfFame,
+  Diagnostics,
+  Wrapped,
 } from './types';
 
 /**
@@ -195,7 +204,7 @@ export function makeQueryClient(): QueryClient {
         // the page's honest "unavailable" by a round trip. On the
         // rate-limited routes it is actively harmful — the storytelling
         // endpoints allow 10 requests a minute EACH, the story page issues
-        // thirteen per session, and retrying a 429 doubles precisely the
+        // fourteen per session, and retrying a 429 doubles precisely the
         // traffic that caused it. 5xx and network failures keep their retry.
         retry: (failureCount: number, error: Error) => {
           if (error instanceof ApiError && error.status < 500) return false;
@@ -254,6 +263,21 @@ export function usePlayerProfile(playerId: string) {
         // for panels nobody sees.
         query: { sections: PROFILE_SECTIONS },
       }) as Promise<PlayerProfile>,
+  });
+}
+
+/** Phase 7: the season card's facts. `season` is 'current' or YYYY-QN; the
+ *  backend answers 400 for anything else, which the page shows as unavailable. */
+export function useWrapped(playerId: string, season: string) {
+  return useQuery({
+    queryKey: ['wrapped', playerId, season],
+    enabled: playerId.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: () =>
+      apiGet('/api/players/{identifier}/wrapped', {
+        pathParams: { identifier: playerId },
+        query: { season },
+      }) as Promise<Wrapped>,
   });
 }
 
@@ -698,7 +722,7 @@ export function useSsr(enabled: boolean) {
 }
 
 // ---------------------------------------------------------------------------
-// Smart Stats. Thirteen endpoints, one session key.
+// Smart Stats. Fourteen endpoints, one session key.
 //
 // Every one is rate-limited to 10/minute on the server and several are slow
 // (the role boards read the position tracker), so they share the gsid in
@@ -740,6 +764,7 @@ type StoryPath =
   | '/api/storytelling/space-created'
   | '/api/storytelling/enabler'
   | '/api/storytelling/lurker-profile'
+  | '/api/storytelling/camp-profile'
   | '/api/storytelling/player-narratives'
   | '/api/storytelling/momentum-session'
   | '/api/storytelling/kill-matrix'
@@ -798,6 +823,13 @@ export function useStoryEnabler(gsid: number) {
 
 export function useStoryLurker(gsid: number) {
   return useQuery(storyQuery<StoryRoleBoard>('story-lurker', '/api/storytelling/lurker-profile', gsid));
+}
+
+/** Fifth tracker board (docs/design/22 slice 2): share of alive time holding
+ *  one spot. `hold_pct` is null for players alive under a minute — the page
+ *  leaves those out rather than ranking them as zeros. */
+export function useStoryCamp(gsid: number) {
+  return useQuery(storyQuery<StoryRoleBoard>('story-camp', '/api/storytelling/camp-profile', gsid));
 }
 
 export function useStoryPlayerNarratives(gsid: number) {
@@ -1778,6 +1810,18 @@ export function useProxPlayerAim(sessionDate: string | null, mapName: string | n
 // noise, so these queries never retry on them (the global retry already
 // stops below 500).
 
+/** Admin backend diagnostics (About page). `enabled` is the caller's
+ *  is_admin: the route answers 401 to everyone else, and an anonymous
+ *  visitor must not fire a request whose only outcome is an error row. */
+export function useDiagnostics(enabled: boolean) {
+  return useQuery({
+    queryKey: ['diagnostics'],
+    queryFn: () => apiGet('/api/diagnostics') as Promise<Diagnostics>,
+    enabled,
+    staleTime: 60_000,
+  });
+}
+
 export function useAvailabilityAccess() {
   return useQuery({
     queryKey: ['availability-access'],
@@ -1929,6 +1973,30 @@ export async function postBet(marketId: number, choice: 'team_a' | 'team_b', amo
   }) as Promise<BetPlaceResponse>;
 }
 
+/** Open tonight's session-winner market (admin). The body is empty on purpose:
+ *  the backend fills every column from defaults (bets_router.py:353-362), which
+ *  is exactly what legacy availability.js posts — `JSON.stringify({})` at
+ *  :2357-2358. Sending labels or a session id from here would be a NEW
+ *  behaviour, not parity, so slice 3 does not.
+ *
+ *  ⭐ This is the call that closes the `/api/bets/market` ratchet line. The
+ *  templated stake POST above could not: its path carries `{market_id}` and the
+ *  extractor's charset stops at '{', so it registered the truncated prefix —
+ *  a DIFFERENT operation. Pinned by
+ *  test_templated_write_does_not_register_its_truncated_prefix. */
+export async function postOpenMarket() {
+  return apiPost('/api/bets/market', {}) as Promise<MarketOpenResponse>;
+}
+
+/** Settle a market and pay out (admin). `outcome` is 'team_a' | 'team_b' |
+ *  'void'; the backend also accepts no override and resolves from
+ *  session_results, but legacy only ever sends an explicit one and so do we. */
+export async function postSettleMarket(marketId: number, outcome: 'team_a' | 'team_b' | 'void') {
+  return apiPost('/api/bets/market/{market_id}/settle', { outcome }, {
+    pathParams: { market_id: marketId },
+  }) as Promise<MarketSettleResponse>;
+}
+
 
 // Phase 6 — uploads.
 
@@ -1992,6 +2060,58 @@ export async function deleteUpload(uploadId: string) {
 
 
 // Phase 6 — greatshot. Auth-gated end to end: 401 is the anonymous state.
+
+
+/** Duel breakdown for one player within ONE session.
+ *  ⛔ `sessionId` is required, not optional: see PlayerVsStats — a scope
+ *  without its id quietly becomes all-time. */
+export function usePlayerVsStats(guid: string, sessionId: number) {
+  return useQuery({
+    queryKey: ['player-vs-stats', guid, sessionId],
+    enabled: guid.length > 0 && Number.isFinite(sessionId),
+    retry: false,
+    queryFn: () => apiGet('/api/player/{guid}/vs-stats', {
+      pathParams: { guid },
+      query: { scope: 'session', session_id: sessionId, limit: 5 },
+    }) as Promise<PlayerVsStats>,
+  });
+}
+
+/** The career keepsake behind the profile's "memory card" section. */
+export function useMemoryCard(guid: string | null) {
+  return useQuery({
+    queryKey: ['memory-card', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/memory-card', {
+      pathParams: { identifier: guid! },
+    }) as Promise<MemoryCard>,
+  });
+}
+
+/** The player's own form: last session against their own recent average. */
+export function useSkillPlayerForm(guid: string | null) {
+  return useQuery({
+    queryKey: ['skill-player-form', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/skill/player/{identifier}/form', {
+      pathParams: { identifier: guid! },
+    }) as Promise<SkillPlayerForm>,
+  });
+}
+
+/** The rating over recent sessions — the trend behind the header's number. */
+export function useSkillPlayerHistory(guid: string | null) {
+  return useQuery({
+    queryKey: ['skill-player-history', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/skill/player/{identifier}/history', {
+      pathParams: { identifier: guid! },
+    }) as Promise<SkillPlayerHistory>,
+  });
+}
 
 export function useGreatshotList() {
   return useQuery({
@@ -2081,5 +2201,17 @@ export function useApiHealth() {
     queryFn: () => apiGet('/api/status') as Promise<ApiHealth>,
     refetchInterval: 60 * 1000,
     staleTime: 60 * 1000,
+  });
+}
+
+/** The dataset register (docs/design/19 §5): what the site can show, what
+ * collects it, what it costs. Static for the life of a build, so it is
+ * fetched once and never considered stale. */
+export function useDatasets(enabled = true) {
+  return useQuery({
+    queryKey: ['datasets'],
+    queryFn: () => apiGet('/api/datasets') as Promise<DatasetRegistry>,
+    enabled,
+    staleTime: Infinity,
   });
 }

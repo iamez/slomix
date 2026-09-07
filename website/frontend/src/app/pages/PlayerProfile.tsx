@@ -1,12 +1,17 @@
 import { Link, useParams } from 'react-router';
-import { usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer } from '../lib/queries';
+import {
+  usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
+  useMemoryCard, useSkillPlayerForm, useSkillPlayerHistory,
+} from '../lib/queries';
+import { sparkPathRanged } from '../lib/spark';
+import { Cluster, Stack } from '../components/layout';
 import type {
   PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
-import { Absent, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 
 /**
  * The player (docs/design/08 phase 3, docs/design/12 row 18). One endpoint
@@ -116,6 +121,12 @@ function Header({ p }: { p: Profile }) {
         ) : (
           <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="identity" /></div>
         )}
+        {/* Phase 7: the two legacy profile actions that were modals/overlays
+          * (compare.js, wrapped.js) are routes now — linkable, no overlay. */}
+        <div style={{ marginTop: 'var(--space-3)', display: 'flex', gap: 'var(--space-4)' }}>
+          <ActLink to={`/compare/${encodeURIComponent(id.guid ?? p.guid)}`}>compare →</ActLink>
+          <ActLink to={`/profile/${encodeURIComponent(id.guid ?? p.guid)}/wrapped`}>wrapped →</ActLink>
+        </div>
       </div>
       {/* An unrated player gets {available:false, reason:"not rated"} — the
         * rating area must say that, not vanish (Codex, #822 wave 4): a
@@ -426,6 +437,173 @@ function Recent({ rows: raw, available }: { rows: ProfileMatchRow[] | undefined;
  * labels the rating it repeats as the same number, not a second opinion.
  * "Not rated" arrives as {status:'error'} inside a 200 — a fact about the
  * player (needs 5+ rounds), rendered as one, never as a failure. */
+/** Δ as the server means it: null is "no comparison", zero is "no change",
+ *  and the two must not render the same. Legacy printed nothing for null
+ *  (player-profile.js:698-709) rather than "—% vs 100%". */
+function Delta({ pct }: { pct: number | null }) {
+  if (pct == null) return <Meta>no baseline yet</Meta>;
+  if (pct === 0) return <Meta>±0%</Meta>;
+  const up = pct > 0;
+  return (
+    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: up ? 'var(--color-pos)' : 'var(--color-neg)' }}>
+      {up ? '▲ +' : '▼ '}{Math.abs(pct)}%
+    </span>
+  );
+}
+
+function Spark({ values, w = 110, h = 26 }: { values: number[]; w?: number; h?: number }) {
+  const d = sparkPathRanged(values, w, h, 2);
+  // Fewer than two points is not a trend. Saying so beats an empty box the
+  // reader has to interpret.
+  if (d === '') return <Meta>one session so far</Meta>;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} role="img" aria-label="trend" style={{ display: 'block' }}>
+      <path d={d} fill="none" stroke="var(--color-accent)" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+/** The memory card — a career keepsake, measured against this player's own
+ *  past (legacy loadMemoryCard, player-profile.js:812).
+ *
+ *  ⚠️ Two of its facts share their names with WRAPPED cards and are not the
+ *  same numbers: wrapped's are per season (signature = most played with a
+ *  win %, best round = best DPM), these are career (signature = biggest lift
+ *  over the player's own average, best round = most kills). Measured before
+ *  writing, because the names alone say "already covered".
+ *
+ *  ⛔ Legacy renders NOTHING on failure — "optional keepsake, never block the
+ *  profile". The new convention says a missing thing names itself, so a 404
+ *  becomes a reason, not a silence: a keepsake that vanishes without a word is
+ *  indistinguishable from one that broke. */
+function MemoryCardSection({ playerId }: { playerId: string }) {
+  const card = useMemoryCard(playerId);
+  const facts = card.data?.facts ?? [];
+  return (
+    <div data-parity="profile.memory-card" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="memory card" />
+      <Meta>a keepsake of your slomix history — measured against your own past, never a ladder</Meta>
+      {card.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="memory card" /></div>}
+      {card.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="memory card" /></div>}
+      {card.data != null && facts.length === 0 && (
+        <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="nothing to keep yet — the card needs rounds behind it" /></div>
+      )}
+      {facts.length > 0 && (
+        <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+          {facts.map((f) => (
+            <Cluster key={f.key} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
+              <Lbl>{f.label}</Lbl>
+              <Cluster gap={3} align="baseline">
+                <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{f.value}</span>
+                {f.sub != null && f.sub !== '' && <Meta>{f.sub}</Meta>}
+              </Cluster>
+            </Cluster>
+          ))}
+        </Stack>
+      )}
+    </div>
+  );
+}
+
+/** "Your form" — the last session against this player's OWN recent average
+ *  (legacy loadPlayerForm, player-profile.js:696). Rank-vs-self, and the page
+ *  prints the server's own `baseline_desc` so nobody reads it as a ladder. */
+function PlayerForm({ playerId }: { playerId: string }) {
+  const form = useSkillPlayerForm(playerId);
+  const d = form.data;
+  const comp = d?.composite;
+  return (
+    <div data-parity="profile.form" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="your form" />
+      {form.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="form" /></div>}
+      {form.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="form" /></div>}
+      {d != null && comp == null && (
+        <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="no form yet — it needs a session to compare against" /></div>
+      )}
+      {d != null && comp != null && (
+        <Stack gap={2} style={{ marginTop: 'var(--space-2)' }}>
+          <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{comp.latest ?? '—'}</span>
+            <Delta pct={comp.delta_pct} />
+            <Spark values={comp.series} />
+            {d.session_date != null && <Meta>last session {d.session_date}</Meta>}
+          </Cluster>
+          {/* The server's sentence, not a paraphrase of it. */}
+          {d.baseline_desc != null && <Meta>{d.baseline_desc}</Meta>}
+          <Stack gap={1} className="rows">
+            {comp.breakdown.map((b) => (
+              <Cluster key={b.metric} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
+                <Lbl>{b.label}</Lbl>
+                <Cluster gap={4} align="baseline">
+                  {/* ⭐ The per-metric SERIES, which this page already had and
+                    * was not drawing. `/api/skill/player/{guid}/form` returns a
+                    * `metrics` block alongside `composite`, and the page read
+                    * only the composite — so the DPM and K/D curves arrived on
+                    * every load and went nowhere.
+                    *
+                    * Measured against `/api/stats/player/{name}/form`, whose
+                    * ratchet line this does NOT close: the last eleven points
+                    * agree to rounding (275.36 / 257.69 / 265.57 … against
+                    * 275.4 / 257.7 / 265.6 …). What only that endpoint has is
+                    * a date per point, rounds per session, an average line and
+                    * a 6-session trend — so the line stays, and this draws the
+                    * shape we were already paying for. */}
+                  {d.metrics[b.metric] != null && d.metrics[b.metric].series.length > 1 && (
+                    <Spark values={d.metrics[b.metric].series} w={72} h={18} />
+                  )}
+                  <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{b.latest ?? '—'}</span>
+                  <Meta>vs {b.baseline ?? '—'}</Meta>
+                  <Delta pct={b.delta_pct} />
+                </Cluster>
+              </Cluster>
+            ))}
+          </Stack>
+        </Stack>
+      )}
+    </div>
+  );
+}
+
+/** The rating over recent sessions — the trend behind the header's single
+ *  number (legacy loadCareerHistory, player-profile.js:772). */
+function RatingHistory({ playerId }: { playerId: string }) {
+  const hist = useSkillPlayerHistory(playerId);
+  const sessions = hist.data?.sessions ?? [];
+  const rated = sessions.filter((s) => s.cumulative_rating != null);
+  return (
+    <div data-parity="profile.rating-history" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="rating over time" aside={hist.data != null ? <span className="lbl">{figure(hist.data.total_sessions)} sessions · {hist.data.range_days}d</span> : undefined} />
+      {hist.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="rating history" /></div>}
+      {hist.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="rating history" /></div>}
+      {hist.data != null && rated.length === 0 && (
+        <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="no rated sessions in this window" /></div>
+      )}
+      {rated.length > 0 && (
+        <Stack gap={2} style={{ marginTop: 'var(--space-2)' }}>
+          <Spark values={rated.map((s) => s.cumulative_rating as number)} w={320} h={44} />
+          <Stack gap={1} className="rows">
+            {/* Newest first: the last night is the one being asked about. */}
+            {[...rated].reverse().slice(0, 10).map((s) => (
+              <Cluster key={s.session_date} gap={4} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0', flexWrap: 'wrap' }}>
+                <Lbl>{s.session_date}</Lbl>
+                <Cluster gap={4} align="baseline">
+                  <Meta>{figure(s.rounds)} rounds · {figure(s.maps)} maps</Meta>
+                  <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{s.cumulative_rating}</span>
+                  {/* ⛔ A null delta is the FIRST session, not a flat one. */}
+                  {s.delta == null ? <Meta>first</Meta>
+                    : <span className="m" style={{ fontSize: 'var(--fs-micro)', color: s.delta > 0 ? 'var(--color-pos)' : s.delta < 0 ? 'var(--color-neg)' : 'var(--color-text-500)' }}>
+                        {s.delta > 0 ? '+' : ''}{s.delta}
+                      </span>}
+                </Cluster>
+              </Cluster>
+            ))}
+          </Stack>
+        </Stack>
+      )}
+    </div>
+  );
+}
+
 function RatingComponents({ playerId }: { playerId: string }) {
   const skill = useSkillPlayer(playerId);
   return (
@@ -600,6 +778,9 @@ export function PlayerProfilePage() {
           <Header p={p} />
           <Lifetime p={p} />
           <RatingComponents playerId={playerId} />
+          <MemoryCardSection playerId={playerId} />
+          <PlayerForm playerId={playerId} />
+          <RatingHistory playerId={playerId} />
           <Streaks p={p} />
           <Achievements playerId={playerId} />
           <Weapons rows={p.weapons.weapons} available={p.weapons.available} />

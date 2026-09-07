@@ -21,6 +21,8 @@ import { WeaponsPage } from './pages/WeaponsPage';
 import { FormPage } from './pages/FormPage';
 import { RetroViz } from './pages/RetroViz';
 import { PlayerProfilePage } from './pages/PlayerProfile';
+import { ComparePage } from './pages/ComparePage';
+import { WrappedPage } from './pages/WrappedPage';
 import { DesignCatalog } from './pages/DesignCatalog';
 import { Rivalries } from './pages/Rivalries';
 import { SessionDetail } from './pages/SessionDetail';
@@ -97,6 +99,8 @@ const PAGES: Record<string, React.ReactElement> = {
   form: <FormPage />,
   'retro-viz': <RetroViz />,
   profile: <PlayerProfilePage />,
+  compare: <ComparePage />,
+  wrapped: <WrappedPage />,
   design: <DesignCatalog />,
   rivalries: <Rivalries />,
   'skill-rating': <SkillRating />,

@@ -1,0 +1,91 @@
+# Spider web — status for reviewers (2026-09-06)
+
+The "spider web" is the owner's name for the whole project's end state: every
+statistic connected to every other through **position × time × player state ×
+event**, so that a positional score can say not only *what* a player did but
+*where, when and under what conditions*. Individual stats are threads; the
+value appears when they are joined. This file is the one place that says how
+far the web is built, what has been measured, and what has *not* been
+validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
+(the spec; §4–§8 are the layers and the validation protocol).
+
+## Layers and their state
+
+| layer | spec | state | where |
+|---|---|---|---|
+| 0 capture | §2 | live. Lua tracker v6.14 on the game server writes 200 ms samples, combat, engagements, vehicle progress (`proximity/lua/proximity_tracker.lua`); parser `proximity/parser/parser.py`; tables `proximity_*`, `player_track`, `combat_engagement`, `vehicle_progress` | PR #916 (v6.14), earlier v6.x |
+| 1 the web (reconstruction of a round at one moment) | §4 | **built and merged** (#792, 2026-08-21; fixes #793). `GET /api/replay/round/{id}/web?t=<ms>` in `website/backend/routers/replay_router.py`, logic in `website/backend/services/round_web_service.py` | SPA page `SpiderWebPage.tsx` (`/spider-web/round/:roundId`, phase 5 slice SW-1, #880) |
+| 2 the clock | §5 | built inside layer 1's response: clock quality is a server verdict (`validated`, `internally_consistent_unvalidated`, `validation_failed`, …, `round_web_service.py` ~858) and the page shows it as a badge; **withheld** is a separate axis, not a sixth state | same endpoint/page |
+| 3 information state (what a team *could* know) | §6 | **not drawn**. Edges are computed; belief regions / information_state are not rendered (see follow-ups) | — |
+| 4 movement quality | §7 | **not started**; §7.5 says weights are choices, not facts | — |
+| validation W6 (offline trace vs engine) | §8, §10 C4 | **done, 2026-08-21/22**: 26,695 paired segments on all 8 project maps, agreement **99.92 %**, 0 hard errors; two maps at exactly 100 %; cost 9–13 µs per trace | `scripts/build_w6_trace_fixtures.py`, `scripts/compare_w6_engine_vs_offline.py`, `tests/unit/test_w6_control_expectations.py`; report is local (`docs/research/W6_OFFLINE_VS_ENGINE_2026-08-22.md`, not in the repo) |
+
+## What was measured (numbers a reviewer can hold us to)
+
+- **Layer 1 cost**: median 2.12 ms per snapshot at 7.5 players (tracks loaded
+  once, slicing in memory). Three runs gave 2.12 / 2.34 / 2.12 — the middle one
+  was noise, not a regression; do not claim a move from two measurements.
+- **Overlapping lives**: 4,757 overlapping life pairs across 87 rounds. The
+  old replay path returned the *earliest* overlapping life; layer 1 resolves
+  by the sample's own life (§4.3). Disagreement between the two rules: 1.83 %
+  on 25 random rounds, 43.96 % on the eight worst. The death boundary is
+  half-open: at `t == death_time_ms` the sample is a corpse.
+- **No positions from the future**: layer 1 uses floor + `stale_ms` (§4.4),
+  checked on 320 snapshots: 0 future states. The replay slider's
+  nearest-neighbour lookup can return a future sample; layer 1 must not.
+- **Derived speed tolerance was measured, not chosen**: |derived − stored| /
+  stored has p50 0.069, p90 0.596, p99 2.434 on 932 samples, because the stored
+  speed is instantaneous and the derived one is an interval average. A guessed
+  0.5 rejected 13.7 % of ordinary movement; 2.5 (p99) rejects 4.6 %.
+- **Offline BSP tracer vs recorded kills** (2026-08-20, before W6): 38,327
+  hitscan kills on 8 maps agree 90.4 % (splash control 26.0 %); the residual
+  falls with distance and mostly clears when re-traced to the head, so the
+  honest tracer error bound is ~4–6 %. W6 later explained the residual: 99.51 %
+  of the "blocked" calls are confirmed blocked by the engine (the bullet passed
+  because of `MASK_SHOT`, antilag `G_HistoricalTrace`, or entities).
+- **Engine trace contract** (read in `etlegacy-source` and confirmed live):
+  `et.trap_Trace` with `passEntityNum = -2` is a **world-only** trace
+  (`sv_world.c:749`); `-1` clips runtime entities whose collision volumes are
+  created by game code (e.g. `team_WOLF_checkpoint`, no brush model) and
+  **cannot be reproduced offline**. W6 therefore compares `-2` against our
+  world tracer; `-1` is diagnostics only.
+
+## What is explicitly NOT validated or not done
+
+- `capture_policy.mode = "unknown"` is the truth for historical rounds:
+  `capabilities` is NULL in all 828 rows measured on 2026-08-21 and capture
+  cadence is stored nowhere; the page shows this as a three-state snapshot
+  integrity, not as an error.
+- Free path (line of sight) between players is still marked `unvalidated` in
+  the web output until §8 is signed off by the owner — W6 validated the
+  tracer, not the metric that would consume it. No metric eats LOS yet.
+- Layer 1 must not rank players (§4.6); the ceiling for all context is +2.51
+  rating points.
+- Objective pressure keeps the radius-500 sphere: replacing it with objective
+  volumes was measured (containment 5.9 %, free path 48.1 %) and a random-
+  direction control killed both instruments — on 3 of 4 maps the path to the
+  objective is *clearer* than random. Only `etl_ice` is worse than random.
+- SW-1 leaves out, by name (page footer): the 3D camera, belief regions and
+  label placement of the legacy canvas. These are follow-ups deferred behind
+  parity (PLAN, 2026-09-02), not missing parity.
+- Layer 3/4 have no code. The owner's positional score is a goal, not a
+  deliverable: any new metric must say which threads it joins
+  (`proximity_*` samples, `storytelling_kill_impact`, W6 LOS, spawn timing,
+  reaction metrics) and follow the measurement discipline that already
+  retired six proposed metrics (no artificial weighting; descriptive, not
+  judging; control group before headline number).
+
+## Review focus for this area
+
+1. `round_web_service.py`: life resolution (§4.3) and staleness (§4.4) — the
+   two rules the replay slider gets wrong; the `stale_ms` of a dead player
+   must be measured from `t`, not from death time (review finding on #792).
+2. `derive_velocity` and `build_edges`: both had `z = 0` assumptions once;
+   the class was removed in both places — look for a third.
+3. The empty-round shortcut must return every key (a KeyError arrived
+   exactly on the thinnest data once).
+4. Lua v6.14 `recordVehicleDamage`: the hook is at the top of `G_Damage`
+   (fires for every entity incl. `script_mover`, before `targ->health -=
+   take`), so vehicle health seen in the hook is *pre-hit*.
+5. Validation scripts must not repeat the subject's self-assessment: the
+   W6 comparison exits 1 on mismatch and compares independently.

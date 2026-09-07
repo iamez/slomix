@@ -19,9 +19,11 @@ import { Cluster, Stack } from './layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from './ui';
 import { guidKey, perMapTotals, type PerMapTotals } from '../lib/perMap';
 import {
+  usePlayerVsStats,
   useSessionPlayerWeapons, useSessionRounds, useSessionVerdicts, useStoryBestLives, useStoryKillImpact,
 } from '../lib/queries';
 import { KisDetails } from '../pages/Story';
+import type { VsOpponent } from '../lib/types';
 
 /** One player's weapons within THIS session — the session-scoped call
  * legacy session-detail.js made, via the hyphen spelling (see
@@ -134,13 +136,69 @@ function Kis({ sessionId, guid8, name }: { sessionId: number; guid8: string; nam
   return <KisDetails gsid={sessionId} guid={me.guid} name={name} />;
 }
 
+/** Who this player fed and who fed on them, THIS session — the sixth
+ *  instrument, and like the other five it declares its own three states.
+ *
+ *  ⛔ Session-scoped on purpose. Rivalries already answers "who is my nemesis"
+ *  across all time; the question this panel exists for is "who did I feed
+ *  tonight", and those are different numbers — measured on one player, 51
+ *  kills against the top prey this session against 938 all-time.
+ *
+ *  ⚠️ An opponent normally appears on BOTH sides (prey at kd 0.74, enemy at
+ *  1.35). Same duel, read from each end — not a duplicate to be deduplicated. */
+function VsStats({ sessionId, guid8 }: { sessionId: number; guid8: string }) {
+  const vs = usePlayerVsStats(guid8, sessionId);
+  const preys = vs.data?.easiest_preys ?? [];
+  const enemies = vs.data?.worst_enemies ?? [];
+  if (vs.isPending) return <Pending label="duels" />;
+  if (vs.isError) return <Unavailable what="duels" />;
+  if (preys.length === 0 && enemies.length === 0) {
+    return <Absent reason="no duels recorded for this player tonight" />;
+  }
+  const side = (rows: VsOpponent[], empty: string) => (
+    rows.length === 0 ? <Absent reason={empty} />
+      : <Stack gap={1} className="rows">
+          {rows.map((o) => (
+            <Cluster key={o.opponent_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
+              {/* Linked by guid, not by name: legacy links `#/profile/<name>`
+                * and a renamed player then lands nowhere. */}
+              <Link to={`/profile/${o.opponent_guid}`} style={{ fontSize: 'var(--fs-row)', color: 'inherit' }}>{o.opponent_name}</Link>
+              <Meta>{figure(o.kills)}k · {figure(o.deaths)}d · {o.kd.toFixed(2)}</Meta>
+            </Cluster>
+          ))}
+        </Stack>
+  );
+  return (
+    <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>
+      <Stack gap={2} style={{ minWidth: 220, flex: 1 }}>
+        <Lbl>easiest preys</Lbl>
+        {side(preys, 'nobody they came out ahead against')}
+      </Stack>
+      <Stack gap={2} style={{ minWidth: 220, flex: 1 }}>
+        <Lbl>worst enemies</Lbl>
+        {side(enemies, 'nobody came out ahead against them')}
+      </Stack>
+    </Cluster>
+  );
+}
+
 export function PlayerDrilldown({ sessionId, guid8, name }: { sessionId: number; guid8: string; name: string }) {
   const key = guidKey(guid8);
+  // The proximity tables hold the tracker's FULL 32-character guid; the
+  // session page only has the 8-character key. Since 2026-09-06 the
+  // proximity endpoints resolve a prefix themselves (every human prefix is
+  // unique in the corpus; bot prefixes are a 400), so the link is always
+  // offered. The kill-impact list (fetched below for the KIS section anyway)
+  // still supplies the full guid when it has it — one lookup fewer on the
+  // other side, and the href the e2e test pins.
+  const kis = useStoryKillImpact(sessionId);
+  const full = kis.data?.players.find((p) => guidKey(p.guid) === key)?.guid;
+  const proximityTarget = full ?? key;
   return (
     <Stack gap={4} parity="session.player" style={{ padding: 'var(--space-3) 0 var(--space-4) var(--space-5)' }}>
       <Cluster gap={4} align="baseline" parity="session.player.links">
         <Link to={`/profile/${key}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>profile →</Link>
-        <Link to={`/proximity/player/${key}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>proximity →</Link>
+        <Link to={`/proximity/player/${proximityTarget}`} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>proximity →</Link>
       </Cluster>
       <Stack gap={2} parity="session.player.maps">
         <SectionHead label="by map" aside={<span className="lbl">counted rounds · summed from the rounds tab</span>} />
@@ -157,6 +215,10 @@ export function PlayerDrilldown({ sessionId, guid8, name }: { sessionId: number;
       <Stack gap={2} parity="session.player.kis">
         <SectionHead label="kills, scored" aside={<span className="lbl">kill impact · the ten that moved most</span>} />
         <Kis sessionId={sessionId} guid8={guid8} name={name} />
+      </Stack>
+      <Stack gap={2} parity="session.player.duels">
+        <SectionHead label="duels" aside={<span className="lbl">this session · who fed whom</span>} />
+        <VsStats sessionId={sessionId} guid8={guid8} />
       </Stack>
       <Stack gap={2} parity="session.player.weapons">
         <SectionHead label="weapons" aside={<span className="lbl">this session</span>} />

@@ -393,6 +393,45 @@ print(len(names), 'archetypes' in names)"   # → 23 False
 
 ---
 
+## Note — errors.log line counts changed on 2026-09-06
+
+Not an issue; recorded so nobody reads the drop as a broken log.
+
+`paramiko.transport` (and its `.sftp` child) report a failure by printing the
+whole traceback, one ERROR record per line. They are now filtered out of the
+**console** (which is what `journalctl -u etlegacy-bot` shows) and out of
+**errors.log**. They still go to **bot.log** in full.
+
+Measured on the 2026-09-06 log, with the owner's own grep
+(`grep -iE "warn|error|exception|traceback|critical"`):
+
+| | lines |
+|---|---|
+| before | 813 |
+| after | **100** |
+| removed | 713 (87%) |
+
+⛔ Nothing that mattered went with them. What remains is 53 `SLOW QUERY`, 19
+`bot.automation.ssh`, 15 `bot.cogs.proximity`, 4 `bot.core` — every line our
+own code wrote. One SSH incident that produced 48 ERROR lines (46 of them
+paramiko's, for **two** actual failures) now produces one line per failure,
+carrying the cause `_describe_ssh_failure` unwrapped.
+
+⚠️ **So counting errors by line no longer gives the old number**, and the two
+are not comparable across this date. `scripts/health_check.sh:585` warns above
+**20** ERROR/CRITICAL lines per 24h, counted per line — measured on the same
+day, that count goes **751 → 38**.
+
+⭐ The threshold does not need lowering; it needed this. At 751 the check was
+always over 20, so it fired every day and said nothing about how bad the day
+was. At 38 it means what it says: more than twenty real failures. The number
+went down by a factor of twenty and became informative at the same time.
+
+⛔ The traceback is kept in bot.log on purpose: `[Errno 9] Bad file
+descriptor` means a socket was closed under paramiko's thread, and diagnosing
+that needs frames, not a summary. The concurrency question it belongs to (one
+connection per cycle, instead of one per file) is still open.
+
 ## Open — website UX / infra (owner decisions)
 
 ### Availability page UX overhaul — needs owner go/no-go

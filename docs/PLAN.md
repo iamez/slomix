@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **4** na tej veji (5 na mainu po #894; uploads r. 2 zapre `/api/uploads/resumable`) |
+| endpoint gap (H1) | **13** — prešteto v `tests/data/endpoint_gap.txt` 6. 9. ob 20:40 |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -37,17 +37,139 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
-## Naslednji koraki (vrstni red)
+## Proga: štiri točke do Astre (6. 9. popoldne)
 
-1. **Faza 6 — preostanek**: `/api/diagnostics`; availability rezina 3 = admin market kontrole
+Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja
+degradacije (PR #946) → (4) doc 19 r. 1 register datasetov (PR #947) → (1)
+watchdog r. 1 (obseg `docs/design/24`, lokalno).
+
+- **(2) proximity guid prefiks — NAREJENO 6. 9.** Izmerjeno: 34 polnih guidov →
+  23 prefiksov; edini kolizijski prefiksi so botovski (`OMNIBOT0` ×9, `OMNIBOT1`
+  ×4), ljudje 21 → 21. `LEFT(guid,8)=` je seq scan (61 ms, en_US collation);
+  `storytelling_kill_impact.killer_guid_canonical` je indeksiran → resolver
+  `proximity_helpers.resolve_player_guid` (canonical → `player_track` fallback →
+  cache 10 min; 32 znakov passthrough; bot prefiks in slaba oblika = 400; miss =
+  prefiks nazaj = prazen izid, ne 500). Vezan v 17 handlerjev (15 query-param +
+  `/proximity/player/{guid}/profile|radar`), `/storytelling/kill-impact/details`
+  primerja `killer_guid OR killer_guid_canonical`. AST varovalo v
+  `tests/unit/test_proximity_guid_prefix.py` (vsak handler s `player_guid` mora
+  klicati resolver ali biti v seznamu izjem z razlogom; mutacija videna pasti).
+  SPA: drilldown vedno ponudi »proximity →«; e2e trdi, da `/proximity/player/D8423F90`
+  pokaže profil. Odprto: `response_model` za `/profile` in `/radar` (ni v tem PR).
+- **(3) diagnostics stanja degradacije — NAREJENO 6. 9.** Prenos iz zaprtega
+  #911 v About panel (`components/DiagnosticsReport.tsx`): tabela brez štetja =
+  razlog (pravi 0 ostane »0 rows«), prazen `time` = poizvedba ni tekla, padla
+  monitoring tabela = `unavailable` (⛔ main je za `{count:0, error:"query
+  failed"}` izpisoval »voice 0 rows« — živ hrošč, popravljen), 401/403 = odgovor
+  (potekla seja / endpoint ne šteje računa za admina), sekciji `time` in `pool`
+  novi. Backend: `response_model=DiagnosticsReport` z `exclude_unset` (odsotno
+  ostane odsotno; `exclude_none` je varovalo pinnalo na eno ruto) → gap
+  response_model −1. Fixture `api_diagnostics_degraded.json` (konstruiran, z
+  `_note`). Mutacija (vrstni red `count`/`error`) videna pasti; oba posnetka
+  brez izgube skozi model (`test_diagnostics_response_model.py`).
+- **(4) doc 19 r. 1 — register datasetov — NAREJENO 6. 9.** Ni greenfield:
+  poenotenje treh obstoječih stvari — `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` z
+  IZMERJENIMI stroški (aim 16 887 ms, advanced 11 077 ms hladno) v profilnem
+  routerju, oblika `formula_registry.py` (vnos = stvar + status + surface, brez
+  tipa) in `routes.data.json` kot imenski prostor `page_key`.
+  `services/dataset_registry.py` (34 vnosov: 14 profilnih sekcij, 8 sejnih,
+  12 proximity/derived) + `GET /api/datasets` (tipiziran, javen, read-only,
+  `DatasetRegistry{registry_version,count,datasets}`); profilni router
+  IZPELJE `_PROFILE_SECTIONS`/`_HEAVY_SECTIONS` iz registra (en vir; »heavy« =
+  ≥ 5 s hladno). Pravila, ki jih testi pinnajo proti VIRU, ne kopiji:
+  `default_visible_on` ⊆ ključi `routes.data.json`, `depends_on` ⊆ ključi,
+  `parity_key` = `data-parity`, ki ga SPA res renderira, `collection_toggle` =
+  Lua `isFeatureEnabled` sekcija ali bot `*_ENABLED` (nikoli web-layer zastava,
+  doc 19 §5). Kontrola: lažen `page_key` → test pade (videno, obnova `cmp`).
+  SPA: tip `DatasetDescriptor`/`DatasetRegistry`, hook `useDatasets`
+  (`staleTime: Infinity`), fixture `api_datasets.json` (GENERIRAN iz registra,
+  z `_note`), e2e `datasets.spec.ts` (Playwright doseže endpoint, ≥ 30 vnosov,
+  `aim` ni na profilu). Openapi posnetek osvežen (+148 vrstic). Brez UI —
+  vrstica na About panelu pride po mergu #946 (isti panel). R. 2 (tabela
+  `user_page_layouts`, column picker) po doc 19 §9 — ownerjeva odločitev.
+- **(1) watchdog r. 1 — NAREJENO 6. 9.** `scripts/slomix_watchdog.py`:
+  opazovalec, nikoli zaganjalnik (systemd ima `Restart=always`; ročni zagon
+  zmaga v tekmi za vrata — 2026-08-05). 9 preverb kot ČISTE funkcije nad
+  zbranimi vhodi (enote `systemctl show` z `LoadState` — neobstoječa enota je
+  `unknown`, ne »inactive«; `/health`; DB `SELECT 1` + `pg_stat_activity`;
+  runde proti kadenci `server_status_history` (300 s = »bot živi«); `/api/live/
+  status` `newest_age_seconds`; mtime kolektorja `~/slomix-server-logs`;
+  `frame_health` stalli ≥ 500 ms v 30 min prek `frame_health_report`; disk +
+  journald; `lua_round_teams` proti `rounds`; + `logs/bot_error_streaks.json`
+  sestre (#923: `version`, `written_at`, `alerted`)). Ravni ok/warn/fail/
+  **unknown** (ni meritve ≠ ok). Politika (`decide`, čista): alarm ob prehodu v
+  fail (web in lua_webhook šele ob 2. zaporednem), dedup 1×/h na ključ,
+  »recovered« enkrat, dnevni heartbeat po 09:00. Stanje `logs/watchdog_state.json`
+  (`version`), poročilo `logs/watchdog_last.json`, Discord webhook
+  `WATCHDOG_WEBHOOK_URL` (samo https; brez njega izpis). Config iz KORENSKEGA
+  `.env` (`dotenv_values`, nikoli `website/.env`), `WATCHDOG_DB_USER` privzeto
+  `etlegacy_user`. Enoti `deploy/systemd/etlegacy-watchdog.{service,timer}`
+  (oneshot, 5 min) — namesti OWNER. **Dokazi:** 24 unit testov (kontrole:
+  odstranjena enota = unknown; brez dedupa dvojni alarm); živ `--once --dry-run`
+  na dev: vseh 9 `ok` (disk 84,7 %, tik pod 85), `bot_streaks` unknown (bot še
+  ni pisal datoteke); simuliran izpad (`WATCHDOG_WEB_URL=http://127.0.0.1:1`,
+  ločeno stanje): tek 1 = `live`+heartbeat, tek 2 = `web` alarm (2× zapored),
+  tek 3 = tišina (dedup), obnova = `recovered` ×2 enkrat, tek 5 = tišina.
+  **Ownerjeva dejanja:** Discord webhook → `WATCHDOG_WEBHOOK_URL` v `.env`;
+  `sudo cp deploy/systemd/etlegacy-watchdog.* /etc/systemd/system/ && sudo
+  systemctl daemon-reload && sudo systemctl enable --now etlegacy-watchdog.timer`.
+  R. 2 (ni tu): SSH sonde na puran (tailer `pgrep`, `ls -t stats/`), `watchdog`
+  ključ v `/api/diagnostics` + vrstica na About panelu (po #946), popravek poti
+  v `~/slomix-server-logs/bin/pull_puran_console_log.sh` (zunaj repa, owner).
+
+## Naslednji koraki (vrstni red) — owner 6. 9.: **dolg → faza 7 → pregledni PR**
+
+0. **Dolg r. 1 (6. 9., MERGAN #919)**: keymap 7 rut zares preslikanih (guard:
+   zgrajena ruta ne sme nositi `phase-N` — videti pasti na starem keymapu),
+   `/replay` → preusmeritev na `/proximity` (edina nezgrajena ruta umaknjena
+   iz `routes.data.json`), `/api/diagnostics` kot admin panel na `/admin`
+   (anonimni ne pošlje zahteve) → **vrzel endpointov 4 → 3**.
+1. **Faza 6 — preostanek**: availability rezina 3 = admin market kontrole
    (`/api/bets/market`, settle) — ownerjeva odločitev, kdaj; `/api/bets` in
    `/api/stats/sessions` se zapreta šele z upokojitvijo legacy js.
 3. **Spider-web follow-upi** (3D kamera, belief regions, label placement;
    W6) — premaknjeno ZA paritetno fazo 6: polish ne prehiteva paritete
    (razlog zapisan 2. 9.).
-4. **Faza 7**: wrapped, compare, Clips, upokojitev začasne /rounds.
-5. **Ultra pregled** (owner-triggered) → 1–2 tedna teka na dev → pogovor o
-   produkciji.
+4. **Faza 7**: r. 1 (6. 9., **MERGANA #920**) = `compare` (`/compare/:a?/:b?`, šest
+   legacy vrstic iz profilnega endpointa, barva = boljša stran) in `wrapped`
+   (`/profile/:id/wrapped`, canvas 1080×1920 v žetonih — brez gradienta,
+   radius 0, pravilo pripeto v testu — + dejstva kot besedilo, copy/download);
+   obe kot RUTI (dizajn sistem nima modalov), povezavi v glavi profila;
+   `PickPlayer` seljen iz Rivalries v `components/`. **O1 zaprta 6. 9.:
+   owner (c) → Clips strani NI** (33. zaslon odpade; 32 rut). `/rounds` že
+   preusmerjen. Ostane: končni paritetni prelet (SPA, vse rute × 4 viewporti
+   × anon/owner — `scripts/audit_website_browser.mjs --app --manifest`), potem
+   pregledni PR-ji za ultra (glej točko 5 — rezine; ⛔ `19c61847` je bil hash
+   iz stare zgodovine).
+
+2. **Faza 6 r. 3 + popravek merilnika (6. 9., veja `feat/availability-admin-market`, PR #915):**
+   admin market kontrole (open / settle / void, `POST /api/bets/market`);
+   greatshot sekcije highlights/clips/renders (ruta je `:section?` nosila od
+   faze 6, stran ga je ignorirala — brez novega endpointa); rating trendi na
+   profilu (`skill/player/{}/form` + `/history`).
+   ⛔⛔ **Popravek ekstraktorja:** legacy zajem se je ustavil pri prvi `${`,
+   zato je odrezan prefiks (`/api/players`) veljal za pokritega, brž ko nova
+   stran kliče karkoli globljega. 29 legacy klicev nosi interpolacijo s
+   segmentom za njo. Merodajno število po mergu izpiše
+   `pytest tests/integration/test_endpoint_gap.py` — vsaka nova vrstica pride
+   z zapisanim razlogom, ne kot tiha zamenjava števila.
+   ⚠️ `compare` in `wrapped` iz te veje sta bila ODSTRANJENA: #920 ju je
+   mergal medtem, in mainovi različici sta ostali.
+5. **Ultra pregled = 20 rezin (6. 9.)**: meja ≤ 8 000 vrstic / 500 datotek na
+   pregled, koda od proda 93 k → `scripts/review_slices.sh` (obratna baza:
+   `review-base/NN-<območje>` = main z območjem na v1.39.0; glava `review/NN` z
+   mainovim drevesom — GitHub zavrne glavo, ki je prednik baze; draft
+   PR-ji »review: … — NEVER MERGE«, telesa `docs/review/SLICES.md`, vodnik
+   `docs/REVIEW_GUIDE.md`, spiderweb `docs/SPIDERWEB_STATUS.md`). Rez = meritev
+   20/20. Vrstni red (owner): 01 proximity+spiderweb+Lua (5 301) → 02 backend
+   routerji (6 411) → 03 SPA lib (7 708) 7. 9. opoldne; ostale po dnevih.
+   ⛔ po #882 (v1.45.0) `cut --push` znova. Nato triaža najdb (Astra, zanka
+   `docs/process/MANDELBROT_RCA.md`) → 1–2 tedna teka na dev → pogovor o
+   produkciji. **Astra predaja**: `AGENTS.md`, `docs/prompts/astra_kickoff.md`,
+   `docs/AGENT_LOG.md`, `~/.codex/*` (memory `astra_codex_handoff_2026-09-06`).
+   **Watchdog proga** (Astra, po triaži): obseg `docs/design/24_WATCHDOG.md`
+   (lokalno) — opazovalec + Discord alarmi z dedupom, nikoli zaganjalnik;
+   dokaz = simuliran izpad → alarm ≤ 2 min, noč brez izpada → 0 alarmov.
 6. **Raziskovalne proge (owner 4. 9.: doc 22 naslednja, pred doc 19 / moments r. 2):**
    - `docs/design/22` (lokalno, **napisan 4. 9.**) — **»digitalni dvojčki« botov**:
      `player_track.path` (200 ms, 74 480 življenj, regularji 28–63 sej/mapo)
@@ -55,6 +177,46 @@ deploy NI naloga.
      0.91 na puranu = en `.way` graf na mapo, per-bot le `OnBotJoin` +
      `bot.SetRoles` + kamp čas + tempo → **»njegovi cilji, njegova kamp mesta,
      njegov tempo«**, ne dobesedna pot; rezine 1–5 v docu; odločitve za ownerja.
+     **Rezina 1 izmerjena 5. 9.** (`scripts/backtest_route_distinctiveness.py`,
+     veja `feat/bot-twins-route-distinctiveness`): polovica igralca najde
+     SVOJO drugo polovico med desetimi v 81 % (@512) / 91 % (@256) proti 10 %
+     naključja, kontrola 0–20 %; a »najbližja točka« da 2–6 u → osebnost je
+     ČASOVNA UTEŽ, ne kraj; prag sej 25 (pod njim 63 %); dwell 10–22 %, top
+     celice skupne (spawn čakanje) → rezina 2 ga izloči. #913 mergan 5. 9.
+     **Rezina 2 zgrajena 5. 9.** (veja `feat/bot-twins-camp-profile`): metrika
+     »drži položaj« = `GET /storytelling/camp-profile` (tipizirana; hold =
+     ≤ 96 u od sidra ≥ 4 s, still = speed < 10 ≥ 3 s; prvih 3 s življenja
+     izven SEZNAMA mest; < 60 s živ → `null`, ne 0) + peta plošča vlog na
+     Story strani. Izmerjeno pred gradnjo: 90 % počasnih točk so postanki
+     < 1,2 s (delež počasnih točk NI kemp → epizodna metrika); obe definiciji
+     stabilna lastnost igralca (Spearman polovic +0,61…+0,95). Živ dokaz:
+     seja 154 hold 11–18 %, seja 120 16–23 %, hladno 0,9–1,1 s, toplo 3 ms.
+     #914 mergan 5. 9. Naslednje: r. 3 (per-bot `.gm` profil iz `top_cells`
+     + tempa) — owner je 5. 9. izbral **najprej moments r. 2** (spodaj).
+   - **Moments r. 2 (doc 20 §7.2) — MERGANA #916 in DEPLOYANA na puran
+     5. 9. 23:16** (sha256 = main, `FH watcher version=6.14`; migracija 082
+     na prod ob naslednjem release deployu; odprto: en večer
+     `frame_health.log`). Vsebina: Lua v6.14 (`first/last_move_time` na
+     `VEHICLE_PROGRESS`, nova sekcija `VEHICLE_DESTROYED` iz `et_Damage`
+     veje pred `isValidClient` — izvor g_combat.c:1857 kljuko sproži za vsako
+     entiteto), parser + migracija 082 (3 stolpci na `proximity_vehicle_progress`,
+     JSONB seznam uničenj, brez nove tabele), detektor `escort_mover` z
+     `timestamp_source: "first_move"` in `destroyed_by`. Testi: harness
+     `tests/lua/vehicle_tracking_harness.lua` v CI (3 mutacije padle), parser 5,
+     escort 13. Runtime: lokalni ET 2.85 (:27961) z boti, 5 rund — dve pasti
+     v živo (supply truck se sam odpelje ob 0,6 s → `first_escort_time`;
+     goldrush skript tank ob 1,0 s »ubije« prek `G_Damage` → smrt brez
+     igralca šteje šele po prvem escortu) in ena o motorju (kljuka teče PRED
+     odštetjem zdravja). ⚠️ Kontrakt `destroyed_count`: korpus pred v6.14
+     nosi fantomsko +1 na goldrush rundah (popravek = odprta naloga).
+   - **Dvojčki r. 3 — zgrajena 6. 9.** (veja `feat/bot-twins-profile-generator`):
+     `scripts/build_bot_twin_profiles.py` → `server/omnibot/twins/` (profil na
+     bota z `ReactionTime`, `<mapa>_twins.gm` z vlogami + kamp časi na
+     njegovih razločevalnih ciljih, tabela imen s `profile=` in pravim
+     razredom) + `docs/design/23_TWINS_REPORT.md` (lokalno). 5 dvojčkov,
+     43 ciljev; ⚠️ kontrola (premešane seje) preživi ≈ 21 % — pragi iz
+     kontrole, številka je v poročilu. Deploy na puran + bot test = owner;
+     r. 4 = harness bot proti človeku (+ kontrola proti tujemu profilu).
    - `docs/design/19` (lokalno) — **modularni statsi + per-user pogled**:
      register datasetov + `user_page_layouts` + column picker/sekcije/home
      v 6 rezinah; zajemna stikala ŠELE zadnja in le s coverage zastavico.
@@ -68,7 +230,7 @@ deploy NI naloga.
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | 4 na tej veji (5 na mainu; 74 ob začetku 1. 9.) |
+| endpoint gap | **13** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
@@ -94,7 +256,7 @@ Odprto (owner): FSK prag, potrditev vzdevkov, Charts zavihek.
 
 ## Proga: match moments (doc 20, lokalno) — Fable 5.1
 
-**Zadnja posodobitev:** 2026-09-04 (Fable 5.1, r. 1 in r. 5 mergani; naslednja doc 22)
+**Zadnja posodobitev:** 2026-09-06 (Fable 5.1, dvojčki r. 3 v PR-ju)
 
 | rezina | vsebina | stanje |
 |---|---|---|
@@ -243,6 +405,43 @@ zmaga v 83,2 %, pri hudih (n=41) v 97,6 %.
 
 ⭐ **Nova najdba 2. 9.:** `revives_given` je 0 na vseh 5.538 vrsticah pred
 2025-12 — vsaka vseskozna revive lestvica se tiho začne decembra 2025.
+
+## Proga: SSH monitor / alarmiranje (Opus 5) — PR #923, ODPRT
+
+Sprožil ownerjev alarm na #privat 6. 9.: »Ssh Monitor Failing / 3 consecutive
+failures / Error reading SSH protocol banner«.
+
+**Štiri rezine, vse na veji `fix/ssh-monitor-says-what-it-knows`:**
+
+1. `55a0e555` — monitor pove, kar ve: dva vzroka pod enim imenom ločena
+   (`[banner/read timed out — remote slow]` proti `[socket closed under the
+   read — local]`), `banner_timeout/auth_timeout=45` na vseh petih mestih,
+   okrevanje se objavi, proximity dobi glas.
+2. `d909fb68` — »consecutive« končno pomeni zaporedne: `STREAK_WINDOW` 30 min
+   na **enem** mestu velja za vseh devet ključev (šest jih ni imelo reseta —
+   ⚠️ ne sedem od osmih, prešteto je šest od devetih).
+3. `7f3dba7a` — Full Jitter razmik pollerjev + **en** ponoven poskus listinga,
+   samo za `remote slow`. ⛔ Iskanje je prvo postavko obrnilo iz »zgradi pool«
+   v **ne gradi poola**: `connect()` ni thread-safe (paramiko #1904), naše
+   operacije tečejo v nitih izvajalca.
+4. `443818b7` — nizi preživijo restart (`logs/bot_error_streaks.json`).
+   ⛔⛔ Restart ni izgubil le zgodovine, **odložil je naslednji alarm**.
+   ⛔⛔ `STREAK_WINDOW` velja tudi ob **branju**, sicer bi trajnost ustvarila
+   lažni »Recovered« za izpad, ki je minil pred restartom.
+   Datoteka in ne tabela: alarmna pot ne sme viseti na tem, o čemer alarmira;
+   brez migracije torej brez prod deploya.
+
+**Stanje: MERGANO** 6. 9. ob 18:02 (`5aca4a76`, squash), z ownerjevim
+dovoljenjem. Vseh 8 zahtevanih checkov zeleno; Codacy `fail` s 3 issues ni
+zahtevan in je bil identičen že pred rezino 4.
+
+⚠️ **Na dev botu še ne teče.** Ownerjev restart 6. 9. ob 17:17 je bil PRED
+mergem in je zagnal `ed0dfe22`, kjer od #923 ni nobene vrstice. Popravki
+stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
+`sudo systemctl restart etlegacy-bot.service` na devu.
+
+**Odprto, izrecno nedokončano:** ena povezava na cikel namesto ena na datoteko
+(predelava produkcijske poti, svoja rezina in svoj pogovor).
 
 ## Odprte ownerjeve odločitve
 

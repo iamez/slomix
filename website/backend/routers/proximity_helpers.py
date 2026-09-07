@@ -337,6 +337,96 @@ def _build_proximity_where_clause(
     return "WHERE " + " AND ".join(clauses), params, scope
 
 
+# ---------------------------------------------------------------------------
+# GUID prefix resolution (2026-09-06)
+#
+# The proximity tables hold the tracker's FULL 32-character guid; the session
+# and profile pages key players on the 8-character prefix that
+# player_comprehensive_stats stores. Every proximity endpoint compared the two
+# with `=`, so a link that carried the prefix rendered a valid "not tracked"
+# page for every player -- the parity sweep could not see it (#921 fixed the
+# one link; this fixes the endpoints). Measured on the live corpus: 34 full
+# guids -> 23 prefixes, and the only prefixes shared by more than one guid are
+# the bots' (`OMNIBOT0` x9, `OMNIBOT1` x4); every human prefix is unique.
+# So the prefix is a lossless key for humans and an honest 400 for bots.
+#
+# Cost: `LEFT(guid, 8) = $1` is a seq scan (en_US collation, no pattern-ops
+# index): 61 ms on player_track. The canonical column of
+# storytelling_kill_impact IS indexed and holds exactly the 8-char form for
+# humans, so that is tried first (sub-ms), player_track second (the two
+# tracked players without a kill), and hits are cached in-process for ten
+# minutes. A miss returns the prefix unchanged: an empty result, not a 500,
+# the same contract as the heatmap resolver this generalises.
+# ---------------------------------------------------------------------------
+_GUID_PREFIX_CACHE: dict[str, tuple[str, float]] = {}
+_GUID_PREFIX_CACHE_TTL_S = 600.0
+_GUID_PREFIX_CACHE_MAX = 512
+_BOT_GUID_PREFIXES = ("OMNIBOT", "SLOT")
+_GUID_CHARS = re.compile(r"^[A-Z0-9]+$")
+
+
+def normalise_player_guid(raw: str | None) -> str | None:
+    """Uppercase/strip a guid; 400 on the shapes that can never match a
+    player: too short, characters outside [A-Z0-9], or a bot prefix (the
+    only ambiguous prefixes in the corpus -- thirteen bots share two)."""
+    g = (raw or "").strip().upper()
+    if not g:
+        return None
+    if len(g) < 8 or len(g) > 32 or not _GUID_CHARS.match(g):
+        raise HTTPException(
+            status_code=400,
+            detail="player_guid must be 8 to 32 characters of [A-Z0-9]",
+        )
+    if len(g) < 32 and g.startswith(_BOT_GUID_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail="a bot guid prefix names several bots; pass the full 32-character guid",
+        )
+    return g
+
+
+async def resolve_player_guid(db: DatabaseAdapter, raw: str | None) -> str | None:
+    """8..31-character prefix -> the full 32-character guid the proximity
+    tables store; a full guid passes through; a miss returns the prefix
+    unchanged (empty results downstream). Fails open when the adapter has no
+    `fetch_val` (the unit-test fakes) or the lookup raises."""
+    g = normalise_player_guid(raw)
+    if g is None or len(g) == 32:
+        return g
+    key = g[:8]
+    now = time.monotonic()
+    hit = _GUID_PREFIX_CACHE.get(key)
+    if hit and now - hit[1] < _GUID_PREFIX_CACHE_TTL_S:
+        return hit[0]
+    fetch_val = getattr(db, "fetch_val", None)
+    if fetch_val is None:
+        return g
+    full: str | None = None
+    try:
+        row = await fetch_val(
+            "SELECT killer_guid FROM storytelling_kill_impact "
+            "WHERE killer_guid_canonical = $1 AND LENGTH(killer_guid) = 32 LIMIT 1",
+            (key,),
+        )
+        if not row:
+            row = await fetch_val(
+                "SELECT player_guid FROM player_track "
+                "WHERE LEFT(player_guid, 8) = $1 AND LENGTH(player_guid) = 32 "
+                "ORDER BY player_guid LIMIT 1",
+                (key,),
+            )
+        full = str(row) if row else None
+    except Exception:
+        logger.warning("player guid prefix resolution failed (input len=%d)", len(g), exc_info=True)
+        return g
+    if full is None:
+        return g
+    if len(_GUID_PREFIX_CACHE) >= _GUID_PREFIX_CACHE_MAX:
+        _GUID_PREFIX_CACHE.clear()
+    _GUID_PREFIX_CACHE[key] = (full, now)
+    return full
+
+
 _IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 

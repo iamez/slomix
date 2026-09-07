@@ -80,6 +80,16 @@ test('the story tab lists the objective escorts on the full night and says why t
   await expect(page.locator('[data-parity="story.escorts"]')).toContainText('no round in this session had a vehicle');
 });
 
+test('the story tab has the fifth tracker board — who holds position — with a share per player', async ({ page }) => {
+  await page.goto('/app/session-detail/154/story', { waitUntil: 'networkidle' });
+  const roles = page.locator('[data-parity="story.roles"]');
+  await expect(roles).toBeVisible();
+  await expect(roles).toContainText('holds position');
+  await expect(roles).toContainText('five from the 200 ms position tracker');
+  // A real share, not a placeholder: the recording of 154 tops out at 18.4 %.
+  await expect(roles).toContainText(/\d+(\.\d)?%/);
+});
+
 for (const s of SESSIONS) {
   test(`session ${s.id} (${s.note}) · the expanded player row opens with its five instruments`, async ({ page }) => {
     const errors = watch(page);
@@ -98,3 +108,26 @@ for (const s of SESSIONS) {
     expect(errors, `session ${s.id} drilldown logged console errors`).toEqual([]);
   });
 }
+
+test('the players drilldown links the proximity profile with the tracker\'s full guid, and that page has capture', async ({ page }) => {
+  await page.goto('/app/session-detail/154/players', { waitUntil: 'networkidle' });
+  const table = page.locator('[data-parity="session.players"]');
+  await expect(table).toBeVisible();
+  await table.getByRole('button', { name: /^details for/ }).first().click();
+  const link = page.getByRole('link', { name: /proximity →/ }).first();
+  await expect(link).toBeVisible({ timeout: 15_000 });
+  const href = await link.getAttribute('href');
+  expect(href).toMatch(/\/proximity\/player\/[0-9A-F]{32}$/);
+  await page.goto(href!, { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('[data-parity="proximity-player.profile"]')).toBeVisible({ timeout: 30_000 });
+});
+
+test('the proximity player page accepts the 8-character key the session page carries', async ({ page }) => {
+  // Every proximity endpoint compared the full guid with `=` until
+  // 2026-09-06; a prefix rendered a valid "no capture" page for everyone,
+  // which a "renders without errors" sweep cannot see. The prefix is now
+  // resolved server-side (every human prefix is unique in the corpus).
+  await page.goto('/app/proximity/player/D8423F90');
+  await expect(page.locator('[data-parity="proximity-player.profile"]')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText(/no proximity capture for this player/)).toHaveCount(0);
+});

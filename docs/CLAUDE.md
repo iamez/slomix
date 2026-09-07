@@ -3,12 +3,14 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 > **Infra Handoff:** Read `docs/INFRA_HANDOFF_2026-02-18.md` before making infra/CI/deployment changes.
+>
+> **Any agent (Codex, Claude, Copilot):** the distilled contract is the root `AGENTS.md`; the working loop is `docs/process/MANDELBROT_RCA.md`; reviewers start at `docs/REVIEW_GUIDE.md`; durable lessons go to `docs/AGENT_LOG.md`.
 
 ---
 
 # Slomix - ET:Legacy Discord Bot
 
-**Version**: 1.44.0 <!-- x-release-please-version --> | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
+**Version**: 1.45.0 <!-- x-release-please-version --> | **Language**: Python 3.11+ | **Discord.py**: 2.6.4 (pinned)
 **Database**: PostgreSQL 17 (production) / 14 (dev) | **Status**: Production-Ready
 
 ---
@@ -119,6 +121,12 @@ All in `bot/core/`: achievement_system, checks, correlation_context, database_ad
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
+# DEV RUN DIRECTORY (2026-09-07): the dev units run from
+#   /home/samba/share/slomix-dev-run        (a clone kept on main)
+# and NOT from this working tree. A checkout here changes nothing that runs;
+# deploy to dev = scripts/dev_deploy.sh (fetch, checkout -B main, copy the
+# SPA/legacy static built HERE, restart both units via the NOPASSWD rule).
+# Unit files: deploy/systemd/etlegacy-{bot,web,watchdog}.{service,timer}.
 # systemd-managed on both the dev box and the production VM, but the UNIT
 # NAMES DIFFER PER HOST: dev uses etlegacy-bot/etlegacy-web, the production
 # VM uses slomix-bot/slomix-web (scripts/deploy_release.sh restarts the
@@ -179,7 +187,7 @@ AUTOMATION_ENABLED=true
 ## Infrastructure Services
 
 - **PostgreSQL**: Primary database (17 in production, 14 in dev)
-- **Redis**: v7.4.2 (caching, session data) — running on localhost:6379; CI uses the same image (`redis:7.4.2-alpine` in `.github/workflows/tests.yml`)
+- **Redis**: 6.0.16 on the dev box (`redis-server --version`, 2026-09-06), 7.4.2 only in CI (`redis:7.4.2-alpine` in `.github/workflows/tests.yml`); used solely by `RedisCacheBackend` and only when `CACHE_BACKEND=redis` (unset on dev → memory)
 - **Website**: FastAPI backend on port 8000
 
 ---
@@ -253,7 +261,7 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-## System Status (Version 1.44.0) <!-- x-release-please-version -->
+## System Status (Version 1.45.0) <!-- x-release-please-version -->
 
 - Parser: 100% functional, R2 differential validated, Oksii fields backward-compatible
 - Database: PostgreSQL (101 tables), no corruption
@@ -266,4 +274,4 @@ See `docs/WEBSITE_CLAUDE.md` and `docs/PROXIMITY_CLAUDE.md` for sister project d
 
 ---
 
-**Version**: 1.44.0 <!-- x-release-please-version --> | **Last Updated**: 2026-07-29 | **Schema Version**: 2.2
+**Version**: 1.45.0 <!-- x-release-please-version --> | **Last Updated**: 2026-07-29 | **Schema Version**: 2.2

@@ -37,6 +37,10 @@ from website.backend.routers.api_helpers import (
     resolve_player_guid,
 )
 from website.backend.routers.proximity_positions import _circular_yaw_stats
+from website.backend.services.dataset_registry import (
+    heavy_profile_section_keys,
+    profile_section_keys,
+)
 from website.backend.services.player_profile_metrics import (
     bait_score,
     compute_streaks,
@@ -1168,18 +1172,19 @@ async def _resolve_guid32(db, guid8: str) -> str | None:
 # no change, dropped). Until the aim summary is precomputed on import, the fix
 # that helps a human is to let the page render without these two and fill them in
 # afterwards — the pattern the story page already uses for its per-map split.
-_HEAVY_SECTIONS = frozenset({"aim", "advanced"})
+# Both sets are DERIVED from the dataset register (docs/design/19 §5, slice 1,
+# services/dataset_registry.py) so the allowlist the endpoint validates against
+# and the register the site publishes at /api/datasets cannot disagree; the
+# measured costs above live there as `cost_ms_cold`, and "heavy" is anything
+# at or above five seconds cold. tests/unit/test_dataset_registry.py pins the
+# derivation; tests/unit/test_profile_sections.py pins the parameter contract.
+_HEAVY_SECTIONS = heavy_profile_section_keys()
 
 # Every section key the endpoint can return. A set, deliberately: it exists so
 # the `sections` parameter can be validated before any work starts, and it makes
 # no ordering promise — response order follows the `fetchers` insertion order in
 # the handler, and the payload's own `sections` list is sorted.
-# tests/unit/test_profile_sections.py pins this against the live registry.
-_PROFILE_SECTIONS = frozenset({
-    "identity", "streaks", "advanced", "movement", "weapons", "hit_regions",
-    "relationships", "skill", "maps", "recent_matches", "aim",
-    "gather_summary", "nick_history", "combat_timing",
-})
+_PROFILE_SECTIONS = profile_section_keys()
 
 
 def _parse_sections(sections: str | None, available: frozenset[str]) -> frozenset[str]:

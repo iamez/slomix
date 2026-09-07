@@ -1540,9 +1540,11 @@ export interface StorySynergy {
   defaulted_players_count?: number;
 }
 
-/** The four role boards (gravity / space-created / enabler / lurker-profile)
- *  return one players[] each with a shared identity and their own score
- *  field, so one row type carries all four rather than four near-copies. */
+/** The five role boards (gravity / space-created / enabler / lurker-profile /
+ *  camp-profile) return one players[] each with a shared identity and their
+ *  own score field, so one row type carries all five rather than five
+ *  near-copies. `hold_pct` is the one that can be null: a player alive under
+ *  a minute has no share, and the server says so instead of writing 0. */
 export interface StoryRolePlayer {
   name: string;
   guid?: string;
@@ -1551,6 +1553,7 @@ export interface StoryRolePlayer {
   space_score?: number;
   enabler_score?: number;
   solo_pct?: number;
+  hold_pct?: number | null;
 }
 
 export interface StoryRoleBoard {
@@ -3214,7 +3217,12 @@ export interface ProxEngagements {
 
 export interface ProxPlayerProfile {
   player_name: string;
+  /** The tracker's full 32-character guid — the one the tables store. */
   guid: string;
+  /** What the caller sent: the same as `guid`, or the 8-character key the
+   *  session page carries, which the endpoint resolved (2026-09-06). Older
+   *  recordings do not have it. */
+  requested_guid?: string | null;
   /** ⚠️ An unknown guid answers 200 with every number 0 and player_name
    *  echoing the guid — 0 engagements means "nothing captured", never a
    *  real profile of zeros. */
@@ -3253,7 +3261,7 @@ export interface ProxPlayerRadar {
   teamplay_formula_version: string | null;
   teamplay_degraded: boolean;
   // Present only on the degraded/fallback form (recorded both ways):
-  teamplay_sample_count?: number;
+  teamplay_sample_count?: number | null;
   teamplay_fallback_reason?: string | null;
 }
 
@@ -3924,6 +3932,25 @@ export interface BetPlaceResponse {
   pool: BetsPool;
 }
 
+/** POST /api/bets/market (bets_router.py:342-372) — admin only. Returns the id
+ *  of the market it just created, nothing else; the page refetches
+ *  /api/bets/market/current rather than trying to build a market from this. */
+export interface MarketOpenResponse { status: string; market_id: number }
+
+/** POST /api/bets/market/{market_id}/settle (bets_router.py:486) — admin only.
+ *  The shape is settle_market_locked's return (bets_router.py:482-483).
+ *  `refunded` is true on a void or when nobody backed the winner: both pay the
+ *  stakes back, and the two are one field because the payout code treats them
+ *  as one case. */
+export interface MarketSettleResponse {
+  status: string;
+  outcome: string;
+  total_pool: number;
+  winning_pool: number;
+  refunded: boolean;
+  bets: number;
+}
+
 /** availability.py:_campaign_payload (:1367-1435) — aggregate-only campaign
  *  metadata; the recipient snapshot never leaves the server. */
 export interface PromotionCampaignJob {
@@ -4147,6 +4174,129 @@ export interface UploadDeleteResponse {
 // whole surface is auth-gated (401 anonymous = a state). Shapes from a
 // LIVE recording: a real demo uploaded and analyzed on this branch.
 
+/** GET /api/skill/player/{identifier}/form — this player's last session
+ *  against THEIR OWN recent-session average. `baseline_desc` says so in the
+ *  server's words ("rank-vs-self"), and the page prints it rather than
+ *  paraphrasing: a form number that looks like a ladder position is the one
+ *  misreading this endpoint exists to avoid.
+ *
+ *  `is_new` is the newcomer case — a player with no baseline yet. Their
+ *  `delta_pct` is null, which is NOT zero: "no comparison" and "no change"
+ *  are different facts. */
+export interface SkillFormMetric {
+  label: string;
+  unit?: string | null;
+  latest: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  series: number[];
+}
+
+export interface SkillFormComposite {
+  latest: number | null;
+  baseline: number | null;
+  delta_pct: number | null;
+  series: number[];
+  breakdown: { metric: string; label: string; delta_pct: number | null; latest: number | null; baseline: number | null }[];
+  is_new: boolean;
+}
+
+/** GET /api/players/{identifier}/memory-card — a keepsake, measured against
+ *  this player's own past. Legacy calls it "never a ladder" and the page keeps
+ *  that sentence.
+ *
+ *  ⚠️ `signature_map` and `best_round` also exist as WRAPPED cards, and they
+ *  are NOT the same numbers. Wrapped is per SEASON (signature = most played
+ *  with a win %, best round = best DPM); this is CAREER (signature = the map
+ *  with the biggest lift over the player's own average, best round = most
+ *  kills). Same two words, different data — measured on one player before
+ *  writing this.
+ *
+ *  `facts` is 2-5 entries: the last three are conditional on the player
+ *  having a best round, a spree and a signature map at all. */
+/** GET /api/player/{guid}/vs-stats — who this player fed, and who fed on them.
+ *
+ *  ⛔ `scope` needs its id or it SILENTLY MEANS ALL-TIME: the handler's branch
+ *  is `elif scope == "session" and session_id` (records_player.py:36), so a
+ *  scope without its id falls through to the all-time query. Measured on one
+ *  player: session 156 gives 51 kills against the top prey, all-time gives
+ *  938. A panel labelled "tonight" showing the 938 would be a lie the code
+ *  never announces, so the hook takes the id as a required argument.
+ *
+ *  Both lists are the same table read from opposite ends, so an opponent
+ *  usually appears in both — as a prey with kd 0.74 and as an enemy with
+ *  1.35. That is not a duplicate; it is the same duel from each side. */
+export interface VsOpponent {
+  opponent_name: string;
+  opponent_guid: string;
+  kills: number;
+  deaths: number;
+  kd: number;
+}
+
+export interface PlayerVsStats {
+  guid: string;
+  scope: string;
+  round_id: number | null;
+  session_id: number | null;
+  easiest_preys: VsOpponent[];
+  worst_enemies: VsOpponent[];
+}
+
+export interface MemoryFact { key: string; label: string; value: string; sub?: string | null }
+
+export interface MemoryCard {
+  status: string;
+  guid: string;
+  player_name: string | null;
+  playing_since: string | null;
+  last_seen: string | null;
+  nights: number;
+  rounds: number;
+  signature_map: { map_name: string; rounds: number; lift_pct: number } | null;
+  facts: MemoryFact[];
+}
+
+export interface SkillPlayerForm {
+  status: string;
+  player_guid: string;
+  player_name: string | null;
+  session_id: number | null;
+  session_date: string | null;
+  baseline_desc: string | null;
+  composite: SkillFormComposite | null;
+  metrics: Record<string, SkillFormMetric>;
+}
+
+/** GET /api/skill/player/{identifier}/history — the rating over recent
+ *  sessions. `session_rating` is that night; `cumulative_rating` is the
+ *  running figure the profile header shows; `delta` is null on the first
+ *  session because there is nothing to subtract from — again, not zero. */
+export interface SkillHistorySession {
+  session_date: string;
+  rounds: number;
+  maps: number;
+  session_rating: number | null;
+  cumulative_rating: number | null;
+  delta: number | null;
+  /** The per-metric contributions behind `session_rating` — 15 metrics per
+   *  session, several carrying `note: "proximity_data_unavailable"`. Declared
+   *  because the endpoint sends it and the fixture keeps it: a type that
+   *  omitted it would make the recorded response fail `satisfies`, and the
+   *  tempting fix (strip the field from the fixture) would leave the app
+   *  testing a response the server never sends. The profile does not read it;
+   *  `rating, taken apart` already carries that story from the composite. */
+  components?: Record<string, unknown>;
+}
+
+export interface SkillPlayerHistory {
+  status: string;
+  player_guid: string;
+  range_days: number;
+  sessions: SkillHistorySession[];
+  total_sessions: number;
+}
+
 export interface GreatshotItem {
   id: string;
   filename: string;
@@ -4241,4 +4391,133 @@ export interface ApiHealth {
   status: string;
   service: string;
   database: string;
+}
+
+// ---------------------------------------------------------------------------
+// Admin — GET /api/diagnostics (legacy diagnostics.js printed this to the
+// console; the About page shows it). Admin-only: anonymous gets 401, so the
+// page asks only when /api/availability/access says is_admin.
+
+export interface DiagnosticsTable {
+  name: string;
+  status: 'ok' | 'permission_denied' | 'not_found' | 'error' | string;
+  required: boolean;
+  /** Present only when the count query succeeded (`status: "ok"`). The
+   *  handler cannot send `null`: every query is a COUNT, so the key is an
+   *  integer or absent — a missing count is a reason, not a zero. */
+  row_count?: number;
+  /** Present when it did not. */
+  error?: string;
+}
+
+/** Five aggregates over player_comprehensive_stats; `{}` when the query
+ *  raised (the handler leaves the block empty and warns) or returned no
+ *  row (then it does not even warn). */
+export interface DiagnosticsTime {
+  raw_dead_seconds?: number;
+  agg_dead_seconds?: number;
+  cap_seconds?: number;
+  cap_hits?: number;
+  raw_denied_seconds?: number;
+}
+
+/** One of the two history tables; on failure the handler sends
+ *  `{count: 0, last_recorded_at: null, error: "query failed"}` — read
+ *  `error` before `count`. */
+export interface DiagnosticsMonitoringTable {
+  count: number;
+  last_recorded_at: string | null;
+  /** Present (and a string) only when the query failed; the schema says
+   *  nullable because the model's default is None, the handler never
+   *  writes null here. */
+  error?: string | null;
+}
+
+/** Every branch carries `connected`; the rest depends on the adapter. */
+export interface DiagnosticsPool {
+  connected: boolean;
+  reason?: string;
+  error?: string;
+  size?: number;
+  idle?: number;
+  in_use?: number;
+  min_size?: number;
+  max_size?: number;
+  utilisation_pct?: number;
+}
+
+export interface Diagnostics {
+  status: 'ok' | 'warning' | 'error' | string;
+  timestamp: string | null;
+  database: { status: string; tests: unknown[]; error?: string };
+  tables: DiagnosticsTable[];
+  issues: string[];
+  warnings: string[];
+  time: DiagnosticsTime;
+  monitoring: { server?: DiagnosticsMonitoringTable; voice?: DiagnosticsMonitoringTable };
+  pool?: DiagnosticsPool;
+  /** The last run of the host watchdog (scripts/slomix_watchdog.py), null
+   *  when it has never run on this host; `{error}` when its file is
+   *  unreadable. Never part of `status`. */
+  watchdog?: DiagnosticsWatchdog | null;
+}
+
+export interface DiagnosticsWatchdog {
+  ran_at?: string | null;
+  age_seconds?: number | null;
+  host?: string | null;
+  levels?: Record<string, 'ok' | 'warn' | 'fail' | 'unknown' | string>;
+  alerts?: number;
+  dry_run?: boolean;
+  error?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 7 — Wrapped (legacy wrapped.js): GET /api/players/{identifier}/wrapped
+// ?season=current|YYYY-QN. Season-scoped highlights for a share card.
+
+export interface WrappedCard {
+  key: string;
+  label: string;
+  value: string;
+  sub?: string;
+}
+
+export interface Wrapped {
+  status: string;
+  guid: string;
+  season_id: string;
+  season_name: string;
+  player_name: string;
+  /** Empty when the player has no rounds in the season — the page says so. */
+  cards: WrappedCard[];
+}
+
+// ---------------------------------------------------------------------------
+// Datasets — GET /api/datasets (docs/design/19 §5, slice 1). The register of
+// what the site can show: read-only, public, one entry per dataset. Nothing
+// stores a user's choices yet (slice 2).
+
+export interface DatasetDescriptor {
+  key: string;
+  label: string;
+  collected_by: 'lua' | 'bot_parser' | 'importer' | 'derived';
+  /** The switch that turns COLLECTION off at the origin (a Lua section or a
+   *  bot env key); null when it is always collected. */
+  collection_toggle: string | null;
+  display_toggle_default: boolean;
+  user_overridable: boolean;
+  /** routes.data.json keys the dataset is shown on by default. */
+  default_visible_on: string[];
+  depends_on: string[];
+  endpoint: string | null;
+  /** Measured cold cost in ms — only where it was timed. */
+  cost_ms_cold: number | null;
+  parity_key: string | null;
+}
+
+export interface DatasetRegistry {
+  registry_version: string;
+  count: number;
+  datasets: DatasetDescriptor[];
 }

@@ -18,6 +18,7 @@ from website.backend.routers.proximity_helpers import (
     _probe_unavailable,
     _resolve_name_for_guid,
     _table_column_exists,
+    resolve_player_guid,
 )
 
 logger = logging.getLogger(__name__)
@@ -452,6 +453,7 @@ async def get_proximity_hit_regions(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Per-player hit region breakdown — head/arms/body/legs distribution."""
+    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["attacker_guid", "victim_guid"],
@@ -517,6 +519,7 @@ async def get_proximity_hit_regions_by_weapon(
     """Per-weapon hit region breakdown for a specific player."""
     if not player_guid or not player_guid.strip():
         return {"status": "error", "detail": "player_guid is required"}
+    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["attacker_guid"],

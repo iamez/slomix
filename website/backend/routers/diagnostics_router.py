@@ -435,7 +435,55 @@ async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/diagnostics")
+class DiagnosticsTableCheck(BaseModel):
+    """One table the API reads. `row_count` is present only on `status: "ok"`
+    (every query is a COUNT, so it is an integer or absent — never null); the
+    other statuses carry `error` instead. A missing count is a reason, not a
+    zero, and the About panel renders it as one."""
+    name: str
+    status: str
+    required: bool
+    row_count: int | None = None
+    error: str | None = None
+
+
+class DiagnosticsMonitoringTable(BaseModel):
+    """`server_status_history` / `voice_status_history`. On failure the
+    handler sends count 0, last_recorded_at null AND `error` — read `error`
+    first, or the failure prints as "0 rows"."""
+    count: int
+    #: Always written by the handler (null when nothing was recorded), so it
+    #: is required-and-nullable on the wire, not optional.
+    last_recorded_at: str | None
+    error: str | None = None
+
+
+class DiagnosticsReport(BaseModel):
+    """GET /api/diagnostics. `time` is `{}` when its query raised or returned
+    no row; `pool` always carries `connected`; monitoring and pool never
+    change `status` (computed from issues/warnings before they are read).
+    Nested dicts stay open so an adapter-specific pool key is not dropped."""
+    model_config = {"extra": "allow"}
+
+    status: str
+    timestamp: str | None = None
+    database: dict[str, Any]
+    tables: list[DiagnosticsTableCheck]
+    issues: list[str]
+    warnings: list[str]
+    time: dict[str, int]
+    monitoring: dict[str, DiagnosticsMonitoringTable]
+    pool: dict[str, Any] | None = None
+    #: The last run of scripts/slomix_watchdog.py on this host (its
+    #: logs/watchdog_last.json), or null when it has never run here. Additive
+    #: since 2026-09-06; it never changes `status`.
+    watchdog: dict[str, Any] | None = None
+
+
+# exclude_unset, not exclude_none: the handler builds a dict, so a key it did
+# not write stays absent (a table without a count has no row_count key) while
+# a null it DID write (timestamp, last_recorded_at) is kept as the value it is.
+@router.get("/diagnostics", response_model=DiagnosticsReport, response_model_exclude_unset=True)
 async def get_diagnostics(
     db: DatabaseAdapter = Depends(get_db),
     _user: dict = Depends(require_admin_user),
@@ -645,7 +693,53 @@ async def get_diagnostics(
     else:
         results["pool"] = {"connected": False, "reason": "adapter has no pool_stats"}
 
+    # The watchdog's last report, when it has run on this host. Read-only,
+    # non-fatal, and deliberately NOT folded into `status`: the watchdog is
+    # an observer of this process among others, so its verdict is shown next
+    # to ours, not merged with it.
+    results["watchdog"] = read_watchdog_last()
+
     return results
+
+
+def read_watchdog_last(path: str | None = None, now: float | None = None) -> dict[str, Any] | None:
+    """Summarise logs/watchdog_last.json (scripts/slomix_watchdog.py) for the
+    About panel: when it ran, how old that is, one level per check, and how
+    many alerts the run produced. None when the file does not exist —
+    "the watchdog has not run here" is a fact, not a failure."""
+    import json as _json
+    import time as _time
+    from pathlib import Path as _Path
+
+    from website.backend.logging_config import LOG_DIR
+
+    target = _Path(path or os.getenv("WATCHDOG_LAST_FILE") or (LOG_DIR / "watchdog_last.json"))
+    if not target.exists():
+        return None
+    try:
+        data = _json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"error": "unreadable"}
+    ran_at = data.get("ran_at")
+    age: float | None = None
+    if isinstance(ran_at, str):
+        try:
+            t = datetime.fromisoformat(ran_at)
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            age = max(0.0, (now if now is not None else _time.time()) - t.timestamp())
+        except ValueError:
+            age = None
+    findings = data.get("findings") or []
+    levels = {f.get("key"): f.get("level") for f in findings if isinstance(f, dict) and f.get("key")}
+    return {
+        "ran_at": ran_at,
+        "age_seconds": age,
+        "host": data.get("host"),
+        "levels": levels,
+        "alerts": len(data.get("alerts") or []),
+        "dry_run": bool(data.get("dry_run")),
+    }
 
 
 @router.get("/diagnostics/lua-webhook")

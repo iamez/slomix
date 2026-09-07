@@ -256,11 +256,13 @@ def sanitize_name(raw: str, max_len: int) -> str:
 
 
 async def fetch_recent_aliases(limit: int) -> List[str]:
-    host = os.getenv("DB_HOST")
-    port = int(os.getenv("DB_PORT", "5432"))
-    database = os.getenv("DB_NAME")
-    user = os.getenv("DB_USER")
-    password = os.getenv("DB_PASSWORD")
+    # The repo's .env carries POSTGRES_* (what the bot reads); DB_* is the
+    # older spelling. Without the fallback this always fell to FALLBACK_NAMES.
+    host = os.getenv("DB_HOST") or os.getenv("POSTGRES_HOST")
+    port = int(os.getenv("DB_PORT") or os.getenv("POSTGRES_PORT") or "5432")
+    database = os.getenv("DB_NAME") or os.getenv("POSTGRES_DATABASE")
+    user = os.getenv("DB_USER") or os.getenv("POSTGRES_USER")
+    password = os.getenv("DB_PASSWORD") or os.getenv("POSTGRES_PASSWORD")
     if not (host and database and user and password):
         raise RuntimeError("Missing DB_* settings in .env")
 
@@ -340,7 +342,21 @@ def gm_escape(name: str) -> str:
     return name.replace("\\", "").replace('"', "")
 
 
-def render_botnames(axis: dict[str, List[str]], allies: dict[str, List[str]], prefix: str, extra: List[str]) -> str:
+def _bot_row(table: str, cls: str, name: str, profiles: dict[str, str]) -> str:
+    profile = profiles.get(name)
+    if profile:
+        return f'{table}["{gm_escape(name)}"] = {{ class=CLASS.{cls}, weapon=0, profile="{gm_escape(profile)}" }};'
+    return f'{table}["{gm_escape(name)}"] = t;'
+
+
+def render_botnames(axis: dict[str, List[str]], allies: dict[str, List[str]], prefix: str, extra: List[str],
+                    profiles: dict[str, str] | None = None) -> str:
+    """The bot table. `profiles` (alias → script path under et/scripts, e.g.
+    "twins/olz.gm") gives those names their OWN table literal with profile=
+    set; everyone else keeps sharing the class table `t` — one `t` per class
+    is what the stock file does, and a shared table cannot carry a per-bot
+    profile (docs/design/22 slice 3)."""
+    profiles = profiles or {}
     lines = []
     lines.append("/////////////////////////////////////////////////////////////////////")
     lines.append("// initialize the team tables")
@@ -371,8 +387,7 @@ def render_botnames(axis: dict[str, List[str]], allies: dict[str, List[str]], pr
         lines.append("")
         lines.append(f"// {label}")
         lines.append(f't = {{ class=CLASS.{cls}, weapon=0, profile="" }};')
-        for name in axis[cls]:
-            lines.append(f'AxisBots["{gm_escape(name)}"] = t;')
+        lines.extend(_bot_row("AxisBots", cls, name, profiles) for name in axis[cls])
 
     lines.append("")
     lines.append("/////////////////////////////////////////////////////////////////////")
@@ -381,8 +396,7 @@ def render_botnames(axis: dict[str, List[str]], allies: dict[str, List[str]], pr
         lines.append("")
         lines.append(f"// {label}")
         lines.append(f't = {{ class=CLASS.{cls}, weapon=0, profile="" }};')
-        for name in allies[cls]:
-            lines.append(f'AlliedBots["{gm_escape(name)}"] = t;')
+        lines.extend(_bot_row("AlliedBots", cls, name, profiles) for name in allies[cls])
 
     lines.append("")
     lines.append("/////////////////////////////////////////////////////////////////////")
