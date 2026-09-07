@@ -15,7 +15,20 @@
   mainu), bot prijavljen 19:24. `static/modern` guard je pravilno preskočil
   (worktree brez legacy bundla). V TEKU: anonimni prelet 32 rut (`--app
   --anon-only`); owner prelet rabi `website/.env` → iz primarnega drevesa.
-  NASLEDNJE: najdbe preleta → rezine; endpoint gap 12 (S/M); Panel rezini 1–2.
+  PRELET (anon, 32 rut × 4 pogledi = 128, `:8000`, bundle `e91875cf`, hladen
+  strežnik 5 min po restartu): **0 padlih**, 16 opomb: greatshot ×8 = 401 za
+  anonimnega (načrtovano stanje); admin/compare/proximity-player na 1920 =
+  `page.goto` 30 s timeout na HLADNEM backbonu (prvi obisk po restartu;
+  1440/768/390 iste rute čiste); dvojni klici `/api/stats/overview` ×2–3 na
+  admin in profil ×2 na compare (dedup kandidat); prelivanje 20–32 px na
+  telefonu 390 za `retro-viz` (sidra) in `proximity` (svg). Mediana
+  nalaganja 2,5 s; owner prelet NI tekel (`website/.env` je le v primarnem
+  drevesu). Izid: `scratchpad/audit-anon/results.json` (lokalno).
+  PR #970: `components/Panel.tsx` (modularnost rezina 1) + ratchet
+  `panels.test.ts` (61) + profil »form by session« → endpoint gap **11**.
+  NASLEDNJE: rezina 2 (Story/Home/SessionDetail/Availability/SkillRating
+  trojice → Panel); gap S: `greatshot/{}/crossref`, `stats/player/{}/rounds`;
+  owner prelet iz primarnega drevesa; dedup dvojnih klicev.
   ⚠️ Ultra na #924 do 19:20 ni oddal ničesar (0 pregledov); rezin ne sekam,
   dokler owner ne potrdi, da pregled ni v teku.
 - (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
