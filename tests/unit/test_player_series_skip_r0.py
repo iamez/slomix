@@ -13,8 +13,14 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-SOURCE = Path(__file__).resolve().parents[2] / "website" / "backend" / "routers" / "players_router.py"
+ROUTERS = Path(__file__).resolve().parents[2] / "website" / "backend" / "routers"
+SOURCE = ROUTERS / "players_router.py"
 HANDLERS = ("get_player_form", "get_player_rounds")
+# skill_router._form_rows feeds /api/skill/player/{}/form (profile header,
+# FormPage, Home form movers): same table, same missing filter, and R0 rounds
+# are is_valid = TRUE (249 of 257 since June 2026), so the join did not save it.
+SKILL_SOURCE = ROUTERS / "skill_router.py"
+SKILL_HANDLERS = ("_form_rows",)
 
 
 def _sql_of(func: ast.FunctionDef) -> str:
@@ -35,3 +41,19 @@ def test_form_and_rounds_series_count_only_the_two_halves():
     for name, sql in seen.items():
         assert "player_comprehensive_stats" in sql, f"{name}: query not found"
         assert "p.round_number IN (1, 2)" in sql, f"{name}: the R0 summary rows are counted again (docs/CLAUDE.md)"
+
+
+def test_skill_form_rows_count_only_the_two_halves():
+    tree = ast.parse(SKILL_SOURCE.read_text(encoding="utf-8"))
+    seen = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name in SKILL_HANDLERS:
+            # The query is an f-string: its literal segments are Constants
+            # inside a JoinedStr, so join every string constant of the body.
+            seen[node.name] = "\n".join(
+                n.value for n in ast.walk(node) if isinstance(n, ast.Constant) and isinstance(n.value, str)
+            )
+    assert set(seen) == set(SKILL_HANDLERS), f"handlers moved: found {sorted(seen)}"
+    for name, sql in seen.items():
+        assert "FROM player_comprehensive_stats" in sql, f"{name}: query not found"
+        assert "pcs.round_number IN (1, 2)" in sql, f"{name}: the R0 summary rows are counted again (docs/CLAUDE.md)"
