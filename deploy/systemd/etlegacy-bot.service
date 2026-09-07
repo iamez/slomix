@@ -1,0 +1,36 @@
+[Unit]
+Description=ET Legacy Discord Stats Bot
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=samba
+Group=samba
+# The RUN directory is a clone kept on main (deploy = scripts/dev_deploy.sh),
+# never the agents' working tree — a checkout there used to be a silent
+# deploy at the next restart (2026-09-06).
+WorkingDirectory=/home/samba/share/slomix-dev-run
+Environment="PATH=/home/samba/share/slomix-dev-run/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/samba/share/slomix-dev-run/venv/bin/python3 bot/ultimate_bot.py
+
+# Restart configuration
+Restart=always
+RestartSec=10
+
+# Resource limits (adjust as needed)
+MemoryLimit=1G
+CPUQuota=200%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=etlegacy-bot
+
+# Security hardening (homelab-safe)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
