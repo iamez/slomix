@@ -162,3 +162,33 @@ def test_feed_retention_hides_stale_events(client, monkeypatch):  # noqa: ARG001
     for e in live_mod._events:  # noqa: SLF001 — aging the ring is the point
         e["received_at"] -= live_mod._FEED_RETENTION_SECONDS + 5  # noqa: SLF001
     assert client.get("/api/live/feed").json()["events"] == []
+
+
+def test_state_reports_the_last_half_from_a_replayed_evening(client, monkeypatch):
+    """The recorded evening of 2026-09-07 (chat stripped) through the real
+    ingest path: after the replay, /api/live/state names how the last half
+    ended. Wall-clock durations are ~0 here because the batch lands in one
+    second; the reducer test covers the level-time durations."""
+    from pathlib import Path
+
+    from vps_scripts.liveview_parser import parse_line
+    from website.backend.services.live_state import LiveStateReducer
+    c = client
+    monkeypatch.setattr(live, "_state", LiveStateReducer())  # noqa: SLF001
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "liveview" / "legacy3_evening_2026-09-07.txt"
+    batch = []
+    for line in fixture.read_text(encoding="utf-8", errors="ignore").splitlines():
+        ev = parse_line(line)
+        if ev is None:
+            continue
+        batch.append({"type": ev.type, "level_ms": ev.level_ms, "fields": ev.fields})
+        if len(batch) == 200:
+            assert _post(c, batch).status_code == 200
+            batch = []
+    if batch:
+        assert _post(c, batch).status_code == 200
+    snap = c.get("/api/live/state").json()
+    last = snap["last_round_result"]
+    assert last is not None
+    assert last["reason"] in ("timelimit", "surrender", "objective")
+    assert "attacking_side" in snap and "time_to_beat_seconds" in snap

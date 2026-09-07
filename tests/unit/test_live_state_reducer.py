@@ -367,3 +367,86 @@ class TestTheMapCarriesItsOwnEvidence:
         # Evidence dates from the CHANGE (40 s ago), not from the rejected
         # event (10 s ago).
         assert snap["map_age_seconds"] >= 39
+
+
+# --- stopwatch context: attacking side, last half's result, time to beat ---
+
+def test_offensive_popup_names_the_attacking_side_and_it_survives_the_side_swap():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("MAP", now - 700, map_name="etl_adlernest"))
+    r.apply(_ev("ROUND_START", now - 600))
+    r.apply(_ev("POPUP", now - 500, team="allies", verb="planted", objective="the Door Controls"))
+    assert r.snapshot()["attacking_side"] == "allies"
+    r.apply(_ev("POPUP", now - 400, team="axis", verb="defused", objective="the Door Controls"))
+    assert r.snapshot()["attacking_side"] == "allies", "defenders defuse; that does not make them the attack"
+    r.apply(_ev("MAP", now - 10, map_name="sw_goldrush_te"))
+    assert r.snapshot()["attacking_side"] is None, "a new map is a new question"
+
+
+def test_timelimit_exit_is_a_full_hold_won_by_the_defence():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("MAP", now - 300, map_name="etl_adlernest"))
+    r.apply(_ev("ROUND_START", now - 220))
+    r.apply(_ev("POPUP", now - 200, team="allies", verb="stole", objective="the documents"))
+    r.apply(_ev("EXIT", now - 10, reason="Timelimit hit."))
+    last = r.snapshot()["last_round_result"]
+    assert last["reason"] == "timelimit" and last["full_hold"] is True
+    assert last["winner_side"] == "axis" and last["round_number"] == 1
+    assert last["duration_seconds"] == 210 and last["map"] == "etl_adlernest"
+    assert 9 <= last["ended_age_seconds"] <= 11
+
+
+def test_second_half_carries_the_time_to_beat_and_an_objective_exit_is_the_attack_winning():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("MAP", now - 400, map_name="etl_adlernest"))
+    r.apply(_ev("ROUND_START", now - 300))
+    r.apply(_ev("POPUP", now - 250, team="allies", verb="planted", objective="the Door Controls"))
+    r.apply(_ev("EXIT", now - 90, reason="Timelimit hit."))
+    r.apply(_ev("ROUND_START", now - 20))  # within the live window, so round_number is published
+    snap = r.snapshot()
+    assert snap["round_number"] == 2 and snap["time_to_beat_seconds"] == 210
+    r.apply(_ev("EXIT", now - 5, reason="Wolf EndRound."))
+    last = r.snapshot()["last_round_result"]
+    assert last["reason"] == "objective" and last["winner_side"] == "allies" and last["full_hold"] is False
+    assert last["duration_seconds"] == 15
+    assert r.snapshot()["time_to_beat_seconds"] is None, "the map is over; nothing left to beat"
+
+
+def test_surrender_names_the_loser_and_an_unknown_attack_leaves_the_winner_null():
+    now = time.time()
+    r = LiveStateReducer()
+    r.apply(_ev("MAP", now - 300, map_name="sw_goldrush_te"))
+    r.apply(_ev("ROUND_START", now - 200))
+    r.apply(_ev("EXIT", now - 5, reason="Allies Surrender"))
+    last = r.snapshot()["last_round_result"]
+    assert last["reason"] == "surrender" and last["winner_side"] == "axis"
+    r.apply(_ev("ROUND_START", now - 4))
+    r.apply(_ev("EXIT", now - 1, reason="Timelimit hit."))
+    assert r.snapshot()["last_round_result"]["winner_side"] is None, "no offensive objective seen: do not guess the defence"
+
+
+def test_the_evening_of_2026_09_07_closes_two_halves_the_way_the_server_log_says():
+    """Replay the recorded evening (chat stripped) through the parser and the
+    reducer with level time as the clock: goldrush R1 ended on an Allies
+    surrender at level 7430875 after starting at 6757775 (673 s), R2 on the
+    time limit (full hold)."""
+    from pathlib import Path
+
+    from vps_scripts.liveview_parser import parse_line
+    fixture = Path(__file__).resolve().parents[1] / "fixtures" / "liveview" / "legacy3_evening_2026-09-07.txt"
+    r = LiveStateReducer()
+    results = []
+    for line in fixture.read_text(encoding="utf-8", errors="ignore").splitlines():
+        ev = parse_line(line)
+        if ev is None:
+            continue
+        r.apply({"type": ev.type, "received_at": (ev.level_ms or 0) / 1000.0, **ev.fields})
+        last = r._last_round  # noqa: SLF001 — the test reads the record as it closes, before the snapshot ages it
+        if last is not None and (not results or results[-1]["ended_at"] != last["ended_at"]):
+            results.append(dict(last))
+    assert [x["reason"] for x in results][:2] == ["surrender", "timelimit"]
+    assert results[0]["winner_side"] == "axis" and results[0]["duration_seconds"] == 673
+    assert results[1]["full_hold"] is True
