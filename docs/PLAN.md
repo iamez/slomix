@@ -18,6 +18,26 @@
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
+## Proga: Astra watchdog delivery acknowledgement
+
+Zadnja posodobitev: 2026-09-07 (Astra). Implemented, locally verified; not deployed.
+Contract: observations and failure streaks persist before delivery; notification
+dedup and heartbeat acknowledgements advance only after successful delivery.
+Failed delivery retries next cycle; dry-run writes neither state nor report.
+Proof: 38 targeted tests pass; targeted Ruff and diff whitespace checks pass.
+Real run/send_webhook with an in-process HTTP transport stub: failed alert,
+successful retry, failed recovery, successful retry, then a silent healthy cycle
+(four POST attempts, no network). Mutation acknowledging a failed POST was seen
+failing (`last_alert_at` unexpectedly nonzero), restored and checked with `cmp`.
+Dry-run tests cover existing/missing output paths and reject save attempts.
+Discord batches are capped at ten and acknowledged separately; partial failure
+retries only the undelivered remainder. Pending notifications follow the latest
+measurement: resolved undelivered failures are superseded, not replayed as history.
+Next: root review, then branch/PR flow. Real Discord delivery requires owner-approved
+test; existing legacy timestamps cannot retroactively prove past delivery. A crash
+after POST success but before state save can duplicate a notification.
+No service changes, real webhook, disk formula or cadence changes.
+
 ## Proga: nova stran (Fable)
 
 ### Kje smo
