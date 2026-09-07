@@ -1,0 +1,36 @@
+[Unit]
+Description=ET Legacy Website Backend (FastAPI)
+After=network-online.target postgresql.service
+Wants=network-online.target
+Requires=postgresql.service
+
+[Service]
+Type=simple
+User=samba
+Group=samba
+# The RUN directory is a clone kept on main (deploy = scripts/dev_deploy.sh),
+# never the agents' working tree. `python -m uvicorn` instead of the uvicorn
+# script: the script's shebang would re-enter the venv the symlink points at.
+WorkingDirectory=/home/samba/share/slomix-dev-run/website
+Environment="PATH=/home/samba/share/slomix-dev-run/website/venv/bin:/usr/local/bin:/usr/bin:/bin"
+ExecStart=/home/samba/share/slomix-dev-run/website/venv/bin/python -m uvicorn backend.main:app --host 0.0.0.0 --port 8000
+
+# Restart configuration
+Restart=always
+RestartSec=10
+
+# Resource limits (adjust as needed)
+MemoryLimit=512M
+CPUQuota=100%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=etlegacy-web
+
+# Security hardening (homelab-safe)
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
