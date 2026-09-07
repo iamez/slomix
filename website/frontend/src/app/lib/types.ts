@@ -4571,3 +4571,55 @@ export interface PlayerSessionForm {
   avg_dpm: number;
   trend: 'improving' | 'declining' | 'stable' | 'insufficient_data';
 }
+
+/** `/api/greatshot/{demo_id}/crossref` — the analysed demo matched against
+ *  the stats database (`greatshot.get_crossref`, per-user: the demo must be
+ *  the caller's). Recorded 2026-09-07 from dev. `matched: false` carries the
+ *  server's `reason`; `matched: true` carries the round it picked, with its
+ *  confidence and the criteria that agreed, and one comparison row per
+ *  player seen in the demo or in the database. Numbers the demo scanner does
+ *  not know arrive as null or 0 — the page must not paint them as measured. */
+export interface GreatshotCrossrefRound {
+  round_id: number;
+  match_id: string | null;
+  round_number: number;
+  round_date: string | null;
+  round_time: string | null;
+  map_name: string | null;
+  duration_seconds: number | null;
+  winner_team: number | null;
+  gaming_session_id: number | null;
+  player_count: number | null;
+  confidence: number;
+  match_details: string[];
+  demo_round_index?: number;
+}
+export interface GreatshotCrossrefStats {
+  kills: number | null;
+  deaths: number | null;
+  damage_given: number | null;
+  damage_received: number | null;
+  accuracy: number | null;
+  headshots: number | null;
+  time_played_seconds: number | null;
+  time_played_minutes: number | null;
+  tpm: number | null;
+  player_guid?: string;
+  headshot_kills?: number | null;
+  revives_given?: number | null;
+  team?: number | null;
+  efficiency?: number | null;
+  kdr?: number | null;
+  skill_rating?: number | null;
+  dpm?: number | null;
+}
+export interface GreatshotCrossrefComparison {
+  demo_name: string | null;
+  db_name: string | null;
+  matched: boolean;
+  demo_stats: GreatshotCrossrefStats | null;
+  db_stats: GreatshotCrossrefStats | null;
+}
+export type GreatshotCrossref =
+  | { matched: false; reason: string }
+  | { matched: true; round: GreatshotCrossrefRound; db_player_stats: Record<string, GreatshotCrossrefStats>; comparison: GreatshotCrossrefComparison[] };

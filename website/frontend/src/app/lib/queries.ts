@@ -183,6 +183,7 @@ import type {
   Diagnostics,
   Wrapped,
   PlayerSessionForm,
+  GreatshotCrossref,
 } from './types';
 
 /**
@@ -2179,6 +2180,19 @@ export function useGreatshotDetail(demoId: string | null) {
         pathParams: { demo_id: demoId! },
       }) as Promise<GreatshotDetail>,
     staleTime: 30 * 1000,
+  });
+}
+
+/** The demo matched against the stats database — the caller's own demo
+ *  only (401 signed out, 404 someone else's). */
+export function useGreatshotCrossref(demoId: string | null) {
+  return useQuery({
+    queryKey: ['greatshot-crossref', demoId],
+    enabled: !!demoId,
+    retry: false,
+    queryFn: () => apiGet('/api/greatshot/{demo_id}/crossref', {
+      pathParams: { demo_id: demoId! },
+    }) as Promise<GreatshotCrossref>,
   });
 }
 
