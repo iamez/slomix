@@ -262,3 +262,17 @@ def test_alert_formatting_names_the_host_and_keeps_the_command():
     e = wd.format_alert({"kind": "fail", "key": "web", "reason": "down", "suggest": "ss -ltnp"}, "samba")
     assert e["title"].startswith("✖ web · samba")
     assert "`ss -ltnp`" in e["description"]
+
+
+def test_exit_code_is_zero_unless_strict(monkeypatch, tmp_path):
+    """A failing CHECK must not be a failing RUN under the timer."""
+    async def fake_run(cfg, *, dry_run, now=None):
+        return [wd.Finding("web", "fail", reason="down")], []
+    monkeypatch.setattr(wd, "run", fake_run)
+    monkeypatch.setattr(wd, "load_config", lambda: {"WATCHDOG_STATE_FILE": str(tmp_path / "s.json"),
+                                                    "WATCHDOG_LAST_FILE": str(tmp_path / "l.json"),
+                                                    "WATCHDOG_UNITS": "", "WATCHDOG_WEB_URL": "http://127.0.0.1:1",
+                                                    "WATCHDOG_SERVER_LOGS_DIR": str(tmp_path), "WATCHDOG_DB_USER": "x",
+                                                    "WATCHDOG_BOT_STREAKS_FILE": str(tmp_path / "b.json")})
+    assert wd.main(["--once"]) == 0
+    assert wd.main(["--once", "--strict"]) == 1
