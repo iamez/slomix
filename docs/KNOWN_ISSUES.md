@@ -17,44 +17,6 @@
 
 ## Open — data pipeline
 
-### Dead-hours orphan mechanism — code CLOSED (#652); historical evidence
-
-The code mechanism described below was fixed by `680c9cb1` (PR #652,
-2026-08-11). `bot/core/dead_hours.py` provides the shared policy, the monitor
-uses it, and the relinker uses `awake_cutoff`. Do not reimplement the old fix.
-Historical orphan inventory and current growth are separate data claims and
-still need read-only remeasurement. The following description and commands
-document the pre-fix mechanism; they are not current verification criteria.
-
-Three constants disagree and together guarantee permanent proximity orphans for
-rounds played 02:00-05:00 CET on the SSH-poll path:
-
-- `bot/services/monitor_tasks_mixin.py` — the `if 2 <= hour < 11` gate makes
-  the endstats monitor return outright during dead hours (02:00-11:00 CET),
-  before any SSH work.
-- `bot/cogs/proximity_mixins/ingestion_mixin.py` — proximity ingestion loop is
-  NOT dead-hours gated, so proximity rows arrive with no `rounds` parent during
-  that window.
-- `bot/cogs/proximity_mixins/relinker_mixin.py` —
-  `_PERMANENT_ORPHAN_AGE_HOURS = 6` (deliberately lowered 48h→6h on 2026-06-09
-  for log-spam reasons) is SHORTER than the 9h dead-hours window, so those rows
-  age out of relinking before imports resume at 11:00.
-
-Measured live 2026-08-11 (supervised bot test): 5 rounds → 8,810 dev orphans
-(`team_cohesion` 8,054, `reaction_metric` 492, `kill_outcome` 264); relinker ran
-5×, linked 0. Full evidence: `docs/research/FINDINGS_FOR_CODEX_2026-08-11.md` §1.
-
-Fix directions (pick one): unify the dead-hours policy across both loops, raise
-`_PERMANENT_ORPHAN_AGE_HOURS` above 10h (respecting why it was lowered), or make
-staleness dead-hours-aware.
-
-Verify:
-```bash
-grep -n "2 <= hour < 11" bot/services/monitor_tasks_mixin.py        # gate exists
-grep -n "_PERMANENT_ORPHAN_AGE_HOURS = " bot/cogs/proximity_mixins/relinker_mixin.py  # still 6
-grep -n "dead" bot/cogs/proximity_mixins/ingestion_mixin.py         # no dead-hours gate
-```
-
 ### Orphan round_id backlog — Medium (coverage part CLOSED)
 
 **Re-measured 2026-08-15.** The coverage half of this issue is closed:
@@ -517,13 +479,14 @@ rediscovered.
 
 ---
 
-## Closure ledger — removed in the 2026-08-11 re-verification
+## Closure ledger — dated code/data closure proofs
 
 Every row was verified against code/DB before removal. Do not re-open without
 re-running the proof.
 
-| Removed claim | Proof of closure (2026-08-11) |
+| Removed claim | Proof of closure (2026-08-11 unless dated otherwise) |
 |---|---|
+| Dead-hours deterministic permanent-orphan code mechanism | Rechecked 2026-09-07: PR #652 (`680c9cb1`, 2026-08-11) added shared `bot/core/dead_hours.py`; monitor uses that policy and relinker uses `awake_cutoff`. Pre-fix diagnosis/commands remain in git history, not the open queue. Historical orphan backlog and current growth remain separate, unmeasured data obligations above. |
 | REL-01: "no v1.27.x release config — **blocks deploy**" | `scripts/release_configs/` contains `v1.27.0.sh` … `v1.30.1.sh`; the config-per-release requirement is now a CI contract for EVERY release (`tests/unit/test_release_config_contract.py`, enforced in `.github/workflows/tests.yml` — release PR #630 failed on exactly this until #635 added the config) |
 | "Prod runs v1.25.0 (`b29977c0`), ~50 PR backlog" | Prod deployed to v1.30.0 on 2026-08-10 and to v1.30.1 on 2026-08-11 ~05:55 (`scripts/deploy_release.sh` + `v1.30.1.sh`); migration ledger 045-070 reconciled, `--validate` CLEAN |
 | "Prometheus: code exists, `prometheus_client` not installed" | `prometheus-client==0.24.1` + `prometheus-fastapi-instrumentator==8.1.0` in `requirements.txt:26-27` AND `website/requirements.txt:22-23` |
