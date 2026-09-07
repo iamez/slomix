@@ -7,6 +7,16 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-07, 21:45) Owner: »je vse pripravljeno na tekme, Lua
+  na puranu?« — izmerjeno med živo igro (6 ljudi na etl_adlernest): Lua na
+  puranu = repo za vse žive module (le arena modul brez #912; oboroži se
+  samo na areni); runda 213018 uvožena 7 s po nastanku datoteke; tailer za
+  živi pogled teče in pošilja na www.slomix.fyi (prod). ⚠️ Watchdog `live:
+  warn` je na devu LAŽEN: dev nima vira živega toka (tailer cilja prod) →
+  watchdog r. 2: preverba mora vedeti, kdo je cilj tailerja, ali biti na
+  devu izklopljena. `KNOWN_ISSUES` »Lua drift High« označen kot rešen.
+  Vlak: #971, #973 mergana; #974, #972 v vratih; lokalno pripravljena veja
+  `feat/profile-rounds-series` (gap 10 → 9 po #974).
 - (Fable 5.1, 2026-09-07, 19:30) Owner: »dokončaj novo stran« + DA za gradnjo,
   dev deploy, Chromium prelet in kodo. NAREJENO: `npm run build:app` v
   worktreeju `slomix-fable` (main `e91875cf`), `DEV_SRC_DIR=…/slomix-fable

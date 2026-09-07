@@ -159,7 +159,24 @@ FROM proximity_vehicle_progress; -- both counts equal (94|94 on 2026-08-11)
 
 ## Open — Lua / game server
 
-### Lua drift repo ↔ puran (deploy owner-gated) — High
+### Lua drift repo ↔ puran — RESOLVED for the live modules (measured 2026-09-07)
+
+Read-only `sha1sum` on puran at 21:35 CEST against the repo at main: the
+modules the engine loads — `proximity_tracker.lua` 6.14 (basepath
+`luascripts/`), `live_events.lua`, `team-lock.lua`, `c0rnp0rn8.lua` and
+`endstats.lua` (`legacy/`), `stats_discord_webhook.lua` (homepath copy, which
+wins) — are byte-identical to the repo; `frame_health.log` shows
+`FH init … version=6.13` for the webhook/live modules and `FH watcher …
+version=6.14` at the last map load. The only difference is
+`dots_arena_1v1.lua` (puran 2026-09-05, repo has #912 merged 2026-09-07), and
+that module arms on the arena map only. Stale copies still sit beside the
+live ones (`luascripts/stats_discord_webhook.lua` 2026-08-15,
+`luascripts/c0rnp0rn8.lua` 2026-08-18): harmless, but a `sha1sum` that reads
+the wrong copy will report drift that is not there — compare the path the
+engine loads (`docs/GAMESERVER_LIVE_LUA_MAP.md`), never the first match.
+The paragraph below is kept as history of the 2026-08 state.
+
+#### (historical) Lua drift repo ↔ puran (deploy owner-gated) — High
 
 **Re-measured by sha256 on 2026-08-15 (`scripts/system_status.sh`): 2 of 5
 scripts differ, not 4.** `c0rnp0rn8.lua` and `stats_discord_webhook.lua` are
