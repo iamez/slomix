@@ -52,10 +52,19 @@ test` (never `npx`), and no visual change unless the slice says so.
    `parity_key`-shaped `data-parity`). Reverse assertion: every rendered
    `data-parity` panel has a descriptor, with `tests/data/unregistered_panels.txt`
    seeded at 169 and ratcheted down.
-7. **Wire `/api/datasets` to one page's visibility** — SessionDetail only: a
-   descriptor with `display_toggle_default: false` hides its panel (doc 19 §5
-   without the user table). Page test with a fixture register. This is the first
-   pixel the register drives; doc 19 r. 2 (`user_page_layouts`) builds on it.
+7. **Add `Hidden` as a fourth state in `ui.tsx`** (a `ui.tsx`-only PR, no backend,
+   no table). Doc 19 §5: hiding is a decision taken *before* the request, absence is
+   a fact about the data — reusing `Absent` would be one name for two measurements.
+   A hidden panel sends no query and leaves a low-contrast trace, never a silent
+   hole. Proof: `components.test.tsx` case that `Hidden` renders a trace rather than
+   nothing, and a `vocabulary.test.ts` pin that `Hidden` and `Absent` cannot share a
+   colour (same shape as the existing `Absent`/`Unavailable` pin). This is the
+   smallest piece of doc 19 §9 slice 3 with no schema risk; the column picker on
+   the basics table (doc 19 §9 slice 2: `user_page_layouts` migration with the
+   `website_app` GRANT in the same file, `GET/PATCH /api/preferences/session-detail`)
+   follows once the owner answers doc 19 §10 (#3 admin UI vs config, #5 position in
+   the Stats 2.0 lane). Slice 5 (`DataTable` adoption) is the enabler for that
+   picker, not cosmetic cleanup.
 8. **Hex/rgba sweep**: 30 hex + 17 rgba literals in pages → two missing tokens
    (`#151a1e` active-chip bg, `#33322e`) added to `tokens.css`; ratchet in
    `tokens.test.ts` counting colour literals with comments stripped (a naive
@@ -63,9 +72,36 @@ test` (never `npx`), and no visual change unless the slice says so.
    honest number is 30).
 
 After 1–8 a per-page display change is: edit one token (text/colour), one
-`Panel` prop (chrome), one column list (what a table shows), or one register
-descriptor (whether a panel shows). Slices 1–4 and 8 are safe for any agent
+`Panel` prop (chrome), one column list (what a table shows), or, once doc 19 §9
+slices 2–3 land, one preference row (whether a panel shows). Slices 1–4 and 8 are safe for any agent
 now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
+
+## Guards that already exist (11) — extend, do not duplicate
+
+| guard | value (2026-09-07) | what it pins |
+|---|---|---|
+| `tests/data/endpoint_gap.txt` | 13 | legacy-called paths the SPA does not cover (fails in both directions) |
+| `tests/data/endpoint_required_extra.txt` | 4 | paths required without a legacy grep hit |
+| `tests/data/response_model_gap.txt` | 217 / 263 | routes without `response_model=` |
+| `tests/data/manual_type_drift.txt` | 0 (`COMPARED_FLOOR = 36`) | hand-written TS types vs OpenAPI; the compared set cannot shrink |
+| `src/app/tokens.test.ts` `BUDGET` | 26 (from 1,010) | raw sizes in style props; ramps monotonic; `@theme static`; `--layout-max` ×4 |
+| `src/app/vocabulary.test.ts` `BUDGET` | 41 (from 66) | grey notes outside `<Absent reason=>`/`<Meta>`; `Absent`≠`Unavailable` colours; `reason` required (type-level) |
+| `src/app/lib/fixturesCoverage.test.ts` | 214 fixtures | every called endpoint has a recorded fixture |
+| `tests/unit/test_proximity_inventory.py` | `PENDING_BUDGET = 0` | 92/92 proximity rows covered; ten tab names |
+| `tests/unit/test_parity_keymap.py` | `UNMAPPED_BUDGET = 2` | Map Distribution (home), Charts (session-detail) |
+| `tests/unit/test_dataset_registry.py` | 32 descriptors | every `parity_key` renders; heavy sections from measured cost |
+| `tests/unit/test_status_vocabulary_crosses_the_language_boundary.py` | 22 statuses | Python and TS classify the same set |
+
+Both frontend budgets glob only `src/app`; `test_endpoint_gap.py` carries
+`test_the_other_react_tree_does_not_count_as_migrated`. The old React tree
+(`src/pages` 11,472 LOC, `src/api` 20,313 LOC) still ships beside `src/app`
+(32,791 LOC) and is scheduled for deletion at switchover; no ratchet covers it, by
+design. Guard code reads source through `src/app/testing/sourceText.ts`
+(`stripComments`), never prose — a naive hex grep counts `#813` PR references.
+
+No guard exists yet for: hand-rolled triads, hand-rolled grids, colour literals,
+number/date formatting, panels absent from the register. Slices 1, 3, 4, 6 and 8
+each add one.
 
 ## What this plan does NOT do
 
