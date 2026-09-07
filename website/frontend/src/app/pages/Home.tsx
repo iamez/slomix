@@ -15,6 +15,7 @@ import {
   Absent, ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
   figure, lblStyle, rowStyle,
 } from '../components/ui';
+import { Panel } from '../components/Panel';
 
 /**
  * Home (docs/design/12 row 1) — visual canon is home.dc.html (decision O8);
@@ -535,19 +536,19 @@ function PulseRow() {
         )}
       </div>
       <div>
-        <SectionHead label="challenge of the week" />
-        <div style={{ marginTop: 'var(--space-3)' }}>
-          {challenge.isPending && <Pending label="challenge" />}
-          {challenge.isError && <Unavailable what="challenge" />}
-          {challenge.data && (challenge.data.challenge ? (
+        <Panel
+          label="challenge of the week"
+          q={challenge}
+          empty="no challenge this week"
+          isEmpty={(d) => !d.challenge}
+        >
+          {(d) => (
             <>
-              <div style={{ fontSize: 'var(--fs-lead)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{challenge.data.challenge.title}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{challenge.data.challenge.description}</div>
+              <div style={{ fontSize: 'var(--fs-lead)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{d.challenge!.title}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{d.challenge!.description}</div>
             </>
-          ) : (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no challenge this week</div>
-          ))}
-        </div>
+          )}
+        </Panel>
       </div>
     </div>
   );
@@ -587,16 +588,14 @@ function Predictions() {
   const preds = useRecentPredictions(3);
   return (
     <div data-parity="home.predictions" style={{ marginTop: 'var(--space-8)', paddingTop: 'var(--space-5)', borderTop: '1px solid var(--color-rule-900)' }}>
-      <SectionHead label="match predictions" />
-      <div style={{ marginTop: 'var(--space-3)' }}>
-        {preds.isPending && <Pending label="predictions" />}
-        {preds.isError && <Unavailable what="predictions" />}
-        {preds.data && (preds.data.length === 0 ? (
-          <Absent reason="no prediction has been published yet — shadow-program rows stay internal until an operator publishes them (AUD-006)" />
-        ) : (
-          preds.data.map((row) => <PredictionLine key={row.id} row={row} />)
-        ))}
-      </div>
+      <Panel
+        label="match predictions"
+        q={preds}
+        empty="no prediction has been published yet — shadow-program rows stay internal until an operator publishes them (AUD-006)"
+        isEmpty={(d) => d.length === 0}
+      >
+        {(d) => <>{d.map((row) => <PredictionLine key={row.id} row={row} />)}</>}
+      </Panel>
     </div>
   );
 }

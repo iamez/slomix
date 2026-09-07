@@ -47,7 +47,7 @@ describe('data panels', () => {
     // candidate for <Panel>; slice 2 of
     // docs/SPA_MODULARITY.md converts Story (9), Home (7), SessionDetail (5),
     // AvailabilityPage (5) and SkillRating (4) first.
-    const BUDGET = 61;
+    const BUDGET = 58;
     let count = 0;
     // A Map, not an object written by a computed key — the scanners here
     // read `obj[file] = n` as an injection sink even for a glob path.
