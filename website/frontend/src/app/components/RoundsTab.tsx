@@ -12,7 +12,8 @@ import { useMemo, useState } from 'react';
 
 import { Cluster, Stack } from './layout';
 import { RoundsTable, type EmptyReason } from './RoundsTable';
-import { Lbl, SectionHead } from './ui';
+import { Absent, Lbl, Pending, SectionHead, Unavailable } from './ui';
+import { useRoundAwards } from '../lib/queries';
 import type { SessionRounds } from '../lib/types';
 
 /** ⛔ A DISABLED QUERY IS PENDING FOREVER IN REACT QUERY v5 — but on the
@@ -27,6 +28,10 @@ export function roundsReason(rounds: { isPending: boolean; isError: boolean }): 
 export function RoundsTab({ rounds, reason }: { rounds: SessionRounds | undefined; reason: EmptyReason }) {
   const [mode, setMode] = useState<'round' | 'player'>('round');
   const [guid, setGuid] = useState<string>('');
+  // Which round's awards are open. The table has carried an `onSelectRound`
+  // prop since it was written and nothing ever passed one — clicking a round
+  // did nothing at all. This is that prop's first consumer.
+  const [openRound, setOpenRound] = useState<number | null>(null);
 
   // Players present in this session, for the "one player" view.
   const players = useMemo(() => {
@@ -96,10 +101,60 @@ export function RoundsTab({ rounds, reason }: { rounds: SessionRounds | undefine
         mode={mode}
         playerGuid={mode === 'player' ? effectiveGuid : undefined}
         emptyReason={reason}
+        onSelectRound={(id) => { setOpenRound((cur) => (cur === id ? null : id)); }}
       />
+      {openRound != null ? <RoundAwardsPanel roundId={openRound} /> : null}
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
         every recorded round, the ones that do not count marked, not hidden
       </Lbl>
+    </Stack>
+  );
+}
+
+/**
+ * Awards for one round, the breakdown behind the session's award summary.
+ *
+ * ⛔ THE EMPTY ANSWER IS THE COMMON ONE. Only 1016 of 3243 rounds carry any
+ * award at all, so "this round has none" is what two visitors in three will
+ * see. It is `Absent` with a reason, not a blank space — a page that shows
+ * nothing without saying why reads as broken.
+ *
+ * ⚠️ `numeric` is deliberately not rendered. It exists for sorting and is
+ * null whenever the figure is a rendered string; `value` is the display form
+ * and is never null.
+ */
+export function RoundAwardsPanel({ roundId }: { roundId: number }) {
+  const awards = useRoundAwards(roundId);
+  const categories = Object.entries(awards.data?.categories ?? {});
+
+  return (
+    <Stack gap={2} parity="session.rounds.awards">
+      <SectionHead label={`awards · round ${String(roundId)}`} />
+      {awards.isPending ? <Pending label="awards" /> : null}
+      {awards.isError ? <Unavailable what="awards" /> : null}
+      {!awards.isPending && !awards.isError && categories.length === 0
+        ? <Absent reason="no awards recorded for this round" />
+        : null}
+      {categories.map(([key, cat]) => (
+        <Stack key={key} gap={1}>
+          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
+            {cat.emoji} {cat.name}
+          </Lbl>
+          {cat.awards.map((a, i) => (
+            <Cluster key={`${a.award}-${String(i)}`} gap={2} align="baseline">
+              <span style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+                {a.award}
+              </span>
+              <span style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-100)' }}>
+                {a.player}
+              </span>
+              <span style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-500)' }}>
+                {a.value}
+              </span>
+            </Cluster>
+          ))}
+        </Stack>
+      ))}
     </Stack>
   );
 }

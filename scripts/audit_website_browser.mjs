@@ -363,7 +363,18 @@ async function manifestRoute(context, route) {
 if (MANIFEST) {
     const browser = await chromium.launch();
     const context = await browser.newContext();
-    const ownerCookie = mintOwnerSession();
+    // ⛔ --anon-only must not need the owner's secret. This called
+    // mintOwnerSession() unconditionally, so an anonymous sweep died with
+    // "SESSION_SECRET not found in website/.env" — in a worktree that has no
+    // website/.env (it is untracked and local), the flag that promises to skip
+    // the owner pass could not run at all. Working around that by exporting
+    // the secret would put it in the process argv, where `ps` shows it to
+    // every user on the box.
+    //
+    // ⚠️ Without the flag the throw STAYS. An owner pass that quietly
+    // downgrades to anonymous would report every owner-only view as an
+    // anonymous redirect and call it a finding.
+    const ownerCookie = ANON_ONLY ? null : mintOwnerSession();
     if (ownerCookie) {
         const { hostname } = new URL(BASE_URL);
         await context.addCookies([

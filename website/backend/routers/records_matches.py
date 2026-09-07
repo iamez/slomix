@@ -438,11 +438,42 @@ async def get_round_awards(round_id: int, db: DatabaseAdapter = Depends(get_db))
         raise HTTPException(status_code=404, detail="Round not found")
 
     # Get awards
+    #
+    # ⛔⛔ THE BOT FILTER IS NOT DECORATION — it is what the session-level
+    # aggregate over this same table already does
+    # (`sessions_router.py:2634`), and without it the two views of one fact
+    # disagree: 2120 of the 27269 award rows are bots, spread over 83 rounds,
+    # and a person opening a round saw names the session summary had hidden.
+    #
+    # ⭐ Measured before changing anything: 2059 of those 2120 (97%) sit in
+    # rounds that contain NO human award at all. So this does not thin a mixed
+    # round's list — it empties an all-bot round, which is the right answer.
+    # An award won against nobody is not an award, and the empty-state copy
+    # already says "no awards for this round".
+    #
+    # ⛔⛔ DISTINCT IS NOT TIDYING — the table holds duplicate rows. Measured
+    # 2026-09-06: 1472 (round, award) groups hold more than one row, and 929
+    # of them are the SAME player with the SAME value written twice within
+    # the same second. Round 9831 shows two "Most damage given" lines; a
+    # visitor reads that as a broken page, because it is.
+    #
+    # ⚠️ Only the identical ones go. 282 further groups hold DIFFERENT
+    # players, written minutes apart — a re-import that reached another
+    # answer. Those are a real disagreement about the data and collapsing
+    # them here would hide it behind a display fix. They stay visible, and
+    # they are written up for the owner rather than silently resolved.
+    #
+    # ⛔ ORDER BY id cannot stay: it is not in the DISTINCT list, and
+    # PostgreSQL rejects that outright. Ordering by the award name gives a
+    # stable, readable sequence instead of insertion order.
     awards_query = """
-        SELECT award_name, player_name, player_guid, award_value, award_value_numeric
+        SELECT DISTINCT award_name, player_name, player_guid,
+                        award_value, award_value_numeric
         FROM round_awards
         WHERE round_id = $1
-        ORDER BY id
+          AND (player_guid IS NULL OR UPPER(player_guid) NOT LIKE 'OMNIBOT%')
+          AND player_name NOT LIKE '%[BOT]%'
+        ORDER BY award_name, player_name
     """
     awards_rows = await db.fetch_all(awards_query, (round_id,))
 

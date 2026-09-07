@@ -19,6 +19,98 @@
 # are retired, not before. Do not delete it to make the number smaller — the
 # test recomputes the set and would fail anyway, which is the ratchet working.
 #
+# ---------------------------------------------------------------------------
+# 2026-09-06 — TRIAGE BY DATA, not by line count.
+#
+# The ratchet counts PATHS. It cannot see that these 13 are wildly unequal in
+# what they would actually show a visitor. Measured against the live dev
+# database that evening, so the next person picks up the ones that pay:
+#
+#   /api/rounds/{}/awards                  round_awards          27269 rows
+#       ^ CLOSED the same evening — it was the only line the data justified.
+#         Closing it also had to fix a disagreement: the session aggregate
+#         over this table drops bots and the per-round endpoint did not, so
+#         2120 bot rows across 83 rounds were visible in one view and hidden
+#         in the other. 97% of them sit in rounds with no human award at all.
+#   /api/greatshot/{}/highlights/render    greatshot_highlights    622 rows
+#                                          greatshot_renders         1 row
+#   /api/greatshot/{}/crossref             greatshot_demos          23 rows
+#   /api/uploads/{}/download               uploads                   8 rows
+#
+# ⭐ ROW COUNTS ALONE PICKED WRONG. Adding the dates changed the order:
+#
+#   greatshot_demos       23 rows   2026-02-08 .. 2026-09-02   alive
+#   greatshot_highlights 622 rows   2026-02-08 .. 2026-09-02   alive
+#   greatshot_renders      1 row    2026-02-15 .. 2026-02-15   used ONCE, 7
+#                                                              months ago
+#
+# So /highlights/render sits on 622 rows and looks like the bigger prize,
+# while the feature it drives has been used exactly once since February. Its
+# neighbour /crossref has a quarter of the rows and is still in use. A count
+# says how much data exists; only a date says whether anyone wants it.
+#
+# ⚠️ /crossref is also per-user (`_require_user`, `WHERE user_id = $2`), so
+# those 23 demos are split across accounts — each visitor sees a slice.
+#   /api/players/{}/awards                 season_awards             2 rows
+#   /api/bets                              parimutuel_bets           0 rows
+#
+# The rest (/card, /vs-stats, /graphs, /stats/player/{}/form and /rounds,
+# /rounds/{}/player/{}/details, /stats/sessions) are composites over
+# player_comprehensive_stats, where the data is not in question.
+#
+# ⛔ Two of these would ship an empty page. `/api/bets` has no rows at all and
+# is an owner decision anyway; `/api/players/{}/awards` has 2 rows across 2
+# players and 1 season. Building UI for them closes a ratchet line and shows a
+# visitor nothing — the repo already has a name for that shape (a mechanism
+# without a consumer), and the ratchet is exactly the kind of number that
+# invites it, because 0 rows and 27269 rows cost the same to close.
+#
+# ⚠️ This is a note about VALUE, not about correctness. Every line here is
+# genuinely uncovered; none may be deleted for being small. Backend handlers
+# already exist for 12 of the 13 (checked against the router decorators), so
+# the remaining work is frontend, not API.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# 2026-09-07 — ORDER OF WORK for the 12 that remain, and what each costs.
+#
+# Row counts separate the first group; for the composites they separate
+# nothing, since all of them read player_comprehensive_stats. What separates
+# THOSE is whether the port can copy legacy or has to fix it on the way.
+#
+# DEAD — do not build UI until the data exists:
+#   /api/bets                            0 rows, and an owner decision anyway
+#   /api/players/{}/awards               2 rows, 2 players, 1 season
+#   /api/greatshot/{}/highlights/render  greatshot_renders: 1 row, 2026-02-15
+#
+# ALIVE, small, per-user:
+#   /api/greatshot/{}/crossref           23 demos to 2026-09-02, but behind
+#                                        `_require_user` + WHERE user_id, so
+#                                        each visitor sees only their own
+#   /api/uploads/{}/download             8 rows
+#
+# ⛔ CANNOT BE COPIED AS-IS — the legacy call carries a bug:
+#   /api/sessions/{}/graphs              The path parameter is a DATE. The
+#     handler accepts an optional `gaming_session_id` query param and prefers
+#     it, but 2 of the 3 legacy call sites omit it (diagnostics.js:296,
+#     sessions.js:2025; only sessions.js:881 passes one). CLAUDE.md forbids
+#     date-based session queries for exactly this reason: measured 2026-09-07,
+#     13 of 176 days (7.4%) hold more than one session, up to 4. On those days
+#     the two bare calls MERGE sessions into one graph. Porting this means
+#     passing gaming_session_id always — not reproducing the legacy call.
+#
+# COMPOSITES over player_comprehensive_stats — data is not the question:
+#   /api/players/{}/card                 rating + 90-day form + percentiles
+#   /api/rounds/{}/player/{}/details
+#   /api/rounds/{}/vs-stats              ⚠️ note /player/{guid}/vs-stats is a
+#                                        DIFFERENT endpoint (records_player.py)
+#   /api/stats/player/{}/form
+#   /api/stats/player/{}/rounds
+#
+# OWNER DECISION, closes with legacy retirement:
+#   /api/stats/sessions                  (see the 2026-08-30 note above)
+# ---------------------------------------------------------------------------
+#
 # 2026-09-02,
 #
 # 2026-09-06: 3 -> 15. A CORRECTION, the second of its kind (see 64 -> 120
@@ -97,7 +189,6 @@
 /api/greatshot/{}/highlights/render
 /api/players/{}/awards
 /api/players/{}/card
-/api/rounds/{}/awards
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats
 /api/sessions/{}/graphs

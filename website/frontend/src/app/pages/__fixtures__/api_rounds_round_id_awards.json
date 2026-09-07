@@ -1,0 +1,435 @@
+{
+  "round_id": 9831,
+  "map_name": "te_escape2",
+  "round_number": 2,
+  "round_date": "2026-02-11",
+  "categories": {
+    "combat": {
+      "name": "Combat",
+      "emoji": "⚔️",
+      "awards": [
+        {
+          "award": "Best K/D ratio",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "1.9333333333333",
+          "numeric": 1.9333332777023315
+        },
+        {
+          "award": "Best K/D ratio",
+          "player": "v_kt_r",
+          "guid": "9CC78CFE",
+          "value": "1.8888888888889",
+          "numeric": 1.8888888359069824
+        },
+        {
+          "award": "Most damage given",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "3910",
+          "numeric": 3910.0
+        },
+        {
+          "award": "Most damage given",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "4953",
+          "numeric": 4953.0
+        },
+        {
+          "award": "Most damage received",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "4050",
+          "numeric": 4050.0
+        },
+        {
+          "award": "Most damage received",
+          "player": "Cru3lzor.",
+          "guid": "DB00AA45",
+          "value": "3386",
+          "numeric": 3386.0
+        },
+        {
+          "award": "Most kills per minute",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "2.09",
+          "numeric": 2.0899999141693115
+        },
+        {
+          "award": "Most kills per minute",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "2.56",
+          "numeric": 2.559999942779541
+        }
+      ]
+    },
+    "teamwork": {
+      "name": "Teamwork",
+      "emoji": "🤝",
+      "awards": [
+        {
+          "award": "Most kill assists",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "6",
+          "numeric": 6.0
+        },
+        {
+          "award": "Most kill assists",
+          "player": "wiseBoy",
+          "guid": "FDA127DF",
+          "value": "6",
+          "numeric": 6.0
+        },
+        {
+          "award": "Most killsteals",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "2",
+          "numeric": 2.0
+        },
+        {
+          "award": "Most revived",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "5",
+          "numeric": 5.0
+        },
+        {
+          "award": "Most revived",
+          "player": "wiseBoy",
+          "guid": "FDA127DF",
+          "value": "5",
+          "numeric": 5.0
+        },
+        {
+          "award": "Most revives",
+          "player": "Cru3lzor.",
+          "guid": "DB00AA45",
+          "value": "6",
+          "numeric": 6.0
+        },
+        {
+          "award": "Most revives",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "4",
+          "numeric": 4.0
+        },
+        {
+          "award": "Most team damage given",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "186",
+          "numeric": 186.0
+        },
+        {
+          "award": "Most team damage given",
+          "player": "vid",
+          "guid": "D8423F90",
+          "value": "107",
+          "numeric": 107.0
+        },
+        {
+          "award": "Most team damage received",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "125",
+          "numeric": 125.0
+        },
+        {
+          "award": "Most team damage received",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "179",
+          "numeric": 179.0
+        }
+      ]
+    },
+    "deaths": {
+      "name": "Deaths & Mayhem",
+      "emoji": "💀",
+      "awards": [
+        {
+          "award": "Longest death spree",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "7",
+          "numeric": 7.0
+        },
+        {
+          "award": "Longest death spree",
+          "player": "wiseBoy",
+          "guid": "FDA127DF",
+          "value": "6",
+          "numeric": 6.0
+        },
+        {
+          "award": "Most deaths",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "18",
+          "numeric": 18.0
+        },
+        {
+          "award": "Most deaths",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "25",
+          "numeric": 25.0
+        },
+        {
+          "award": "Most selfkills",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "13",
+          "numeric": 13.0
+        },
+        {
+          "award": "Most selfkills",
+          "player": "vid",
+          "guid": "D8423F90",
+          "value": "10",
+          "numeric": 10.0
+        },
+        {
+          "award": "Most teamkills",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "2",
+          "numeric": 2.0
+        }
+      ]
+    },
+    "skills": {
+      "name": "Skills",
+      "emoji": "🎯",
+      "awards": [
+        {
+          "award": "Highest headshot accuracy",
+          "player": "v_kt_r",
+          "guid": "9CC78CFE",
+          "value": "22.31 percent",
+          "numeric": 22.309999465942383
+        },
+        {
+          "award": "Highest headshot accuracy",
+          "player": "vid",
+          "guid": "D8423F90",
+          "value": "16.53 percent",
+          "numeric": 16.530000686645508
+        },
+        {
+          "award": "Highest light weapons accuracy",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "45.01 percent",
+          "numeric": 45.0099983215332
+        },
+        {
+          "award": "Highest light weapons accuracy",
+          "player": "vid",
+          "guid": "D8423F90",
+          "value": "47.64 percent",
+          "numeric": 47.63999938964844
+        },
+        {
+          "award": "Longest killing spree",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "3",
+          "numeric": 3.0
+        },
+        {
+          "award": "Longest killing spree",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "3",
+          "numeric": 3.0
+        },
+        {
+          "award": "Most bullets fired",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "512",
+          "numeric": 512.0
+        },
+        {
+          "award": "Most bullets fired",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "390",
+          "numeric": 390.0
+        },
+        {
+          "award": "Most doublekills",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "3",
+          "numeric": 3.0
+        },
+        {
+          "award": "Most headshot kills",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "5",
+          "numeric": 5.0
+        },
+        {
+          "award": "Most headshot kills",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "3",
+          "numeric": 3.0
+        },
+        {
+          "award": "Most headshots",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "35",
+          "numeric": 35.0
+        },
+        {
+          "award": "Most headshots",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "26",
+          "numeric": 26.0
+        },
+        {
+          "award": "Most light weapon kills",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "14",
+          "numeric": 14.0
+        },
+        {
+          "award": "Most light weapon kills",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "13",
+          "numeric": 13.0
+        },
+        {
+          "award": "Most multikills",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "1",
+          "numeric": 1.0
+        },
+        {
+          "award": "Most pistol kills",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "2",
+          "numeric": 2.0
+        },
+        {
+          "award": "Quickest multikill w/ light weapons",
+          "player": "bronze",
+          "guid": "2B5938F5",
+          "value": "3 kills in 2.18s",
+          "numeric": 3.0
+        }
+      ]
+    },
+    "weapons": {
+      "name": "Weapons",
+      "emoji": "🔫",
+      "awards": [
+        {
+          "award": "Most grenade kills",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "3",
+          "numeric": 3.0
+        },
+        {
+          "award": "Most grenade kills",
+          "player": "vid",
+          "guid": "D8423F90",
+          "value": "5",
+          "numeric": 5.0
+        }
+      ]
+    },
+    "objectives": {
+      "name": "Objectives",
+      "emoji": "🎯",
+      "awards": [
+        {
+          "award": "Most corpse gibs",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "7",
+          "numeric": 7.0
+        },
+        {
+          "award": "Most corpse gibs",
+          "player": "wiseBoy",
+          "guid": "FDA127DF",
+          "value": "10",
+          "numeric": 10.0
+        },
+        {
+          "award": "Most objectives stolen",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "5",
+          "numeric": 5.0
+        },
+        {
+          "award": "Most objectives stolen",
+          "player": "SuperBoyy",
+          "guid": "EDBB5DA9",
+          "value": "2",
+          "numeric": 2.0
+        },
+        {
+          "award": "Most objectives stolen",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "2",
+          "numeric": 2.0
+        }
+      ]
+    },
+    "timing": {
+      "name": "Timing",
+      "emoji": "⏱️",
+      "awards": [
+        {
+          "award": "Full respawn king",
+          "player": "Zlatorog",
+          "guid": "E587CA5F",
+          "value": "18.18 percent, 2.06 min",
+          "numeric": 18.18000030517578
+        },
+        {
+          "award": "Least time dead (What spawn?)",
+          "player": "wiseBoy",
+          "guid": "FDA127DF",
+          "value": "5.83 percent, 0.66 min",
+          "numeric": 5.829999923706055
+        },
+        {
+          "award": "Most playtime denied",
+          "player": ".olz",
+          "guid": "5D989160",
+          "value": "74 seconds",
+          "numeric": 74.0
+        },
+        {
+          "award": "Most playtime denied",
+          "player": "v_kt_r",
+          "guid": "9CC78CFE",
+          "value": "136 seconds",
+          "numeric": 136.0
+        }
+      ]
+    }
+  }
+}

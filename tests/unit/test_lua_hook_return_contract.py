@@ -75,13 +75,26 @@ def test_lua_sources_are_discovered():
     assert LUA_SOURCES, "no Lua modules found — the glob paths moved"
 
 
+def _returns_a_value(line: str) -> bool:
+    """Does this line return something the engine would read as "handled"?
+
+    ⛔ A trailing comment is not a return value. The first version of this check
+    was `^\\s*return\\s+\\S`, and `--` is a non-space character, so a perfectly
+    safe `return  -- why` was reported as an offender (found 2026-09-04 on
+    dots_arena_1v1.lua, whose three returns are all bare). A guard that cannot
+    tell a comment from a value teaches people to work around it.
+    """
+    code = re.sub(r"--.*$", "", line).rstrip()
+    return re.search(r"^\s*return\s+\S", code) is not None
+
+
 @pytest.mark.parametrize("path", LUA_SOURCES, ids=lambda p: p.name)
 def test_obituary_never_returns_a_value(path: Path):
     """`return 0` here starves every module loaded after this one."""
     offenders = [
         (ln, txt.strip())
         for ln, txt in _hook_body(path, "et_Obituary")
-        if re.search(r"^\s*return\s+\S", txt)
+        if _returns_a_value(txt)
     ]
     assert not offenders, (
         f"{path.name}: et_Obituary returns a value at "
@@ -90,6 +103,25 @@ def test_obituary_never_returns_a_value(path: Path):
         "module walk and every module after this one stops receiving kills. "
         "Use a bare `return` instead — the engine ignores this hook's value."
     )
+
+
+@pytest.mark.parametrize(
+    ("line", "returns_value"),
+    [
+        ("    return", False),
+        ("    return  -- not a 1v1 right now", False),
+        ("\treturn -- why", False),
+        ("    return 0", True),
+        ("    return 0  -- handled", True),
+        ("    return qtrue", True),
+        ('    return "x"', True),
+        ("    returnValue = 1", False),
+    ],
+)
+def test_the_value_check_reads_code_not_comments(line: str, returns_value: bool):
+    """Both directions. The comment case is why this exists; the `return 0 --`
+    case is what must NOT be lost while fixing it."""
+    assert _returns_a_value(line) is returns_value
 
 
 def test_the_guard_knows_what_it_is_guarding():

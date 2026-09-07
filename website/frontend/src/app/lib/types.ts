@@ -2184,6 +2184,39 @@ export interface SessionAwards {
   categories: SessionAwardCategory[];
 }
 
+/** GET /api/rounds/{round_id}/awards — the same table SessionAwards sums,
+ *  broken out by round.
+ *
+ *  ⚠️ Three nullable fields, each for a measured reason (see RoundAwards in
+ *  records_matches.py): `guid` is null for award rows that never resolved to
+ *  a player, and `numeric` is null for awards whose figure is a rendered
+ *  string with no number behind it — typing that one as `number` once
+ *  rejected 3 rounds out of 40 and turned the page into a 500.
+ */
+export interface RoundAwardEntry {
+  award: string;
+  player: string;
+  guid: string | null;
+  value: string;
+  numeric: number | null;
+}
+
+export interface RoundAwardCategory {
+  name: string;
+  emoji: string;
+  awards: RoundAwardEntry[];
+}
+
+export interface RoundAwards {
+  round_id: number;
+  map_name: string | null;
+  round_number: number | null;
+  round_date: string | null;
+  /** ⚠️ A mapping, not a list: the backend builds categories from the award
+   *  table and naming them in a model would silently drop any new one. */
+  categories: Record<string, RoundAwardCategory>;
+}
+
 // ---------------------------------------------------------------------------
 // The backwards-debt eight: paths legacy called that the app had not adopted.
 

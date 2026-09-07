@@ -33,13 +33,15 @@ except ImportError:  # pragma: no cover - environment-dependent
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from bot.core.round_contract import DEFAULT_EXCLUDED_MAPS  # noqa: E402
+
 
 def _excluded_maps() -> list[str]:
     with contextlib.suppress(Exception):
         from dotenv import load_dotenv
 
         load_dotenv()
-    raw = os.getenv("EXCLUDED_MAPS", "mp_sillyctf") or ""
+    raw = os.getenv("EXCLUDED_MAPS", ",".join(sorted(DEFAULT_EXCLUDED_MAPS))) or ""
     return [m.strip().lower() for m in raw.split(",") if m.strip()]
 
 
