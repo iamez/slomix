@@ -244,4 +244,4 @@ Other new-site work:
 - **Puran cron `0 20 * * * kill etlded`** — it throws players out mid-game; conditional kill or reschedule — `PLAN.md:455-456`.
 - **`scripts/local_et_setup.sh` P1** — the production webhook is configured in the local test server — `PLAN.md:457`.
 - **Hosting ticket** if the watcher confirms population B (host stall) — `PLAN.md:458`.
-- **Owner actions, not decisions** (queued, updated 2026-09-07 11:30): ~~install the watchdog timer~~ done; ~~restart the dev bot~~ done; #960 merged; #958 in the merge gate; #955 and #912 next under the owner's "close all open PRs except Don't merge" (with the sister's #912 reservation); build the SPA bundle + `dev_deploy.sh` + restart (owner DA)..
+- **Owner actions, not decisions** (queued, updated 2026-09-07 11:30): ~~install the watchdog timer~~ done; ~~restart the dev bot~~ done; #960 merged; #958 in the merge gate; #955 and #912 next under the owner's "close all open PRs except Don't merge" (with the sister's #912 reservation); build the SPA bundle + `dev_deploy.sh` + restart (owner DA).
