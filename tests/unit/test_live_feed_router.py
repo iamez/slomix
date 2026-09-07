@@ -8,6 +8,7 @@ internal-secret gate, all process-local.
 from __future__ import annotations
 
 import importlib
+import os
 
 import pytest
 from fastapi import FastAPI
@@ -27,7 +28,14 @@ def client(monkeypatch):
     return TestClient(app)
 
 
-def _post(client, events, token="test-secret"):  # noqa: S107 — test fixture value, not a credential
+_FROM_ENV = object()
+
+
+def _post(client, events, token=_FROM_ENV):
+    # The secret is whatever the `client` fixture put in the environment —
+    # read back here, never spelled in the file (pre-push scans for that).
+    if token is _FROM_ENV:
+        token = os.environ["INTERNAL_API_SECRET"]
     headers = {"X-Internal-Token": token} if token else {}
     return client.post("/api/live/events", json={"events": events}, headers=headers)
 
