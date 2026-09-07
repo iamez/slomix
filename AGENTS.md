@@ -26,6 +26,13 @@ in English.
   `git reset --hard`, `git push --force`, `git push --no-verify`. The
   pre-push hook refuses > 25 files across the pushed commits and scans for
   credentials; do not work around it — split the PR.
+  **One written exception (owner, 2026-09-07):** `scripts/review_slices.sh cut
+  --push` force-pushes the `review-base/NN-*` / `review/NN-*` branches with
+  `--no-verify`. Those are review vehicles for `/code-review ultra` (tree = main,
+  draft PRs #924–#943, never merged, re-cut after every move of main), not
+  work branches; the 25-file cap would forbid a 500-file review vehicle. Only
+  that script, only those branch names; the owner decides if the mechanism
+  changes to immutable snapshots (`docs/HANDOFF-astra.md` §I).
 - ⛔ **No secrets, logs, backups, dumps, spreadsheets or raw data in git.**
   The repo is public. Local-only paths (gitignored, visible in this checkout,
   absent from a fresh clone): `docs/design/` (except the committed subset),
