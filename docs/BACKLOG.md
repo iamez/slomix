@@ -7,6 +7,17 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-07, 19:30) Owner: »dokončaj novo stran« + DA za gradnjo,
+  dev deploy, Chromium prelet in kodo. NAREJENO: `npm run build:app` v
+  worktreeju `slomix-fable` (main `e91875cf`), `DEV_SRC_DIR=…/slomix-fable
+  scripts/dev_deploy.sh` → run dir `e91875cf`, servirani bundle
+  `app-Bv4wOtcy.js` = zgrajeni (prvič od 6. 9. 11:03 je SPA na `:8000` enak
+  mainu), bot prijavljen 19:24. `static/modern` guard je pravilno preskočil
+  (worktree brez legacy bundla). V TEKU: anonimni prelet 32 rut (`--app
+  --anon-only`); owner prelet rabi `website/.env` → iz primarnega drevesa.
+  NASLEDNJE: najdbe preleta → rezine; endpoint gap 12 (S/M); Panel rezini 1–2.
+  ⚠️ Ultra na #924 do 19:20 ni oddal ničesar (0 pregledov); rezin ne sekam,
+  dokler owner ne potrdi, da pregled ni v teku.
 - (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
   #958, #955 mergani; #912 mergan 12:30 pod ownerjevim DA za nabor (»zapri odprte PR-je
   razen Don't merge«, 03:40) — ⚠️ pogodba hoče DA na številko PR-ja; ownerju
