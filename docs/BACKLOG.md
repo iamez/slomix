@@ -8,8 +8,9 @@
 ## Trenutna pozicija
 
 - (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
-  #958, #955 mergani; #912 v vratih (CI »Docker Build« še teče; sestrin pridržek:
-  `arena_acc_log` neizmerjen v živo); #961 (predaja Astri + modularnost SPA) čaka
+  #958, #955 mergani; #912 mergan 12:30 pod ownerjevim DA za nabor (»zapri odprte PR-je
+  razen Don't merge«, 03:40) — ⚠️ pogodba hoče DA na številko PR-ja; ownerju
+  poročano posebej s sestrinim pridržkom (`arena_acc_log` neizmerjen v živo); #961 (predaja Astri + modularnost SPA) čaka
   ownerjev DA. Po mergu #912: `scripts/review_slices.sh cut --push` (rezine
   #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
   Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.

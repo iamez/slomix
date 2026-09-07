@@ -35,11 +35,14 @@ A green `npm run build` proves nothing about the SPA.
 ## Modularity rules (2026-09-07; measured basis and plan in `docs/SPA_MODULARITY.md`)
 
 - A panel is `<Panel>` (`components/Panel.tsx` once slice 1 lands; `ProxPanel` in
-  `pages/proximityShared.tsx` until then). Never hand-roll
+  `pages/proximityShared.tsx` until then). Colour tokens are `--color-*`. Never hand-roll
   `isPending && <Pending/>` / `isError && <Unavailable/>` / `<Absent/>` again.
-- Rows are `<DataTable>` with `DataColumn<Row>[]` declared as data, or `<GridRow>`;
-  no new `gridTemplateColumns` in `pages/`.
-- Numbers and dates go through `lib/format.ts`; no `.toFixed(` in `pages/`.
+- Rows are `<DataTable>` with `DataColumn<Row>[]` declared as data, or `<GridRow>`
+  (exists only after slice 3 of `docs/SPA_MODULARITY.md`; until then use `DataTable`
+  or reuse an existing grid verbatim); no new `gridTemplateColumns` in `pages/`.
+- Numbers and dates go through `src/app/lib/format.ts` (exists only after slice 4;
+  until then reuse `mmss` from `RoundsTable` and `figure()` from `ui.tsx`); no new
+  `.toFixed(` in `pages/`.
 - Sizes and colours are tokens (`var(--fs-*)`, `var(--space-*)`, colour tokens);
   no hex/rgb()/raw px except the 1px hairline. "Make it bigger/brighter" is a
   `tokens.css` edit, never a page edit.

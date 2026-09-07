@@ -15,7 +15,7 @@ second person and agree within counting method):
 | empty / error / pending vocabulary | **good** | `Pending`/`Unavailable`/`Absent` in 31–34 of 38 pages; grey-note ratchet at 41 (from 66) |
 | proximity / telemetry coverage | **good** | 66 of 67 proximity endpoints consumed (only `/proximity/dashboard` unused); 53 `ProxPanel`s; 92/92 inventory rows covered |
 | primitives reuse (layout) | **partial** | 44 hand-built `gridTemplateColumns` layouts vs 2 `DataTable` uses; 1,412 inline `style={{}}` in 38/38 pages; 9 of 16 doc-11 §A units and 1 of 14 §B patterns exist |
-| declarative page config | **weak** | 1 page of 38 defines columns as data; `dataset_registry` (32 descriptors, `GET /api/datasets`) drives **zero pixels**; 169 of 179 rendered `data-parity` panels are unknown to it |
+| declarative page config | **weak** | 1 page of 38 defines columns as data; `dataset_registry` (34 descriptors, `GET /api/datasets`) drives **zero pixels**; 169 of 179 rendered `data-parity` panels are unknown to it |
 
 **So:** "make this text bigger / this colour stronger" is one line in
 `src/app/tokens.css` (e.g. `--fs-caption` reaches 260 sites). "Change how a panel
@@ -58,7 +58,9 @@ test` (never `npx`), and no visual change unless the slice says so.
    A hidden panel sends no query and leaves a low-contrast trace, never a silent
    hole. Proof: `components.test.tsx` case that `Hidden` renders a trace rather than
    nothing, and a `vocabulary.test.ts` pin that `Hidden` and `Absent` cannot share a
-   colour (same shape as the existing `Absent`/`Unavailable` pin). This is the
+   colour (same shape as the existing `Absent`/`Unavailable` pin). Contract, shared
+   with the doc 19 slice 3 line in `HANDOFF-astra-inventory.md`: the hidden panel's
+   `data-parity` node is absent and no query is sent; only the trace remains. This is the
    smallest piece of doc 19 §9 slice 3 with no schema risk; the column picker on
    the basics table (doc 19 §9 slice 2: `user_page_layouts` migration with the
    `website_app` GRANT in the same file, `GET/PATCH /api/preferences/session-detail`)
@@ -89,7 +91,7 @@ now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
 | `src/app/lib/fixturesCoverage.test.ts` | 214 fixtures | every called endpoint has a recorded fixture |
 | `tests/unit/test_proximity_inventory.py` | `PENDING_BUDGET = 0` | 92/92 proximity rows covered; ten tab names |
 | `tests/unit/test_parity_keymap.py` | `UNMAPPED_BUDGET = 2` | Map Distribution (home), Charts (session-detail) |
-| `tests/unit/test_dataset_registry.py` | 32 descriptors | every `parity_key` renders; heavy sections from measured cost |
+| `tests/unit/test_dataset_registry.py` | 34 descriptors, asserted only as `len(DATASETS) >= 30` (not a ratchet; slice 6 adds the exact baseline) | every `parity_key` renders; heavy sections from measured cost |
 | `tests/unit/test_status_vocabulary_crosses_the_language_boundary.py` | 22 statuses | Python and TS classify the same set |
 
 Both frontend budgets glob only `src/app`; `test_endpoint_gap.py` carries
@@ -118,7 +120,7 @@ each add one.
 2. A list of rows is `<DataTable>` with a `DataColumn<Row>[]` declared as data, or
    `<GridRow>` for non-sortable rows. No new `gridTemplateColumns` in `pages/`.
 3. Numbers and dates go through `lib/format.ts`. No `.toFixed(` in `pages/`.
-4. Sizes and colours are tokens: `var(--fs-*)`, `var(--space-*)`, `var(--c-*)`.
+4. Sizes and colours are tokens: `var(--fs-*)`, `var(--space-*)`, `var(--color-*)` (49 colour tokens in `tokens.css`; there is no `--c-*`).
    No hex, rgb() or raw px except the 1px hairline.
 5. Every section carries `data-parity="page.panel"` and, once slice 6 lands, a
    descriptor in `dataset_registry.py`.
