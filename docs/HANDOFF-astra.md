@@ -171,3 +171,43 @@ Sestrinih osem (B6) + Fable:
 
 ## E. Kako začeti (Astra, prva ura read-only)
 `AGENTS.md` (že naložen) → `docs/HANDOFF-next.md` → `docs/PLAN.md` → `docs/BACKLOG.md` (prva stran) → `docs/process/MANDELBROT_RCA.md` → `docs/REVIEW_GUIDE.md` → `docs/AGENT_LOG.md` → ta datoteka (del C). Nato `git status`, `gh pr list`, `free -m`, `systemctl list-units --all 'etlegacy-*'`, `ss -ltnp`, `bash scripts/health_check.sh`. Ownerju: snapshot ≤ 15 vrstic + 3 predlogi z oceno tveganja + vprašanja z opcijami. Odgovori v slovenščini; koda/commiti angleško.
+
+---
+
+## G. Odgovori Astri (plan-mode vprašanja, 7. 9. 11:15) — vsak z meritvijo, ne s spominom
+
+### G1. Začeto delo BREZ runtime dokaza ali le delno oddano
+| kaj | stanje na dev (izmerjeno 11:10) | dokaz |
+|---|---|---|
+| **SPA spremembe #946 (diagnostics stanja), #954 (watchdog vrstica, register), #921 (faza 7)** | koda na mainu, **NI servirana**: bundle `slomix-dev-run/website/static/app` najnovejša datoteka 6. 9. 11:03, zadnji commit v `src/app` 7. 9. 00:23 (`3fdfd88b`) | `find …/static/app -type f -printf '%TY-%Tm-%Td %TH:%TM'` proti `git log -1 -- website/frontend/src/app`; About panel na `:8000/app` je torej star |
+| **watchdog r. 1 — pot alarma na Discord** | nikoli sprožena v živo: `logs/watchdog_state.json` ima `last_alert_at: 0.0` pri vseh 11 ključih; 11/11 `ok`, heartbeat datum 2026-09-07 zapisan (torej ura 09:00 je šla mimo — ali je bil heartbeat POSLAN, iz stanja ni razvidno, preveri kanal) | dokazan je le `--once` cikel + webhook ustvarjen; **simuliran izpad (zaprta vrata → alarm v ≤ 10 min) NI narejen** = prva Astrina meritev v r. 2 |
+| **#912 `arena_acc_log`** (sestra) | nameščen, **0 ACC vrstic v živo** (strežnik ugasnjen po namestitvi); offline 48/49 + 32/32 mutacij; CI 11/11 zelen po rebasu (`02880c10`) | manjkajoča meritev = en dvoboj na prižganem testnem strežniku, podpis prek `lua_status` (razsodnik), ne datoteke |
+| **#923 SSH monitor r. 1–4** | TEČE iz run dira od 02:57 (`bot_error_streaks.json` piše se, 11:07) — dokaz za obstoj datoteke; **alarm ob tretji napaki v živo po restartu 02:57 ni bil znova viden** (prej dokazan s 4 PID-i v starem drevesu) | `ls -la logs/bot_error_streaks.json` v run diru |
+| **`dev_deploy.sh` guard (#960)** | mergan 09:03; run dir je 1 commit ZA mainom (`71de6b65` proti `7ced9435`) — razlika je samo ta skripta, brez runtime učinka; guard je bil preverjen z mutacijo v PR-ju, **ne pa z resničnim deployem** (bundle še ni zgrajen → prvi resnični tek bo exit 3 po načrtu) | `git -C slomix-dev-run rev-parse HEAD` |
+| **prelet faze 7** | zadnji polni tek 6. 9. zjutraj, po #921 ni ponovljen (RAM) | — |
+| **`round_awards` v SPA (#955)** | odprt; tudi po mergu ostane NEVIDEN, dokler bundle ni zgrajen | — |
+
+### G2. Trditve v #961, ki so zastarele ali v nasprotju z artefakti (popravi ob branju)
+- `HANDOFF-astra-inventory.md` §0: »#960 open« → mergan 09:03 (main `7ced9435`). §4 »Restart the dev bot — not one line of #923 is running« → **zastarelo**, bot teče iz run dira na `71de6b65` od 02:57. §4 »Install the timer« → **narejeno** (timer aktiven, teče vsakih 5 min). §4 `[✓/verify] watchdog key + About line` → koda mergana (#954), a NI servirana (G1). §1 »`AUDIT_BASE_URL=…:8056`« → dev je `:8000`.
+- `HANDOFF-astra.md` §A3 »#954 About: watchdog zadnji tek« in »#946 diagnostics stanja v About panelu« → mergano, **ne servirano** (bundle). §A4 »#960 vrata tečejo« → mergan.
+- §A1 »Codex varovala … hook« → Astrin audit: **oba hooka sta `untrusted` in se preskočita**; guard ne ujame `git -C … add -A` / `reset --hard`; `push origin x --force` (zastavica zadaj) gre skozi rules kot `allow`; `last_input.json` beleži surov vnos (0664). Torej »varovalo« iz predaje trenutno NE deluje — pisna pravila so edina meja.
+- §A4 »rotacija DB gesla v `default.rules`« potrjeno: 194 vrstic s `PGPASSWORD=` (audit) — še vedno odprto, owner.
+
+### G3. Ownerjeve odločitve: SPREJETE danes proti ODPRTIM
+Sprejete (7. 9.): prod ostane zamrznjen v1.39.0; »zapri odprte PR-je razen Don't merge« (#960 ✓, #958 v vratih, #955, #912 sledita — #912 s sestrinim pridržkom); restarti to noč delegirani Fable (izvedeni 02:57, dovoljenje ni prenosljivo na druge seje); popolna predaja + dokončanje začetega + stabilnost PRED runtime v2, nove funkcije pozneje (Astri, 11:00).
+Odprte (naslov → kje): rotacija sudo gesla (bilo v pogovoru) in DB gesla (`default.rules`, argv MCP) → owner; `build:app` + `dev_deploy.sh` + restart DA → owner; ultra #924/#925/#926 → owner požene; #912 zdaj ali po meritvi ACC → owner; Node 22.22+ na stroju (aktiven 20.20.0, frontend zahteva ≥ 22.22.0, `.nvmrc` 22.13.1) → owner/namestitev; ločeni venv-i za run dir → r. 2 z ownerjevim `install`; ostalo = `HANDOFF-astra-inventory.md` §11 (destroyed_count, FIX 13, doc 19/20/21/22 vprašanja, `denied_playtime`, `full_selfkills`, `vs-stats`, `highlights/render`, `awards` postavitev, cron `kill etlded`, hosting ticket).
+
+### G4. Doc 21 (runtime v2) — predpostavke, ki jih NISEM preveril v kodi
+1. »Emitter v ISTI transakciji kot zapis runde«: transakcija obstaja v `postgresql_database_manager.py:1661` (uvoz datoteke; `:1750` obvesti korelacijo PO commitu) — **nisem preveril**, ali bot pot `_process_stats_ready_round` (`bot/services/stats_ready_mixin.py:165`) gre skozi TO metodo ali skozi lastne `execute` klice brez transakcije (v mixinu ni nobenega `transaction`).
+2. »Website kot LISTEN naročnik«: v `website/backend` ni nobenega `LISTEN`/`add_listener`; **nisem preveril**, ali websiteov pool (`local_database_adapter.py` ovoj) sploh dovoli namensko trajno povezavo za LISTEN in kako preživi restart PG.
+3. »Dedup na `(map, round_number, round_end_unix)`«: `rounds.round_end_unix` ima `DEFAULT 0` (`tools/schema_postgresql.sql:606`) in R0 vrstice se še pišejo → ključ z 0 trka; **nisem izmeril**, koliko vrstic ima 0.
+4. »Replay iz `events`«: nisem preveril, da so porabniki idempotentni (Discord post dvakrat = dva posta); doc 21 to predpostavlja.
+5. »Latenca ≈ 0 dodana«: ni osnovnice datoteka→Discord post; izmeri PRED rezino.
+6. `pg_notify` payload meja 8 000 B in izguba ob odklopu poslušalca (NOTIFY ni trajen) — doc omenja, koda ne obstaja.
+
+### G5. Manjkajoči indeksi / nepotisnjeno / lokalno
+- Nepotisnjenih commitov v NOBENEM od 13 worktreejev (izmerjeno `@{u}..HEAD` = 0); 8 scratchpad worktreejev seje Opus (`…/57cfdfc9…/scratchpad/{armed,audit,bkp,diag,stale,tpp,tppbf,…}`) na že merganih vejah, 3 z umazanim drevesom (audit 1, tpp 3, tppbf 1 datoteka) → pobrati/odstraniti po protokolu (`readlink /proc/*/cwd` prej).
+- ⛔ `git stash list` v primarnem drevesu: `stash@{0}: WIP on deploy-script-and-docs` (tuj, star) — ne popaj.
+- ⚠️ Lokalna datoteka v primarnem drevesu z imenom, ki nosi del **prod webhook URL-ja** (`webhook prod https…txt`, 15. 8., 526 B, v `.git/info/exclude`) → ownerju: premakni izven drevesa; vsebine nisem bral.
+- Lokalno, ne v repu (po namenu): `docs/design/00–24` razen podmnožice, `docs/research`, `docs/archive`, `server/omnibot`, `~/.claude/plans/nifty-honking-scroll.md` (načrt te predaje, začasen), Claude spomin `~/.claude/projects/-home-samba-share-slomix-discord/memory/` (kazalo `MEMORY.md` je 31 KB > 24 KB meje → nalaga se le del; ⚠️ za Claude, ne za Codex).
+- Codex: `~/.codex/memories/` prazen (asinhrono), hooki untrusted (G2) — to je Astrin audit, potrjujem lastništvo datotek/mode (0664 `hooks.json`, `last_input.json`).
