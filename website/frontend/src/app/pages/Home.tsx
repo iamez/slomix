@@ -542,10 +542,10 @@ function PulseRow() {
           empty="no challenge this week"
           isEmpty={(d) => !d.challenge}
         >
-          {(d) => (
+          {(d) => d.challenge && (
             <>
-              <div style={{ fontSize: 'var(--fs-lead)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{d.challenge!.title}</div>
-              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{d.challenge!.description}</div>
+              <div style={{ fontSize: 'var(--fs-lead)', letterSpacing: '0.03em', textTransform: 'uppercase' }}>{d.challenge.title}</div>
+              <div style={{ fontSize: 'var(--fs-body)', color: 'var(--color-text-400)', marginTop: 'var(--space-1)' }}>{d.challenge.description}</div>
             </>
           )}
         </Panel>

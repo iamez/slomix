@@ -78,6 +78,18 @@ After 1–8 a per-page display change is: edit one token (text/colour), one
 slices 2–3 land, one preference row (whether a panel shows). Slices 1–4 and 8 are safe for any agent
 now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
 
+## Status
+
+- 2026-09-07: slice 1 (`components/Panel.tsx` + `panels.test.ts`, seed 61) in PR #970; slice 2
+  converted twelve panels (SkillRating rated players; Home challenge, predictions;
+  Story escorts, momentum, kill impact, synergy, composite, players; SessionDetail
+  top dpm; Availability week, tonight) — ratchet 61 → 49, vocabulary 41 → 40.
+  Panel gained `gap`, `parity`, a JSX `aside` and an `empty(data)` function so a
+  conversion is not a visual change. Left hand-rolled on purpose: panels with no
+  head (`Lbl` instead of `SectionHead`, or none), gated formula reveals, and the
+  market panel with admin controls beside its body — each is a design decision,
+  not a mechanical edit.
+
 ## Guards that already exist (11) — extend, do not duplicate
 
 | guard | value (2026-09-07) | what it pins |

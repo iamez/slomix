@@ -1332,14 +1332,14 @@ export function SessionStory({ gsid }: { gsid: number }) {
           empty={(d) => (d.status === 'partial_data' ? 'insufficient data — no R1 rows to build the groups from' : 'no synergy rows for this session')}
           isEmpty={(d) => !d.groups.group_a || !d.groups.group_b}
         >
-          {(d) => (
+          {(d) => d.groups.group_a && d.groups.group_b && (
           <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>
             {/* Named, not indexed: the two groups are a pair, not a list,
               * and an object read by a computed key is a finding in this
               * repo's scanners even when the key is a literal. */}
             {[
-              { key: 'group_a', group: d.groups.group_a! },
-              { key: 'group_b', group: d.groups.group_b! },
+              { key: 'group_a', group: d.groups.group_a },
+              { key: 'group_b', group: d.groups.group_b },
             ].map(({ key, group: g }) => {
               return (
                 <Stack key={key} gap={1} style={{ minWidth: 240 }}>
