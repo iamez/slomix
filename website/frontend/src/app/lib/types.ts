@@ -4554,3 +4554,20 @@ export interface DatasetRegistry {
   count: number;
   datasets: DatasetDescriptor[];
 }
+
+/** `/api/stats/player/{player_name}/form` — session-aggregated DPM, oldest
+ *  first, one point per gaming session with more than two minutes played
+ *  (`players_router.get_player_form`). Recorded 2026-09-07 from dev; no
+ *  response_model on the backend yet, so this is the observed shape. */
+export interface PlayerSessionFormPoint {
+  label: string;
+  date: string;
+  dpm: number;
+  rounds: number;
+  kd: number;
+}
+export interface PlayerSessionForm {
+  sessions: PlayerSessionFormPoint[];
+  avg_dpm: number;
+  trend: 'improving' | 'declining' | 'stable' | 'insufficient_data';
+}

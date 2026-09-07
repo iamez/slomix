@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router';
 import {
   usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
   useMemoryCard, useSkillPlayerForm, useSkillPlayerHistory,
+  usePlayerSessionForm,
 } from '../lib/queries';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
@@ -9,9 +10,11 @@ import type {
   PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
+  PlayerSessionForm,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
 import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Panel } from '../components/Panel';
 
 /**
  * The player (docs/design/08 phase 3, docs/design/12 row 18). One endpoint
@@ -564,6 +567,58 @@ function PlayerForm({ playerId }: { playerId: string }) {
   );
 }
 
+/** The server's trend word, spelled for the reader — a switch, not a lookup
+ *  table indexed by the value (the scanners here flag computed keys). */
+function trendWord(trend: PlayerSessionForm['trend']): string {
+  switch (trend) {
+    case 'improving': return 'improving';
+    case 'declining': return 'declining';
+    case 'stable': return 'stable';
+    default: return 'fewer than six sessions, no trend yet';
+  }
+}
+
+/** Session-by-session DPM: one point per gaming session, a date under each,
+ *  the average and the six-session trend the server computed (legacy
+ *  loadPlayerForm, player-profile.js). Drawn with the shared frame from
+ *  components/Panel.tsx — the first non-proximity panel to use it. */
+function SessionForm({ playerId }: { playerId: string }) {
+  const q = usePlayerSessionForm(playerId);
+  return (
+    <div data-parity="profile.session-form" style={{ marginTop: 'var(--space-6)' }}>
+      <Panel<PlayerSessionForm>
+        label="form by session"
+        aside={q.data != null && q.data.sessions.length > 0 ? `avg ${figure(q.data.avg_dpm)} dpm` : undefined}
+        q={q}
+        empty="no gaming session with more than two minutes played"
+        isEmpty={(d) => d.sessions.length === 0}
+      >
+        {(d) => (
+          <Stack gap={2}>
+            <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
+              <Spark values={d.sessions.map((s) => s.dpm)} />
+              <Meta>{trendWord(d.trend)}</Meta>
+              <Meta>{d.sessions.length} sessions</Meta>
+            </Cluster>
+            <Stack gap={1} className="rows">
+              {d.sessions.slice(-5).reverse().map((s) => (
+                <Cluster key={s.date} gap={4} justify="between" align="baseline" className="row" style={rowStyle}>
+                  <span style={{ fontSize: 'var(--fs-row)' }}>{s.date}</span>
+                  <Cluster gap={4} align="baseline">
+                    <Meta>{s.rounds} rounds</Meta>
+                    <Meta>k/d {figure(s.kd)}</Meta>
+                    <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{figure(s.dpm)} dpm</span>
+                  </Cluster>
+                </Cluster>
+              ))}
+            </Stack>
+          </Stack>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
 /** The rating over recent sessions — the trend behind the header's single
  *  number (legacy loadCareerHistory, player-profile.js:772). */
 function RatingHistory({ playerId }: { playerId: string }) {
@@ -781,6 +836,7 @@ export function PlayerProfilePage() {
           <MemoryCardSection playerId={playerId} />
           <PlayerForm playerId={playerId} />
           <RatingHistory playerId={playerId} />
+          <SessionForm playerId={playerId} />
           <Streaks p={p} />
           <Achievements playerId={playerId} />
           <Weapons rows={p.weapons.weapons} available={p.weapons.available} />

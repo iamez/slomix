@@ -182,6 +182,7 @@ import type {
   WeaponsHallOfFame,
   Diagnostics,
   Wrapped,
+  PlayerSessionForm,
 } from './types';
 
 /**
@@ -2116,6 +2117,22 @@ export function useSkillPlayerForm(guid: string | null) {
     queryFn: () => apiGet('/api/skill/player/{identifier}/form', {
       pathParams: { identifier: guid! },
     }) as Promise<SkillPlayerForm>,
+  });
+}
+
+/** Session-by-session DPM with a date per point, rounds per session, the
+ *  average and a six-session trend — what `/api/skill/player/{}/form` does
+ *  not carry (PlayerProfile's own note measured the two series equal to
+ *  rounding). The handler resolves a guid or a name. */
+export function usePlayerSessionForm(identifier: string | null, limit = 20) {
+  return useQuery({
+    queryKey: ['player-session-form', identifier, limit],
+    enabled: !!identifier,
+    retry: false,
+    queryFn: () => apiGet('/api/stats/player/{player_name}/form', {
+      pathParams: { player_name: identifier! },
+      query: { limit },
+    }) as Promise<PlayerSessionForm>,
   });
 }
 
