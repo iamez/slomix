@@ -7,6 +7,13 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
+  #958, #955 mergani; #912 v vratih (CI »Docker Build« še teče; sestrin pridržek:
+  `arena_acc_log` neizmerjen v živo); #961 (predaja Astri + modularnost SPA) čaka
+  ownerjev DA. Po mergu #912: `scripts/review_slices.sh cut --push` (rezine
+  #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
+  Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.
+  Bundle NI zgrajen (owner: pozneje); sudo/DB geslo rotacija = owner.
 - (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
   (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
   ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve

@@ -89,6 +89,8 @@ in English.
 | need | file |
 |---|---|
 | where we are, what is next, how to prove it | `docs/HANDOFF-next.md` |
+| the full-project handoff to Astra (work package §C, do-nots §D, measured answers §G–§I) and the open-work inventory | `docs/HANDOFF-astra.md`, `docs/HANDOFF-astra-inventory.md` |
+| how the new SPA must be extended (panel, rows, formatters, tokens, ratchets) and the owner's visual complaints | `docs/SPA_MODULARITY.md`, `website/frontend/AGENTS.md`, `docs/DESIGN_PUNCHLIST.md` |
 | plan of record / open positions | `docs/PLAN.md`, `docs/BACKLOG.md` |
 | rules per package | `docs/CLAUDE.md`, `bot/CLAUDE.md`, `bot/{core,cogs,services,automation}/CLAUDE.md`, `website/backend/CLAUDE.md`, `tests/CLAUDE.md`, `docs/WEBSITE_CLAUDE.md`, `docs/PROXIMITY_CLAUDE.md`, `docs/GAMESERVER_CLAUDE.md`, `website/frontend/AGENTS.md` |
 | known issues | `docs/KNOWN_ISSUES.md` |
