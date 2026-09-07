@@ -28,7 +28,23 @@ git -C "$RUN" checkout -q -B main "$REF"
 after=$(git -C "$RUN" rev-parse --short HEAD)
 echo "run dir: $before -> $after ($(git -C "$RUN" log -1 --format=%s))"
 
+# The bundles are artefacts, not code: the tree can be on the right commit
+# while static/app was built hours before the SPA source last changed
+# (2026-09-07: bundle 11:03, source 00:23 next day — /api/build reads the
+# commit and would have looked right). Refuse to copy a bundle older than
+# its source; SKIP_STATIC=1 deploys the code alone.
+if [ "${SKIP_STATIC:-0}" != "1" ]; then
+  newest_src=$(git -C "$SRC" log -1 --format=%ct -- website/frontend/src/app website/frontend/src/api website/frontend/package.json)
+  built=$(stat -c %Y "$SRC/website/static/app/app.html" 2>/dev/null || echo 0)
+  if [ "$built" -lt "$newest_src" ]; then
+    echo "⛔ static/app in $SRC was built $(date -d @"$built" +%F\ %R) but website/frontend/src/app changed $(date -d @"$newest_src" +%F\ %R):" >&2
+    echo "   run (cd $SRC/website/frontend && npm run build:app) first, or SKIP_STATIC=1 to deploy the code alone" >&2
+    exit 3
+  fi
+fi
+
 for d in app modern; do
+  if [ "${SKIP_STATIC:-0}" = "1" ]; then break; fi
   if [ -d "$SRC/website/static/$d" ]; then
     rm -rf "$RUN/website/static/$d.new"
     cp -a "$SRC/website/static/$d" "$RUN/website/static/$d.new"
