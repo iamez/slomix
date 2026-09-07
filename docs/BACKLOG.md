@@ -7,6 +7,27 @@
 
 ## Trenutna pozicija
 
+- **2026-09-07 (Astra):** owner approved the reconciled implementation plan.
+  Current authority: PLAN's "Astra execution ledger" (A01–A10, R01–R04).
+  Source `4f653c01`: #955 and #912 are now merged; runtime proof is separate.
+  Saving handoff on `docs/astra-execution-ledger`; independent helpers handle
+  watchdog delivery and immutable review snapshots in their own worktrees.
+  No service, deployment, browser, live-data write or merge performed by Astra.
+  Next: finish these stability slices, Codex/local environment safeguards and
+  artifact identity; isolated event-journal development follows the gate.
+
+**Historical entries below are not current action instructions.** In
+particular, old `review_slices.sh cut --push` advice is suspended: the existing
+script bypasses mandatory push checks and rewrites refs. Use the replacement
+only after review. Old advice to delete generated OpenAPI types is superseded
+by npm `pre*` hooks (`generate:api` before bare `npx`). Prior "install/restart
+watchdog" notes are not proof that installation is still pending.
+
+Deferred, not forgotten: twins r4/puran test, user layouts, spiderweb layer 3
+rendering/layer 4, endpoint-gap features, broad response typing and modular UI
+work. Data repairs, production migration and real alert delivery have their
+own permission gates. Read PLAN A09/A10 before reopening old research.
+
 - (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
   `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
   vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.

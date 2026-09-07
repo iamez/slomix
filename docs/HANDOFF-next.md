@@ -1,5 +1,20 @@
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
+> **Current handoff override — 2026-09-07, Astra.** Start with the "Astra
+> execution ledger" in `docs/PLAN.md`; the sections below are a historical
+> snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
+> #961 carries additional Claude handoff evidence and remains under review.
+> Merge, build, active service and runtime proof are separate states.
+> Do NOT run the old review `cut --push`: it uses forbidden push options.
+> Do NOT treat old server/browser commands as permission to start them.
+> Watchdog exists; delivery/retry proof is still required. Keep its 5-minute
+> cadence/two-failure policy unless explicitly changed, not a <=2-minute SLA.
+> Raw Codex hook input logging must be removed, not validated by logging
+> more real commands. Private Claude memory stays private.
+> Runtime starts with `round_stats_imported` in the canonical PG transaction,
+> NOT `round_ended` in the Discord mixin. Stability before development;
+> 1–2 week observation before activation, not before development.
+
 Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
 pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v

@@ -1,5 +1,10 @@
 # Known Issues
 
+> **Audit qualification — 2026-09-07, source `4f653c01`.** The August
+> measurements below are historical, not current database counts. Current
+> triage and proof obligations are in PLAN's Astra execution ledger. No data
+> repair or deployment is authorized by an old "fix direction".
+
 > **Re-verified against code, database and live logs on 2026-08-11.**
 > Rule for this file: every OPEN entry carries a `Verify:` command that proves
 > the claim today. If the command stops reproducing the claim, the entry is
@@ -12,7 +17,14 @@
 
 ## Open — data pipeline
 
-### Dead-hours orphan mechanism (deterministic permanent orphans) — High
+### Dead-hours orphan mechanism — code CLOSED (#652); historical evidence
+
+The code mechanism described below was fixed by `680c9cb1` (PR #652,
+2026-08-11). `bot/core/dead_hours.py` provides the shared policy, the monitor
+uses it, and the relinker uses `awake_cutoff`. Do not reimplement the old fix.
+Historical orphan inventory and current growth are separate data claims and
+still need read-only remeasurement. The following description and commands
+document the pre-fix mechanism; they are not current verification criteria.
 
 Three constants disagree and together guarantee permanent proximity orphans for
 rounds played 02:00-05:00 CET on the SSH-poll path:

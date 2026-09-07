@@ -6,6 +6,23 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-07 · Commit, artifact, process and data are separate evidence.**
+  The handoff audit found merged SPA source newer than the served bundle.
+  Why: a healthy endpoint and matching git revision do not identify static
+  assets. Apply: record source/build identities and process start time before
+  live proof; never close a runtime obligation from a merge alone.
+- **2026-09-07 · Canonical import is earlier than data finalization.**
+  `process_file()` commits stats before Lua, timing, endstats and other updates;
+  `processed_files` is also written after that commit. Why: a Discord-only
+  emitter misses other inputs and a first event cannot promise final stats.
+  Apply: emit transactionally in the canonical importer, deduplicate the first
+  event durably and cover late changes before enabling consumers.
+- **2026-09-07 · Review tooling is subject to ordinary Git safety rules.**
+  The old review cutter used force/no-verify despite AGENTS forbidding both.
+  Why: historical scrubbed source does not replace today's pre-push scan.
+  Apply: new immutable refs, <=25-file slices and real hooks; existing review
+  PRs remain NEVER MERGE. Do not run the old push workflow.
+
 - **2026-09-06 · One row's age carries two meanings; say both.** (Review of
   #949 by the sister session.) `server_status_history` stops moving when the
   bot is down AND when its monitor loop fails on every tick (the loop survives
