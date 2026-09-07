@@ -1,0 +1,90 @@
+# SPA modularity — measured state, remediation plan, rules (2026-09-07)
+
+Owner's question (2026-09-07): *the new site will change a lot; I like the colours
+and the theme, but the way text/data is shown on some pages and its visibility
+must change, and proximity/telemetry feels minimal. Is the site built so that
+such changes are quick and simple? If not, plan the fix and set rules.*
+
+Answer, measured (read-only audit of `website/frontend/src/app` at main
+`7ced9435`; every count has its command; two counts were re-measured by a
+second person and agree within counting method):
+
+| dimension | verdict | number |
+|---|---|---|
+| tokens (type, colour, space) | **good** | 652 of 654 `fontSize` uses are `var(--fs-*)`; 30 hex literals vs 2,086 `var(--)`; raw-size ratchet at 26 (from 1,010) |
+| empty / error / pending vocabulary | **good** | `Pending`/`Unavailable`/`Absent` in 31–34 of 38 pages; grey-note ratchet at 41 (from 66) |
+| proximity / telemetry coverage | **good** | 66 of 67 proximity endpoints consumed (only `/proximity/dashboard` unused); 53 `ProxPanel`s; 92/92 inventory rows covered |
+| primitives reuse (layout) | **partial** | 44 hand-built `gridTemplateColumns` layouts vs 2 `DataTable` uses; 1,412 inline `style={{}}` in 38/38 pages; 9 of 16 doc-11 §A units and 1 of 14 §B patterns exist |
+| declarative page config | **weak** | 1 page of 38 defines columns as data; `dataset_registry` (32 descriptors, `GET /api/datasets`) drives **zero pixels**; 169 of 179 rendered `data-parity` panels are unknown to it |
+
+**So:** "make this text bigger / this colour stronger" is one line in
+`src/app/tokens.css` (e.g. `--fs-caption` reaches 260 sites). "Change how a panel
+looks or which panels a page shows" is not: a panel is not a component, it is
+`SectionHead` + a hand-built grid + inline styles, repeated per page. The
+loading/error/empty/failure four-way branch is hand-rolled 58–62 times (by counting
+method) outside proximity, while `ProxPanel` (`pages/proximityShared.tsx`) already
+solves it in one place — for proximity only. Telemetry is the opposite of minimal;
+what it lacks is *depth* (spider-web layer 3 not drawn, layer 4 not started,
+`/api/replay/round/{id}/positions|paths` unused), not endpoints.
+
+## Remediation plan — eight slices, one PR each, in this order
+
+Each slice: branch + PR ≤ 25 files, a ratchet seeded at the measured value and
+lowered in the same commit, mutation seen failing, `npm run typecheck && npm run
+test` (never `npx`), and no visual change unless the slice says so.
+
+1. **Promote `ProxPanel` to `components/Panel.tsx`** (re-export from
+   `proximityShared` so proximity does not move). Ratchet: count of
+   `isPending && <Pending` in `pages/` (58 on 2026-09-07 by `grep -o`, test files
+   excluded), budget = measured, must only fall.
+2. **Convert the five heaviest hand-rolled triads to `<Panel>`**: Story (9), Home
+   (7), SessionDetail (5), AvailabilityPage (5), SkillRating (4). Ratchet from
+   slice 1 drops by ≈30. Playwright parity inventory unchanged (same `data-parity`).
+3. **`components/GridRow.tsx`** (`cols`, `divided`, `align`) for the 44
+   `gridTemplateColumns`; convert Home (7) and About (7) first. Ratchet on
+   `gridTemplateColumns` in `pages/`, seed 44.
+4. **`lib/format.ts`**: `mmss` (move from RoundsTable), `pct`, `num`, `dateShort`.
+   Ratchet on `.toFixed(` + `toLocaleString(` + `slice(0, 10)` in `pages/`, seed 188.
+5. **Adopt `DataTable` on Leaderboards and MapsPage** (both hand-sort today).
+   `DataColumn<` declarations 4 → 6 files; sort round-trip asserted in
+   `DataTable.test.tsx`.
+6. **Grow the dataset register to the 53 proximity panels** (they already carry
+   `parity_key`-shaped `data-parity`). Reverse assertion: every rendered
+   `data-parity` panel has a descriptor, with `tests/data/unregistered_panels.txt`
+   seeded at 169 and ratcheted down.
+7. **Wire `/api/datasets` to one page's visibility** — SessionDetail only: a
+   descriptor with `display_toggle_default: false` hides its panel (doc 19 §5
+   without the user table). Page test with a fixture register. This is the first
+   pixel the register drives; doc 19 r. 2 (`user_page_layouts`) builds on it.
+8. **Hex/rgba sweep**: 30 hex + 17 rgba literals in pages → two missing tokens
+   (`#151a1e` active-chip bg, `#33322e`) added to `tokens.css`; ratchet in
+   `tokens.test.ts` counting colour literals with comments stripped (a naive
+   `#[0-9a-f]{3,}` grep scores 161 because it eats `#813` PR references — the
+   honest number is 30).
+
+After 1–8 a per-page display change is: edit one token (text/colour), one
+`Panel` prop (chrome), one column list (what a table shows), or one register
+descriptor (whether a panel shows). Slices 1–4 and 8 are safe for any agent
+now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
+
+## What this plan does NOT do
+
+- It does not change the look. The owner's per-page dislikes are collected in
+  `docs/DESIGN_PUNCHLIST.md` and fixed *after* the panel exists, one token or one
+  prop at a time, so a fix on one page reaches every page that shares the unit.
+- It does not build spider-web layers 3–4 (owner-ordered, `docs/SPIDERWEB_STATUS.md`).
+- It does not add `user_page_layouts` (doc 19 r. 2, owner decision).
+
+## Rules for every new page or panel from now on (also in `website/frontend/AGENTS.md`)
+
+1. A panel is `<Panel>` (after slice 1: `<ProxPanel>` until then). Never write
+   `isPending && <Pending/>` by hand.
+2. A list of rows is `<DataTable>` with a `DataColumn<Row>[]` declared as data, or
+   `<GridRow>` for non-sortable rows. No new `gridTemplateColumns` in `pages/`.
+3. Numbers and dates go through `lib/format.ts`. No `.toFixed(` in `pages/`.
+4. Sizes and colours are tokens: `var(--fs-*)`, `var(--space-*)`, `var(--c-*)`.
+   No hex, rgb() or raw px except the 1px hairline.
+5. Every section carries `data-parity="page.panel"` and, once slice 6 lands, a
+   descriptor in `dataset_registry.py`.
+6. Each rule is a ratchet in `src/app/*.test.ts` or `tests/data/*.txt`: the budget
+   only falls, and it falls in the same commit that earns it.

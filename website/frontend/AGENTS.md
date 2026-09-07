@@ -31,3 +31,21 @@ A green `npm run build` proves nothing about the SPA.
   a signed-in non-admin (sentinel id −1), never an admin.
 - Never start chromium while another agent's Playwright/audit is running
   (2 GB box). Kill leftovers by PID from `ps`, not `pkill -f`.
+
+## Modularity rules (2026-09-07; measured basis and plan in `docs/SPA_MODULARITY.md`)
+
+- A panel is `<Panel>` (`components/Panel.tsx` once slice 1 lands; `ProxPanel` in
+  `pages/proximityShared.tsx` until then). Never hand-roll
+  `isPending && <Pending/>` / `isError && <Unavailable/>` / `<Absent/>` again.
+- Rows are `<DataTable>` with `DataColumn<Row>[]` declared as data, or `<GridRow>`;
+  no new `gridTemplateColumns` in `pages/`.
+- Numbers and dates go through `lib/format.ts`; no `.toFixed(` in `pages/`.
+- Sizes and colours are tokens (`var(--fs-*)`, `var(--space-*)`, colour tokens);
+  no hex/rgb()/raw px except the 1px hairline. "Make it bigger/brighter" is a
+  `tokens.css` edit, never a page edit.
+- Every section carries `data-parity="page.panel"` and (after slice 6) a
+  `dataset_registry.py` descriptor.
+- Each rule is a ratchet whose budget only falls, in the same commit that earns it.
+- The owner's visual complaints live in `docs/DESIGN_PUNCHLIST.md`; fix them through
+  the shared unit so the fix reaches every page.
+

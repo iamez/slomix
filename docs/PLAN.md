@@ -53,6 +53,11 @@ prečrta, kar je zaprto; ne premika prioritet brez ownerja.
   ponovno sekane po zadnjem mergu; bundle `static/app` NI zgrajen (RAM);
   prelet faze 7 NI ponovljen (RAM). Prvo Astrino delo = §C 1–2 (triaža ultra,
   watchdog r. 2), medtem ko čaka na ultra najdbe.
+- 7. 9. 12:40 — owner: nova stran se bo »ful spreminjala«, dizajn na točkah ni
+  všeč, telemetrija se zdi minimalna → izmerjena revizija modularnosti:
+  `docs/SPA_MODULARITY.md` (verdikt po dimenzijah, 8 rezin sanacije, pravila),
+  `website/frontend/AGENTS.md` (pravila), `docs/DESIGN_PUNCHLIST.md` (ownerjeve
+  pripombe). Vrinjeno v Astrin §C kot 1b. Bundle se NE gradi (owner).
 
 ## Proga: štiri točke do Astre (6. 9. popoldne)
 
