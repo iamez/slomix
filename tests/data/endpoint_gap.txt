@@ -185,7 +185,6 @@
 # (records_player.py:36), so a scope without its id silently returns all-time.
 # Pinned by a test that reads the request URL.
 /api/bets
-/api/greatshot/{}/crossref
 /api/greatshot/{}/highlights/render
 /api/players/{}/awards
 /api/players/{}/card

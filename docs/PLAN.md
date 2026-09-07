@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **11** — prešteto v `tests/data/endpoint_gap.txt` 7. 9. ob 20:30 (`/api/stats/player/{}/form` zaprt v #970; prej 12 po `/api/rounds/{}/awards`) |
+| endpoint gap (H1) | **10** — prešteto v `tests/data/endpoint_gap.txt` 7. 9. ob 21:30 (`/api/greatshot/{}/crossref` zaprt; prej 11 po `/api/stats/player/{}/form` v #970) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -252,7 +252,7 @@ watchdog r. 1 (obseg `docs/design/24`, lokalno).
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | **11** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
+| endpoint gap | **10** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970) → 10 (crossref). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)
