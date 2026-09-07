@@ -6,6 +6,21 @@
 > koraku, ne na koncu dneva.
 
 ## Trenutna pozicija
+- (Opus 5, 2026-09-07, 12:10) **SEJA SE ZAKLJUČUJE — predaja je
+  `docs/HANDOFF-opus5-2026-09-07.md`** (komplementarna k `HANDOFF-astra.md`).
+  Mergano danes: #923, #948, #950, #952, #955, #958 → **endpoint gap 13 → 12**,
+  vse v v1.45.0. Odprto: **#912** (arena, CI zelen, ⛔ `arena_acc_log`
+  NEIZMERJEN v živo — manjka en dvoboj na prižganem strežniku; razsodnik je
+  `lua_status` podpis, ne datoteka na disku) in **#962** (watchdog je kazal
+  84,9 % diska, `df` 90 % — prag 85 % se je sprožil šele pri `df` ~89,6 %).
+  ⛔ **Bundle ni zgrajen**: nobena SPA sprememba od 09-06 11:03 ni vidna na
+  `:8000`; pred oceno frontenda `npm run build:app` + `dev_deploy.sh`
+  (restart = ownerjev DA). Prelet faze 7 delen (manifest 32 rut + 20 rut, vse
+  200, 0 konzolnih napak); celoten čaka RAM. SSD sproščen 90 % → 80 % (nič
+  izbrisano, vse v `share/_from_ssd_tmp_2026-09-07/` in
+  `share/slomix-archive/cleanup-2026-08-26/`). Ownerju ostajata dva ukaza:
+  `journalctl --vacuum-size=200M` (442 MB) in `enable --now
+  systemd-tmpfiles-clean.timer` (`/tmp` se ne čisti sam).
 
 - (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
   `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
