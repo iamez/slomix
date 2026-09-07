@@ -49,16 +49,18 @@ describe('data panels', () => {
     // AvailabilityPage (5) and SkillRating (4) first.
     const BUDGET = 61;
     let count = 0;
-    const perFile: Record<string, number> = {};
+    // A Map, not an object written by a computed key — the scanners here
+    // read `obj[file] = n` as an injection sink even for a glob path.
+    const perFile = new Map<string, number>();
     for (const [file, text] of pageSources()) {
       const n = [...text.matchAll(HAND_WRITTEN_PENDING)].length;
-      if (n) perFile[file] = n;
+      if (n) perFile.set(file, n);
       count += n;
     }
     expect(
       count,
       count > BUDGET
-        ? `hand-written pending branches rose to ${count}; wrap the panel in <Panel> from components/Panel.tsx instead (${JSON.stringify(perFile)})`
+        ? `hand-written pending branches rose to ${count}; wrap the panel in <Panel> from components/Panel.tsx instead (${JSON.stringify(Object.fromEntries(perFile))})`
         : `hand-written pending branches are down to ${count} — lower BUDGET to ${count} in this commit`,
     ).toBe(BUDGET);
   });

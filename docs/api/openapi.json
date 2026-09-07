@@ -20452,7 +20452,7 @@
   },
   "/api/stats/player/{player_name}/form": {
    "get": {
-    "description": "Get player's recent form - session DPM (aggregated per gaming session).",
+    "description": "Get player's recent form - session DPM (aggregated per gaming session).\n\nR1/R2 only: the importer still writes a round_number = 0 \"summary\" row per\nmap whose damage is the two halves added again (docs/CLAUDE.md). Measured\n2026-09-07 for one regular: 26 R0 rows carried 96,970 damage against\n99,536 across their 56 R1+R2 rows, so this series was ~1.9x too high.",
     "operationId": "get_player_form_api_stats_player__player_name__form_get",
     "parameters": [
      {
