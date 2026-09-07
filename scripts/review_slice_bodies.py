@@ -32,13 +32,22 @@ Size at cut time: {files} files, {lines} changed lines (limit 500 / 8 000).
 
 FOCUS: dict[str, str] = {
     "01-proximity-spiderweb-lua": """\
-**Area: proximity capture (Lua v6.14), parser, storytelling/moments services, the spider-web layer 1 and replay.**
+**Area: proximity capture (the tracker Lua v6.14 under `proximity/lua`), parser, storytelling/moments services, the spider-web layer 1 and replay.** The other server-side Lua modules (`vps_scripts/`) are slice 01b.
 Context: `docs/SPIDERWEB_STATUS.md`, `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md` §4–§8, `docs/design/17_PROXIMITY_POPIS.md`.
 - `proximity/lua/proximity_tracker.lua`: the damage hook fires at the top of `G_Damage` (pre-hit health, every entity incl. `script_mover`); the frame-health section (`FM wall / self`); `recordVehicleDamage`; the unified start-state gate. Look for work on the frame path that could stall the server (the sweep in `stats_discord_webhook.lua` is a known one).
 - `proximity/parser/parser.py`: R2 differential is never recomputed; `first/last_escort_time`; `VehicleDestroyed`.
 - `website/backend/services/round_web_service.py`: life resolution (§4.3, half-open death boundary), staleness measured from `t` not from death, `derive_velocity`/`build_edges` z-axis, the empty-round shortcut returning every key, clock-quality verdicts.
 - `website/backend/services/storytelling/*`: camp episodes, escort mover detector thresholds (from measurement, control ≈ 21 %), kill impact; `advanced_metrics.py` must not weight stats artificially.
 - Migrations 078–082 touched by this area are immutable; judge the code that reads them.
+""",
+    "01b-lua-modules": """\
+**Area: the server-side Lua modules under `vps_scripts/` (everything except the proximity tracker): `stats_discord_webhook.lua` (round-end webhook, pending-retry sweep), `c0rnp0rn8.lua` stats writer (useful-kills and assist counters are OURS, not the engine's), live events / frame-health instrumentation (v6.13 `FM wall/self`), the 1v1 arena module (#912: `force_tapout`, lifesteal, `arena_acc_log` — installed, NOT yet measured live), and the deploy/status helpers.**
+Context: `docs/GAMESERVER_CLAUDE.md`, `docs/GAMESERVER_LIVE_LUA_MAP.md` (claims 4 modules; 6 are live), `docs/AGENT_LOG.md` entries on `G_Damage` order and `CS_SERVERINFO` being empty on the first `map`.
+- Anything on the frame path that can stall the server: `os.execute`/`io.popen` in the webhook sweep runs on `os.time()` through pauses and at 0 players; `trap_FS_Write` bursts at round end.
+- `et_Damage`/`G_Damage` semantics: the hook runs BEFORE health is subtracted; `DAMAGE_NO_PROTECTION` does not bypass godmode; `MOD_SUICIDE` is 33 live; `victim == killer` also catches your own grenade.
+- Config traps: `setl` cvars in a shared config, `lua_modules` in a config REPLACES the whole list, `G_ConfigCheckLocked` unloads on cvar change.
+- Stats writer: `topshots[15]` useful kills = victim had ≥ limbo/2 ahead; assists are a 1 500 ms window with a MOD filter (two counters disagree on 40 of 1 005 rounds).
+- Do not judge by the deployed copy on the game server: repo and server differ (`KNOWN_ISSUES.md` "Lua drift"); review the repo.
 """,
     "02-backend-routers": """\
 **Area: FastAPI routers (except proximity/storytelling/replay).**
