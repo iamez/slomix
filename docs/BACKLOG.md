@@ -7,6 +7,29 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
+  — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
+  deset vrzeli (L1–L10) in osem rezin v LOKALNEM
+  `docs/research/LIVE_VIEW_VISITOR_REVIEW_2026-09-07.md`. Bistvo: ni vrstice
+  »kaj se je pravkar zgodilo« (zadnja runda, zmagovalec, čas); ni stopwatch
+  konteksta (limit, čas za premagati, kdo napada); »session 4m« je ura
+  strežnika, ne večera; `prev gammajump` je jump mapa; K/D v rosterju je
+  kumulativa od povezave brez oznake; momentum/hold krivulji brez osi;
+  feed podvaja POPUP+DYNAMITE in MAP+LIVE_MAP; mrtve stave sredi strani.
+  Ni narobe: časi rund so IZMERJENI (210 s = 3:30, dva polna holda).
+  Popravki gredo na SPA `LivePage.tsx` (prod zamrznjen); predpogoj je
+  replay živega toka na devu (tailer cilja prod). Posnetek toka in stanja z
+  nocojšnje igre: `scratchpad/live-feed-2026-09-07.json` (lokalno).
+- (Fable 5.1, 2026-09-07, 21:45) Owner: »je vse pripravljeno na tekme, Lua
+  na puranu?« — izmerjeno med živo igro (6 ljudi na etl_adlernest): Lua na
+  puranu = repo za vse žive module (le arena modul brez #912; oboroži se
+  samo na areni); runda 213018 uvožena 7 s po nastanku datoteke; tailer za
+  živi pogled teče in pošilja na www.slomix.fyi (prod). ⚠️ Watchdog `live:
+  warn` je na devu LAŽEN: dev nima vira živega toka (tailer cilja prod) →
+  watchdog r. 2: preverba mora vedeti, kdo je cilj tailerja, ali biti na
+  devu izklopljena. `KNOWN_ISSUES` »Lua drift High« označen kot rešen.
+  Vlak: #971, #973 mergana; #974, #972 v vratih; lokalno pripravljena veja
+  `feat/profile-rounds-series` (gap 10 → 9 po #974).
 - (Fable 5.1, 2026-09-07, 19:30) Owner: »dokončaj novo stran« + DA za gradnjo,
   dev deploy, Chromium prelet in kodo. NAREJENO: `npm run build:app` v
   worktreeju `slomix-fable` (main `e91875cf`), `DEV_SRC_DIR=…/slomix-fable
