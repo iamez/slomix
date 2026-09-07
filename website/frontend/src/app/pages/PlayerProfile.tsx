@@ -567,12 +567,16 @@ function PlayerForm({ playerId }: { playerId: string }) {
   );
 }
 
-const TREND_WORD: Record<PlayerSessionForm['trend'], string> = {
-  improving: 'improving',
-  declining: 'declining',
-  stable: 'stable',
-  insufficient_data: 'fewer than six sessions, no trend yet',
-};
+/** The server's trend word, spelled for the reader — a switch, not a lookup
+ *  table indexed by the value (the scanners here flag computed keys). */
+function trendWord(trend: PlayerSessionForm['trend']): string {
+  switch (trend) {
+    case 'improving': return 'improving';
+    case 'declining': return 'declining';
+    case 'stable': return 'stable';
+    default: return 'fewer than six sessions, no trend yet';
+  }
+}
 
 /** Session-by-session DPM: one point per gaming session, a date under each,
  *  the average and the six-session trend the server computed (legacy
@@ -593,7 +597,7 @@ function SessionForm({ playerId }: { playerId: string }) {
           <Stack gap={2}>
             <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
               <Spark values={d.sessions.map((s) => s.dpm)} />
-              <Meta>{TREND_WORD[d.trend] ?? d.trend}</Meta>
+              <Meta>{trendWord(d.trend)}</Meta>
               <Meta>{d.sessions.length} sessions</Meta>
             </Cluster>
             <Stack gap={1} className="rows">
