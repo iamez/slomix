@@ -37,6 +37,28 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
+## Proga: Astra (Codex CLI) — delovni paket predaje (7. 9. 2026)
+
+Vir resnice za Astrino delo: **`docs/HANDOFF-astra.md`** (§C vrstni red 1–20 s
+fazami: 1 = brez ownerjevih odločitev, 2 = po odločitvah, 3 = dolg; §D »ne
+delaj« z razlogi; §E prva ura) + **`docs/HANDOFF-astra-inventory.md`** (popoln
+inventar odprtega dela po območjih z `[S|M|L]`, virom, odvisnostjo in dokazom;
+§11 = zbrane ownerjeve odločitve). Ista predaja brez sprememb je bila oddana
+kot `/tmp/slomix-claude-handoff-to-astra-20260907.md` (ownerjeva zahteva).
+Pravilo: Astra ob vsakem koraku posodobi TA razdelek (pozicija, PR, dokaz);
+prečrta, kar je zaprto; ne premika prioritet brez ownerja.
+
+- Pozicija 7. 9. 04:30: main po #960; #958 v vratih, #955 in #912 sledita
+  (ownerjev DA 7. 9.: »zapri odprte PR-je razen Don't merge«); rezine #924–#943
+  ponovno sekane po zadnjem mergu; bundle `static/app` NI zgrajen (RAM);
+  prelet faze 7 NI ponovljen (RAM). Prvo Astrino delo = §C 1–2 (triaža ultra,
+  watchdog r. 2), medtem ko čaka na ultra najdbe.
+- 7. 9. 12:40 — owner: nova stran se bo »ful spreminjala«, dizajn na točkah ni
+  všeč, telemetrija se zdi minimalna → izmerjena revizija modularnosti:
+  `docs/SPA_MODULARITY.md` (verdikt po dimenzijah, 8 rezin sanacije, pravila),
+  `website/frontend/AGENTS.md` (pravila), `docs/DESIGN_PUNCHLIST.md` (ownerjeve
+  pripombe). Vrinjeno v Astrin §C kot 1b. Bundle se NE gradi (owner).
+
 ## Proga: štiri točke do Astre (6. 9. popoldne)
 
 Vrstni red: (2) proximity guid prefiks (PR #945) → (3) diagnostics stanja

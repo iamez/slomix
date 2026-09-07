@@ -6,6 +6,28 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
+  <dir>` reports when the directory entry list last changed (a file added or
+  removed), not when files inside were written; a rebuilt bundle that reuses
+  its file names leaves the directory mtime untouched. Ask the files:
+  `find <dir> -type f -printf '%T@ %p\n' | sort -n | tail -1`. This is how a
+  13-hour-old SPA bundle looked fresh on 2026-09-07 (sister session).
+- **2026-09-07 · A cold cache changes how many calls a measurer sees, not
+  only how long they take.** The same page produced 2 observed API calls in
+  one window and 40 in another, depending on whether the backbone was warm.
+  Every recorded number states cold/warm, and nothing is compared with a
+  number taken right after a restart (sister session; see also
+  `docs/AGENT_LOG.md` 2026-08-29 "second call is not a measurement").
+- **2026-09-07 · `git stash list` before `git stash pop`.** A stash left by
+  another session on the same working tree pops into a clean tree as
+  conflicts that look like your own. On a shared box, list first and pop by
+  index, or do not stash at all — commit to the branch (sister session).
+- **2026-09-07 · An artefact is not a commit.** `/api/build` reports the git
+  commit the process runs from; the SPA bundle it serves is a build product
+  with its own age. Both were checked on 2026-09-07 and only the commit was
+  current. `scripts/dev_deploy.sh` now refuses a bundle older than its
+  source (exit 3, #960); when a deploy "looks right", also compare the
+  bundle's newest file against the last commit touching `src/app`.
 - **2026-09-06 · One row's age carries two meanings; say both.** (Review of
   #949 by the sister session.) `server_status_history` stops moving when the
   bot is down AND when its monitor loop fails on every tick (the loop survives

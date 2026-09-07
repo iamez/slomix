@@ -26,6 +26,13 @@ in English.
   `git reset --hard`, `git push --force`, `git push --no-verify`. The
   pre-push hook refuses > 25 files across the pushed commits and scans for
   credentials; do not work around it — split the PR.
+  **One written exception (owner, 2026-09-07):** `scripts/review_slices.sh cut
+  --push` force-pushes the `review-base/NN-*` / `review/NN-*` branches with
+  `--no-verify`. Those are review vehicles for `/code-review ultra` (tree = main,
+  draft PRs #924–#943, never merged, re-cut after every move of main), not
+  work branches; the 25-file cap would forbid a 500-file review vehicle. Only
+  that script, only those branch names; the owner decides if the mechanism
+  changes to immutable snapshots (`docs/HANDOFF-astra.md` §I).
 - ⛔ **No secrets, logs, backups, dumps, spreadsheets or raw data in git.**
   The repo is public. Local-only paths (gitignored, visible in this checkout,
   absent from a fresh clone): `docs/design/` (except the committed subset),
@@ -89,6 +96,8 @@ in English.
 | need | file |
 |---|---|
 | where we are, what is next, how to prove it | `docs/HANDOFF-next.md` |
+| the full-project handoff to Astra (work package §C, do-nots §D, measured answers §G–§I) and the open-work inventory | `docs/HANDOFF-astra.md`, `docs/HANDOFF-astra-inventory.md` |
+| how the new SPA must be extended (panel, rows, formatters, tokens, ratchets) and the owner's visual complaints | `docs/SPA_MODULARITY.md`, `website/frontend/AGENTS.md`, `docs/DESIGN_PUNCHLIST.md` |
 | plan of record / open positions | `docs/PLAN.md`, `docs/BACKLOG.md` |
 | rules per package | `docs/CLAUDE.md`, `bot/CLAUDE.md`, `bot/{core,cogs,services,automation}/CLAUDE.md`, `website/backend/CLAUDE.md`, `tests/CLAUDE.md`, `docs/WEBSITE_CLAUDE.md`, `docs/PROXIMITY_CLAUDE.md`, `docs/GAMESERVER_CLAUDE.md`, `website/frontend/AGENTS.md` |
 | known issues | `docs/KNOWN_ISSUES.md` |
