@@ -29,31 +29,47 @@ after=$(git -C "$RUN" rev-parse --short HEAD)
 echo "run dir: $before -> $after ($(git -C "$RUN" log -1 --format=%s))"
 
 # The bundles are artefacts, not code: the tree can be on the right commit
-# while static/app was built hours before the SPA source last changed
-# (2026-09-07: bundle 11:03, source 00:23 next day — /api/build reads the
-# commit and would have looked right). Refuse to copy a bundle older than
-# its source; SKIP_STATIC=1 deploys the code alone.
-if [ "${SKIP_STATIC:-0}" != "1" ]; then
-  newest_src=$(git -C "$SRC" log -1 --format=%ct -- website/frontend/src/app website/frontend/src/api website/frontend/package.json)
-  built=$(stat -c %Y "$SRC/website/static/app/app.html" 2>/dev/null || echo 0)
+# while a bundle was built hours before its source last changed (2026-09-07:
+# static/app 11:03, src/app 00:23 next day — /api/build reads the commit and
+# would have looked right). Each bundle is checked against ITS source:
+#   app    <- website/frontend/src/app, src/api, package.json  (the SPA; stale = refuse)
+#   modern <- website/frontend/src minus src/app               (legacy React; stale = skip, warn)
+# SKIP_STATIC=1 deploys the code alone.
+bundle_is_fresh() {  # name, marker file, pathspecs...
+  local name=$1 marker=$2; shift 2
+  local newest_src built
+  newest_src=$(git -C "$SRC" log -1 --format=%ct -- "$@")
+  built=$(stat -c %Y "$SRC/website/static/$name/$marker" 2>/dev/null || echo 0)
   if [ "$built" -lt "$newest_src" ]; then
-    echo "⛔ static/app in $SRC was built $(date -d @"$built" +%F\ %R) but website/frontend/src/app changed $(date -d @"$newest_src" +%F\ %R):" >&2
+    echo "⛔ static/$name in $SRC was built $(date -d @"$built" +%F\ %R) but its source changed $(date -d @"$newest_src" +%F\ %R)" >&2
+    return 1
+  fi
+}
+
+copy_bundle() {  # name
+  local d=$1
+  [ -d "$SRC/website/static/$d" ] || return 0
+  rm -rf "$RUN/website/static/$d.new"
+  cp -a "$SRC/website/static/$d" "$RUN/website/static/$d.new"
+  rm -rf "$RUN/website/static/$d.prev"
+  [ -d "$RUN/website/static/$d" ] && mv "$RUN/website/static/$d" "$RUN/website/static/$d.prev"
+  mv "$RUN/website/static/$d.new" "$RUN/website/static/$d"
+  echo "static/$d copied from the agents' tree ($(du -sh "$RUN/website/static/$d" | cut -f1))"
+}
+
+if [ "${SKIP_STATIC:-0}" != "1" ]; then
+  if bundle_is_fresh app app.html website/frontend/src/app website/frontend/src/api website/frontend/package.json; then
+    copy_bundle app
+  else
     echo "   run (cd $SRC/website/frontend && npm run build:app) first, or SKIP_STATIC=1 to deploy the code alone" >&2
     exit 3
   fi
-fi
-
-for d in app modern; do
-  if [ "${SKIP_STATIC:-0}" = "1" ]; then break; fi
-  if [ -d "$SRC/website/static/$d" ]; then
-    rm -rf "$RUN/website/static/$d.new"
-    cp -a "$SRC/website/static/$d" "$RUN/website/static/$d.new"
-    rm -rf "$RUN/website/static/$d.prev"
-    [ -d "$RUN/website/static/$d" ] && mv "$RUN/website/static/$d" "$RUN/website/static/$d.prev"
-    mv "$RUN/website/static/$d.new" "$RUN/website/static/$d"
-    echo "static/$d copied from the agents' tree ($(du -sh "$RUN/website/static/$d" | cut -f1))"
+  if bundle_is_fresh modern route-host.js website/frontend/src ':!website/frontend/src/app' ':!website/frontend/src/api/generated'; then
+    copy_bundle modern
+  else
+    echo "   static/modern left as it is in the run dir (legacy React gets fixes only; rebuild with npm run build when it matters)" >&2
   fi
-done
+fi
 
 if [ "${SKIP_RESTART:-0}" != "1" ]; then
   sudo -n systemctl restart etlegacy-bot etlegacy-web
