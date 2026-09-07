@@ -194,7 +194,7 @@ Sestrinih osem (B6) + Fable:
 - §A4 »rotacija DB gesla v `default.rules`« potrjeno: 194 vrstic s `PGPASSWORD=` (audit) — še vedno odprto, owner.
 
 ### G3. Ownerjeve odločitve: SPREJETE danes proti ODPRTIM
-Sprejete (7. 9.): prod ostane zamrznjen v1.39.0; »zapri odprte PR-je razen Don't merge« (#960 ✓, #958 v vratih, #955, #912 sledita — #912 s sestrinim pridržkom); restarti to noč delegirani Fable (izvedeni 02:57, dovoljenje ni prenosljivo na druge seje); popolna predaja + dokončanje začetega + stabilnost PRED runtime v2, nove funkcije pozneje (Astri, 11:00).
+Sprejete (7. 9.): prod ostane zamrznjen v1.39.0; »zapri odprte PR-je razen Don't merge« (#960 ✓, #958 v vratih, #955, #912 sledita — #912 s sestrinim pridržkom); restarti to noč delegirani Fable (izvedeni 02:57, dovoljenje ni prenosljivo na druge seje); popolna predaja + dokončanje začetega + stabilnost PRED runtime v2, nove funkcije pozneje (Astri, 11:00); **dopolnitev (Astri, 11:30): RAZVOJ runtime v2 se sme začeti po preverbi stabilnosti in zahtevanih pregledih/popravkih; opazovalno obdobje 1–2 tedna velja pred AKTIVACIJO/produkcijo, ne pred izoliranim razvojem** — §C 9 se s tem premakne iz »šele po ownerjevem DA« v »po triaži ultra + stabilnosti, stikalo OFF«.
 Odprte (naslov → kje): rotacija sudo gesla (bilo v pogovoru) in DB gesla (`default.rules`, argv MCP) → owner; `build:app` + `dev_deploy.sh` + restart DA → owner; ultra #924/#925/#926 → owner požene; #912 zdaj ali po meritvi ACC → owner; Node 22.22+ na stroju (aktiven 20.20.0, frontend zahteva ≥ 22.22.0, `.nvmrc` 22.13.1) → owner/namestitev; ločeni venv-i za run dir → r. 2 z ownerjevim `install`; ostalo = `HANDOFF-astra-inventory.md` §11 (destroyed_count, FIX 13, doc 19/20/21/22 vprašanja, `denied_playtime`, `full_selfkills`, `vs-stats`, `highlights/render`, `awards` postavitev, cron `kill etlded`, hosting ticket).
 
 ### G4. Doc 21 (runtime v2) — predpostavke, ki jih NISEM preveril v kodi
@@ -211,3 +211,22 @@ Odprte (naslov → kje): rotacija sudo gesla (bilo v pogovoru) in DB gesla (`def
 - ⚠️ Lokalna datoteka v primarnem drevesu z imenom, ki nosi del **prod webhook URL-ja** (`webhook prod https…txt`, 15. 8., 526 B, v `.git/info/exclude`) → ownerju: premakni izven drevesa; vsebine nisem bral.
 - Lokalno, ne v repu (po namenu): `docs/design/00–24` razen podmnožice, `docs/research`, `docs/archive`, `server/omnibot`, `~/.claude/plans/nifty-honking-scroll.md` (načrt te predaje, začasen), Claude spomin `~/.claude/projects/-home-samba-share-slomix-discord/memory/` (kazalo `MEMORY.md` je 31 KB > 24 KB meje → nalaga se le del; ⚠️ za Claude, ne za Codex).
 - Codex: `~/.codex/memories/` prazen (asinhrono), hooki untrusted (G2) — to je Astrin audit, potrjujem lastništvo datotek/mode (0664 `hooks.json`, `last_input.json`).
+
+---
+
+## H. Sestrska seja — odgovor na Astrina vprašanja (7. 9. 11:25, dobesedno)
+
+**(1) Začeto brez runtime dokaza ali le delno oddano**
+1. ⛔⛔ Nobena SPA sprememba od 6. 9. 11:03 ni vidna na `:8000`. Bundle, ki ga strežnik servira, je `app-BP8nlUYF.js`, najnovejša datoteka v run-dir `static/app` je `2026-09-06 11:03`, zadnji commit v `website/frontend/src/app` na mainu pa `2026-09-07 00:23` (`3fdfd88b`). Vse poznejše SPA delo obstaja v repozitoriju, ne pa v brskalniku.
+2. #955 (nagrade rund v SPA): niti mergano niti vidno. Backend del (bot filter, `DISTINCT`) 6 testov, SPA panel 5 — runtime dokaza v brskalniku nima, ker bundla ni.
+3. #923 rezine 1–4: dokazano v živo iz run dira (`logs/bot_error_streaks.json` ~19 s po zagonu, `written_at` se premika, `boot_time` stoji; alarm ob tretji napaki čez štiri PID-e).
+4. #950 (paramiko filter): po restartu `errors.log` 0 paramiko vrstic, `bot.log` 24 — ⚠️ tistih 24 je `INFO`; filter še ni bil preizkušen na resnični SSH napaki.
+5. #958 (`--anon-only`): anonimni manifest prelet čez 32 rut je zapisal `inventory.json`; pred popravkom se ni zagnal.
+6. Prelet faze 7: delen (manifest 32 rut + skrajšani prelet 20 rut, vse 200, 0 konzolnih napak); celoten 4 viewporti × anon/owner NI tekel — RAM.
+
+**(2) Nepotisnjeno delo — nič.** `slomix-market` in `slomix-arena`: 0 commitov pred originom, 0 neshranjenih datotek. ⚠️ `git stash list`: `stash@{0}: WIP on deploy-script-and-docs: 339f618 …` — ni njen, ni današnji; nocoj pomotoma popan na čisto drevo → konflikti → `reset --hard`; stash nedotaknjen; naj ga pogleda lastnik.
+
+**(3) Zastarelo v #961**
+- ⛔ »`/api/rounds/{}/awards` — depends on owner decision on where« ne drži več: površina je v #955 (`RoundsTable` prop `onSelectRound` je bil brez porabnika; zdaj klik odpre panel z nagradami). Odprto le, ali owner površino potrdi.
+- ⚠️ »proof: raw `value` vs nicer form« — pravi razlog za previdnost: `round_awards` ima 1 472 podvojenih (round, award) skupin; 929 identičnih odstrani `DISTINCT`, 282 (dva uvoza, različni odgovori) namenoma ostane; `docs/KNOWN_ISSUES.md`.
+- ✅ Drži: gap 13, `endpoint_gap.txt:100`, 94 vrstic komentarjev, #955 → 12 ob mergu.
