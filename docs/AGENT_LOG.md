@@ -125,3 +125,10 @@ data here.
 - **2026-08-18 · `rounds.actual_time` is the stopwatch target, not the
   measured duration** (overstates ~15 % of rounds). Apply:
   `shared/round_time.py`.
+- **2026-09-07 · Bundle mtime does not identify its source or target.**
+  A fresh-looking SPA can belong to another commit or contain changed assets;
+  checking after checkout already changes the run tree on failure. Apply:
+  commit before `npm run build:app`, retain generated provenance, and validate
+  exact target/input/output identity in a private staging directory before dev
+  checkout. SKIP_STATIC no longer bypasses this check. Legacy provenance is
+  separate; keep its existing bundle rather than copying unverified bytes.
