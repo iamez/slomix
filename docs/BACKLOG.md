@@ -10,16 +10,17 @@
 - **2026-09-07 (Astra):** owner approved the reconciled implementation plan.
   Current authority: PLAN's "Astra execution ledger" (A01–A10, R01–R04).
   Source `4f653c01`: #955 and #912 are now merged; runtime proof is separate.
-  Saving handoff on `docs/astra-execution-ledger`; independent helpers handle
-  watchdog delivery and immutable review snapshots in their own worktrees.
+  Handoff saved in PR #964; watchdog delivery in #965; immutable review
+  snapshot candidate tested separately. Node/CI pin alignment is the next slice.
   No service, deployment, browser, live-data write or merge performed by Astra.
   Next: finish these stability slices, Codex/local environment safeguards and
   artifact identity; isolated event-journal development follows the gate.
 
 **Historical entries below are not current action instructions.** In
-particular, old `review_slices.sh cut --push` advice is suspended: the existing
-script bypasses mandatory push checks and rewrites refs. Use the replacement
-only after review. Old advice to delete generated OpenAPI types is superseded
+particular, Astra has not executed `review_slices.sh cut --push`: #961 added a
+narrow AGENTS exception for the legacy script while our approved plan prepares
+an immutable replacement. Preserve that exception pending owner review; do not
+apply it to any other push. Old advice to delete generated OpenAPI types is superseded
 by npm `pre*` hooks (`generate:api` before bare `npx`). Prior "install/restart
 watchdog" notes are not proof that installation is still pending.
 
@@ -28,6 +29,22 @@ rendering/layer 4, endpoint-gap features, broad response typing and modular UI
 work. Data repairs, production migration and real alert delivery have their
 own permission gates. Read PLAN A09/A10 before reopening old research.
 
+- (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
+  #958, #955 mergani; #912 mergan 12:30 pod ownerjevim DA za nabor (»zapri odprte PR-je
+  razen Don't merge«, 03:40) — ⚠️ pogodba hoče DA na številko PR-ja; ownerju
+  poročano posebej s sestrinim pridržkom (`arena_acc_log` neizmerjen v živo); #961 (predaja Astri + modularnost SPA) čaka
+  ownerjev DA. Po mergu #912: `scripts/review_slices.sh cut --push` (rezine
+  #924–#943 na novi main) — če seja ugasne prej, to naredi Astra ali owner.
+  Astra vstopi prek `AGENTS.md` §4 → `docs/HANDOFF-astra.md` §E (prva ura) → §C.
+  Bundle NI zgrajen (owner: pozneje); sudo/DB geslo rotacija = owner.
+- (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
+  (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
+  ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve
+  odločitve); kopija v `/tmp/slomix-claude-handoff-to-astra-20260907.md`. Owner
+  DA: zapri odprte PR-je razen `review:` → #960 mergan, #958 v vratih, nato
+  #955, #912 (sestrin pridržek: `arena_acc_log` neizmerjen v živo). Odprto za
+  ownerja: rotacija sudo + DB gesla; `build:app` + `dev_deploy.sh` restart;
+  ultra #924/#925/#926 opoldne.
 - (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
   `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
   vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.

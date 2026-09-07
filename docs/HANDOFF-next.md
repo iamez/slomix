@@ -3,7 +3,7 @@
 > **Current handoff override — 2026-09-07, Astra.** Start with the "Astra
 > execution ledger" in `docs/PLAN.md`; the sections below are a historical
 > snapshot, not the current queue. #955 and #912 are merged at `4f653c01`;
-> #961 carries additional Claude handoff evidence and remains under review.
+> #961 merged as `28662f04`; its Claude handoff evidence is now included.
 > Merge, build, active service and runtime proof are separate states.
 > Do NOT run the old review `cut --push`: it uses forbidden push options.
 > Do NOT treat old server/browser commands as permission to start them.
@@ -90,7 +90,7 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    proximity+spiderweb+Lua) → **#925** (02 backend routerji) → **#926** (03 SPA
    lib); ostali #927–#943 po dnevih (odprti 6. 9. kot draft). ⛔ Stara baza `19c61847` je bila hash iz PRE-prepisne zgodovine
    (pravi #802 merge = `87a7063d`); veja izbrisana.
-3. **Astra (Codex CLI, od 7. 9.)**: vstop = `AGENTS.md` (Codex ga naloži sam;
+3. **Astra (Codex CLI, od 7. 9.)**: **predaja celotnega projekta = `docs/HANDOFF-astra.md` (§C delovni paket, §D ne delaj) + `docs/HANDOFF-astra-inventory.md`** (7. 9.); vstop = `AGENTS.md` (Codex ga naloži sam;
    preveri s `codex debug prompt-input "ping"`), kickoff
    `docs/prompts/astra_kickoff.md`, zanka `docs/process/MANDELBROT_RCA.md`,
    dnevnik `docs/AGENT_LOG.md`. Vrstni red (owner): triaža najdb ultra →

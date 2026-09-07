@@ -17,12 +17,40 @@ data here.
   emitter misses other inputs and a first event cannot promise final stats.
   Apply: emit transactionally in the canonical importer, deduplicate the first
   event durably and cover late changes before enabling consumers.
-- **2026-09-07 · Review tooling is subject to ordinary Git safety rules.**
-  The old review cutter used force/no-verify despite AGENTS forbidding both.
-  Why: historical scrubbed source does not replace today's pre-push scan.
-  Apply: new immutable refs, <=25-file slices and real hooks; existing review
-  PRs remain NEVER MERGE. Do not run the old push workflow.
+- **2026-09-07 · Record the safety-policy snapshot when reviewing tooling.**
+  At `4f653c01` the review cutter contradicted the general force/no-verify ban;
+  #961 subsequently added a narrow legacy-script exception. Why: simultaneous
+  handoffs change policy while audits run. Apply: preserve the written exception
+  without extending it; the approved Astra plan prepares an immutable replacement
+  with ordinary hooks. Do not confuse preparing the replacement with deploying it.
+- **2026-09-07 · Configured Codex hooks are not necessarily active.**
+  The local hook was hardened and credential-bearing saved approvals sanitized,
+  but hooks/list still reports both hooks untrusted. Apply: owner reviews /hooks;
+  never claim lifecycle enforcement from synthetic subprocess tests, and never
+  log real tool input to prove integration. Rotation remains a separate action.
 
+- **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
+  <dir>` reports when the directory entry list last changed (a file added or
+  removed), not when files inside were written; a rebuilt bundle that reuses
+  its file names leaves the directory mtime untouched. Ask the files:
+  `find <dir> -type f -printf '%T@ %p\n' | sort -n | tail -1`. This is how a
+  13-hour-old SPA bundle looked fresh on 2026-09-07 (sister session).
+- **2026-09-07 · A cold cache changes how many calls a measurer sees, not
+  only how long they take.** The same page produced 2 observed API calls in
+  one window and 40 in another, depending on whether the backbone was warm.
+  Every recorded number states cold/warm, and nothing is compared with a
+  number taken right after a restart (sister session; see also
+  `docs/AGENT_LOG.md` 2026-08-29 "second call is not a measurement").
+- **2026-09-07 · `git stash list` before `git stash pop`.** A stash left by
+  another session on the same working tree pops into a clean tree as
+  conflicts that look like your own. On a shared box, list first and pop by
+  index, or do not stash at all — commit to the branch (sister session).
+- **2026-09-07 · An artefact is not a commit.** `/api/build` reports the git
+  commit the process runs from; the SPA bundle it serves is a build product
+  with its own age. Both were checked on 2026-09-07 and only the commit was
+  current. `scripts/dev_deploy.sh` now refuses a bundle older than its
+  source (exit 3, #960); when a deploy "looks right", also compare the
+  bundle's newest file against the last commit touching `src/app`.
 - **2026-09-06 · One row's age carries two meanings; say both.** (Review of
   #949 by the sister session.) `server_status_history` stops moving when the
   bot is down AND when its monitor loop fails on every tick (the loop survives

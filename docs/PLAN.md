@@ -16,7 +16,7 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-07 (Astra, execution ledger; source `4f653c01`)
+**Zadnja posodobitev:** 2026-09-07 (Astra, execution ledger; source `28662f04`)
 
 ## Astra execution ledger — current authority (2026-09-07)
 
@@ -37,14 +37,14 @@ agent responsible for the next step, not permission to execute protected work.
 
 | ID | Source / state at audit | Owner / next action and required evidence |
 |---|---|---|
-| A01 handoff | Audit complete; durable ledger being saved on `docs/astra-execution-ledger` | Astra: reconcile PR #961, PLAN/BACKLOG/KNOWN_ISSUES and relevant private-memory indexes; record every found obligation with disposition, dependency and next proof. |
-| A02 Codex safeguards | Local audit: configured hooks untrusted; regex/execpolicy gaps; raw command logging and credential-bearing saved approvals | Astra: sanitize local rules/logging without copying secrets, synthetic deny/allow canaries, verify real tool integration; owner reviews hook trust and credential rotation. No claim of universal enforcement. |
+| A01 handoff | Ledger saved, PR #964; Claude #961 merged as `28662f04`, both sets of lessons preserved | Astra: continue obligation-by-obligation reconciliation and current PR intake; #963 adds the sister session report. |
+| A02 Codex safeguards | Local hardening implemented: no raw hook input logging/echo; 194 credential-assignment rules removed from active approvals, recoverable private backup; 4 test methods pass | Astra: normalization mutation produced 7 expected failures, restored/cmp; strict config and execpolicy load. hooks/list STILL says untrusted for both hooks. Owner reviews /hooks trust and credential rotation; broader approvals/complex-shell coverage still open. |
 | A03 development dependencies | Node 20 does not meet frontend requirement >=22.22.0; service venv links into agent environment | Astra: isolated worktree/environment; pin compatible Node 22 consistently with CI. Prepare independent service environments; owner activates. Never install into shared running venv. |
-| A04 review safety | `review_slices.sh` uses forbidden push options; #924–943 are read-only review PRs | Astra helper: immutable versioned refs, <=25 files and <=8000 lines per slice, ordinary pre-push checks; prove rejection/idempotence with synthetic local repositories. NEVER MERGE review PRs. Do not execute old `cut --push`. |
+| A04 review safety | Candidate `ce95981a`: immutable refs, <=25 files/8000 lines; 7 real-hook integration tests pass, mutation restored/cmp | Astra: publish/review replacement, not existing review snapshots. #961 added a narrowly scoped legacy exception in AGENTS; it is preserved, not exercised. Owner-approved plan selected preparing this replacement; existing #924–943 remain NEVER MERGE. |
 | A05 artifact identity | #960 merged; audit observed older SPA bundle than source | Astra: preflight must validate target source/config/build identity before touching active tree. Owner activates verified artifact; then permitted sequential parity sweep, 32 routes x 4 viewports x anon/owner. No browser run yet. |
-| A06 watchdog delivery | Timer active in earlier audit; successful Discord delivery not proven; state saved before send result | Astra helper: reproduce failed-send suppression, preserve retryable alarm/recovery/heartbeat, truly non-writing dry-run. Prove with stub transport and mutation; real Discord message requires owner permission. |
+| A06 watchdog delivery | PR #965, `96316e0e`: post-delivery ACK, retryable recovery/heartbeat and non-writing dry-run; 38 tests pass | Astra: root reran tests/lint; failed-POST ACK mutation seen failing and restored/cmp; real run/send functions exercised with in-process transport stub. Await review/owner merge. Real Discord message and activation still require permission. |
 | A07 watchdog measurement | #962 disk metric OPEN at refresh; timer 5 min, web/Lua require two failures | Astra: review #962 without duplicating it. Keep cadence; expected detection around 10 min plus scheduling/probe time, NOT <=2 min. SSH probes are a separate follow-up. |
-| A08 open-code intake | #955 MERGED `07d332ca`; #912 MERGED `4f653c01`; #958/#960 merged; #961/#962/#956 open | Astra: review current diff/checks/threads and separate merge from runtime evidence. Arena ACC runtime proof remains unmeasured; no arena activation required for runtime development. Release PR is not deploy authority. |
+| A08 open-code intake | #955 MERGED `07d332ca`; #912 MERGED `4f653c01`; #958/#960/#961 merged; #962/#963/#956 open at refresh | Astra: review current diff/checks/threads and separate merge from runtime evidence. Arena ACC runtime proof remains unmeasured; no arena activation required for runtime development. Release PR is not deploy authority. |
 | A09 observations | New-import time_played_percent and v6.14 evening frame-health observations pending | Astra: read-only next-session evidence after checking running revision; historical destroyed_count repair and production migration 082 require separate owner action. |
 | A10 future features | twins r4, user layouts, spiderweb layers 3/4, remaining endpoint gaps and broad typing/modularity work | Astra: prioritized BACKLOG entries, not pre-runtime implementation blockers. Relevant correctness/security findings still enter stability triage. |
 
@@ -127,6 +127,28 @@ deploy NI naloga.
 | availability r. 2 (ta veja) | linked formi (settings, kanali prek link-tokena, DELETE), promotions (status+jobs, preview z recipients, schedule), betting (bazen, multiplikator, stava, denarnica; BREZ admin kontrol — owner 2. 9.); fixturi povezane stopnje prek dev sentinela (`scripts/e2e_sentinel_rows.py`) + harness posnetkov |
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
+
+## Proga: Astra (Codex CLI) — delovni paket predaje (7. 9. 2026)
+
+Vir resnice za Astrino delo: **`docs/HANDOFF-astra.md`** (§C vrstni red 1–20 s
+fazami: 1 = brez ownerjevih odločitev, 2 = po odločitvah, 3 = dolg; §D »ne
+delaj« z razlogi; §E prva ura) + **`docs/HANDOFF-astra-inventory.md`** (popoln
+inventar odprtega dela po območjih z `[S|M|L]`, virom, odvisnostjo in dokazom;
+§11 = zbrane ownerjeve odločitve). Ista predaja brez sprememb je bila oddana
+kot `/tmp/slomix-claude-handoff-to-astra-20260907.md` (ownerjeva zahteva).
+Pravilo: Astra ob vsakem koraku posodobi TA razdelek (pozicija, PR, dokaz);
+prečrta, kar je zaprto; ne premika prioritet brez ownerja.
+
+- Pozicija 7. 9. 04:30: main po #960; #958 v vratih, #955 in #912 sledita
+  (ownerjev DA 7. 9.: »zapri odprte PR-je razen Don't merge«); rezine #924–#943
+  ponovno sekane po zadnjem mergu; bundle `static/app` NI zgrajen (RAM);
+  prelet faze 7 NI ponovljen (RAM). Prvo Astrino delo = §C 1–2 (triaža ultra,
+  watchdog r. 2), medtem ko čaka na ultra najdbe.
+- 7. 9. 12:40 — owner: nova stran se bo »ful spreminjala«, dizajn na točkah ni
+  všeč, telemetrija se zdi minimalna → izmerjena revizija modularnosti:
+  `docs/SPA_MODULARITY.md` (verdikt po dimenzijah, 8 rezin sanacije, pravila),
+  `website/frontend/AGENTS.md` (pravila), `docs/DESIGN_PUNCHLIST.md` (ownerjeve
+  pripombe). Vrinjeno v Astrin §C kot 1b. Bundle se NE gradi (owner).
 
 ## Proga: štiri točke do Astre (6. 9. popoldne)
 
