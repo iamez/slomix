@@ -4623,4 +4623,3 @@ export interface GreatshotCrossrefComparison {
 export type GreatshotCrossref =
   | { matched: false; reason: string }
   | { matched: true; round: GreatshotCrossrefRound; db_player_stats: Record<string, GreatshotCrossrefStats>; comparison: GreatshotCrossrefComparison[] };
-
