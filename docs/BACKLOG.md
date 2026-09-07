@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-07, 04:30) Predaja projekta Astri: `docs/HANDOFF-astra.md`
+  (§A Fable, §B sestra dobesedno, §C delovni paket 1–20, §D ne delaj, §E prva
+  ura) + `docs/HANDOFF-astra-inventory.md` (inventar po območjih, §11 ownerjeve
+  odločitve); kopija v `/tmp/slomix-claude-handoff-to-astra-20260907.md`. Owner
+  DA: zapri odprte PR-je razen `review:` → #960 mergan, #958 v vratih, nato
+  #955, #912 (sestrin pridržek: `arena_acc_log` neizmerjen v živo). Odprto za
+  ownerja: rotacija sudo + DB gesla; `build:app` + `dev_deploy.sh` restart;
+  ultra #924/#925/#926 opoldne.
 - (Fable 5.1, 2026-09-06, 19:50) Proga (1) watchdog r. 1 narejena (veja
   `feat/watchdog-r1`, PR). Vse štiri proge dneva imajo PR: #945 (guid, v
   vratih), #946 (diagnostics, čaka rebase po #945), #947 (datasets), watchdog.
