@@ -474,6 +474,10 @@ class DiagnosticsReport(BaseModel):
     time: dict[str, int]
     monitoring: dict[str, DiagnosticsMonitoringTable]
     pool: dict[str, Any] | None = None
+    #: The last run of scripts/slomix_watchdog.py on this host (its
+    #: logs/watchdog_last.json), or null when it has never run here. Additive
+    #: since 2026-09-06; it never changes `status`.
+    watchdog: dict[str, Any] | None = None
 
 
 # exclude_unset, not exclude_none: the handler builds a dict, so a key it did
@@ -689,7 +693,53 @@ async def get_diagnostics(
     else:
         results["pool"] = {"connected": False, "reason": "adapter has no pool_stats"}
 
+    # The watchdog's last report, when it has run on this host. Read-only,
+    # non-fatal, and deliberately NOT folded into `status`: the watchdog is
+    # an observer of this process among others, so its verdict is shown next
+    # to ours, not merged with it.
+    results["watchdog"] = read_watchdog_last()
+
     return results
+
+
+def read_watchdog_last(path: str | None = None, now: float | None = None) -> dict[str, Any] | None:
+    """Summarise logs/watchdog_last.json (scripts/slomix_watchdog.py) for the
+    About panel: when it ran, how old that is, one level per check, and how
+    many alerts the run produced. None when the file does not exist —
+    "the watchdog has not run here" is a fact, not a failure."""
+    import json as _json
+    import time as _time
+    from pathlib import Path as _Path
+
+    from website.backend.logging_config import LOG_DIR
+
+    target = _Path(path or os.getenv("WATCHDOG_LAST_FILE") or (LOG_DIR / "watchdog_last.json"))
+    if not target.exists():
+        return None
+    try:
+        data = _json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {"error": "unreadable"}
+    ran_at = data.get("ran_at")
+    age: float | None = None
+    if isinstance(ran_at, str):
+        try:
+            t = datetime.fromisoformat(ran_at)
+            if t.tzinfo is None:
+                t = t.replace(tzinfo=timezone.utc)
+            age = max(0.0, (now if now is not None else _time.time()) - t.timestamp())
+        except ValueError:
+            age = None
+    findings = data.get("findings") or []
+    levels = {f.get("key"): f.get("level") for f in findings if isinstance(f, dict) and f.get("key")}
+    return {
+        "ran_at": ran_at,
+        "age_seconds": age,
+        "host": data.get("host"),
+        "levels": levels,
+        "alerts": len(data.get("alerts") or []),
+        "dry_run": bool(data.get("dry_run")),
+    }
 
 
 @router.get("/diagnostics/lua-webhook")

@@ -161,6 +161,15 @@ before believing "inactive".
   the token. A five-character token with `+4` moved a `;` past an inserted
   block — legal code, silent in typecheck and tests, seen only by static
   analysis and only at one of the two places (2026-09-06).
+- The endpoint gap is a COUNT of `tests/data/endpoint_gap.txt`
+  (`grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`), never a number
+  copied from a document — PLAN quoted 3 and 16 on the same day while the
+  file said 13; `test_plan_quotes_the_measured_gap.py` now refuses that.
+- The dev bot and website run from `/home/samba/share/slomix-dev-run`, a
+  clone kept on `main` (since 2026-09-07; before that they ran from this
+  working tree and a `git checkout` here was a silent deploy). Deploy to dev
+  with `scripts/dev_deploy.sh`; never edit or check out inside the run dir.
+  Work in a `git worktree` (e.g. `../slomix-fable`), not in the primary tree.
 - A hash quoted in a document may predate the history rewrite of 2026-08-27
   (all hashes changed); verify with `git merge-base --is-ancestor` before
   building on it.

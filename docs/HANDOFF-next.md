@@ -15,6 +15,10 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
   izpisa — Python job konča s kodo 2).
 - Zeleni testi NISO dovolj: vsaka rezina rabi runtime dokaz (endpoint/stran/log)
   in vsaj eno mutacijo varovala, ki je bila VIDENA pasti (`cmp` po obnovi).
+- Dev servisi tečejo iz `/home/samba/share/slomix-dev-run` (klon na mainu, od
+  7. 9.), NE iz tega drevesa; deploy na dev = `scripts/dev_deploy.sh`
+  (restart je NOPASSWD). Enote: `deploy/systemd/`. Watchdog timer teče iz
+  istega imenika; webhook je v run-dir `.env` (`WATCHDOG_WEBHOOK_URL`).
 - Nikoli restart/deploy servisov (`etlegacy-*`/`slomix-*`) brez ownerja; dev
   strežnik agenta je `nohup ./venv/bin/python -m uvicorn website.backend.main:app --host 0.0.0.0 --port 8056`
   (pid prek `ss -ltnp | grep :8056`, nikoli `pgrep -f`; zagon traja > 10 s).

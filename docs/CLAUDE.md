@@ -121,6 +121,12 @@ All in `bot/core/`: achievement_system, checks, correlation_context, database_ad
 ```bash
 pip install -r requirements.txt
 python -m bot.ultimate_bot
+# DEV RUN DIRECTORY (2026-09-07): the dev units run from
+#   /home/samba/share/slomix-dev-run        (a clone kept on main)
+# and NOT from this working tree. A checkout here changes nothing that runs;
+# deploy to dev = scripts/dev_deploy.sh (fetch, checkout -B main, copy the
+# SPA/legacy static built HERE, restart both units via the NOPASSWD rule).
+# Unit files: deploy/systemd/etlegacy-{bot,web,watchdog}.{service,timer}.
 # systemd-managed on both the dev box and the production VM, but the UNIT
 # NAMES DIFFER PER HOST: dev uses etlegacy-bot/etlegacy-web, the production
 # VM uses slomix-bot/slomix-web (scripts/deploy_release.sh restarts the

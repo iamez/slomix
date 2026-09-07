@@ -31,7 +31,8 @@ watchdog is not invisible.
 
 Outputs: the Discord webhook (WATCHDOG_WEBHOOK_URL; --dry-run prints), the
 full report to WATCHDOG_LAST_FILE (which /api/diagnostics may expose later),
-and the exit code: 0 all ok/warn, 1 any fail, 2 the run itself broke.
+and the exit code: 0 (the run completed; findings are the payload), 1 only
+with --strict and a failing check, 2 when the run itself broke.
 
 Config comes from the ROOT .env via dotenv_values (never website/.env, which
 overrides POSTGRES_USER to the least-privilege role — the admin-tool trap of
@@ -637,6 +638,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--once", action="store_true", help="run one cycle (the only mode; the timer repeats it)")
     ap.add_argument("--dry-run", action="store_true", help="measure and print; do not send or persist state")
     ap.add_argument("--json", action="store_true", help="print the full report as JSON")
+    ap.add_argument("--strict", action="store_true",
+                    help="exit 1 when any check fails (for a human at a shell); under the timer the "
+                         "findings are the payload and a failing CHECK is not a failing RUN")
     args = ap.parse_args(argv)
     cfg = load_config()
     try:
@@ -652,7 +656,15 @@ def main(argv: list[str] | None = None) -> int:
             extra = f.reason or (json.dumps(f.value, default=str) if f.value is not None else "")
             print(f"{f.level:<8} {f.key:<{width}}  {extra[:140]}")
         print(f"alerts: {len(alerts)}")
-    return 1 if any(f.level == "fail" for f in findings) else 0
+    # Exit 2 above means the watchdog itself broke. A failing check is a
+    # finding, not a broken watchdog: under systemd a non-zero oneshot shows
+    # up as a "failed" unit on every tick with a down service, which buries
+    # the one signal that matters (the run at 02:41 on 2026-09-07 ran one
+    # second after the web restart, saw /health closed, and systemd reported
+    # the WATCHDOG failed). --strict keeps the old behaviour for shells.
+    if args.strict and any(f.level == "fail" for f in findings):
+        return 1
+    return 0
 
 
 if __name__ == "__main__":

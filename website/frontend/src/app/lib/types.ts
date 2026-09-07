@@ -3255,7 +3255,7 @@ export interface ProxPlayerProfile {
   /** What the caller sent: the same as `guid`, or the 8-character key the
    *  session page carries, which the endpoint resolved (2026-09-06). Older
    *  recordings do not have it. */
-  requested_guid?: string;
+  requested_guid?: string | null;
   /** ⚠️ An unknown guid answers 200 with every number 0 and player_name
    *  echoing the guid — 0 engagements means "nothing captured", never a
    *  real profile of zeros. */
@@ -3294,7 +3294,7 @@ export interface ProxPlayerRadar {
   teamplay_formula_version: string | null;
   teamplay_degraded: boolean;
   // Present only on the degraded/fallback form (recorded both ways):
-  teamplay_sample_count?: number;
+  teamplay_sample_count?: number | null;
   teamplay_fallback_reason?: string | null;
 }
 
@@ -4489,6 +4489,20 @@ export interface Diagnostics {
   time: DiagnosticsTime;
   monitoring: { server?: DiagnosticsMonitoringTable; voice?: DiagnosticsMonitoringTable };
   pool?: DiagnosticsPool;
+  /** The last run of the host watchdog (scripts/slomix_watchdog.py), null
+   *  when it has never run on this host; `{error}` when its file is
+   *  unreadable. Never part of `status`. */
+  watchdog?: DiagnosticsWatchdog | null;
+}
+
+export interface DiagnosticsWatchdog {
+  ran_at?: string | null;
+  age_seconds?: number | null;
+  host?: string | null;
+  levels?: Record<string, 'ok' | 'warn' | 'fail' | 'unknown' | string>;
+  alerts?: number;
+  dry_run?: boolean;
+  error?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -48,6 +48,14 @@ data here.
   bots. Apply: `resolve_player_guid` in `proximity_helpers`; never push
   `LEFT(guid,8)=` or `LIKE` into a main query (seq scan, en_US collation) —
   resolve once through the indexed `*_guid_canonical` column, then bind `=`.
+- **2026-09-07 · The services no longer run from the working tree.**
+  `/home/samba/share/slomix-dev-run` is a clone kept on `main`; venvs and
+  the big read-mostly corpora are symlinks into the agents' tree, `.env` is
+  a copy whose four absolute paths point at the run dir, static bundles are
+  copied by `scripts/dev_deploy.sh` (no vite build on a 1.8 GB box). Why: a
+  checkout in the working tree was a silent deploy twice on 2026-09-06.
+  Apply: deploy to dev with the script; unit files live in `deploy/systemd`;
+  a fresh venv per service is the next isolation step.
 - **2026-09-06 · Scripted edits: count the token before adding an offset.**
   `s.index("\n  };") + 4` on a five-character token slid a `;` past the
   inserted block: one statement lost it, an empty statement appeared later.
