@@ -75,7 +75,7 @@ KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
    proximity+spiderweb+Lua) → **#925** (02 backend routerji) → **#926** (03 SPA
    lib); ostali #927–#943 po dnevih (odprti 6. 9. kot draft). ⛔ Stara baza `19c61847` je bila hash iz PRE-prepisne zgodovine
    (pravi #802 merge = `87a7063d`); veja izbrisana.
-3. **Astra (Codex CLI, od 7. 9.)**: vstop = `AGENTS.md` (Codex ga naloži sam;
+3. **Astra (Codex CLI, od 7. 9.)**: **predaja celotnega projekta = `docs/HANDOFF-astra.md` (§C delovni paket, §D ne delaj) + `docs/HANDOFF-astra-inventory.md`** (7. 9.); vstop = `AGENTS.md` (Codex ga naloži sam;
    preveri s `codex debug prompt-input "ping"`), kickoff
    `docs/prompts/astra_kickoff.md`, zanka `docs/process/MANDELBROT_RCA.md`,
    dnevnik `docs/AGENT_LOG.md`. Vrstni red (owner): triaža najdb ultra →
