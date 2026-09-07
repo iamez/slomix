@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Chip, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Panel } from '../components/Panel';
 import { ApiError } from '../lib/api';
 import {
   deleteSubscription, postAvailabilitySettings, postBet, postCampaign, postLinkToken,
@@ -555,12 +556,17 @@ export function AvailabilityPage() {
       </Stack>
 
       <div data-parity="availability.week">
-        <SectionHead label="the week" aside={<span className="lbl">{from} → {to}</span>} />
-        {week.isPending && <Pending label="availability" />}
-        {week.isError && <Unavailable what="availability" />}
-        {week.data && (
-          <Stack gap={2} style={{ marginTop: 'var(--space-3)' }}>
-            {week.data.days.map((d) => (
+        <Panel
+          gap={3}
+          label="the week"
+          aside={`${from} → ${to}`}
+          q={week}
+          empty="no day in this window has an availability row yet"
+          isEmpty={(w) => w.days.length === 0}
+        >
+          {(w) => (
+          <Stack gap={2}>
+            {w.days.map((d) => (
               <Cluster key={d.date} gap={4} align="baseline" justify="between" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
                 <span className="m" style={{ fontSize: 'var(--fs-row)', minWidth: 110 }}>{d.date}</span>
                 <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
@@ -586,32 +592,38 @@ export function AvailabilityPage() {
             ))}
             {saveError && <Absent reason={saveError} />}
           </Stack>
-        )}
+          )}
+        </Panel>
       </div>
 
       <div data-parity="availability.planning-today">
-        <SectionHead label="tonight" />
-        {planning.isPending && <Pending label="planning" />}
-        {planning.isError && <Unavailable what="planning" />}
-        {planning.data && (
-          <Stack gap={2} style={{ marginTop: 'var(--space-3)' }}>
+        <Panel
+          gap={3}
+          label="tonight"
+          q={planning}
+          empty="no planning row for tonight"
+          isEmpty={() => false}
+        >
+          {(pl) => (
+          <Stack gap={2}>
             <Meta>
-              {planning.data.session_ready.ready
-                ? `session ready — ${figure(planning.data.session_ready.looking_count)} looking (threshold ${figure(planning.data.session_ready.threshold)})`
-                : `${figure(planning.data.session_ready.looking_count)} of ${figure(planning.data.session_ready.threshold)} needed are looking`}
+              {pl.session_ready.ready
+                ? `session ready — ${figure(pl.session_ready.looking_count)} looking (threshold ${figure(pl.session_ready.threshold)})`
+                : `${figure(pl.session_ready.looking_count)} of ${figure(pl.session_ready.threshold)} needed are looking`}
             </Meta>
             <Cluster gap={3} style={{ flexWrap: 'wrap' }}>
-              {planning.data.participants.map((p) => (
+              {pl.participants.map((p) => (
                 <span key={p.user_id} className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>
                   {p.display_name ?? `#${p.user_id}`} · {p.status.toLowerCase()}
                 </span>
               ))}
             </Cluster>
-            {planning.data.is_mock && (
+            {pl.is_mock && (
               <Absent reason="this backend serves MOCK planning data and says so — nothing here is a real evening" />
             )}
           </Stack>
-        )}
+          )}
+        </Panel>
       </div>
 
       <div data-parity="availability.bets">

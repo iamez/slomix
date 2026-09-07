@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { RoundsTab, roundsReason } from '../components/RoundsTab';
 import { TeamplayTab } from '../components/TeamplayTab';
@@ -308,15 +309,17 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
 function TopDpm({ sessionId }: { sessionId: number }) {
   const board = useSessionLeaderboard(sessionId, 3);
   return (
-    <Stack gap={2} parity="session.top-dpm">
-      <SectionHead label="top dpm" aside={<span className="lbl">computed, not voted</span>} />
-      {board.isPending && <Pending label="top dpm" />}
-      {board.isError && <Unavailable what="top dpm" />}
-      {board.data && (board.data.length === 0 ? (
-        <Absent reason="no counted rounds carry damage for this session, so there is no dpm to rank" />
-      ) : (
+    <Panel
+      parity="session.top-dpm"
+      label="top dpm"
+      aside="computed, not voted"
+      q={board}
+      empty="no counted rounds carry damage for this session, so there is no dpm to rank"
+      isEmpty={(d) => d.length === 0}
+    >
+      {(d) => (
         <Stack gap={1} className="rows">
-          {board.data.map((row) => (
+          {d.map((row) => (
             <Cluster key={row.rank} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-row)' }}>{row.name}</span>
               <Cluster gap={3} align="baseline">
@@ -328,8 +331,8 @@ function TopDpm({ sessionId }: { sessionId: number }) {
             </Cluster>
           ))}
         </Stack>
-      ))}
-    </Stack>
+      )}
+    </Panel>
   );
 }
 
