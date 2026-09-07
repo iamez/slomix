@@ -478,3 +478,20 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
   kill ali prestavitev.
 - `scripts/local_et_setup.sh` P1: produkcijski webhook v lokalnem strežniku.
 - hosting ticket, če watcher potrdi populacijo B (host stall).
+
+## Proga: Astra shared Node 22 pin
+
+Zadnja posodobitev: 2026-09-07 (Astra). Implemented; local contract verified.
+Pin local development and both CI Node setup jobs to `.nvmrc`, version 22.23.2.
+Verified against the official release index and archive (latest 22, Jod LTS),
+and the security release announcement:
+https://nodejs.org/en/blog/release/v22.23.2
+Contract tests parse package engines and workflow YAML, rejecting a pin below
+the frontend floor or an inline CI override. No local installation, dependencies,
+build, browser, global environment or service changes in this slice.
+Proof: three tests and targeted Ruff pass. Mutations to old Node 22.13.1 and
+inline CI `22.x` both failed the respective contract; restored files match
+pre-mutation snapshots by `cmp`. Independent Node JSON comparison confirms the
+pin meets the floor; parsed YAML resolves both jobs to 22.23.2. That is config
+proof, not execution under the selected Node: host Node remains v20.20.0.
+Next: root review/PR, then isolated portable runtime validation and actual CI.
