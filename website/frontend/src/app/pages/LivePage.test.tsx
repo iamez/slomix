@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { LivePage } from './LivePage';
 import type {
-  ActivityHistory, ApiHealth, LiveFeed, LiveState, MonitoringStatus, VoiceHistory,
+  ActivityHistory, ApiHealth, LiveFeed, LiveState, MonitoringStatus, TonightStatus, VoiceHistory,
 } from '../lib/types';
 import stateJson from './__fixtures__/api_live_state_quiet_form.json';
 import feedJson from './__fixtures__/api_live_feed.json';
@@ -13,6 +13,8 @@ import serverJson from './__fixtures__/api_server_activity_history.json';
 import voiceJson from './__fixtures__/api_voice_activity_history.json';
 import monitoringJson from './__fixtures__/api_monitoring_status.json';
 import statusJson from './__fixtures__/api_status.json';
+import tonightJson from './__fixtures__/api_stats_tonight.json';
+import tonightQuietJson from './__fixtures__/api_stats_tonight.quiet.json';
 
 const liveState = stateJson satisfies LiveState;
 const feed = feedJson satisfies LiveFeed;
@@ -20,6 +22,8 @@ const serverHist = serverJson satisfies ActivityHistory;
 const voiceHist = voiceJson satisfies VoiceHistory;
 const monitoring = monitoringJson satisfies MonitoringStatus;
 const health = statusJson satisfies ApiHealth;
+const tonight = tonightJson satisfies TonightStatus;
+const tonightQuiet = tonightQuietJson satisfies TonightStatus;
 
 function stub() {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
@@ -31,6 +35,7 @@ function stub() {
       '/api/voice-activity/history': voiceHist,
       '/api/monitoring/status': monitoring,
       '/api/status': health,
+      '/api/stats/tonight': tonightQuiet,
     }[pathname];
     if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
@@ -131,3 +136,80 @@ describe('LivePage', () => {
     await waitFor(() => expect(screen.getByText(/voice sampling is STALE — last record 90 min ago/)).toBeInTheDocument());
   });
 });
+
+/** An evening in progress: the recorded score board of 2026-09-07 (eight
+ *  maps, 5–2) beside a live state in its second half — the strip the
+ *  visitor reads first, and the board the legacy page had that the new one
+ *  fetched and never showed (ledger 2026-09-08). */
+describe('LivePage — the evening', () => {
+  const inSecondHalf: LiveState = {
+    ...liveState,
+    is_live: true,
+    game_state: 'live',
+    current_map: 'etl_adlernest',
+    previous_map: 'supply',
+    round_number: 2,
+    round_elapsed_seconds: 72,
+    session_start_seconds: 1500,
+    attacking_side: 'allies',
+    time_to_beat_seconds: 210,
+    last_round_result: {
+      round_number: 1, map: 'etl_adlernest', reason: 'timelimit', reason_raw: 'Timelimit hit.',
+      winner_side: 'axis', duration_seconds: 210, full_hold: true, ended_age_seconds: 95,
+    },
+    roster: { ...liveState.roster, player_count: 6 },
+  };
+
+  it('says which half, the clock, the time to beat, who attacks, and what the last half ended on', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      const body = {
+        '/api/live/state': inSecondHalf,
+        '/api/live/feed': feed,
+        '/api/server-activity/history': serverHist,
+        '/api/voice-activity/history': voiceHist,
+        '/api/monitoring/status': monitoring,
+        '/api/status': health,
+        '/api/stats/tonight': tonight,
+      }[pathname];
+      if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    }));
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <MemoryRouter initialEntries={['/live']}>
+          <LivePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText(/R2 · 1:12/)).toBeInTheDocument());
+    expect(screen.getByText(/to beat 3:30/)).toBeInTheDocument();
+    expect(screen.getByText('Allies attack')).toBeInTheDocument();
+    expect(screen.getByText(/last: R1 full hold 3:30 \(Axis\)/)).toBeInTheDocument();
+    expect(screen.getByText(/before that supply/)).toBeInTheDocument();
+    // The board: the recorded director's sentence, the map score, the rosters,
+    // every recorded map, and the hold curve with its marker sentence.
+    await waitFor(() => expect(screen.getByText(tonight.director!)).toBeInTheDocument());
+    expect(screen.getByText(/Team A 2 – 5 Team B/)).toBeInTheDocument();
+    expect(screen.getByText(/rounds 7–9 · 8 completed/)).toBeInTheDocument();
+    for (const m of tonight.maps) {
+      expect(screen.getAllByText(new RegExp(`#${m.map_number}$`)).length).toBeGreaterThan(0);
+    }
+    expect(screen.getByLabelText(`hold probability on ${tonight.hold_probability!.map}`)).toBeInTheDocument();
+    expect(screen.getByText(/by 1:12 the attack had completed in \d+ % of recorded halves/)).toBeInTheDocument();
+    expect(screen.getByLabelText('team momentum')).toBeInTheDocument();
+  });
+
+  it('a night with no imported round says so instead of an empty board', async () => {
+    stub();
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <MemoryRouter initialEntries={['/live']}>
+          <LivePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText(/no round has been imported today/)).toBeInTheDocument());
+  });
+});
+

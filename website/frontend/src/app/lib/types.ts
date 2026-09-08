@@ -35,6 +35,12 @@ export interface LiveState {
    * until the snapshot is re-frozen: the side that attacks on this map
    * (constant across the two halves), how the last half ended, and the
    * time the second half must beat. */
+  /** Returned by the reducer since 2026-08; typed on 2026-09-08 when the
+   * live page started reading them (ledger). */
+  previous_map?: string | null;
+  session_start_seconds?: number | null;
+  recent_objectives?: { type: string; team: string | null; verb: string; player: string | null; objective: string | null; at?: number }[];
+  recent_roster_changes?: { name: string; action: string; side: string | null; age_seconds: number }[];
   attacking_side?: 'axis' | 'allies' | null;
   last_round_result?: {
     round_number: number | null;
@@ -510,9 +516,47 @@ export interface ChallengeCurrent {
 }
 
 /** GET /api/stats/tonight — corpus: api_stats_tonight.json */
+/** One half of a map in TEAM terms — the handler resolves axis/allies into
+ *  the two logical teams that swap sides between halves (players_router
+ *  get_tonight). */
+export interface TonightRound {
+  round: number;
+  /** 'a' | 'b' | null — a string here so a recorded JSON fixture satisfies the type. */
+  winner: string | null;
+  axis_score: number | null;
+  allies_score: number | null;
+  a_on_axis: boolean | null;
+  duration: number | null;
+  is_fullhold: boolean;
+}
+export interface TonightMap {
+  map_number: number;
+  map: string;
+  rounds: TonightRound[];
+  /** 'a' | 'b' | 'draw' | 'pending' */
+  winner: string;
+  a_points: number;
+  b_points: number;
+}
+/** GET /api/stats/tonight — the evening's score board. Recorded 2026-09-08
+ *  from the handler over the rows of 2026-09-07 (the endpoint is bound to
+ *  CURRENT_DATE, so an active evening can only be recorded while it runs;
+ *  the same code over the same rows the morning after is the honest
+ *  substitute). The quiet form (`api_stats_tonight.quiet.json`) is what a
+ *  night with no rounds answers: empty teams/score/maps, nulls elsewhere. */
 export interface TonightStatus {
   status: string;
   active: boolean;
+  current_map?: string | null;
+  last_update_unix?: number | null;
+  age_seconds?: number | null;
+  teams: { a?: { name: string; roster: string[] }; b?: { name: string; roster: string[] } };
+  score: { a_maps?: number; b_maps?: number; a_rounds?: number; b_rounds?: number; maps_completed?: number };
+  maps: TonightMap[];
+  momentum: { a: number; b: number }[];
+  current: { map: string; round: number; status: string; r2_pending: boolean; beat_seconds: number | null } | null;
+  director: string | null;
+  hold_probability: { map: string; curve: { t: number; p: number }[] } | null;
 }
 
 /** GET /api/live-status — fixture api_live_status.json RECORDED FRESH from
