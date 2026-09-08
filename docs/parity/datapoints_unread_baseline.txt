@@ -371,7 +371,6 @@
 /api/stats/live-session last_update
 /api/stats/maps max_duration
 /api/stats/maps min_duration
-/api/stats/maps total_deaths
 /api/stats/matches score_display
 /api/stats/matches team2_name
 /api/stats/overview most_active_14d
@@ -426,17 +425,12 @@
 /api/storytelling/camp-profile thresholds.still_min_s
 /api/storytelling/camp-profile thresholds.still_speed_lt
 /api/storytelling/enabler distance_threshold
-/api/storytelling/enabler players.crossfire_assists
-/api/storytelling/enabler players.enabled_kills
-/api/storytelling/enabler players.own_kills
 /api/storytelling/enabler players.total_assists
-/api/storytelling/enabler players.trade_assists
 /api/storytelling/enabler scope.accepted_round_count
 /api/storytelling/enabler scope.dates
 /api/storytelling/enabler scope.distinct_map_names
 /api/storytelling/enabler scope.last_round_unix
 /api/storytelling/enabler time_window_ms
-/api/storytelling/gravity players.total_attention_ms
 /api/storytelling/gravity players.total_engaged_ms
 /api/storytelling/gravity scope.accepted_round_count
 /api/storytelling/gravity scope.dates
@@ -478,8 +472,6 @@
 /api/storytelling/lurker-profile coverage.tracks_skipped
 /api/storytelling/lurker-profile coverage.tracks_used
 /api/storytelling/lurker-profile downsample_ms
-/api/storytelling/lurker-profile players.solo_samples
-/api/storytelling/lurker-profile players.solo_time_est_s
 /api/storytelling/lurker-profile scope.accepted_round_count
 /api/storytelling/lurker-profile scope.dates
 /api/storytelling/lurker-profile scope.distinct_map_names
@@ -515,10 +507,6 @@
 /api/storytelling/scopes sessions.accepted_round_count
 /api/storytelling/scopes sessions.distinct_map_names
 /api/storytelling/scopes sessions.scope_version
-/api/storytelling/space-created players.productive_deaths
-/api/storytelling/space-created players.teammate_kills_after
-/api/storytelling/space-created players.total_deaths
-/api/storytelling/space-created players.wasted_deaths
 /api/storytelling/space-created scope.accepted_round_count
 /api/storytelling/space-created scope.dates
 /api/storytelling/space-created scope.distinct_map_names

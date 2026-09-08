@@ -7,8 +7,8 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2946,
-  "unread": 556,
+  "read": 2958,
+  "unread": 544,
   "dropped": 42,
   "endpoints": 176,
   "endpoints_fully_read": 64,
@@ -636,8 +636,8 @@
    "dropped": 0
   },
   "/api/stats/maps": {
-   "read": 15,
-   "unread": 3,
+   "read": 16,
+   "unread": 2,
    "dropped": 0
   },
   "/api/stats/matches": {
@@ -771,8 +771,8 @@
    "dropped": 0
   },
   "/api/storytelling/enabler": {
-   "read": 12,
-   "unread": 11,
+   "read": 16,
+   "unread": 7,
    "dropped": 0
   },
   "/api/storytelling/formula": {
@@ -781,8 +781,8 @@
    "dropped": 19
   },
   "/api/storytelling/gravity": {
-   "read": 16,
-   "unread": 6,
+   "read": 17,
+   "unread": 5,
    "dropped": 0
   },
   "/api/storytelling/kill-impact": {
@@ -801,8 +801,8 @@
    "dropped": 0
   },
   "/api/storytelling/lurker-profile": {
-   "read": 16,
-   "unread": 11,
+   "read": 18,
+   "unread": 9,
    "dropped": 0
   },
   "/api/storytelling/moments": {
@@ -841,8 +841,8 @@
    "dropped": 0
   },
   "/api/storytelling/space-created": {
-   "read": 12,
-   "unread": 9,
+   "read": 16,
+   "unread": 5,
    "dropped": 0
   },
   "/api/storytelling/synergy": {
@@ -13352,7 +13352,7 @@
   {
    "endpoint": "/api/stats/maps",
    "key": "total_deaths",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/maps",
@@ -16007,12 +16007,12 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "players.crossfire_assists",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "players.enabled_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16032,7 +16032,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "players.own_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16042,7 +16042,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "players.trade_assists",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16351,7 +16351,7 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "players.total_attention_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17061,12 +17061,12 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "players.solo_samples",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "players.solo_time_est_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17796,7 +17796,7 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "players.productive_deaths",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -17806,17 +17806,17 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "players.teammate_kills_after",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "players.total_deaths",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "players.wasted_deaths",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
