@@ -6,6 +6,15 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-08 · Import success must be logged after transaction exit.**
+  `pg_notify` participates in the import transaction and can fail at COMMIT;
+  the emitter returning does not prove persistence. R01 moves success counts
+  and logs after COMMIT; a canonical-import test injects commit failure and
+  checks that only the failed processed-file marker is written. This mock is
+  wiring evidence, not real PostgreSQL transaction proof. Initial journal
+  events are not final-round events: validation warnings and post-commit
+  correlation/Lua/endstats changes remain distinct facts.
+
 - **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
   <dir>` reports when the directory entry list last changed (a file added or
   removed), not when files inside were written; a rebuilt bundle that reuses

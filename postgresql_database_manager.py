@@ -40,6 +40,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from bot.community_stats_parser import C0RNP0RN3StatsParser
 from bot.config import load_config
 from bot.stats import StatsCalculator
+from shared.runtime_events import emit_round_stats_imported, event_stream_enabled
 
 # Import comprehensive logging system
 try:
@@ -84,6 +85,7 @@ class PostgreSQLDatabaseManager:
 
     def __init__(self, stats_dir: str = "local_stats"):
         self.config = load_config()
+        self.event_stream_enabled = event_stream_enabled()
 
         if self.config.database_type != 'postgresql':
             raise ValueError(
@@ -1705,29 +1707,34 @@ class PostgreSQLDatabaseManager:
                         # Log warning but don't fail - data is still saved
                         logger.warning(f"⚠️  Data mismatch in {filename}: {validation_msg}")
 
-                    # Transaction successful - update stats
-                    self.stats['files_processed'] += 1
-                    self.stats['rounds_created'] += 1
-                    self.stats['players_inserted'] += player_count
-                    self.stats['weapons_inserted'] += weapon_count
-
-                    # Log successful import
-                    duration = time.time() - start_time
-                    logger.info(
-                        f"✓ Imported {filename}: {player_count} players, {weapon_count} weapons "
-                        f"[{duration:.2f}s]{' (WITH WARNINGS)' if not validation_passed else ''}"
-                    )
-                    log_stats_import(
-                        filename,
-                        round_count=1,
-                        player_count=player_count,
-                        weapon_count=weapon_count,
-                        duration=duration
+                    # Same transaction: journal/NOTIFY failures roll back the import.
+                    await emit_round_stats_imported(
+                        conn, enabled=self.event_stream_enabled, round_id=round_id,
+                        source_filename=filename, source_payload_sha256=payload_hash,
+                        validation_passed=validation_passed,
                     )
 
-                    # Warn if import was slow
-                    if duration > 3.0:
-                        log_performance_warning(f"Import {filename}", duration, threshold=3.0)
+            # Count/log success only after COMMIT (NOTIFY can fail at commit).
+            self.stats['files_processed'] += 1
+            self.stats['rounds_created'] += 1
+            self.stats['players_inserted'] += player_count
+            self.stats['weapons_inserted'] += weapon_count
+
+            duration = time.time() - start_time
+            logger.info(
+                f"✓ Imported {filename}: {player_count} players, {weapon_count} weapons "
+                f"[{duration:.2f}s]{' (WITH WARNINGS)' if not validation_passed else ''}"
+            )
+            log_stats_import(
+                filename,
+                round_count=1,
+                player_count=player_count,
+                weapon_count=weapon_count,
+                duration=duration
+            )
+
+            if duration > 3.0:
+                log_performance_warning(f"Import {filename}", duration, threshold=3.0)
 
             # 🔒 CRITICAL: Mark file as processed ONLY after transaction commits successfully
             # This prevents files from being marked as processed when the transaction rolls back

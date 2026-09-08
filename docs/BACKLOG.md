@@ -7,6 +7,14 @@
 
 ## Trenutna pozicija
 
+- (Astra, 2026-09-08) Runtime v2 R01 code prepared on
+  `feat/db-runtime-events-r01` in `/tmp/slomix-astra-runtime-r01`: migration 083,
+  default-OFF canonical import journal, transactional wake-up, unit and opt-in
+  PostgreSQL tests. 39 focused unit cases pass; 4 actual PG cases skipped.
+  Await owner permission for a disposable PG process before runtime proof.
+  No live DB/services changed. Next: PG commit/rollback/concurrency proof,
+  then review/PR; not R02 consumers yet. Fable retains frontend ownership.
+
 - (Fable 5.1, 2026-09-08, 12:05) Vlak zaključen: #980 (live glava; 11 Codex
   niti + drift tipov popravljeni), #981 (profil: name history, gathers,
   combat timing), #982 (story role boards s številkami), #983 (skill

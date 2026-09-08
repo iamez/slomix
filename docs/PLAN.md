@@ -18,6 +18,35 @@
 
 **Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
 
+## Track: runtime v2 R01 (Astra)
+
+Last updated: 2026-09-08. Owner priority: system runtime; frontend stays with
+Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
+`feat/db-runtime-events-r01`. Code prepared; PostgreSQL runtime proof pending.
+NOT merged, migrated, enabled or deployed.
+
+- R01: migration 083 and neutral initial-import emitter on the existing
+  canonical importer transaction; `EVENT_STREAM_ENABLED=false`. R1/R2 only,
+  unique round/type, versioned source metadata, validation-warning flag,
+  transactional ID-only NOTIFY. No live migration, consumer or backfill.
+- Verify disabled/no-table behavior, retry deduplication, canonical wiring,
+  event failure rollback and notifications at commit using isolated PostgreSQL.
+  Temporary test PostgreSQL launch permission requested; not yet run. Opt-in
+  integration tests refuse non-disposable socket paths and have no live-DB
+  fallback. The four PostgreSQL tests are SKIPPED, not passed.
+- Local verification: 21 new unit cases plus 18 neighboring importer cases
+  pass (39 total); includes emitter and COMMIT failures. Disabled guard
+  mutation failed with `AttributeError: 'NoneType' object has no attribute
+  'is_in_transaction'`; restored by patch and `cmp` passed. New files lint
+  clean; importer has the same 20 pre-existing Ruff findings as base HEAD.
+  Minimal Python environment lacked `discord`; rerun used the existing full
+  venv read-only, without installing anything. Success counters/logs now run
+  after COMMIT. No claim of real PostgreSQL transaction/notification proof yet.
+- R02: map and journal post-commit corrections before consumers.
+- R03: per-consumer receipts and durable catch-up, not maximum-ID cursors.
+- R04: independent Linux Python capture/import/retry plus watchdog; remove
+  Discord lifecycle/metadata dependencies before claiming independent ingest.
+
 ## Proga: nova stran (Fable)
 
 ### Kje smo
