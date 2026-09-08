@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-08, 12:05) Vlak zaključen: #980 (live glava; 11 Codex
+  niti + drift tipov popravljeni), #981 (profil: name history, gathers,
+  combat timing), #982 (story role boards s številkami), #983 (skill
+  formula uteži) MERGANI; merilnik podatkovnih točk `unread` 563 → 543;
+  rezine pregleda ponovno izrezane; SPA zgrajena in DEPLOYANA na dev
+  (`/api/build` `5b7cfbcf`, servirani bundle nosi »last imported«,
+  »players on for«, »database says«). Odprti PR-ji: #985 ticker (stavki
+  dogodkov, zloženi dvojčki; cherry-pick na main), #986 profil long tail
+  (unread 556 → 532), #984 ta docs PR. Vsi trije čakajo ownerjev DA.
 - (Fable 5.1, 2026-09-08, 10:20) Owner: »aim/advanced razišči z Mandelbrot +
   RCA, shrani v docs, odloži, gremo naprej« — NAREJENO, nič implementirano.
   Vzrok je I/O, ne CPU: EXPLAIN ANALYZE flick/spread poizvedbe (9,6 s) bere
