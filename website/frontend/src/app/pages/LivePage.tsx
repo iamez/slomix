@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { LiveMiniMap } from '../components/LiveMiniMap';
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
@@ -17,7 +18,7 @@ import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import { svgPath } from '../lib/spark';
 import {
-  useApiHealth, useLiveFeed, useLiveState, useMonitoringStatus,
+  useApiHealth, useLiveFeed, useLiveState, useMapMesh, useMonitoringStatus,
   useServerActivityHistory, useTonight, useVoiceActivityHistory,
 } from '../lib/queries';
 import type { LiveRosterMember, LiveState, TonightMap, TonightStatus } from '../lib/types';
@@ -284,6 +285,7 @@ export function LivePage() {
   const tonight = useTonight();
   const running = state.data?.is_live === true && state.data.game_state === 'live';
   const elapsed = useTickingSeconds(state.data?.round_elapsed_seconds ?? null, state.dataUpdatedAt, running);
+  const mesh = useMapMesh(state.data?.is_live ? state.data.current_map : null);
   const importedMaps = new Set((tonight.data?.maps ?? []).map((m) => m.map).filter((m): m is string => m != null));
   // The feed cursor ADVANCES: since=0 fetches the newest ring page, every
   // later poll asks only for seq > since, per the /api/live/feed contract.
@@ -331,6 +333,7 @@ export function LivePage() {
         )}
         {state.isError && <Unavailable what="live state" />}
         {state.data && <NowStrip state={state.data} elapsed={elapsed} beatFromDb={tonight.data?.current?.beat_seconds ?? null} importedMaps={importedMaps} />}
+        {state.data?.is_live && <LiveMiniMap state={state.data} mesh={mesh.data} />}
       </Stack>
 
       <TonightBoard q={tonight} liveElapsed={elapsed} />
