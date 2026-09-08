@@ -9,6 +9,13 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_yaml_parser_is_a_declared_development_dependency():
+    requirements = (ROOT / "requirements-dev.txt").read_text().splitlines()
+    assert any(re.fullmatch(r"PyYAML==\d+\.\d+\.\d+", line) for line in requirements), (
+        "The workflow parser needs an explicit pinned development dependency"
+    )
+
+
 def test_node_pin_satisfies_frontend_engine_floor():
     pin = (ROOT / ".nvmrc").read_text().strip()
     assert re.fullmatch(r"22\.\d+\.\d+", pin), "Pin an exact supported Node 22 patch"
