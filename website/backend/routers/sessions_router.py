@@ -1211,34 +1211,9 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/sessions/{date}/graphs")
-async def get_session_graph_stats(
-    date: str,
-    gaming_session_id: int | None = None,
-    db: DatabaseAdapter = Depends(get_db),
-):
-    """
-    Get aggregated session stats formatted for graph rendering.
-    Returns data for:
-    - Combat Stats (Offense): kills, deaths, damage, K/D, DPM
-    - Combat Stats (Defense/Support): revives, gibs, headshots, time alive/dead
-    - Advanced Metrics: FragPotential, Damage Efficiency, Time Denied, Survival Rate
-    - Playstyle Analysis: Classification based on stats patterns
-    - DPM Timeline: Per-round DPM values for each player
-    """
-    # Get all player stats for this session date
-    # Use DISTINCT to avoid duplicates from the rounds join
-    if gaming_session_id is not None:
-        where_clause = "r.gaming_session_id = $1"
-        params = (gaming_session_id,)
-    else:
-        # round_date is stored as a 10-char 'YYYY-MM-DD' string, so the old
-        # SUBSTRING(...,1,10) wrapper was a no-op that also made the predicate
-        # non-sargable. Plain equality is equivalent and sargable.
-        where_clause = "p.round_date = $1"
-        params = (date,)
-
-    query = f"""
+# One SQL for both graph endpoints; `{where_clause}` is the only thing the
+# two disagree on (a date+status gate, or the counted round ids).
+_GRAPH_ROWS_SQL = """
         SELECT DISTINCT
             p.player_guid,
             p.player_name,
@@ -1277,9 +1252,41 @@ async def get_session_graph_stats(
         JOIN rounds r ON p.round_id = r.id
         WHERE {where_clause}
           AND r.round_number IN (1, 2)
-          AND (r.round_status IN ('completed', 'cancelled', 'substitution') OR r.round_status IS NULL)
         ORDER BY p.player_name, r.id
     """
+
+
+@router.get("/sessions/{date}/graphs")
+async def get_session_graph_stats(
+    date: str,
+    gaming_session_id: int | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get aggregated session stats formatted for graph rendering.
+    Returns data for:
+    - Combat Stats (Offense): kills, deaths, damage, K/D, DPM
+    - Combat Stats (Defense/Support): revives, gibs, headshots, time alive/dead
+    - Advanced Metrics: FragPotential, Damage Efficiency, Time Denied, Survival Rate
+    - Playstyle Analysis: Classification based on stats patterns
+    - DPM Timeline: Per-round DPM values for each player
+    """
+    # Get all player stats for this session date
+    # Use DISTINCT to avoid duplicates from the rounds join
+    # This endpoint's own gate — status only, which /stats/session/{gsid}/graphs
+    # tightens to the counted trio (is_valid, bot round, status).
+    _status_gate = " AND (r.round_status IN ('completed', 'cancelled', 'substitution') OR r.round_status IS NULL)"
+    if gaming_session_id is not None:
+        where_clause = "r.gaming_session_id = $1" + _status_gate
+        params = (gaming_session_id,)
+    else:
+        # round_date is stored as a 10-char 'YYYY-MM-DD' string, so the old
+        # SUBSTRING(...,1,10) wrapper was a no-op that also made the predicate
+        # non-sargable. Plain equality is equivalent and sargable.
+        where_clause = "p.round_date = $1" + _status_gate
+        params = (date,)
+
+    query = _GRAPH_ROWS_SQL.format(where_clause=where_clause)
 
     try:
         rows = await db.fetch_all(query, params)
@@ -1290,6 +1297,15 @@ async def get_session_graph_stats(
     if not rows:
         raise HTTPException(status_code=404, detail="No stats found for this session")
 
+    players_data = _build_session_graph_players(rows)
+    return {"date": date, "player_count": len(players_data), "players": players_data}
+
+
+def _build_session_graph_players(rows) -> list[dict[str, Any]]:
+    """The per-player graph payload over the rows one gate selected — shared
+    by the date-keyed endpoint (its own status gate) and the gsid-keyed one
+    (`counts_toward_totals`, the Stats 2.0 gate), so the two never compute
+    the same player two ways."""
     # Aggregate stats per player
     player_stats = {}
     dpm_timeline = {}  # player -> list of (map_round, dpm)
@@ -1415,7 +1431,14 @@ async def get_session_graph_stats(
         round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
         # Use shorter map name format for timeline
         short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
-        dpm_timeline[agg_key].append({"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)})
+        # The round's identity rides with the point so a client can align every
+        # player's series on the session's round axis instead of on the
+        # point's index (Codex on #990: a player who sat out a map had their
+        # points drawn under the wrong labels).
+        dpm_timeline[agg_key].append({
+            "label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1),
+            "round_id": round_id, "round_number": round_num, "map_name": map_name,
+        })
 
     # Calculate derived metrics and build response
     players_data = []
@@ -1501,7 +1524,146 @@ async def get_session_graph_stats(
     # Sort by DPM for consistent ordering
     players_data.sort(key=lambda x: x["combat_offense"]["dpm"], reverse=True)
 
-    return {"date": date, "player_count": len(players_data), "players": players_data}
+    return players_data
+
+
+class SessionGraphOffense(BaseModel):
+    kills: int
+    deaths: int
+    damage_given: int
+    kd: float
+    dpm: float
+
+
+class SessionGraphDefense(BaseModel):
+    revives: int
+    kill_assists: int
+    gibs: int
+    #: Head HITS (player_comprehensive_stats.headshots), not headshot kills.
+    headshots: int
+    useful_kills: int
+    full_selfkills: int
+    times_revived: int
+    team_kills: int
+    self_kills: int
+
+
+class SessionGraphAdvanced(BaseModel):
+    #: Served for the record; the owner's decision (2026) hides it from every
+    #: visitor-facing surface — the SPA does not draw it.
+    frag_potential: float
+    damage_efficiency: float
+    survival_rate: float
+    time_denied: float
+    time_denied_raw_seconds: int
+    time_dead_raw_seconds: int
+    useful_kills_per_round: float
+    deaths_per_round: float
+    rounds_played: int
+    aggression_score: float
+    pressure_score: float
+    risk_load: float
+    empty_death_burden: float
+    discipline_score: float
+    dead_time_share: float
+
+
+class SessionGraphPlaystyle(BaseModel):
+    aggression: float
+    precision: float
+    survivability: float
+    support: float
+    lethality: float
+    brutality: float
+    consistency: float
+    efficiency: float
+
+
+class SessionGraphPoint(BaseModel):
+    label: str
+    dpm: float
+    round_id: int
+    round_number: int
+    map_name: str | None
+
+
+class SessionGraphRound(BaseModel):
+    """One counted round of the evening, in play order — the x axis every
+    player's dpm series aligns on (a point names its round_id)."""
+
+    round_id: int
+    label: str
+    map_name: str | None
+    round_number: int
+
+
+class SessionGraphPlayer(BaseModel):
+    name: str
+    guid: str
+    combat_offense: SessionGraphOffense
+    combat_defense: SessionGraphDefense
+    advanced_metrics: SessionGraphAdvanced
+    playstyle: SessionGraphPlaystyle
+    dpm_timeline: list[SessionGraphPoint]
+
+
+class SessionGraphs(BaseModel):
+    """GET /api/stats/session/{gsid}/graphs — the playstyle radar, the
+    advanced metrics and the per-round DPM series of an evening, keyed by
+    gaming session (never by date: 13 of 176 days hold more than one
+    session, and the date form merges them). `gate` names the round filter
+    so a panel can say which total it agrees with."""
+
+    gaming_session_id: int
+    date: str
+    gate: str
+    rounds_counted: int
+    rounds: list[SessionGraphRound]
+    player_count: int
+    players: list[SessionGraphPlayer]
+
+
+@router.get("/stats/session/{gaming_session_id}/graphs", response_model=SessionGraphs)
+async def get_session_graphs(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """The graphs of an evening over its COUNTED rounds — the same trio of
+    gates as /basics and /rounds (`counts_toward_totals`), so the kills a
+    radar rests on are the kills the basics table shows."""
+    round_rows = await db.fetch_all(SESSION_ROUNDS_SQL, (gaming_session_id,))
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+    round_ids = [r[0] for r in round_rows]
+    placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
+    # Bots out per player as well as per round: rows older than the
+    # is_bot_round flag carry OMNIBOT guids / [BOT] names inside rounds the
+    # gate accepts, and /basics drops them — a percentile over the evening
+    # must rest on the same people (Codex on #990).
+    rows = await db.fetch_all(
+        _GRAPH_ROWS_SQL.format(where_clause=f"r.id IN ({placeholders}) {_BOT_PLAYER_FILTER}"), tuple(round_ids)
+    )
+    # Counted rounds with no player rows are a known absence: players is
+    # empty and the client says so, instead of a 404 it can only call an error.
+    players = _build_session_graph_players(rows) if rows else []
+    rounds = [
+        {
+            "round_id": r[0],
+            "label": f"{(r[1].split('_')[-1][:8] if r[1] and '_' in r[1] else (r[1] or '?')[:8])} R{r[2]}",
+            "map_name": r[1],
+            "round_number": int(r[2] or 0),
+        }
+        for r in round_rows
+    ]
+    return {
+        "gaming_session_id": gaming_session_id,
+        "date": str(round_rows[0][4]),
+        "gate": "counts_toward_totals",
+        "rounds_counted": len(round_ids),
+        "rounds": rounds,
+        "player_count": len(players),
+        "players": players,
+    }
 
 
 def _clamp_percentage(value: float | None) -> float | None:

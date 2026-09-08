@@ -366,6 +366,70 @@ export interface MatchRow {
   format: string;
 }
 
+/** GET /api/stats/matches/{match_id} — the box score of one half: both
+ *  logical teams with every player's row, the team totals and who won.
+ *  Recorded 2026-09-08 from round 11321 (corpus: api_stats_matches_match_id.json).
+ *  `match_id` is the round id; the handler also accepts a date and answers
+ *  with that day's LAST round, which the app never uses (a day can hold
+ *  several sessions). `headshots` counts head HITS, `headshot_kills` the
+ *  kills — both are served so a column can say which it shows. */
+export interface MatchDetailsPlayer {
+  name: string;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  time_played: number;
+  team: number;
+  xp: number;
+  headshots: number;
+  revives_given: number;
+  accuracy: number;
+  gibs: number;
+  selfkills: number;
+  teamkills: number;
+  times_revived: number;
+  useful_kills: number;
+  shots: number;
+  hits: number;
+  time_dead: number;
+  time_denied: number;
+  double_kills: number;
+  triple_kills: number;
+  quad_kills: number;
+  multi_kills: number;
+  mega_kills: number;
+  player_guid: string;
+  headshot_kills: number;
+  dpm: number;
+  kd: number;
+}
+export interface MatchDetailsTeam {
+  name: string;
+  players: MatchDetailsPlayer[];
+  totals: { kills: number; deaths: number; damage: number };
+  is_winner: boolean;
+}
+export interface MatchDetails {
+  match: {
+    id: number;
+    map_name: string | null;
+    round_number: number;
+    round_date: string | null;
+    /** 'Axis' | 'Allies' | 'Draw' — the side, not the logical team. */
+    winner: string;
+    /** `rounds.actual_time` text, null when the round carried none. */
+    duration: string | null;
+    /** `rounds.round_outcome` raw — null on 26 rows (sessions_router). */
+    outcome: string | null;
+    time_limit: string | null;
+    gaming_session_id: number | null;
+  };
+  team1: MatchDetailsTeam;
+  team2: MatchDetailsTeam;
+  player_count: number;
+}
+
 /** GET /api/seasons/current — corpus: api_seasons_current.json */
 export interface SeasonCurrent {
   id: string;
@@ -391,7 +455,10 @@ export interface SeasonLeaders {
   status: string;
   note: string | null;
   failed_metrics: string[];
-  leaders: Record<string, { player: string; value: number } | null>;
+  /** Every category but `longest_session` is a (player, value) pair;
+   *  `longest_session` is the evening with the most rounds — a different
+   *  shape under the same map (records_seasons.py LongestSession). */
+  leaders: Record<string, { player: string; value: number } | null> & { longest_session?: { rounds: number; date: string } | null };
 }
 
 /** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
@@ -2113,12 +2180,70 @@ export interface SessionTeamAggregate {
 
 /** Same rule as the scoring block: unavailable means `{available: false,
  *  reason}` and nothing else. */
+/** One cell of the player × map matrix (`rosters[].cells[]`) and, with the
+ *  ratios, a player's session totals. `played: false` cells carry zeros the
+ *  page must not print as a 0 — the player was not on that map. */
+export interface SessionMatrixCell {
+  map_index: number;
+  played: boolean;
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  revives: number;
+  times_revived: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  hits: number;
+  shots: number;
+  weapon_hs: number;
+  dpm: number;
+  kd: number;
+  accuracy: number;
+  hs_pct: number;
+  return_fire_ms: number | null;
+}
+export interface SessionMatrixPlayer {
+  player_guid: string;
+  player_name: string;
+  totals: Omit<SessionMatrixCell, 'map_index' | 'played'>;
+  cells: SessionMatrixCell[];
+}
+/** One player's line of one round (`rounds_detail[round_id][]`) — the side
+ *  they were on that half, which the matrix cells (per map) cannot say. */
+export interface SessionMatrixRoundRow {
+  player_guid: string;
+  player_name: string;
+  team: string;
+  side: number;
+  kills: number;
+  deaths: number;
+  damage: number;
+  damage_received: number;
+  dpm: number;
+  kd: number;
+  time_played: number;
+  revives: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  return_fire_ms: number | null;
+}
 export interface SessionTeamMatrix {
   available: boolean;
   reason?: string;
   team_a_name?: string;
   team_b_name?: string;
   aggregates?: { team_a: SessionTeamAggregate; team_b: SessionTeamAggregate };
+  /** The columns of the matrix, in play order; typed 2026-09-08 when the
+   *  page started drawing it (the old React had the matrix, the new one
+   *  showed the team totals only). */
+  /** Scores are null when stopwatch scoring was unavailable or the map is
+   *  not in its index (session_matrix_service tests pin both). */
+  maps?: { map_name: string; map_index: number; team_a_score: number | null; team_b_score: number | null }[];
+  rosters?: { team_a: SessionMatrixPlayer[]; team_b: SessionMatrixPlayer[] };
+  rounds_detail?: Record<string, SessionMatrixRoundRow[]>;
 }
 
 /** One player's session totals. `alive_pct` and `alive_pct_lua` are two
@@ -2186,6 +2311,42 @@ export interface SessionMatch {
 }
 
 /** GET /api/stats/session/{id}/detail */
+/** GET /api/stats/session/{gsid}/graphs — the playstyle axes, the advanced
+ *  metrics and the per-round DPM series of an evening over its COUNTED
+ *  rounds (`gate`). Recorded 2026-09-08 from session 152 through the handler
+ *  (corpus: api_stats_session_gaming_session_id_graphs.json). ⛔ The
+ *  legacy page called the DATE form, which merges the sessions of a day. */
+export interface SessionGraphPlayer {
+  name: string;
+  guid: string;
+  combat_offense: { kills: number; deaths: number; damage_given: number; kd: number; dpm: number };
+  /** `headshots` = head HITS. */
+  combat_defense: { revives: number; kill_assists: number; gibs: number; headshots: number; useful_kills: number; full_selfkills: number; times_revived: number; team_kills: number; self_kills: number };
+  /** `frag_potential` is served and NOT drawn — the owner's standing
+   *  decision keeps it off every visitor-facing surface. */
+  advanced_metrics: {
+    frag_potential: number; damage_efficiency: number; survival_rate: number; time_denied: number;
+    time_denied_raw_seconds: number; time_dead_raw_seconds: number; useful_kills_per_round: number;
+    deaths_per_round: number; rounds_played: number; aggression_score: number; pressure_score: number;
+    risk_load: number; empty_death_burden: number; discipline_score: number; dead_time_share: number;
+  };
+  /** Eight axes, 0–100. */
+  playstyle: { aggression: number; precision: number; survivability: number; support: number; lethality: number; brutality: number; consistency: number; efficiency: number };
+  /** A point names its round, so a series aligns on the session's round
+   *  axis (`rounds`) and a map the player sat out stays a gap. */
+  dpm_timeline: { label: string; dpm: number; round_id: number; round_number: number; map_name: string | null }[];
+}
+export interface SessionGraphs {
+  gaming_session_id: number;
+  date: string;
+  gate: string;
+  rounds_counted: number;
+  /** The counted rounds in play order — the x axis of every dpm series. */
+  rounds: { round_id: number; label: string; map_name: string | null; round_number: number }[];
+  player_count: number;
+  players: SessionGraphPlayer[];
+}
+
 export interface SessionDetail {
   session_id: number;
   date: string;
@@ -3861,7 +4022,29 @@ export interface ProxKillOutcomes {
     avg_delta_ms: number; avg_denied_ms: number;
   };
   outcomes: Record<string, { count: number; avg_delta_ms: number; avg_denied_ms?: number }>;
-  events: unknown[];
+  /** One row per kill of the scope, newest first (200 in the recording):
+   *  what became of it and who did the gibbing or the reviving. */
+  events: ProxKillOutcomeEvent[];
+}
+export interface ProxKillOutcomeEvent {
+  /** Level clock in ms (the round's own time), not an epoch. */
+  kill_time: number;
+  victim_guid: string;
+  victim_name: string;
+  killer_guid: string;
+  killer_name: string;
+  kill_mod: number;
+  outcome: string;
+  delta_ms: number;
+  effective_denied_ms: number;
+  /** Empty strings when nobody gibbed / revived — not null, on this wire. */
+  gibber_guid: string;
+  gibber_name: string;
+  reviver_guid: string;
+  reviver_name: string;
+  session_date: string;
+  map_name: string;
+  round_number: number;
 }
 
 export interface ProxHeadshotRates {
@@ -3954,6 +4137,20 @@ export interface ProxSummary {
   avg_attackers: number;
   escape_rate_pct: number;
   kill_rate_pct: number;
+  /** The rest of the evening in numbers (typed 2026-09-08 when the page
+   *  started showing them; fetched and dropped until then): movement and
+   *  sampling figures, the duo list, and how many rows each v5 source
+   *  table holds for the scope. */
+  unique_players: number;
+  avg_track_distance_m: number;
+  avg_speed: number;
+  avg_sprint_pct: number;
+  avg_time_to_first_move_ms: number;
+  sample_rounds: number;
+  top_duos: { player1: string; player2: string; crossfire_kills: number; crossfire_count: number; avg_delay_ms: number }[];
+  top_duos_partial: boolean;
+  v5_counts: Record<string, number>;
+  v5_counts_unknown: string[];
 }
 
 // ---------------------------------------------------------------------------
