@@ -7,11 +7,11 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2985,
-  "unread": 517,
+  "read": 3005,
+  "unread": 497,
   "dropped": 42,
   "endpoints": 176,
-  "endpoints_fully_read": 64,
+  "endpoints_fully_read": 65,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -176,8 +176,8 @@
    "dropped": 0
   },
   "/api/proximity/carrier-events": {
-   "read": 27,
-   "unread": 8,
+   "read": 28,
+   "unread": 7,
    "dropped": 0
   },
   "/api/proximity/carrier-kills": {
@@ -321,8 +321,8 @@
    "dropped": 0
   },
   "/api/proximity/kill-outcomes": {
-   "read": 26,
-   "unread": 10,
+   "read": 33,
+   "unread": 3,
    "dropped": 1
   },
   "/api/proximity/kill-outcomes/player-stats": {
@@ -361,8 +361,8 @@
    "dropped": 0
   },
   "/api/proximity/objective-runs": {
-   "read": 20,
-   "unread": 20,
+   "read": 21,
+   "unread": 19,
    "dropped": 0
   },
   "/api/proximity/player-aim": {
@@ -456,8 +456,8 @@
    "dropped": 0
   },
   "/api/proximity/summary": {
-   "read": 27,
-   "unread": 12,
+   "read": 34,
+   "unread": 5,
    "dropped": 0
   },
   "/api/proximity/support-summary": {
@@ -546,8 +546,8 @@
    "dropped": 0
   },
   "/api/seasons/current/leaders": {
-   "read": 15,
-   "unread": 4,
+   "read": 19,
+   "unread": 0,
    "dropped": 0
   },
   "/api/seasons/current/summary": {
@@ -3754,7 +3754,7 @@
   {
    "endpoint": "/api/proximity/carrier-events",
    "key": "events.killer_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-events",
@@ -6529,7 +6529,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "events.effective_denied_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -6539,7 +6539,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "events.gibber_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -6549,7 +6549,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "events.kill_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -6559,7 +6559,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "events.killer_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -6579,7 +6579,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "events.reviver_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -6655,7 +6655,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "summary.avg_delta_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -6665,7 +6665,7 @@
   {
    "endpoint": "/api/proximity/kill-outcomes",
    "key": "summary.expired",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/kill-outcomes",
@@ -7590,7 +7590,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.killer_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -9587,7 +9587,7 @@
   {
    "endpoint": "/api/proximity/summary",
    "key": "avg_distance_m",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/summary",
@@ -9607,12 +9607,12 @@
   {
    "endpoint": "/api/proximity/summary",
    "key": "avg_time_to_first_move_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/summary",
    "key": "avg_track_distance_m",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/summary",
@@ -9657,7 +9657,7 @@
   {
    "endpoint": "/api/proximity/summary",
    "key": "sample_rounds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/summary",
@@ -9727,7 +9727,7 @@
   {
    "endpoint": "/api/proximity/summary",
    "key": "top_duos_partial",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/summary",
@@ -9742,7 +9742,7 @@
   {
    "endpoint": "/api/proximity/summary",
    "key": "v5_counts",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/summary",
@@ -9772,7 +9772,7 @@
   {
    "endpoint": "/api/proximity/summary",
    "key": "v5_counts_unknown",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/support-summary",
@@ -11644,7 +11644,7 @@
   {
    "endpoint": "/api/seasons/current/leaders",
    "key": "leaders.longest_session",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/seasons/current/leaders",
@@ -11659,17 +11659,17 @@
   {
    "endpoint": "/api/seasons/current/leaders",
    "key": "leaders.team_damage",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/seasons/current/leaders",
    "key": "leaders.time_alive",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/seasons/current/leaders",
    "key": "leaders.time_dead",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/seasons/current/leaders",
