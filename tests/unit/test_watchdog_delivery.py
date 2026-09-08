@@ -105,6 +105,35 @@ def test_missing_webhook_never_acknowledges(cycle):
     assert wd.load_state(Path(cfg["WATCHDOG_STATE_FILE"]))["keys"]["db"]["last_alert_at"] == 0
 
 
+def test_failed_heartbeat_retries_across_midnight_until_ack(cycle):
+    cfg, findings, deliveries, outcome, run = cycle
+    findings[0].level = "ok"
+    late = wd.dt.datetime(2026, 9, 7, 23, 58).timestamp()
+    run(late)
+    outcome[0] = True
+    run(late + 300)  # 00:03: still owe yesterday's heartbeat.
+    assert len(deliveries) == 2
+    state = wd.load_state(Path(cfg["WATCHDOG_STATE_FILE"]))
+    assert state["last_heartbeat_date"] == "2026-09-07"
+    assert state["pending_alerts"] == []
+    run(late + 600)
+    assert len(deliveries) == 2
+    run(wd.dt.datetime(2026, 9, 8, 9, 5).timestamp())
+    assert len(deliveries) == 3
+    assert wd.load_state(Path(cfg["WATCHDOG_STATE_FILE"]))["last_heartbeat_date"] == "2026-09-08"
+
+
+def test_new_daily_heartbeat_supersedes_undelivered_previous_day(cycle):
+    cfg, findings, deliveries, _, run = cycle
+    findings[0].level = "ok"
+    run(wd.dt.datetime(2026, 9, 7, 23, 58).timestamp())
+    run(wd.dt.datetime(2026, 9, 8, 9, 5).timestamp())
+    pending = wd.load_state(Path(cfg["WATCHDOG_STATE_FILE"]))["pending_alerts"]
+    assert len(pending) == 1
+    assert pending[0]["date"] == "2026-09-08"
+    assert [len(batch) for batch in deliveries] == [1, 1]
+
+
 def test_failed_warning_retries(cycle):
     cfg, findings, deliveries, outcome, run = cycle
     findings[0].level = "warn"

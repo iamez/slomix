@@ -466,6 +466,15 @@ def decide(findings: list[Finding], state: dict[str, Any], now: float,
         summary = ", ".join(f"{f.key}={f.level}" for f in findings if f.level != "ok") or "all ok"
         alerts.append({"kind": "heartbeat", "key": "heartbeat",
                        "reason": f"daily heartbeat: {summary}", "value": worst, "date": today})
+    else:
+        # Scheduling the next daily heartbeat must not erase yesterday's
+        # failed delivery at midnight. Keep one pending heartbeat until ACK;
+        # a newly due heartbeat above supersedes it, so there is no backlog.
+        pending_heartbeat = next((a for a in state.get("pending_alerts", [])
+                                  if a.get("kind") == "heartbeat"
+                                  and a.get("date") != state.get("last_heartbeat_date")), None)
+        if pending_heartbeat is not None:
+            alerts.append(pending_heartbeat)
     # Units the register no longer measures do not linger with a stale level.
     live_keys = {f.key for f in findings}
     for stale in [k for k in keys if k not in live_keys]:

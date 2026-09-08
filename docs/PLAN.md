@@ -20,11 +20,11 @@
 
 ## Proga: Astra watchdog delivery acknowledgement
 
-Zadnja posodobitev: 2026-09-07 (Astra). Implemented, locally verified; not deployed.
+Zadnja posodobitev: 2026-09-08 (Astra). Implemented, locally verified; not deployed.
 Contract: observations and failure streaks persist before delivery; notification
 dedup and heartbeat acknowledgements advance only after successful delivery.
 Failed delivery retries next cycle; dry-run writes neither state nor report.
-Proof: 38 targeted tests pass; targeted Ruff and diff whitespace checks pass.
+Proof: 40 targeted tests pass; targeted Ruff and diff whitespace checks pass.
 Real run/send_webhook with an in-process HTTP transport stub: failed alert,
 successful retry, failed recovery, successful retry, then a silent healthy cycle
 (four POST attempts, no network). Mutation acknowledging a failed POST was seen
@@ -37,6 +37,13 @@ Next: root review, then branch/PR flow. Real Discord delivery requires owner-app
 test; existing legacy timestamps cannot retroactively prove past delivery. A crash
 after POST success but before state save can duplicate a notification.
 No service changes, real webhook, disk formula or cadence changes.
+PR #965 review 3951724563: pending daily heartbeat now survives midnight until
+acknowledged, or is replaced by the newly due day's heartbeat (at most one).
+Actual run with local stub: failed 23:58 -> successful retry 00:03 -> silent
+00:08 -> next day's normal 09:05 heartbeat; on-disk dates/pending count checked.
+Mutation disabling pending-heartbeat retention failed (`1` attempt vs expected
+`2`); restored file matches snapshot by `cmp`. Main was merged normally and
+both existing plan additions preserved. Next: root push and review reply.
 
 ## Proga: nova stran (Fable)
 
