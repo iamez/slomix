@@ -22,7 +22,9 @@ const METRICS: { key: MatrixMetric; label: string; title: string }[] = [
   { key: 'kd', label: 'k/d', title: 'kills over deaths on that map' },
   { key: 'damage', label: 'damage', title: 'damage given on that map' },
 ];
-const STORAGE_KEY = 'spa.session.matrix.metric';
+// The SAME key the legacy session-detail.js and the old React matrix used,
+// so a choice made on either page follows the visitor here (Codex on #989).
+const STORAGE_KEY = 'session-matrix-metric';
 const ABSENT_REASON: Record<string, string> = {
   no_teams: 'no lua team rosters for this session, so no matrix',
   no_rounds: 'no counted rounds in this session',
@@ -94,6 +96,11 @@ export function PlayerMapMatrix({ matrix }: { matrix: SessionTeamMatrix }) {
           {([['team_a', matrix.team_a_name ?? 'Team A'], ['team_b', matrix.team_b_name ?? 'Team B']] as const).map(([key, name]) => (
             <Stack key={key} gap={1}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{name}</Lbl>
+              {rosters[key].length === 0 ? (
+                // The service can map the sides from one team's players alone
+                // and return the other roster empty: say so, keep the other.
+                <Absent reason={`no player of ${name} could be placed on a side — the matrix knows only the other team`} />
+              ) : (
               <DataTable<SessionMatrixPlayer>
                 parity={key === 'team_a' ? 'session.matrix.team-a' : 'session.matrix.team-b'}
                 label={`${name} by map`}
@@ -103,6 +110,7 @@ export function PlayerMapMatrix({ matrix }: { matrix: SessionTeamMatrix }) {
                 defaultSort={{ key: 'total', dir: 'desc' }}
                 minWidth={160 + 90 * (maps.length + 1)}
               />
+              )}
             </Stack>
           ))}
           <Meta>a dash is a map the player did not play — not a zero</Meta>
