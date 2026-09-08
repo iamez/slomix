@@ -2589,7 +2589,7 @@ def _round_time_hms(value) -> tuple[int, int, int] | None:
     return int(digits[:2]), int(digits[2:4]), int(digits[4:6])
 
 
-def _session_clock(round_rows: list) -> dict[str, Any]:
+def _session_clock(round_rows: list, first_round_pause_seconds: int = 0) -> dict[str, Any]:
     """When the evening ran, from the rows SESSION_ROUNDS_SQL already returned.
 
     `rounds.round_time` is the stats file's write time — the END of a round
@@ -2599,7 +2599,14 @@ def _session_clock(round_rows: list) -> dict[str, Any]:
     duration comes from the canonical `round_duration_seconds` (measured
     first, the parsed actual_time as the documented fallback), never from
     one column alone. Everything stays on the file clock (local time), no
-    epoch mixed in."""
+    epoch mixed in.
+
+    The duration EXCLUDES pauses (shared/round_time.py; TIMING_DATA_SOURCES
+    §"actual_duration = round_end − round_start − pauses"), so a first round
+    interrupted by a pause would put the start late by the pause's length
+    and shorten the span by the same amount. The caller passes the first
+    round's pause seconds (the webhook's `lua_pause_events`, 0 when the
+    webhook has no record) and the start moves back by them (Codex, #1001)."""
     if not round_rows:
         return {"start": None, "end": None, "span_seconds": None}
     first, last = round_rows[0], round_rows[-1]
@@ -2610,7 +2617,7 @@ def _session_clock(round_rows: list) -> dict[str, Any]:
     )
     start_s = None
     if first_t and first_duration is not None:
-        start_s = first_t[0] * 3600 + first_t[1] * 60 + first_t[2] - int(first_duration)
+        start_s = first_t[0] * 3600 + first_t[1] * 60 + first_t[2] - int(first_duration) - int(first_round_pause_seconds or 0)
         if start_s < 0:
             start_s += 86400  # the first round straddled midnight
     end_s = last_t[0] * 3600 + last_t[1] * 60 + last_t[2] if last_t else None
@@ -2719,6 +2726,12 @@ async def get_session_basics(
         "SELECT COUNT(*) FROM rounds WHERE gaming_session_id = $1", (gaming_session_id,)
     )
     rounds_total = int(total_rounds_row[0]) if total_rounds_row and total_rounds_row[0] is not None else len(round_ids)
+    # The first round's pauses, for the wall clock (see _session_clock): the
+    # webhook's record, one row per round, absent for rounds it did not see.
+    pause_row = await db.fetch_one(
+        "SELECT lua_pause_events FROM lua_round_teams WHERE round_id = $1", (round_ids[0],)
+    )
+    first_round_pause_seconds = _pause_seconds(pause_row[0]) if pause_row else 0
 
     player_rows = await db.fetch_all(session_player_sql(placeholders, exclude_bots=True), tuple(round_ids))
     duration = await _session_duration_seconds(db, round_rows, round_ids)
@@ -2820,7 +2833,7 @@ async def get_session_basics(
     return {
         "gaming_session_id": gaming_session_id,
         "date": str(first_date) if first_date else None,
-        "clock": _session_clock(round_rows),
+        "clock": _session_clock(round_rows, first_round_pause_seconds),
         "coverage": {
             "rounds_counted": len(round_ids),
             "rounds_total": rounds_total,

@@ -656,7 +656,15 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
           <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)' }}>
             #{sessionId} · {detail.round_count} rounds · {detail.matches.length} maps · {detail.player_count} players · {clock(duration)}
             {/* `?.` on the block: a recording from before the clock existed has none */}
-            {basics.data?.clock?.start && <> · {basics.data.clock.start}{basics.data.clock.end ? `–${basics.data.clock.end}` : ''}{basics.data.clock.span_seconds != null ? ` (${hms(basics.data.clock.span_seconds)} wall clock)` : ''}</>}
+            {/* A historical evening can know its end (the last file time) and
+              * not its start (the first round lost both duration sources):
+              * `_session_clock` answers start:null, end, span:null on purpose,
+              * and a measured end must not vanish behind the missing start. */}
+            {basics.data?.clock && (basics.data.clock.start || basics.data.clock.end) && (
+              basics.data.clock.start
+                ? <> · {basics.data.clock.start}{basics.data.clock.end ? `–${basics.data.clock.end}` : ''}{basics.data.clock.span_seconds != null ? ` (${hms(basics.data.clock.span_seconds)} wall clock)` : ''}</>
+                : <> · ended {basics.data.clock.end} <Meta>start not measured</Meta></>
+            )}
           </span>
         </Stack>
         {teams.length === 2

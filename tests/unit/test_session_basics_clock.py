@@ -40,3 +40,21 @@ def test_missing_times_or_duration_answer_null_not_a_guess():
     assert sr._session_clock([_row(None, 600)]) == {"start": None, "end": None, "span_seconds": None}
     out = sr._session_clock([_row("20:00:00", None)])
     assert out["start"] is None and out["end"] == "20:00" and out["span_seconds"] is None
+
+
+def test_a_pause_in_the_first_round_moves_the_start_back_by_its_length():
+    """The duration excludes pauses (shared/round_time.py), so a paused first
+    round would otherwise put the start late and the span short by the pause."""
+    rows = [_row("20:05:10", 600), _row("21:40:00", 480)]
+    plain = sr._session_clock(rows)
+    paused = sr._session_clock(rows, first_round_pause_seconds=120)
+    assert plain["start"] == "19:55"
+    assert paused["start"] == "19:53"
+    assert paused["span_seconds"] == plain["span_seconds"] + 120
+    assert paused["end"] == plain["end"]
+
+
+def test_the_pause_helper_reads_the_webhook_list_in_both_of_its_forms():
+    assert sr._pause_seconds(None) == 0
+    assert sr._pause_seconds('[{"n": 1, "start": 100, "end": 160, "sec": 60}]') == 60
+    assert sr._pause_seconds([{"n": 1, "start": 100, "end": 160}, {"sec": 30}]) == 90

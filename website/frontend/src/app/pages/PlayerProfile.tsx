@@ -650,7 +650,7 @@ function PlayerCardSection({ playerId }: { playerId: string }) {
           <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
             {d.rating?.value != null ? (
               <span className="m" style={{ fontSize: 'var(--fs-value)' }}>
-                rating {figure(d.rating.value)} <Meta>{d.rating.tier ?? '—'} · trend {d.rating.trend ?? '—'} · {figure(d.rating.games_rated ?? 0)} rated</Meta>
+                rating {d.rating.value.toFixed(3)} <Meta>{d.rating.tier ?? '—'} · trend {d.rating.trend ?? '—'} · {figure(d.rating.games_rated ?? 0)} rated</Meta>
               </span>
             ) : <Meta>not rated yet</Meta>}
             {d.archetype && <Meta>archetype {d.archetype.replace(/_/g, ' ')}</Meta>}
@@ -663,8 +663,11 @@ function PlayerCardSection({ playerId }: { playerId: string }) {
           </Cluster>
           <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>percentile in the pool</Lbl>
+            {/* The endpoint ranks revives per ROUND (revives / rounds against
+              * the pool) while the form row above shows the window's total —
+              * one name, two measurements, so the label says which. */}
             {Object.entries(d.percentiles).map(([k, v]) => (
-              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k} </Meta>{v == null ? <Meta>withheld</Meta> : figure(v)}</span>
+              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k === 'revives' ? 'revives/round' : k} </Meta>{v == null ? <Meta>withheld</Meta> : figure(v)}</span>
             ))}
             {d.small_sample && <Meta>percentiles withheld under 10 rounds in the window</Meta>}
             <Meta>a different pool and window than the rating components — the two do not agree, on purpose</Meta>
