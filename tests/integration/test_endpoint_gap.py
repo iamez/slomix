@@ -18,13 +18,12 @@ import re
 from pathlib import Path
 
 from tests.integration.test_route_contract import (
-    _API_BASE_PREFIX,
     _EXCLUDED_JS_FILES,
     _FE_FULL_PATH_RE,
     _FE_LITERAL_API_RE,
-    _normalise_call,
     WEBSITE_JS_DIR,
     _extract_frontend_api_paths,
+    _normalise_call,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -63,7 +62,12 @@ _NEW_WRAPPER_RE = re.compile(
     r"(?:<[^>]{0,200}>)?\(\s*[`'\"](/[a-zA-Z0-9/_{}-]+)"
 )
 _NEW_TEMPLATE_RE = re.compile(r"\$\{API(?:_BASE)?\}(/[a-zA-Z0-9/_-]+)")
-_NEW_LITERAL_RE = re.compile(r"(?<=['\"`}])/(?:api|auth)/[a-zA-Z0-9/_-]+")
+# The charset admits `{param}` segments (2026-09-08): lib/uploads/resumable.ts
+# names its HEAD/PATCH/DELETE target as a bare spec literal
+# (`'/api/uploads/resumable/{session_id}' satisfies keyof paths`), not through
+# apiGet, and a charset that stops at `{` recorded the LIST path — so the
+# session shape the app really drives read as uncovered.
+_NEW_LITERAL_RE = re.compile(r"(?<=['\"`}])/(?:api|auth)/[a-zA-Z0-9/_{}-]+")
 
 
 _BLOCK_COMMENT_RE = re.compile(r"/\*.*?\*/", re.S)
@@ -110,14 +114,10 @@ def _extract_new_frontend_paths(root: Path | None = None) -> tuple[set[str], set
             for match in rx.finditer(text):
                 add(match.group(1), text, match.end())
         for match in _NEW_LITERAL_RE.finditer(text):
-            # A literal whose charset stopped at '{' is the head of a spec
-            # TEMPLATE, not a call: '/api/bets/market' cut out of
-            # apiPost('/api/bets/market/{market_id}/bet'). The wrapper regex
-            # registers the template whole; registering the stump as an
-            # exact call would clear a legacy exact requirement for an
-            # operation nobody built (slice 2 of phase 6).
-            if text[match.end():match.end() + 1] == "{":
-                continue
+            # The charset admits `{}` (2026-09-08), so a spec template is read
+            # whole — the stump `/api/bets/market` that a '{'-stopping charset
+            # cut out of apiPost('/api/bets/market/{market_id}/bet') can no
+            # longer register as an exact call (the guard below still pins it).
             add(match.group(0), text, match.end())
     return exact, dynamic
 
@@ -385,8 +385,14 @@ def test_templated_write_does_not_register_its_truncated_prefix(tmp_path: Path):
     )
     text = (src / "queries.ts").read_text(encoding="utf-8")
     assert not old_wrapper.search(text)
-    literal_hits = {m.group(0).rstrip("/") for m in _NEW_LITERAL_RE.finditer(text)}
-    assert "/api/bets/market" in literal_hits, "control: the old extraction no longer misreads — retire this test"
+    # Control (2026-09-08): the literal charset admits `{}` now, so the live
+    # regex reads the whole template. The stump it used to produce is
+    # reproduced with the PREVIOUS charset on the same text — the guard's
+    # subject is the old reading, kept here so the assertion above can fail.
+    old_literal = re.compile(r"(?<=['\"`}])/(?:api|auth)/[a-zA-Z0-9/_-]+")
+    old_hits = {m.group(0).rstrip("/") for m in old_literal.finditer(text)}
+    assert "/api/bets/market" in old_hits, "control: the old charset no longer stumps — retire this control"
+    assert "/api/bets/market" not in {m.group(0) for m in _NEW_LITERAL_RE.finditer(text)}
 
 
 def test_a_midpath_interpolation_registers_the_whole_shape_not_a_prefix():
@@ -410,10 +416,17 @@ def test_a_midpath_interpolation_registers_the_whole_shape_not_a_prefix():
         "the extractor is truncating again"
     )
 
-    # 2. A call that ENDS in an interpolation is still only a prefix: there is
-    #    genuinely nothing behind it to know.
-    assert "/api/stats/player" in dynamic, (
-        "a call ending in an interpolation must stay a truncated prefix"
+    # 2. A call that ENDS in an interpolated segment is a one-parameter SHAPE,
+    #    not a prefix (2026-09-08): `${API_BASE}/stats/matches/${id}` is the
+    #    match detail, a different operation from the `/api/stats/matches`
+    #    list the new app already calls. As a prefix it was cleared by that
+    #    list call and the unbuilt detail read as migrated — three shapes hid
+    #    that way (matches/{}, sessions/{}, uploads/resumable/{}).
+    assert "/api/stats/player/{}" in exact and "/api/stats/player" not in dynamic, (
+        "a call ending in an interpolation must register its one-parameter shape"
+    )
+    assert "/api/stats/matches/{}" in exact, (
+        "matches.js's match-detail call must be a required shape, not the list prefix"
     )
 
     # 3. ⛔ An interpolation GLUED to a segment (availability.js:1592 writes
