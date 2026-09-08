@@ -15,6 +15,7 @@ import {
   Absent, ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
   figure, lblStyle, rowStyle,
 } from '../components/ui';
+import { MatchBoxScore } from '../components/MatchBoxScore';
 import { Panel } from '../components/Panel';
 
 /**
@@ -399,6 +400,8 @@ function SeasonBlock() {
 function LatestGames() {
   const matches = useRecentMatches(5);
   const data = matches.isError ? undefined : matches.data;
+  // The half whose box score is open under its row (R3b, 2026-09-08).
+  const [openMatch, setOpenMatch] = useState<number | null>(null);
   return (
     <div data-parity="home.latest-games">
       <SectionHead
@@ -443,10 +446,24 @@ function LatestGames() {
             </>
           );
           const rowLook = { ...rowStyle, display: 'block', padding: 'var(--space-3) 0', textDecoration: 'none', color: 'var(--color-text-100)' };
-          return to === null ? (
-            <div key={m.id} style={rowLook} title="this round is not attributed to an evening">{rowBody}</div>
-          ) : (
-            <Link key={m.id} to={to} style={rowLook}>{rowBody}</Link>
+          const open = openMatch === m.id;
+          return (
+            <div key={m.id}>
+              {to === null ? (
+                <div style={rowLook} title="this round is not attributed to an evening">{rowBody}</div>
+              ) : (
+                <Link to={to} style={rowLook}>{rowBody}</Link>
+              )}
+              <button
+                type="button"
+                aria-expanded={open}
+                onClick={() => { setOpenMatch(open ? null : m.id); }}
+                style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', textTransform: 'uppercase', color: open ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
+              >
+                {open ? 'hide box score' : 'box score'}
+              </button>
+              {open && <div style={{ marginTop: 'var(--space-2)' }}><MatchBoxScore roundId={m.id} /></div>}
+            </div>
           );
         })}
       </div>

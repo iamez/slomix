@@ -120,6 +120,7 @@ import type {
   RecentPrediction,
   RecentRound,
   RivalryLeaderboard,
+  MatchDetails,
   RoundAwards,
   RoundPlayerDetails,
   RoundViz,
@@ -426,6 +427,17 @@ export function useRecentMatches(limit = 5) {
   return useQuery({
     queryKey: ['recent-matches', limit],
     queryFn: () => apiGet('/api/stats/matches', { query: { limit } }) as Promise<MatchRow[]>,
+  });
+}
+
+/** The box score of one half. Mounted only once a row is opened — a
+ *  disabled query is pending forever in React Query v5. */
+export function useMatchDetails(roundId: number | null) {
+  return useQuery({
+    queryKey: ['match-details', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/stats/matches/{match_id}', { pathParams: { match_id: String(roundId!) } }) as Promise<MatchDetails>,
   });
 }
 

@@ -54,7 +54,6 @@
 /api/planning/today session.updated_at
 /api/planning/today viewer
 /api/planning/today viewer.website_user_id
-/api/player/{player_name}/matches time_played
 /api/players/{identifier}/memory-card nights
 /api/players/{identifier}/memory-card playing_since
 /api/players/{identifier}/memory-card signature_map
@@ -301,7 +300,6 @@
 /api/seasons/current/leaders leaders.longest_session
 /api/seasons/current/leaders leaders.team_damage
 /api/seasons/current/leaders leaders.time_alive
-/api/seasons/current/leaders leaders.time_dead
 /api/seasons/current/summary totals.active_days
 /api/seasons/current/summary totals.avg_rounds_per_day
 /api/server-activity/history summary.avg_players

@@ -366,6 +366,68 @@ export interface MatchRow {
   format: string;
 }
 
+/** GET /api/stats/matches/{match_id} — the box score of one half: both
+ *  logical teams with every player's row, the team totals and who won.
+ *  Recorded 2026-09-08 from round 11321 (corpus: api_stats_matches_match_id.json).
+ *  `match_id` is the round id; the handler also accepts a date and answers
+ *  with that day's LAST round, which the app never uses (a day can hold
+ *  several sessions). `headshots` counts head HITS, `headshot_kills` the
+ *  kills — both are served so a column can say which it shows. */
+export interface MatchDetailsPlayer {
+  name: string;
+  kills: number;
+  deaths: number;
+  damage_given: number;
+  damage_received: number;
+  time_played: number;
+  team: number;
+  xp: number;
+  headshots: number;
+  revives_given: number;
+  accuracy: number;
+  gibs: number;
+  selfkills: number;
+  teamkills: number;
+  times_revived: number;
+  useful_kills: number;
+  shots: number;
+  hits: number;
+  time_dead: number;
+  time_denied: number;
+  double_kills: number;
+  triple_kills: number;
+  quad_kills: number;
+  multi_kills: number;
+  mega_kills: number;
+  player_guid: string;
+  headshot_kills: number;
+  dpm: number;
+  kd: number;
+}
+export interface MatchDetailsTeam {
+  name: string;
+  players: MatchDetailsPlayer[];
+  totals: { kills: number; deaths: number; damage: number };
+  is_winner: boolean;
+}
+export interface MatchDetails {
+  match: {
+    id: number;
+    map_name: string | null;
+    round_number: number;
+    round_date: string | null;
+    /** 'Axis' | 'Allies' | 'Draw' — the side, not the logical team. */
+    winner: string;
+    duration: string;
+    outcome: string;
+    time_limit: string | null;
+    gaming_session_id: number | null;
+  };
+  team1: MatchDetailsTeam;
+  team2: MatchDetailsTeam;
+  player_count: number;
+}
+
 /** GET /api/seasons/current — corpus: api_seasons_current.json */
 export interface SeasonCurrent {
   id: string;
