@@ -323,7 +323,8 @@ describe('SessionDetail', () => {
     const coloured = {
       ...g,
       players: g.players.map((p, i) => (i === 0
-        ? { ...p, name: '^1bronze^7', dpm_timeline: p.dpm_timeline.filter((t) => t.round_id !== g.rounds[1].round_id) }
+        // drop the player's OWN second round, so the gap is one they played around
+        ? { ...p, name: '^1bronze^7', dpm_timeline: p.dpm_timeline.filter((t, k) => k !== 1) }
         : p)),
     };
     renderPage(withOverride('/graphs', () => json(coloured)));
