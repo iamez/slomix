@@ -958,6 +958,26 @@ export interface SessionLineups {
  * fields the rest of the site omits per round (`time_played_seconds`, `gibs`,
  * `damage_received`) are the reason that endpoint exists.
  */
+/** GET /api/rounds/{round_id}/player/{player_guid}/details — one player's
+ *  breakdown of one half: combat, support, objectives, sprees, time, misc
+ *  and the per-weapon table with the deaths column the legacy modal had.
+ *  Recorded 2026-09-08 from round 11430 (corpus:
+ *  api_rounds_round_id_player_player_guid_details.json). ⛔ The legacy
+ *  matches.js:970 read `combat.useful_kills` and `w.weapon_name`; neither
+ *  exists — the recording is the arbiter: useful kills sit under `support`,
+ *  the weapon is `name` and comes as the WS_ token. */
+export interface RoundPlayerDetails {
+  player_name: string;
+  round: { id: number; map_name: string; round_number: number; round_date: string };
+  combat: { kills: number; deaths: number; damage_given: number; damage_received: number; headshot_kills: number; headshots: number; gibs: number; accuracy: number; shots: number; hits: number };
+  support: { revives_given: number; times_revived: number; useful_kills: number; useless_kills: number; kill_assists: number };
+  objectives: { stolen: number; returned: number; dynamites_planted: number; dynamites_defused: number };
+  sprees: { double_kills: number; triple_kills: number; quad_kills: number; multi_kills: number; mega_kills: number };
+  time: { played_seconds: number; dead_minutes: number; denied_playtime: number };
+  misc: { xp: number; team_kills: number; self_kills: number };
+  weapons: { name: string; kills: number; deaths: number; headshots: number; hits: number; shots: number; accuracy: number }[];
+}
+
 export interface RoundPlayerRow {
   player_guid: string;
   player_name: string;
