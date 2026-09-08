@@ -455,7 +455,10 @@ export interface SeasonLeaders {
   status: string;
   note: string | null;
   failed_metrics: string[];
-  leaders: Record<string, { player: string; value: number } | null>;
+  /** Every category but `longest_session` is a (player, value) pair;
+   *  `longest_session` is the evening with the most rounds — a different
+   *  shape under the same map (records_seasons.py LongestSession). */
+  leaders: Record<string, { player: string; value: number } | null> & { longest_session?: { rounds: number; date: string } | null };
 }
 
 /** GET /api/seasons/current/summary — corpus: api_seasons_current_summary.json */
@@ -3969,7 +3972,29 @@ export interface ProxKillOutcomes {
     avg_delta_ms: number; avg_denied_ms: number;
   };
   outcomes: Record<string, { count: number; avg_delta_ms: number; avg_denied_ms?: number }>;
-  events: unknown[];
+  /** One row per kill of the scope, newest first (200 in the recording):
+   *  what became of it and who did the gibbing or the reviving. */
+  events: ProxKillOutcomeEvent[];
+}
+export interface ProxKillOutcomeEvent {
+  /** Level clock in ms (the round's own time), not an epoch. */
+  kill_time: number;
+  victim_guid: string;
+  victim_name: string;
+  killer_guid: string;
+  killer_name: string;
+  kill_mod: number;
+  outcome: string;
+  delta_ms: number;
+  effective_denied_ms: number;
+  /** Empty strings when nobody gibbed / revived — not null, on this wire. */
+  gibber_guid: string;
+  gibber_name: string;
+  reviver_guid: string;
+  reviver_name: string;
+  session_date: string;
+  map_name: string;
+  round_number: number;
 }
 
 export interface ProxHeadshotRates {
@@ -4062,6 +4087,20 @@ export interface ProxSummary {
   avg_attackers: number;
   escape_rate_pct: number;
   kill_rate_pct: number;
+  /** The rest of the evening in numbers (typed 2026-09-08 when the page
+   *  started showing them; fetched and dropped until then): movement and
+   *  sampling figures, the duo list, and how many rows each v5 source
+   *  table holds for the scope. */
+  unique_players: number;
+  avg_track_distance_m: number;
+  avg_speed: number;
+  avg_sprint_pct: number;
+  avg_time_to_first_move_ms: number;
+  sample_rounds: number;
+  top_duos: { player1: string; player2: string; crossfire_kills: number; crossfire_count: number; avg_delay_ms: number }[];
+  top_duos_partial: boolean;
+  v5_counts: Record<string, number>;
+  v5_counts_unknown: string[];
 }
 
 // ---------------------------------------------------------------------------
