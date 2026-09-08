@@ -65,7 +65,7 @@ export function MatchBoxScore({ roundId }: { roundId: number }) {
     <Panel<MatchDetails>
       parity="match.box-score"
       label="box score"
-      aside={q.data ? `${q.data.match.map_name ?? 'unknown map'} R${String(q.data.match.round_number)} · ${q.data.match.winner.toLowerCase()} · ${q.data.match.duration ?? 'duration unknown'}${q.data.match.time_limit ? ` of ${q.data.match.time_limit}` : ''} · ${q.data.match.outcome?.toLowerCase() ?? 'outcome unknown'}` : undefined}
+      aside={q.data ? `${q.data.match.map_name ?? 'unknown map'} R${String(q.data.match.round_number)} · ${q.data.match.winner.toLowerCase()} · ${q.data.match.duration ?? 'duration unknown'}${q.data.match.time_limit ? ` of ${q.data.match.time_limit}` : ''} · ${q.data.match.outcome?.toLowerCase() ?? 'outcome unknown'} · round #${String(q.data.match.id)} · ${q.data.match.round_date ?? 'date unknown'} · ${figure(q.data.player_count)} players` : undefined}
       q={q}
       empty="the round exists, but no player rows were recorded for this half"
       isEmpty={(d) => d.team1.players.length + d.team2.players.length === 0}
