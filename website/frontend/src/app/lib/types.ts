@@ -1056,6 +1056,29 @@ export interface ProfileLifetime extends ProfileSection {
   damage_received: number;
   time_played_seconds: number;
   xp: number;
+  /** The long tail the legacy profile drew and the page dropped (ledger
+   * 2026-09-08): objectives, dynamite, multi-kills, sprees, support. */
+  hours_played: number | null;
+  objectives_completed: number;
+  objectives_destroyed: number;
+  objectives_stolen: number;
+  objectives_returned: number;
+  dynamites_planted: number;
+  dynamites_defused: number;
+  double_kills: number;
+  triple_kills: number;
+  quad_kills: number;
+  multi_kills: number;
+  mega_kills: number;
+  best_killing_spree: number;
+  shots: number;
+  useful_kills: number;
+  kill_assists: number;
+  revives_given: number;
+  times_revived: number;
+  self_kills: number;
+  team_kills: number;
+  team_damage_given: number;
 }
 
 export interface ProfileSkill extends ProfileSection {
@@ -1091,6 +1114,8 @@ export interface ProfileWeapons extends ProfileSection {
   weapons?: ProfileWeaponRow[];
   overall_accuracy: number | null;
   overall_hs_accuracy: number | null;
+  total_shots?: number;
+  total_hits?: number;
 }
 
 export interface ProfileHitRegions extends ProfileSection {
@@ -1106,6 +1131,8 @@ export interface ProfileMovement extends ProfileSection {
   peak_speed: number | null;
   sprint_pct: number | null;
   avg_distance_per_life: number | null;
+  /** Units covered in the first seconds after a spawn — the "how far before the first fight" figure. */
+  avg_post_spawn_distance?: number | null;
   stance?: {
     standing_pct: number; crouching_pct: number; prone_pct: number;
   } | null;
@@ -1140,6 +1167,9 @@ export interface ProfileRelationships extends ProfileSection {
   top_victims?: ProfileOpponent[];
   best_teammates?: ProfileTeammate[];
   worst_teammates?: ProfileTeammate[];
+  /** Ranked by win rate of the duel, not by count: RIVAL / PREY classes. */
+  hardest_opponents?: ProfileOpponent[];
+  easiest_opponents?: ProfileOpponent[];
   baseline_dpm: number | null;
 }
 
