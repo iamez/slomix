@@ -30,7 +30,6 @@
 /api/greatshot/{demo_id} metadata.crossref_confidence
 /api/greatshot/{demo_id} metadata.crossref_match_details
 /api/greatshot/{demo_id} metadata.extension
-/api/greatshot/{demo_id} metadata.gametype
 /api/greatshot/{demo_id} metadata.matched_round_id
 /api/greatshot/{demo_id} metadata.mod_version
 /api/greatshot/{demo_id} metadata.profile_name
@@ -457,7 +456,6 @@
 /api/storytelling/kill-impact/details kills.base_impact
 /api/storytelling/kill-impact/details kills.is_carrier_kill
 /api/storytelling/kill-impact/details kills.is_during_push
-/api/storytelling/kill-impact/details kills.killer_health
 /api/storytelling/kill-impact/details scope.accepted_round_count
 /api/storytelling/kill-impact/details scope.dates
 /api/storytelling/kill-impact/details scope.distinct_map_names

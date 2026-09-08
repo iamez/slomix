@@ -12,6 +12,7 @@ import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
 import { useTickingSeconds } from '../lib/liveClock';
+import { describeEvent, foldDoubles, type LiveEvent } from '../lib/liveEvents';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import { svgPath } from '../lib/spark';
@@ -288,7 +289,7 @@ export function LivePage() {
   // later poll asks only for seq > since, per the /api/live/feed contract.
   // Events accumulate here because a cursor poll returns only the new ones.
   const [since, setSince] = useState(0);
-  const [log, setLog] = useState<{ seq: number; type: string }[]>([]);
+  const [log, setLog] = useState<LiveEvent[]>([]);
   const [gapNote, setGapNote] = useState<string | null>(null);
   const feed = useLiveFeed(since);
   const feedData = feed.data;
@@ -354,13 +355,26 @@ export function LivePage() {
             <Absent reason="quiet — no renderable events since this page loaded" />
           </div>
         )}
-        {log.length > 0 && (
-          <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)', maxHeight: 260, overflowY: 'auto' }}>
-            {log.slice(-30).reverse().map((e) => (
-              <Meta key={e.seq}>#{figure(e.seq)} · {e.type.toLowerCase().replace(/_/g, ' ')}</Meta>
-            ))}
-          </Stack>
-        )}
+        {log.length > 0 && (() => {
+          // Names for slots come from the roster the reducer keeps; the
+          // doubles (POPUP+DYNAMITE, MAP+LIVE_MAP, KILL+LIVE_KILL) fold into
+          // one line each; a kind with nothing to say (BEGIN, GAMETIME) is
+          // skipped rather than printed as its type name (audit 2026-09-07).
+          const names = new Map<number, string>();
+          const roster = state.data?.roster;
+          for (const m of [...(roster?.axis ?? []), ...(roster?.allies ?? []), ...(roster?.spectators ?? [])]) names.set(m.slot, m.name);
+          const lines = foldDoubles(log).map((e) => ({ seq: e.seq, text: describeEvent(e, names) })).filter((l) => l.text != null);
+          return (
+            <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)', maxHeight: 260, overflowY: 'auto' }}>
+              {lines.slice(-40).reverse().map((l) => (
+                <Cluster key={l.seq} gap={3} align="baseline" justify="between" className="row" style={{ padding: 'var(--space-1) 0' }}>
+                  <span style={{ fontSize: 'var(--fs-small)' }}>{l.text}</span>
+                  <Meta>#{figure(l.seq)}</Meta>
+                </Cluster>
+              ))}
+            </Stack>
+          );
+        })()}
       </div>
 
       <div data-parity="live.server-activity">

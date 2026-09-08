@@ -15,6 +15,7 @@ import monitoringJson from './__fixtures__/api_monitoring_status.json';
 import statusJson from './__fixtures__/api_status.json';
 import tonightJson from './__fixtures__/api_stats_tonight.json';
 import tonightQuietJson from './__fixtures__/api_stats_tonight.quiet.json';
+import eveningFeedJson from './__fixtures__/api_live_feed.evening.json';
 
 const liveState = stateJson satisfies LiveState;
 const feed = feedJson satisfies LiveFeed;
@@ -24,6 +25,7 @@ const monitoring = monitoringJson satisfies MonitoringStatus;
 const health = statusJson satisfies ApiHealth;
 const tonight = tonightJson satisfies TonightStatus;
 const tonightQuiet = tonightQuietJson satisfies TonightStatus;
+const eveningFeed = eveningFeedJson as unknown as LiveFeed;
 
 function stub() {
   vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
@@ -165,7 +167,7 @@ describe('LivePage — the evening', () => {
       const pathname = String(input).split('?')[0];
       const body = {
         '/api/live/state': inSecondHalf,
-        '/api/live/feed': feed,
+        '/api/live/feed': eveningFeed,
         '/api/server-activity/history': serverHist,
         '/api/voice-activity/history': voiceHist,
         '/api/monitoring/status': monitoring,
@@ -203,6 +205,13 @@ describe('LivePage — the evening', () => {
     expect(screen.getByText(/last imported/)).toBeInTheDocument();
     expect(screen.queryByText(/^now /)).toBeNull();
     expect(screen.getByLabelText('team momentum')).toBeInTheDocument();
+    // The ticker reads its events: a recorded kill as a sentence with its
+    // weapon and (from the folded LIVE_KILL twin) its distance; no bare type
+    // names; the plant once, not as POPUP and DYNAMITE.
+    await waitFor(() => expect(screen.getAllByText(/killed .* · mp40/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/ · \d+ u/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/^live kill$/)).toBeNull();
+    expect(screen.queryByText(/^team change$/)).toBeNull();
   });
 
   it('a night with no imported round says so instead of an empty board', async () => {
