@@ -1057,6 +1057,13 @@ export interface RoundPlayerRow {
   revives_given: number;
   times_revived: number;
   xp: number;
+  /** The four per-round counters nothing read until 2026-09-08, and the
+   *  flag that says the dead time was rebuilt, not measured. */
+  team_gibs: number;
+  kill_steals: number;
+  tank_meatshield: number;
+  death_spree_worst: number;
+  time_dead_reconstructed: boolean;
 }
 
 export interface SessionRound {
@@ -1072,6 +1079,17 @@ export interface SessionRound {
   /** False for a cancelled round: show it, leave it out of totals. */
   counts_toward_totals: boolean;
   match_id: string | null;
+  /** The webhook's own record of the round (lua_round_teams) and the round
+   *  row's provenance — typed 2026-09-08 when the tab started showing them.
+   *  `surrender` is null when nobody gave up; `team` 1 = Axis, 2 = Allies. */
+  surrender: { caller_name: string; team: number | null } | null;
+  pauses: { count: number; total_seconds: number };
+  time_limit_minutes: number | null;
+  warmup_seconds: number | null;
+  bot_player_count: number | null;
+  score_confidence: string | null;
+  /** The limit this half set for the next one. */
+  next_timelimit_minutes: number | null;
   players: RoundPlayerRow[];
 }
 
@@ -1719,6 +1737,16 @@ export interface StoryKisPlayer {
   clutch_kills: number;
   avg_impact: number;
   archetype: string;
+  /** The rest of the row (kis.py): the kinds of kill the score is made of
+   *  and the context figures. Typed 2026-09-08 when the panel started
+   *  printing them; `time_dead_pct` is a fraction (0.17 = 17 %). */
+  solo_clutch_kills: number;
+  outnumbered_kills: number;
+  spawn_denial_kills: number;
+  dpm: number;
+  denied_time: number;
+  time_dead_pct: number;
+  revives_given: number;
 }
 
 export interface StoryKillImpact {
@@ -1793,6 +1821,14 @@ export interface StoryRolePlayer {
   total_samples?: number;
   tracks?: number;
   solo_time_est_s?: number;
+  /** camp-profile: the hold share's parts — time held, time standing
+   *  still and its share, alive time, the three busiest 512 u cells as
+   *  [x, y, seconds]. Typed 2026-09-08 when the board started showing them. */
+  still_pct?: number | null;
+  hold_time_s?: number | null;
+  still_time_s?: number | null;
+  alive_s?: number | null;
+  top_cells?: [number, number, number][];
 }
 
 export interface StoryRoleBoard {
@@ -1800,6 +1836,10 @@ export interface StoryRoleBoard {
   metric: string;
   description: string;
   players: StoryRolePlayer[];
+  /** camp-profile carries how many tracks it read and the thresholds it
+   *  used; the other boards do not. */
+  coverage?: { tracks_fetched: number; tracks_used: number; tracks_skipped: number };
+  thresholds?: Record<string, number>;
 }
 
 /** GET /api/storytelling/player-narratives — generated prose per player. */
@@ -3308,6 +3348,8 @@ export interface ObjectiveRuns {
     assisted_runs: number; team_effort_runs: number; unopposed_runs: number;
     total_self_kills: number; total_team_kills: number;
     avg_path_efficiency: number | null;
+    /** The engineer's objective actions in the scope (recorded 2026-09-08). */
+    plants: number; defuses: number; builds: number; destroys: number;
   }[];
   recent_runs: {
     engineer_name: string | null; action_type: string; track_name: string;
@@ -3898,8 +3940,9 @@ export interface SpiderPlayer {
   z: number;
   health: number;
   weapon: number;
-  stance: number;
-  speed: number;
+  /** null when the sample carried no stance / speed (older samples). */
+  stance: number | null;
+  speed: number | null;
   alive: boolean;
   track_id: number;
   stale_ms: number;
@@ -3926,8 +3969,9 @@ export interface SpiderWebSnapshot {
   map_name: string;
   round_duration_ms: number;
   teams: string[];
-  first_position_ms: number;
-  velocity_max_dt_ms: number;
+  /** null for a round without tracks / without a valid manifest. */
+  first_position_ms: number | null;
+  velocity_max_dt_ms: number | null;
   player_count: number;
   overlap_conflicts: number;
   players: SpiderPlayer[];
@@ -3944,6 +3988,61 @@ export interface SpiderWebSnapshot {
     conflicting_flags: number;
   };
   withheld_by_pov: string[];
+  notes: string[];
+  /** Layer 3 — what each player KNOWS at this moment (information_state.py):
+   *  per holder, the beliefs the server grants them and the counts derived
+   *  from those. Typed 2026-09-08 when the page started drawing them; the
+   *  legacy spider-web.js had. `gaps` names every player without a state
+   *  and why — a player is never simply absent (the server's own note). */
+  information_state: {
+    holders: Record<string, SpiderHolder>;
+    audible_gunfire_radius: number | null;
+    pov: string | null;
+    /** Why a requested pov has no holder — the server's sentence. */
+    pov_unavailable?: string | null;
+    /** Channels the whole state cannot have (team pov: the union). */
+    unavailable?: Record<string, string>;
+  };
+  gaps: Record<string, string>;
+  /** Layer-1 validation the snapshot cites: where the coordinates were
+   *  checked, over how many rounds and samples, and what was excluded. */
+  reconstruction_accuracy: {
+    measured_at: string;
+    script: string;
+    rounds: number;
+    samples: Record<string, number>;
+    sources: string[];
+    unit: string;
+    excluded: string;
+  };
+  /** Geometric distance to the nearest teammate, by guid — not tactical
+   *  support distance (the server's own note). */
+  nearest_teammate_separation: Record<string, number>;
+}
+
+export interface SpiderBelief {
+  kind: string;
+  source: string;
+  subject_guid: string | null;
+  roster_state: string | null;
+  t_observed: number | null;
+  confidence: number;
+  counts_as_known: boolean;
+  /** Null on beliefs the recording carries without one (position regions). */
+  capability: string | null;
+  expiry_basis: string | null;
+  region: { x: number; y: number; z: number; radius: number } | null;
+}
+export interface SpiderHolder {
+  holder_guid: string;
+  known_enemy_count: number;
+  /** An INTERVAL — the server publishes the uncertainty, not a point. */
+  nearest_known_enemy_distance: { min: number; max: number } | null;
+  nearest_heard_activity_distance: { min: number; max: number } | null;
+  beliefs: SpiderBelief[];
+  position_claim_max_radius: number | null;
+  /** Channels this holder cannot have, each with the server's reason. */
+  unavailable: Record<string, string>;
   notes: string[];
 }
 

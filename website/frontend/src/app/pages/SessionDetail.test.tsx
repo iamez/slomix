@@ -453,7 +453,9 @@ describe('SessionDetail', () => {
     const fourth = renderPage(withOverride('/storytelling/best-lives', () =>
       json({ ...(bestLives as object), min_kills: 4 })));
     await openMore();
-    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'));
+    // Fourth render of a page that now carries the matrix, the graphs and
+    // the role boards: under CI load the default 1 s is not enough (#995).
+    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'), { timeout: 8000 });
   });
 
   it('tells an empty night apart from a failed request', async () => {
@@ -729,7 +731,7 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
   type DetailPlayer = { player_guid: string; player_name: string; dpm: number };
   const players = (detail as { players: DetailPlayer[] }).players;
   const top = [...players].sort((a, b) => b.dpm - a.dpm)[0];
-  const allRounds = (rounds as { rounds: SessionRound[] }).rounds;
+  const allRounds = (rounds as unknown as { rounds: SessionRound[] }).rounds;
 
   async function openTop(entry = '/session-detail/154/players') {
     const rendered = renderPage(fixtureFetch, entry);

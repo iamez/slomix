@@ -39,9 +39,9 @@
   "/api/players/{identifier}/profile": "13 files reachable from the endpoint's callers",
   "/api/players/{identifier}/wrapped": "7 files reachable from the endpoint's callers",
   "/api/proximity/aim-lock": "20 files reachable from the endpoint's callers",
-  "/api/proximity/carrier-events": "12 files reachable from the endpoint's callers",
-  "/api/proximity/carrier-kills": "12 files reachable from the endpoint's callers",
-  "/api/proximity/carrier-returns": "12 files reachable from the endpoint's callers",
+  "/api/proximity/carrier-events": "14 files reachable from the endpoint's callers",
+  "/api/proximity/carrier-kills": "14 files reachable from the endpoint's callers",
+  "/api/proximity/carrier-returns": "14 files reachable from the endpoint's callers",
   "/api/proximity/classes": "20 files reachable from the endpoint's callers",
   "/api/proximity/cohesion": "20 files reachable from the endpoint's callers",
   "/api/proximity/combat-position-stats": "20 files reachable from the endpoint's callers",
@@ -56,11 +56,11 @@
   "/api/proximity/competitive/side-splits": "20 files reachable from the endpoint's callers",
   "/api/proximity/competitive/stagger": "20 files reachable from the endpoint's callers",
   "/api/proximity/competitive/wave-cycles": "11 files reachable from the endpoint's callers",
-  "/api/proximity/construction-events": "12 files reachable from the endpoint's callers",
+  "/api/proximity/construction-events": "14 files reachable from the endpoint's callers",
   "/api/proximity/crossfire-angles": "20 files reachable from the endpoint's callers",
   "/api/proximity/duos": "10 files reachable from the endpoint's callers",
   "/api/proximity/engagements": "11 files reachable from the endpoint's callers",
-  "/api/proximity/escort-credits": "12 files reachable from the endpoint's callers",
+  "/api/proximity/escort-credits": "14 files reachable from the endpoint's callers",
   "/api/proximity/event/{event_id}": "11 files reachable from the endpoint's callers",
   "/api/proximity/events": "11 files reachable from the endpoint's callers",
   "/api/proximity/focus-fire": "20 files reachable from the endpoint's callers",
@@ -74,9 +74,9 @@
   "/api/proximity/lua-trades": "20 files reachable from the endpoint's callers",
   "/api/proximity/movement-stats": "10 files reachable from the endpoint's callers",
   "/api/proximity/movers": "11 files reachable from the endpoint's callers",
-  "/api/proximity/objective-focus": "12 files reachable from the endpoint's callers",
+  "/api/proximity/objective-focus": "14 files reachable from the endpoint's callers",
   "/api/proximity/objective-pressure": "13 files reachable from the endpoint's callers",
-  "/api/proximity/objective-runs": "12 files reachable from the endpoint's callers",
+  "/api/proximity/objective-runs": "14 files reachable from the endpoint's callers",
   "/api/proximity/player-aim": "11 files reachable from the endpoint's callers",
   "/api/proximity/player-heatmap": "11 files reachable from the endpoint's callers",
   "/api/proximity/player-journey": "11 files reachable from the endpoint's callers",
@@ -102,10 +102,10 @@
   "/api/proximity/trades/player-stats": "12 files reachable from the endpoint's callers",
   "/api/proximity/trades/summary": "13 files reachable from the endpoint's callers",
   "/api/proximity/v7-status": "10 files reachable from the endpoint's callers",
-  "/api/proximity/vehicle-progress": "12 files reachable from the endpoint's callers",
+  "/api/proximity/vehicle-progress": "14 files reachable from the endpoint's callers",
   "/api/proximity/weapon-accuracy": "13 files reachable from the endpoint's callers",
   "/api/records/maps/segments": "7 files reachable from the endpoint's callers",
-  "/api/replay/round/{round_id}/web": "8 files reachable from the endpoint's callers",
+  "/api/replay/round/{round_id}/web": "10 files reachable from the endpoint's callers",
   "/api/rivalries/h2h/{guid1}/{guid2}": "7 files reachable from the endpoint's callers",
   "/api/rivalries/leaderboard": "7 files reachable from the endpoint's callers",
   "/api/rivalries/player/{guid}": "7 files reachable from the endpoint's callers",
@@ -188,9 +188,9 @@
   "/api/voice-activity/history": "15 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2851,
-  "unread": 736,
-  "dropped": 46,
+  "read": 2922,
+  "unread": 655,
+  "dropped": 63,
   "endpoints": 179,
   "endpoints_fully_read": 48,
   "unmeasured": 3
@@ -357,8 +357,8 @@
    "dropped": 0
   },
   "/api/proximity/carrier-events": {
-   "read": 22,
-   "unread": 13,
+   "read": 23,
+   "unread": 12,
    "dropped": 0
   },
   "/api/proximity/carrier-kills": {
@@ -442,8 +442,8 @@
    "dropped": 0
   },
   "/api/proximity/construction-events": {
-   "read": 12,
-   "unread": 6,
+   "read": 13,
+   "unread": 5,
    "dropped": 0
   },
   "/api/proximity/crossfire-angles": {
@@ -477,8 +477,8 @@
    "dropped": 0
   },
   "/api/proximity/focus-fire": {
-   "read": 17,
-   "unread": 5,
+   "read": 18,
+   "unread": 4,
    "dropped": 0
   },
   "/api/proximity/hit-regions": {
@@ -542,8 +542,8 @@
    "dropped": 0
   },
   "/api/proximity/objective-runs": {
-   "read": 18,
-   "unread": 22,
+   "read": 36,
+   "unread": 4,
    "dropped": 0
   },
   "/api/proximity/player-aim": {
@@ -687,8 +687,8 @@
    "dropped": 0
   },
   "/api/replay/round/{round_id}/web": {
-   "read": 30,
-   "unread": 34,
+   "read": 59,
+   "unread": 5,
    "dropped": 1
   },
   "/api/rivalries/h2h/{guid1}/{guid2}": {
@@ -907,7 +907,7 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/rounds": {
-   "read": 14,
+   "read": 21,
    "unread": 1,
    "dropped": 0
   },
@@ -962,8 +962,8 @@
    "dropped": 0
   },
   "/api/storytelling/camp-profile": {
-   "read": 15,
-   "unread": 20,
+   "read": 29,
+   "unread": 6,
    "dropped": 0
   },
   "/api/storytelling/enabler": {
@@ -982,13 +982,13 @@
    "dropped": 0
   },
   "/api/storytelling/kill-impact": {
-   "read": 32,
-   "unread": 18,
-   "dropped": 0
+   "read": 27,
+   "unread": 6,
+   "dropped": 17
   },
   "/api/storytelling/kill-impact/details": {
-   "read": 33,
-   "unread": 13,
+   "read": 34,
+   "unread": 12,
    "dropped": 0
   },
   "/api/storytelling/kill-matrix": {
@@ -997,13 +997,13 @@
    "dropped": 0
   },
   "/api/storytelling/lurker-profile": {
-   "read": 16,
-   "unread": 11,
+   "read": 19,
+   "unread": 8,
    "dropped": 0
   },
   "/api/storytelling/moments": {
-   "read": 17,
-   "unread": 8,
+   "read": 18,
+   "unread": 7,
    "dropped": 0
   },
   "/api/storytelling/momentum": {
@@ -3950,7 +3950,7 @@
   {
    "endpoint": "/api/proximity/carrier-events",
    "key": "events.killer_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-events",
@@ -5470,7 +5470,7 @@
   {
    "endpoint": "/api/proximity/construction-events",
    "key": "events.track_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/construction-events",
@@ -6275,7 +6275,7 @@
   {
    "endpoint": "/api/proximity/focus-fire",
    "key": "recent",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/focus-fire",
@@ -7686,7 +7686,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.assisted_runs",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7696,7 +7696,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.builds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7711,7 +7711,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.destroys",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7731,7 +7731,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.solo_runs",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7741,7 +7741,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.team_effort_runs",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7751,32 +7751,32 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.total_self_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.total_team_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "objective_runners.unopposed_runs",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.action_type",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.approach_time_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7786,7 +7786,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.killer_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7796,22 +7796,22 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.nearby_teammates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.path_efficiency",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.run_type",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.self_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -7821,12 +7821,12 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.team_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.track_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -10868,12 +10868,12 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "capture_policy.manifest_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "capture_policy.manifest_version",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10938,27 +10938,27 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "first_position_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "gaps",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state.audible_gunfire_radius",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state.holders",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10973,7 +10973,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "nearest_teammate_separation",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11009,7 +11009,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.class",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11019,7 +11019,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11029,7 +11029,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.overlap_conflict",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11039,17 +11039,17 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.stale_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.stance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11059,17 +11059,17 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.track_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.velocity_reason",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.velocity_stale_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11084,7 +11084,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.vz",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11104,47 +11104,47 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.excluded",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.measured_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.rounds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.samples",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.script",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.sources",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.unit",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11159,7 +11159,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "t_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -11169,7 +11169,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "velocity_max_dt_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -15730,6 +15730,11 @@
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.bot_player_count",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
    "key": "rounds.counts_toward_totals",
    "status": "read"
   },
@@ -15755,6 +15760,16 @@
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.next_timelimit_minutes",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.pauses",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
    "key": "rounds.played_at",
    "status": "unread"
   },
@@ -15776,6 +15791,26 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
    "key": "rounds.round_status",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.score_confidence",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.surrender",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.time_limit_minutes",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.warmup_seconds",
    "status": "read"
   },
   {
@@ -16462,17 +16497,17 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "coverage.tracks_fetched",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "coverage.tracks_skipped",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "coverage.tracks_used",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16492,7 +16527,7 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "players.alive_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16512,7 +16547,7 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "players.hold_time_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16522,17 +16557,17 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "players.still_pct",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "players.still_time_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "players.top_cells",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16597,22 +16632,22 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.cell_u",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.hold_min_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.hold_radius_u",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.min_alive_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16622,12 +16657,12 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.still_min_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.still_speed_lt",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -17071,87 +17106,104 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.archetype",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.avg_impact",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.carrier_kills",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.clutch_kills",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.crossfire_kills",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.denied_time",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.dpm",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.guid",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.kills",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.name",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.outnumbered_kills",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.push_kills",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.revives_given",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.solo_clutch_kills",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.spawn_denial_kills",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.time_dead_pct",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "entries.total_kis",
-   "status": "read"
+   "status": "dropped",
+   "reason": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17186,7 +17238,7 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "players.denied_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17211,12 +17263,12 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "players.outnumbered_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "players.push_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17226,17 +17278,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "players.solo_clutch_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "players.spawn_denial_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "players.time_dead_pct",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17526,7 +17578,7 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "summary.push_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17651,17 +17703,17 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "coverage.tracks_fetched",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "coverage.tracks_skipped",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "coverage.tracks_used",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17826,7 +17878,7 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "moments.team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
