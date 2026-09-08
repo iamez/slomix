@@ -2311,6 +2311,42 @@ export interface SessionMatch {
 }
 
 /** GET /api/stats/session/{id}/detail */
+/** GET /api/stats/session/{gsid}/graphs — the playstyle axes, the advanced
+ *  metrics and the per-round DPM series of an evening over its COUNTED
+ *  rounds (`gate`). Recorded 2026-09-08 from session 152 through the handler
+ *  (corpus: api_stats_session_gaming_session_id_graphs.json). ⛔ The
+ *  legacy page called the DATE form, which merges the sessions of a day. */
+export interface SessionGraphPlayer {
+  name: string;
+  guid: string;
+  combat_offense: { kills: number; deaths: number; damage_given: number; kd: number; dpm: number };
+  /** `headshots` = head HITS. */
+  combat_defense: { revives: number; kill_assists: number; gibs: number; headshots: number; useful_kills: number; full_selfkills: number; times_revived: number; team_kills: number; self_kills: number };
+  /** `frag_potential` is served and NOT drawn — the owner's standing
+   *  decision keeps it off every visitor-facing surface. */
+  advanced_metrics: {
+    frag_potential: number; damage_efficiency: number; survival_rate: number; time_denied: number;
+    time_denied_raw_seconds: number; time_dead_raw_seconds: number; useful_kills_per_round: number;
+    deaths_per_round: number; rounds_played: number; aggression_score: number; pressure_score: number;
+    risk_load: number; empty_death_burden: number; discipline_score: number; dead_time_share: number;
+  };
+  /** Eight axes, 0–100. */
+  playstyle: { aggression: number; precision: number; survivability: number; support: number; lethality: number; brutality: number; consistency: number; efficiency: number };
+  /** A point names its round, so a series aligns on the session's round
+   *  axis (`rounds`) and a map the player sat out stays a gap. */
+  dpm_timeline: { label: string; dpm: number; round_id: number; round_number: number; map_name: string | null }[];
+}
+export interface SessionGraphs {
+  gaming_session_id: number;
+  date: string;
+  gate: string;
+  rounds_counted: number;
+  /** The counted rounds in play order — the x axis of every dpm series. */
+  rounds: { round_id: number; label: string; map_name: string | null; round_number: number }[];
+  player_count: number;
+  players: SessionGraphPlayer[];
+}
+
 export interface SessionDetail {
   session_id: number;
   date: string;

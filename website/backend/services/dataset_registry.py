@@ -136,6 +136,8 @@ PROFILE_SECTIONS: tuple[DatasetDescriptor, ...] = (
 SESSION_SECTIONS: tuple[DatasetDescriptor, ...] = (
     _session("session_player_map_matrix", "player × map matrix",
              endpoint="/api/stats/session/{gaming_session_id}/detail", parity="session.matrix"),
+    _session("session_graphs", "playstyle radar, dpm timeline, advanced metrics",
+             endpoint="/api/stats/session/{gaming_session_id}/graphs", parity="session.graphs"),
     _session("session_round_player_details", "a player's breakdown of one half",
              endpoint="/api/rounds/{round_id}/player/{player_guid}/details", parity="session.rounds.player-details"),
     _session("session_basics", "basics table", endpoint=SESSION_ENDPOINT_BASICS, parity="session.basics"),

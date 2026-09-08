@@ -189,6 +189,12 @@
 # built on it must say which gate it used, or the site will show two different
 # kill totals for one evening.
 #
+# 2026-09-08, /api/sessions/{}/graphs STAYS, by design: the new app draws the
+# graphs from /api/stats/session/{gsid}/graphs (R3d — keyed by gaming
+# session, gate counts_toward_totals, response_model), never from the date
+# path, so the legacy call is uncovered and this line closes with legacy
+# retirement, like /api/stats/sessions above.
+#
 # 2026-09-08, /api/stats/matches/{} DELETED: built as the box score under a
 # "latest games" row on Home (components/MatchBoxScore.tsx). Verified per
 # docs/design/07 §C.1 — 200 on the live server for round 11321, response

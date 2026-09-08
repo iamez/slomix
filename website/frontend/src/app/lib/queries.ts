@@ -131,6 +131,7 @@ import type {
   SessionAwards,
   SessionBasics,
   SessionDetail,
+  SessionGraphs,
   SessionGoodNight,
   SessionLeaderRow,
   SessionLineups,
@@ -954,6 +955,16 @@ export function useStoryKisDetails(gsid: number, playerGuid: string | null) {
 /** Everything the session totals are built from: matches, per-player totals,
  *  stopwatch scoring and the team matrix. One 39 KB response rather than the
  *  legacy page's five calls. */
+/** The graphs of an evening over its counted rounds — keyed by gaming
+ *  session, never by date (a day can hold several). */
+export function useSessionGraphs(sessionId: number) {
+  return useQuery({
+    queryKey: ['session-graphs', sessionId],
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/graphs', { pathParams: { gaming_session_id: sessionId } }) as Promise<SessionGraphs>,
+  });
+}
+
 export function useSessionDetail(sessionId: number | null) {
   return useQuery({
     queryKey: ['session-detail', sessionId],

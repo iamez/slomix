@@ -5592,6 +5592,391 @@
     "title": "SessionBasicsTeam",
     "type": "object"
    },
+   "SessionGraphAdvanced": {
+    "properties": {
+     "aggression_score": {
+      "title": "Aggression Score",
+      "type": "number"
+     },
+     "damage_efficiency": {
+      "title": "Damage Efficiency",
+      "type": "number"
+     },
+     "dead_time_share": {
+      "title": "Dead Time Share",
+      "type": "number"
+     },
+     "deaths_per_round": {
+      "title": "Deaths Per Round",
+      "type": "number"
+     },
+     "discipline_score": {
+      "title": "Discipline Score",
+      "type": "number"
+     },
+     "empty_death_burden": {
+      "title": "Empty Death Burden",
+      "type": "number"
+     },
+     "frag_potential": {
+      "title": "Frag Potential",
+      "type": "number"
+     },
+     "pressure_score": {
+      "title": "Pressure Score",
+      "type": "number"
+     },
+     "risk_load": {
+      "title": "Risk Load",
+      "type": "number"
+     },
+     "rounds_played": {
+      "title": "Rounds Played",
+      "type": "integer"
+     },
+     "survival_rate": {
+      "title": "Survival Rate",
+      "type": "number"
+     },
+     "time_dead_raw_seconds": {
+      "title": "Time Dead Raw Seconds",
+      "type": "integer"
+     },
+     "time_denied": {
+      "title": "Time Denied",
+      "type": "number"
+     },
+     "time_denied_raw_seconds": {
+      "title": "Time Denied Raw Seconds",
+      "type": "integer"
+     },
+     "useful_kills_per_round": {
+      "title": "Useful Kills Per Round",
+      "type": "number"
+     }
+    },
+    "required": [
+     "frag_potential",
+     "damage_efficiency",
+     "survival_rate",
+     "time_denied",
+     "time_denied_raw_seconds",
+     "time_dead_raw_seconds",
+     "useful_kills_per_round",
+     "deaths_per_round",
+     "rounds_played",
+     "aggression_score",
+     "pressure_score",
+     "risk_load",
+     "empty_death_burden",
+     "discipline_score",
+     "dead_time_share"
+    ],
+    "title": "SessionGraphAdvanced",
+    "type": "object"
+   },
+   "SessionGraphDefense": {
+    "properties": {
+     "full_selfkills": {
+      "title": "Full Selfkills",
+      "type": "integer"
+     },
+     "gibs": {
+      "title": "Gibs",
+      "type": "integer"
+     },
+     "headshots": {
+      "title": "Headshots",
+      "type": "integer"
+     },
+     "kill_assists": {
+      "title": "Kill Assists",
+      "type": "integer"
+     },
+     "revives": {
+      "title": "Revives",
+      "type": "integer"
+     },
+     "self_kills": {
+      "title": "Self Kills",
+      "type": "integer"
+     },
+     "team_kills": {
+      "title": "Team Kills",
+      "type": "integer"
+     },
+     "times_revived": {
+      "title": "Times Revived",
+      "type": "integer"
+     },
+     "useful_kills": {
+      "title": "Useful Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "revives",
+     "kill_assists",
+     "gibs",
+     "headshots",
+     "useful_kills",
+     "full_selfkills",
+     "times_revived",
+     "team_kills",
+     "self_kills"
+    ],
+    "title": "SessionGraphDefense",
+    "type": "object"
+   },
+   "SessionGraphOffense": {
+    "properties": {
+     "damage_given": {
+      "title": "Damage Given",
+      "type": "integer"
+     },
+     "deaths": {
+      "title": "Deaths",
+      "type": "integer"
+     },
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "kd": {
+      "title": "Kd",
+      "type": "number"
+     },
+     "kills": {
+      "title": "Kills",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "kills",
+     "deaths",
+     "damage_given",
+     "kd",
+     "dpm"
+    ],
+    "title": "SessionGraphOffense",
+    "type": "object"
+   },
+   "SessionGraphPlayer": {
+    "properties": {
+     "advanced_metrics": {
+      "$ref": "#/components/schemas/SessionGraphAdvanced"
+     },
+     "combat_defense": {
+      "$ref": "#/components/schemas/SessionGraphDefense"
+     },
+     "combat_offense": {
+      "$ref": "#/components/schemas/SessionGraphOffense"
+     },
+     "dpm_timeline": {
+      "items": {
+       "$ref": "#/components/schemas/SessionGraphPoint"
+      },
+      "title": "Dpm Timeline",
+      "type": "array"
+     },
+     "guid": {
+      "title": "Guid",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "playstyle": {
+      "$ref": "#/components/schemas/SessionGraphPlaystyle"
+     }
+    },
+    "required": [
+     "name",
+     "guid",
+     "combat_offense",
+     "combat_defense",
+     "advanced_metrics",
+     "playstyle",
+     "dpm_timeline"
+    ],
+    "title": "SessionGraphPlayer",
+    "type": "object"
+   },
+   "SessionGraphPlaystyle": {
+    "properties": {
+     "aggression": {
+      "title": "Aggression",
+      "type": "number"
+     },
+     "brutality": {
+      "title": "Brutality",
+      "type": "number"
+     },
+     "consistency": {
+      "title": "Consistency",
+      "type": "number"
+     },
+     "efficiency": {
+      "title": "Efficiency",
+      "type": "number"
+     },
+     "lethality": {
+      "title": "Lethality",
+      "type": "number"
+     },
+     "precision": {
+      "title": "Precision",
+      "type": "number"
+     },
+     "support": {
+      "title": "Support",
+      "type": "number"
+     },
+     "survivability": {
+      "title": "Survivability",
+      "type": "number"
+     }
+    },
+    "required": [
+     "aggression",
+     "precision",
+     "survivability",
+     "support",
+     "lethality",
+     "brutality",
+     "consistency",
+     "efficiency"
+    ],
+    "title": "SessionGraphPlaystyle",
+    "type": "object"
+   },
+   "SessionGraphPoint": {
+    "properties": {
+     "dpm": {
+      "title": "Dpm",
+      "type": "number"
+     },
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "label",
+     "dpm",
+     "round_id",
+     "round_number",
+     "map_name"
+    ],
+    "title": "SessionGraphPoint",
+    "type": "object"
+   },
+   "SessionGraphRound": {
+    "description": "One counted round of the evening, in play order — the x axis every\nplayer's dpm series aligns on (a point names its round_id).",
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "round_id",
+     "label",
+     "map_name",
+     "round_number"
+    ],
+    "title": "SessionGraphRound",
+    "type": "object"
+   },
+   "SessionGraphs": {
+    "description": "GET /api/stats/session/{gsid}/graphs — the playstyle radar, the\nadvanced metrics and the per-round DPM series of an evening, keyed by\ngaming session (never by date: 13 of 176 days hold more than one\nsession, and the date form merges them). `gate` names the round filter\nso a panel can say which total it agrees with.",
+    "properties": {
+     "date": {
+      "title": "Date",
+      "type": "string"
+     },
+     "gaming_session_id": {
+      "title": "Gaming Session Id",
+      "type": "integer"
+     },
+     "gate": {
+      "title": "Gate",
+      "type": "string"
+     },
+     "player_count": {
+      "title": "Player Count",
+      "type": "integer"
+     },
+     "players": {
+      "items": {
+       "$ref": "#/components/schemas/SessionGraphPlayer"
+      },
+      "title": "Players",
+      "type": "array"
+     },
+     "rounds": {
+      "items": {
+       "$ref": "#/components/schemas/SessionGraphRound"
+      },
+      "title": "Rounds",
+      "type": "array"
+     },
+     "rounds_counted": {
+      "title": "Rounds Counted",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "gaming_session_id",
+     "date",
+     "gate",
+     "rounds_counted",
+     "rounds",
+     "player_count",
+     "players"
+    ],
+    "title": "SessionGraphs",
+    "type": "object"
+   },
    "SessionLeaderRow": {
     "description": "One row of the session DPM leaderboard.\n\n⛔ TYPED FROM THE SCHEMA AND THE AGGREGATE, NOT THE SAMPLE.\n\n  name    `MAX(player_name)` over a NOT NULL column — never null.\n  dpm     the CASE has an `ELSE 0`, and the handler wraps it in `int()`.\n  kills   `SUM(kills)` over a NULLABLE column. SUM returns NULL when every\n  deaths  summed value is NULL, and the handler passes the result through\n          with no guard. Zero such rows exist today; the column and the\n          aggregate both say it is reachable, and \"zero rows today\" is not\n          a type — a stricter model would answer 500 the first time it\n          happened rather than dropping a field.\n\nRequested by the session-detail workstream ahead of phase 4, so that page\ncan be written against a schema instead of against a sample.",
     "properties": {
@@ -20917,6 +21302,49 @@
      }
     },
     "summary": "Get Session Good Night",
+    "tags": [
+     "Sessions"
+    ]
+   }
+  },
+  "/api/stats/session/{gaming_session_id}/graphs": {
+   "get": {
+    "description": "The graphs of an evening over its COUNTED rounds — the same trio of\ngates as /basics and /rounds (`counts_toward_totals`), so the kills a\nradar rests on are the kills the basics table shows.",
+    "operationId": "get_session_graphs_api_stats_session__gaming_session_id__graphs_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "gaming_session_id",
+      "required": true,
+      "schema": {
+       "title": "Gaming Session Id",
+       "type": "integer"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/SessionGraphs"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Get Session Graphs",
     "tags": [
      "Sessions"
     ]
