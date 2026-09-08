@@ -28,6 +28,15 @@ def git(root, *args):
     return subprocess.check_output(["git", "-C", str(root), *args])
 
 
+def reject_symlink_path(root, relative):
+    """Check every component before any write can traverse an output parent."""
+    current = root
+    for component in (".", *relative.parts):
+        current = current / component
+        if current.is_symlink():
+            raise ValueError(f"symlinked source/output path is unsupported: {current}")
+
+
 def digest(path):
     if path.is_symlink() or not path.is_file():
         raise ValueError(f"expected regular file: {path}")
@@ -35,6 +44,8 @@ def digest(path):
 
 
 def identity(root):
+    reject_symlink_path(root, OUTPUT)
+    reject_symlink_path(root, GENERATED)
     commit = git(root, "rev-parse", "--verify", "HEAD^{commit}").decode().strip()
     if git(root, "status", "--porcelain", "--untracked-files=no"):
         raise ValueError("tracked source is dirty; commit changes before npm run build:app")
@@ -53,7 +64,11 @@ def identity(root):
     if os.environ.get("NODE_ENV", "production") != "production":
         raise ValueError("deployable SPA requires NODE_ENV=production or unset")
     paths = git(root, "ls-files", "-z", "--", *INPUTS).split(b"\0")
-    hashes = {os.fsdecode(p): digest(root / os.fsdecode(p)) for p in paths if p}
+    hashes = {}
+    for path in filter(None, paths):
+        relative = Path(os.fsdecode(path))
+        reject_symlink_path(root, relative)
+        hashes[str(relative)] = digest(root / relative)
     hashes[str(GENERATED)] = digest(root / GENERATED)
     return {"source_commit": commit, "inputs": hashes}
 
@@ -90,8 +105,8 @@ def validate(root, directory, target):
 
 
 def build(root):
-    if (root / OUTPUT).is_symlink():
-        raise ValueError("refusing symlinked SPA artifact directory")
+    reject_symlink_path(root, OUTPUT)
+    reject_symlink_path(root, FRONTEND)
     marker = root / OUTPUT / MANIFEST
     # Invalidate previous proof before any build attempt, including failed preflight.
     marker.unlink(missing_ok=True)

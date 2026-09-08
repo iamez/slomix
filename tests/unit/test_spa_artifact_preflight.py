@@ -193,3 +193,37 @@ def test_copy_corruption_is_detected_in_staged_bytes(fixture, monkeypatch):
                         "--target", git(source, "rev-parse", "HEAD"), "--stage", str(source.parent / "stage")])
     with pytest.raises(ValueError, match="integrity check failed"):
         module.main()
+
+
+@pytest.mark.parametrize("relative", ["website", "website/static"])
+def test_build_rejects_symlink_parent_before_unlinking_proof_or_running_vite(fixture, relative):
+    source, _ = fixture
+    build(source)
+    proof = source / "website/static/app/.slomix-build.json"
+    expected = proof.read_bytes()
+    parent = source / relative
+    external = source.parent / "external"
+    parent.rename(external)
+    parent.symlink_to(external, target_is_directory=True)
+    vite = source / "website/frontend/node_modules/vite/bin/vite.js"
+    vite.write_text("require('fs').writeFileSync('../../vite-was-run', 'unexpected');\n")
+    result = build(source, check=False)
+    assert result.returncode != 0
+    assert "symlinked source/output path" in result.stderr
+    assert proof.read_bytes() == expected
+    assert not (source / "vite-was-run").exists()
+    assert (source / "website/static/app/assets/a.js").read_text() == "console.log(1);"
+
+
+@pytest.mark.parametrize("relative", ["website", "website/static"])
+def test_run_symlink_parent_is_rejected_without_mutation(fixture, relative):
+    source, run = fixture
+    build(source)
+    parent = run / relative
+    external = source.parent / "external-run"
+    parent.rename(external)
+    parent.symlink_to(external, target_is_directory=True)
+    result = preflight(source, run)
+    assert result.returncode != 0
+    assert "symlinked run artifacts" in result.stderr
+    assert (run / "website/static/app/app.html").read_text() == "previous active bundle"

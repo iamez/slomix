@@ -481,6 +481,15 @@ stopijo v veljavo šele ob naslednjem restartu — ⛔ ownerjeva poteza,
 
 ## Astra — SPA artifact provenance before dev mutation (2026-09-07)
 
+Follow-up 2026-09-08: root completed the interrupted helper's parent-symlink
+fix. All source/output path components and run website/static parents are
+checked before any proof unlink or activation. Nineteen behavioral tests pass
+in the isolated agent Python environment. Removing the early output-parent
+check caused the static-parent test to fail with FileNotFoundError (the existing
+proof was wrongly deleted); restored with apply_patch and cmp. Node version is
+recorded as metadata, not enforced against .nvmrc by this slice; use the pinned
+toolchain from #969. No real build, deploy or service action performed.
+
 - Implemented locally on `fix/website-artifact-preflight`; no real build,
   deployment, restart or production changes. Parent review and feature PR next.
 - `npm run build:app` keeps `prebuild:app` API generation, then wraps the
