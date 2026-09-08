@@ -30,9 +30,19 @@ Agent-only Python 3.13 environment is now independent of the service venv;
 pip check and 38 watchdog / 7 review tests pass there. Service venv links remain
 unchanged. Node PR #969 now declares PyYAML directly (4 contract tests, mutation
 proved); no reliance on pre-commit's transitive YAML dependency.
-Artifact candidate has 19 behavioral tests including parent symlinks; no real
-build/deploy performed. Watchdog review found a failed-heartbeat midnight edge;
-correction is in progress, so #965 is not yet declared finished.
+Artifact PR #979 has 19 behavioral tests including parent symlinks; no real
+build/deploy performed. Watchdog review's failed-heartbeat midnight edge is
+fixed in `16383281`: 40 tests pass, mutation failed then restored/cmp. Review
+replies on #964/#965/#969 are answered with commits and evidence. PR review/CI
+and exact owner merge decisions remain outstanding; runtime v2 is not built.
+
+**Resume here:** review current checks/findings on #964 (handoff), #965
+(delivery), #966 (immutable reviews), #969 (Node pin), #979 (artifact preflight).
+Keep these independent slices; merge only an explicitly authorized PR number.
+Next stability work is service-package isolation, owner-reviewed hook trust,
+remaining relevant review findings and approved live proof. Revalidate current
+dev/source identities before any new measurement. Then R01 below; do not
+activate consumers or claim complete handoff/stability from these unit tests.
 
 Owner approved implementation after the handoff audit. Order: handoff and
 necessary stability/security fixes, then isolated runtime v2 development.
@@ -55,8 +65,8 @@ agent responsible for the next step, not permission to execute protected work.
 | A02 Codex safeguards | Local hardening implemented: no raw hook input logging/echo; 194 credential-assignment rules removed from active approvals, recoverable private backup; 4 test methods pass | Astra: normalization mutation produced 7 expected failures, restored/cmp; strict config and execpolicy load. hooks/list STILL says untrusted for both hooks. Owner reviews /hooks trust and credential rotation; broader approvals/complex-shell coverage still open. |
 | A03 development dependencies | PR #969 pins Node 22.23.2 and both CI jobs; 3 tests/mutations pass. Portable private toolchain verified by official SHA256, node reports v22.23.2/npm 10.9.8; system Node unchanged | Astra: frontend build remains unproven; use private toolchain explicitly, no global PATH edit. Prepare independent Python/service environments; owner activates services. Never install into shared running venv. |
 | A04 review safety | PR #966: immutable refs, <=25 files/8000 lines; 7 real-hook integration tests pass, mutation restored/cmp | Astra: review replacement, not existing review snapshots. #961 added a narrowly scoped legacy exception in AGENTS; it is preserved, not exercised. Owner-approved plan selected preparing this replacement; existing review vehicles remain NEVER MERGE. |
-| A05 artifact identity | #960 merged; audit observed older SPA bundle than source; helper implementing isolated provenance/preflight slice | Astra: validate/stage exact target artifact before active-tree changes. Candidate rejects SKIP_STATIC bypass and unsupported build env overrides, preserves unverified legacy bundle with warning. Review behavior changes before owner activation. Then permitted sequential parity sweep; no browser run yet. |
-| A06 watchdog delivery | PR #965, `96316e0e`: post-delivery ACK, retryable recovery/heartbeat and non-writing dry-run; 38 tests pass | Astra: root reran tests/lint; failed-POST ACK mutation seen failing and restored/cmp; real run/send functions exercised with in-process transport stub. Await review/owner merge. Real Discord message and activation still require permission. |
+| A05 artifact identity | PR #979: exact target/input/output provenance and staging before active-tree changes, 19 behavioral tests pass | Astra: review stricter SKIP_STATIC/env policy and preserved legacy behavior before owner activation. Parent-symlink and corruption mutations failed/restored/cmp. Current dev was rebuilt separately, but candidate provenance has not been built/deployed there; no browser run by Astra. |
+| A06 watchdog delivery | PR #965, latest correction `16383281`: post-delivery ACK, retries across midnight, non-writing dry-run; 40 tests pass | Astra: root reran tests; failed-POST ACK/midnight mutations failed/restored/cmp; run/send functions exercised with in-process transport stubs. Await review/owner merge. Real Discord message and activation still require permission. |
 | A07 watchdog measurement | #962 disk metric OPEN at refresh; timer 5 min, web/Lua require two failures | Astra: review #962 without duplicating it. Keep cadence; expected detection around 10 min plus scheduling/probe time, NOT <=2 min. SSH probes are a separate follow-up. |
 | A08 open-code intake | #955 MERGED `07d332ca`; #912 MERGED `4f653c01`; #958/#960/#961 merged; #962/#963/#956 open at refresh | Astra: review current diff/checks/threads and separate merge from runtime evidence. Arena ACC runtime proof remains unmeasured; no arena activation required for runtime development. Release PR is not deploy authority. |
 | A09 observations | New-import time_played_percent and v6.14 evening frame-health observations pending | Astra: read-only next-session evidence after checking running revision; historical destroyed_count repair and production migration 082 require separate owner action. |

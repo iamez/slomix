@@ -7,6 +7,15 @@
 
 ## Trenutna pozicija
 
+- **2026-09-08 (Astra, resume checkpoint):** first implementation slices are
+  published as #964/#965/#966/#969/#979; see PLAN's current ledger. Targeted
+  tests pass per slice (2/40/7/4/19), not a combined whole-project proof.
+  Review corrections: closed issue moved to closure ledger, YAML dependency
+  declared directly, failed heartbeat retained across midnight. Helpers stopped
+  after their bounded tasks; local agent Node/Python tools persist separately
+  from services. No merge/deploy/browser/live-data mutation by Astra. Runtime
+  R01 remains gated by necessary stability/review work; it is not implemented.
+
 - **2026-09-07 (Astra):** owner approved the reconciled implementation plan.
   Current authority: PLAN's "Astra execution ledger" (A01–A10, R01–R04).
   Source `4f653c01`: #955 and #912 are now merged; runtime proof is separate.
