@@ -6,6 +6,29 @@ Copilot) can read and append to; private agent memories are not visible
 across tools, this file is. Never put credentials, private names or raw
 data here.
 
+- **2026-09-07 · Commit, artifact, process and data are separate evidence.**
+  The handoff audit found merged SPA source newer than the served bundle.
+  Why: a healthy endpoint and matching git revision do not identify static
+  assets. Apply: record source/build identities and process start time before
+  live proof; never close a runtime obligation from a merge alone.
+- **2026-09-07 · Canonical import is earlier than data finalization.**
+  `process_file()` commits stats before Lua, timing, endstats and other updates;
+  `processed_files` is also written after that commit. Why: a Discord-only
+  emitter misses other inputs and a first event cannot promise final stats.
+  Apply: emit transactionally in the canonical importer, deduplicate the first
+  event durably and cover late changes before enabling consumers.
+- **2026-09-07 · Record the safety-policy snapshot when reviewing tooling.**
+  At `4f653c01` the review cutter contradicted the general force/no-verify ban;
+  #961 subsequently added a narrow legacy-script exception. Why: simultaneous
+  handoffs change policy while audits run. Apply: preserve the written exception
+  without extending it; the approved Astra plan prepares an immutable replacement
+  with ordinary hooks. Do not confuse preparing the replacement with deploying it.
+- **2026-09-07 · Configured Codex hooks are not necessarily active.**
+  The local hook was hardened and credential-bearing saved approvals sanitized,
+  but hooks/list still reports both hooks untrusted. Apply: owner reviews /hooks;
+  never claim lifecycle enforcement from synthetic subprocess tests, and never
+  log real tool input to prove integration. Rotation remains a separate action.
+
 - **2026-09-07 · A directory's mtime is not its contents' mtime.** `ls -la
   <dir>` reports when the directory entry list last changed (a file added or
   removed), not when files inside were written; a rebuilt bundle that reuses

@@ -5,6 +5,12 @@ Paste the block between the rules into a fresh `codex` session started in
 (check with `codex debug prompt-input "ping"` before the first real session).
 The short form at the bottom is for every later session.
 
+For continuation after the 2026-09-07 handoff, read PLAN's "Astra execution
+ledger" and its latest dated evidence first. Do not repeat hour-one discovery
+or wait for a new task selection if the owner has already approved that plan.
+The legacy package below remains background; the ledger supersedes old queue
+order, completion claims and the Discord-only runtime emitter proposal.
+
 ---
 
 You are the autonomous engineering agent for Slomix (ET:Legacy stats: Discord

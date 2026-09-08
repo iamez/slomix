@@ -16,7 +16,122 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-03 (Fable 5.1, uploads rezina 2)
+**Zadnja posodobitev:** 2026-09-08 (Astra, execution ledger; source `dd966bca`)
+
+## Astra execution ledger — current authority (2026-09-07)
+
+**2026-09-08 evidence refresh:** merged current main and retained Claude's new
+R0 query-audit obligation, modularity progress and live-view work. Endpoint
+counts below come from this checkout, not the old handoff. Read-only live proof:
+dev `4bc00b1f`, bot/web process starts 2026-09-07 23:41 CEST, app.html mtime
+23:40, /api/build agrees, /health and database ok. This supersedes "never
+rebuilt" but does not prove bundle/source identity or latest-main deployment.
+Agent-only Python 3.13 environment is now independent of the service venv;
+pip check and 38 watchdog / 7 review tests pass there. Service venv links remain
+unchanged. Node PR #969 now declares PyYAML directly (4 contract tests, mutation
+proved); no reliance on pre-commit's transitive YAML dependency.
+Artifact PR #979 has 19 behavioral tests including parent symlinks; no real
+build/deploy performed. Watchdog review's failed-heartbeat midnight edge is
+fixed in `16383281`: 40 tests pass, mutation failed then restored/cmp. Review
+replies on #964/#965/#969 are answered with commits and evidence. PR review/CI
+and exact owner merge decisions remain outstanding; runtime v2 is not built.
+
+**Resume here:** review current checks/findings on #964 (handoff), #965
+(delivery), #966 (immutable reviews), #969 (Node pin), #979 (artifact preflight).
+Keep these independent slices; merge only an explicitly authorized PR number.
+Next stability work is service-package isolation, owner-reviewed hook trust,
+remaining relevant review findings and approved live proof. Revalidate current
+dev/source identities before any new measurement. Then R01 below; do not
+activate consumers or claim complete handoff/stability from these unit tests.
+
+Owner approved implementation after the handoff audit. Order: handoff and
+necessary stability/security fixes, then isolated runtime v2 development.
+One to two weeks of observation gate activation, not development. Production
+remains frozen at v1.39.0. No merge, service restart, deploy, browser or agent
+server permission is implied. Instructions in AGENTS.md still apply.
+
+This section supersedes historical priorities/statuses below, not their
+evidence. Read `HANDOFF-next.md` first; Claude's PR #961 is an additional
+source, not an execution authority. Recheck its latest revision before intake.
+No private memory, raw terminal transcript or credential is copied here.
+
+Status vocabulary: **code / merged / built / active / runtime-proven / deferred**
+are separate facts. `unmeasured` is not `ok`. Owner below means the person or
+agent responsible for the next step, not permission to execute protected work.
+
+| ID | Source / state at audit | Owner / next action and required evidence |
+|---|---|---|
+| A01 handoff | Ledger saved, PR #964; Claude #961 merged as `28662f04`, both sets of lessons preserved | Astra: continue obligation-by-obligation reconciliation and current PR intake; #963 adds the sister session report. |
+| A02 Codex safeguards | Local hardening implemented: no raw hook input logging/echo; 194 credential-assignment rules removed from active approvals, recoverable private backup; 4 test methods pass | Astra: normalization mutation produced 7 expected failures, restored/cmp; strict config and execpolicy load. hooks/list STILL says untrusted for both hooks. Owner reviews /hooks trust and credential rotation; broader approvals/complex-shell coverage still open. |
+| A03 development dependencies | PR #969 pins Node 22.23.2 and both CI jobs; 3 tests/mutations pass. Portable private toolchain verified by official SHA256, node reports v22.23.2/npm 10.9.8; system Node unchanged | Astra: frontend build remains unproven; use private toolchain explicitly, no global PATH edit. Prepare independent Python/service environments; owner activates services. Never install into shared running venv. |
+| A04 review safety | PR #966: immutable refs, <=25 files/8000 lines; 7 real-hook integration tests pass, mutation restored/cmp | Astra: review replacement, not existing review snapshots. #961 added a narrowly scoped legacy exception in AGENTS; it is preserved, not exercised. Owner-approved plan selected preparing this replacement; existing review vehicles remain NEVER MERGE. |
+| A05 artifact identity | PR #979: exact target/input/output provenance and staging before active-tree changes, 19 behavioral tests pass | Astra: review stricter SKIP_STATIC/env policy and preserved legacy behavior before owner activation. Parent-symlink and corruption mutations failed/restored/cmp. Current dev was rebuilt separately, but candidate provenance has not been built/deployed there; no browser run by Astra. |
+| A06 watchdog delivery | PR #965, latest correction `16383281`: post-delivery ACK, retries across midnight, non-writing dry-run; 40 tests pass | Astra: root reran tests; failed-POST ACK/midnight mutations failed/restored/cmp; run/send functions exercised with in-process transport stubs. Await review/owner merge. Real Discord message and activation still require permission. |
+| A07 watchdog measurement | #962 disk metric OPEN at refresh; timer 5 min, web/Lua require two failures | Astra: review #962 without duplicating it. Keep cadence; expected detection around 10 min plus scheduling/probe time, NOT <=2 min. SSH probes are a separate follow-up. |
+| A08 open-code intake | #955 MERGED `07d332ca`; #912 MERGED `4f653c01`; #958/#960/#961 merged; #962/#963/#956 open at refresh | Astra: review current diff/checks/threads and separate merge from runtime evidence. Arena ACC runtime proof remains unmeasured; no arena activation required for runtime development. Release PR is not deploy authority. |
+| A09 observations | New-import time_played_percent and v6.14 evening frame-health observations pending | Astra: read-only next-session evidence after checking running revision; historical destroyed_count repair and production migration 082 require separate owner action. |
+| A10 future features | twins r4, user layouts, spiderweb layers 3/4, remaining endpoint gaps and broad typing/modularity work | Astra: prioritized BACKLOG entries, not pre-runtime implementation blockers. Relevant correctness/security findings still enter stability triage. |
+
+### Runtime v2 contract and stages
+
+**R01 — first executable slice, after necessary stability/review gates:**
+new immutable migration (next unused number), durable event journal and
+neutral emitter using the EXISTING asyncpg connection inside canonical
+`postgresql_database_manager.process_file()` transaction, after validated
+player/weapon writes. All paths through that importer are covered, including
+SSH, STATS_READY, filename webhook, manual sync and CLI/bulk; do not attach
+the emitter only to the Discord mixin, which owns no canonical transaction.
+
+First event: `round_stats_imported`, versioned contract with event ID, round ID,
+gaming_session_id and source/import identity metadata, no raw stats payload.
+Unique initial event per round/event type, R1/R2 only (no R0), so a crash
+after commit but before `processed_files` does not duplicate the initial event.
+Use transaction-local `pg_notify` with only event ID as wake-up; the table is
+the durable source. `EVENT_STREAM_ENABLED=false` by default, isolated test DB
+only initially, no historical backfill, consumer, Discord publication or HTTP
+API change. A first import is NOT a final `round_ended` event.
+
+**R02 — before consumers:** map post-commit teams/correlation, Lua overrides,
+timing/DPM reconciliation, endstats and proximity writers to their transactions.
+Add versioned updates for actual changes, including older-round repairs during
+new imports. Identical input is idempotent; parser-version reimports remain
+distinguishable. Initial events alone do not cover these changes.
+
+**R03 — consumers:** NOTIFY plus reconnect and durable periodic catch-up;
+acknowledge only successful handling. Never assume sequence IDs follow commit
+order (`id > last_max_id` can miss a late commit). Use per-consumer/event
+receipts; each process with a memory cache needs independent handling. Start
+with existing global HTTP invalidation, cover relevant inner caches before
+claiming page freshness, conservatively flush on reconnect/startup. Measure
+browser Cache-Control/refetch separately. No pruning in the first slice.
+
+**R04 — independent Linux Python ingest:** extract fetch/retry, canonical
+import, Lua capture/reconciliation and endstats/proximity from Discord lifecycle.
+Replace Discord-dependent metadata intake with durable recovery before claiming
+full independence. Keep bot/web separate. Publication is another slice; a send
+followed by a crash before ACK does not provide exactly-once Discord delivery.
+
+### Proofs and exit criteria
+
+- Each code slice: focused tests, real runtime log/response in an isolated
+  harness, a guard mutation seen failing and restoration verified with `cmp`.
+- Event tests: rollback; crash after commit/before processed marker; duplicate
+  SSH/webhook inputs; CLI without Lua timestamps; R0 exclusion; repeated maps,
+  midnight and orphan R2 reconciliation. Compare eligible rounds and events
+  independently, not against webhook counts.
+- Consumer gates: lower ID commits last; missed NOTIFY/reconnect; handler
+  failure; warmed inner/HTTP caches followed by import then late Lua change;
+  multiple memory-cache workers. Test failed imports and recovery beyond the
+  existing 168-hour file cutoff; current code does not prove replayability.
+- Record hot/cold and source-to-commit/event/consumer/browser latencies
+  separately. Every known obligation needs an explicit disposition; no claim
+  of 100% absence of unknown bugs.
+- One branch/PR per slice, named staging, commit completed steps, <=25 files,
+  self-review after push, answer review threads, wait for exact owner merge
+  permission. At most two helpers, separate writer worktrees, no parallel
+  browser runs. Stop completed helpers; preserve foreign dirty work/stashes.
+
+### Historical tracks (read with the ledger above)
 
 ## Proga: nova stran (Fable)
 
