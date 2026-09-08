@@ -3419,6 +3419,15 @@ _SESSION_PLAYERS_SQL = """
 """
 
 
+def _col(row, i: int, default=None):
+    """Positional read that survives a row shorter than the SELECT — the
+    appended webhook/provenance columns are optional for older callers."""
+    try:
+        return row[i]
+    except (IndexError, TypeError):
+        return default
+
+
 def _pause_seconds(events) -> int:
     """Sum of the webhook's pause list (`[{"n","start","end","sec"}, …]`),
     tolerant of the column arriving as text or as nothing."""
@@ -3471,11 +3480,14 @@ async def get_session_rounds(
                 revives_given=row[12] or 0,
                 times_revived=row[13] or 0,
                 xp=float(row[14] or 0),
-                team_gibs=row[15] or 0,
-                kill_steals=row[16] or 0,
-                tank_meatshield=row[17] or 0,
-                death_spree_worst=row[18] or 0,
-                time_dead_reconstructed=bool(row[19]),
+                # Appended columns read through _col: a row from before this
+                # change (the unit tests' fixtures, an older adapter) is
+                # shorter, and a short row must degrade to zeros, not raise.
+                team_gibs=_col(row, 15) or 0,
+                kill_steals=_col(row, 16) or 0,
+                tank_meatshield=_col(row, 17) or 0,
+                death_spree_worst=_col(row, 18) or 0,
+                time_dead_reconstructed=bool(_col(row, 19)),
             )
         )
 
@@ -3493,13 +3505,13 @@ async def get_session_rounds(
                 round_status=status,
                 counts_toward_totals=_counts_toward_totals(status, row[8], row[9]),
                 match_id=row[7],
-                surrender=RoundSurrender(caller_name=row[10], team=row[11]) if row[10] else None,
-                pauses=RoundPauses(count=int(row[12] or 0), total_seconds=_pause_seconds(row[13])),
-                time_limit_minutes=row[14],
-                warmup_seconds=row[15],
-                bot_player_count=row[16],
-                score_confidence=row[17],
-                next_timelimit_minutes=row[18],
+                surrender=RoundSurrender(caller_name=_col(row, 10), team=_col(row, 11)) if _col(row, 10) else None,
+                pauses=RoundPauses(count=int(_col(row, 12) or 0), total_seconds=_pause_seconds(_col(row, 13))),
+                time_limit_minutes=_col(row, 14),
+                warmup_seconds=_col(row, 15),
+                bot_player_count=_col(row, 16),
+                score_confidence=_col(row, 17),
+                next_timelimit_minutes=_col(row, 18),
                 players=by_round.get(row[0], []),
             )
         )
