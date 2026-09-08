@@ -729,7 +729,7 @@ describe('SessionDetail — stats 2.0 R5, the expanded player row', () => {
   type DetailPlayer = { player_guid: string; player_name: string; dpm: number };
   const players = (detail as { players: DetailPlayer[] }).players;
   const top = [...players].sort((a, b) => b.dpm - a.dpm)[0];
-  const allRounds = (rounds as { rounds: SessionRound[] }).rounds;
+  const allRounds = (rounds as unknown as { rounds: SessionRound[] }).rounds;
 
   async function openTop(entry = '/session-detail/154/players') {
     const rendered = renderPage(fixtureFetch, entry);

@@ -18,6 +18,7 @@ function player(over: Partial<RoundPlayerRow> = {}): RoundPlayerRow {
     time_played_seconds: 222, gibs: 3, damage_received: 1204,
     damage_given: 1510, kills: 8, deaths: 3, headshots: 12,
     headshot_kills: 2, revives_given: 1, times_revived: 0, xp: 55,
+    team_gibs: 0, kill_steals: 1, tank_meatshield: 0, death_spree_worst: 2, time_dead_reconstructed: false,
     ...over,
   };
 }
@@ -28,6 +29,8 @@ function round(over: Partial<SessionRound> = {}): SessionRound {
     played_at: '2026-08-26 21:09:58', duration_seconds: 454,
     end_reason: 'SURRENDER', round_status: 'completed',
     counts_toward_totals: true, match_id: 'm1',
+    surrender: null, pauses: { count: 0, total_seconds: 0 }, time_limit_minutes: 12, warmup_seconds: 0,
+    bot_player_count: 0, score_confidence: 'verified_header', next_timelimit_minutes: null,
     players: [player()],
     ...over,
   };
@@ -182,5 +185,41 @@ describe('the review round', () => {
     );
     expect(container.querySelector('[data-empty="filtered"]')).toBeTruthy();
     expect(container.querySelector('[data-empty="no_data"]')).toBeNull();
+  });
+});
+
+describe('the facts the webhook recorded and nobody showed (2026-09-08)', () => {
+  it('names the surrender caller, the pauses, the limits, the bots and the reconstructed dead time', () => {
+    render(
+      <RoundsTable
+        mode="round"
+        rounds={[round({
+          surrender: { caller_name: 'one', team: 2 },
+          pauses: { count: 2, total_seconds: 21 },
+          warmup_seconds: 15,
+          bot_player_count: 1,
+          next_timelimit_minutes: 9,
+          players: [player({ time_dead_reconstructed: true, kill_steals: 3, death_spree_worst: 5, team_gibs: 1, tank_meatshield: 2 })],
+        })]}
+      />,
+    );
+    expect(screen.getByText(/Allies surrendered · called by one/)).toBeInTheDocument();
+    expect(screen.getByText(/2 pauses · 0:21/)).toBeInTheDocument();
+    expect(screen.getByText(/limit 12 min/)).toBeInTheDocument();
+    expect(screen.getByText(/sets R2 to 9 min/)).toBeInTheDocument();
+    expect(screen.getByText(/warm-up 0:15/)).toBeInTheDocument();
+    expect(screen.getByText('1 bot')).toBeInTheDocument();
+    expect(screen.getByText(/score verified header/)).toBeInTheDocument();
+    expect(screen.getByTitle(/dead time reconstructed/)).toBeInTheDocument();
+    for (const h of ['steals', 'worst run', 'tg', 'tank']) expect(screen.getByText(h)).toBeInTheDocument();
+    expect(screen.getByTitle('the longest run of deaths without a kill')).toBeInTheDocument();
+  });
+
+  it('stays quiet when nothing of that happened', () => {
+    render(<RoundsTable mode="round" rounds={[round()]} />);
+    expect(screen.queryByText(/surrendered/)).toBeNull();
+    expect(screen.queryByText(/pause/)).toBeNull();
+    expect(screen.queryByText(/bot/)).toBeNull();
+    expect(screen.queryByTitle(/dead time reconstructed/)).toBeNull();
   });
 });

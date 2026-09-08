@@ -188,8 +188,8 @@
   "/api/voice-activity/history": "15 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2851,
-  "unread": 736,
+  "read": 2859,
+  "unread": 735,
   "dropped": 46,
   "endpoints": 179,
   "endpoints_fully_read": 48,
@@ -907,7 +907,7 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/rounds": {
-   "read": 14,
+   "read": 21,
    "unread": 1,
    "dropped": 0
   },
@@ -1002,8 +1002,8 @@
    "dropped": 0
   },
   "/api/storytelling/moments": {
-   "read": 17,
-   "unread": 8,
+   "read": 18,
+   "unread": 7,
    "dropped": 0
   },
   "/api/storytelling/momentum": {
@@ -15730,6 +15730,11 @@
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.bot_player_count",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
    "key": "rounds.counts_toward_totals",
    "status": "read"
   },
@@ -15755,6 +15760,16 @@
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.next_timelimit_minutes",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.pauses",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
    "key": "rounds.played_at",
    "status": "unread"
   },
@@ -15776,6 +15791,26 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
    "key": "rounds.round_status",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.score_confidence",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.surrender",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.time_limit_minutes",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/rounds",
+   "key": "rounds.warmup_seconds",
    "status": "read"
   },
   {
@@ -17826,7 +17861,7 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "moments.team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",

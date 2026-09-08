@@ -10,13 +10,16 @@ function row(guid: string, kills: number, deaths: number, dmg: number, secs: num
     player_guid: guid, player_name: guid.slice(0, 4), team: 1, time_played_seconds: secs, gibs: 0,
     damage_received: 0, damage_given: dmg, kills, deaths, headshots: 0, headshot_kills: 0,
     revives_given: 0, times_revived: 0, xp: 0,
+    team_gibs: 0, kill_steals: 0, tank_meatshield: 0, death_spree_worst: 0, time_dead_reconstructed: false,
   };
 }
 
 function round(map: string, counts: boolean, players: ReturnType<typeof row>[]): SessionRound {
   return {
     round_id: 1, map_name: map, round_number: 1, played_at: '', duration_seconds: null, end_reason: null,
-    round_status: counts ? 'completed' : 'cancelled', counts_toward_totals: counts, match_id: null, players,
+    round_status: counts ? 'completed' : 'cancelled', counts_toward_totals: counts, match_id: null,
+    surrender: null, pauses: { count: 0, total_seconds: 0 }, time_limit_minutes: null, warmup_seconds: null,
+    bot_player_count: null, score_confidence: null, next_timelimit_minutes: null, players,
   };
 }
 
