@@ -50,9 +50,15 @@ export const ROUND_COLUMNS = [
   { key: 'deaths', label: 'd' },
   { key: 'headshot_kills', label: 'hs' },
   { key: 'revives_given', label: 'rev' },
+  // The four counters the round recorded and nobody read (ledger 2026-09-08).
+  { key: 'kill_steals', label: 'steals', title: 'kills finished on an opponent someone else had brought low' },
+  { key: 'death_spree_worst', label: 'worst run', title: 'the longest run of deaths without a kill' },
+  { key: 'team_gibs', label: 'tg', title: 'gibs on teammates' },
+  { key: 'tank_meatshield', label: 'tank', title: 'damage soaked at the front as the tank' },
 ] as const satisfies readonly {
   key: keyof RoundPlayerRow;
   label: string;
+  title?: string;
   format?: (value: number) => string;
 }[];
 
@@ -107,6 +113,7 @@ function HeadRow({ columns }: { columns: readonly typeof ROUND_COLUMNS[number][]
       {columns.map((c) => (
         <th
           key={c.key}
+          title={'title' in c ? c.title : undefined}
           style={{ textAlign: 'right', padding: `${SPACE[1]} ${SPACE[2]}`,
                    fontSize: FS.micro, letterSpacing: '0.08em',
                    textTransform: 'uppercase', color: 'var(--color-text-500)',
@@ -154,10 +161,15 @@ function PlayerRows({
                   onClick={onSelectPlayer ? () => { onSelectPlayer(p.player_guid); } : undefined}
                   disabled={!onSelectPlayer}
                   aria-expanded={onSelectPlayer ? open : undefined}
-                  style={{ all: 'unset', cursor: onSelectPlayer ? 'pointer' : 'default', color: 'inherit' }}
+                  // Not `all: unset`: that also drops the outline and hides
+                  // :focus-visible from tokens.css (Codex on #989).
+                  style={{ background: 'none', border: 0, padding: 0, font: 'inherit', cursor: onSelectPlayer ? 'pointer' : 'default', color: 'inherit' }}
                 >
                   {p.player_name}
                 </button>
+                {p.time_dead_reconstructed && (
+                  <span title="dead time reconstructed from the round's timeline, not read from the stats file" style={{ marginInlineStart: SPACE[1], fontSize: FS.micro, color: 'var(--color-text-500)' }}>~dead</span>
+                )}
               </td>
               {columns.map((c) => {
                 const raw = p[c.key];
@@ -203,6 +215,36 @@ function RoundHeading({ round }: { round: SessionRound }) {
                        textTransform: 'uppercase', letterSpacing: '0.08em' }}>
           {round.end_reason}
         </span>
+      ) : null}
+      {round.time_limit_minutes != null && round.time_limit_minutes > 0 ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)' }} title="the stopwatch limit the webhook recorded">
+          limit {round.time_limit_minutes} min
+        </span>
+      ) : null}
+      {round.next_timelimit_minutes != null && round.round_number === 1 ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)' }} title="the limit this half set for the second">
+          sets R2 to {round.next_timelimit_minutes} min
+        </span>
+      ) : null}
+      {round.surrender ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-accent-warm)' }} title="who typed the surrender, per the webhook">
+          {round.surrender.team === 1 ? 'Axis' : round.surrender.team === 2 ? 'Allies' : 'a side'} surrendered · called by {round.surrender.caller_name}
+        </span>
+      ) : null}
+      {/* `?.` on purpose: a recording from before 2026-09-08 has no pauses block. */}
+      {(round.pauses?.count ?? 0) > 0 ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)' }}>
+          {round.pauses.count} pause{round.pauses.count === 1 ? '' : 's'} · {mmss(round.pauses.total_seconds)}
+        </span>
+      ) : null}
+      {round.warmup_seconds != null && round.warmup_seconds > 0 ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)' }}>warm-up {mmss(round.warmup_seconds)}</span>
+      ) : null}
+      {round.bot_player_count != null && round.bot_player_count > 0 ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-accent-warm)' }}>{round.bot_player_count} bot{round.bot_player_count === 1 ? '' : 's'}</span>
+      ) : null}
+      {round.score_confidence ? (
+        <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)' }} title="where the score came from">score {round.score_confidence.replace(/_/g, ' ')}</span>
       ) : null}
       {excluded ? (
         // ⛔ Say it, do not hide the round. The session endpoint drops these
@@ -291,7 +333,7 @@ export function RoundsTable({
                 round
               </th>
               {cols.map((c) => (
-                <th key={c.key}
+                <th key={c.key} title={'title' in c ? c.title : undefined}
                     style={{ textAlign: 'right', padding: `${SPACE[1]} ${SPACE[2]}`,
                              fontSize: FS.micro, letterSpacing: '0.08em',
                              textTransform: 'uppercase',

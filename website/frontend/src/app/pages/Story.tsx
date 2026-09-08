@@ -1116,7 +1116,16 @@ function Roles({ gsid }: { gsid: number }) {
             rows={camp.data.players.filter((r) => r.hold_pct != null)}
             value={(r) => r.hold_pct ?? 0}
             unit="%"
+            detail={(r) => (r.hold_time_s == null ? null
+              : `${mmss(Math.round(r.hold_time_s))} held · still ${figure(r.still_pct ?? 0)} % (${mmss(Math.round(r.still_time_s ?? 0))}) of ${mmss(Math.round(r.alive_s ?? 0))} alive · ${figure(r.tracks ?? 0)} tracks${r.top_cells?.[0] ? ` · busiest cell ${figure(r.top_cells[0][0])},${figure(r.top_cells[0][1])} for ${mmss(Math.round(r.top_cells[0][2]))}` : ''}`)}
           />
+        )}
+        {camp.data?.coverage && (
+          <Meta>
+            camp profile read {figure(camp.data.coverage.tracks_used)} of {figure(camp.data.coverage.tracks_fetched)} tracks
+            {camp.data.coverage.tracks_skipped > 0 && <> ({figure(camp.data.coverage.tracks_skipped)} skipped)</>}
+            {camp.data.thresholds && <> · hold = within {figure(camp.data.thresholds.hold_radius_u ?? 96)} u for {figure(camp.data.thresholds.hold_min_s ?? 4)} s · still = under {figure(camp.data.thresholds.still_speed_lt ?? 10)} u/s for {figure(camp.data.thresholds.still_min_s ?? 3)} s · cells {figure(camp.data.thresholds.cell_u ?? 512)} u · alive ≥ {figure(camp.data.thresholds.min_alive_s ?? 60)} s</>}
+          </Meta>
         )}
         {/* Not from the position tracker like its four neighbours — this one
           * is counted from kill outcomes and spawn timers, which is why it
@@ -1318,6 +1327,12 @@ export function SessionStory({ gsid }: { gsid: number }) {
                     </span>
                   </Cluster>
                 </Cluster>
+                {/* The rest of the row's numbers — fetched since phase 5, shown since
+                    the 2026-09-08 ledger: the kinds of kill the score is made of. */}
+                <Meta>
+                  {figure(p.push_kills)} push · {figure(p.crossfire_kills)} crossfire · {figure(p.solo_clutch_kills)} solo clutch · {figure(p.outnumbered_kills)} outnumbered · {figure(p.spawn_denial_kills)} spawn denial
+                  {' · '}avg impact {figure(p.avg_impact)} · denied {mmss(p.denied_time)} · dead {figure(Math.round(p.time_dead_pct * 100))} % · {figure(p.revives_given)} revives · {p.archetype.replace(/_/g, ' ')}
+                </Meta>
                 {openKis === p.guid && <KisDetails gsid={gsid} guid={p.guid} name={p.name} />}
               </Stack>
             ))}
