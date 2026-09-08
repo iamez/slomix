@@ -344,10 +344,18 @@ class LiveStateReducer:
             if victim is not None:
                 self._live_stat(victim)["alive"] = False
             killer = self._slot(ev, "killer_slot")
+            # A self-kill / world kill arrives with the tracker's sentinels:
+            # distance -1, killer_health -1 and a killer_pos of 0,0 (measured
+            # on the recorded evening of 2026-09-07). Those are not a point on
+            # the map; a mini map would draw a line from the origin.
+            distance = ev.get("distance")
+            no_killer = isinstance(distance, (int, float)) and distance < 0
             self._recent_kills.append({
-                "killer_slot": killer, "victim_slot": victim,
-                "killer_pos": _xy(ev.get("killer_pos")), "victim_pos": _xy(ev.get("victim_pos")),
-                "distance": ev.get("distance"), "killer_health": ev.get("killer_health"),
+                "killer_slot": None if no_killer else killer, "victim_slot": victim,
+                "killer_pos": None if no_killer else _xy(ev.get("killer_pos")),
+                "victim_pos": _xy(ev.get("victim_pos")),
+                "distance": None if no_killer else distance,
+                "killer_health": None if no_killer else ev.get("killer_health"),
                 "mod_id": ev.get("mod_id"), "at": at,
             })
             del self._recent_kills[:-_RECENT_KILLS_MAX]
