@@ -10,12 +10,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Chip, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
 import { ApiError } from '../lib/api';
 import { stripEtColors } from '../lib/names';
 import { mapLabel } from '../lib/maps';
 import { useMapMesh, useSpiderWebMoment } from '../lib/queries';
-import type { SpiderClock, SpiderWebSnapshot } from '../lib/types';
+import { DataTable, type DataColumn } from '../components/DataTable';
+import { mmss } from '../components/RoundsTable';
+import type { SpiderBelief, SpiderClock, SpiderPlayer, SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
 
 const POVS = [
@@ -146,6 +148,100 @@ function drawMoment(
   }
 }
 
+const STANCE_WORD: Record<number, string> = { 0: 'standing', 1: 'crouching', 2: 'prone' };
+
+/** Every placed player at this moment with the track fields the canvas
+ *  cannot show: how stale the sample is, which track it came from, whether
+ *  it collided with another, the velocity and why it may be missing, and
+ *  the geometric distance to the nearest teammate. */
+function PlacedPlayers({ snap }: { snap: SpiderWebSnapshot }) {
+  const sep = snap.nearest_teammate_separation ?? {};
+  const columns: DataColumn<SpiderPlayer>[] = [
+    { key: 'name', label: 'player', width: 140, align: 'left', format: (p) => p.name ?? p.guid.slice(0, 8), sortValue: (p) => p.name ?? p.guid },
+    { key: 'team', label: 'team', sortValue: (p) => p.team },
+    { key: 'class', label: 'class', format: (p) => p.class ?? <Meta>—</Meta>, sortValue: (p) => p.class },
+    { key: 'alive', label: 'state', format: (p) => (p.alive ? 'alive' : 'down'), sortValue: (p) => (p.alive ? 1 : 0) },
+    { key: 'health', label: 'hp', align: 'right', sortValue: (p) => p.health },
+    { key: 'stance', label: 'stance', format: (p) => STANCE_WORD[p.stance] ?? String(p.stance), sortValue: (p) => p.stance },
+    { key: 'speed', label: 'speed', align: 'right', title: 'game units per second', format: (p) => figure(Math.round(p.speed)), sortValue: (p) => p.speed },
+    { key: 'vz', label: 'vz', align: 'right', title: 'vertical velocity — null when no second sample within the window', format: (p) => (p.vz == null ? <Meta>—</Meta> : figure(Math.round(p.vz))), sortValue: (p) => p.vz },
+    { key: 'velocity_reason', label: 'velocity', title: 'why the velocity is what it is (the server names it)', format: (p) => p.velocity_reason ?? <Meta>—</Meta>, sortValue: (p) => p.velocity_reason },
+    { key: 'velocity_stale_ms', label: 'v stale', align: 'right', title: 'ms since the velocity sample', format: (p) => (p.velocity_stale_ms == null ? <Meta>—</Meta> : figure(p.velocity_stale_ms)), sortValue: (p) => p.velocity_stale_ms },
+    { key: 'stale_ms', label: 'stale', align: 'right', title: 'ms since the position sample', sortValue: (p) => p.stale_ms },
+    { key: 'track_id', label: 'track', align: 'right', sortValue: (p) => p.track_id },
+    { key: 'overlap_conflict', label: 'overlap', title: 'two tracks claimed this player at once', format: (p) => (p.overlap_conflict ? 'conflict' : <Meta>—</Meta>), sortValue: (p) => (p.overlap_conflict ? 1 : 0) },
+    { key: 'nearest', label: 'nearest mate', align: 'right', title: 'geometric distance to the nearest teammate — not tactical support distance', format: (p) => (sep[p.guid] == null ? <Meta>—</Meta> : figure(Math.round(sep[p.guid]))), sortValue: (p) => sep[p.guid] ?? null },
+  ];
+  return (
+    <div data-parity="spider-web.players">
+      <SectionHead label="placed players" aside={<span className="lbl">{figure(snap.players.length)} at {mmss(snap.t_ms / 1000)}</span>} />
+      <div style={{ marginTop: 'var(--space-3)' }}>
+        <DataTable<SpiderPlayer> parity="spider-web.players.table" label="placed players" columns={columns} rows={snap.players} rowKey={(p) => p.guid} defaultSort={{ key: 'team', dir: 'asc' }} minWidth={1100} />
+      </div>
+    </div>
+  );
+}
+
+/** Layer 3 — what each player knows: the beliefs the server grants a holder
+ *  (a LOWER BOUND, per its own notes), one row per belief, and the gaps: every
+ *  player without a state and why. */
+function Beliefs({ snap }: { snap: SpiderWebSnapshot }) {
+  const nameOf = (guid: string | null) => (guid == null ? '—' : (snap.players.find((p) => p.guid === guid)?.name ?? guid.slice(0, 8)));
+  const holders = Object.values(snap.information_state?.holders ?? {});
+  type Row = SpiderBelief & { holder: string; id: string };
+  const rows: Row[] = holders.flatMap((h) => h.beliefs.map((b, i) => ({ ...b, holder: nameOf(h.holder_guid), id: `${h.holder_guid}-${String(i)}` })));
+  const columns: DataColumn<Row>[] = [
+    { key: 'holder', label: 'who knows', width: 120, align: 'left', sortValue: (r) => r.holder },
+    { key: 'kind', label: 'belief', format: (r) => r.kind.replace(/_/g, ' '), sortValue: (r) => r.kind },
+    { key: 'subject', label: 'about', format: (r) => nameOf(r.subject_guid), sortValue: (r) => nameOf(r.subject_guid) },
+    { key: 'roster_state', label: 'state', format: (r) => r.roster_state?.replace(/_/g, ' ') ?? <Meta>—</Meta>, sortValue: (r) => r.roster_state },
+    { key: 'source', label: 'from', format: (r) => r.source?.replace(/_/g, ' ') ?? <Meta>—</Meta>, sortValue: (r) => r.source },
+    { key: 't_observed', label: 'seen at', align: 'right', format: (r) => (r.t_observed == null ? <Meta>—</Meta> : mmss(r.t_observed / 1000)), sortValue: (r) => r.t_observed },
+    { key: 'confidence', label: 'conf', align: 'right', title: '0–1, decays by the expiry basis', format: (r) => figure(Math.round(r.confidence * 100) / 100), sortValue: (r) => r.confidence },
+    { key: 'counts_as_known', label: 'known', format: (r) => (r.counts_as_known ? 'yes' : <Meta>no</Meta>), sortValue: (r) => (r.counts_as_known ? 1 : 0) },
+    { key: 'capability', label: 'capability', format: (r) => r.capability ?? <Meta>—</Meta>, sortValue: (r) => r.capability },
+    { key: 'expiry_basis', label: 'expires by', format: (r) => r.expiry_basis?.replace(/_/g, ' ') ?? <Meta>—</Meta>, sortValue: (r) => r.expiry_basis },
+    { key: 'region', label: 'region', title: 'centre and radius in game units, when the belief is a region', format: (r) => (r.region ? `r ${figure(Math.round(r.region.radius))} at ${figure(Math.round(r.region.x))}, ${figure(Math.round(r.region.y))}` : <Meta>—</Meta>), sortValue: (r) => r.region?.radius ?? null },
+  ];
+  const gaps = Object.entries(snap.gaps ?? {});
+  return (
+    <div data-parity="spider-web.beliefs">
+      <SectionHead
+        label="what each player knows"
+        aside={<span className="lbl">{snap.information_state?.pov ?? 'world'} pov · gunfire audible within {snap.information_state?.audible_gunfire_radius == null ? '—' : figure(snap.information_state.audible_gunfire_radius)}</span>}
+      />
+      <Stack gap={3} style={{ marginTop: 'var(--space-3)' }}>
+        <Cluster gap={5} style={{ flexWrap: 'wrap' }}>
+          {holders.map((h) => (
+            <Stack key={h.holder_guid} gap={1} style={{ minWidth: 200 }}>
+              <span style={{ fontSize: 'var(--fs-row)' }}>{nameOf(h.holder_guid)}</span>
+              <Meta>
+                knows of {figure(h.known_enemy_count)} {h.known_enemy_count === 1 ? 'enemy' : 'enemies'}
+                {h.nearest_known_enemy_distance != null && <> · nearest known {figure(Math.round(h.nearest_known_enemy_distance))}</>}
+                {h.nearest_heard_activity_distance != null && <> · heard at {figure(Math.round(h.nearest_heard_activity_distance))}</>}
+                {h.position_claim_max_radius != null && <> · claims within {figure(Math.round(h.position_claim_max_radius))}</>}
+              </Meta>
+              {Object.entries(h.unavailable ?? {}).map(([channel, why]) => (
+                <Meta key={channel}>{channel.replace(/_/g, ' ')} unavailable: {why}</Meta>
+              ))}
+            </Stack>
+          ))}
+        </Cluster>
+        {rows.length === 0
+          ? <Absent reason="no beliefs granted at this moment — nothing has been seen, heard or reported yet" />
+          : <DataTable<Row> parity="spider-web.beliefs.table" label="beliefs" columns={columns} rows={rows} rowKey={(r) => r.id} defaultSort={{ key: 'holder', dir: 'asc' }} minWidth={1000} />}
+        {gaps.length > 0 && (
+          <Stack gap={1}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>without a state</Lbl>
+            {gaps.map(([guid, why]) => <Meta key={guid}>{nameOf(guid)}: {why}</Meta>)}
+          </Stack>
+        )}
+        {holders.flatMap((h) => h.notes ?? []).filter((n, i, a) => a.indexOf(n) === i).map((n) => <Meta key={n}>{n}</Meta>)}
+      </Stack>
+    </div>
+  );
+}
+
 export function SpiderWebPage() {
   const params = useParams();
   const roundId = params.roundId != null && /^\d+$/.test(params.roundId) ? Number(params.roundId) : null;
@@ -186,16 +282,15 @@ export function SpiderWebPage() {
           {figure(snap.player_count)} players placed · capture {snap.capture_policy.mode}
           {snap.capture_policy.observation_interval_ms != null && <> · sampled every {figure(snap.capture_policy.observation_interval_ms)} ms</>}
           {snap.overlap_conflicts > 0 && <> · {figure(snap.overlap_conflicts)} overlap conflicts</>}
+          {' '}· first position at {mmss(snap.first_position_ms / 1000)} · velocity window {figure(snap.velocity_max_dt_ms)} ms
+          {snap.capture_policy.manifest_version != null && <> · manifest v{snap.capture_policy.manifest_version} ×{figure(snap.capture_policy.manifest_count)}</>}
         </Meta>
       </Stack>
 
       <div data-parity="spider-web.controls">
         <Cluster gap={4} align="center" style={{ flexWrap: 'wrap' }}>
           {POVS.map((p) => (
-            <button key={p.key} type="button" onClick={() => setPov(p.key)} aria-pressed={pov === p.key}
-              style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', textTransform: 'uppercase', color: pov === p.key ? 'var(--color-text-100)' : 'var(--color-text-400)' }}>
-              {p.label}
-            </button>
+            <Chip key={p.key} active={pov === p.key} label={p.label} onClick={() => setPov(p.key)} />
           ))}
           <input
             type="range" min={0} max={Math.max(durationMs, 1)} step={1000} value={tLive}
@@ -244,6 +339,20 @@ export function SpiderWebPage() {
         {snap.capture_policy.conflicting_flags > 0 && (
           <Meta>{figure(snap.capture_policy.conflicting_flags)} conflicting manifest flags</Meta>
         )}
+      </div>
+
+      <PlacedPlayers snap={snap} />
+      <Beliefs snap={snap} />
+      <div data-parity="spider-web.accuracy">
+        <SectionHead label="reconstruction accuracy" aside={<span className="lbl">measured {snap.reconstruction_accuracy.measured_at}</span>} />
+        <Stack gap={1} style={{ marginTop: 'var(--space-3)' }}>
+          <Meta>
+            {figure(snap.reconstruction_accuracy.rounds)} rounds ·
+            {Object.entries(snap.reconstruction_accuracy.samples).map(([k, v]) => ` ${figure(v)} ${k} samples`).join(' ·')}
+            {' '}· unit: {snap.reconstruction_accuracy.unit}
+          </Meta>
+          <Meta>sources: {snap.reconstruction_accuracy.sources.join(', ')} · excluded: {snap.reconstruction_accuracy.excluded} · {snap.reconstruction_accuracy.script}</Meta>
+        </Stack>
       </div>
 
       {snap.notes.length > 0 && (

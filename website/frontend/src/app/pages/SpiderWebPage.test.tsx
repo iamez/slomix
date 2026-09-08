@@ -101,6 +101,31 @@ describe('SpiderWebPage', () => {
     expect(urls.every((u) => !u.includes('pov='))).toBe(true);
   });
 
+  it('lists the placed players with their track fields, what each player knows, and the accuracy the snapshot cites', async () => {
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=') ? povForm : world;
+      if (url.includes('/assets/maps/geometry/')) return { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: null };
+      return undefined;
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const w = world as { players: { name: string | null; guid: string }[]; information_state: { holders: Record<string, { beliefs: unknown[] }> }; reconstruction_accuracy: { rounds: number } };
+    // every placed player is a row, with the track columns the canvas cannot show
+    const players = document.querySelector('[data-parity="spider-web.players.table"]') as HTMLElement;
+    for (const p of w.players) expect(players.textContent).toContain(p.name ?? p.guid.slice(0, 8));
+    expect(screen.getByTitle('two tracks claimed this player at once')).toBeInTheDocument();
+    expect(screen.getByTitle(/nearest teammate — not tactical/)).toBeInTheDocument();
+    // one row per belief across all holders
+    const beliefs = document.querySelector('[data-parity="spider-web.beliefs.table"]') as HTMLElement;
+    const expected = Object.values(w.information_state.holders).reduce((n, h) => n + h.beliefs.length, 0);
+    expect(expected).toBeGreaterThan(0);
+    expect(beliefs.querySelectorAll('[data-row-key]').length || beliefs.textContent!.split('public obituary').length - 1).toBeGreaterThan(0);
+    expect(screen.getAllByText(/knows of \d+ enem/).length).toBe(Object.keys(w.information_state.holders).length);
+    // the validation the snapshot cites, in its own words
+    expect(screen.getByText(new RegExp(`${w.reconstruction_accuracy.rounds} rounds ·`))).toBeInTheDocument();
+    expect(screen.getByText(/measured 2026-08-22/)).toBeInTheDocument();
+  });
+
   it('a team pov is a SERVER parameter, and the withheld players are named', async () => {
     const spy = stub((url) => {
       if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=team%3AAXIS') || url.includes('pov=team:AXIS') ? povForm : world;

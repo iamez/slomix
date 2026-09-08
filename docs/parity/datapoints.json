@@ -7,11 +7,11 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2985,
-  "unread": 517,
+  "read": 3004,
+  "unread": 498,
   "dropped": 42,
   "endpoints": 176,
-  "endpoints_fully_read": 64,
+  "endpoints_fully_read": 65,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -506,8 +506,8 @@
    "dropped": 0
   },
   "/api/replay/round/{round_id}/web": {
-   "read": 45,
-   "unread": 19,
+   "read": 64,
+   "unread": 0,
    "dropped": 1
   },
   "/api/rivalries/h2h/{guid1}/{guid2}": {
@@ -10672,12 +10672,12 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "capture_policy.manifest_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "capture_policy.manifest_version",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10742,27 +10742,27 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "first_position_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "gaps",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state.audible_gunfire_radius",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state.holders",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10777,7 +10777,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "nearest_teammate_separation",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10833,7 +10833,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.overlap_conflict",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10848,7 +10848,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.stale_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10863,17 +10863,17 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.track_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.velocity_reason",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.velocity_stale_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10888,7 +10888,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.vz",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10913,7 +10913,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10923,7 +10923,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.measured_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10938,12 +10938,12 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.script",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "reconstruction_accuracy.sources",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
@@ -10973,7 +10973,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "velocity_max_dt_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",

@@ -3764,6 +3764,56 @@ export interface SpiderWebSnapshot {
   };
   withheld_by_pov: string[];
   notes: string[];
+  /** Layer 3 — what each player KNOWS at this moment (information_state.py):
+   *  per holder, the beliefs the server grants them and the counts derived
+   *  from those. Typed 2026-09-08 when the page started drawing them; the
+   *  legacy spider-web.js had. `gaps` names every player without a state
+   *  and why — a player is never simply absent (the server's own note). */
+  information_state: {
+    holders: Record<string, SpiderHolder>;
+    audible_gunfire_radius: number | null;
+    pov: string | null;
+  };
+  gaps: Record<string, string>;
+  /** Layer-1 validation the snapshot cites: where the coordinates were
+   *  checked, over how many rounds and samples, and what was excluded. */
+  reconstruction_accuracy: {
+    measured_at: string;
+    script: string;
+    rounds: number;
+    samples: Record<string, number>;
+    sources: string[];
+    unit: string;
+    excluded: string;
+  };
+  /** Geometric distance to the nearest teammate, by guid — not tactical
+   *  support distance (the server's own note). */
+  nearest_teammate_separation: Record<string, number>;
+}
+
+export interface SpiderBelief {
+  kind: string;
+  source: string;
+  subject_guid: string | null;
+  roster_state: string | null;
+  t_observed: number | null;
+  confidence: number;
+  counts_as_known: boolean;
+  /** Null on beliefs the recording carries without one (position regions). */
+  capability: string | null;
+  expiry_basis: string | null;
+  region: { x: number; y: number; z: number; radius: number } | null;
+}
+export interface SpiderHolder {
+  holder_guid: string;
+  known_enemy_count: number;
+  nearest_known_enemy_distance: number | null;
+  nearest_heard_activity_distance: number | null;
+  beliefs: SpiderBelief[];
+  position_claim_max_radius: number | null;
+  /** Channels this holder cannot have, each with the server's reason. */
+  unavailable: Record<string, string>;
+  notes: string[];
 }
 
 /** Flat triangle mesh under /assets/maps/geometry/<map>.json — static, and
