@@ -46,12 +46,6 @@
 /api/live-status voice_channel.channel_name
 /api/live-status voice_channel.updated_at
 /api/live/feed server_time
-/api/live/state game_state
-/api/live/state previous_map
-/api/live/state recent_objectives
-/api/live/state recent_roster_changes
-/api/live/state round_elapsed_seconds
-/api/live/state session_start_seconds
 /api/planning/today committed_count
 /api/planning/today participant_count
 /api/planning/today session.created_by_user_id
@@ -385,8 +379,6 @@
 /api/stats/maps max_duration
 /api/stats/maps min_duration
 /api/stats/maps total_deaths
-/api/stats/matches allies_score
-/api/stats/matches axis_score
 /api/stats/matches score_display
 /api/stats/matches team2_name
 /api/stats/overview most_active_14d
@@ -410,15 +402,12 @@
 /api/stats/session/{gaming_session_id}/mvp most_underrated_guid
 /api/stats/session/{gaming_session_id}/mvp my_vote
 /api/stats/session/{gaming_session_id}/rounds rounds.played_at
-/api/stats/tonight director
-/api/stats/tonight hold_probability
 /api/stats/trends dates
 /api/status service
 /api/storytelling/best-lives scope.accepted_round_count
 /api/storytelling/best-lives scope.dates
 /api/storytelling/best-lives scope.distinct_map_names
 /api/storytelling/best-lives scope.last_round_unix
-/api/storytelling/box-score maps_completed
 /api/storytelling/box-score scope.accepted_round_count
 /api/storytelling/box-score scope.dates
 /api/storytelling/box-score scope.distinct_map_names
