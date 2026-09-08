@@ -12,7 +12,7 @@ import { Stack } from '../components/layout';
 import { Lbl, Meta, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
-import type { ObjectiveRuns } from '../lib/types';
+import type { CarrierReturns, ObjectiveRuns } from '../lib/types';
 import {
   useCarrierEvents, useCarrierKills, useCarrierReturns, useConstructionEvents,
   useEscortCredits, useObjectiveFocus, useObjectiveRuns, useVehicleProgress,
@@ -39,6 +39,18 @@ const RECENT_RUN_COLUMNS: DataColumn<RecentRun>[] = [
   { key: 'self_kills', label: 'sk', align: 'right', sortValue: (r) => r.self_kills },
   { key: 'team_kills', label: 'tk', align: 'right', sortValue: (r) => r.team_kills },
   { key: 'killer_name', label: 'stopped by', format: (r) => (r.killer_name ? stripEtColors(r.killer_name) : <Meta>—</Meta>), sortValue: (r) => r.killer_name },
+];
+
+type ReturnEvent = CarrierReturns['events'][number] & { id: string };
+const RETURN_COLUMNS: DataColumn<ReturnEvent>[] = [
+  { key: 'returner', label: 'returned by', format: (e) => (e.returner_name ? stripEtColors(e.returner_name) : <Meta>—</Meta>), sortValue: (e) => e.returner_name },
+  { key: 'returner_team', label: 'side', format: (e) => e.returner_team.toLowerCase(), sortValue: (e) => e.returner_team },
+  { key: 'flag_team', label: 'flag', format: (e) => e.flag_team.replace(/flag$/, ' flag'), sortValue: (e) => e.flag_team },
+  { key: 'map', label: 'map', format: (e) => mapLabel(e.map_name), sortValue: (e) => e.map_name },
+  { key: 'return_time', label: 'at', align: 'right', title: 'the round clock', format: (e) => mmss(e.return_time / 1000), sortValue: (e) => e.return_time },
+  { key: 'return_delay_ms', label: 'after the drop', align: 'right', format: (e) => mmss(e.return_delay_ms / 1000), sortValue: (e) => e.return_delay_ms },
+  { key: 'drop', label: 'where it lay', format: (e) => (e.drop_x == null || e.drop_y == null ? <Meta>—</Meta> : `${figure(Math.round(e.drop_x))}, ${figure(Math.round(e.drop_y))}${e.drop_z != null ? `, ${figure(Math.round(e.drop_z))}` : ''}`), sortValue: (e) => e.drop_x ?? null },
+  { key: 'original_carrier_guid', label: 'dropped by', title: 'guid of the carrier who lost it', format: (e) => e.original_carrier_guid.slice(0, 8), sortValue: (e) => e.original_carrier_guid },
 ];
 
 export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string | null }) {
@@ -107,6 +119,18 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                 {d.returners.slice(0, 5).map((r) => (
                   <ProxRow key={r.guid} name={nameOf(r.name, r.guid)} mid={`avg ${figure(Math.round(r.avg_delay_ms / 1000))} s after the drop`} val={`${figure(r.returns)}×`} />
                 ))}
+                {d.events.length > 0 && (
+                  <div style={{ marginTop: 'var(--space-3)' }}>
+                    <DataTable<ReturnEvent>
+                      parity="proximity.flag-returns.events"
+                      label="the returns, one by one"
+                      columns={RETURN_COLUMNS}
+                      rows={d.events.map((e, i) => ({ ...e, id: `${e.map_name}-${String(e.return_time)}-${String(i)}` }))}
+                      rowKey={(e) => e.id}
+                      minWidth={760}
+                    />
+                  </div>
+                )}
               </Stack>
             )}
           </ProxPanel>
@@ -139,7 +163,12 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                   <ProxRow
                     key={`${v.map_name}:${v.round_number}:${i}`}
                     name={`${v.vehicle_name} · ${mapLabel(v.map_name)} r${v.round_number}`}
-                    mid={v.destroyed_count > 0 ? `destroyed ${figure(v.destroyed_count)}×` : undefined}
+                    mid={[
+                      v.vehicle_type ? v.vehicle_type.replace(/_/g, ' ') : null,
+                      v.destroyed_count > 0 ? `destroyed ${figure(v.destroyed_count)}×` : null,
+                      v.max_health > 0 ? `health ${figure(v.final_health)} of ${figure(v.max_health)} at the end` : null,
+                      (v.end_x != null && v.end_y != null && (v.end_x !== 0 || v.end_y !== 0)) ? `ended at ${figure(Math.round(v.end_x))}, ${figure(Math.round(v.end_y))}${(v.start_x ?? 0) !== 0 || (v.start_y ?? 0) !== 0 ? ` from ${figure(Math.round(v.start_x ?? 0))}, ${figure(Math.round(v.start_y ?? 0))}` : ''}` : null,
+                    ].filter(Boolean).join(' · ') || undefined}
                     val={`${figure(Math.round(v.total_distance))} u`}
                   />
                 ))}

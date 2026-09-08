@@ -59,10 +59,10 @@
   "/api/proximity/construction-events": "14 files reachable from the endpoint's callers",
   "/api/proximity/crossfire-angles": "20 files reachable from the endpoint's callers",
   "/api/proximity/duos": "10 files reachable from the endpoint's callers",
-  "/api/proximity/engagements": "11 files reachable from the endpoint's callers",
+  "/api/proximity/engagements": "12 files reachable from the endpoint's callers",
   "/api/proximity/escort-credits": "14 files reachable from the endpoint's callers",
-  "/api/proximity/event/{event_id}": "11 files reachable from the endpoint's callers",
-  "/api/proximity/events": "11 files reachable from the endpoint's callers",
+  "/api/proximity/event/{event_id}": "12 files reachable from the endpoint's callers",
+  "/api/proximity/events": "12 files reachable from the endpoint's callers",
   "/api/proximity/focus-fire": "20 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions": "10 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions/by-weapon": "10 files reachable from the endpoint's callers",
@@ -188,11 +188,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2922,
-  "unread": 655,
+  "read": 2994,
+  "unread": 583,
   "dropped": 63,
   "endpoints": 179,
-  "endpoints_fully_read": 48,
+  "endpoints_fully_read": 49,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -357,8 +357,8 @@
    "dropped": 0
   },
   "/api/proximity/carrier-events": {
-   "read": 23,
-   "unread": 12,
+   "read": 25,
+   "unread": 10,
    "dropped": 0
   },
   "/api/proximity/carrier-kills": {
@@ -367,8 +367,8 @@
    "dropped": 0
   },
   "/api/proximity/carrier-returns": {
-   "read": 14,
-   "unread": 10,
+   "read": 24,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/classes": {
@@ -442,8 +442,8 @@
    "dropped": 0
   },
   "/api/proximity/construction-events": {
-   "read": 13,
-   "unread": 5,
+   "read": 14,
+   "unread": 4,
    "dropped": 0
   },
   "/api/proximity/crossfire-angles": {
@@ -467,13 +467,13 @@
    "dropped": 0
   },
   "/api/proximity/event/{event_id}": {
-   "read": 32,
-   "unread": 30,
+   "read": 60,
+   "unread": 2,
    "dropped": 0
   },
   "/api/proximity/events": {
-   "read": 23,
-   "unread": 9,
+   "read": 25,
+   "unread": 7,
    "dropped": 0
   },
   "/api/proximity/focus-fire": {
@@ -597,8 +597,8 @@
    "dropped": 0
   },
   "/api/proximity/quality": {
-   "read": 22,
-   "unread": 13,
+   "read": 32,
+   "unread": 3,
    "dropped": 1
   },
   "/api/proximity/reactions": {
@@ -647,8 +647,8 @@
    "dropped": 0
   },
   "/api/proximity/teamplay": {
-   "read": 28,
-   "unread": 14,
+   "read": 40,
+   "unread": 2,
    "dropped": 0
   },
   "/api/proximity/trades/events": {
@@ -672,8 +672,8 @@
    "dropped": 0
   },
   "/api/proximity/vehicle-progress": {
-   "read": 8,
-   "unread": 9,
+   "read": 15,
+   "unread": 2,
    "dropped": 0
   },
   "/api/proximity/weapon-accuracy": {
@@ -3910,7 +3910,7 @@
   {
    "endpoint": "/api/proximity/carrier-events",
    "key": "events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-events",
@@ -3945,7 +3945,7 @@
   {
    "endpoint": "/api/proximity/carrier-events",
    "key": "events.flag_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-events",
@@ -4060,27 +4060,27 @@
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.drop_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.drop_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.drop_z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.flag_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
@@ -4090,27 +4090,27 @@
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.original_carrier_guid",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.return_delay_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.return_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.returner_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.returner_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
@@ -5430,7 +5430,7 @@
   {
    "endpoint": "/api/proximity/construction-events",
    "key": "events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/construction-events",
@@ -5825,32 +5825,32 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.sprint",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.stance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.weapon",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5865,7 +5865,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5880,12 +5880,12 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attackers.first_hit_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attackers.got_kill",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5900,7 +5900,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attackers.last_hit_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5930,17 +5930,17 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "end_time_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "end_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "end_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5960,7 +5960,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "num_attackers",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5975,12 +5975,12 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "round_date",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "round_end_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6010,17 +6010,17 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "start_time_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "start_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "start_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6040,7 +6040,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_guid",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6060,32 +6060,32 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.sprint",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.stance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.weapon",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6100,12 +6100,12 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6185,7 +6185,7 @@
   {
    "endpoint": "/api/proximity/events",
    "key": "events.round_date",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/events",
@@ -6210,7 +6210,7 @@
   {
    "endpoint": "/api/proximity/events",
    "key": "events.target_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/events",
@@ -8912,17 +8912,17 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "cache_freshness",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "cache_freshness.latest_context_created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "cache_freshness.latest_kis_created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -8942,12 +8942,12 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "linkage",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "linkage.breach_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -9002,22 +9002,22 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.expected_round_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.latest_created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.missing_existing_round_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.present_proximity_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -9032,7 +9032,7 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.unpaired_round_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -10083,7 +10083,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "crossfire_kills.crossfire_final_blows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10098,7 +10098,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "crossfire_kills.focus_escapes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10118,12 +10118,12 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "crossfire_kills.times_focused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10133,7 +10133,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.crossfire_final_blows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10148,7 +10148,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.focus_escapes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10163,12 +10163,12 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.survival_rate_pct",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.times_focused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10238,7 +10238,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10248,7 +10248,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync.crossfire_final_blows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10263,7 +10263,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync.focus_escapes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10278,7 +10278,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync.times_focused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/trades/events",
@@ -10688,12 +10688,12 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.end_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.end_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10703,7 +10703,7 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.final_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10713,7 +10713,7 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.max_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10728,12 +10728,12 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.start_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.start_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10753,7 +10753,7 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.vehicle_type",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/weapon-accuracy",

@@ -50,6 +50,22 @@ function QualityBand({ sessionDate }: { sessionDate: string | null }) {
                 {' ('}{q.data.round_correlation.complete_count}/{q.data.round_correlation.correlation_count} complete{')'}
               </>
             )}
+            {q.data.round_correlation.expected_round_sides != null && (
+              <>
+                {' · '}sides {figure(q.data.round_correlation.present_proximity_sides ?? 0)}/{figure(q.data.round_correlation.expected_round_sides)}
+                {(q.data.round_correlation.missing_existing_round_sides ?? 0) > 0 && <>, {figure(q.data.round_correlation.missing_existing_round_sides ?? 0)} missing</>}
+                {(q.data.round_correlation.unpaired_round_sides ?? 0) > 0 && <>, {figure(q.data.round_correlation.unpaired_round_sides ?? 0)} unpaired</>}
+              </>
+            )}
+            {q.data.linkage && <> · linkage {q.data.linkage.status}{q.data.linkage.breach_count > 0 ? ` (${figure(q.data.linkage.breach_count)} breaches)` : ''}</>}
+            {q.data.cache_freshness && (
+              <>
+                {' · '}caches {q.data.cache_freshness.status}
+                {q.data.cache_freshness.latest_kis_created_at && <>, KIS {q.data.cache_freshness.latest_kis_created_at.slice(0, 16).replace('T', ' ')}</>}
+                {q.data.cache_freshness.latest_context_created_at && <>, context {q.data.cache_freshness.latest_context_created_at.slice(0, 16).replace('T', ' ')}</>}
+              </>
+            )}
+            {q.data.round_correlation.latest_created_at && <> · correlated {q.data.round_correlation.latest_created_at.slice(0, 16).replace('T', ' ')}</>}
           </Meta>
           <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
             {Object.entries(q.data.signals).map(([key, sig]) => (

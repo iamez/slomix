@@ -12,6 +12,7 @@ import { Link } from 'react-router';
 import { Stack } from '../components/layout';
 import { Lbl, Meta, Pending, Unavailable, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
+import { mmss } from '../components/RoundsTable';
 import { stripEtColors } from '../lib/names';
 import {
   useProxEngagements, useProxEventDetail, useProxEvents,
@@ -32,7 +33,9 @@ function fmtRoundTime(raw: string | null): string | null {
   return `${s.slice(0, 2)}:${s.slice(2, 4)}`;
 }
 
-type PathPoint = { x: number; y: number; event: string | null };
+type PathPoint = { x: number; y: number; event: string | null; time: number | null; z: number | null; health: number | null; speed: number | null; sprint: number | null; stance: number | null; weapon: number | null };
+
+const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 /** The doubly-serialised path: a JSON string when recorded, `[]` when the
  *  column was empty. Parsed behind a guard — a malformed string is an
@@ -51,10 +54,12 @@ function parsePath(raw: string | unknown[]): PathPoint[] {
   }
   if (!Array.isArray(arr)) return [];
   return arr.flatMap((p) => {
-    const q = p as { x?: unknown; y?: unknown; event?: unknown } | null;
+    const q = p as { x?: unknown; y?: unknown; event?: unknown; time?: unknown; z?: unknown; health?: unknown; speed?: unknown; sprint?: unknown; stance?: unknown; weapon?: unknown } | null;
     if (q == null || typeof q.x !== 'number' || !Number.isFinite(q.x)
       || typeof q.y !== 'number' || !Number.isFinite(q.y)) return [];
-    return [{ x: q.x, y: q.y, event: typeof q.event === 'string' ? q.event : null }];
+    // The track-derived paths carry the sample's state too (ledger 2026-09-10).
+    return [{ x: q.x, y: q.y, event: typeof q.event === 'string' ? q.event : null,
+      time: num(q.time), z: num(q.z), health: num(q.health), speed: num(q.speed), sprint: num(q.sprint), stance: num(q.stance), weapon: num(q.weapon) }];
   });
 }
 
@@ -111,12 +116,36 @@ function EventDetail({ eventId }: { eventId: number }) {
         {d.is_crossfire && ' · crossfire'}
         {d.distance_traveled != null && <> · moved {figure(Math.round(d.distance_traveled))} u</>}
       </Meta>
+      {/* The engagement's frame the drill-down used to drop (ledger 2026-09-10):
+          who was targeted and on which side, when it ran on the round clock,
+          from where to where, how many attackers, and the round's own date. */}
+      <Meta>
+        {d.target_name ? stripEtColors(d.target_name) : (d.target_guid?.slice(0, 8) ?? 'target unknown')}{d.target_team ? ` (${d.target_team.toLowerCase()})` : ''}
+        {d.start_time_ms != null && d.end_time_ms != null && <> · {mmss(d.start_time_ms / 1000)}–{mmss(d.end_time_ms / 1000)} on the round clock</>}
+        {d.start_x != null && d.start_y != null && d.end_x != null && d.end_y != null && <> · from {figure(Math.round(d.start_x))}, {figure(Math.round(d.start_y))} to {figure(Math.round(d.end_x))}, {figure(Math.round(d.end_y))}</>}
+        {d.num_attackers != null && <> · {figure(d.num_attackers)} attacker{d.num_attackers === 1 ? '' : 's'}</>}
+        {d.round_date != null && <> · {d.round_date}</>}
+        {d.round_end_unix != null && d.round_start_unix != null && <> · round lasted {mmss(d.round_end_unix - d.round_start_unix)}</>}
+      </Meta>
       {attackers.map((a, i) => (
         <Meta key={a.guid ?? i}>
           {a.name ? stripEtColors(a.name) : (a.guid?.slice(0, 8) ?? 'unknown')}
           {' · '}{figure(a.hits)} hits · {figure(a.damage)} dmg
+          {a.first_hit_ms != null && a.last_hit_ms != null && <> · hit from {mmss(a.first_hit_ms / 1000)} to {mmss(a.last_hit_ms / 1000)}</>}
+          {a.got_kill != null && <> · {a.got_kill ? 'got the kill' : 'no kill'}</>}
         </Meta>
       ))}
+      {attackerPath.some((pt) => pt.health != null || pt.speed != null) && (
+        <Meta>
+          attacker's samples — health {figure(Math.min(...attackerPath.filter((pt) => pt.health != null).map((pt) => pt.health!)))}–{figure(Math.max(...attackerPath.filter((pt) => pt.health != null).map((pt) => pt.health!)))}
+          {' · '}speed up to {figure(Math.round(Math.max(0, ...attackerPath.filter((pt) => pt.speed != null).map((pt) => pt.speed!))))} u/s
+          {' · '}sprinting {figure(Math.round(100 * attackerPath.filter((pt) => pt.sprint === 1).length / Math.max(1, attackerPath.filter((pt) => pt.sprint != null).length)))} % of samples
+          {' · '}stance {Array.from(new Set(attackerPath.map((pt) => pt.stance).filter((v): v is number => v != null))).map((v) => ({ 0: 'standing', 1: 'crouching', 2: 'prone' } as Record<number, string>)[v] ?? String(v)).join('/') || '—'}
+          {' · '}weapons {Array.from(new Set(attackerPath.map((pt) => pt.weapon).filter((v): v is number => v != null))).map((v) => `#${String(v)}`).join(' ') || '—'}
+          {(() => { const zs = attackerPath.map((pt) => pt.z).filter((v): v is number => v != null); return zs.length > 0 ? ` · height ${figure(Math.round(Math.min(...zs)))}–${figure(Math.round(Math.max(...zs)))}` : ''; })()}
+          {(() => { const ts = attackerPath.map((pt) => pt.time).filter((v): v is number => v != null); return ts.length > 1 ? ` · ${figure(ts.length)} samples over ${figure(Math.round((Math.max(...ts) - Math.min(...ts)) / 100) / 10)} s` : ''; })()}
+        </Meta>
+      )}
       {strafeMoved && strafe != null && (
         <Meta>
           movement — target {figure(Math.round(strafe.target.avg_speed))} u/s
