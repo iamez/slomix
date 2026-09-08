@@ -1388,6 +1388,12 @@ export interface SkillFormula {
   shrinkage_k: number;
   normalization: string;
   range: string;
+  /** The formula's own tables (read since 2026-09-08 — 24 keys fetched and
+   * never shown): metric -> weight (signed), metric -> what it measures,
+   * source -> the metrics it feeds. */
+  weights: Record<string, number>;
+  metrics: Record<string, string>;
+  metric_sources: Record<string, string[]>;
 }
 
 export interface SsrComponent {
