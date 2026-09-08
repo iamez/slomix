@@ -36,7 +36,7 @@ STATUSES = {"phase-5", "phase-6", "phase-7", "retired", "unmapped"}
 # Growth is fine (a page maps more of the inventory); shrinkage of coverage —
 # a mapped panel demoted to a status — moves this number UP and must be a
 # reviewed, deliberate edit of this line.
-UNMAPPED_BUDGET = 2  # Map Distribution (home), Charts (session-detail)
+UNMAPPED_BUDGET = 0  # 2026-09-08: Charts -> session.graphs (#990), Map Distribution -> maps.summary (decision)
 
 _PARITY_RE = re.compile(r'parity="([a-z0-9.-]+)"')
 _COMMENT_RE = re.compile(r"/\*.*?\*/|(?<![:\\'\"])//[^\n]*", re.S)
