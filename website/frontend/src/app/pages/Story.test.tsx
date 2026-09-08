@@ -293,6 +293,16 @@ describe('SessionStory (the session page story tab)', () => {
     expect(screen.getAllByText(/objective specialist/).length).toBeGreaterThan(0);
   });
 
+  it('prints the scope once, the winner and the maps completed, and the dropped fields of movement, lurker and win contribution', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/scope: gaming session · 12 accepted rounds · 2026-08-27 · 4 maps/)).toBeInTheDocument());
+    expect(screen.getByText(/Team B took the evening · 6 maps completed/)).toBeInTheDocument();
+    expect(screen.getAllByText(/lives · \d+ u after a spawn · \d+:\d\d alive/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/alone = no teammate within 500 u, sampled every 1,000 ms · read 937 of 937 tracks/)).toBeInTheDocument();
+    expect(screen.getAllByText(/pwc by round/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/enabler counts a teammate's kill within ±5 s and 500 u/)).toBeInTheDocument();
+  });
+
   it('says how much of the synergy composite was defaulted', async () => {
     const defaulted = { ...synergy, defaulted_players_count: 2 };
     renderPage(withOverride('/storytelling/synergy', () =>

@@ -1666,6 +1666,7 @@ export interface StoryBoxScore {
   winner: string;
   winner_name: string;
   maps: StoryBoxScoreMap[];
+  scope?: StoryAnswerScope;
 }
 
 /** GET /api/storytelling/moments. `detail` varies by `type` — a carrier run
@@ -1681,6 +1682,11 @@ export interface StoryMoment {
   impact_stars: number;
   time_formatted: string;
   detail?: unknown;
+  /** multikill / team_wipe carry how long the run took and who fell. */
+  duration_ms?: number;
+  victims?: string[];
+  kills?: number;
+  team?: string;
 }
 
 export interface StoryMoments {
@@ -1723,6 +1729,8 @@ export interface StoryPwcPlayer {
   rounds_lost: number;
   total_rounds: number;
   components: Record<string, number>;
+  /** pwc round by round, with the round's own figures. */
+  per_round?: { round_number: number; map_name: string; pwc: number; won: boolean; kills: number; damage: number; objectives: number; revives: number }[];
 }
 
 export interface StoryWinContribution {
@@ -1767,6 +1775,8 @@ export interface StoryKillImpact {
   players: StoryKisPlayer[];
   total: number;
   total_kills: number;
+  /** How the numbers were produced: read_only means served from the table. */
+  compute?: { status: string };
 }
 
 export interface StorySynergyGroup {
@@ -1853,6 +1863,27 @@ export interface StoryRoleBoard {
    *  used; the other boards do not. */
   coverage?: { tracks_fetched: number; tracks_used: number; tracks_skipped: number };
   thresholds?: Record<string, number>;
+  /** The metric's own constants, when the board publishes them: lurker's
+   *  radius and sampling, enabler's window and distance, space's window. */
+  solo_radius?: number;
+  downsample_ms?: number;
+  time_window_ms?: number;
+  distance_threshold?: number;
+  window_ms?: number;
+  /** Every storytelling answer carries the scope it was computed over. */
+  scope?: StoryAnswerScope;
+}
+
+/** The scope block every storytelling endpoint answers with — the same
+ *  object on all of them, so the page prints it once. */
+export interface StoryAnswerScope {
+  kind: string;
+  version?: string;
+  gaming_session_id: number;
+  dates: string[];
+  accepted_round_count: number;
+  distinct_map_names: string[];
+  last_round_unix: number | null;
 }
 
 /** GET /api/storytelling/player-narratives — generated prose per player. */
@@ -2033,6 +2064,9 @@ export interface StoryKisKill {
   is_objective_area: boolean | null;
   kill_time_ms: number | null;
   killer_health: number;
+  /** The flags and the moment's roster the multipliers were read from. */
+  axis_alive?: number | null;
+  allies_alive?: number | null;
 }
 
 export interface StoryKisDetails {
