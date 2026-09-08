@@ -7,8 +7,8 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2939,
-  "unread": 563,
+  "read": 2941,
+  "unread": 561,
   "dropped": 42,
   "endpoints": 176,
   "endpoints_fully_read": 64,
@@ -101,8 +101,8 @@
    "dropped": 0
   },
   "/api/greatshot/{demo_id}": {
-   "read": 38,
-   "unread": 12,
+   "read": 39,
+   "unread": 11,
    "dropped": 1
   },
   "/api/greatshot/{demo_id}/crossref": {
@@ -791,8 +791,8 @@
    "dropped": 0
   },
   "/api/storytelling/kill-impact/details": {
-   "read": 35,
-   "unread": 11,
+   "read": 36,
+   "unread": 10,
    "dropped": 0
   },
   "/api/storytelling/kill-matrix": {
@@ -1886,7 +1886,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.gametype",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -16741,7 +16741,7 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.killer_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
