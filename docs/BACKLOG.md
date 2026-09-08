@@ -7,6 +7,21 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-08, 10:20) Owner: »aim/advanced razišči z Mandelbrot +
+  RCA, shrani v docs, odloži, gremo naprej« — NAREJENO, nič implementirano.
+  Vzrok je I/O, ne CPU: EXPLAIN ANALYZE flick/spread poizvedbe (9,6 s) bere
+  17 212 razpršenih heap strani `proximity_shot_fired` za enega igralca ob
+  `shared_buffers` 128 MB; `advanced` teče čez celo `combat_engagement` zaradi
+  `LEFT(target_guid, 8)`; cache 077 `player_aim_summary` nima proizvajalca
+  (5 vrstic, zadnje so moji probi). Poti A–F + priporočilo v `KNOWN_ISSUES`
+  in HANDOFF-astra §C 14; polna sled lokalno
+  `docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md`. Ob istem koraku so
+  štiri agentska poročila popisa podatkovnih točk (stari React / legacy /
+  zaledje / UX kot obiskovalec: 166 izgubljenih točk po nivojih, DPM 20,9 %
+  razhajanje ponderirano proti neponderiranemu, `.js.map` javno) shranjena v
+  lokalni `docs/research/DATAPOINT_AUDIT_2026-09-07.md`; agenti zaprti.
+  Odprto po vrsti: #980 (drift tipov + 11 niti), #981 vrata, veji
+  `feat/live-ticker-reads-its-events` in `feat/profile-long-tail` za PR.
 - (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
   — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
   deset vrzeli (L1–L10) in osem rezin v LOKALNEM
