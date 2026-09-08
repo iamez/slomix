@@ -93,6 +93,10 @@ describe('About', () => {
     // Probes: every row fires a real GET; the stub answers 200.
     expect(screen.getByText('Recent Matches')).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/200 · \d+ ms/).length).toBe(API_PROBES.length));
+    // the 14-day window and the most active players, answered since phase 1 and shown since 2026-09-09
+    expect(screen.getByText(/most active, all time/)).toBeInTheDocument();
+    expect(screen.getByText(/\.olz · 1,793 rounds/)).toBeInTheDocument();
+    expect(screen.getByText(/kills, last 14 days/)).toBeInTheDocument();
   });
 
   it('marks failed probes without taking the page down', async () => {

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { useAvailabilityAccess, useBuildInfo, useDatasets, useDiagnostics, useOverview, useSystemOverview } from '../lib/queries';
-import type { DiagnosticsWatchdog } from '../lib/types';
+import type { DatasetDescriptor, DiagnosticsWatchdog } from '../lib/types';
 import { API_PROBES, runProbes, type ProbeResult } from '../lib/probes';
-import { Absent, Lbl, Pending, StatusDot, Unavailable, lblStyle, rowStyle } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, StatusDot, Unavailable, figure, lblStyle, rowStyle } from '../components/ui';
+import { DataTable, type DataColumn } from '../components/DataTable';
 import { DiagnosticsReport } from '../components/DiagnosticsReport';
 import { ApiError } from '../lib/api';
 
@@ -138,6 +139,14 @@ function Counted() {
     { k: 'players, all time', v: live(d.players_all_time) },
     { k: 'first round kept', v: d.rounds_since ?? '—' },
     { k: 'latest round', v: d.rounds_latest ?? '—' },
+    // The 14-day window and the two most active players — answered since
+    // phase 1, shown since 2026-09-09.
+    { k: `kills, last ${d.window_days ?? 14} days`, v: live(d.total_kills_14d) },
+    { k: `rounds, last ${d.window_days ?? 14} days`, v: live(d.rounds_14d) },
+    { k: `sessions, last ${d.window_days ?? 14} days`, v: live(d.sessions_14d) },
+    { k: `players, last ${d.window_days ?? 14} days`, v: live(d.players_14d) },
+    { k: 'most active, all time', v: d.most_active_overall ? `${d.most_active_overall.name} · ${figure(d.most_active_overall.rounds)} rounds` : '—' },
+    { k: `most active, last ${d.window_days ?? 14} days`, v: d.most_active_14d ? `${d.most_active_14d.name} · ${figure(d.most_active_14d.rounds)} rounds` : '—' },
   ];
   return (
     <>
@@ -253,6 +262,18 @@ function DiagnosticsPanel() {
             {datasets.data.datasets.filter((x) => x.cost_ms_cold != null).length} with a measured cost
           </Lbl>
         )}
+        {datasets.data && (
+          <div style={{ marginTop: 'var(--space-3)' }}>
+            <DataTable<DatasetDescriptor>
+              parity="admin.datasets.table"
+              label="dataset register"
+              columns={DATASET_COLUMNS}
+              rows={datasets.data.datasets}
+              rowKey={(x) => x.key}
+              minWidth={1000}
+            />
+          </div>
+        )}
       </div>
     </div>
   );
@@ -315,6 +336,19 @@ function ProbeTable() {
     </div>
   );
 }
+
+const DATASET_COLUMNS: DataColumn<DatasetDescriptor>[] = [
+  { key: 'key', label: 'dataset', format: (x) => x.label, sortValue: (x) => x.key },
+  { key: 'collected_by', label: 'collected by', sortValue: (x) => x.collected_by },
+  { key: 'collection_toggle', label: 'switch', format: (x) => x.collection_toggle ?? <Meta>—</Meta>, sortValue: (x) => x.collection_toggle },
+  { key: 'display_toggle_default', label: 'shown', title: 'display toggle default', format: (x) => (x.display_toggle_default ? 'yes' : 'no'), sortValue: (x) => (x.display_toggle_default ? 1 : 0) },
+  { key: 'user_overridable', label: 'user may hide', format: (x) => (x.user_overridable ? 'yes' : 'no'), sortValue: (x) => (x.user_overridable ? 1 : 0) },
+  { key: 'default_visible_on', label: 'pages', format: (x) => x.default_visible_on.join(', ') || <Meta>—</Meta>, sortValue: (x) => x.default_visible_on.length },
+  { key: 'depends_on', label: 'depends on', format: (x) => x.depends_on.join(', ') || <Meta>—</Meta>, sortValue: (x) => x.depends_on.length },
+  { key: 'endpoint', label: 'endpoint', format: (x) => x.endpoint ?? <Meta>—</Meta>, sortValue: (x) => x.endpoint },
+  { key: 'parity_key', label: 'parity key', format: (x) => x.parity_key ?? <Meta>—</Meta>, sortValue: (x) => x.parity_key },
+  { key: 'cost_ms_cold', label: 'cold ms', align: 'right', format: (x) => (x.cost_ms_cold == null ? <Meta>—</Meta> : figure(x.cost_ms_cold)), sortValue: (x) => x.cost_ms_cold },
+];
 
 export function About() {
   return (

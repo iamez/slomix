@@ -300,6 +300,22 @@ export function GreatshotDemoPage() {
           {typeof d.metadata.duration_ms === 'number' && <> · {fmtClock(d.metadata.duration_ms)}</>}
           {typeof d.metadata.gametype_short === 'string' && <> · {d.metadata.gametype_short}</>}
         </Meta>
+        {/* The rest of the header the scanner wrote (fetched and dropped until
+            2026-09-09): the mod, the profile, the extension, the cross-reference
+            to a stored round with its confidence and the evidence, the scan
+            timings and the event count. */}
+        <Meta>
+          {typeof d.metadata.mod_version === 'string' && <>mod {d.metadata.mod_version} · </>}
+          {typeof d.metadata.profile_name === 'string' && <>{d.metadata.profile_name} · </>}
+          {typeof d.metadata.extension === 'string' && <>{d.metadata.extension} · </>}
+          {typeof d.metadata.matched_round_id === 'number'
+            ? <>matched round #{figure(d.metadata.matched_round_id)}{typeof d.metadata.crossref_confidence === 'number' ? ` · crossref ${figure(d.metadata.crossref_confidence)} %` : ''}{Array.isArray(d.metadata.crossref_match_details) ? ` (${(d.metadata.crossref_match_details as string[]).join(', ')})` : ''}</>
+            : <>no stored round matched</>}
+          {d.processing_started_at != null && d.processing_finished_at != null && (
+            <> · scanned in {figure(Math.round((Date.parse(d.processing_finished_at.replace(' ', 'T')) - Date.parse(d.processing_started_at.replace(' ', 'T'))) / 100) / 10)} s</>
+          )}
+          {d.analysis != null && typeof d.analysis.events_total === 'number' && <> · {figure(d.analysis.events_total)} events</>}
+        </Meta>
         {d.error != null && <Absent reason={`the scanner stopped: ${d.error}`} />}
         {d.warnings.length > 0 && d.warnings.map((w) => <Meta key={w}>⚠ {w}</Meta>)}
       </Stack>
@@ -325,7 +341,30 @@ export function GreatshotDemoPage() {
                   {h.clip_download != null && (
                     <a href={h.clip_download} className="lbl" style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>clip →</a>
                   )}
+                  {h.clip_download == null && h.clip_demo_path != null && <Meta>clip cut, not served: {h.clip_demo_path}</Meta>}
                 </Cluster>
+              </Cluster>
+            ))}
+          </Stack>
+        )}
+      </div>
+
+      <div data-parity="greatshot.player-stats">
+        <SectionHead label="players in the demo" aside={<span className="lbl">{figure(Object.keys(d.player_stats ?? {}).length)} seen</span>} />
+        {Object.keys(d.player_stats ?? {}).length === 0 ? (
+          <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="the scanner recorded no per-player block for this demo" /></div>
+        ) : (
+          <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+            {Object.entries(d.player_stats ?? {}).map(([name, stats]) => (
+              <Cluster key={name} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: 'var(--fs-row)' }}>{name}</span>
+                <Meta>
+                  {Object.entries((stats ?? {}) as Record<string, unknown>)
+                    .filter(([, v]) => typeof v === 'number' || typeof v === 'string')
+                    .slice(0, 8)
+                    .map(([k, v]) => `${k.replace(/_/g, ' ')} ${typeof v === 'number' ? figure(v) : String(v)}`)
+                    .join(' · ')}
+                </Meta>
               </Cluster>
             ))}
           </Stack>

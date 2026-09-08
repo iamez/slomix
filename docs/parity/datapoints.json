@@ -8,7 +8,7 @@
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over the comment-stripped source REACHABLE FROM THAT ENDPOINT'S CALLERS (the files calling its hook, and their imports); a name match is an upper bound on rendering",
  "scope": {
   "/api/availability": "13 files reachable from the endpoint's callers",
-  "/api/availability/access": "11 files reachable from the endpoint's callers",
+  "/api/availability/access": "12 files reachable from the endpoint's callers",
   "/api/availability/promotion-preferences": "8 files reachable from the endpoint's callers",
   "/api/availability/promotions/campaign": "8 files reachable from the endpoint's callers",
   "/api/availability/promotions/preview": "8 files reachable from the endpoint's callers",
@@ -18,10 +18,10 @@
   "/api/awards/leaderboard": "5 files reachable from the endpoint's callers",
   "/api/bets/market/current": "8 files reachable from the endpoint's callers",
   "/api/bets/wallet": "8 files reachable from the endpoint's callers",
-  "/api/build": "7 files reachable from the endpoint's callers",
+  "/api/build": "8 files reachable from the endpoint's callers",
   "/api/challenges/current": "12 files reachable from the endpoint's callers",
-  "/api/datasets": "7 files reachable from the endpoint's callers",
-  "/api/diagnostics": "7 files reachable from the endpoint's callers",
+  "/api/datasets": "8 files reachable from the endpoint's callers",
+  "/api/diagnostics": "8 files reachable from the endpoint's callers",
   "/api/diagnostics/storytelling-completeness": "5 files reachable from the endpoint's callers",
   "/api/greatshot": "9 files reachable from the endpoint's callers",
   "/api/greatshot/{demo_id}": "9 files reachable from the endpoint's callers",
@@ -180,7 +180,7 @@
   "/api/storytelling/useless-defense-deaths": "10 files reachable from the endpoint's callers",
   "/api/storytelling/win-contribution": "10 files reachable from the endpoint's callers",
   "/api/storytelling/win-contribution/formula": "10 files reachable from the endpoint's callers",
-  "/api/system/overview": "8 files reachable from the endpoint's callers",
+  "/api/system/overview": "9 files reachable from the endpoint's callers",
   "/api/uploads": "6 files reachable from the endpoint's callers",
   "/api/uploads/resumable/{session_id}/finalize": "3 files reachable from the endpoint's callers",
   "/api/uploads/{upload_id}": "6 files reachable from the endpoint's callers",
@@ -188,11 +188,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2922,
-  "unread": 655,
+  "read": 2958,
+  "unread": 619,
   "dropped": 63,
   "endpoints": 179,
-  "endpoints_fully_read": 48,
+  "endpoints_fully_read": 52,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -262,8 +262,8 @@
    "dropped": 0
   },
   "/api/datasets": {
-   "read": 8,
-   "unread": 6,
+   "read": 14,
+   "unread": 0,
    "dropped": 1
   },
   "/api/diagnostics": {
@@ -277,13 +277,13 @@
    "dropped": 0
   },
   "/api/greatshot": {
-   "read": 12,
-   "unread": 3,
+   "read": 14,
+   "unread": 1,
    "dropped": 0
   },
   "/api/greatshot/{demo_id}": {
-   "read": 29,
-   "unread": 21,
+   "read": 40,
+   "unread": 10,
    "dropped": 1
   },
   "/api/greatshot/{demo_id}/crossref": {
@@ -292,8 +292,8 @@
    "dropped": 1
   },
   "/api/greatshot/{demo_id}/status": {
-   "read": 4,
-   "unread": 2,
+   "read": 6,
+   "unread": 0,
    "dropped": 0
   },
   "/api/hall-of-fame": {
@@ -837,8 +837,8 @@
    "dropped": 0
   },
   "/api/stats/overview": {
-   "read": 12,
-   "unread": 6,
+   "read": 18,
+   "unread": 0,
    "dropped": 0
   },
   "/api/stats/player/{player_name}": {
@@ -1067,8 +1067,8 @@
    "dropped": 0
   },
   "/api/uploads": {
-   "read": 15,
-   "unread": 4,
+   "read": 18,
+   "unread": 1,
    "dropped": 0
   },
   "/api/uploads/resumable/{session_id}/finalize": {
@@ -1077,8 +1077,8 @@
    "dropped": 0
   },
   "/api/uploads/{upload_id}": {
-   "read": 14,
-   "unread": 6,
+   "read": 20,
+   "unread": 0,
    "dropped": 0
   },
   "/api/voice-activity/current": {
@@ -1522,7 +1522,7 @@
   {
    "endpoint": "/api/datasets",
    "key": "datasets.collected_by",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -1537,17 +1537,17 @@
   {
    "endpoint": "/api/datasets",
    "key": "datasets.default_visible_on",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
    "key": "datasets.depends_on",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
    "key": "datasets.display_toggle_default",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -1567,12 +1567,12 @@
   {
    "endpoint": "/api/datasets",
    "key": "datasets.parity_key",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
    "key": "datasets.user_overridable",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -1887,12 +1887,12 @@
   {
    "endpoint": "/api/greatshot",
    "key": "items.processing_finished_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot",
    "key": "items.processing_started_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot",
@@ -1932,7 +1932,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "analysis.events_total",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -1982,7 +1982,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "highlights.clip_demo_path",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2047,12 +2047,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.crossref_confidence",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.crossref_match_details",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2067,7 +2067,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.extension",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2102,7 +2102,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.matched_round_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2112,7 +2112,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.mod_version",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2122,7 +2122,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.profile_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2137,7 +2137,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "player_stats",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2148,12 +2148,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "processing_finished_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "processing_started_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2304,12 +2304,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
    "key": "processing_finished_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
    "key": "processing_started_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
@@ -14022,7 +14022,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "most_active_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14037,7 +14037,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "most_active_overall",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14057,7 +14057,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "players_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14072,7 +14072,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "rounds_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14092,7 +14092,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "sessions_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14102,7 +14102,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "total_kills_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -19094,7 +19094,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.extension",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
@@ -19114,7 +19114,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.poster_url",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
@@ -19129,7 +19129,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.uploader_discord_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
@@ -19199,7 +19199,7 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "content_hash",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
@@ -19229,7 +19229,7 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "extension",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
@@ -19249,17 +19249,17 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "is_playable",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "mime_type",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "poster_url",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
@@ -19279,7 +19279,7 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "uploader_discord_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
