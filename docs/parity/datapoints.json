@@ -110,14 +110,15 @@
   "/api/rivalries/leaderboard": "7 files reachable from the endpoint's callers",
   "/api/rivalries/player/{guid}": "7 files reachable from the endpoint's callers",
   "/api/rounds/recent": "6 files reachable from the endpoint's callers",
-  "/api/rounds/{round_id}/awards": "7 files reachable from the endpoint's callers",
+  "/api/rounds/{round_id}/awards": "11 files reachable from the endpoint's callers",
+  "/api/rounds/{round_id}/player/{player_guid}/details": "11 files reachable from the endpoint's callers",
   "/api/rounds/{round_id}/viz": "6 files reachable from the endpoint's callers",
   "/api/seasons/current": "9 files reachable from the endpoint's callers",
   "/api/seasons/current/leaders": "9 files reachable from the endpoint's callers",
   "/api/seasons/current/summary": "8 files reachable from the endpoint's callers",
   "/api/seasons/{season_id}/awards": "5 files reachable from the endpoint's callers",
   "/api/server-activity/history": "15 files reachable from the endpoint's callers",
-  "/api/sessions": "22 files reachable from the endpoint's callers",
+  "/api/sessions": "23 files reachable from the endpoint's callers",
   "/api/skill/adjusted-lifetime": "8 files reachable from the endpoint's callers",
   "/api/skill/composite": "10 files reachable from the endpoint's callers",
   "/api/skill/formula": "8 files reachable from the endpoint's callers",
@@ -139,15 +140,15 @@
   "/api/stats/player/{player_name}/rounds": "11 files reachable from the endpoint's callers",
   "/api/stats/quick-leaders": "9 files reachable from the endpoint's callers",
   "/api/stats/records": "5 files reachable from the endpoint's callers",
-  "/api/stats/session-leaderboard": "18 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/awards": "18 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/basics": "18 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/detail": "18 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/good-night": "18 files reachable from the endpoint's callers",
+  "/api/stats/session-leaderboard": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/awards": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/basics": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/detail": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/good-night": "19 files reachable from the endpoint's callers",
   "/api/stats/session/{gaming_session_id}/lineups": "6 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/mvp": "18 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/rounds": "18 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/verdicts": "18 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/mvp": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/rounds": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/verdicts": "19 files reachable from the endpoint's callers",
   "/api/stats/tonight": "16 files reachable from the endpoint's callers",
   "/api/stats/trends": "8 files reachable from the endpoint's callers",
   "/api/stats/weapons": "8 files reachable from the endpoint's callers",
@@ -155,7 +156,7 @@
   "/api/stats/weapons/by_player": "6 files reachable from the endpoint's callers",
   "/api/stats/weapons/hall-of-fame": "6 files reachable from the endpoint's callers",
   "/api/status": "15 files reachable from the endpoint's callers",
-  "/api/storytelling/best-lives": "18 files reachable from the endpoint's callers",
+  "/api/storytelling/best-lives": "19 files reachable from the endpoint's callers",
   "/api/storytelling/box-score": "10 files reachable from the endpoint's callers",
   "/api/storytelling/camp-profile": "10 files reachable from the endpoint's callers",
   "/api/storytelling/enabler": "10 files reachable from the endpoint's callers",
@@ -185,11 +186,11 @@
   "/api/voice-activity/history": "15 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2709,
-  "unread": 789,
+  "read": 2760,
+  "unread": 788,
   "dropped": 46,
-  "endpoints": 176,
-  "endpoints_fully_read": 43,
+  "endpoints": 177,
+  "endpoints_fully_read": 45,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -709,9 +710,14 @@
    "dropped": 0
   },
   "/api/rounds/{round_id}/awards": {
-   "read": 4,
-   "unread": 1,
+   "read": 5,
+   "unread": 0,
    "dropped": 1
+  },
+  "/api/rounds/{round_id}/player/{player_guid}/details": {
+   "read": 50,
+   "unread": 0,
+   "dropped": 0
   },
   "/api/rounds/{round_id}/viz": {
    "read": 28,
@@ -11567,7 +11573,7 @@
   {
    "endpoint": "/api/rounds/{round_id}/awards",
    "key": "round_date",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/rounds/{round_id}/awards",
@@ -11577,6 +11583,256 @@
   {
    "endpoint": "/api/rounds/{round_id}/awards",
    "key": "round_number",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.accuracy",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.damage_given",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.damage_received",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.gibs",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.headshot_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.headshots",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.hits",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.shots",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc.self_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc.team_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc.xp",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.dynamites_defused",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.dynamites_planted",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.returned",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.stolen",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "player_name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.id",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.map_name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.round_date",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.round_number",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.double_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.mega_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.multi_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.quad_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.triple_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.kill_assists",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.revives_given",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.times_revived",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.useful_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.useless_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time.dead_minutes",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time.denied_playtime",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time.played_seconds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.accuracy",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.headshots",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.hits",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.shots",
    "status": "read"
   },
   {
