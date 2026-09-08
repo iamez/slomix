@@ -2566,7 +2566,7 @@ export interface SessionBasics {
    *  end (start + measured duration) and the span; nulls when unrecorded.
    *  The two fields the date-keyed /api/sessions/{date} carried and the
    *  gsid family did not (2026-09-08). */
-  clock?: { start: string | null; end: string | null; span_seconds: number | null };
+  clock: { start: string | null; end: string | null; span_seconds: number | null };
   coverage: SessionBasicsCoverage;
   teams: SessionBasicsTeam[];
   players: SessionBasicsPlayer[];
