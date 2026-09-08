@@ -1057,6 +1057,13 @@ export interface RoundPlayerRow {
   revives_given: number;
   times_revived: number;
   xp: number;
+  /** The four per-round counters nothing read until 2026-09-08, and the
+   *  flag that says the dead time was rebuilt, not measured. */
+  team_gibs: number;
+  kill_steals: number;
+  tank_meatshield: number;
+  death_spree_worst: number;
+  time_dead_reconstructed: boolean;
 }
 
 export interface SessionRound {
@@ -1072,6 +1079,17 @@ export interface SessionRound {
   /** False for a cancelled round: show it, leave it out of totals. */
   counts_toward_totals: boolean;
   match_id: string | null;
+  /** The webhook's own record of the round (lua_round_teams) and the round
+   *  row's provenance — typed 2026-09-08 when the tab started showing them.
+   *  `surrender` is null when nobody gave up; `team` 1 = Axis, 2 = Allies. */
+  surrender: { caller_name: string; team: number | null } | null;
+  pauses: { count: number; total_seconds: number };
+  time_limit_minutes: number | null;
+  warmup_seconds: number | null;
+  bot_player_count: number | null;
+  score_confidence: string | null;
+  /** The limit this half set for the next one. */
+  next_timelimit_minutes: number | null;
   players: RoundPlayerRow[];
 }
 
@@ -1719,6 +1737,16 @@ export interface StoryKisPlayer {
   clutch_kills: number;
   avg_impact: number;
   archetype: string;
+  /** The rest of the row (kis.py): the kinds of kill the score is made of
+   *  and the context figures. Typed 2026-09-08 when the panel started
+   *  printing them; `time_dead_pct` is a fraction (0.17 = 17 %). */
+  solo_clutch_kills: number;
+  outnumbered_kills: number;
+  spawn_denial_kills: number;
+  dpm: number;
+  denied_time: number;
+  time_dead_pct: number;
+  revives_given: number;
 }
 
 export interface StoryKillImpact {
@@ -1793,6 +1821,14 @@ export interface StoryRolePlayer {
   total_samples?: number;
   tracks?: number;
   solo_time_est_s?: number;
+  /** camp-profile: the hold share's parts — time held, time standing
+   *  still and its share, alive time, the three busiest 512 u cells as
+   *  [x, y, seconds]. Typed 2026-09-08 when the board started showing them. */
+  still_pct?: number | null;
+  hold_time_s?: number | null;
+  still_time_s?: number | null;
+  alive_s?: number | null;
+  top_cells?: [number, number, number][];
 }
 
 export interface StoryRoleBoard {
@@ -1800,6 +1836,10 @@ export interface StoryRoleBoard {
   metric: string;
   description: string;
   players: StoryRolePlayer[];
+  /** camp-profile carries how many tracks it read and the thresholds it
+   *  used; the other boards do not. */
+  coverage?: { tracks_fetched: number; tracks_used: number; tracks_skipped: number };
+  thresholds?: Record<string, number>;
 }
 
 /** GET /api/storytelling/player-narratives — generated prose per player. */
@@ -3308,6 +3348,8 @@ export interface ObjectiveRuns {
     assisted_runs: number; team_effort_runs: number; unopposed_runs: number;
     total_self_kills: number; total_team_kills: number;
     avg_path_efficiency: number | null;
+    /** The engineer's objective actions in the scope (recorded 2026-09-08). */
+    plants: number; defuses: number; builds: number; destroys: number;
   }[];
   recent_runs: {
     engineer_name: string | null; action_type: string; track_name: string;

@@ -282,6 +282,17 @@ describe('SessionStory (the session page story tab)', () => {
     expect(screen.getByText('enabler')).toBeInTheDocument();
   });
 
+  it('shows the camp board\'s parts and the kill-impact row\'s kinds of kill (fetched and dropped until 2026-09-08)', async () => {
+    renderPage();
+    // camp-profile: held time, still share, alive time, the busiest cell
+    await waitFor(() => expect(screen.getAllByText(/held · still \d+(\.\d+)? % \(/).length).toBeGreaterThan(0));
+    expect(screen.getByText(/camp profile read 937 of 937 tracks/)).toBeInTheDocument();
+    expect(screen.getByText(/hold = within 96 u for 4 s/)).toBeInTheDocument();
+    // kill impact: the second line of every row
+    await waitFor(() => expect(screen.getAllByText(/push · \d+ crossfire · \d+ solo clutch · \d+ outnumbered · \d+ spawn denial/).length).toBeGreaterThan(0));
+    expect(screen.getAllByText(/objective specialist/).length).toBeGreaterThan(0);
+  });
+
   it('says how much of the synergy composite was defaulted', async () => {
     const defaulted = { ...synergy, defaulted_players_count: 2 };
     renderPage(withOverride('/storytelling/synergy', () =>
