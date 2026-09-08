@@ -145,6 +145,7 @@ Za fazo 7 je odprt le končni prelet, nato pregledni PR-ji za ultra. Odvisnosti:
 11. **Korpus `destroyed_count`** (fantomska +1 na goldrush rundah pred Lua v6.14): obseg, backup vrstic, dry-run diff, popravi le z izvornim virom.
 12. **Migracija 082 na prod** ob naslednjem release deployu (prod zamrznjen v1.39.0 — owner).
 13. **`round_awards` 282 skupin** z različnimi odgovori dveh uvozov (runda 9831, 11 min narazen): RCA, kaj je pognalo dva uvoza; NE združevanje.
+14. **Profil `aim`/`advanced` — raziskano 8. 9., ODLOŽENO (owner):** hladno 9–46 s na igralca je I/O (124k strelov na 17 212 razpršenih heap straneh, `shared_buffers` 128 MB proti 2 GB tabel), `advanced` ima dva `LEFT(col, 8) = $1` predikata (seq scan), cache `player_aim_summary` (077) ima za pisca le lazy branje, ki ga SPA ne sproži (5 vrstic). Poti A–F in priporočilo (B expression indeksa + E `SET LOCAL work_mem` takoj, A `CLUSTER` z meritvijo pred/po, C proizvajalec šele če A ne zadostuje) v `docs/KNOWN_ISSUES.md` (»a cache nobody warms«) in lokalno `docs/research/PROFILE_AIM_ADVANCED_RCA_2026-09-08.md`. Ne začni brez ownerjeve izbire poti; SPA še naprej ne zahteva teh dveh sekcij.
 
 ### Faza 3 — dolg in kakovost (kadar koli, majhni PR-ji)
 14. Docs: `docs/HANDOFF-next.md` §3 `:8056` → `:8000` (run dir); `docs/PRODUCTION_AUTOMATION_GUIDE.md` opisuje neobstoječe datoteke → označi zastarelo; spomin `infrastructure_reference` omenja `screen -r slomix` (zastarelo).
