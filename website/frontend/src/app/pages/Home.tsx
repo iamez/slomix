@@ -330,11 +330,24 @@ function SeasonBlock() {
   // wire names them since #862, and a filtered-away row must not read as
   // "nobody led" (the absence-is-not-agreement class).
   const failedLeaders = new Set(leaders.data?.status === 'partial' ? leaders.data.failed_metrics : []);
-  const leaderRows = [
+  // Every category the wire carries (ledger 2026-09-08: team damage, time
+  // alive, time dead were fetched and never shown). Units: time_alive is
+  // seconds over the season, time_dead minutes (records_seasons.py).
+  const leaderRows: { k: string; row: { player: string; value: number } | null | undefined; fmt?: (v: number) => string }[] = [
     { k: 'kills', row: lead?.kills },
     { k: 'dpm', row: lead?.dpm },
     { k: 'xp', row: lead?.xp },
+    { k: 'damage', row: lead?.damage_given },
+    { k: 'taken', row: lead?.damage_received },
+    { k: 'team dmg', row: lead?.team_damage },
+    { k: 'revives', row: lead?.revives },
+    { k: 'gibs', row: lead?.gibs },
+    { k: 'objectives', row: lead?.objectives },
+    { k: 'deaths', row: lead?.deaths },
+    { k: 'alive', row: lead?.time_alive, fmt: (v: number) => `${figure(Math.round(v / 360) / 10)} h` },
+    { k: 'dead', row: lead?.time_dead, fmt: (v: number) => `${figure(Math.round(v))} min` },
   ].filter((r) => r.row != null || failedLeaders.has(r.k));
+  const longest = lead?.longest_session ?? null;
   // An empty activity object is the endpoint's failure shape inside a 200
   // (and a 90-day window with zero active days does not happen in this
   // dataset) — no line beats a false 'active on 0 days' (Codex wave 3).
@@ -369,13 +382,13 @@ function SeasonBlock() {
       {leaders.isError && <div style={{ marginTop: 'var(--space-3)' }}><Unavailable what="season leaders" /></div>}
       {leaderRows.length > 0 && (
         <div style={{ marginTop: 'var(--space-4)', borderTop: '1px solid var(--color-rule-900)' }}>
-          {leaderRows.map(({ k, row }) => (
+          {leaderRows.map(({ k, row, fmt }) => (
             <div key={k} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: '60px 1fr auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
               {row != null ? (
                 <>
                   <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.player}</span>
-                  <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{figure(row.value)}</span>
+                  <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{fmt ? fmt(row.value) : figure(row.value)}</span>
                 </>
               ) : (
                 // Kept by failed_metrics: the query for THIS category
@@ -387,12 +400,49 @@ function SeasonBlock() {
           ))}
         </div>
       )}
-      {activeDays != null && (
+      {longest && (
         <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
-          active on {activeDays} of the last {calendar.data?.days} days
+          longest evening: {figure(longest.rounds)} rounds on {longest.date}
+        </div>
+      )}
+      {activeDays != null && calendar.data && (
+        <div style={{ marginTop: 'var(--space-3)' }}>
+          <ActivityHeatmap days={calendar.data.days} activity={calendar.data.activity} />
+          <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
+            active on {activeDays} of the last {calendar.data.days} days · darker is more rounds
+          </div>
         </div>
       )}
       <div className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>next: {s.next_season_name} starts {s.next_season_start}</div>
+    </div>
+  );
+}
+
+/** The last N days as one cell each, shaded by rounds played — the values
+ *  the calendar answers and the page used to reduce to a count. */
+function ActivityHeatmap({ days, activity }: { days: number; activity: Record<string, number> }) {
+  const max = Math.max(1, ...Object.values(activity));
+  // The window ends today — unless nothing was recorded inside it, when it
+  // ends on the last recorded day instead (an old recording, or a long
+  // quiet spell), and the label says so.
+  const newest = Object.keys(activity).sort().at(-1);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const windowStart = new Date(Date.parse(todayIso) - (days - 1) * 86_400_000).toISOString().slice(0, 10);
+  const endIso = newest != null && newest < windowStart ? newest : todayIso;
+  const cells: { date: string; n: number }[] = [];
+  for (let i = days - 1; i >= 0; i -= 1) {
+    const date = new Date(Date.parse(endIso) - i * 86_400_000).toISOString().slice(0, 10);
+    cells.push({ date, n: activity[date] ?? 0 });
+  }
+  return (
+    <div role="img" aria-label={`rounds per day, ${String(days)} days ending ${endIso}`} style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-1)' }}>
+      {cells.map((c) => (
+        <span
+          key={c.date}
+          title={`${c.date}: ${figure(c.n)} rounds`}
+          style={{ width: 'var(--space-3)', height: 'var(--space-3)', background: 'var(--color-accent)', opacity: c.n === 0 ? 0.08 : 0.25 + 0.75 * (c.n / max) }}
+        />
+      ))}
     </div>
   );
 }

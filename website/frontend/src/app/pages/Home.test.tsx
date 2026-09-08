@@ -333,4 +333,17 @@ describe('season partial contract (#862)', () => {
     // "nobody led".
     await waitFor(() => expect(screen.getByText('dpm: unavailable')).toBeInTheDocument());
   });
+
+  it('draws the season leaders the wire carries and the days as a heatmap', async () => {
+    renderHome();
+    await waitFor(() => expect(screen.getByText('team dmg')).toBeInTheDocument());
+    expect(screen.getByText('alive')).toBeInTheDocument();
+    expect(screen.getByText(/longest evening: 23 rounds on 2026-07-18/)).toBeInTheDocument();
+    // The window ends today, or on the newest recorded day once the recording
+    // is older than the window — either way the newest recorded day is a cell.
+    const activity = (calendar as { activity: Record<string, number> }).activity;
+    const newest = Object.keys(activity).sort().at(-1)!;
+    expect(screen.getByLabelText(/rounds per day, 90 days ending \d{4}-\d{2}-\d{2}/)).toBeInTheDocument();
+    expect(screen.getByTitle(`${newest}: ${activity[newest]} rounds`)).toBeInTheDocument();
+  });
 });
