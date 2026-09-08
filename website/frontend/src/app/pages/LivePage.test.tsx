@@ -226,6 +226,45 @@ describe('LivePage — the evening', () => {
     await waitFor(() => expect(screen.getByText(/no round has been imported today/)).toBeInTheDocument());
   });
 
+  it('draws the mini map from the positions and kills the state carries, and nothing without them', async () => {
+    const withPositions: LiveState = {
+      ...inSecondHalf,
+      roster: {
+        ...inSecondHalf.roster,
+        axis: [{ slot: 3, name: '^1one^7', on_server_seconds: 100, on_side_seconds: 100, pos: { x: 100, y: -200, yaw: 90, age_seconds: 4 }, live: { kills: 1, deaths: 0, damage: 50, dpm: null, alive: true } }],
+        allies: [{ slot: 5, name: 'two', on_server_seconds: 100, on_side_seconds: 100, pos: { x: 300, y: 50, yaw: null, age_seconds: 9 }, live: { kills: 0, deaths: 1, damage: 0, dpm: null, alive: false } }],
+      },
+      recent_kills: [{ killer_slot: 3, victim_slot: 5, killer: 'one', victim: 'two', killer_pos: { x: 100, y: -200 }, victim_pos: { x: 300, y: 50 }, distance: 320, killer_health: 60, mod_id: 8, age_seconds: 6 }],
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      if (pathname.startsWith('/assets/maps/geometry/')) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+      const body = {
+        '/api/live/state': withPositions,
+        '/api/live/feed': feed,
+        '/api/server-activity/history': serverHist,
+        '/api/voice-activity/history': voiceHist,
+        '/api/monitoring/status': monitoring,
+        '/api/status': health,
+        '/api/stats/tonight': tonight,
+      }[pathname];
+      if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    }));
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <MemoryRouter initialEntries={['/live']}>
+          <LivePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    const map = await screen.findByLabelText('2 placed, 1 recent kills');
+    expect(map.querySelectorAll('circle').length).toBe(2);
+    expect(map.textContent).toContain('one');
+    expect(map.textContent).not.toContain('^1');
+    expect(screen.getByText(/no floor mesh exported for this map/)).toBeInTheDocument();
+  });
+
   it('hides a last-round result older than the roster (a previous evening), a previous map the evening never imported, and names an unknown winner', async () => {
     const afterGap: LiveState = {
       ...inSecondHalf,
