@@ -470,7 +470,6 @@
 /api/replay/round/{round_id}/web t_ms
 /api/replay/round/{round_id}/web teams
 /api/replay/round/{round_id}/web velocity_max_dt_ms
-/api/rounds/{round_id}/awards round_date
 /api/rounds/{round_id}/viz players.kill_assists
 /api/rounds/{round_id}/viz players.self_kills
 /api/rounds/{round_id}/viz players.xp
