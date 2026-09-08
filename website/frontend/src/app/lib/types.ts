@@ -15,10 +15,10 @@ export interface LiveRosterMember {
   live?: {
     kills: number; deaths: number; damage: number;
     dpm: number | null; alive: boolean;
-    /** Last known position (map plane) and facing, when a LIVE_MOVEMENT
-   *  sample is under a minute old. */
+  };
+  /** Last known position (map plane) and facing, when a LIVE_MOVEMENT
+   *  sample is under a minute old (reducer since 2026-09-08). */
   pos?: { x: number; y: number; yaw: number | null; age_seconds: number };
-};
 }
 
 export interface LiveState {
