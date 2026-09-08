@@ -5,6 +5,7 @@ import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Una
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { PlayerMapMatrix } from '../components/PlayerMapMatrix';
+import { hms } from '../components/RoundsTable';
 import { RoundsTab, roundsReason } from '../components/RoundsTab';
 import { SessionGraphsPanel } from '../components/SessionGraphs';
 import { TeamplayTab } from '../components/TeamplayTab';
@@ -655,7 +656,7 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
           <span className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)' }}>
             #{sessionId} · {detail.round_count} rounds · {detail.matches.length} maps · {detail.player_count} players · {clock(duration)}
             {/* `?.` on the block: a recording from before the clock existed has none */}
-            {basics.data?.clock?.start && <> · {basics.data.clock.start}{basics.data.clock.end ? `–${basics.data.clock.end}` : ''}{basics.data.clock.span_seconds != null ? ` (${clock(basics.data.clock.span_seconds)} wall clock)` : ''}</>}
+            {basics.data?.clock?.start && <> · {basics.data.clock.start}{basics.data.clock.end ? `–${basics.data.clock.end}` : ''}{basics.data.clock.span_seconds != null ? ` (${hms(basics.data.clock.span_seconds)} wall clock)` : ''}</>}
           </span>
         </Stack>
         {teams.length === 2

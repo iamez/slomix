@@ -64,6 +64,14 @@ export const ROUND_COLUMNS = [
 
 export type RoundColumnKey = (typeof ROUND_COLUMNS)[number]['key'];
 
+/** H:MM:SS for a wall-clock span (an evening runs past an hour; `mmss`
+ *  is for a round). */
+export function hms(seconds: number): string {
+  if (!Number.isFinite(seconds)) return '—';
+  const whole = Math.round(seconds);
+  return `${Math.floor(whole / 3600)}:${String(Math.floor((whole % 3600) / 60)).padStart(2, '0')}:${String(whole % 60).padStart(2, '0')}`;
+}
+
 export function mmss(seconds: number): string {
   if (!Number.isFinite(seconds)) return '—';
   const whole = Math.round(seconds);

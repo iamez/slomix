@@ -454,12 +454,15 @@ export interface PlayerCard {
   status: string;
   guid: string;
   name: string;
-  rating: { value: number; tier: string; games_rated: number; trend: string } | null;
+  /** Present with null VALUES for a player without a rating row — not a
+   *  null object (Codex on #1001). */
+  rating: { value: number | null; tier: string | null; games_rated: number | null; trend: string | null } | null;
   archetype: string | null;
   window_days: number;
   small_sample: boolean;
   form: { rounds: number; kills: number; deaths: number; kd: number; dpm: number; revives: number; headshot_pct: number; time_dead_pct: number };
-  percentiles: Record<string, number>;
+  /** null values under small_sample (1–9 rounds in the window). */
+  percentiles: Record<string, number | null>;
   sparkline_dpm: number[];
   badges: { type: string; threshold: number; emoji: string; title: string; color: string }[];
   career: { kills: number; sessions: number };

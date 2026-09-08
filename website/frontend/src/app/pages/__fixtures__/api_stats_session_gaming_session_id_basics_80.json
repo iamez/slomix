@@ -2,9 +2,9 @@
  "gaming_session_id": 80,
  "date": "2026-01-27",
  "clock": {
-  "start": "21:30",
-  "end": null,
-  "span_seconds": null
+  "start": "21:21",
+  "end": "23:01",
+  "span_seconds": 5988
  },
  "coverage": {
   "rounds_counted": 8,

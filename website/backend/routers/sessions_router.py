@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from shared.config import load_config
-from shared.round_time import round_duration_sql
+from shared.round_time import round_duration_seconds, round_duration_sql
 from shared.services.session_stats_aggregator import SessionStatsAggregator
 from shared.services.stopwatch_scoring_service import StopwatchScoringService
 from shared.utils import escape_like_pattern
@@ -2523,10 +2523,10 @@ class SessionBasicsClock(BaseModel):
     """When the evening ran — the two fields the date-keyed /api/sessions/{date}
     carried and the gsid family did not (endpoint ratchet, 2026-09-08)."""
 
-    #: "HH:MM" of the first counted round's start, null when unrecorded.
+    #: "HH:MM" of the first counted round's start — its stats file's write
+    #: time (≈ the round's end) minus its duration; null when unrecorded.
     start: str | None
-    #: "HH:MM" of the last counted round's end (its start plus its measured
-    #: duration), null when either is unrecorded.
+    #: "HH:MM" of the last counted round's end — its stats file's write time.
     end: str | None
     #: Seconds from the first start to the last end; null with either missing.
     span_seconds: int | None
@@ -2590,25 +2590,37 @@ def _round_time_hms(value) -> tuple[int, int, int] | None:
 
 
 def _session_clock(round_rows: list) -> dict[str, Any]:
-    """Start of the first counted round, end of the last (start + measured
-    duration), and the span — all from the rows SESSION_ROUNDS_SQL already
-    returned (round_time at [5], measured duration at [8]), so the clock
-    stands on the same gate as every other basics figure."""
+    """When the evening ran, from the rows SESSION_ROUNDS_SQL already returned.
+
+    `rounds.round_time` is the stats file's write time — the END of a round
+    (plus 0–3 s), the way bot/core/round_canonical.py derives a start from it
+    by subtracting the duration. So: start = first round's file time minus
+    its duration; end = last round's file time; span = the difference. The
+    duration comes from the canonical `round_duration_seconds` (measured
+    first, the parsed actual_time as the documented fallback), never from
+    one column alone. Everything stays on the file clock (local time), no
+    epoch mixed in."""
     if not round_rows:
         return {"start": None, "end": None, "span_seconds": None}
-    first = _round_time_hms(round_rows[0][5])
-    last = _round_time_hms(round_rows[-1][5])
-    last_duration = round_rows[-1][8] if len(round_rows[-1]) > 8 else None
-    start = f"{first[0]:02d}:{first[1]:02d}" if first else None
-    end = None
+    first, last = round_rows[0], round_rows[-1]
+    first_t = _round_time_hms(first[5])
+    last_t = _round_time_hms(last[5])
+    first_duration = round_duration_seconds(
+        first[8] if len(first) > 8 else None, first[6] if len(first) > 6 else None
+    )
+    start_s = None
+    if first_t and first_duration is not None:
+        start_s = first_t[0] * 3600 + first_t[1] * 60 + first_t[2] - int(first_duration)
+        if start_s < 0:
+            start_s += 86400  # the first round straddled midnight
+    end_s = last_t[0] * 3600 + last_t[1] * 60 + last_t[2] if last_t else None
+    start = f"{(start_s // 3600) % 24:02d}:{(start_s % 3600) // 60:02d}" if start_s is not None else None
+    end = f"{end_s // 3600:02d}:{(end_s % 3600) // 60:02d}" if end_s is not None else None
     span = None
-    if first and last and last_duration is not None:
-        first_s = first[0] * 3600 + first[1] * 60 + first[2]
-        end_s = last[0] * 3600 + last[1] * 60 + last[2] + int(last_duration)
-        if end_s < first_s:
-            end_s += 86400  # the evening crossed midnight
-        end = f"{(end_s // 3600) % 24:02d}:{(end_s % 3600) // 60:02d}"
-        span = end_s - first_s
+    if start_s is not None and end_s is not None:
+        span = end_s - start_s
+        if span < 0:
+            span += 86400  # the evening crossed midnight
     return {"start": start, "end": end, "span_seconds": span}
 
 

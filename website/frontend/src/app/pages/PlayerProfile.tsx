@@ -5,6 +5,7 @@ import {
   usePlayerSessionForm,
   usePlayerRoundsSeries, usePlayerCard,
 } from '../lib/queries';
+import { ApiError } from '../lib/api';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
 import { stripEtColors } from '../lib/names';
@@ -625,6 +626,16 @@ function Spark({ values, w = 110, h = 26 }: { values: number[]; w?: number; h?: 
  *  the career totals. Five of its fields were on the endpoint ratchet. */
 function PlayerCardSection({ playerId }: { playerId: string }) {
   const q = usePlayerCard(playerId);
+  // The endpoint answers 404 for a profile with no valid round in the window
+  // — a known absence, not a failed request (Codex on #1001).
+  if (q.isError && q.error instanceof ApiError && q.error.status === 404) {
+    return (
+      <Stack gap={2} parity="profile.card">
+        <SectionHead label="player card" />
+        <Absent reason="no card — no counted round in the last 90 days" />
+      </Stack>
+    );
+  }
   return (
     <Panel<PlayerCard>
       parity="profile.card"
@@ -637,9 +648,9 @@ function PlayerCardSection({ playerId }: { playerId: string }) {
       {(d) => (
         <Stack gap={2}>
           <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
-            {d.rating ? (
+            {d.rating?.value != null ? (
               <span className="m" style={{ fontSize: 'var(--fs-value)' }}>
-                rating {figure(d.rating.value)} <Meta>{d.rating.tier} · trend {d.rating.trend} · {figure(d.rating.games_rated)} rated</Meta>
+                rating {figure(d.rating.value)} <Meta>{d.rating.tier ?? '—'} · trend {d.rating.trend ?? '—'} · {figure(d.rating.games_rated ?? 0)} rated</Meta>
               </span>
             ) : <Meta>not rated yet</Meta>}
             {d.archetype && <Meta>archetype {d.archetype.replace(/_/g, ' ')}</Meta>}
@@ -653,8 +664,9 @@ function PlayerCardSection({ playerId }: { playerId: string }) {
           <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>percentile in the pool</Lbl>
             {Object.entries(d.percentiles).map(([k, v]) => (
-              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k} </Meta>{figure(v)}</span>
+              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k} </Meta>{v == null ? <Meta>withheld</Meta> : figure(v)}</span>
             ))}
+            {d.small_sample && <Meta>percentiles withheld under 10 rounds in the window</Meta>}
             <Meta>a different pool and window than the rating components — the two do not agree, on purpose</Meta>
           </Cluster>
           {d.sparkline_dpm.length >= 2 && (
