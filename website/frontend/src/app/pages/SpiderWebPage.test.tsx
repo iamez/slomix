@@ -126,6 +126,46 @@ describe('SpiderWebPage', () => {
     expect(screen.getByText(/measured 2026-08-22/)).toBeInTheDocument();
   });
 
+  it('prints intervals as ranges, keeps two decimals of confidence, names a team holder whole, and calls a missing state unavailable', async () => {
+    const w = world as unknown as SpiderWebSnapshot;
+    const shaped: SpiderWebSnapshot = {
+      ...w,
+      first_position_ms: null, velocity_max_dt_ms: null,
+      capture_policy: { ...w.capture_policy, manifest_version: null, manifest_count: 2 },
+      players: w.players.map((p, i) => (i === 0 ? { ...p, speed: null, stance: null } : p)),
+      information_state: {
+        holders: {
+          'team:AXIS': { holder_guid: 'team:AXIS', known_enemy_count: 2, nearest_known_enemy_distance: { min: 0, max: 831.9 }, nearest_heard_activity_distance: null,
+            beliefs: [{ kind: 'position_region', source: 'gunfire', subject_guid: null, roster_state: null, t_observed: 5000, confidence: 0.031, counts_as_known: false, capability: null, expiry_basis: null, region: { x: 1, y: 2, z: 300, radius: 500 } }],
+            position_claim_max_radius: null, unavailable: {}, notes: [] },
+        },
+        audible_gunfire_radius: 1330, pov: 'team:AXIS', pov_unavailable: null, unavailable: { comm_events: 'voice macros are not read' },
+      },
+    };
+    const povUnavailable: SpiderWebSnapshot = { ...shaped, information_state: { ...shaped.information_state, holders: {}, pov_unavailable: "no players on team 'ALLIES' in this round" } };
+    let serve = shaped;
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return serve;
+      if (url.includes('/assets/maps/geometry/')) return { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: null };
+      return undefined;
+    });
+    const first = renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.getByText(/first position unknown \(no tracks\) · velocity window unknown \(no valid manifest\) · 2 manifests \(versions disagree\)/)).toBeInTheDocument();
+    expect(screen.getAllByText(/AXIS \(team union\)/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/nearest known 0–832/)).toBeInTheDocument();
+    expect(screen.getByText('0.03')).toBeInTheDocument();
+    expect(screen.getByText(/r 500 at 1, 2, 300/)).toBeInTheDocument();
+    expect(screen.getByText(/comm events unavailable for this pov/)).toBeInTheDocument();
+    const players = document.querySelector('[data-parity="spider-web.players.table"]') as HTMLElement;
+    expect(players.textContent).not.toContain('null');
+    first.unmount();
+    serve = povUnavailable;
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/beliefs — no players on team 'ALLIES' in this round: unavailable/)).toBeInTheDocument());
+    expect(screen.queryByText(/nothing has been seen, heard or reported yet/)).toBeNull();
+  });
+
   it('a team pov is a SERVER parameter, and the withheld players are named', async () => {
     const spy = stub((url) => {
       if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=team%3AAXIS') || url.includes('pov=team:AXIS') ? povForm : world;

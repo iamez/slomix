@@ -3737,8 +3737,9 @@ export interface SpiderPlayer {
   z: number;
   health: number;
   weapon: number;
-  stance: number;
-  speed: number;
+  /** null when the sample carried no stance / speed (older samples). */
+  stance: number | null;
+  speed: number | null;
   alive: boolean;
   track_id: number;
   stale_ms: number;
@@ -3765,8 +3766,9 @@ export interface SpiderWebSnapshot {
   map_name: string;
   round_duration_ms: number;
   teams: string[];
-  first_position_ms: number;
-  velocity_max_dt_ms: number;
+  /** null for a round without tracks / without a valid manifest. */
+  first_position_ms: number | null;
+  velocity_max_dt_ms: number | null;
   player_count: number;
   overlap_conflicts: number;
   players: SpiderPlayer[];
@@ -3793,6 +3795,10 @@ export interface SpiderWebSnapshot {
     holders: Record<string, SpiderHolder>;
     audible_gunfire_radius: number | null;
     pov: string | null;
+    /** Why a requested pov has no holder — the server's sentence. */
+    pov_unavailable?: string | null;
+    /** Channels the whole state cannot have (team pov: the union). */
+    unavailable?: Record<string, string>;
   };
   gaps: Record<string, string>;
   /** Layer-1 validation the snapshot cites: where the coordinates were
@@ -3827,8 +3833,9 @@ export interface SpiderBelief {
 export interface SpiderHolder {
   holder_guid: string;
   known_enemy_count: number;
-  nearest_known_enemy_distance: number | null;
-  nearest_heard_activity_distance: number | null;
+  /** An INTERVAL — the server publishes the uncertainty, not a point. */
+  nearest_known_enemy_distance: { min: number; max: number } | null;
+  nearest_heard_activity_distance: { min: number; max: number } | null;
   beliefs: SpiderBelief[];
   position_claim_max_radius: number | null;
   /** Channels this holder cannot have, each with the server's reason. */
