@@ -93,18 +93,21 @@ now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
 ## The datapoint ledger (2026-09-08)
 
 "Capture everything" is the house rule; the ledger is how we see what is captured
-and never shown. `scripts/datapoint_ledger.py` reads every recorded fixture of an
-endpoint the app calls (`pages/__fixtures__`), lists its keys one level deep, and
-checks each name against comment-stripped `src/app` source with `lib/types.ts`
-excluded — a declaration is not a read. `docs/parity/datapoints.json` is the
-result (`read` / `unread` / `dropped`), `docs/parity/datapoint_decisions.json`
-holds the allowances with their reasons (iterated with `Object.entries`, debug
-blocks, deliberate retirements), and `tests/unit/test_datapoint_ledger.py` holds
-the unread count exactly (358 on 2026-09-08; lower it in the commit that reads a
-key). A row closes when a page reads the key — through `<Panel>`, with a fixture-
-driven test — never by deleting it. The rows are the field-level half of the
-audit of 2026-09-07 (old React tree, legacy JS, backend and DB columns with no
-reader); the plan that orders them is in BACKLOG.
+and never shown. `scripts/datapoint_ledger.py` reads every recorded fixture of a
+path the app READS (`apiGet`, `fetch`, and any `/api/…` literal handed to a query
+helper — writes are receipts, not datapoints), lists its keys one level deep (a
+list contributes the union of its elements' keys; a table keyed by nick or guid is
+one `<map>` row), and checks each name against comment-stripped `src/app` source
+with `lib/types.ts` excluded — a declaration is not a read. `docs/parity/
+datapoints.json` is the result (`read` / `unread` / `dropped`, plus the endpoints
+whose recording is empty as `unmeasured`); `docs/parity/datapoint_decisions.json`
+holds the allowances with their reasons; **`docs/parity/datapoints_unread_baseline.txt`
+is the ratchet** — one line per unread row, which the script only ever removes
+(`--rebase-baseline`), so a new unread row fails `tests/unit/test_datapoint_ledger.py`
+even after the ledger is regenerated, and a row that became read fails until the
+baseline drops it. 574 unread rows over 176 read endpoints on 2026-09-08. A row
+closes when a page reads the key — through `<Panel>`, with a fixture-driven test —
+never by editing the baseline by hand.
 
 ## Guards that already exist (11) — extend, do not duplicate
 

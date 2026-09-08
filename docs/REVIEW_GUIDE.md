@@ -116,8 +116,11 @@ it makes the triage mechanical.
 keys of its recorded response the app reads and which it does not
 (`scripts/datapoint_ledger.py`; ratchet in `tests/unit/test_datapoint_ledger.py`).
 An `unread` row is not a bug in the page that fetches it — it is a captured
-datapoint waiting for a panel. A `dropped` row carries a reason in
-`docs/parity/datapoint_decisions.json`; a decision without a reason, or naming a
-key no fixture has, fails the test. A name match is an upper bound: a key can be
+datapoint waiting for a panel. The ratchet is per ROW (`docs/parity/
+datapoints_unread_baseline.txt`, which the script only ever shrinks), not a sum,
+so a new unread key cannot hide behind an unrelated gain. A `dropped` row carries a
+reason in `docs/parity/datapoint_decisions.json`; a decision without a reason, or
+naming a key no fixture has, fails the test. Endpoints whose recording is empty are
+`unmeasured`, not covered. A name match is an upper bound: a key can be
 counted `read` and still not reach the DOM — the page tests are the other half.
 
