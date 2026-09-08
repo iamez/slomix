@@ -47,7 +47,7 @@ function TeamTable({ team, side }: { team: MatchDetailsTeam; side: string }) {
         <Meta>{side}{team.is_winner ? ' · won' : ''} · {figure(team.totals.kills)} k · {figure(team.totals.deaths)} d · {figure(team.totals.damage)} dmg</Meta>
       </Cluster>
       <DataTable<MatchDetailsPlayer>
-        parity="match.box_score.team"
+        parity="match.box-score.team"
         label={`${team.name} players`}
         columns={PLAYER_COLUMNS}
         rows={team.players}
@@ -63,11 +63,11 @@ export function MatchBoxScore({ roundId }: { roundId: number }) {
   const q = useMatchDetails(roundId);
   return (
     <Panel<MatchDetails>
-      parity="match.box_score"
+      parity="match.box-score"
       label="box score"
-      aside={q.data ? `${q.data.match.map_name ?? 'unknown map'} R${String(q.data.match.round_number)} · ${q.data.match.winner.toLowerCase()} · ${q.data.match.duration}${q.data.match.time_limit ? ` of ${q.data.match.time_limit}` : ''} · ${q.data.match.outcome.toLowerCase()}` : undefined}
+      aside={q.data ? `${q.data.match.map_name ?? 'unknown map'} R${String(q.data.match.round_number)} · ${q.data.match.winner.toLowerCase()} · ${q.data.match.duration ?? 'duration unknown'}${q.data.match.time_limit ? ` of ${q.data.match.time_limit}` : ''} · ${q.data.match.outcome?.toLowerCase() ?? 'outcome unknown'}` : undefined}
       q={q}
-      empty="no player rows recorded for this half"
+      empty="the round exists, but no player rows were recorded for this half"
       isEmpty={(d) => d.team1.players.length + d.team2.players.length === 0}
     >
       {(d) => (

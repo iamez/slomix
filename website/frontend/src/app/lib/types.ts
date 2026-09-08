@@ -418,8 +418,10 @@ export interface MatchDetails {
     round_date: string | null;
     /** 'Axis' | 'Allies' | 'Draw' — the side, not the logical team. */
     winner: string;
-    duration: string;
-    outcome: string;
+    /** `rounds.actual_time` text, null when the round carried none. */
+    duration: string | null;
+    /** `rounds.round_outcome` raw — null on 26 rows (sessions_router). */
+    outcome: string | null;
     time_limit: string | null;
     gaming_session_id: number | null;
   };
