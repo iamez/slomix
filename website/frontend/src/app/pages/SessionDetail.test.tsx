@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -30,6 +30,7 @@ import killImpact from './__fixtures__/api_storytelling_kill_impact.json';
 import killImpactDetails from './__fixtures__/api_storytelling_kill_impact_details.json';
 import kisFormula from './__fixtures__/api_storytelling_formula.json';
 import weaponsByPlayer from './__fixtures__/api_stats_weapons_by_player.json';
+import graphs from './__fixtures__/api_stats_session_gaming_session_id_graphs.json';
 import { perMapTotals } from '../lib/perMap';
 import type { SessionRound } from '../lib/types';
 import type { SessionAwards, SessionBasics } from '../lib/types';
@@ -59,6 +60,7 @@ const BODIES: [string, unknown][] = [
   ['/storytelling/kill-impact', killImpact],
   ['/storytelling/formula', kisFormula],
   ['/stats/weapons/by-player', weaponsByPlayer],
+  ['/graphs', graphs],
 ];
 
 /** Match the END of the pathname, not a substring of the URL: '/detail'
@@ -285,8 +287,24 @@ describe('SessionDetail', () => {
     expect(matrix.textContent).toContain('—');
     // the session column shows the player's evening dpm; switching to k/d swaps it
     expect(matrix.textContent).toContain(String(first.totals.dpm));
-    fireEvent.click(screen.getByRole('button', { name: 'k/d' }));
+    fireEvent.click(within(document.querySelector('[data-parity="session.matrix"]') as HTMLElement).getByRole('button', { name: 'k/d' }));
     await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team_a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
+  });
+
+  it('draws the playstyle radar, the dpm timeline and the advanced table over the counted rounds, without frag potential', async () => {
+    renderPage();
+    await openMore();
+    await waitFor(() => expect(screen.getByText('counted rounds only · 10 rounds')).toBeInTheDocument());
+    const first = (graphs as { players: { name: string }[] }).players[0];
+    expect(screen.getByLabelText(`playstyle of ${first.name}`)).toBeInTheDocument();
+    expect(screen.getByLabelText('dpm per round')).toBeInTheDocument();
+    const advanced = document.querySelector('[data-parity="session.graphs.advanced"]') as HTMLElement;
+    expect(advanced.textContent).toContain('dmg eff');
+    expect(document.body.textContent).not.toMatch(/frag potential/i);
+    // choosing another player moves the radar
+    const second = (graphs as { players: { name: string }[] }).players[1];
+    fireEvent.click(screen.getByRole('button', { name: second.name }));
+    await waitFor(() => expect(screen.getByLabelText(`playstyle of ${second.name}`)).toBeInTheDocument());
   });
 
   it('shows the per-player totals on their own tab', async () => {
@@ -352,7 +370,9 @@ describe('SessionDetail', () => {
     expect(panel.textContent).toContain(`${first.life_seconds}s alive`);
   });
 
-  it('states the lives cutoff from the payload, and stays silent on older wire shapes', async () => {
+  // Three full renders of a page that now carries the matrix and the graphs
+  // (R3c/R3d): 5.4 s under jsdom on 2026-09-08, hence the wider budget.
+  it('states the lives cutoff from the payload, and stays silent on older wire shapes', { timeout: 20000 }, async () => {
     // The endpoint's `total` is len(lives) AFTER the limit — a total that is
     // not a total — so the disclosure reads qualifying_total, counted before
     // the cut (Codex on #842, fourth cutoff of the family). The recorded

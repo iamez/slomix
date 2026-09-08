@@ -7,11 +7,11 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 3059,
-  "unread": 514,
+  "read": 3075,
+  "unread": 511,
   "dropped": 42,
-  "endpoints": 178,
-  "endpoints_fully_read": 67,
+  "endpoints": 179,
+  "endpoints_fully_read": 68,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -161,8 +161,8 @@
    "dropped": 0
   },
   "/api/players/{identifier}/profile": {
-   "read": 118,
-   "unread": 16,
+   "read": 119,
+   "unread": 15,
    "dropped": 0
   },
   "/api/players/{identifier}/wrapped": {
@@ -586,8 +586,8 @@
    "dropped": 0
   },
   "/api/skill/formula": {
-   "read": 22,
-   "unread": 23,
+   "read": 24,
+   "unread": 21,
    "dropped": 0
   },
   "/api/skill/leaderboard": {
@@ -709,6 +709,11 @@
    "read": 9,
    "unread": 0,
    "dropped": 7
+  },
+  "/api/stats/session/{gaming_session_id}/graphs": {
+   "read": 13,
+   "unread": 0,
+   "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/lineups": {
    "read": 14,
@@ -2864,7 +2869,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "advanced",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -12444,7 +12449,7 @@
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.survival_rate",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/skill/formula",
@@ -12559,7 +12564,7 @@
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.survival_rate",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/skill/formula",
@@ -15296,6 +15301,71 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/good-night",
    "key": "status",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "date",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "gaming_session_id",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "gate",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "player_count",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.advanced_metrics",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.combat_defense",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.combat_offense",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.dpm_timeline",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.guid",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "players.playstyle",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "rounds_counted",
    "status": "read"
   },
   {
