@@ -35,6 +35,12 @@ export interface LiveState {
    * until the snapshot is re-frozen: the side that attacks on this map
    * (constant across the two halves), how the last half ended, and the
    * time the second half must beat. */
+  /** Returned by the reducer since 2026-08; typed on 2026-09-08 when the
+   * live page started reading them (ledger). */
+  previous_map?: string | null;
+  session_start_seconds?: number | null;
+  recent_objectives?: { type: string; team: string | null; verb: string; player: string | null; objective: string | null; at?: number }[];
+  recent_roster_changes?: { name: string; action: string; side: string | null; age_seconds: number }[];
   attacking_side?: 'axis' | 'allies' | null;
   last_round_result?: {
     round_number: number | null;
@@ -510,9 +516,48 @@ export interface ChallengeCurrent {
 }
 
 /** GET /api/stats/tonight — corpus: api_stats_tonight.json */
+/** One half of a map in TEAM terms — the handler resolves axis/allies into
+ *  the two logical teams that swap sides between halves (players_router
+ *  get_tonight). */
+export interface TonightRound {
+  round: number;
+  /** 'a' | 'b' | null — a string here so a recorded JSON fixture satisfies the type. */
+  winner: string | null;
+  axis_score: number;
+  allies_score: number;
+  a_on_axis: boolean;
+  duration: number | null;
+  is_fullhold: boolean;
+}
+export interface TonightMap {
+  map_number: number;
+  /** null when `lua_round_teams.map_name` was null — preserved, not invented. */
+  map: string | null;
+  rounds: TonightRound[];
+  /** 'a' | 'b' | 'draw' | 'pending' */
+  winner: string;
+  a_points: number;
+  b_points: number;
+}
+/** GET /api/stats/tonight — the evening's score board. Recorded 2026-09-08
+ *  from the handler over the rows of 2026-09-07 (the endpoint is bound to
+ *  CURRENT_DATE, so an active evening can only be recorded while it runs;
+ *  the same code over the same rows the morning after is the honest
+ *  substitute). The quiet form (`api_stats_tonight.quiet.json`) is what a
+ *  night with no rounds answers: empty teams/score/maps, nulls elsewhere. */
 export interface TonightStatus {
   status: string;
   active: boolean;
+  current_map?: string | null;
+  last_update_unix?: number | null;
+  age_seconds?: number | null;
+  teams: { a?: { name: string; roster: string[] }; b?: { name: string; roster: string[] } };
+  score: { a_maps?: number; b_maps?: number; a_rounds?: number; b_rounds?: number; maps_completed?: number };
+  maps: TonightMap[];
+  momentum: { a: number; b: number }[];
+  current: { map: string; round: number; status: string; r2_pending: boolean; beat_seconds: number | null } | null;
+  director: string | null;
+  hold_probability: { map: string; curve: { t: number; p: number }[] } | null;
 }
 
 /** GET /api/live-status — fixture api_live_status.json RECORDED FRESH from
@@ -1143,6 +1188,37 @@ export interface PlayerProfile {
   relationships: ProfileRelationships;
   maps: ProfileMaps;
   recent_matches: ProfileRecentMatches;
+  /** Requested since 2026-09-08 (cheap sections the legacy profile drew and
+   * the new page never asked for — ledger). */
+  nick_history: ProfileNickHistory;
+  gather_summary: ProfileGatherSummary;
+  combat_timing: ProfileCombatTiming;
+}
+
+/** Every name this guid has played under, with first/last sight and how
+ * many rows carried it. */
+export interface ProfileNickHistory {
+  available: boolean;
+  names: { name: string; first_seen: string | null; last_seen: string | null; uses: number }[];
+}
+/** Gathers (organised evenings) as wins/losses/draws with the running streak. */
+export interface ProfileGatherSummary {
+  available: boolean;
+  gathers: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  win_rate: number | null;
+  current_streak: number;
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+/** Median time to kill and median return fire, with the sample each rests on. */
+export interface ProfileCombatTiming {
+  available: boolean;
+  time_to_kill: { median_ms: number | null; kills: number } | null;
+  return_fire: { median_ms: number | null; samples: number; coverage_pct: number | null } | null;
 }
 
 /* ── Rivalries (docs/design/12 row 25) ────────────────────────────────────

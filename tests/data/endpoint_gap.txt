@@ -108,7 +108,28 @@
 #   /api/stats/player/{}/rounds
 #
 # OWNER DECISION, closes with legacy retirement:
-#   /api/stats/sessions                  (see the 2026-08-30 note above)
+#   /api/stats/sessions                  (see the 2026-08-30 note above)#
+# 2026-09-08, 9 -> 11: the legacy extractor now reads a call that ENDS in an
+# interpolated segment as a one-parameter SHAPE (`/api/stats/matches/{}`), not
+# as the list prefix — the list call the new app makes had been clearing the
+# unbuilt detail (same class as the 2026-09-05 mid-path fix, from the other
+# end). The two shapes that surfaced:
+#   /api/stats/matches/{}   matches.js:634 + session-detail.js — the match
+#                           modal (team1/team2/is_winner per team, 20 fields).
+#                           Closes with a match expansion on RoundsTable.
+#   /api/sessions/{}        sessions.js:1617 + session-detail.js:359 — a session
+#                           BY DATE. The new app keys sessions by
+#                           gaming_session_id (/api/stats/session/{gsid}/*, the
+#                           CLAUDE.md direction), which carries everything this
+#                           returned except start_time / end_time /
+#                           gaming_session_ids. Closes by adding those to
+#                           /basics and retiring the date-keyed call, never by
+#                           porting the date path (a day with two sessions
+#                           merges them).
+# A third shape, /api/uploads/resumable/{}, was a phantom: the new app drives
+# it (HEAD/PATCH/DELETE in lib/uploads/resumable.ts) through a bare spec
+# literal the new-tree extractor's charset cut at `{`; fixed in the same
+# change, so it never appeared here.
 # ---------------------------------------------------------------------------
 #
 # 2026-09-02,
@@ -190,6 +211,8 @@
 /api/players/{}/card
 /api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats
+/api/sessions/{}
 /api/sessions/{}/graphs
+/api/stats/matches/{}
 /api/stats/sessions
 /api/uploads/{}/download

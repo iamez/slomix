@@ -1,1 +1,405 @@
-{"status":"ok","active":false,"teams":{},"maps":[],"momentum":[],"score":{},"current":null,"director":null,"hold_probability":null}
+{
+    "status": "ok",
+    "active": false,
+    "current_map": "et_brewdog",
+    "last_update_unix": 1788816590,
+    "age_seconds": 33985,
+    "teams": {
+        "a": {
+            "name": "Team A",
+            "roster": [
+                ".lgz",
+                "qmr",
+                "wiseBoy"
+            ]
+        },
+        "b": {
+            "name": "Team B",
+            "roster": [
+                ".olz",
+                "kanii",
+                "vid"
+            ]
+        }
+    },
+    "score": {
+        "a_maps": 2,
+        "b_maps": 5,
+        "a_rounds": 7,
+        "b_rounds": 9,
+        "maps_completed": 8
+    },
+    "maps": [
+        {
+            "map_number": 1,
+            "map": "etl_adlernest",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "b",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": true,
+                    "duration": 210,
+                    "is_fullhold": false
+                },
+                {
+                    "round": 2,
+                    "winner": "b",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": false,
+                    "duration": 210,
+                    "is_fullhold": true
+                }
+            ],
+            "winner": "b",
+            "a_points": 0,
+            "b_points": 2
+        },
+        {
+            "map_number": 2,
+            "map": "etl_adlernest",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "b",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": false,
+                    "duration": 599,
+                    "is_fullhold": true
+                },
+                {
+                    "round": 2,
+                    "winner": "b",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": true,
+                    "duration": 294,
+                    "is_fullhold": false
+                }
+            ],
+            "winner": "b",
+            "a_points": 0,
+            "b_points": 2
+        },
+        {
+            "map_number": 3,
+            "map": "sw_goldrush_te",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "a",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": true,
+                    "duration": 657,
+                    "is_fullhold": true
+                },
+                {
+                    "round": 2,
+                    "winner": "b",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": false,
+                    "duration": 719,
+                    "is_fullhold": true
+                }
+            ],
+            "winner": "draw",
+            "a_points": 1,
+            "b_points": 1
+        },
+        {
+            "map_number": 4,
+            "map": "etl_sp_delivery",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "a",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": false,
+                    "duration": 143,
+                    "is_fullhold": false
+                },
+                {
+                    "round": 2,
+                    "winner": "a",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": true,
+                    "duration": 116,
+                    "is_fullhold": true
+                }
+            ],
+            "winner": "a",
+            "a_points": 2,
+            "b_points": 0
+        },
+        {
+            "map_number": 5,
+            "map": "supply",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "a",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": true,
+                    "duration": 662,
+                    "is_fullhold": true
+                },
+                {
+                    "round": 2,
+                    "winner": "a",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": false,
+                    "duration": 689,
+                    "is_fullhold": false
+                }
+            ],
+            "winner": "a",
+            "a_points": 2,
+            "b_points": 0
+        },
+        {
+            "map_number": 6,
+            "map": "te_escape2",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "a",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": false,
+                    "duration": 529,
+                    "is_fullhold": false
+                },
+                {
+                    "round": 2,
+                    "winner": "b",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": true,
+                    "duration": 471,
+                    "is_fullhold": false
+                }
+            ],
+            "winner": "b",
+            "a_points": 0,
+            "b_points": 2
+        },
+        {
+            "map_number": 7,
+            "map": "te_escape2",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "b",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": true,
+                    "duration": 318,
+                    "is_fullhold": false
+                },
+                {
+                    "round": 2,
+                    "winner": "b",
+                    "axis_score": 1,
+                    "allies_score": 0,
+                    "a_on_axis": false,
+                    "duration": 318,
+                    "is_fullhold": true
+                }
+            ],
+            "winner": "b",
+            "a_points": 0,
+            "b_points": 2
+        },
+        {
+            "map_number": 8,
+            "map": "et_brewdog",
+            "rounds": [
+                {
+                    "round": 1,
+                    "winner": "a",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": false,
+                    "duration": 297,
+                    "is_fullhold": false
+                },
+                {
+                    "round": 2,
+                    "winner": "b",
+                    "axis_score": 0,
+                    "allies_score": 1,
+                    "a_on_axis": true,
+                    "duration": 249,
+                    "is_fullhold": false
+                }
+            ],
+            "winner": "b",
+            "a_points": 0,
+            "b_points": 2
+        }
+    ],
+    "momentum": [
+        {
+            "a": 35.0,
+            "b": 65.0
+        },
+        {
+            "a": 24.5,
+            "b": 75.5
+        },
+        {
+            "a": 17.1,
+            "b": 82.8
+        },
+        {
+            "a": 12.0,
+            "b": 88.0
+        },
+        {
+            "a": 38.4,
+            "b": 61.6
+        },
+        {
+            "a": 26.9,
+            "b": 73.1
+        },
+        {
+            "a": 48.8,
+            "b": 51.2
+        },
+        {
+            "a": 64.2,
+            "b": 35.8
+        },
+        {
+            "a": 74.9,
+            "b": 25.1
+        },
+        {
+            "a": 82.4,
+            "b": 17.6
+        },
+        {
+            "a": 87.7,
+            "b": 12.3
+        },
+        {
+            "a": 61.4,
+            "b": 38.6
+        },
+        {
+            "a": 43.0,
+            "b": 57.0
+        },
+        {
+            "a": 30.1,
+            "b": 69.9
+        },
+        {
+            "a": 51.1,
+            "b": 48.9
+        },
+        {
+            "a": 35.7,
+            "b": 64.3
+        }
+    ],
+    "current": {
+        "map": "et_brewdog",
+        "round": 2,
+        "status": "map complete",
+        "r2_pending": false,
+        "beat_seconds": null
+    },
+    "director": "Team B lead the night 5\u20132 on maps, and they hold the momentum.",
+    "hold_probability": {
+        "map": "et_brewdog",
+        "curve": [
+            {
+                "t": 0,
+                "p": 0.0
+            },
+            {
+                "t": 30,
+                "p": 0.0
+            },
+            {
+                "t": 60,
+                "p": 0.9
+            },
+            {
+                "t": 90,
+                "p": 2.8
+            },
+            {
+                "t": 120,
+                "p": 10.3
+            },
+            {
+                "t": 150,
+                "p": 21.5
+            },
+            {
+                "t": 180,
+                "p": 29.9
+            },
+            {
+                "t": 210,
+                "p": 38.3
+            },
+            {
+                "t": 240,
+                "p": 50.5
+            },
+            {
+                "t": 270,
+                "p": 59.8
+            },
+            {
+                "t": 300,
+                "p": 66.4
+            },
+            {
+                "t": 330,
+                "p": 72.9
+            },
+            {
+                "t": 360,
+                "p": 77.6
+            },
+            {
+                "t": 390,
+                "p": 83.2
+            },
+            {
+                "t": 420,
+                "p": 89.7
+            },
+            {
+                "t": 450,
+                "p": 92.5
+            },
+            {
+                "t": 480,
+                "p": 93.5
+            },
+            {
+                "t": 510,
+                "p": 97.2
+            },
+            {
+                "t": 540,
+                "p": 99.1
+            }
+        ]
+    }
+}
