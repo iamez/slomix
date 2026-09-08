@@ -7,6 +7,7 @@ import {
 } from '../lib/queries';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
+import { stripEtColors } from '../lib/names';
 import type {
   PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
@@ -178,15 +179,45 @@ function Lifetime({ p }: { p: Profile }) {
     ['hs kills', figure(l.headshot_kills)],
     ['played', hours(l.time_played_seconds)],
   ];
+  // The long tail: what the server counts and the legacy profile drew
+  // (player-profile.js:1178-1192). "Capture everything" shows it; the
+  // display tiers of doc 19 decide later what folds away.
+  const tail: [string, string][] = [
+    ['objectives', `${figure(l.objectives_stolen)} stolen · ${figure(l.objectives_returned)} returned`],
+    ['objectives · more', `${figure(l.objectives_completed)} completed · ${figure(l.objectives_destroyed)} destroyed`],
+    ['dynamite', `${figure(l.dynamites_planted)} planted · ${figure(l.dynamites_defused)} defused`],
+    ['multi-kills', `${figure(l.double_kills)} · ${figure(l.triple_kills)} · ${figure(l.quad_kills)} · ${figure(l.multi_kills)} · ${figure(l.mega_kills)}`],
+    ['best spree', figure(l.best_killing_spree)],
+    ['useful kills', figure(l.useful_kills)],
+    ['assists', figure(l.kill_assists)],
+    ['revives', `${figure(l.revives_given)} given · ${figure(l.times_revived)} received`],
+    ['self kills', figure(l.self_kills)],
+    ['team kills', `${figure(l.team_kills)} · ${figure(l.team_damage_given)} team dmg`],
+    ['damage', `${figure(l.damage_given)} given · ${figure(l.damage_received)} taken`],
+    ['shots', figure(l.shots)],
+    ['hours', l.hours_played == null ? '—' : figure(Math.round(l.hours_played))],
+    ['xp', figure(l.xp)],
+    ['head hits', figure(l.headshots)],
+  ];
   return (
-    <div data-parity="profile.lifetime" className="about-grid-5" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-6)' }}>
-      {cells.map(([k, v]) => (
-        <div key={k}>
-          <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
-          <div className="m" style={{ fontSize: 'var(--fs-row-lg)', marginTop: 'var(--space-1)' }}>{v}</div>
-        </div>
-      ))}
-    </div>
+    <>
+      <div data-parity="profile.lifetime" className="about-grid-5" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-6)' }}>
+        {cells.map(([k, v]) => (
+          <div key={k}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+            <div className="m" style={{ fontSize: 'var(--fs-row-lg)', marginTop: 'var(--space-1)' }}>{v}</div>
+          </div>
+        ))}
+      </div>
+      <div data-parity="profile.lifetime-tail" className="about-grid-5" style={{ gap: 'var(--space-3)', marginTop: 'var(--space-4)' }}>
+        {tail.map(([k, v]) => (
+          <div key={k}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{k}</Lbl>
+            <div className="m" style={{ fontSize: 'var(--fs-small)', marginTop: 'var(--space-1)' }}>{v}</div>
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -225,26 +256,28 @@ function Streaks({ p }: { p: Profile }) {
   );
 }
 
-function Weapons({ rows, available }: { rows: ProfileWeaponRow[] | undefined; available: boolean }) {
+function Weapons({ rows, available, totals }: { rows: ProfileWeaponRow[] | undefined; available: boolean; totals?: { total_shots?: number; total_hits?: number } }) {
   // An unavailable section carries no list at all — read defensively, then
   // let SectionBody name the state (Codex, #822).
   const top = [...(rows ?? [])].sort((a, b) => b.kills - a.kills).slice(0, 8);
   return (
     <div data-parity="profile.weapons" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills</Lbl>} />
+      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills{totals?.total_shots != null && <> · {figure(totals.total_hits ?? 0)} of {figure(totals.total_shots)} shots hit</>}</Lbl>} />
       <SectionBody available={available} empty={top.length === 0} what="weapon stats">
         <div style={{ marginTop: 'var(--space-2)' }}>
-          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
+          <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
             <Lbl style={{ fontSize: 'var(--fs-caption)' }}>weapon</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>kills</Lbl>
+            <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>deaths</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>acc</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>head hits</Lbl>
             <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>hs rate</Lbl>
           </div>
           {top.map((w) => (
-            <div key={w.weapon} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
+            <div key={w.weapon} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto', gap: 'var(--space-3)', alignItems: 'baseline', padding: 'var(--space-2) 0' }}>
               <span style={{ fontSize: 'var(--fs-value)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>{w.weapon}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right' }}>{figure(w.kills)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{figure(w.deaths)}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.accuracy)}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{figure(w.headshots)}</span>
               <span className="m" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{pct(w.hs_accuracy)}</span>
@@ -287,7 +320,7 @@ function Body({ p }: { p: Profile }) {
         <SectionBody available={m.available} empty={!m.tracks} what="movement">
           <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {([['avg speed', num(m.avg_speed)], ['peak', num(m.peak_speed)], ['sprint', pct(m.sprint_pct)],
-              ['dist / life', num(m.avg_distance_per_life)],
+              ['dist / life', num(m.avg_distance_per_life)], ['after spawn', num(m.avg_post_spawn_distance)],
               ['standing', pct(stance?.standing_pct)], ['crouching', pct(stance?.crouching_pct)]] as const)
               .map(([k, v]) => (
                 <div key={k}>
@@ -334,6 +367,28 @@ function OpponentList({ title, rows, note, lead }: {
  * (players_profile_router:516). Showing only the win rate made the visible
  * number disagree with the order whenever the two diverge (Codex, #822);
  * win rate stays, as the second figure. */
+/** A duel: win rate of the pairing first (what the list is sorted by), then
+ *  the two kill counts and the classification the server gave. */
+function DuelList({ title, rows }: { title: string; rows: ProfileOpponent[] }) {
+  return (
+    <div>
+      <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{title}</Lbl>
+      <Stack gap={1} style={{ marginTop: 'var(--space-2)' }}>
+        {rows.slice(0, 5).map((o) => (
+          <Cluster key={o.guid} gap={2} justify="between" align="baseline" style={rowStyle}>
+            <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stripEtColors(o.name)}</span>
+            <Cluster gap={2} align="baseline">
+              <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-200)' }}>{o.win_rate == null ? '—' : `${Math.round(o.win_rate * 100)} %`}</span>
+              <Meta>{figure(o.kills_by_player)}–{figure(o.kills_on_player)}{o.classification ? ` · ${o.classification.toLowerCase()}` : ''}</Meta>
+            </Cluster>
+          </Cluster>
+        ))}
+      </Stack>
+      <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-1)' }}>win rate of the duel · kills by – on</Lbl>
+    </div>
+  );
+}
+
 function MateList({ title, rows }: { title: string; rows: ProfileTeammate[] }) {
   return (
     <div>
@@ -377,6 +432,89 @@ function Relationships({ p }: { p: Profile }) {
           <MateList title="best alongside" rows={best} />
           <MateList title="worst alongside" rows={worst} />
         </div>
+        {/* The duel lists the legacy profile had (player-profile.js:1350): ranked
+          * by the win rate of the pairing, not by a count — a rival is someone
+          * this player LOSES to more often than not. */}
+        {((r.hardest_opponents?.length ?? 0) > 0 || (r.easiest_opponents?.length ?? 0) > 0) && (
+          <div className="about-grid-4" style={{ gap: 'var(--space-5)', marginTop: 'var(--space-4)' }}>
+            <DuelList title="hardest duels" rows={r.hardest_opponents ?? []} />
+            <DuelList title="easiest duels" rows={r.easiest_opponents ?? []} />
+          </div>
+        )}
+      </SectionBody>
+    </div>
+  );
+}
+
+/** The names behind the guid — the legacy profile's "known as" table,
+ *  never carried over (audit 2026-09-07). */
+function NickHistory({ p }: { p: Profile }) {
+  const names = [...(p.nick_history?.names ?? [])].sort((a, b) => b.uses - a.uses);
+  return (
+    <div data-parity="profile.nick-history" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="known as" aside={names.length > 1 ? <span className="lbl">{figure(names.length)} names</span> : undefined} />
+      <SectionBody available={p.nick_history?.available ?? false} empty={names.length === 0} what="name history">
+        <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+          {names.map((n) => (
+            <Cluster key={n.name} gap={4} justify="between" align="baseline" className="row" style={rowStyle}>
+              {/* One text node: the header already shows the current name on
+                * its own, and a second bare "vid" would be two answers to
+                * "where is the name" for a reader and a test alike. */}
+              <span style={{ fontSize: 'var(--fs-row)' }}>{`${stripEtColors(n.name)} · ${figure(n.uses)} rounds`}</span>
+              <Meta>{n.first_seen ?? '?'} → {n.last_seen ?? '?'}</Meta>
+            </Cluster>
+          ))}
+        </Stack>
+      </SectionBody>
+    </div>
+  );
+}
+
+/** Gathers as a record with the running streak (legacy player-profile.js:1379). */
+function GatherSummary({ p }: { p: Profile }) {
+  const g = p.gather_summary;
+  return (
+    <div data-parity="profile.gathers" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="gathers" aside={g?.available && g.gathers > 0 ? <span className="lbl">{figure(g.gathers)} played</span> : undefined} />
+      <SectionBody available={g?.available ?? false} empty={!g || g.gathers === 0} what="gathers">
+        {g && (
+          <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{figure(g.wins)}–{figure(g.losses)}{g.draws > 0 && <>–{figure(g.draws)}</>}</span>
+            <Meta>w–l{g.draws > 0 ? '–d' : ''}</Meta>
+            {g.win_rate != null && <Meta>{figure(g.win_rate)} % won</Meta>}
+            {g.current_streak > 0 && g.current_type && <Meta>streak {figure(g.current_streak)}{g.current_type}</Meta>}
+            <Meta>longest {figure(g.longest_win)}W · {figure(g.longest_loss)}L</Meta>
+          </Cluster>
+        )}
+      </SectionBody>
+    </div>
+  );
+}
+
+/** Median time to kill and median return fire — the legacy "combat
+ *  timing" panel (player-profile.js:963), with the sample each number rests
+ *  on, because a median of eleven is not a median of eleven thousand. */
+function CombatTiming({ p }: { p: Profile }) {
+  const c = p.combat_timing;
+  const ttk = c?.time_to_kill ?? null;
+  const rf = c?.return_fire ?? null;
+  const secs = (ms: number | null | undefined) => (ms == null ? '—' : `${(ms / 1000).toFixed(2)} s`);
+  return (
+    <div data-parity="profile.combat-timing" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="combat timing" aside={<span className="lbl">medians · engagement clock</span>} />
+      <SectionBody available={c?.available ?? false} empty={ttk == null && rf == null} what="combat timing">
+        <Cluster gap={6} align="baseline" style={{ flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+          <Stack gap={1}>
+            <Lbl>time to kill</Lbl>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{secs(ttk?.median_ms)}</span>
+            {ttk && <Meta>over {figure(ttk.kills)} kills</Meta>}
+          </Stack>
+          <Stack gap={1}>
+            <Lbl>return fire</Lbl>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{secs(rf?.median_ms)}</span>
+            {rf && <Meta>{figure(rf.samples)} samples{rf.coverage_pct != null && <> · covers {figure(rf.coverage_pct)} % of deaths</>}</Meta>}
+          </Stack>
+        </Cluster>
       </SectionBody>
     </div>
   );
@@ -878,11 +1016,14 @@ export function PlayerProfilePage() {
           <RoundsSeries playerId={playerId} />
           <Streaks p={p} />
           <Achievements playerId={playerId} />
-          <Weapons rows={p.weapons.weapons} available={p.weapons.available} />
+          <Weapons rows={p.weapons.weapons} available={p.weapons.available} totals={p.weapons} />
           <Body p={p} />
           <Relationships p={p} />
+          <GatherSummary p={p} />
+          <CombatTiming p={p} />
           <Maps rows={p.maps.maps} available={p.maps.available} />
           <Recent rows={p.recent_matches.matches} available={p.recent_matches.available} />
+          <NickHistory p={p} />
           <RecentDetail playerId={playerId} />
           <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
             {p.sections.length} sections · generated {p.generated_at.slice(0, 19).replace('T', ' ')} utc

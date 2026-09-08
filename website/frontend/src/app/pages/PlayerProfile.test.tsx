@@ -470,3 +470,50 @@ describe('PlayerProfile — memory card', () => {
     await waitFor(() => expect(screen.getByText(/memory card: unavailable/i)).toBeInTheDocument());
   });
 });
+
+/** The three cheap sections the legacy profile drew and the new page never
+ *  requested (ledger 2026-09-08): name history, gathers, combat timing.
+ *  Asserted against the recording, not a paraphrase of it. */
+it('shows the recorded name history, gather record and combat timing', async () => {
+  renderProfile('D8423F90');
+  const rec = profile as unknown as {
+    nick_history: { names: { name: string; uses: number }[] };
+    gather_summary: { wins: number; losses: number; gathers: number };
+    combat_timing: { time_to_kill: { median_ms: number; kills: number }; return_fire: { median_ms: number; coverage_pct: number } };
+  };
+  await waitFor(() => expect(screen.getByText(/known as/)).toBeInTheDocument());
+  const top = rec.nick_history.names[0];
+  expect(screen.getByText(`${top.name} · ${top.uses.toLocaleString('en-US')} rounds`)).toBeInTheDocument();
+  expect(screen.getByText(`${rec.gather_summary.gathers} played`)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`^${rec.gather_summary.wins}–${rec.gather_summary.losses}`))).toBeInTheDocument();
+  expect(screen.getByText(`${(rec.combat_timing.time_to_kill.median_ms / 1000).toFixed(2)} s`)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`over ${rec.combat_timing.time_to_kill.kills.toLocaleString('en-US')} kills`))).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`covers ${rec.combat_timing.return_fire.coverage_pct} % of deaths`))).toBeInTheDocument();
+});
+
+/** The lifetime long tail, the duel lists, the weapons' deaths column and the
+ *  post-spawn distance — fields the recording carried and the page dropped
+ *  (ledger 2026-09-08). Asserted against the recorded numbers. */
+it('shows the recorded long tail: objectives, dynamite, sprees, duels, weapon deaths', async () => {
+  renderProfile('D8423F90');
+  const rec = profile as unknown as {
+    lifetime: { objectives_stolen: number; objectives_returned: number; dynamites_planted: number; dynamites_defused: number; best_killing_spree: number; useful_kills: number };
+    relationships: { hardest_opponents: { name: string; win_rate: number }[] };
+    weapons: { weapons: { weapon: string; deaths: number }[]; total_shots: number };
+    movement: { avg_post_spawn_distance: number };
+  };
+  await waitFor(() => expect(screen.getByText('vid')).toBeInTheDocument());
+  const f = (n: number) => n.toLocaleString('en-US');
+  const l = rec.lifetime;
+  expect(screen.getByText(`${f(l.objectives_stolen)} stolen · ${f(l.objectives_returned)} returned`)).toBeInTheDocument();
+  expect(screen.getByText(`${f(l.dynamites_planted)} planted · ${f(l.dynamites_defused)} defused`)).toBeInTheDocument();
+  expect(screen.getByText('best spree')).toBeInTheDocument();
+  expect(screen.getByText(f(l.useful_kills))).toBeInTheDocument();
+  expect(screen.getByText('hardest duels')).toBeInTheDocument();
+  expect(screen.getByText(`${Math.round(rec.relationships.hardest_opponents[0].win_rate * 100)} %`)).toBeInTheDocument();
+  const top = [...rec.weapons.weapons].sort((a, b) => 0)[0];
+  expect(screen.getByText('deaths')).toBeInTheDocument();
+  expect(screen.getAllByText(f(top.deaths)).length).toBeGreaterThan(0);
+  expect(screen.getByText(new RegExp(`of ${f(rec.weapons.total_shots)} shots hit`))).toBeInTheDocument();
+  expect(screen.getByText('after spawn')).toBeInTheDocument();
+});

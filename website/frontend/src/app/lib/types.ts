@@ -35,6 +35,12 @@ export interface LiveState {
    * until the snapshot is re-frozen: the side that attacks on this map
    * (constant across the two halves), how the last half ended, and the
    * time the second half must beat. */
+  /** Returned by the reducer since 2026-08; typed on 2026-09-08 when the
+   * live page started reading them (ledger). */
+  previous_map?: string | null;
+  session_start_seconds?: number | null;
+  recent_objectives?: { type: string; team: string | null; verb: string; player: string | null; objective: string | null; at?: number }[];
+  recent_roster_changes?: { name: string; action: string; side: string | null; age_seconds: number }[];
   attacking_side?: 'axis' | 'allies' | null;
   last_round_result?: {
     round_number: number | null;
@@ -510,9 +516,48 @@ export interface ChallengeCurrent {
 }
 
 /** GET /api/stats/tonight — corpus: api_stats_tonight.json */
+/** One half of a map in TEAM terms — the handler resolves axis/allies into
+ *  the two logical teams that swap sides between halves (players_router
+ *  get_tonight). */
+export interface TonightRound {
+  round: number;
+  /** 'a' | 'b' | null — a string here so a recorded JSON fixture satisfies the type. */
+  winner: string | null;
+  axis_score: number;
+  allies_score: number;
+  a_on_axis: boolean;
+  duration: number | null;
+  is_fullhold: boolean;
+}
+export interface TonightMap {
+  map_number: number;
+  /** null when `lua_round_teams.map_name` was null — preserved, not invented. */
+  map: string | null;
+  rounds: TonightRound[];
+  /** 'a' | 'b' | 'draw' | 'pending' */
+  winner: string;
+  a_points: number;
+  b_points: number;
+}
+/** GET /api/stats/tonight — the evening's score board. Recorded 2026-09-08
+ *  from the handler over the rows of 2026-09-07 (the endpoint is bound to
+ *  CURRENT_DATE, so an active evening can only be recorded while it runs;
+ *  the same code over the same rows the morning after is the honest
+ *  substitute). The quiet form (`api_stats_tonight.quiet.json`) is what a
+ *  night with no rounds answers: empty teams/score/maps, nulls elsewhere. */
 export interface TonightStatus {
   status: string;
   active: boolean;
+  current_map?: string | null;
+  last_update_unix?: number | null;
+  age_seconds?: number | null;
+  teams: { a?: { name: string; roster: string[] }; b?: { name: string; roster: string[] } };
+  score: { a_maps?: number; b_maps?: number; a_rounds?: number; b_rounds?: number; maps_completed?: number };
+  maps: TonightMap[];
+  momentum: { a: number; b: number }[];
+  current: { map: string; round: number; status: string; r2_pending: boolean; beat_seconds: number | null } | null;
+  director: string | null;
+  hold_probability: { map: string; curve: { t: number; p: number }[] } | null;
 }
 
 /** GET /api/live-status — fixture api_live_status.json RECORDED FRESH from
@@ -1011,6 +1056,29 @@ export interface ProfileLifetime extends ProfileSection {
   damage_received: number;
   time_played_seconds: number;
   xp: number;
+  /** The long tail the legacy profile drew and the page dropped (ledger
+   * 2026-09-08): objectives, dynamite, multi-kills, sprees, support. */
+  hours_played: number | null;
+  objectives_completed: number;
+  objectives_destroyed: number;
+  objectives_stolen: number;
+  objectives_returned: number;
+  dynamites_planted: number;
+  dynamites_defused: number;
+  double_kills: number;
+  triple_kills: number;
+  quad_kills: number;
+  multi_kills: number;
+  mega_kills: number;
+  best_killing_spree: number;
+  shots: number;
+  useful_kills: number;
+  kill_assists: number;
+  revives_given: number;
+  times_revived: number;
+  self_kills: number;
+  team_kills: number;
+  team_damage_given: number;
 }
 
 export interface ProfileSkill extends ProfileSection {
@@ -1046,6 +1114,8 @@ export interface ProfileWeapons extends ProfileSection {
   weapons?: ProfileWeaponRow[];
   overall_accuracy: number | null;
   overall_hs_accuracy: number | null;
+  total_shots?: number;
+  total_hits?: number;
 }
 
 export interface ProfileHitRegions extends ProfileSection {
@@ -1061,6 +1131,8 @@ export interface ProfileMovement extends ProfileSection {
   peak_speed: number | null;
   sprint_pct: number | null;
   avg_distance_per_life: number | null;
+  /** Units covered in the first seconds after a spawn — the "how far before the first fight" figure. */
+  avg_post_spawn_distance?: number | null;
   stance?: {
     standing_pct: number; crouching_pct: number; prone_pct: number;
   } | null;
@@ -1095,6 +1167,9 @@ export interface ProfileRelationships extends ProfileSection {
   top_victims?: ProfileOpponent[];
   best_teammates?: ProfileTeammate[];
   worst_teammates?: ProfileTeammate[];
+  /** Ranked by win rate of the duel, not by count: RIVAL / PREY classes. */
+  hardest_opponents?: ProfileOpponent[];
+  easiest_opponents?: ProfileOpponent[];
   baseline_dpm: number | null;
 }
 
@@ -1143,6 +1218,37 @@ export interface PlayerProfile {
   relationships: ProfileRelationships;
   maps: ProfileMaps;
   recent_matches: ProfileRecentMatches;
+  /** Requested since 2026-09-08 (cheap sections the legacy profile drew and
+   * the new page never asked for — ledger). */
+  nick_history: ProfileNickHistory;
+  gather_summary: ProfileGatherSummary;
+  combat_timing: ProfileCombatTiming;
+}
+
+/** Every name this guid has played under, with first/last sight and how
+ * many rows carried it. */
+export interface ProfileNickHistory {
+  available: boolean;
+  names: { name: string; first_seen: string | null; last_seen: string | null; uses: number }[];
+}
+/** Gathers (organised evenings) as wins/losses/draws with the running streak. */
+export interface ProfileGatherSummary {
+  available: boolean;
+  gathers: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  win_rate: number | null;
+  current_streak: number;
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+/** Median time to kill and median return fire, with the sample each rests on. */
+export interface ProfileCombatTiming {
+  available: boolean;
+  time_to_kill: { median_ms: number | null; kills: number } | null;
+  return_fire: { median_ms: number | null; samples: number; coverage_pct: number | null } | null;
 }
 
 /* ── Rivalries (docs/design/12 row 25) ────────────────────────────────────
@@ -1312,6 +1418,12 @@ export interface SkillFormula {
   shrinkage_k: number;
   normalization: string;
   range: string;
+  /** The formula's own tables (read since 2026-09-08 — 24 keys fetched and
+   * never shown): metric -> weight (signed), metric -> what it measures,
+   * source -> the metrics it feeds. */
+  weights: Record<string, number>;
+  metrics: Record<string, string>;
+  metric_sources: Record<string, string[]>;
 }
 
 export interface SsrComponent {
@@ -1570,6 +1682,30 @@ export interface StoryRolePlayer {
   enabler_score?: number;
   solo_pct?: number;
   hold_pct?: number | null;
+  /** The numbers behind each score (read since 2026-09-08; the legacy
+   * "invisible value" board showed them, the new boards showed only the
+   * score). gravity: */
+  engagements?: number;
+  avg_attackers?: number;
+  total_attention_ms?: number;
+  total_engaged_ms?: number;
+  alive_ms?: number;
+  /** space created: */
+  productive_deaths?: number;
+  wasted_deaths?: number;
+  total_deaths?: number;
+  teammate_kills_after?: number;
+  /** enabler: */
+  enabled_kills?: number;
+  crossfire_assists?: number;
+  trade_assists?: number;
+  total_assists?: number;
+  own_kills?: number;
+  /** alone (lurker): */
+  solo_samples?: number;
+  total_samples?: number;
+  tracks?: number;
+  solo_time_est_s?: number;
 }
 
 export interface StoryRoleBoard {

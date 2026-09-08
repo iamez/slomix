@@ -865,3 +865,15 @@ describe('SessionStory (the session page story tab)', () => {
     ).toBeGreaterThan(0);
   });
 });
+
+/** The numbers behind each role score, from the recording: gravity's
+ *  engagements, space's productive/wasted deaths, enabler's enabled kills,
+ *  the lurker's samples (audit 2026-09-07: fetched and dropped). */
+it('shows the numbers behind the role scores, not only the scores', async () => {
+  renderPage();
+  const g = (gravity as { players: { engagements: number }[] }).players[0];
+  await waitFor(() => expect(screen.getByText(new RegExp(`${g.engagements.toLocaleString('en-US')} engagements`))).toBeInTheDocument());
+  expect(screen.getAllByText(/productive · \d[\d,]* wasted of/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/enabled · \d[\d,]* crossfire/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/samples · ≈ \d+:\d\d alone/).length).toBeGreaterThan(0);
+});
