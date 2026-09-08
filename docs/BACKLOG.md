@@ -7,6 +7,66 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-07, 22:05) Owner: »poglej live mode kot obiskovalec«
+  — pregledano med živo igro na produkciji (legacy `#/live`, v1.39.0):
+  deset vrzeli (L1–L10) in osem rezin v LOKALNEM
+  `docs/research/LIVE_VIEW_VISITOR_REVIEW_2026-09-07.md`. Bistvo: ni vrstice
+  »kaj se je pravkar zgodilo« (zadnja runda, zmagovalec, čas); ni stopwatch
+  konteksta (limit, čas za premagati, kdo napada); »session 4m« je ura
+  strežnika, ne večera; `prev gammajump` je jump mapa; K/D v rosterju je
+  kumulativa od povezave brez oznake; momentum/hold krivulji brez osi;
+  feed podvaja POPUP+DYNAMITE in MAP+LIVE_MAP; mrtve stave sredi strani.
+  Ni narobe: časi rund so IZMERJENI (210 s = 3:30, dva polna holda).
+  Popravki gredo na SPA `LivePage.tsx` (prod zamrznjen); predpogoj je
+  replay živega toka na devu (tailer cilja prod). Posnetek toka in stanja z
+  nocojšnje igre: `scratchpad/live-feed-2026-09-07.json` (lokalno).
+- (Fable 5.1, 2026-09-07, 21:45) Owner: »je vse pripravljeno na tekme, Lua
+  na puranu?« — izmerjeno med živo igro (6 ljudi na etl_adlernest): Lua na
+  puranu = repo za vse žive module (le arena modul brez #912; oboroži se
+  samo na areni); runda 213018 uvožena 7 s po nastanku datoteke; tailer za
+  živi pogled teče in pošilja na www.slomix.fyi (prod). ⚠️ Watchdog `live:
+  warn` je na devu LAŽEN: dev nima vira živega toka (tailer cilja prod) →
+  watchdog r. 2: preverba mora vedeti, kdo je cilj tailerja, ali biti na
+  devu izklopljena. `KNOWN_ISSUES` »Lua drift High« označen kot rešen.
+  Vlak: #971, #973 mergana; #974, #972 v vratih; lokalno pripravljena veja
+  `feat/profile-rounds-series` (gap 10 → 9 po #974).
+- (Fable 5.1, 2026-09-07, 19:30) Owner: »dokončaj novo stran« + DA za gradnjo,
+  dev deploy, Chromium prelet in kodo. NAREJENO: `npm run build:app` v
+  worktreeju `slomix-fable` (main `e91875cf`), `DEV_SRC_DIR=…/slomix-fable
+  scripts/dev_deploy.sh` → run dir `e91875cf`, servirani bundle
+  `app-Bv4wOtcy.js` = zgrajeni (prvič od 6. 9. 11:03 je SPA na `:8000` enak
+  mainu), bot prijavljen 19:24. `static/modern` guard je pravilno preskočil
+  (worktree brez legacy bundla). V TEKU: anonimni prelet 32 rut (`--app
+  --anon-only`); owner prelet rabi `website/.env` → iz primarnega drevesa.
+  PRELET (anon, 32 rut × 4 pogledi = 128, `:8000`, bundle `e91875cf`, hladen
+  strežnik 5 min po restartu): **0 padlih**, 16 opomb: greatshot ×8 = 401 za
+  anonimnega (načrtovano stanje); admin/compare/proximity-player na 1920 =
+  `page.goto` 30 s timeout na HLADNEM backbonu (prvi obisk po restartu;
+  1440/768/390 iste rute čiste); dvojni klici `/api/stats/overview` ×2–3 na
+  admin in profil ×2 na compare (dedup kandidat); prelivanje 20–32 px na
+  telefonu 390 za `retro-viz` (sidra) in `proximity` (svg). Mediana
+  nalaganja 2,5 s; owner prelet NI tekel (`website/.env` je le v primarnem
+  drevesu). Izid: `scratchpad/audit-anon/results.json` (lokalno).
+  PR #970: `components/Panel.tsx` (modularnost rezina 1) + ratchet
+  `panels.test.ts` (61) + profil »form by session« → endpoint gap **11**.
+  OWNER PRELET (prijavljen sentinel, isti bundle, 128 preverb, 21:20): **0
+  padlih**, 7 opomb — greatshot 401 izginejo; `admin` ruta na VSEH štirih
+  pogledih `page.goto` 30 s timeout z dvojnima klicema `/api/stats/overview`
+  in `/api/system/overview` (kandidat: polling brez `networkidle` ali počasen
+  endpoint za neadminskega prijavljenega uporabnika — preveri `refetchInterval`
+  in odziv obeh endpointov za `website_user_id = -1`); `proximity` 1920 hladen
+  timeout (40 s), prelivanje 20–32 px na 390 (retro-viz sidra, proximity svg)
+  kot pri anonimnem. Mediana nalaganja 2,65 s. Izid `scratchpad/audit-owner/`.
+  R0 NAJDBA (glej `docs/KNOWN_ISSUES.md` »R0 summary rows counted again«):
+  `stats/player/{}/form|rounds` in `skill_router._form_rows` so sešteli R0
+  vrstice → DPM serija ~30 % previsoka; popravki v #970 + veja
+  `fix/skill-form-skips-r0`; razred (api_helpers, season_awards, auth,
+  session_matrix, greatshot_crossref brez filtra) čaka per-query audit.
+  NASLEDNJE: PR-ji po mergu #970: `feat/panel-slice-2` (ratchet 61 → 49),
+  `fix/skill-form-skips-r0`, `feat/greatshot-crossref-panel` (gap 11 → 10);
+  potem `stats/player/{}/rounds` (S), dedup dvojnih klicev, admin timeout.
+  ⚠️ Ultra na #924 do 19:20 ni oddal ničesar (0 pregledov); rezin ne sekam,
+  dokler owner ne potrdi, da pregled ni v teku.
 - (Fable 5.1, 2026-09-07, 13:10) SEJA ZAKLJUČENA na ownerjevo zahtevo. Stanje: #960,
   #958, #955 mergani; #912 mergan 12:30 pod ownerjevim DA za nabor (»zapri odprte PR-je
   razen Don't merge«, 03:40) — ⚠️ pogodba hoče DA na številko PR-ja; ownerju

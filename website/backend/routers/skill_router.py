@@ -1073,6 +1073,7 @@ async def _form_rows(db, guid: str | None, session_limit: int):
             JOIN rounds r ON r.id = pcs.round_id
             WHERE r.gaming_session_id IN (SELECT gaming_session_id FROM recent_sessions)
               AND r.is_valid IS DISTINCT FROM FALSE
+              AND pcs.round_number IN (1, 2)
               AND pcs.time_played_seconds > 0
               {scope}
             GROUP BY pcs.player_guid, r.gaming_session_id

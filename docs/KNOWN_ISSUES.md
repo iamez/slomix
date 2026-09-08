@@ -10,7 +10,40 @@
 
 ---
 
+
 ## Open — data pipeline
+
+### R0 summary rows counted again — a class, not one handler (2026-09-07, Fable)
+
+**Symptom.** `/api/stats/player/{name}/form` and `/rounds` (players_router) and
+`skill_router._form_rows` (feeds `/api/skill/player/{}/form`: profile header,
+FormPage, Home form movers) summed `player_comprehensive_stats` with no
+`round_number IN (1, 2)`. The importer still writes a round 0 row per map whose
+damage is the halves added again (docs/CLAUDE.md), and R0 *rounds* are
+`is_valid = TRUE` (249 of 257 since June 2026), so a join on valid rounds does
+not filter them. Measured for one regular (rows > 60 s): R0 26 rows / 96,970
+damage vs R1+R2 56 rows / 99,536; per-session DPM 366.9 → 263.9, 406.5 → 295.5,
+396.2 → 250.8 (≈ 30 % lower once the halves alone are counted).
+
+**Fixed** in #970 (players_router, guard `tests/unit/test_player_series_skip_r0.py`)
+and the skill form follow-up (skill_router `_form_rows`, same guard).
+
+**Open — the rest of the class.** A file-level count on 2026-09-07 (`FROM
+player_comprehensive_stats` occurrences vs any of `round_number IN (1, 2)`,
+`round_number > 0`, `counts_toward_totals`, `player_match_stats` in the same
+file) shows files with reads and **no** filter of any kind:
+`api_helpers.py` 5, `season_awards_service.py` 3, `greatshot_crossref.py` 3,
+`auth.py` 2, `session_matrix_service.py` 1; and files where reads outnumber
+filters: `players_router.py` 27 vs 16, `records_awards.py` 10 vs 4 + 3 view
+reads, `skill_rating_service.py` 5 vs 6 `> 0`. A file count is not a query
+count — some reads are lookups by guid where R0 does not matter — so the next
+step is a per-query audit with a ratchet (`tests/data/pcs_unfiltered_reads.txt`,
+seeded from an AST walk that pairs each `FROM player_comprehensive_stats`
+literal with the presence of a round filter in the same literal), then fixes
+one router per PR with a before/after measurement each. Do not "fix" blindly:
+Stats 2.0 uses `counts_toward_totals`, older routers use the halves filter,
+and the two gates disagree on a few rounds (see the graphs note in
+`tests/data/endpoint_gap.txt`).
 
 ### Dead-hours orphan mechanism (deterministic permanent orphans) — High
 
@@ -126,7 +159,24 @@ FROM proximity_vehicle_progress; -- both counts equal (94|94 on 2026-08-11)
 
 ## Open — Lua / game server
 
-### Lua drift repo ↔ puran (deploy owner-gated) — High
+### Lua drift repo ↔ puran — RESOLVED for the live modules (measured 2026-09-07)
+
+Read-only `sha1sum` on puran at 21:35 CEST against the repo at main: the
+modules the engine loads — `proximity_tracker.lua` 6.14 (basepath
+`luascripts/`), `live_events.lua`, `team-lock.lua`, `c0rnp0rn8.lua` and
+`endstats.lua` (`legacy/`), `stats_discord_webhook.lua` (homepath copy, which
+wins) — are byte-identical to the repo; `frame_health.log` shows
+`FH init … version=6.13` for the webhook/live modules and `FH watcher …
+version=6.14` at the last map load. The only difference is
+`dots_arena_1v1.lua` (puran 2026-09-05, repo has #912 merged 2026-09-07), and
+that module arms on the arena map only. Stale copies still sit beside the
+live ones (`luascripts/stats_discord_webhook.lua` 2026-08-15,
+`luascripts/c0rnp0rn8.lua` 2026-08-18): harmless, but a `sha1sum` that reads
+the wrong copy will report drift that is not there — compare the path the
+engine loads (`docs/GAMESERVER_LIVE_LUA_MAP.md`), never the first match.
+The paragraph below is kept as history of the 2026-08 state.
+
+#### (historical) Lua drift repo ↔ puran (deploy owner-gated) — High
 
 **Re-measured by sha256 on 2026-08-15 (`scripts/system_status.sh`): 2 of 5
 scripts differ, not 4.** `c0rnp0rn8.lua` and `stats_discord_webhook.lua` are
