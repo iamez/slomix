@@ -1188,6 +1188,37 @@ export interface PlayerProfile {
   relationships: ProfileRelationships;
   maps: ProfileMaps;
   recent_matches: ProfileRecentMatches;
+  /** Requested since 2026-09-08 (cheap sections the legacy profile drew and
+   * the new page never asked for — ledger). */
+  nick_history: ProfileNickHistory;
+  gather_summary: ProfileGatherSummary;
+  combat_timing: ProfileCombatTiming;
+}
+
+/** Every name this guid has played under, with first/last sight and how
+ * many rows carried it. */
+export interface ProfileNickHistory {
+  available: boolean;
+  names: { name: string; first_seen: string | null; last_seen: string | null; uses: number }[];
+}
+/** Gathers (organised evenings) as wins/losses/draws with the running streak. */
+export interface ProfileGatherSummary {
+  available: boolean;
+  gathers: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  win_rate: number | null;
+  current_streak: number;
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+/** Median time to kill and median return fire, with the sample each rests on. */
+export interface ProfileCombatTiming {
+  available: boolean;
+  time_to_kill: { median_ms: number | null; kills: number } | null;
+  return_fire: { median_ms: number | null; samples: number; coverage_pct: number | null } | null;
 }
 
 /* ── Rivalries (docs/design/12 row 25) ────────────────────────────────────
@@ -1357,6 +1388,12 @@ export interface SkillFormula {
   shrinkage_k: number;
   normalization: string;
   range: string;
+  /** The formula's own tables (read since 2026-09-08 — 24 keys fetched and
+   * never shown): metric -> weight (signed), metric -> what it measures,
+   * source -> the metrics it feeds. */
+  weights: Record<string, number>;
+  metrics: Record<string, string>;
+  metric_sources: Record<string, string[]>;
 }
 
 export interface SsrComponent {
@@ -1615,6 +1652,30 @@ export interface StoryRolePlayer {
   enabler_score?: number;
   solo_pct?: number;
   hold_pct?: number | null;
+  /** The numbers behind each score (read since 2026-09-08; the legacy
+   * "invisible value" board showed them, the new boards showed only the
+   * score). gravity: */
+  engagements?: number;
+  avg_attackers?: number;
+  total_attention_ms?: number;
+  total_engaged_ms?: number;
+  alive_ms?: number;
+  /** space created: */
+  productive_deaths?: number;
+  wasted_deaths?: number;
+  total_deaths?: number;
+  teammate_kills_after?: number;
+  /** enabler: */
+  enabled_kills?: number;
+  crossfire_assists?: number;
+  trade_assists?: number;
+  total_assists?: number;
+  own_kills?: number;
+  /** alone (lurker): */
+  solo_samples?: number;
+  total_samples?: number;
+  tracks?: number;
+  solo_time_est_s?: number;
 }
 
 export interface StoryRoleBoard {
