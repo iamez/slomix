@@ -289,6 +289,16 @@ describe('SessionDetail', () => {
     await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
   });
 
+  it('names an empty team roster as an absence and still draws the other team', async () => {
+    const tm = (detail as { team_matrix: { rosters: { team_a: unknown[]; team_b: unknown[] } } }).team_matrix;
+    const oneSided = { ...detail, team_matrix: { ...tm, rosters: { team_a: tm.rosters.team_a, team_b: [] } } };
+    renderPage(withOverride('/detail', () => json(oneSided)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText(/no player of Team B could be placed on a side/)).toBeInTheDocument());
+    expect(document.querySelector('[data-parity="session.matrix.team-a"]')).not.toBeNull();
+    expect(document.querySelector('[data-parity="session.matrix.team-b"]')).toBeNull();
+  });
+
   it('calls a failed matrix unavailable and a session without rosters absent, with the reason', async () => {
     const failed = { ...detail, team_matrix: { available: false, reason: 'side_mapping_failed' } };
     renderPage(withOverride('/detail', () => json(failed)));
