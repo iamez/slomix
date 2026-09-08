@@ -84,6 +84,7 @@
 /api/players/{identifier}/memory-card playing_since
 /api/players/{identifier}/memory-card signature_map
 /api/players/{identifier}/memory-card signature_map.lift_pct
+/api/players/{identifier}/profile advanced
 /api/players/{identifier}/profile advanced.bait
 /api/players/{identifier}/profile advanced.utro
 /api/players/{identifier}/profile aim
@@ -502,6 +503,7 @@
 /api/skill/formula metrics.objective_rate
 /api/skill/formula metrics.revive_rate
 /api/skill/formula metrics.spawn_timing_eff
+/api/skill/formula metrics.survival_rate
 /api/skill/formula metrics.trade_rate
 /api/skill/formula metrics.useful_kill_rate
 /api/skill/formula weights.accuracy
@@ -516,6 +518,7 @@
 /api/skill/formula weights.objective_rate
 /api/skill/formula weights.revive_rate
 /api/skill/formula weights.spawn_timing_eff
+/api/skill/formula weights.survival_rate
 /api/skill/formula weights.trade_rate
 /api/skill/formula weights.useful_kill_rate
 /api/skill/leaderboard players.last_rated_at
