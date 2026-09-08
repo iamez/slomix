@@ -295,11 +295,14 @@ describe('SessionStory (the session page story tab)', () => {
 
   it('prints the scope once, the winner and the maps completed, and the dropped fields of movement, lurker and win contribution', async () => {
     renderPage();
-    await waitFor(() => expect(screen.getByText(/scope: gaming session · 12 accepted rounds · 2026-08-27 · 4 maps/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/scope: gaming session · 12 accepted rounds · 2026-08-27 · 4 distinct maps .* · last round 2026-08-2\d \d\d:\d\d UTC/)).toBeInTheDocument());
     expect(screen.getByText(/Team B took the evening · 6 maps completed/)).toBeInTheDocument();
     expect(screen.getAllByText(/lives · \d+ u after a spawn · \d+:\d\d alive/).length).toBeGreaterThan(0);
     expect(screen.getByText(/alone = no teammate within 500 u, sampled every 1,000 ms · read 937 of 937 tracks/)).toBeInTheDocument();
     expect(screen.getAllByText(/pwc by round/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/MVP picked by waa_bayes/)).toBeInTheDocument();
+    // a multikill's kills arrive as a LIST on the wire — counted, not printed as an object
+    expect(screen.getAllByText(/ · \d+ kills · /).length).toBeGreaterThan(0);
     expect(screen.getByText(/enabler counts a teammate's kill within ±5 s and 500 u/)).toBeInTheDocument();
   });
 

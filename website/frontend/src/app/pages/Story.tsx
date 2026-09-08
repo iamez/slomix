@@ -44,6 +44,12 @@ import type {
  */
 
 /** The generated paragraph, printed as prose and labelled as generated. */
+/** One stamp for a unix time on this page: UTC, minute precision, the same
+ *  string on every machine — never the browser's locale and zone. */
+function utcStamp(unix: number): string {
+  return `${new Date(unix * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
 function Narrative({ gsid }: { gsid: number }) {
   const q = useStoryNarrative(gsid);
   if (q.isPending) return <Pending label="narrative" />;
@@ -79,7 +85,7 @@ function BoxScore({ data }: { data: StoryBoxScore }) {
         aside={
           <span className="lbl">
             {data.alpha_team} {data.alpha_score} — {data.beta_score} {data.beta_team}
-            {data.winner_name ? ` · ${data.winner_name} took the evening` : ''}
+            {data.winner === 'draw' ? ' · the evening was a draw' : data.winner_name ? ` · ${data.winner_name} took the evening` : ''}
             {data.maps_completed != null ? ` · ${figure(data.maps_completed)} maps completed` : ''}
           </span>
         }
@@ -88,8 +94,8 @@ function BoxScore({ data }: { data: StoryBoxScore }) {
           printed once, here, from the panel whose numbers come off the rounds. */}
       {data.scope && (
         <Meta>
-          scope: {data.scope.kind.replace(/_/g, ' ')} · {figure(data.scope.accepted_round_count)} accepted rounds · {data.scope.dates.join(', ')} · {data.scope.distinct_map_names.length} maps ({data.scope.distinct_map_names.join(', ')})
-          {data.scope.last_round_unix != null ? ` · last round ${new Date(data.scope.last_round_unix * 1000).toLocaleString()}` : ''}
+          scope: {data.scope.kind.replace(/_/g, ' ')} · {figure(data.scope.accepted_round_count)} accepted rounds · {data.scope.dates.join(', ')} · {data.scope.distinct_map_names.length} distinct maps ({data.scope.distinct_map_names.join(', ')})
+          {data.scope.last_round_unix != null ? ` · last round ${utcStamp(data.scope.last_round_unix)}` : ''}
         </Meta>
       )}
       <Stack gap={1} className="rows">
@@ -161,7 +167,7 @@ function Escorts({ gsid }: { gsid: number }) {
               </Cluster>
               <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.narrative}</span>
               {(m.duration_ms != null || (m.victims && m.victims.length > 0)) && (
-                <Meta>{m.duration_ms != null ? `${figure(Math.round(m.duration_ms / 100) / 10)} s` : ''}{m.victims && m.victims.length > 0 ? `${m.duration_ms != null ? ' · ' : ''}${m.victims.join(', ')}` : ''}{m.kills != null ? ` · ${figure(m.kills)} kills` : ''}{m.team ? ` · ${m.team}` : ''}</Meta>
+                <Meta>{m.duration_ms != null ? `${figure(Math.round(m.duration_ms / 100) / 10)} s` : ''}{m.victims && m.victims.length > 0 ? `${m.duration_ms != null ? ' · ' : ''}${m.victims.join(', ')}` : ''}{m.kills != null ? ` · ${figure(Array.isArray(m.kills) ? m.kills.length : m.kills)} kills` : ''}{m.team ? ` · ${m.team}` : ''}</Meta>
               )}
             </Stack>
           ))}
@@ -546,7 +552,7 @@ function WinContribution({ gsid }: { gsid: number }) {
             * the board makes the badge look arbitrary (#783). */}
           <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
             {mvpIsLeader
-              ? 'top of the board and MVP are the same player here — they are still two different metrics'
+              ? `top of the board and MVP are the same player here — they are still two different metrics (MVP picked by ${mvp.selected_by ?? 'waa_bayes'})`
               : `picked by ${mvp.selected_by ?? 'waa_bayes'} (pwc in WON rounds ÷ rounds played, shrunk), not by the board below, which ${leader ? `${leader.name} leads` : 'is ordered by total pwc'}`}
           </span>
         </Stack>
@@ -1156,7 +1162,7 @@ function Roles({ gsid }: { gsid: number }) {
           <Meta>
             camp profile read {figure(camp.data.coverage.tracks_used)} of {figure(camp.data.coverage.tracks_fetched)} tracks
             {camp.data.coverage.tracks_skipped > 0 && <> ({figure(camp.data.coverage.tracks_skipped)} skipped)</>}
-            {camp.data.thresholds && <> · hold = within {figure(camp.data.thresholds.hold_radius_u ?? 96)} u for {figure(camp.data.thresholds.hold_min_s ?? 4)} s · still = under {figure(camp.data.thresholds.still_speed_lt ?? 10)} u/s for {figure(camp.data.thresholds.still_min_s ?? 3)} s · cells {figure(camp.data.thresholds.cell_u ?? 512)} u · alive ≥ {figure(camp.data.thresholds.min_alive_s ?? 60)} s · first {figure(camp.data.thresholds.spawn_skip_s ?? 3)} s after a spawn skipped</>}
+            {camp.data.thresholds && <> · hold = within {figure(camp.data.thresholds.hold_radius_u ?? 96)} u for {figure(camp.data.thresholds.hold_min_s ?? 4)} s · still = under {figure(camp.data.thresholds.still_speed_lt ?? 10)} u/s for {figure(camp.data.thresholds.still_min_s ?? 3)} s · cells {figure(camp.data.thresholds.cell_u ?? 512)} u · alive ≥ {figure(camp.data.thresholds.min_alive_s ?? 60)} s · first {figure(camp.data.thresholds.spawn_skip_s ?? 3)} s after a spawn left out of the busiest cells only</>}
           </Meta>
         )}
         {(enabler.data?.time_window_ms != null || space.data?.window_ms != null) && (

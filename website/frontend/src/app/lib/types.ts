@@ -1682,10 +1682,11 @@ export interface StoryMoment {
   impact_stars: number;
   time_formatted: string;
   detail?: unknown;
-  /** multikill / team_wipe carry how long the run took and who fell. */
+  /** multikill / team_wipe carry how long the run took and who fell;
+   *  `kills` is the LIST of the kills on that wire (Codex on #1002). */
   duration_ms?: number;
   victims?: string[];
-  kills?: number;
+  kills?: unknown[] | number;
   team?: string;
 }
 
