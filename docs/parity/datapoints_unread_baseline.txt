@@ -700,7 +700,6 @@
 /api/storytelling/lurker-profile scope.last_round_unix
 /api/storytelling/lurker-profile solo_radius
 /api/storytelling/moments moments.duration_ms
-/api/storytelling/moments moments.team
 /api/storytelling/moments moments.victims
 /api/storytelling/moments scope.accepted_round_count
 /api/storytelling/moments scope.dates

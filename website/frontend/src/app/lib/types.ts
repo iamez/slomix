@@ -970,6 +970,13 @@ export interface RoundPlayerRow {
   revives_given: number;
   times_revived: number;
   xp: number;
+  /** The four per-round counters nothing read until 2026-09-08, and the
+   *  flag that says the dead time was rebuilt, not measured. */
+  team_gibs: number;
+  kill_steals: number;
+  tank_meatshield: number;
+  death_spree_worst: number;
+  time_dead_reconstructed: boolean;
 }
 
 export interface SessionRound {
@@ -985,6 +992,17 @@ export interface SessionRound {
   /** False for a cancelled round: show it, leave it out of totals. */
   counts_toward_totals: boolean;
   match_id: string | null;
+  /** The webhook's own record of the round (lua_round_teams) and the round
+   *  row's provenance — typed 2026-09-08 when the tab started showing them.
+   *  `surrender` is null when nobody gave up; `team` 1 = Axis, 2 = Allies. */
+  surrender: { caller_name: string; team: number | null } | null;
+  pauses: { count: number; total_seconds: number };
+  time_limit_minutes: number | null;
+  warmup_seconds: number | null;
+  bot_player_count: number | null;
+  score_confidence: string | null;
+  /** The limit this half set for the next one. */
+  next_timelimit_minutes: number | null;
   players: RoundPlayerRow[];
 }
 

@@ -4,6 +4,7 @@ Session-related endpoints: last-session, session lists, session details, graphs.
 Extracted from api.py to reduce file size and improve maintainability.
 """
 
+import json
 import math
 from datetime import datetime
 from typing import Any
@@ -3246,6 +3247,28 @@ class RoundPlayerRow(BaseModel):
     revives_given: int
     times_revived: int
     xp: float
+    #: Gibs on teammates.
+    team_gibs: int
+    #: Kills finished on an opponent someone else had brought low.
+    kill_steals: int
+    #: Damage soaked as the tank at the front (rare: 642 of 14,289 rows > 0).
+    tank_meatshield: int
+    #: The longest run of deaths without a kill.
+    death_spree_worst: int
+    #: True when time_dead_minutes was rebuilt from the round's timeline
+    #: (8,721 of 14,289 rows on 2026-09-08), not read from the stats file.
+    time_dead_reconstructed: bool
+
+
+class RoundSurrender(BaseModel):
+    caller_name: str
+    #: 1 = Axis, 2 = Allies — the side that gave up.
+    team: int | None
+
+
+class RoundPauses(BaseModel):
+    count: int
+    total_seconds: int
 
 
 class SessionRound(BaseModel):
@@ -3269,6 +3292,19 @@ class SessionRound(BaseModel):
     #: leave it out of totals, which one flag cannot do if it is missing.
     counts_toward_totals: bool
     match_id: str | None
+    #: None when nobody surrendered (or the webhook did not record the round).
+    surrender: RoundSurrender | None
+    #: Pauses the webhook counted, with their summed length.
+    pauses: RoundPauses
+    #: The stopwatch limit in minutes (webhook), null when not recorded.
+    time_limit_minutes: int | None
+    warmup_seconds: int | None
+    bot_player_count: int | None
+    #: Where the score came from ('verified_header' …), null when unknown.
+    score_confidence: str | None
+    #: The limit this half set for the next one (a first half's time becomes
+    #: the second half's target); null when not recorded.
+    next_timelimit_minutes: int | None
     players: list[RoundPlayerRow]
 
 
@@ -3333,8 +3369,24 @@ _SESSION_ROUNDS_SQL = (
     + round_duration_sql("r")
     + """ AS duration_seconds,
            r.end_reason, r.round_status, r.match_id,
-           r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
+           r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round,
+           -- Appended LAST (positional mapping below). The webhook's own
+           -- record of the round (lua_round_teams, one row per round: 1127
+           -- rows, 1127 distinct round ids on 2026-09-08) — who called the
+           -- surrender, the pauses, the stopwatch limit, the warm-up — and
+           -- the round's bot count, score provenance and the limit it set
+           -- for the next half. None of it had a reader (ledger 2026-09-08).
+           NULLIF(l.surrender_caller_name, '') AS surrender_caller_name,
+           l.surrender_team,
+           COALESCE(l.pause_count, 0) AS pause_count,
+           l.lua_pause_events,
+           l.time_limit_minutes,
+           l.lua_warmup_seconds,
+           r.bot_player_count,
+           r.score_confidence,
+           r.next_timelimit_minutes
     FROM rounds r
+    LEFT JOIN lua_round_teams l ON l.round_id = r.id
     WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2)
     -- ⛔ ORDER BY the PLAY time, not created_at: the SELECT already computed
     -- played_at for display while the ordering quietly used ingestion time —
@@ -3351,7 +3403,12 @@ _SESSION_PLAYERS_SQL = """
     SELECT p.round_id, p.player_guid, p.player_name, p.team,
            p.time_played_seconds, p.gibs, p.damage_received, p.damage_given,
            p.kills, p.deaths, p.headshots, p.headshot_kills,
-           p.revives_given, p.times_revived, p.xp
+           p.revives_given, p.times_revived, p.xp,
+           -- Appended LAST: the four per-round counters nothing read
+           -- (ledger 2026-09-08) and the flag that says the dead time was
+           -- reconstructed rather than measured.
+           p.team_gibs, p.kill_steals, p.tank_meatshield, p.death_spree_worst,
+           COALESCE(p.time_dead_reconstructed, FALSE)
     FROM player_comprehensive_stats p
     JOIN rounds r ON r.id = p.round_id
     WHERE r.gaming_session_id = $1 AND p.round_number IN (1, 2)
@@ -3360,6 +3417,29 @@ _SESSION_PLAYERS_SQL = """
       AND COALESCE(p.player_name, '') NOT LIKE '[BOT]%'
     ORDER BY p.round_id, p.damage_given DESC
 """
+
+
+def _pause_seconds(events) -> int:
+    """Sum of the webhook's pause list (`[{"n","start","end","sec"}, …]`),
+    tolerant of the column arriving as text or as nothing."""
+    if not events:
+        return 0
+    if isinstance(events, str):
+        try:
+            events = json.loads(events)
+        except ValueError:
+            return 0
+    total = 0
+    for e in events if isinstance(events, list) else []:
+        if isinstance(e, dict):
+            sec = e.get("sec")
+            if sec is None and e.get("start") is not None and e.get("end") is not None:
+                sec = int(e["end"]) - int(e["start"])
+            try:
+                total += int(sec or 0)
+            except (TypeError, ValueError):
+                continue
+    return total
 
 
 @router.get("/stats/session/{gaming_session_id}/rounds", response_model=SessionRounds)
@@ -3391,6 +3471,11 @@ async def get_session_rounds(
                 revives_given=row[12] or 0,
                 times_revived=row[13] or 0,
                 xp=float(row[14] or 0),
+                team_gibs=row[15] or 0,
+                kill_steals=row[16] or 0,
+                tank_meatshield=row[17] or 0,
+                death_spree_worst=row[18] or 0,
+                time_dead_reconstructed=bool(row[19]),
             )
         )
 
@@ -3408,6 +3493,13 @@ async def get_session_rounds(
                 round_status=status,
                 counts_toward_totals=_counts_toward_totals(status, row[8], row[9]),
                 match_id=row[7],
+                surrender=RoundSurrender(caller_name=row[10], team=row[11]) if row[10] else None,
+                pauses=RoundPauses(count=int(row[12] or 0), total_seconds=_pause_seconds(row[13])),
+                time_limit_minutes=row[14],
+                warmup_seconds=row[15],
+                bot_player_count=row[16],
+                score_confidence=row[17],
+                next_timelimit_minutes=row[18],
                 players=by_round.get(row[0], []),
             )
         )

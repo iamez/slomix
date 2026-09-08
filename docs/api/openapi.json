@@ -3925,6 +3925,24 @@
     "title": "RoundAwards",
     "type": "object"
    },
+   "RoundPauses": {
+    "properties": {
+     "count": {
+      "title": "Count",
+      "type": "integer"
+     },
+     "total_seconds": {
+      "title": "Total Seconds",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "count",
+     "total_seconds"
+    ],
+    "title": "RoundPauses",
+    "type": "object"
+   },
    "RoundPlayerRow": {
     "description": "One player's line in one round, as the round recorded it.\n\n⚠️ MEASURED, NOT DESIGNED. `player_comprehensive_stats` carries 39\npopulated numeric fields per round; this is the subset a person reads,\nincluding the three the rest of the site never surfaces per round —\n`time_played_seconds`, `gibs`, `damage_received`.",
     "properties": {
@@ -3934,6 +3952,10 @@
      },
      "damage_received": {
       "title": "Damage Received",
+      "type": "integer"
+     },
+     "death_spree_worst": {
+      "title": "Death Spree Worst",
       "type": "integer"
      },
      "deaths": {
@@ -3952,6 +3974,10 @@
       "title": "Headshots",
       "type": "integer"
      },
+     "kill_steals": {
+      "title": "Kill Steals",
+      "type": "integer"
+     },
      "kills": {
       "title": "Kills",
       "type": "integer"
@@ -3968,9 +3994,21 @@
       "title": "Revives Given",
       "type": "integer"
      },
+     "tank_meatshield": {
+      "title": "Tank Meatshield",
+      "type": "integer"
+     },
      "team": {
       "title": "Team",
       "type": "integer"
+     },
+     "team_gibs": {
+      "title": "Team Gibs",
+      "type": "integer"
+     },
+     "time_dead_reconstructed": {
+      "title": "Time Dead Reconstructed",
+      "type": "boolean"
      },
      "time_played_seconds": {
       "title": "Time Played Seconds",
@@ -3999,9 +4037,39 @@
      "headshot_kills",
      "revives_given",
      "times_revived",
-     "xp"
+     "xp",
+     "team_gibs",
+     "kill_steals",
+     "tank_meatshield",
+     "death_spree_worst",
+     "time_dead_reconstructed"
     ],
     "title": "RoundPlayerRow",
+    "type": "object"
+   },
+   "RoundSurrender": {
+    "properties": {
+     "caller_name": {
+      "title": "Caller Name",
+      "type": "string"
+     },
+     "team": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Team"
+     }
+    },
+    "required": [
+     "caller_name",
+     "team"
+    ],
+    "title": "RoundSurrender",
     "type": "object"
    },
    "RoundViz": {
@@ -5883,6 +5951,17 @@
    "SessionRound": {
     "description": "One round, with its full roster.\n\n`duration_seconds` comes from `shared/round_time.py` — the MEASURED clock.\n`rounds.actual_time` is the stopwatch TARGET and overstates ~15% of rounds\n(RCA 2026-08-18), so it is not what a player is shown.",
     "properties": {
+     "bot_player_count": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Bot Player Count"
+     },
      "counts_toward_totals": {
       "title": "Counts Toward Totals",
       "type": "boolean"
@@ -5924,6 +6003,20 @@
       ],
       "title": "Match Id"
      },
+     "next_timelimit_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Next Timelimit Minutes"
+     },
+     "pauses": {
+      "$ref": "#/components/schemas/RoundPauses"
+     },
      "played_at": {
       "title": "Played At",
       "type": "string"
@@ -5953,6 +6046,49 @@
        }
       ],
       "title": "Round Status"
+     },
+     "score_confidence": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Score Confidence"
+     },
+     "surrender": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/RoundSurrender"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "time_limit_minutes": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Time Limit Minutes"
+     },
+     "warmup_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Warmup Seconds"
      }
     },
     "required": [
@@ -5965,6 +6101,13 @@
      "round_status",
      "counts_toward_totals",
      "match_id",
+     "surrender",
+     "pauses",
+     "time_limit_minutes",
+     "warmup_seconds",
+     "bot_player_count",
+     "score_confidence",
+     "next_timelimit_minutes",
      "players"
     ],
     "title": "SessionRound",
