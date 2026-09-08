@@ -31,6 +31,22 @@ export interface LiveState {
   map_age_seconds?: number | null;
   round_number: number | null;
   round_elapsed_seconds: number | null;
+  /** Stopwatch context from the reducer (2026-09-07), read defensively
+   * until the snapshot is re-frozen: the side that attacks on this map
+   * (constant across the two halves), how the last half ended, and the
+   * time the second half must beat. */
+  attacking_side?: 'axis' | 'allies' | null;
+  last_round_result?: {
+    round_number: number | null;
+    map: string | null;
+    reason: 'timelimit' | 'surrender' | 'objective' | 'other';
+    reason_raw: string;
+    winner_side: 'axis' | 'allies' | null;
+    duration_seconds: number;
+    full_hold: boolean;
+    ended_age_seconds: number;
+  } | null;
+  time_to_beat_seconds?: number | null;
   roster: {
     axis: LiveRosterMember[];
     allies: LiveRosterMember[];
