@@ -1188,6 +1188,37 @@ export interface PlayerProfile {
   relationships: ProfileRelationships;
   maps: ProfileMaps;
   recent_matches: ProfileRecentMatches;
+  /** Requested since 2026-09-08 (cheap sections the legacy profile drew and
+   * the new page never asked for — ledger). */
+  nick_history: ProfileNickHistory;
+  gather_summary: ProfileGatherSummary;
+  combat_timing: ProfileCombatTiming;
+}
+
+/** Every name this guid has played under, with first/last sight and how
+ * many rows carried it. */
+export interface ProfileNickHistory {
+  available: boolean;
+  names: { name: string; first_seen: string | null; last_seen: string | null; uses: number }[];
+}
+/** Gathers (organised evenings) as wins/losses/draws with the running streak. */
+export interface ProfileGatherSummary {
+  available: boolean;
+  gathers: number;
+  wins: number;
+  losses: number;
+  draws: number;
+  win_rate: number | null;
+  current_streak: number;
+  current_type: string | null;
+  longest_win: number;
+  longest_loss: number;
+}
+/** Median time to kill and median return fire, with the sample each rests on. */
+export interface ProfileCombatTiming {
+  available: boolean;
+  time_to_kill: { median_ms: number | null; kills: number } | null;
+  return_fire: { median_ms: number | null; samples: number; coverage_pct: number | null } | null;
 }
 
 /* ── Rivalries (docs/design/12 row 25) ────────────────────────────────────

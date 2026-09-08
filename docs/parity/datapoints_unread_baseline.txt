@@ -68,11 +68,6 @@
 /api/players/{identifier}/profile aim.flick
 /api/players/{identifier}/profile aim.per_weapon
 /api/players/{identifier}/profile aim.spread
-/api/players/{identifier}/profile combat_timing
-/api/players/{identifier}/profile combat_timing.time_to_kill
-/api/players/{identifier}/profile gather_summary
-/api/players/{identifier}/profile gather_summary.draws
-/api/players/{identifier}/profile gather_summary.gathers
 /api/players/{identifier}/profile hit_regions.per_weapon
 /api/players/{identifier}/profile identity.country
 /api/players/{identifier}/profile identity.discord_linked
@@ -93,7 +88,6 @@
 /api/players/{identifier}/profile lifetime.triple_kills
 /api/players/{identifier}/profile movement.avg_post_spawn_distance
 /api/players/{identifier}/profile movement.sprint_sec
-/api/players/{identifier}/profile nick_history
 /api/players/{identifier}/profile relationships.baseline_dpm
 /api/players/{identifier}/profile relationships.easiest_opponents
 /api/players/{identifier}/profile relationships.hardest_opponents
@@ -333,7 +327,6 @@
 /api/server-activity/history summary.avg_players
 /api/server-activity/history summary.peak_time
 /api/server-activity/history summary.total_records
-/api/sessions draws
 /api/sessions winning_team
 /api/skill/composite coverage.source_rows
 /api/skill/formula metric_sources

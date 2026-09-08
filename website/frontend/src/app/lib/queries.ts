@@ -249,6 +249,10 @@ export function useOverview() {
 const PROFILE_SECTIONS = [
   'identity', 'skill', 'streaks', 'weapons', 'hit_regions', 'movement',
   'relationships', 'maps', 'recent_matches',
+  // Measured cold on dev 2026-09-08 for a regular: nick_history 0.42 s,
+  // gather_summary 0.04 s, combat_timing 1.36 s (all ~0 warm) — cheap
+  // enough for the one request. `aim` 8.9 s and `advanced` 9.3 s stay out.
+  'nick_history', 'gather_summary', 'combat_timing',
 ].join(',');
 
 /** The profile is ONE endpoint with sections (players_profile_router): the

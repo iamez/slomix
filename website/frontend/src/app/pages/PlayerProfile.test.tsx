@@ -470,3 +470,23 @@ describe('PlayerProfile — memory card', () => {
     await waitFor(() => expect(screen.getByText(/memory card: unavailable/i)).toBeInTheDocument());
   });
 });
+
+/** The three cheap sections the legacy profile drew and the new page never
+ *  requested (ledger 2026-09-08): name history, gathers, combat timing.
+ *  Asserted against the recording, not a paraphrase of it. */
+it('shows the recorded name history, gather record and combat timing', async () => {
+  renderProfile('D8423F90');
+  const rec = profile as unknown as {
+    nick_history: { names: { name: string; uses: number }[] };
+    gather_summary: { wins: number; losses: number; gathers: number };
+    combat_timing: { time_to_kill: { median_ms: number; kills: number }; return_fire: { median_ms: number; coverage_pct: number } };
+  };
+  await waitFor(() => expect(screen.getByText(/known as/)).toBeInTheDocument());
+  const top = rec.nick_history.names[0];
+  expect(screen.getByText(`${top.name} · ${top.uses.toLocaleString('en-US')} rounds`)).toBeInTheDocument();
+  expect(screen.getByText(`${rec.gather_summary.gathers} played`)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`^${rec.gather_summary.wins}–${rec.gather_summary.losses}`))).toBeInTheDocument();
+  expect(screen.getByText(`${(rec.combat_timing.time_to_kill.median_ms / 1000).toFixed(2)} s`)).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`over ${rec.combat_timing.time_to_kill.kills.toLocaleString('en-US')} kills`))).toBeInTheDocument();
+  expect(screen.getByText(new RegExp(`covers ${rec.combat_timing.return_fire.coverage_pct} % of deaths`))).toBeInTheDocument();
+});

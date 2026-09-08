@@ -7,8 +7,8 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2939,
-  "unread": 563,
+  "read": 2946,
+  "unread": 556,
   "dropped": 42,
   "endpoints": 176,
   "endpoints_fully_read": 64,
@@ -161,8 +161,8 @@
    "dropped": 0
   },
   "/api/players/{identifier}/profile": {
-   "read": 94,
-   "unread": 40,
+   "read": 100,
+   "unread": 34,
    "dropped": 0
   },
   "/api/players/{identifier}/wrapped": {
@@ -566,8 +566,8 @@
    "dropped": 0
   },
   "/api/sessions": {
-   "read": 15,
-   "unread": 2,
+   "read": 16,
+   "unread": 1,
    "dropped": 0
   },
   "/api/skill/adjusted-lifetime": {
@@ -2914,7 +2914,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "combat_timing",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -2929,12 +2929,12 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "combat_timing.time_to_kill",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "gather_summary",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -2954,12 +2954,12 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "gather_summary.draws",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "gather_summary.gathers",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3334,7 +3334,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "nick_history",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -11874,7 +11874,7 @@
   {
    "endpoint": "/api/sessions",
    "key": "draws",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/sessions",

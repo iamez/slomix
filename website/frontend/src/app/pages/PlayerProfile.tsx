@@ -7,6 +7,7 @@ import {
 } from '../lib/queries';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
+import { stripEtColors } from '../lib/names';
 import type {
   PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
@@ -377,6 +378,80 @@ function Relationships({ p }: { p: Profile }) {
           <MateList title="best alongside" rows={best} />
           <MateList title="worst alongside" rows={worst} />
         </div>
+      </SectionBody>
+    </div>
+  );
+}
+
+/** The names behind the guid — the legacy profile's "known as" table,
+ *  never carried over (audit 2026-09-07). */
+function NickHistory({ p }: { p: Profile }) {
+  const names = [...(p.nick_history?.names ?? [])].sort((a, b) => b.uses - a.uses);
+  return (
+    <div data-parity="profile.nick-history" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="known as" aside={names.length > 1 ? <span className="lbl">{figure(names.length)} names</span> : undefined} />
+      <SectionBody available={p.nick_history?.available ?? false} empty={names.length === 0} what="name history">
+        <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-2)' }}>
+          {names.map((n) => (
+            <Cluster key={n.name} gap={4} justify="between" align="baseline" className="row" style={rowStyle}>
+              {/* One text node: the header already shows the current name on
+                * its own, and a second bare "vid" would be two answers to
+                * "where is the name" for a reader and a test alike. */}
+              <span style={{ fontSize: 'var(--fs-row)' }}>{`${stripEtColors(n.name)} · ${figure(n.uses)} rounds`}</span>
+              <Meta>{n.first_seen ?? '?'} → {n.last_seen ?? '?'}</Meta>
+            </Cluster>
+          ))}
+        </Stack>
+      </SectionBody>
+    </div>
+  );
+}
+
+/** Gathers as a record with the running streak (legacy player-profile.js:1379). */
+function GatherSummary({ p }: { p: Profile }) {
+  const g = p.gather_summary;
+  return (
+    <div data-parity="profile.gathers" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="gathers" aside={g?.available && g.gathers > 0 ? <span className="lbl">{figure(g.gathers)} played</span> : undefined} />
+      <SectionBody available={g?.available ?? false} empty={!g || g.gathers === 0} what="gathers">
+        {g && (
+          <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{figure(g.wins)}–{figure(g.losses)}{g.draws > 0 && <>–{figure(g.draws)}</>}</span>
+            <Meta>w–l{g.draws > 0 ? '–d' : ''}</Meta>
+            {g.win_rate != null && <Meta>{figure(g.win_rate)} % won</Meta>}
+            {g.current_streak > 0 && g.current_type && <Meta>streak {figure(g.current_streak)}{g.current_type}</Meta>}
+            <Meta>longest {figure(g.longest_win)}W · {figure(g.longest_loss)}L</Meta>
+          </Cluster>
+        )}
+      </SectionBody>
+    </div>
+  );
+}
+
+/** Median time to kill and median return fire — the legacy "combat
+ *  timing" panel (player-profile.js:963), with the sample each number rests
+ *  on, because a median of eleven is not a median of eleven thousand. */
+function CombatTiming({ p }: { p: Profile }) {
+  const c = p.combat_timing;
+  const ttk = c?.time_to_kill ?? null;
+  const rf = c?.return_fire ?? null;
+  const secs = (ms: number | null | undefined) => (ms == null ? '—' : `${(ms / 1000).toFixed(2)} s`);
+  return (
+    <div data-parity="profile.combat-timing" style={{ marginTop: 'var(--space-6)' }}>
+      <SectionHead label="combat timing" aside={<span className="lbl">medians · engagement clock</span>} />
+      <SectionBody available={c?.available ?? false} empty={ttk == null && rf == null} what="combat timing">
+        <Cluster gap={6} align="baseline" style={{ flexWrap: 'wrap', marginTop: 'var(--space-2)' }}>
+          <Stack gap={1}>
+            <Lbl>time to kill</Lbl>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{secs(ttk?.median_ms)}</span>
+            {ttk && <Meta>over {figure(ttk.kills)} kills</Meta>}
+          </Stack>
+          <Stack gap={1}>
+            <Lbl>return fire</Lbl>
+            <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{secs(rf?.median_ms)}</span>
+            {rf && <Meta>{figure(rf.samples)} samples{rf.coverage_pct != null && <> · covers {figure(rf.coverage_pct)} % of deaths</>}</Meta>}
+          </Stack>
+        </Cluster>
       </SectionBody>
     </div>
   );
@@ -881,8 +956,11 @@ export function PlayerProfilePage() {
           <Weapons rows={p.weapons.weapons} available={p.weapons.available} />
           <Body p={p} />
           <Relationships p={p} />
+          <GatherSummary p={p} />
+          <CombatTiming p={p} />
           <Maps rows={p.maps.maps} available={p.maps.available} />
           <Recent rows={p.recent_matches.matches} available={p.recent_matches.available} />
+          <NickHistory p={p} />
           <RecentDetail playerId={playerId} />
           <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-6)' }}>
             {p.sections.length} sections · generated {p.generated_at.slice(0, 19).replace('T', ' ')} utc
