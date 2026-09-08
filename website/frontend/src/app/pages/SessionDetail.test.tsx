@@ -280,13 +280,24 @@ describe('SessionDetail', () => {
     renderPage(withOverride('/detail', () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withGap) } as Response)));
     await openMore();
     await waitFor(() => expect(screen.getByText('player × map')).toBeInTheDocument(), { timeout: 4000 });
-    const matrix = document.querySelector('[data-parity="session.matrix.team_a"]') as HTMLElement;
+    const matrix = document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement;
     expect(matrix.textContent).toContain(first.player_name);
     expect(matrix.textContent).toContain('—');
     // the session column shows the player's evening dpm; switching to k/d swaps it
     expect(matrix.textContent).toContain(String(first.totals.dpm));
     fireEvent.click(screen.getByRole('button', { name: 'k/d' }));
-    await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team_a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
+    await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
+  });
+
+  it('calls a failed matrix unavailable and a session without rosters absent, with the reason', async () => {
+    const failed = { ...detail, team_matrix: { available: false, reason: 'side_mapping_failed' } };
+    renderPage(withOverride('/detail', () => json(failed)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText(/player × map matrix: unavailable/)).toBeInTheDocument());
+    const none = { ...detail, team_matrix: { available: false, reason: 'no_teams' } };
+    const second = renderPage(withOverride('/detail', () => json(none)));
+    await openMore();
+    await waitFor(() => expect(second.container.textContent).toContain('no lua team rosters for this session'));
   });
 
   it('shows the per-player totals on their own tab', async () => {

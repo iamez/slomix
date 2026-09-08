@@ -134,6 +134,8 @@ PROFILE_SECTIONS: tuple[DatasetDescriptor, ...] = (
 
 # Session detail — the Stats 2.0 surfaces, each under its own parity key.
 SESSION_SECTIONS: tuple[DatasetDescriptor, ...] = (
+    _session("session_player_map_matrix", "player × map matrix",
+             endpoint="/api/stats/session/{gaming_session_id}/detail", parity="session.matrix"),
     _session("session_round_player_details", "a player's breakdown of one half",
              endpoint="/api/rounds/{round_id}/player/{player_guid}/details", parity="session.rounds.player-details"),
     _session("session_basics", "basics table", endpoint=SESSION_ENDPOINT_BASICS, parity="session.basics"),

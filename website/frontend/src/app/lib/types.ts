@@ -2236,7 +2236,9 @@ export interface SessionTeamMatrix {
   /** The columns of the matrix, in play order; typed 2026-09-08 when the
    *  page started drawing it (the old React had the matrix, the new one
    *  showed the team totals only). */
-  maps?: { map_name: string; map_index: number; team_a_score: number; team_b_score: number }[];
+  /** Scores are null when stopwatch scoring was unavailable or the map is
+   *  not in its index (session_matrix_service tests pin both). */
+  maps?: { map_name: string; map_index: number; team_a_score: number | null; team_b_score: number | null }[];
   rosters?: { team_a: SessionMatrixPlayer[]; team_b: SessionMatrixPlayer[] };
   rounds_detail?: Record<string, SessionMatrixRoundRow[]>;
 }
