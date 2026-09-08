@@ -7,7 +7,7 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 3075,
+  "read": 3080,
   "unread": 511,
   "dropped": 42,
   "endpoints": 179,
@@ -711,7 +711,7 @@
    "dropped": 7
   },
   "/api/stats/session/{gaming_session_id}/graphs": {
-   "read": 13,
+   "read": 18,
    "unread": 0,
    "dropped": 0
   },
@@ -15361,6 +15361,31 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
    "key": "players.playstyle",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "rounds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "rounds.label",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "rounds.map_name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "rounds.round_id",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/graphs",
+   "key": "rounds.round_number",
    "status": "read"
   },
   {

@@ -2329,13 +2329,17 @@ export interface SessionGraphPlayer {
   };
   /** Eight axes, 0–100. */
   playstyle: { aggression: number; precision: number; survivability: number; support: number; lethality: number; brutality: number; consistency: number; efficiency: number };
-  dpm_timeline: { label: string; dpm: number }[];
+  /** A point names its round, so a series aligns on the session's round
+   *  axis (`rounds`) and a map the player sat out stays a gap. */
+  dpm_timeline: { label: string; dpm: number; round_id: number; round_number: number; map_name: string | null }[];
 }
 export interface SessionGraphs {
   gaming_session_id: number;
   date: string;
   gate: string;
   rounds_counted: number;
+  /** The counted rounds in play order — the x axis of every dpm series. */
+  rounds: { round_id: number; label: string; map_name: string | null; round_number: number }[];
   player_count: number;
   players: SessionGraphPlayer[];
 }

@@ -5860,13 +5860,71 @@
      "label": {
       "title": "Label",
       "type": "string"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
      }
     },
     "required": [
      "label",
-     "dpm"
+     "dpm",
+     "round_id",
+     "round_number",
+     "map_name"
     ],
     "title": "SessionGraphPoint",
+    "type": "object"
+   },
+   "SessionGraphRound": {
+    "description": "One counted round of the evening, in play order — the x axis every\nplayer's dpm series aligns on (a point names its round_id).",
+    "properties": {
+     "label": {
+      "title": "Label",
+      "type": "string"
+     },
+     "map_name": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Map Name"
+     },
+     "round_id": {
+      "title": "Round Id",
+      "type": "integer"
+     },
+     "round_number": {
+      "title": "Round Number",
+      "type": "integer"
+     }
+    },
+    "required": [
+     "round_id",
+     "label",
+     "map_name",
+     "round_number"
+    ],
+    "title": "SessionGraphRound",
     "type": "object"
    },
    "SessionGraphs": {
@@ -5895,6 +5953,13 @@
       "title": "Players",
       "type": "array"
      },
+     "rounds": {
+      "items": {
+       "$ref": "#/components/schemas/SessionGraphRound"
+      },
+      "title": "Rounds",
+      "type": "array"
+     },
      "rounds_counted": {
       "title": "Rounds Counted",
       "type": "integer"
@@ -5905,6 +5970,7 @@
      "date",
      "gate",
      "rounds_counted",
+     "rounds",
      "player_count",
      "players"
     ],

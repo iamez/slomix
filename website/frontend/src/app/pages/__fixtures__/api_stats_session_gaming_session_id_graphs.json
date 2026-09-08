@@ -3,6 +3,68 @@
  "date": "2026-08-23",
  "gate": "counts_toward_totals",
  "rounds_counted": 10,
+ "rounds": [
+  {
+   "round_id": 11308,
+   "label": "adlernes R1",
+   "map_name": "etl_adlernest",
+   "round_number": 1
+  },
+  {
+   "round_id": 11309,
+   "label": "adlernes R2",
+   "map_name": "etl_adlernest",
+   "round_number": 2
+  },
+  {
+   "round_id": 11311,
+   "label": "supply R1",
+   "map_name": "supply",
+   "round_number": 1
+  },
+  {
+   "round_id": 11312,
+   "label": "supply R2",
+   "map_name": "supply",
+   "round_number": 2
+  },
+  {
+   "round_id": 11314,
+   "label": "delivery R1",
+   "map_name": "etl_sp_delivery",
+   "round_number": 1
+  },
+  {
+   "round_id": 11315,
+   "label": "delivery R2",
+   "map_name": "etl_sp_delivery",
+   "round_number": 2
+  },
+  {
+   "round_id": 11317,
+   "label": "escape2 R1",
+   "map_name": "te_escape2",
+   "round_number": 1
+  },
+  {
+   "round_id": 11318,
+   "label": "escape2 R2",
+   "map_name": "te_escape2",
+   "round_number": 2
+  },
+  {
+   "round_id": 11320,
+   "label": "escape2 R1",
+   "map_name": "te_escape2",
+   "round_number": 1
+  },
+  {
+   "round_id": 11321,
+   "label": "escape2 R2",
+   "map_name": "te_escape2",
+   "round_number": 2
+  }
+ ],
  "player_count": 7,
  "players": [
   {
@@ -56,19 +118,31 @@
    "dpm_timeline": [
     {
      "label": "escape2 R1",
-     "dpm": 440.3
+     "dpm": 440.3,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 497.5
+     "dpm": 497.5,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R1",
-     "dpm": 448.6
+     "dpm": 448.6,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 380.7
+     "dpm": 380.7,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
     }
    ]
   },
@@ -123,27 +197,45 @@
    "dpm_timeline": [
     {
      "label": "adlernes R1",
-     "dpm": 413.0
+     "dpm": 413.0,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "adlernes R2",
-     "dpm": 547.5
+     "dpm": 547.5,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "supply R1",
-     "dpm": 382.5
+     "dpm": 382.5,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
     },
     {
      "label": "supply R2",
-     "dpm": 371.2
+     "dpm": 371.2,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
     },
     {
      "label": "delivery R1",
-     "dpm": 333.7
+     "dpm": 333.7,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "delivery R2",
-     "dpm": 327.8
+     "dpm": 327.8,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
     }
    ]
   },
@@ -198,43 +290,73 @@
    "dpm_timeline": [
     {
      "label": "adlernes R1",
-     "dpm": 256.5
+     "dpm": 256.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "adlernes R2",
-     "dpm": 401.0
+     "dpm": 401.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "supply R1",
-     "dpm": 260.0
+     "dpm": 260.0,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
     },
     {
      "label": "supply R2",
-     "dpm": 404.2
+     "dpm": 404.2,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
     },
     {
      "label": "delivery R1",
-     "dpm": 320.2
+     "dpm": 320.2,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "delivery R2",
-     "dpm": 336.5
+     "dpm": 336.5,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "escape2 R1",
-     "dpm": 219.3
+     "dpm": 219.3,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 316.4
+     "dpm": 316.4,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R1",
-     "dpm": 319.4
+     "dpm": 319.4,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 419.4
+     "dpm": 419.4,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
     }
    ]
   },
@@ -289,43 +411,73 @@
    "dpm_timeline": [
     {
      "label": "adlernes R1",
-     "dpm": 111.5
+     "dpm": 111.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "adlernes R2",
-     "dpm": 223.5
+     "dpm": 223.5,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "supply R1",
-     "dpm": 263.9
+     "dpm": 263.9,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
     },
     {
      "label": "supply R2",
-     "dpm": 318.8
+     "dpm": 318.8,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
     },
     {
      "label": "delivery R1",
-     "dpm": 292.1
+     "dpm": 292.1,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "delivery R2",
-     "dpm": 210.3
+     "dpm": 210.3,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "escape2 R1",
-     "dpm": 241.4
+     "dpm": 241.4,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 283.8
+     "dpm": 283.8,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R1",
-     "dpm": 268.6
+     "dpm": 268.6,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 284.6
+     "dpm": 284.6,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
     }
    ]
   },
@@ -380,43 +532,73 @@
    "dpm_timeline": [
     {
      "label": "adlernes R1",
-     "dpm": 162.0
+     "dpm": 162.0,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "adlernes R2",
-     "dpm": 292.0
+     "dpm": 292.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "supply R1",
-     "dpm": 268.8
+     "dpm": 268.8,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
     },
     {
      "label": "supply R2",
-     "dpm": 232.9
+     "dpm": 232.9,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
     },
     {
      "label": "delivery R1",
-     "dpm": 253.9
+     "dpm": 253.9,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "delivery R2",
-     "dpm": 255.9
+     "dpm": 255.9,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "escape2 R1",
-     "dpm": 256.5
+     "dpm": 256.5,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 355.1
+     "dpm": 355.1,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R1",
-     "dpm": 297.4
+     "dpm": 297.4,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 150.8
+     "dpm": 150.8,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
     }
    ]
   },
@@ -471,43 +653,73 @@
    "dpm_timeline": [
     {
      "label": "adlernes R1",
-     "dpm": 349.5
+     "dpm": 349.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "adlernes R2",
-     "dpm": 133.0
+     "dpm": 133.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "supply R1",
-     "dpm": 290.8
+     "dpm": 290.8,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
     },
     {
      "label": "supply R2",
-     "dpm": 205.6
+     "dpm": 205.6,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
     },
     {
      "label": "delivery R1",
-     "dpm": 223.9
+     "dpm": 223.9,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "delivery R2",
-     "dpm": 244.8
+     "dpm": 244.8,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "escape2 R1",
-     "dpm": 225.1
+     "dpm": 225.1,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 153.6
+     "dpm": 153.6,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R1",
-     "dpm": 264.9
+     "dpm": 264.9,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 225.2
+     "dpm": 225.2,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
     }
    ]
   },
@@ -562,43 +774,73 @@
    "dpm_timeline": [
     {
      "label": "adlernes R1",
-     "dpm": 100.5
+     "dpm": 100.5,
+     "round_id": 11308,
+     "round_number": 1,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "adlernes R2",
-     "dpm": 314.0
+     "dpm": 314.0,
+     "round_id": 11309,
+     "round_number": 2,
+     "map_name": "etl_adlernest"
     },
     {
      "label": "supply R1",
-     "dpm": 167.1
+     "dpm": 167.1,
+     "round_id": 11311,
+     "round_number": 1,
+     "map_name": "supply"
     },
     {
      "label": "supply R2",
-     "dpm": 205.6
+     "dpm": 205.6,
+     "round_id": 11312,
+     "round_number": 2,
+     "map_name": "supply"
     },
     {
      "label": "delivery R1",
-     "dpm": 183.0
+     "dpm": 183.0,
+     "round_id": 11314,
+     "round_number": 1,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "delivery R2",
-     "dpm": 208.3
+     "dpm": 208.3,
+     "round_id": 11315,
+     "round_number": 2,
+     "map_name": "etl_sp_delivery"
     },
     {
      "label": "escape2 R1",
-     "dpm": 193.2
+     "dpm": 193.2,
+     "round_id": 11317,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 215.1
+     "dpm": 215.1,
+     "round_id": 11318,
+     "round_number": 2,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R1",
-     "dpm": 296.6
+     "dpm": 296.6,
+     "round_id": 11320,
+     "round_number": 1,
+     "map_name": "te_escape2"
     },
     {
      "label": "escape2 R2",
-     "dpm": 139.2
+     "dpm": 139.2,
+     "round_id": 11321,
+     "round_number": 2,
+     "map_name": "te_escape2"
     }
    ]
   }

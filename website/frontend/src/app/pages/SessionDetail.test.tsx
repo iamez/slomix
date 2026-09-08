@@ -318,6 +318,24 @@ describe('SessionDetail', () => {
     await waitFor(() => expect(screen.getByLabelText(`playstyle of ${second.name}`)).toBeInTheDocument());
   });
 
+  it('strips ET colour codes from graph names and aligns a player who sat out a round on the session axis', async () => {
+    const g = graphs as { rounds: { round_id: number }[]; players: { name: string; guid: string; dpm_timeline: { round_id: number }[] }[] };
+    const coloured = {
+      ...g,
+      players: g.players.map((p, i) => (i === 0
+        ? { ...p, name: '^1bronze^7', dpm_timeline: p.dpm_timeline.filter((t) => t.round_id !== g.rounds[1].round_id) }
+        : p)),
+    };
+    renderPage(withOverride('/graphs', () => json(coloured)));
+    await openMore();
+    await waitFor(() => expect(screen.getByLabelText('playstyle of bronze')).toBeInTheDocument());
+    expect(document.body.textContent).not.toContain('^1bronze');
+    // the chosen player's line breaks where the round is missing: two paths, not one
+    const svg = screen.getByLabelText('dpm per round');
+    const accent = [...svg.querySelectorAll('path')].filter((el) => el.getAttribute('stroke') === 'var(--color-accent)');
+    expect(accent.length).toBeGreaterThanOrEqual(2);
+  });
+
   it('shows the per-player totals on their own tab', async () => {
     renderPage(fixtureFetch, '/session-detail/154/players');
     await openMore();

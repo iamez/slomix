@@ -10,11 +10,12 @@ import { Cluster, Stack } from './layout';
 import { Panel } from './Panel';
 import { mmss } from './RoundsTable';
 import { Lbl, Meta, figure } from './ui';
+import { stripEtColors } from '../lib/names';
 import { useMatchDetails } from '../lib/queries';
 import type { MatchDetails, MatchDetailsPlayer, MatchDetailsTeam } from '../lib/types';
 
 const PLAYER_COLUMNS: DataColumn<MatchDetailsPlayer>[] = [
-  { key: 'name', label: 'player', sortValue: (p) => p.name },
+  { key: 'name', label: 'player', format: (p) => stripEtColors(p.name), sortValue: (p) => stripEtColors(p.name) },
   { key: 'kills', label: 'k', align: 'right', sortValue: (p) => p.kills },
   { key: 'deaths', label: 'd', align: 'right', sortValue: (p) => p.deaths },
   { key: 'kd', label: 'k/d', align: 'right', format: (p) => figure(p.kd), sortValue: (p) => p.kd },

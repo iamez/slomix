@@ -48,7 +48,16 @@ def test_the_gsid_endpoint_selects_counted_rounds_and_names_its_gate():
     assert db.calls[0][0] is sr.SESSION_ROUNDS_SQL and db.calls[0][1] == (152,)
     sql, params = db.calls[1]
     assert "r.id IN ($1, $2)" in sql and params == (11323, 11324)
+    assert "OMNIBOT" in sql and "[BOT]" in sql, "bots must be dropped per player, as /basics does"
+    assert [r["round_id"] for r in out["rounds"]] == [11323, 11324]
+    assert [pt["round_id"] for pt in out["players"][0]["dpm_timeline"]] == [11323, 11324]
     assert "round_date" not in sql.split("WHERE", 1)[1] and "round_status" not in sql.split("WHERE", 1)[1]
+
+
+def test_counted_rounds_without_player_rows_answer_an_empty_player_list():
+    round_rows = [(11323, "etl_adlernest", 1, 2, "2026-08-23", "20:00", None, None, 600)]
+    out = asyncio.run(sr.get_session_graphs(152, _Db(round_rows, [])))
+    assert out["players"] == [] and out["player_count"] == 0 and out["rounds_counted"] == 1
 
 
 def test_an_unknown_session_is_a_404_not_an_empty_graph():

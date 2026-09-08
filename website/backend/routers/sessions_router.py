@@ -1431,7 +1431,14 @@ def _build_session_graph_players(rows) -> list[dict[str, Any]]:
         round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
         # Use shorter map name format for timeline
         short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
-        dpm_timeline[agg_key].append({"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)})
+        # The round's identity rides with the point so a client can align every
+        # player's series on the session's round axis instead of on the
+        # point's index (Codex on #990: a player who sat out a map had their
+        # points drawn under the wrong labels).
+        dpm_timeline[agg_key].append({
+            "label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1),
+            "round_id": round_id, "round_number": round_num, "map_name": map_name,
+        })
 
     # Calculate derived metrics and build response
     players_data = []
@@ -1575,6 +1582,19 @@ class SessionGraphPlaystyle(BaseModel):
 class SessionGraphPoint(BaseModel):
     label: str
     dpm: float
+    round_id: int
+    round_number: int
+    map_name: str | None
+
+
+class SessionGraphRound(BaseModel):
+    """One counted round of the evening, in play order — the x axis every
+    player's dpm series aligns on (a point names its round_id)."""
+
+    round_id: int
+    label: str
+    map_name: str | None
+    round_number: int
 
 
 class SessionGraphPlayer(BaseModel):
@@ -1598,6 +1618,7 @@ class SessionGraphs(BaseModel):
     date: str
     gate: str
     rounds_counted: int
+    rounds: list[SessionGraphRound]
     player_count: int
     players: list[SessionGraphPlayer]
 
@@ -1615,15 +1636,31 @@ async def get_session_graphs(
         raise HTTPException(status_code=404, detail="Session not found")
     round_ids = [r[0] for r in round_rows]
     placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
-    rows = await db.fetch_all(_GRAPH_ROWS_SQL.format(where_clause=f"r.id IN ({placeholders})"), tuple(round_ids))
-    if not rows:
-        raise HTTPException(status_code=404, detail="No stats found for this session")
-    players = _build_session_graph_players(rows)
+    # Bots out per player as well as per round: rows older than the
+    # is_bot_round flag carry OMNIBOT guids / [BOT] names inside rounds the
+    # gate accepts, and /basics drops them — a percentile over the evening
+    # must rest on the same people (Codex on #990).
+    rows = await db.fetch_all(
+        _GRAPH_ROWS_SQL.format(where_clause=f"r.id IN ({placeholders}) {_BOT_PLAYER_FILTER}"), tuple(round_ids)
+    )
+    # Counted rounds with no player rows are a known absence: players is
+    # empty and the client says so, instead of a 404 it can only call an error.
+    players = _build_session_graph_players(rows) if rows else []
+    rounds = [
+        {
+            "round_id": r[0],
+            "label": f"{(r[1].split('_')[-1][:8] if r[1] and '_' in r[1] else (r[1] or '?')[:8])} R{r[2]}",
+            "map_name": r[1],
+            "round_number": int(r[2] or 0),
+        }
+        for r in round_rows
+    ]
     return {
         "gaming_session_id": gaming_session_id,
         "date": str(round_rows[0][4]),
         "gate": "counts_toward_totals",
         "rounds_counted": len(round_ids),
+        "rounds": rounds,
         "player_count": len(players),
         "players": players,
     }

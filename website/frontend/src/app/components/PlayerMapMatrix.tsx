@@ -13,6 +13,7 @@ import { DataTable, type DataColumn } from './DataTable';
 import { Cluster, Stack } from './layout';
 import { Absent, Chip, Lbl, Meta, SectionHead, Unavailable, figure } from './ui';
 import { mapLabel } from '../lib/maps';
+import { stripEtColors } from '../lib/names';
 import type { SessionMatrixCell, SessionMatrixPlayer, SessionTeamMatrix } from '../lib/types';
 
 export type MatrixMetric = 'dpm' | 'kd' | 'damage';
@@ -57,7 +58,7 @@ function columnsFor(maps: NonNullable<SessionTeamMatrix['maps']>, metric: Matrix
     },
   }));
   return [
-    { key: 'player', label: 'player', width: 160, align: 'left', sortValue: (p) => p.player_name },
+    { key: 'player', label: 'player', width: 160, align: 'left', format: (p) => stripEtColors(p.player_name), sortValue: (p) => stripEtColors(p.player_name) },
     ...perMap,
     { key: 'total', label: 'session', align: 'right', title: 'the whole evening', format: (p) => cellText(p.totals, metric), sortValue: (p) => p.totals[metric] },
   ];

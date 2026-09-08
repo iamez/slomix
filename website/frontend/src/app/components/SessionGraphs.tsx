@@ -16,6 +16,8 @@ import { DataTable, type DataColumn } from './DataTable';
 import { Cluster, Stack } from './layout';
 import { Panel } from './Panel';
 import { Chip, Lbl, Meta, figure } from './ui';
+import { mapLabel } from '../lib/maps';
+import { stripEtColors } from '../lib/names';
 import { useSessionGraphs } from '../lib/queries';
 import { svgPath } from '../lib/spark';
 import type { SessionGraphPlayer, SessionGraphs as SessionGraphsData } from '../lib/types';
@@ -28,15 +30,19 @@ const AXES: { key: keyof SessionGraphPlayer['playstyle']; label: string }[] = [
 ];
 
 const PLAYSTYLE_COLUMNS: DataColumn<SessionGraphPlayer>[] = [
-  { key: 'name', label: 'player', sortValue: (p) => p.name },
+  { key: 'name', label: 'player', format: (p) => stripEtColors(p.name), sortValue: (p) => stripEtColors(p.name) },
   ...AXES.map((a): DataColumn<SessionGraphPlayer> => ({
-    key: a.key, label: a.label, align: 'right', title: `${a.label}, 0–100 relative to the evening`,
+    key: a.key, label: a.label, align: 'right',
+    // Only aggression is a percentile of the evening; the other seven are
+    // absolute 0–100 scales (precision = accuracy × 2, lethality = k/d × 30,
+    // survivability = alive %, …) that do not move with the company.
+    title: a.key === 'aggression' ? 'aggression, percentile of the evening' : `${a.label}, absolute 0–100 scale (does not depend on who else played)`,
     format: (p) => figure(Math.round(p.playstyle[a.key])), sortValue: (p) => p.playstyle[a.key],
   })),
 ];
 
 const ADVANCED_COLUMNS: DataColumn<SessionGraphPlayer>[] = [
-  { key: 'name', label: 'player', sortValue: (p) => p.name },
+  { key: 'name', label: 'player', format: (p) => stripEtColors(p.name), sortValue: (p) => stripEtColors(p.name) },
   { key: 'dpm', label: 'dpm', align: 'right', format: (p) => figure(p.combat_offense.dpm), sortValue: (p) => p.combat_offense.dpm },
   { key: 'kd', label: 'k/d', align: 'right', format: (p) => figure(p.combat_offense.kd), sortValue: (p) => p.combat_offense.kd },
   { key: 'damage_efficiency', label: 'dmg eff', align: 'right', title: 'damage given over damage taken', format: (p) => figure(p.advanced_metrics.damage_efficiency), sortValue: (p) => p.advanced_metrics.damage_efficiency },
@@ -54,7 +60,7 @@ const ADVANCED_COLUMNS: DataColumn<SessionGraphPlayer>[] = [
 ];
 
 const SUPPORT_COLUMNS: DataColumn<SessionGraphPlayer>[] = [
-  { key: 'name', label: 'player', sortValue: (p) => p.name },
+  { key: 'name', label: 'player', format: (p) => stripEtColors(p.name), sortValue: (p) => stripEtColors(p.name) },
   { key: 'revives', label: 'rev', align: 'right', title: 'revives given', sortValue: (p) => p.combat_defense.revives },
   { key: 'times_revived', label: 'revived', align: 'right', sortValue: (p) => p.combat_defense.times_revived },
   { key: 'kill_assists', label: 'assists', align: 'right', sortValue: (p) => p.combat_defense.kill_assists },
@@ -80,7 +86,7 @@ function Radar({ player }: { player: SessionGraphPlayer }) {
   };
   const shape = `${svgPath(AXES.map((a, i) => at(i, (Math.max(0, Math.min(100, player.playstyle[a.key])) / 100) * R)))} Z`;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W }} role="img" aria-label={`playstyle of ${player.name}`}>
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W }} role="img" aria-label={`playstyle of ${stripEtColors(player.name)}`}>
       {[0.5, 1].map((f) => (
         <path key={f} d={`${svgPath(AXES.map((_a, i) => at(i, R * f)))} Z`} fill="none" stroke="var(--color-rule-900)" strokeWidth="1" />
       ))}
@@ -98,15 +104,33 @@ function Radar({ player }: { player: SessionGraphPlayer }) {
   );
 }
 
-/** Every player's per-round DPM as a line; the chosen one in the accent. */
-function DpmTimeline({ players, chosen }: { players: SessionGraphPlayer[]; chosen: string }) {
+/** Every player's per-round DPM as a line on the SESSION's round axis; the
+ *  chosen one in the accent. A player who sat out a round has no point
+ *  there — the line breaks instead of borrowing the next round's place. */
+function DpmTimeline({ players, rounds, chosen }: { players: SessionGraphPlayer[]; rounds: SessionGraphsData['rounds']; chosen: string }) {
   const W = 640; const H = 120; const L = 34; const B = 18;
-  const n = Math.max(...players.map((p) => p.dpm_timeline.length), 0);
-  if (n < 2) return <Meta>the timeline needs at least two rounds</Meta>;
+  const n = rounds.length;
+  if (n < 2) return <Meta>the timeline needs at least two counted rounds</Meta>;
   const maxDpm = Math.max(1, ...players.flatMap((p) => p.dpm_timeline.map((t) => t.dpm)));
+  const index = new Map(rounds.map((r, i) => [r.round_id, i]));
   const x = (i: number) => L + (i / (n - 1)) * (W - L - 6);
   const y = (v: number) => 6 + (1 - v / maxDpm) * (H - B - 6);
-  const labels = players.reduce((acc, p) => (p.dpm_timeline.length > acc.length ? p.dpm_timeline : acc), [] as SessionGraphPlayer['dpm_timeline']);
+  // One path per contiguous run of rounds the player was in.
+  const pathsOf = (p: SessionGraphPlayer): string[] => {
+    const pts = p.dpm_timeline
+      .map((t) => ({ i: index.get(t.round_id), v: t.dpm }))
+      .filter((q): q is { i: number; v: number } => q.i != null)
+      .sort((a, b) => a.i - b.i);
+    const runs: { x: number; y: number }[][] = [];
+    let prev = -2;
+    for (const q of pts) {
+      if (q.i !== prev + 1) runs.push([]);
+      runs[runs.length - 1].push({ x: x(q.i), y: y(q.v) });
+      prev = q.i;
+    }
+    return runs.map((run) => (run.length === 1 ? `M${run[0].x.toFixed(1)} ${run[0].y.toFixed(1)} h0.1` : svgPath(run))).filter(Boolean);
+  };
+  const every = Math.max(1, Math.ceil(n / 6));
   return (
     <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', maxWidth: W }} role="img" aria-label="dpm per round">
       {[0, maxDpm / 2, maxDpm].map((v) => (
@@ -115,15 +139,15 @@ function DpmTimeline({ players, chosen }: { players: SessionGraphPlayer[]; chose
           <text x={L - 4} y={y(v) + 3} textAnchor="end" style={AXIS_TEXT}>{figure(Math.round(v))}</text>
         </g>
       ))}
-      {labels.map((t, i) => (i % Math.ceil(n / 6) === 0 || i === n - 1) && (
-        <text key={`${t.label}-${String(i)}`} x={x(i)} y={H - 4} textAnchor="middle" style={AXIS_TEXT}>{t.label}</text>
+      {rounds.map((r, i) => (i % every === 0 || i === n - 1) && (
+        <text key={r.round_id} x={x(i)} y={H - 4} textAnchor="middle" style={AXIS_TEXT}>{mapLabel(r.map_name)} R{r.round_number}</text>
       ))}
-      {players.filter((p) => p.guid !== chosen).map((p) => (
-        <path key={p.guid} d={svgPath(p.dpm_timeline.map((t, i) => ({ x: x(i), y: y(t.dpm) })))} fill="none" stroke="var(--color-text-500)" strokeWidth="1" strokeOpacity="0.5" />
-      ))}
-      {players.filter((p) => p.guid === chosen).map((p) => (
-        <path key={p.guid} d={svgPath(p.dpm_timeline.map((t, i) => ({ x: x(i), y: y(t.dpm) })))} fill="none" stroke="var(--color-accent)" strokeWidth="1.6" />
-      ))}
+      {players.filter((p) => p.guid !== chosen).flatMap((p) => pathsOf(p).map((d, k) => (
+        <path key={`${p.guid}-${String(k)}`} d={d} fill="none" stroke="var(--color-text-500)" strokeWidth="1" strokeOpacity="0.5" strokeLinecap="round" />
+      )))}
+      {players.filter((p) => p.guid === chosen).flatMap((p) => pathsOf(p).map((d, k) => (
+        <path key={`${p.guid}-${String(k)}`} d={d} fill="none" stroke="var(--color-accent)" strokeWidth="1.6" strokeLinecap="round" />
+      )))}
     </svg>
   );
 }
@@ -147,14 +171,14 @@ export function SessionGraphsPanel({ sessionId }: { sessionId: number }) {
             <Cluster gap={2} align="baseline" style={{ flexWrap: 'wrap' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>radar for</Lbl>
               {d.players.map((p) => (
-                <Chip key={p.guid} active={p.guid === pick.guid} label={p.name} onClick={() => { setChosen(p.guid); }} />
+                <Chip key={p.guid} active={p.guid === pick.guid} label={stripEtColors(p.name)} onClick={() => { setChosen(p.guid); }} />
               ))}
             </Cluster>
             <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>
               <Radar player={pick} />
               <Stack gap={1} style={{ flex: '1 1 320px' }}>
-                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>dpm per round · {pick.name} in colour</Lbl>
-                <DpmTimeline players={d.players} chosen={pick.guid} />
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>dpm per round · {stripEtColors(pick.name)} in colour</Lbl>
+                <DpmTimeline players={d.players} rounds={d.rounds} chosen={pick.guid} />
               </Stack>
             </Cluster>
             <DataTable<SessionGraphPlayer>
@@ -184,7 +208,7 @@ export function SessionGraphsPanel({ sessionId }: { sessionId: number }) {
               defaultSort={{ key: 'revives', dir: 'desc' }}
               minWidth={900}
             />
-            <Meta>axes and percentile scores are relative to this evening's players, not to the whole database</Meta>
+            <Meta>aggression and the percentile scores are relative to this evening's players; the other seven axes are absolute 0–100 scales</Meta>
           </Stack>
         );
       }}
