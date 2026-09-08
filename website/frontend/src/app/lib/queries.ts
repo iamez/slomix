@@ -120,7 +120,9 @@ import type {
   RecentPrediction,
   RecentRound,
   RivalryLeaderboard,
+  MatchDetails,
   RoundAwards,
+  RoundPlayerDetails,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -129,6 +131,7 @@ import type {
   SessionAwards,
   SessionBasics,
   SessionDetail,
+  SessionGraphs,
   SessionGoodNight,
   SessionLeaderRow,
   SessionLineups,
@@ -428,6 +431,17 @@ export function useRecentMatches(limit = 5) {
   });
 }
 
+/** The box score of one half. Mounted only once a row is opened — a
+ *  disabled query is pending forever in React Query v5. */
+export function useMatchDetails(roundId: number | null) {
+  return useQuery({
+    queryKey: ['match-details', roundId],
+    enabled: roundId != null,
+    queryFn: () =>
+      apiGet('/api/stats/matches/{match_id}', { pathParams: { match_id: String(roundId!) } }) as Promise<MatchDetails>,
+  });
+}
+
 export function useAvailabilityOverview() {
   return useQuery({
     queryKey: ['availability-overview'],
@@ -629,6 +643,20 @@ export function useRecentRounds() {
  * rounds table lists up to 18 of them and eagerly fetching each one would be
  * 18 calls to answer a question nobody asked.
  */
+/** One player's breakdown of one half. Disabled until both ids are known —
+ *  and a disabled query is pending forever in React Query v5, so the caller
+ *  mounts it only once a row was clicked. */
+export function useRoundPlayerDetails(roundId: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['round-player-details', roundId, playerGuid],
+    enabled: roundId != null && playerGuid != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/player/{player_guid}/details', {
+        pathParams: { round_id: roundId!, player_guid: playerGuid! },
+      }) as Promise<RoundPlayerDetails>,
+  });
+}
+
 export function useRoundAwards(roundId: number | null) {
   return useQuery({
     queryKey: ['round-awards', roundId],
@@ -927,6 +955,16 @@ export function useStoryKisDetails(gsid: number, playerGuid: string | null) {
 /** Everything the session totals are built from: matches, per-player totals,
  *  stopwatch scoring and the team matrix. One 39 KB response rather than the
  *  legacy page's five calls. */
+/** The graphs of an evening over its counted rounds — keyed by gaming
+ *  session, never by date (a day can hold several). */
+export function useSessionGraphs(sessionId: number) {
+  return useQuery({
+    queryKey: ['session-graphs', sessionId],
+    queryFn: () =>
+      apiGet('/api/stats/session/{gaming_session_id}/graphs', { pathParams: { gaming_session_id: sessionId } }) as Promise<SessionGraphs>,
+  });
+}
+
 export function useSessionDetail(sessionId: number | null) {
   return useQuery({
     queryKey: ['session-detail', sessionId],
