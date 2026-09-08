@@ -1418,6 +1418,12 @@ export interface SkillFormula {
   shrinkage_k: number;
   normalization: string;
   range: string;
+  /** The formula's own tables (read since 2026-09-08 — 24 keys fetched and
+   * never shown): metric -> weight (signed), metric -> what it measures,
+   * source -> the metrics it feeds. */
+  weights: Record<string, number>;
+  metrics: Record<string, string>;
+  metric_sources: Record<string, string[]>;
 }
 
 export interface SsrComponent {
@@ -1676,6 +1682,30 @@ export interface StoryRolePlayer {
   enabler_score?: number;
   solo_pct?: number;
   hold_pct?: number | null;
+  /** The numbers behind each score (read since 2026-09-08; the legacy
+   * "invisible value" board showed them, the new boards showed only the
+   * score). gravity: */
+  engagements?: number;
+  avg_attackers?: number;
+  total_attention_ms?: number;
+  total_engaged_ms?: number;
+  alive_ms?: number;
+  /** space created: */
+  productive_deaths?: number;
+  wasted_deaths?: number;
+  total_deaths?: number;
+  teammate_kills_after?: number;
+  /** enabler: */
+  enabled_kills?: number;
+  crossfire_assists?: number;
+  trade_assists?: number;
+  total_assists?: number;
+  own_kills?: number;
+  /** alone (lurker): */
+  solo_samples?: number;
+  total_samples?: number;
+  tracks?: number;
+  solo_time_est_s?: number;
 }
 
 export interface StoryRoleBoard {

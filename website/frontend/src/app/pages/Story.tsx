@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, lblStyle } from '../components/ui';
 import { Panel } from '../components/Panel';
+import { mmss } from '../components/RoundsTable';
 import { ApiError } from '../lib/api';
 import { isFailureStatus } from '../lib/responseStatus';
 import { stripEtColors } from '../lib/names';
@@ -938,12 +939,17 @@ function roleFigure(value: number): string {
 /** One telemetry-derived role board. Every one of these is measured from the
  * position tracker, so the label says so once per board rather than once per
  * page — a reader who scrolls into the middle still learns it. */
-function RoleBoard({ label, note, rows, value, unit }: {
+function RoleBoard({ label, note, rows, value, unit, detail }: {
   label: string;
   note: string;
   rows: StoryRolePlayer[];
   value: (row: StoryRolePlayer) => number;
   unit?: string;
+  /** The numbers the score is made of, one line under the row — so a
+   *  reader can see WHY a player leads, not only that they do (the legacy
+   *  "invisible value" board had them; the audit of 2026-09-07 found the new
+   *  boards fetched and dropped them). */
+  detail?: (row: StoryRolePlayer) => string | null;
 }) {
   const top = rows.slice(0, 5);
   return (
@@ -956,12 +962,15 @@ function RoleBoard({ label, note, rows, value, unit }: {
       ) : (
         <Stack gap={1} className="rows">
           {top.map((r) => (
-            <Cluster key={r.guid_short ?? r.name} gap={2} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0' }}>
-              <span style={{ fontSize: 'var(--fs-small)', minWidth: 0 }}>{r.name}</span>
-              <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
-                {roleFigure(value(r))}{unit ?? ''}
-              </span>
-            </Cluster>
+            <Stack key={r.guid_short ?? r.name} gap={1} className="row" style={{ padding: 'var(--space-1) 0' }}>
+              <Cluster gap={2} justify="between" align="baseline">
+                <span style={{ fontSize: 'var(--fs-small)', minWidth: 0 }}>{r.name}</span>
+                <span className="m" style={{ fontSize: 'var(--fs-small)' }}>
+                  {roleFigure(value(r))}{unit ?? ''}
+                </span>
+              </Cluster>
+              {detail && detail(r) != null && <Meta>{detail(r)}</Meta>}
+            </Stack>
           ))}
         </Stack>
       )}
@@ -1065,6 +1074,8 @@ function Roles({ gsid }: { gsid: number }) {
             note="attackers drawn per engagement"
             rows={gravity.data.players}
             value={(r) => r.gravity_score ?? 0}
+            detail={(r) => (r.engagements == null ? null
+              : `${figure(r.engagements)} engagements · ${r.avg_attackers ?? '—'} attackers avg · ${r.total_attention_ms != null ? mmss(Math.round(r.total_attention_ms / 1000)) : '—'} under attention`)}
           />
         )}
         {space.data && (
@@ -1073,6 +1084,8 @@ function Roles({ gsid }: { gsid: number }) {
             note="deaths a teammate converted within the window"
             rows={space.data.players}
             value={(r) => r.space_score ?? 0}
+            detail={(r) => (r.total_deaths == null ? null
+              : `${figure(r.productive_deaths ?? 0)} productive · ${figure(r.wasted_deaths ?? 0)} wasted of ${figure(r.total_deaths)} deaths · ${figure(r.teammate_kills_after ?? 0)} teammate kills after`)}
           />
         )}
         {enabler.data && (
@@ -1081,6 +1094,8 @@ function Roles({ gsid }: { gsid: number }) {
             note="crossfire and trade assists into others' kills"
             rows={enabler.data.players}
             value={(r) => r.enabler_score ?? 0}
+            detail={(r) => (r.enabled_kills == null ? null
+              : `${figure(r.enabled_kills)} enabled · ${figure(r.crossfire_assists ?? 0)} crossfire · ${figure(r.trade_assists ?? 0)} trade · ${figure(r.own_kills ?? 0)} own kills`)}
           />
         )}
         {lurker.data && (
@@ -1090,6 +1105,8 @@ function Roles({ gsid }: { gsid: number }) {
             rows={lurker.data.players}
             value={(r) => r.solo_pct ?? 0}
             unit="%"
+            detail={(r) => (r.solo_samples == null ? null
+              : `${figure(r.solo_samples)} of ${figure(r.total_samples ?? 0)} samples · ≈ ${r.solo_time_est_s != null ? mmss(Math.round(r.solo_time_est_s)) : '—'} alone · ${figure(r.tracks ?? 0)} tracks`)}
           />
         )}
         {camp.data && (

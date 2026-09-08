@@ -373,3 +373,15 @@ describe('SkillRating', () => {
     expect(screen.queryByText(/adjusted ratings: unavailable/)).toBeNull();
   });
 });
+
+/** The formula's weights table, from the recording (24 keys fetched and never
+ *  shown before 2026-09-08): the heaviest metric first, signed, with what it
+ *  measures and its source. */
+it('shows every weight of the formula with its meaning and source', async () => {
+  const rec = formula as unknown as { weights: Record<string, number>; metrics: Record<string, string> };
+  renderPage();
+  const [metric, w] = Object.entries(rec.weights).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))[0];
+  await waitFor(() => expect(screen.getByText(`weight ${w > 0 ? '+' : ''}${w}`)).toBeInTheDocument());
+  expect(screen.getByText(new RegExp(rec.metrics[metric].slice(0, 20).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
+  expect(screen.getAllByText(/ · (pcs|proximity)$/).length).toBeGreaterThan(0);
+});
