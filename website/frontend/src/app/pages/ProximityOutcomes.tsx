@@ -5,6 +5,8 @@
  * is rendered, not translated.
  */
 import { Cluster, Stack } from '../components/layout';
+import { DataTable, type DataColumn } from '../components/DataTable';
+import { mmss } from '../components/RoundsTable';
 import { Lbl, Meta, SectionHead, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
@@ -14,8 +16,22 @@ import {
   useProxWeaponAccuracy,
 } from '../lib/queries';
 import { ProxPanel, ProxRow } from './proximityShared';
+import type { ProxKillOutcomeEvent } from '../lib/types';
 
 const NO_ROWS = 'no rows in this scope — proximity capture only covers sessions where the tracker ran';
+
+type KillEventRow = ProxKillOutcomeEvent & { id: string };
+const KILL_EVENT_COLUMNS: DataColumn<KillEventRow>[] = [
+  { key: 'kill_time', label: 'at', title: 'the round clock', format: (e) => mmss(e.kill_time / 1000), sortValue: (e) => e.kill_time },
+  { key: 'map', label: 'map', format: (e) => `${mapLabel(e.map_name)} R${String(e.round_number)}`, sortValue: (e) => `${e.map_name} ${String(e.round_number)}` },
+  { key: 'killer', label: 'killer', format: (e) => (e.killer_name ? stripEtColors(e.killer_name) : <Meta>—</Meta>), sortValue: (e) => e.killer_name },
+  { key: 'victim', label: 'victim', format: (e) => (e.victim_name ? stripEtColors(e.victim_name) : <Meta>—</Meta>), sortValue: (e) => e.victim_name },
+  { key: 'outcome', label: 'became', format: (e) => e.outcome.replace(/_/g, ' '), sortValue: (e) => e.outcome },
+  { key: 'delta_ms', label: 'after', align: 'right', title: 'seconds from the kill to the outcome', format: (e) => mmss(e.delta_ms / 1000), sortValue: (e) => e.delta_ms },
+  { key: 'effective_denied_ms', label: 'denied', align: 'right', title: 'seconds of playtime the kill denied', format: (e) => mmss(e.effective_denied_ms / 1000), sortValue: (e) => e.effective_denied_ms },
+  { key: 'gibber', label: 'gibbed by', format: (e) => (e.gibber_name ? stripEtColors(e.gibber_name) : <Meta>—</Meta>), sortValue: (e) => e.gibber_name },
+  { key: 'reviver', label: 'revived by', format: (e) => (e.reviver_name ? stripEtColors(e.reviver_name) : <Meta>—</Meta>), sortValue: (e) => e.reviver_name },
+];
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (
@@ -44,14 +60,40 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
         <ProxPanel label="the evening in numbers" q={summary} empty={NO_ROWS}
           isEmpty={(d) => d.total_engagements === 0}>
           {(d) => (
-            <Cluster gap={6} style={{ flexWrap: 'wrap' }}>
-              <Tile label="engagements" value={figure(d.total_engagements)} />
-              <Tile label="crossfires" value={figure(d.crossfire_events)} />
-              <Tile label="hotzones" value={figure(d.hotzones)} />
-              <Tile label="escape rate" value={`${figure(d.escape_rate_pct)}%`} />
-              <Tile label="kill rate" value={`${figure(d.kill_rate_pct)}%`} />
-              <Tile label="avg attackers" value={figure(d.avg_attackers)} />
-            </Cluster>
+            <Stack gap={4}>
+              <Cluster gap={6} style={{ flexWrap: 'wrap' }}>
+                <Tile label="engagements" value={figure(d.total_engagements)} />
+                <Tile label="crossfires" value={figure(d.crossfire_events)} />
+                <Tile label="hotzones" value={figure(d.hotzones)} />
+                <Tile label="escape rate" value={`${figure(d.escape_rate_pct)}%`} />
+                <Tile label="kill rate" value={`${figure(d.kill_rate_pct)}%`} />
+                <Tile label="avg attackers" value={figure(d.avg_attackers)} />
+                <Tile label="avg engagement" value={`${figure(Math.round(d.avg_duration_ms / 100) / 10)} s`} />
+                <Tile label="avg distance" value={`${figure(Math.round(d.avg_distance_m))} m`} />
+              </Cluster>
+              {/* Movement and sampling — fetched since phase 5, shown since the
+                  2026-09-08 ledger: a visitor could not tell how much of the
+                  evening the tracker actually saw. */}
+              <Cluster gap={6} style={{ flexWrap: 'wrap' }}>
+                <Tile label="players" value={figure(d.unique_players)} />
+                <Tile label="rounds sampled" value={figure(d.sample_rounds)} />
+                <Tile label="track per life" value={`${figure(Math.round(d.avg_track_distance_m))} m`} />
+                <Tile label="avg speed" value={figure(Math.round(d.avg_speed))} />
+                <Tile label="sprinting" value={`${figure(d.avg_sprint_pct)}%`} />
+                <Tile label="first move" value={`${figure(d.avg_time_to_first_move_ms)} ms`} />
+              </Cluster>
+              <Stack gap={1}>
+                <Lbl style={{ fontSize: 'var(--fs-caption)' }}>v5 source rows in this scope</Lbl>
+                <Cluster gap={4} style={{ flexWrap: 'wrap' }}>
+                  {Object.entries(d.v5_counts).map(([table, n]) => (
+                    <Meta key={table}>{table.replace(/^proximity_/, '').replace(/_/g, ' ')} {figure(n)}</Meta>
+                  ))}
+                  {d.v5_counts_unknown.length > 0 && <Meta>unknown: {d.v5_counts_unknown.join(', ')}</Meta>}
+                </Cluster>
+                {d.top_duos_partial && <Meta>the duo list is partial — not every pairing of the scope was scored</Meta>}
+                <Meta>{figure(d.range_days)}-day scope{d.generated_at ? ` · computed ${d.generated_at.slice(0, 16).replace('T', ' ')}` : ''}</Meta>
+              </Stack>
+            </Stack>
           )}
         </ProxPanel>
       </div>
@@ -69,7 +111,21 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
               <ProxRow name="revived against" mid={`${figure(d.summary.revive_rate)}%`} val={figure(d.summary.revived)} />
               <ProxRow name="tapped out" val={figure(d.summary.tapped_out)} />
               <ProxRow name="lasted to round end" val={figure(d.summary.round_end)} />
+              <ProxRow name="expired (no outcome recorded)" val={figure(d.summary.expired)} />
               <ProxRow name="denial per kill" val={`${figure(Math.round(d.summary.avg_denied_ms / 100) / 10)} s avg`} />
+              <ProxRow name="time to the outcome" val={`${figure(Math.round(d.summary.avg_delta_ms / 100) / 10)} s avg`} />
+              {d.events.length > 0 && (
+                <div style={{ marginTop: 'var(--space-3)' }}>
+                  <DataTable<KillEventRow>
+                    parity="proximity.kill-outcomes.events"
+                    label="the kills, one by one"
+                    columns={KILL_EVENT_COLUMNS}
+                    rows={d.events.map((e, i) => ({ ...e, id: `${String(e.kill_time)}-${e.victim_guid}-${String(i)}` }))}
+                    rowKey={(e) => e.id}
+                    minWidth={900}
+                  />
+                </div>
+              )}
             </Stack>
           )}
         </ProxPanel>

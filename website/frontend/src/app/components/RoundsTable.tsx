@@ -18,7 +18,7 @@
  * — which is how `--color-ink-800` painted 22 boxes transparent. A fallback
  * makes this correct before AND after that PR merges.
  */
-import type { ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 
 import { Cluster, Stack } from './layout';
 import type { RoundPlayerRow, SessionRound } from '../lib/types';
@@ -130,39 +130,65 @@ function PlayerRows({
   players,
   columns,
   highlightGuid,
+  onSelectPlayer,
+  selectedGuid,
+  renderPlayerDetails,
 }: {
   players: readonly RoundPlayerRow[];
   columns: readonly typeof ROUND_COLUMNS[number][];
   highlightGuid?: string;
+  onSelectPlayer?: (guid: string) => void;
+  selectedGuid?: string | null;
+  renderPlayerDetails?: (guid: string) => ReactNode;
 }) {
   return (
     <>
       {players.map((p) => {
         const mine = highlightGuid != null && p.player_guid === highlightGuid;
+        const open = selectedGuid != null && p.player_guid === selectedGuid;
         return (
-          <tr
-            key={p.player_guid}
-            data-highlighted={mine || undefined}
-            style={{ borderTop: '1px solid var(--color-rule-900)' }}
-          >
-            <td style={{ padding: `${SPACE[1]} ${SPACE[2]}`, fontSize: FS.body,
-                         color: mine ? 'var(--color-accent)'
-                                     : 'var(--color-text-100)' }}>
-              {p.player_name}
-              {p.time_dead_reconstructed && (
-                <span title="dead time reconstructed from the round's timeline, not read from the stats file" style={{ marginInlineStart: SPACE[1], fontSize: FS.micro, color: 'var(--color-text-500)' }}>~dead</span>
-              )}
-            </td>
-            {columns.map((c) => {
-              const raw = p[c.key];
-              const value = typeof raw === 'number' ? raw : 0;
-              return (
-                <Cell key={c.key}>
-                  {'format' in c ? c.format(value) : value.toLocaleString()}
-                </Cell>
-              );
-            })}
-          </tr>
+          <Fragment key={p.player_guid}>
+            <tr
+              data-highlighted={mine || undefined}
+              data-open={open || undefined}
+              style={{ borderTop: '1px solid var(--color-rule-900)' }}
+            >
+              <td style={{ padding: `${SPACE[1]} ${SPACE[2]}`, fontSize: FS.body,
+                           color: mine ? 'var(--color-accent)'
+                                       : 'var(--color-text-100)' }}>
+                <button
+                  type="button"
+                  onClick={onSelectPlayer ? () => { onSelectPlayer(p.player_guid); } : undefined}
+                  disabled={!onSelectPlayer}
+                  aria-expanded={onSelectPlayer ? open : undefined}
+                  // Not `all: unset`: that also drops the outline and hides
+                  // :focus-visible from tokens.css (Codex on #989).
+                  style={{ background: 'none', border: 0, padding: 0, font: 'inherit', cursor: onSelectPlayer ? 'pointer' : 'default', color: 'inherit' }}
+                >
+                  {p.player_name}
+                </button>
+                {p.time_dead_reconstructed && (
+                  <span title="dead time reconstructed from the round's timeline, not read from the stats file" style={{ marginInlineStart: SPACE[1], fontSize: FS.micro, color: 'var(--color-text-500)' }}>~dead</span>
+                )}
+              </td>
+              {columns.map((c) => {
+                const raw = p[c.key];
+                const value = typeof raw === 'number' ? raw : 0;
+                return (
+                  <Cell key={c.key}>
+                    {'format' in c ? c.format(value) : value.toLocaleString()}
+                  </Cell>
+                );
+              })}
+            </tr>
+            {open && renderPlayerDetails ? (
+              <tr data-details-for={p.player_guid}>
+                <td colSpan={columns.length + 1} style={{ padding: `${SPACE[2]} ${SPACE[2]}` }}>
+                  {renderPlayerDetails(p.player_guid)}
+                </td>
+              </tr>
+            ) : null}
+          </Fragment>
         );
       })}
     </>
@@ -250,6 +276,11 @@ export interface RoundsTableProps {
   /** Narrow the default set; order follows ROUND_COLUMNS regardless. */
   columns?: readonly RoundColumnKey[];
   onSelectRound?: (roundId: number) => void;
+  /** `round` mode: a player's name is a button; the selected player's row
+   *  is followed by `renderPlayerDetails(guid)` inside the same table. */
+  onSelectPlayer?: (roundId: number, guid: string) => void;
+  selectedPlayer?: { roundId: number; guid: string } | null;
+  renderPlayerDetails?: (roundId: number, guid: string) => ReactNode;
 }
 
 export function RoundsTable({
@@ -259,6 +290,9 @@ export function RoundsTable({
   emptyReason = 'no_data',
   columns,
   onSelectRound,
+  onSelectPlayer,
+  selectedPlayer,
+  renderPlayerDetails,
 }: RoundsTableProps) {
   const cols = columns
     ? ROUND_COLUMNS.filter((c) => columns.includes(c.key))
@@ -363,7 +397,10 @@ export function RoundsTable({
                 </thead>
                 <tbody>
                   <PlayerRows players={round.players} columns={cols}
-                              highlightGuid={playerGuid} />
+                              highlightGuid={playerGuid}
+                              onSelectPlayer={onSelectPlayer ? (guid) => { onSelectPlayer(round.round_id, guid); } : undefined}
+                              selectedGuid={selectedPlayer?.roundId === round.round_id ? selectedPlayer.guid : null}
+                              renderPlayerDetails={renderPlayerDetails ? (guid) => renderPlayerDetails(round.round_id, guid) : undefined} />
                 </tbody>
               </table>
             </div>

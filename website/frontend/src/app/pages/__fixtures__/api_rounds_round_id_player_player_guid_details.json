@@ -1,0 +1,80 @@
+{
+    "player_name": "imma^>koala",
+    "round": {
+        "id": 11430,
+        "map_name": "etl_sp_delivery",
+        "round_number": 2,
+        "round_date": "2026-09-03"
+    },
+    "combat": {
+        "kills": 1,
+        "deaths": 2,
+        "damage_given": 106,
+        "damage_received": 249,
+        "headshot_kills": 1,
+        "headshots": 1,
+        "gibs": 0,
+        "accuracy": 100.0,
+        "shots": 6,
+        "hits": 6
+    },
+    "support": {
+        "revives_given": 1,
+        "times_revived": 0,
+        "useful_kills": 1,
+        "useless_kills": 0,
+        "kill_assists": 0
+    },
+    "objectives": {
+        "stolen": 0,
+        "returned": 0,
+        "dynamites_planted": 0,
+        "dynamites_defused": 0
+    },
+    "sprees": {
+        "double_kills": 0,
+        "triple_kills": 0,
+        "quad_kills": 0,
+        "multi_kills": 0,
+        "mega_kills": 0
+    },
+    "time": {
+        "played_seconds": 204,
+        "dead_minutes": 1.399999976158142,
+        "denied_playtime": 5
+    },
+    "misc": {
+        "xp": 9.0,
+        "team_kills": 0,
+        "self_kills": 0
+    },
+    "weapons": [
+        {
+            "name": "WS_THOMPSON",
+            "kills": 1,
+            "deaths": 0,
+            "headshots": 1,
+            "hits": 5,
+            "shots": 5,
+            "accuracy": 100.0
+        },
+        {
+            "name": "WS_MP40",
+            "kills": 0,
+            "deaths": 2,
+            "headshots": 0,
+            "hits": 0,
+            "shots": 0,
+            "accuracy": 0
+        },
+        {
+            "name": "WS_SYRINGE",
+            "kills": 0,
+            "deaths": 0,
+            "headshots": 0,
+            "hits": 1,
+            "shots": 1,
+            "accuracy": 100.0
+        }
+    ]
+}
