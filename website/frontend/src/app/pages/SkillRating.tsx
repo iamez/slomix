@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Chip, figure, Lbl, Meta, Pending, SectionHead, Unavailable } from '../components/ui';
+import { Panel } from '../components/Panel';
 import { useAdjustedLifetime, useSkillFormula, useSkillLeaderboard, useSsr } from '../lib/queries';
 import type { AdjustedLifetimePlayer, RatedPlayer, SsrPlayer } from '../lib/types';
 
@@ -396,30 +397,32 @@ export function SkillRating() {
         )}
       </Stack>
 
-      <Stack gap={2} parity="skill.leaderboard" style={{ paddingTop: 'var(--space-6)' }}>
-        <SectionHead label="rated players" aside={<span className="lbl">rounds · sample · rating</span>} />
-        {board.isPending && <Pending label="ratings" />}
-        {board.isError && <Unavailable what="ratings" />}
-        {board.data && board.data.players.length === 0 && (
-          <Absent reason={<>nobody has played the {board.data.meta.min_rounds} rounds a rating needs yet</>} />
-        )}
-        {board.data && board.data.players.length > 0 && (
-          <Stack gap={1} className="rows">
-            {board.data.players.map((p) => (
-              <RatedRow
-                key={p.player_guid}
-                player={p}
-                open={open === p.player_guid}
-                onToggle={() => { setOpen(open === p.player_guid ? null : p.player_guid); }}
-                ambiguous={(nameCounts.get(p.display_name) ?? 0) > 1}
-                constant={board.data.meta.constant}
-                shrinkageK={board.data.meta.shrinkage_k}
-                poolMean={board.data.meta.pool_mean ?? null}
-              />
-            ))}
-          </Stack>
-        )}
-      </Stack>
+      <div data-parity="skill.leaderboard" style={{ paddingTop: 'var(--space-6)' }}>
+        <Panel
+          label="rated players"
+          aside="rounds · sample · rating"
+          q={board}
+          empty={`nobody has played the ${board.data?.meta.min_rounds ?? ''} rounds a rating needs yet`}
+          isEmpty={(d) => d.players.length === 0}
+        >
+          {(d) => (
+            <Stack gap={1} className="rows">
+              {d.players.map((p) => (
+                <RatedRow
+                  key={p.player_guid}
+                  player={p}
+                  open={open === p.player_guid}
+                  onToggle={() => { setOpen(open === p.player_guid ? null : p.player_guid); }}
+                  ambiguous={(nameCounts.get(p.display_name) ?? 0) > 1}
+                  constant={d.meta.constant}
+                  shrinkageK={d.meta.shrinkage_k}
+                  poolMean={d.meta.pool_mean ?? null}
+                />
+              ))}
+            </Stack>
+          )}
+        </Panel>
+      </div>
 
       <AdjustedLifetimeBoard />
 

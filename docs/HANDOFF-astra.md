@@ -1,5 +1,17 @@
 # HANDOFF — Astra (Codex CLI), 7. 9. 2026
 
+> **Execution corrections, Astra 2026-09-08:** use PLAN's Astra execution
+> ledger before the historical work package below. The approved runtime first
+> event is `round_stats_imported` in the canonical `process_file()` transaction,
+> not `round_ended` in a Discord mixin. Consumers wait for late-update coverage.
+> Stability gates development; soak gates activation. Raw Codex input logging
+> has been removed locally; never restore it to prove integration. Both hooks
+> still need owner trust review. PRs #964/#965/#966/#969 carry the first slices.
+> Dev was rebuilt/restarted by another session: read-only check now reports
+> `4bc00b1f`, start 2026-09-07 23:41 CEST, app.html mtime 23:40; /health ok.
+> Earlier "bundle never rebuilt" statements are historical. Main has since
+> advanced; neither this timestamp nor /api/build proves current artifact identity.
+
 > Tracked copy of the handoff assembled from two Claude sessions on the owner's request. The same text was delivered as `/tmp/slomix-claude-handoff-to-astra-20260907.md`; this copy lives in the repo so a fresh clone carries it. No secrets: credentials and webhook URLs are only in `.env` files.
 
 Sestavljeno na ownerjevo zahtevo iz dveh Claude sej: **Fable** (ta datoteka, del A)
@@ -130,6 +142,7 @@ Za fazo 7 je odprt le končni prelet, nato pregledni PR-ji za ultra. Odvisnosti:
 ### Faza 1 — takoj, brez ownerjevih odločitev
 1. **Triaža najdb ultra** (#924 → #925 → #926, ko jih owner požene): vsaka najdba dobi oznako iz `docs/process/MANDELBROT_RCA.md` (1–12), meritev po drugi poti, popravek ALI zavrnitev z meritvijo; en PR na rezino; `docs/REVIEW_GUIDE.md` pove, kaj je namerno.
 1b. **Modularnost SPA, rezine 1–8** (`docs/SPA_MODULARITY.md`; owner 7. 9.: stran se bo ful spreminjala): Panel → trojice → GridRow → `lib/format` → DataTable → register 53 panelov → stanje `Hidden` v `ui.tsx` (doc 19 §5, NE `Absent`) → hex sweep; vsaka z ratchetom, seed = izmerjeno, budget pade v istem commitu; ownerjeve vizualne pripombe iz `docs/DESIGN_PUNCHLIST.md` šele SKOZI enoto.
+1c. **Živi pogled za obiskovalca, rezine 1–8** (owner 7. 9. zvečer; pregled v lokalnem `docs/research/LIVE_VIEW_VISITOR_REVIEW_2026-09-07.md`, povzetek v BACKLOG 22:05): (1) replay toka na dev (`scripts/live_feed_replay.py` + fixture nocojšnjega večera) → (2) reducer `last_round_result`, `time_limit_seconds`, `attacking_team` → (3) SPA »now« vrstica → (4) seznam ciljev mape + dedup toka → (5) oznake rosterja + povezave → (6) momentum/hold z osmi ali umik → (7) umik stav z živega → (8) beseda »session«. Vse na `LivePage.tsx`, prod ostane zamrznjen.
 2. **Watchdog r. 2** (`scripts/slomix_watchdog.py`): (a) SSH sonde na puran, samo read-only (PID tailerja po točnem imenu ali pidfile: `pgrep -x`/`pidof`/`systemctl is-active`, **nikoli `pgrep -f`** (AGENTS §1: ujame lastno lupino); `ls -t` v `stats/`), `SSH_*` iz korenskega `.env`, `bot/automation/ssh_handler.py` za host-key politiko; (b) »kar teče = kar je na mainu«: `git -C /home/samba/share/slomix-dev-run rev-parse HEAD` proti `/api/build` + starost bundla proti viru (isti test kot guard v `scripts/dev_deploy.sh`); (c) error rate PO DOGODKIH (nikoli po vrsticah); (d) svež venv na servis v run diru (`python3.13 -m venv venv-bot`/`venv-web`, `pip install -r requirements.txt`/`website/requirements.txt`, enote → nove poti, ownerjev `install`). Dokaz: `--once --dry-run`, simuliran izpad (zaprta vrata), noč brez alarmov.
 3. **Bundle + deploy**: ko je RAM prost (obe Claude seji zaprti; `free -m` ≥ 800 MB na voljo): `cd website/frontend && npm run build:app` v agentovem drevesu `slomix_discord`, preveri hash bundla in mtime `static/app/app.html` proti zadnjemu commitu `src/app`; `bash scripts/dev_deploy.sh` — **cela skripta (checkout run dira + kopija statike + restart) je deploy in teče le z ownerjevim DA za ta zagon**, tudi s `SKIP_RESTART=1`.
 4. **Paritetni prelet faze 7** (⛔ Playwright/Chromium na 2-GB stroju = ownerjev OK PRED vsakim zagonom; prost RAM ni dovoljenje): `AUDIT_BASE_URL=http://127.0.0.1:8000 node scripts/audit_website_browser.mjs --app --out /tmp/audit` (32 rut × 4 viewporti × anon/owner; `--anon-only` po #958 brez `website/.env`); `networkidle` + 2 500 ms; chromium ostanke pobij po PID; najdbe → rezine; izid v `docs/PLAN.md`.

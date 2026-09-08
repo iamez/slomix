@@ -16,9 +16,23 @@
 >   skupno glavo; razdelki različnih prog se v gitu zlijejo brez konflikta.
 > - Vsak razdelek nosi vrstico »Zadnja posodobitev: datum (kdo)«.
 
-**Zadnja posodobitev:** 2026-09-07 (Astra, execution ledger; source `28662f04`)
+**Zadnja posodobitev:** 2026-09-08 (Astra, execution ledger; source `dd966bca`)
 
 ## Astra execution ledger — current authority (2026-09-07)
+
+**2026-09-08 evidence refresh:** merged current main and retained Claude's new
+R0 query-audit obligation, modularity progress and live-view work. Endpoint
+counts below come from this checkout, not the old handoff. Read-only live proof:
+dev `4bc00b1f`, bot/web process starts 2026-09-07 23:41 CEST, app.html mtime
+23:40, /api/build agrees, /health and database ok. This supersedes "never
+rebuilt" but does not prove bundle/source identity or latest-main deployment.
+Agent-only Python 3.13 environment is now independent of the service venv;
+pip check and 38 watchdog / 7 review tests pass there. Service venv links remain
+unchanged. Node PR #969 now declares PyYAML directly (4 contract tests, mutation
+proved); no reliance on pre-commit's transitive YAML dependency.
+Artifact candidate has 19 behavioral tests including parent symlinks; no real
+build/deploy performed. Watchdog review found a failed-heartbeat midnight edge;
+correction is in progress, so #965 is not yet declared finished.
 
 Owner approved implementation after the handoff audit. Order: handoff and
 necessary stability/security fixes, then isolated runtime v2 development.
@@ -120,7 +134,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **12** — prešteto v `tests/data/endpoint_gap.txt` 6. 9. ob 22:00 (`/api/rounds/{}/awards` zaprt) |
+| endpoint gap (H1) | **9** — prešteto v `tests/data/endpoint_gap.txt` 7. 9. ob 22:10 (`/api/stats/player/{}/rounds` zaprt; prej 10 po `/api/greatshot/{}/crossref` v #974) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -343,7 +357,7 @@ watchdog r. 1 (obseg `docs/design/24`, lokalno).
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | **12** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
+| endpoint gap | **9** — ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970) → 10 (#974) → 9 (rounds). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)

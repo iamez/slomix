@@ -182,6 +182,9 @@ import type {
   WeaponsHallOfFame,
   Diagnostics,
   Wrapped,
+  PlayerSessionForm,
+  GreatshotCrossref,
+  PlayerRoundsSeries,
 } from './types';
 
 /**
@@ -2119,6 +2122,37 @@ export function useSkillPlayerForm(guid: string | null) {
   });
 }
 
+/** Session-by-session DPM with a date per point, rounds per session, the
+ *  average and a six-session trend — what `/api/skill/player/{}/form` does
+ *  not carry (PlayerProfile's own note measured the two series equal to
+ *  rounding). The handler resolves a guid or a name. */
+export function usePlayerSessionForm(identifier: string | null, limit = 20) {
+  return useQuery({
+    queryKey: ['player-session-form', identifier, limit],
+    enabled: !!identifier,
+    retry: false,
+    queryFn: () => apiGet('/api/stats/player/{player_name}/form', {
+      pathParams: { player_name: identifier! },
+      query: { limit },
+    }) as Promise<PlayerSessionForm>,
+  });
+}
+
+/** The last rounds one by one — the grain below the session series:
+ *  a map and a DPM per counted half. Not the profile's "last rounds"
+ *  table (that is `/api/player/{name}/matches`); same word, different data. */
+export function usePlayerRoundsSeries(identifier: string | null, limit = 30) {
+  return useQuery({
+    queryKey: ['player-rounds-series', identifier, limit],
+    enabled: !!identifier,
+    retry: false,
+    queryFn: () => apiGet('/api/stats/player/{player_name}/rounds', {
+      pathParams: { player_name: identifier! },
+      query: { limit },
+    }) as Promise<PlayerRoundsSeries>,
+  });
+}
+
 /** The rating over recent sessions — the trend behind the header's number. */
 export function useSkillPlayerHistory(guid: string | null) {
   return useQuery({
@@ -2162,6 +2196,19 @@ export function useGreatshotDetail(demoId: string | null) {
         pathParams: { demo_id: demoId! },
       }) as Promise<GreatshotDetail>,
     staleTime: 30 * 1000,
+  });
+}
+
+/** The demo matched against the stats database — the caller's own demo
+ *  only (401 signed out, 404 someone else's). */
+export function useGreatshotCrossref(demoId: string | null) {
+  return useQuery({
+    queryKey: ['greatshot-crossref', demoId],
+    enabled: !!demoId,
+    retry: false,
+    queryFn: () => apiGet('/api/greatshot/{demo_id}/crossref', {
+      pathParams: { demo_id: demoId! },
+    }) as Promise<GreatshotCrossref>,
   });
 }
 
