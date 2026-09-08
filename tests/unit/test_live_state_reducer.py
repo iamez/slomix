@@ -499,3 +499,21 @@ def test_positions_go_stale_and_kills_leave_the_window_and_clear_on_a_round_boun
     assert len(r.snapshot()["recent_kills"]) == 1
     r.apply(_ev("ROUND_START", time.time()))
     assert r.snapshot()["recent_kills"] == []
+
+
+def test_a_self_kill_carries_no_killer_point():
+    """The tracker marks a self-kill / world kill with distance -1, health -1
+    and a killer position of 0,0 (recorded 2026-09-07) — sentinels, not a
+    place on the map."""
+    r = LiveStateReducer()
+    t0 = time.time() - 5
+    r.apply(_ev("TEAM_CHANGE", t0, slot=3, name="one", team=1))
+    r.apply(_ev("LIVE_MAP", t0 + 1, map="supply"))
+    r.apply(_ev("ROUND_START", t0 + 2))
+    r.apply(_ev("LIVE_KILL", t0 + 3, killer_slot=3, victim_slot=3, mod_id=33,
+                killer_pos={"x": 0, "y": 0, "z": 0}, victim_pos={"x": 183, "y": -1547, "z": -300},
+                killer_health=-1, distance=-1))
+    k = r.snapshot()["recent_kills"][0]
+    assert k["killer_slot"] is None and k["killer"] is None
+    assert k["killer_pos"] is None and k["distance"] is None and k["killer_health"] is None
+    assert k["victim"] == "one" and k["victim_pos"] == {"x": 183, "y": -1547}
