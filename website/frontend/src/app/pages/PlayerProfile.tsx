@@ -3,13 +3,13 @@ import {
   usePlayerIdentity, usePlayerMatchRounds, usePlayerProfile, useSkillPlayer,
   useMemoryCard, useSkillPlayerForm, useSkillPlayerHistory,
   usePlayerSessionForm,
-  usePlayerRoundsSeries,
+  usePlayerRoundsSeries, usePlayerCard,
 } from '../lib/queries';
 import { sparkPathRanged } from '../lib/spark';
 import { Cluster, Stack } from '../components/layout';
 import { stripEtColors } from '../lib/names';
 import type {
-  PlayerIdentity, PlayerMatchRound,
+  PlayerCard, PlayerIdentity, PlayerMatchRound,
   PlayerProfile as Profile, ProfileIdentity, ProfileMapRow, ProfileMatchRow,
   ProfileOpponent, ProfileTeammate, ProfileWeaponRow, SkillPlayerComponent,
   PlayerSessionForm,
@@ -619,6 +619,65 @@ function Spark({ values, w = 110, h = 26 }: { values: number[]; w?: number; h?: 
  *  profile". The new convention says a missing thing names itself, so a 404
  *  becomes a reason, not a silence: a keepsake that vanishes without a word is
  *  indistinguishable from one that broke. */
+/** The hover card the legacy player list showed on mouse-over
+ *  (player-card.js): the rating and its trend, the archetype, the 90-day
+ *  form with percentiles against the pool, a dpm sparkline, the badges and
+ *  the career totals. Five of its fields were on the endpoint ratchet. */
+function PlayerCardSection({ playerId }: { playerId: string }) {
+  const q = usePlayerCard(playerId);
+  return (
+    <Panel<PlayerCard>
+      parity="profile.card"
+      label="player card"
+      aside={q.data ? `${figure(q.data.window_days)}-day form${q.data.small_sample ? ' · small sample' : ''}` : undefined}
+      q={q}
+      empty="no card yet — the card needs rated rounds behind it"
+      isEmpty={(d) => d.form.rounds === 0 && d.career.kills === 0}
+    >
+      {(d) => (
+        <Stack gap={2}>
+          <Cluster gap={5} align="baseline" style={{ flexWrap: 'wrap' }}>
+            {d.rating ? (
+              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>
+                rating {figure(d.rating.value)} <Meta>{d.rating.tier} · trend {d.rating.trend} · {figure(d.rating.games_rated)} rated</Meta>
+              </span>
+            ) : <Meta>not rated yet</Meta>}
+            {d.archetype && <Meta>archetype {d.archetype.replace(/_/g, ' ')}</Meta>}
+            <Meta>career {figure(d.career.kills)} kills · {figure(d.career.sessions)} sessions</Meta>
+          </Cluster>
+          <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
+            {([['kills', d.form.kills], ['deaths', d.form.deaths], ['k/d', d.form.kd], ['dpm', d.form.dpm], ['revives', d.form.revives], ['hs %', d.form.headshot_pct], ['dead %', d.form.time_dead_pct], ['rounds', d.form.rounds]] as [string, number][]).map(([k, v]) => (
+              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k} </Meta>{figure(v)}</span>
+            ))}
+          </Cluster>
+          <Cluster gap={4} align="baseline" style={{ flexWrap: 'wrap' }}>
+            <Lbl style={{ fontSize: 'var(--fs-caption)' }}>percentile in the pool</Lbl>
+            {Object.entries(d.percentiles).map(([k, v]) => (
+              <span key={k} style={{ fontSize: 'var(--fs-small)' }}><Meta>{k} </Meta>{figure(v)}</span>
+            ))}
+            <Meta>a different pool and window than the rating components — the two do not agree, on purpose</Meta>
+          </Cluster>
+          {d.sparkline_dpm.length >= 2 && (
+            <Cluster gap={3} align="baseline">
+              <Lbl style={{ fontSize: 'var(--fs-caption)' }}>dpm, last {figure(d.sparkline_dpm.length)} sessions</Lbl>
+              <Spark values={d.sparkline_dpm} />
+            </Cluster>
+          )}
+          {d.badges.length > 0 && (
+            <Cluster gap={3} align="baseline" style={{ flexWrap: 'wrap' }}>
+              {d.badges.map((b) => (
+                <span key={`${b.type}-${String(b.threshold)}`} title={`${b.type} ≥ ${figure(b.threshold)}`} style={{ fontSize: 'var(--fs-small)' }}>
+                  {b.emoji} {b.title}
+                </span>
+              ))}
+            </Cluster>
+          )}
+        </Stack>
+      )}
+    </Panel>
+  );
+}
+
 function MemoryCardSection({ playerId }: { playerId: string }) {
   const card = useMemoryCard(playerId);
   const facts = card.data?.facts ?? [];
@@ -1009,6 +1068,7 @@ export function PlayerProfilePage() {
           <Header p={p} />
           <Lifetime p={p} />
           <RatingComponents playerId={playerId} />
+          <PlayerCardSection playerId={playerId} />
           <MemoryCardSection playerId={playerId} />
           <PlayerForm playerId={playerId} />
           <RatingHistory playerId={playerId} />

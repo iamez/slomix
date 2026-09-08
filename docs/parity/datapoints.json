@@ -35,6 +35,7 @@
   "/api/planning/today": "8 files reachable from the endpoint's callers",
   "/api/player/{guid}/vs-stats": "13 files reachable from the endpoint's callers",
   "/api/player/{player_name}/matches": "11 files reachable from the endpoint's callers",
+  "/api/players/{identifier}/card": "11 files reachable from the endpoint's callers",
   "/api/players/{identifier}/memory-card": "11 files reachable from the endpoint's callers",
   "/api/players/{identifier}/profile": "13 files reachable from the endpoint's callers",
   "/api/players/{identifier}/wrapped": "7 files reachable from the endpoint's callers",
@@ -188,11 +189,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2922,
+  "read": 2957,
   "unread": 655,
-  "dropped": 63,
-  "endpoints": 179,
-  "endpoints_fully_read": 48,
+  "dropped": 67,
+  "endpoints": 180,
+  "endpoints_fully_read": 49,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -335,6 +336,11 @@
    "read": 18,
    "unread": 2,
    "dropped": 0
+  },
+  "/api/players/{identifier}/card": {
+   "read": 31,
+   "unread": 0,
+   "dropped": 4
   },
   "/api/players/{identifier}/memory-card": {
    "read": 12,
@@ -877,7 +883,7 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/basics": {
-   "read": 40,
+   "read": 44,
    "unread": 1,
    "dropped": 0
   },
@@ -2965,6 +2971,185 @@
   {
    "endpoint": "/api/player/{player_name}/matches",
    "key": "xp",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "archetype",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.color",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.emoji",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.threshold",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.title",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.type",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career.sessions",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.dpm",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.headshot_pct",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.kd",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.revives",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.rounds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.time_dead_pct",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "guid",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.dpm",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.kd",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.revives",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.survival",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.games_rated",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.tier",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.trend",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.value",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "small_sample",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "sparkline_dpm",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "status",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "window_days",
    "status": "read"
   },
   {
@@ -14927,6 +15112,26 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/awards",
    "key": "rounds_with_awards",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.end",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.span_seconds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.start",
    "status": "read"
   },
   {

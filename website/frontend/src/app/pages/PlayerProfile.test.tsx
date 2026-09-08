@@ -8,6 +8,7 @@ import profile from './__fixtures__/api_players_identifier_profile.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';
+import playerCard from './__fixtures__/api_players_identifier_card.json';
 
 /** The player page against the RECORDED profile (vid, sections=all). */
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
@@ -24,6 +25,9 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   }
   if (/^\/api\/players\/[^/]+\/memory-card$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(memoryCard) } as Response);
+  }
+  if (/^\/api\/players\/[^/]+\/card$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(playerCard) } as Response);
   }
   return Promise.reject(new Error(`unexpected endpoint: ${path}`));
 }

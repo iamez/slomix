@@ -2519,10 +2519,24 @@ class SessionBasicsPlayer(BaseModel):
     alive_pct_drift: bool
 
 
+class SessionBasicsClock(BaseModel):
+    """When the evening ran — the two fields the date-keyed /api/sessions/{date}
+    carried and the gsid family did not (endpoint ratchet, 2026-09-08)."""
+
+    #: "HH:MM" of the first counted round's start, null when unrecorded.
+    start: str | None
+    #: "HH:MM" of the last counted round's end (its start plus its measured
+    #: duration), null when either is unrecorded.
+    end: str | None
+    #: Seconds from the first start to the last end; null with either missing.
+    span_seconds: int | None
+
+
 class SessionBasics(BaseModel):
     gaming_session_id: int
     #: The counted rounds' first date.
     date: str | None
+    clock: SessionBasicsClock
     coverage: SessionBasicsCoverage
     teams: list[SessionBasicsTeam]
     #: Sorted by dpm, descending.
@@ -2561,6 +2575,41 @@ class SessionAwards(BaseModel):
     #: Counted rounds that carry at least one engine award (~83 % since June).
     rounds_with_awards: int
     categories: list[SessionAwardCategory]
+
+
+def _round_time_hms(value) -> tuple[int, int, int] | None:
+    """`rounds.round_time` in either of its two forms ('HH:MM:SS' or 'HHMMSS'
+    zero-padded to six digits — the round_time family's dual form)."""
+    if value is None:
+        return None
+    digits = str(value).replace(":", "")
+    if not digits.isdigit():
+        return None
+    digits = digits.zfill(6)[-6:]
+    return int(digits[:2]), int(digits[2:4]), int(digits[4:6])
+
+
+def _session_clock(round_rows: list) -> dict[str, Any]:
+    """Start of the first counted round, end of the last (start + measured
+    duration), and the span — all from the rows SESSION_ROUNDS_SQL already
+    returned (round_time at [5], measured duration at [8]), so the clock
+    stands on the same gate as every other basics figure."""
+    if not round_rows:
+        return {"start": None, "end": None, "span_seconds": None}
+    first = _round_time_hms(round_rows[0][5])
+    last = _round_time_hms(round_rows[-1][5])
+    last_duration = round_rows[-1][8] if len(round_rows[-1]) > 8 else None
+    start = f"{first[0]:02d}:{first[1]:02d}" if first else None
+    end = None
+    span = None
+    if first and last and last_duration is not None:
+        first_s = first[0] * 3600 + first[1] * 60 + first[2]
+        end_s = last[0] * 3600 + last[1] * 60 + last[2] + int(last_duration)
+        if end_s < first_s:
+            end_s += 86400  # the evening crossed midnight
+        end = f"{(end_s // 3600) % 24:02d}:{(end_s % 3600) // 60:02d}"
+        span = end_s - first_s
+    return {"start": start, "end": end, "span_seconds": span}
 
 
 async def _session_duration_seconds(db: DatabaseAdapter, round_rows: list, round_ids: list[int]) -> int:
@@ -2759,6 +2808,7 @@ async def get_session_basics(
     return {
         "gaming_session_id": gaming_session_id,
         "date": str(first_date) if first_date else None,
+        "clock": _session_clock(round_rows),
         "coverage": {
             "rounds_counted": len(round_ids),
             "rounds_total": rounds_total,

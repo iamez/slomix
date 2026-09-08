@@ -13,5 +13,6 @@
   "/api/live/state server_time": "transport field (the server's clock for the poll), not a datapoint",
   "/api/datasets _note": "documentation string inside the payload",
   "/api/stats/last-session map_counts.*": "data-map: the keys are map names (a table of counts by map), not fields",
-  "/api/storytelling/kill-impact entries.*": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`"
+  "/api/storytelling/kill-impact entries.*": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`",
+  "/api/players/{identifier}/card percentiles.*": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
 }
