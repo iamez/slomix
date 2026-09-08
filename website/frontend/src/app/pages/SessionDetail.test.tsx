@@ -265,6 +265,51 @@ describe('SessionDetail', () => {
     expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('draws the player × map matrix with a metric switch, and a dash for a map not played', { timeout: 15000 }, async () => {
+    const tm = (detail as { team_matrix: { rosters: { team_a: { player_name: string; cells: { played: boolean; dpm: number; kd: number }[]; totals: { dpm: number; kd: number } }[] } } }).team_matrix;
+    const first = tm.rosters.team_a[0];
+    // The recording has every player on every map; the absent cell is
+    // constructed, because a fixture cannot fail on a value it lacks.
+    const withGap = {
+      ...detail,
+      team_matrix: {
+        ...tm,
+        rosters: { ...tm.rosters, team_a: [{ ...first, cells: first.cells.map((c, i) => (i === 0 ? { ...c, played: false, dpm: 0, kd: 0, damage: 0 } : c)) }, ...tm.rosters.team_a.slice(1)] },
+      },
+    };
+    renderPage(withOverride('/detail', () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withGap) } as Response)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText('player × map')).toBeInTheDocument(), { timeout: 4000 });
+    const matrix = document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement;
+    expect(matrix.textContent).toContain(first.player_name);
+    expect(matrix.textContent).toContain('—');
+    // the session column shows the player's evening dpm; switching to k/d swaps it
+    expect(matrix.textContent).toContain(String(first.totals.dpm));
+    fireEvent.click(screen.getByRole('button', { name: 'k/d' }));
+    await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team-a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
+  });
+
+  it('names an empty team roster as an absence and still draws the other team', async () => {
+    const tm = (detail as { team_matrix: { rosters: { team_a: unknown[]; team_b: unknown[] } } }).team_matrix;
+    const oneSided = { ...detail, team_matrix: { ...tm, rosters: { team_a: tm.rosters.team_a, team_b: [] } } };
+    renderPage(withOverride('/detail', () => json(oneSided)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText(/no player of Team B could be placed on a side/)).toBeInTheDocument());
+    expect(document.querySelector('[data-parity="session.matrix.team-a"]')).not.toBeNull();
+    expect(document.querySelector('[data-parity="session.matrix.team-b"]')).toBeNull();
+  });
+
+  it('calls a failed matrix unavailable and a session without rosters absent, with the reason', async () => {
+    const failed = { ...detail, team_matrix: { available: false, reason: 'side_mapping_failed' } };
+    renderPage(withOverride('/detail', () => json(failed)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText(/player × map matrix: unavailable/)).toBeInTheDocument());
+    const none = { ...detail, team_matrix: { available: false, reason: 'no_teams' } };
+    const second = renderPage(withOverride('/detail', () => json(none)));
+    await openMore();
+    await waitFor(() => expect(second.container.textContent).toContain('no lua team rosters for this session'));
+  });
+
   it('shows the per-player totals on their own tab', async () => {
     renderPage(fixtureFetch, '/session-detail/154/players');
     await openMore();

@@ -118,7 +118,7 @@
   "/api/seasons/current/summary": "11 files reachable from the endpoint's callers",
   "/api/seasons/{season_id}/awards": "5 files reachable from the endpoint's callers",
   "/api/server-activity/history": "15 files reachable from the endpoint's callers",
-  "/api/sessions": "24 files reachable from the endpoint's callers",
+  "/api/sessions": "25 files reachable from the endpoint's callers",
   "/api/skill/adjusted-lifetime": "8 files reachable from the endpoint's callers",
   "/api/skill/composite": "10 files reachable from the endpoint's callers",
   "/api/skill/formula": "8 files reachable from the endpoint's callers",
@@ -141,15 +141,15 @@
   "/api/stats/player/{player_name}/rounds": "11 files reachable from the endpoint's callers",
   "/api/stats/quick-leaders": "12 files reachable from the endpoint's callers",
   "/api/stats/records": "5 files reachable from the endpoint's callers",
-  "/api/stats/session-leaderboard": "19 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/awards": "19 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/basics": "19 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/detail": "19 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/good-night": "19 files reachable from the endpoint's callers",
+  "/api/stats/session-leaderboard": "20 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/awards": "20 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/basics": "20 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/detail": "20 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/good-night": "20 files reachable from the endpoint's callers",
   "/api/stats/session/{gaming_session_id}/lineups": "6 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/mvp": "19 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/rounds": "19 files reachable from the endpoint's callers",
-  "/api/stats/session/{gaming_session_id}/verdicts": "19 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/mvp": "20 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/rounds": "20 files reachable from the endpoint's callers",
+  "/api/stats/session/{gaming_session_id}/verdicts": "20 files reachable from the endpoint's callers",
   "/api/stats/tonight": "17 files reachable from the endpoint's callers",
   "/api/stats/trends": "11 files reachable from the endpoint's callers",
   "/api/stats/weapons": "8 files reachable from the endpoint's callers",
@@ -157,7 +157,7 @@
   "/api/stats/weapons/by_player": "6 files reachable from the endpoint's callers",
   "/api/stats/weapons/hall-of-fame": "6 files reachable from the endpoint's callers",
   "/api/status": "15 files reachable from the endpoint's callers",
-  "/api/storytelling/best-lives": "19 files reachable from the endpoint's callers",
+  "/api/storytelling/best-lives": "20 files reachable from the endpoint's callers",
   "/api/storytelling/box-score": "10 files reachable from the endpoint's callers",
   "/api/storytelling/camp-profile": "10 files reachable from the endpoint's callers",
   "/api/storytelling/enabler": "10 files reachable from the endpoint's callers",
@@ -187,8 +187,8 @@
   "/api/voice-activity/history": "15 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2832,
-  "unread": 737,
+  "read": 2833,
+  "unread": 736,
   "dropped": 46,
   "endpoints": 178,
   "endpoints_fully_read": 47,
@@ -881,8 +881,8 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/detail": {
-   "read": 46,
-   "unread": 5,
+   "read": 47,
+   "unread": 4,
    "dropped": 2
   },
   "/api/stats/session/{gaming_session_id}/good-night": {
@@ -15378,7 +15378,7 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",
    "key": "team_matrix.rosters",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",

@@ -2180,12 +2180,70 @@ export interface SessionTeamAggregate {
 
 /** Same rule as the scoring block: unavailable means `{available: false,
  *  reason}` and nothing else. */
+/** One cell of the player × map matrix (`rosters[].cells[]`) and, with the
+ *  ratios, a player's session totals. `played: false` cells carry zeros the
+ *  page must not print as a 0 — the player was not on that map. */
+export interface SessionMatrixCell {
+  map_index: number;
+  played: boolean;
+  kills: number;
+  deaths: number;
+  damage: number;
+  time_played: number;
+  revives: number;
+  times_revived: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  hits: number;
+  shots: number;
+  weapon_hs: number;
+  dpm: number;
+  kd: number;
+  accuracy: number;
+  hs_pct: number;
+  return_fire_ms: number | null;
+}
+export interface SessionMatrixPlayer {
+  player_guid: string;
+  player_name: string;
+  totals: Omit<SessionMatrixCell, 'map_index' | 'played'>;
+  cells: SessionMatrixCell[];
+}
+/** One player's line of one round (`rounds_detail[round_id][]`) — the side
+ *  they were on that half, which the matrix cells (per map) cannot say. */
+export interface SessionMatrixRoundRow {
+  player_guid: string;
+  player_name: string;
+  team: string;
+  side: number;
+  kills: number;
+  deaths: number;
+  damage: number;
+  damage_received: number;
+  dpm: number;
+  kd: number;
+  time_played: number;
+  revives: number;
+  assists: number;
+  gibs: number;
+  hs_kills: number;
+  return_fire_ms: number | null;
+}
 export interface SessionTeamMatrix {
   available: boolean;
   reason?: string;
   team_a_name?: string;
   team_b_name?: string;
   aggregates?: { team_a: SessionTeamAggregate; team_b: SessionTeamAggregate };
+  /** The columns of the matrix, in play order; typed 2026-09-08 when the
+   *  page started drawing it (the old React had the matrix, the new one
+   *  showed the team totals only). */
+  /** Scores are null when stopwatch scoring was unavailable or the map is
+   *  not in its index (session_matrix_service tests pin both). */
+  maps?: { map_name: string; map_index: number; team_a_score: number | null; team_b_score: number | null }[];
+  rosters?: { team_a: SessionMatrixPlayer[]; team_b: SessionMatrixPlayer[] };
+  rounds_detail?: Record<string, SessionMatrixRoundRow[]>;
 }
 
 /** One player's session totals. `alive_pct` and `alive_pct_lua` are two
