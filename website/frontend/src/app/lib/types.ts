@@ -523,15 +523,16 @@ export interface TonightRound {
   round: number;
   /** 'a' | 'b' | null — a string here so a recorded JSON fixture satisfies the type. */
   winner: string | null;
-  axis_score: number | null;
-  allies_score: number | null;
-  a_on_axis: boolean | null;
+  axis_score: number;
+  allies_score: number;
+  a_on_axis: boolean;
   duration: number | null;
   is_fullhold: boolean;
 }
 export interface TonightMap {
   map_number: number;
-  map: string;
+  /** null when `lua_round_teams.map_name` was null — preserved, not invented. */
+  map: string | null;
   rounds: TonightRound[];
   /** 'a' | 'b' | 'draw' | 'pending' */
   winner: string;

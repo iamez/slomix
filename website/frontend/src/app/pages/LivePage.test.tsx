@@ -182,7 +182,7 @@ describe('LivePage — the evening', () => {
         </MemoryRouter>
       </QueryClientProvider>,
     );
-    await waitFor(() => expect(screen.getByText(/R2 · 1:12/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/R2 · 1:1[2-9]/)).toBeInTheDocument());
     expect(screen.getByText(/to beat 3:30/)).toBeInTheDocument();
     expect(screen.getByText('Allies attack')).toBeInTheDocument();
     expect(screen.getByText(/last: R1 full hold 3:30 \(Axis\)/)).toBeInTheDocument();
@@ -196,7 +196,12 @@ describe('LivePage — the evening', () => {
       expect(screen.getAllByText(new RegExp(`#${m.map_number}$`)).length).toBeGreaterThan(0);
     }
     expect(screen.getByLabelText(`hold probability on ${tonight.hold_probability!.map}`)).toBeInTheDocument();
-    expect(screen.getByText(/by 1:12 the attack had completed in \d+ % of recorded halves/)).toBeInTheDocument();
+    // `p` is a percentage already (0.9 at t=60 in the recording): printed as
+    // received, not multiplied again — the marker at 1:12 reads the t=60 point.
+    expect(screen.getByText(/by 1:1\d the attack had completed in 0\.9 % of recorded halves/)).toBeInTheDocument();
+    expect(screen.getByText(/players on for 25:00/)).toBeInTheDocument();
+    expect(screen.getByText(/last imported/)).toBeInTheDocument();
+    expect(screen.queryByText(/^now /)).toBeNull();
     expect(screen.getByLabelText('team momentum')).toBeInTheDocument();
   });
 
@@ -210,5 +215,44 @@ describe('LivePage — the evening', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => expect(screen.getByText(/no round has been imported today/)).toBeInTheDocument());
+  });
+
+  it('hides a last-round result older than the roster (a previous evening), a previous map the evening never imported, and names an unknown winner', async () => {
+    const afterGap: LiveState = {
+      ...inSecondHalf,
+      previous_map: 'gammajump',
+      session_start_seconds: 40,
+      last_round_result: { ...inSecondHalf.last_round_result!, ended_age_seconds: 4 * 3600 },
+    };
+    const withUnknownWinner: TonightStatus = {
+      ...tonight,
+      maps: tonight.maps.map((m, i) => (i === 0 ? { ...m, rounds: [{ ...m.rounds[0], winner: null }, m.rounds[1]] } : m)),
+    };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL): Promise<Response> => {
+      const pathname = String(input).split('?')[0];
+      const body = {
+        '/api/live/state': afterGap,
+        '/api/live/feed': feed,
+        '/api/server-activity/history': serverHist,
+        '/api/voice-activity/history': voiceHist,
+        '/api/monitoring/status': monitoring,
+        '/api/status': health,
+        '/api/stats/tonight': withUnknownWinner,
+      }[pathname];
+      if (body === undefined) return Promise.reject(new Error(`unexpected: ${pathname}`));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(body) } as Response);
+    }));
+    render(
+      <QueryClientProvider client={makeQueryClient()}>
+        <MemoryRouter initialEntries={['/live']}>
+          <LivePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText(/R2 · 1:1[2-9]/)).toBeInTheDocument());
+    expect(screen.queryByText(/last: R1/)).toBeNull();
+    expect(screen.queryByText(/before that/)).toBeNull();
+    await waitFor(() => expect(screen.getByText(/R1 unknown · 3:30/)).toBeInTheDocument());
+    expect(screen.queryByText(/R1 pending/)).toBeNull();
   });
 });
