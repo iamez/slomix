@@ -458,7 +458,7 @@ function LatestGames() {
                 type="button"
                 aria-expanded={open}
                 onClick={() => { setOpenMatch(open ? null : m.id); }}
-                style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', textTransform: 'uppercase', color: open ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
+                style={{ background: 'none', border: 0, padding: 0, font: 'inherit', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', textTransform: 'uppercase', color: open ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
               >
                 {open ? 'hide box score' : 'box score'}
               </button>
