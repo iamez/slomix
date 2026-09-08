@@ -7,8 +7,8 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2946,
-  "unread": 556,
+  "read": 2970,
+  "unread": 532,
   "dropped": 42,
   "endpoints": 176,
   "endpoints_fully_read": 64,
@@ -161,8 +161,8 @@
    "dropped": 0
   },
   "/api/players/{identifier}/profile": {
-   "read": 100,
-   "unread": 34,
+   "read": 118,
+   "unread": 16,
    "dropped": 0
   },
   "/api/players/{identifier}/wrapped": {
@@ -361,8 +361,8 @@
    "dropped": 0
   },
   "/api/proximity/objective-runs": {
-   "read": 19,
-   "unread": 21,
+   "read": 20,
+   "unread": 20,
    "dropped": 0
   },
   "/api/proximity/player-aim": {
@@ -621,8 +621,8 @@
    "dropped": 1
   },
   "/api/stats/last-session": {
-   "read": 48,
-   "unread": 9,
+   "read": 53,
+   "unread": 4,
    "dropped": 1
   },
   "/api/stats/leaderboard": {
@@ -3089,7 +3089,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.best_killing_spree",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3109,7 +3109,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.double_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3119,12 +3119,12 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.dynamites_defused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.dynamites_planted",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3144,7 +3144,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.hours_played",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3169,37 +3169,37 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.mega_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.multi_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.objectives_completed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.objectives_destroyed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.objectives_returned",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.objectives_stolen",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.quad_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3229,7 +3229,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.team_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3244,7 +3244,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "lifetime.triple_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3299,7 +3299,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "movement.avg_post_spawn_distance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3384,12 +3384,12 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "relationships.easiest_opponents",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "relationships.hardest_opponents",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -3514,7 +3514,7 @@
   {
    "endpoint": "/api/players/{identifier}/profile",
    "key": "weapons.total_shots",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/players/{identifier}/profile",
@@ -7625,7 +7625,7 @@
   {
    "endpoint": "/api/proximity/objective-runs",
    "key": "recent_runs.team_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-runs",
@@ -13102,7 +13102,7 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.double_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13147,12 +13147,12 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.mega_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.multi_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13162,7 +13162,7 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.quad_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13197,7 +13197,7 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.triple_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
