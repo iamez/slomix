@@ -16,6 +16,9 @@ export interface LiveRosterMember {
     kills: number; deaths: number; damage: number;
     dpm: number | null; alive: boolean;
   };
+  /** Last known position (map plane) and facing, when a LIVE_MOVEMENT
+   *  sample is under a minute old (reducer since 2026-09-08). */
+  pos?: { x: number; y: number; yaw: number | null; age_seconds: number };
 }
 
 export interface LiveState {
@@ -41,6 +44,16 @@ export interface LiveState {
   session_start_seconds?: number | null;
   recent_objectives?: { type: string; team: string | null; verb: string; player: string | null; objective: string | null; at?: number }[];
   recent_roster_changes?: { name: string; action: string; side: string | null; age_seconds: number }[];
+  /** The last kills of the half with both positions on the map plane
+   *  (reducer since 2026-09-08; the tracker sent them all along) — a mini
+   *  map draws from these later. Empty between rounds. */
+  recent_kills?: {
+    killer_slot: number | null; victim_slot: number | null;
+    killer: string | null; victim: string | null;
+    killer_pos: { x: number; y: number } | null; victim_pos: { x: number; y: number } | null;
+    distance: number | null; killer_health: number | null; mod_id: number | null;
+    age_seconds: number;
+  }[];
   attacking_side?: 'axis' | 'allies' | null;
   last_round_result?: {
     round_number: number | null;

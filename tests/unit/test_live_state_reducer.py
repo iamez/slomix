@@ -450,3 +450,52 @@ def test_the_evening_of_2026_09_07_closes_two_halves_the_way_the_server_log_says
     assert [x["reason"] for x in results][:2] == ["surrender", "timelimit"]
     assert results[0]["winner_side"] == "axis" and results[0]["duration_seconds"] == 673
     assert results[1]["full_hold"] is True
+
+
+def test_positions_and_kill_positions_are_kept_and_named():
+    """The tracker sends every player's x/y/yaw every few seconds and every
+    kill with both positions; the reducer used to keep only the alive flag."""
+    r = LiveStateReducer()
+    t0 = time.time() - 15
+    r.apply(_ev("TEAM_CHANGE", t0, slot=3, name="one", team=1))
+    r.apply(_ev("TEAM_CHANGE", t0, slot=5, name="two", team=2))
+    r.apply(_ev("LIVE_MAP", t0 + 1, map="supply"))
+    r.apply(_ev("ROUND_START", t0 + 2))
+    r.apply(_ev("LIVE_MOVEMENT", t0 + 5, players=[{"slot": 3, "x": 100, "y": -200, "yaw": 90}, {"slot": 5, "x": 5, "y": 6}]))
+    r.apply(_ev("LIVE_KILL", t0 + 8, killer_slot=3, victim_slot=5, mod_id=8,
+                killer_pos={"x": 100, "y": -200, "z": 10}, victim_pos={"x": 120, "y": -190, "z": 10},
+                killer_health=77, distance=22))
+    snap = r.snapshot()
+    axis = {m["slot"]: m for m in snap["roster"]["axis"]}
+    allies = {m["slot"]: m for m in snap["roster"]["allies"]}
+    assert axis[3]["pos"]["x"] == 100 and axis[3]["pos"]["yaw"] == 90 and 8 <= axis[3]["pos"]["age_seconds"] <= 12
+    assert allies[5]["pos"]["x"] == 5 and allies[5]["pos"]["yaw"] is None
+    kills = snap["recent_kills"]
+    assert len(kills) == 1
+    k = kills[0]
+    assert k["killer"] == "one" and k["victim"] == "two"
+    assert k["killer_pos"] == {"x": 100, "y": -200} and k["victim_pos"] == {"x": 120, "y": -190}
+    assert k["distance"] == 22 and k["killer_health"] == 77 and k["mod_id"] == 8
+    assert "at" not in k and 5 <= k["age_seconds"] <= 9
+
+
+def test_positions_go_stale_and_kills_leave_the_window_and_clear_on_a_round_boundary():
+    r = LiveStateReducer()
+    t0 = time.time() - 100
+    r.apply(_ev("TEAM_CHANGE", t0, slot=3, name="one", team=1))
+    r.apply(_ev("LIVE_MAP", t0 + 1, map="supply"))
+    r.apply(_ev("ROUND_START", t0 + 2))
+    r.apply(_ev("LIVE_MOVEMENT", t0 + 3, players=[{"slot": 3, "x": 1, "y": 2}]))
+    r.apply(_ev("LIVE_KILL", t0 + 4, killer_slot=3, victim_slot=9, killer_pos={"x": 1, "y": 2, "z": 0}, victim_pos={"x": 3, "y": 4, "z": 0}))
+    snap = r.snapshot()
+    axis = {m["slot"]: m for m in snap["roster"]["axis"]}
+    # a position ~97 s old is stale — no pos on the member; the kill is outside the window
+    assert "pos" not in axis[3]
+    assert snap["recent_kills"] == []
+    r.apply(_ev("LIVE_MOVEMENT", time.time() - 2, players=[{"slot": 3, "x": 9, "y": 9}]))
+    axis = {m["slot"]: m for m in r.snapshot()["roster"]["axis"]}
+    assert axis[3]["pos"]["x"] == 9 and axis[3]["pos"]["age_seconds"] <= 3
+    r.apply(_ev("LIVE_KILL", time.time() - 1, killer_slot=3, victim_slot=9, killer_pos={"x": 9, "y": 9, "z": 0}, victim_pos={"x": 3, "y": 4, "z": 0}))
+    assert len(r.snapshot()["recent_kills"]) == 1
+    r.apply(_ev("ROUND_START", time.time()))
+    assert r.snapshot()["recent_kills"] == []
