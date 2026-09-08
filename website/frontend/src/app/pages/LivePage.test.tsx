@@ -212,4 +212,3 @@ describe('LivePage — the evening', () => {
     await waitFor(() => expect(screen.getByText(/no round has been imported today/)).toBeInTheDocument());
   });
 });
-
