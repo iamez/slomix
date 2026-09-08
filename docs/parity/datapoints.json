@@ -188,8 +188,8 @@
   "/api/voice-activity/history": "15 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2879,
-  "unread": 708,
+  "read": 2880,
+  "unread": 707,
   "dropped": 46,
   "endpoints": 179,
   "endpoints_fully_read": 48,
@@ -687,8 +687,8 @@
    "dropped": 0
   },
   "/api/replay/round/{round_id}/web": {
-   "read": 58,
-   "unread": 6,
+   "read": 59,
+   "unread": 5,
    "dropped": 1
   },
   "/api/rivalries/h2h/{guid1}/{guid2}": {
@@ -11104,7 +11104,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "players.z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
