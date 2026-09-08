@@ -7,8 +7,8 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2958,
-  "unread": 544,
+  "read": 2959,
+  "unread": 543,
   "dropped": 42,
   "endpoints": 176,
   "endpoints_fully_read": 64,
@@ -581,8 +581,8 @@
    "dropped": 0
   },
   "/api/skill/formula": {
-   "read": 21,
-   "unread": 24,
+   "read": 22,
+   "unread": 23,
    "dropped": 0
   },
   "/api/skill/leaderboard": {
@@ -12104,7 +12104,7 @@
   {
    "endpoint": "/api/skill/formula",
    "key": "metric_sources",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/skill/formula",

@@ -329,7 +329,6 @@
 /api/server-activity/history summary.total_records
 /api/sessions winning_team
 /api/skill/composite coverage.source_rows
-/api/skill/formula metric_sources
 /api/skill/formula metric_sources.pcs
 /api/skill/formula metrics.clutch_factor
 /api/skill/formula metrics.crossfire_rate
