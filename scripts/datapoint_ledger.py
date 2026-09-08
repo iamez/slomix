@@ -140,19 +140,29 @@ def leaf_keys(payload: Any) -> list[tuple[str, str]]:
     return out
 
 
-def reference_patterns(leaf: str) -> list[re.Pattern[str]]:
-    name = leaf.split(".")[-1]
-    esc = re.escape(name)
-    return [
-        re.compile(r"\." + esc + r"\b"),
-        re.compile(r"\[\s*['\"]" + esc + r"['\"]\s*\]"),
-        re.compile(r"['\"]" + esc + r"['\"]"),
-        re.compile(r"(?<![\w.])" + esc + r"\s*[:,}]"),
-    ]
+_REF_TOKEN_RES = (
+    re.compile(r"\.([A-Za-z_]\w*)\b"),                 # obj.key
+    re.compile(r"['\"]([A-Za-z_]\w*)['\"]"),             # 'key' / "key" (also obj['key'])
+    re.compile(r"(?<![\w.])([A-Za-z_]\w*)\s*[:,}]"),   # { key, other } / { key: v }
+)
+
+
+def referenced_names(corpus: str) -> set[str]:
+    """Every identifier the corpus reads as a property, a quoted key or a
+    destructured name — built once, so each ledger key is a set lookup
+    rather than four regex passes over 1.5 MB of source."""
+    names: set[str] = set()
+    for rx in _REF_TOKEN_RES:
+        names.update(rx.findall(corpus))
+    return names
 
 
 def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
-    corpus = "\n".join(sources.values())
+    names = referenced_names("\n".join(sources.values()))
+
+    def is_read(leaf: str) -> bool:
+        return leaf.split(".")[-1] in names
+
     rows: list[dict[str, Any]] = []
     seen_fixture: set[str] = set()
     for path in sorted(called_paths(sources)):
@@ -177,8 +187,7 @@ def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
             if reason:
                 rows.append({"endpoint": path, "key": key, "status": "dropped", "reason": reason})
                 continue
-            read = any(rx.search(corpus) for rx in reference_patterns(key))
-            rows.append({"endpoint": path, "key": key, "status": "read" if read else "unread"})
+            rows.append({"endpoint": path, "key": key, "status": "read" if is_read(key) else "unread"})
     rows.sort(key=lambda r: (r["endpoint"], r["key"]))
     counts = {"read": 0, "unread": 0, "dropped": 0}
     for r in rows:
