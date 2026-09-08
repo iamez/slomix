@@ -1,0 +1,155 @@
+{
+    "rounds": [
+        {
+            "label": "decay_sw",
+            "date": "2025-05-20",
+            "dpm": 305.0
+        },
+        {
+            "label": "etl_adlernes",
+            "date": "2026-02-03",
+            "dpm": 270.5
+        },
+        {
+            "label": "etl_adlernes",
+            "date": "2026-02-03",
+            "dpm": 322.7
+        },
+        {
+            "label": "etl_adlernes",
+            "date": "2026-02-03",
+            "dpm": 575.0
+        },
+        {
+            "label": "etl_sp_deliv",
+            "date": "2026-02-03",
+            "dpm": 253.4
+        },
+        {
+            "label": "etl_sp_deliv",
+            "date": "2026-02-03",
+            "dpm": 304.3
+        },
+        {
+            "label": "etl_sp_deliv",
+            "date": "2026-02-03",
+            "dpm": 557.7
+        },
+        {
+            "label": "etl_adlernes",
+            "date": "2026-02-04",
+            "dpm": 0.0
+        },
+        {
+            "label": "supply",
+            "date": "2026-02-11",
+            "dpm": 269.2
+        },
+        {
+            "label": "supply",
+            "date": "2026-02-11",
+            "dpm": 282.5
+        },
+        {
+            "label": "supply",
+            "date": "2026-02-11",
+            "dpm": 615.9
+        },
+        {
+            "label": "etl_sp_deliv",
+            "date": "2026-02-11",
+            "dpm": 403.4
+        },
+        {
+            "label": "etl_sp_deliv",
+            "date": "2026-02-11",
+            "dpm": 381.2
+        },
+        {
+            "label": "te_escape2",
+            "date": "2026-02-11",
+            "dpm": 311.2
+        },
+        {
+            "label": "te_escape2",
+            "date": "2026-02-11",
+            "dpm": 301.3
+        },
+        {
+            "label": "te_escape2",
+            "date": "2026-02-11",
+            "dpm": 754.6
+        },
+        {
+            "label": "te_escape2",
+            "date": "2026-02-11",
+            "dpm": 353.5
+        },
+        {
+            "label": "te_escape2",
+            "date": "2026-02-11",
+            "dpm": 293.8
+        },
+        {
+            "label": "et_brewdog",
+            "date": "2026-02-11",
+            "dpm": 257.6
+        },
+        {
+            "label": "et_brewdog",
+            "date": "2026-02-11",
+            "dpm": 125.0
+        },
+        {
+            "label": "et_brewdog",
+            "date": "2026-02-11",
+            "dpm": 574.8
+        },
+        {
+            "label": "supply",
+            "date": "2026-02-11",
+            "dpm": 294.1
+        },
+        {
+            "label": "supply",
+            "date": "2026-02-11",
+            "dpm": 344.7
+        },
+        {
+            "label": "sw_goldrush_",
+            "date": "2026-02-11",
+            "dpm": 269.8
+        },
+        {
+            "label": "sw_goldrush_",
+            "date": "2026-02-11",
+            "dpm": 301.0
+        },
+        {
+            "label": "sw_goldrush_",
+            "date": "2026-02-11",
+            "dpm": 596.6
+        },
+        {
+            "label": "sw_goldrush_",
+            "date": "2026-03-25",
+            "dpm": 134.2
+        },
+        {
+            "label": "sw_goldrush_",
+            "date": "2026-03-25",
+            "dpm": 199.1
+        },
+        {
+            "label": "sw_goldrush_",
+            "date": "2026-03-25",
+            "dpm": 199.1
+        },
+        {
+            "label": "etl_sp_deliv",
+            "date": "2026-09-03",
+            "dpm": 31.2
+        }
+    ],
+    "avg_dpm": 329.4
+}
