@@ -457,12 +457,14 @@ function LatestGames() {
               <button
                 type="button"
                 aria-expanded={open}
+                aria-controls={`box-score-${String(m.id)}`}
+                aria-label={`${open ? 'hide ' : ''}box score · ${m.map_name ?? 'unknown map'} R${String(m.round_number)}`}
                 onClick={() => { setOpenMatch(open ? null : m.id); }}
                 style={{ background: 'none', border: 0, padding: 0, font: 'inherit', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', textTransform: 'uppercase', color: open ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
               >
                 {open ? 'hide box score' : 'box score'}
               </button>
-              {open && <div style={{ marginTop: 'var(--space-2)' }}><MatchBoxScore roundId={m.id} /></div>}
+              {open && <div id={`box-score-${String(m.id)}`} style={{ marginTop: 'var(--space-2)' }}><MatchBoxScore roundId={m.id} /></div>}
             </div>
           );
         })}
