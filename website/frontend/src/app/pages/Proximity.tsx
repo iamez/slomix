@@ -14,6 +14,7 @@
  */
 import { useState } from 'react';
 import { Link } from 'react-router';
+import { DataTable, type DataColumn } from '../components/DataTable';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { stripEtColors } from '../lib/names';
@@ -26,7 +27,7 @@ import { ProximityOutcomes } from './ProximityOutcomes';
 import { ProximityMapOverlays } from './ProximityMapOverlays';
 import { ProximityRoundCanvases } from './ProximityRoundCanvases';
 import { ProximityEvents } from './ProximityEvents';
-import type { LbCategory, ProximityLeaderboard } from '../lib/types';
+import type { SsrPlayer, LbCategory, ProximityLeaderboard } from '../lib/types';
 
 const LB_TABS: readonly { key: LbCategory | 'comp_skill'; label: string }[] = [
   { key: 'power', label: 'power rating' },
@@ -133,6 +134,27 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
 /** Comp Skill (SSR) is all-time and group-relative — its endpoint ignores
  * range and scope entirely (owner answer A4), so the range chips do not
  * apply and saying so beats greying them out. */
+/** Rating, sessions, coverage and every component's percentile — the
+ *  components were fetched and never shown (ledger 2026-09-08). A null
+ *  component is one the player has no data for, shown as a dash. */
+function ssrColumns(players: SsrPlayer[]): DataColumn<SsrPlayer>[] {
+  const keys = [...new Set(players.flatMap((p) => Object.keys(p.components)))];
+  return [
+    { key: 'name', label: 'player', width: 150, align: 'left', format: (p) => stripEtColors(p.name), sortValue: (p) => stripEtColors(p.name) },
+    { key: 'ssr', label: 'ssr', align: 'right', format: (p) => figure(Math.round(p.ssr * 1000) / 1000), sortValue: (p) => p.ssr },
+    { key: 'n_sessions', label: 'sessions', align: 'right', sortValue: (p) => p.n_sessions },
+    { key: 'coverage', label: 'coverage', align: 'right', title: 'components with data of components in the formula', sortValue: (p) => p.coverage },
+    ...keys.map((k): DataColumn<SsrPlayer> => ({
+      key: k, label: k.replace(/_/g, ' '), align: 'right', title: `${k} — percentile among rated players; the raw value in the tooltip of each cell`,
+      format: (p) => {
+        const c = p.components[k];
+        return c?.pct == null ? <Meta>—</Meta> : <span title={c.raw == null ? undefined : `raw ${figure(c.raw)}`}>{figure(Math.round(c.pct * 100))}</span>;
+      },
+      sortValue: (p) => p.components[k]?.pct ?? null,
+    })),
+  ];
+}
+
 function CompSkillBoard() {
   const q = useSsr(true);
   return (
@@ -142,19 +164,15 @@ function CompSkillBoard() {
       {q.data && (q.data.players.length === 0 ? (
         <Absent reason="no rated players yet — SSR needs at least 5 sessions and 3 components per player" />
       ) : (
-        <Stack gap={1} className="rows">
-          {q.data.players.slice(0, 10).map((p, i) => (
-            <Cluster key={p.player_guid} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-2) 0' }}>
-              <Cluster gap={3} align="baseline">
-                <span className="m lbl" style={{ width: 20, textAlign: 'right' }}>{i + 1}</span>
-                <span style={{ fontSize: 'var(--fs-row)' }}>{stripEtColors(p.name)}</span>
-              </Cluster>
-              <span className="m" style={{ fontSize: 'var(--fs-value)', width: 92, textAlign: 'right' }}>
-                {p.ssr.toFixed(1)}
-              </span>
-            </Cluster>
-          ))}
-        </Stack>
+        <DataTable<SsrPlayer>
+          parity="proximity.comp-skill.table"
+          label="comp skill"
+          columns={ssrColumns(q.data.players)}
+          rows={q.data.players}
+          rowKey={(p) => p.player_guid}
+          defaultSort={{ key: 'ssr', dir: 'desc' }}
+          minWidth={900}
+        />
       ))}
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>all-time and group-relative — the range above does not apply here</Lbl>
     </Stack>
