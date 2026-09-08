@@ -58,6 +58,9 @@ def _is_named(name: Any) -> bool:
     return bool(name) and not str(name).startswith("slot ")
 
 
+_OTHER_SIDE = {"axis": "allies", "allies": "axis"}
+
+
 class LiveStateReducer:
     """Folds the live event stream into a current-state snapshot."""
 
@@ -87,6 +90,14 @@ class LiveStateReducer:
         # flush at the source) + an instant alive flag from LIVE_KILL (dead)
         # and LIVE_MOVEMENT (moving = alive). Reset on round/map boundaries.
         self._live_stats: dict[int, dict[str, Any]] = {}
+        # Stopwatch context a spectator needs and the raw stream never states:
+        # which SIDE attacks on this map (constant per map — the two teams swap
+        # sides between halves, the objective does not), what the last half
+        # ended on, and the time the second half must beat. Sourced from the
+        # events we already carry: an offensive POPUP (planted/stole) names
+        # the attacking side; EXIT's reason names how the half ended.
+        self._attacking_side: str | None = None
+        self._last_round: dict[str, Any] | None = None
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -241,6 +252,7 @@ class LiveStateReducer:
                 self._map_asserted_at = at
                 self._game_state = "mapchange"
                 self._round_number = None
+                self._attacking_side = None
                 self._objectives = []
                 self._live_stats.clear()
 
@@ -264,9 +276,17 @@ class LiveStateReducer:
 
         elif etype == "EXIT":
             self._game_state = "between"
+            self._close_round(str(ev.get("reason") or ""), at)
 
         elif etype == "POPUP":
             verb = ev.get("verb")
+            raw_team = ev.get("team")
+            # legacy3 POPUP names the side ('allies'/'axis'); other events
+            # carry the engine number — accept both.
+            side = raw_team if raw_team in ("axis", "allies") else self._side(raw_team)
+            if verb in ("stole", "planted") and side in ("axis", "allies"):
+                # Only attackers steal and plant; defenders return and defuse.
+                self._attacking_side = side
             if verb in ("stole", "returned", "planted", "defused"):
                 # POPUP carries the team but no slot, so it stays team-level
                 # (player=None). FLAG_PICKUP/DYNAMITE below name the actor.
@@ -313,6 +333,39 @@ class LiveStateReducer:
             })
 
     # -- snapshot -----------------------------------------------------------
+    def _close_round(self, reason: str, at: float) -> None:
+        """Record how the half ended. The engine writes three exit reasons:
+        `Timelimit hit.` (the defence held the whole clock), `Wolf EndRound.`
+        (the objective fell — or the second half beat the first half's time),
+        `<Side> Surrender`. The winner follows from the reason and the
+        attacking side; when the attacking side is unknown (no offensive
+        objective yet) the winner is left null rather than guessed."""
+        if self._round_started_at is None:
+            return
+        low = reason.lower()
+        if "timelimit" in low:
+            kind = "timelimit"
+            winner = _OTHER_SIDE.get(self._attacking_side or "")
+        elif "surrender" in low:
+            loser = "allies" if low.startswith("allies") else ("axis" if low.startswith("axis") else None)
+            kind = "surrender"
+            winner = _OTHER_SIDE.get(loser or "")
+        elif "endround" in low:
+            kind, winner = "objective", self._attacking_side
+        else:
+            kind, winner = "other", None
+        self._last_round = {
+            "round_number": self._round_number,
+            "map": self._current_map,
+            "reason": kind,
+            "reason_raw": reason,
+            "winner_side": winner,
+            "duration_seconds": int(at - self._round_started_at),
+            "full_hold": kind == "timelimit",
+            "ended_at": at,
+        }
+        self._round_started_at = None
+
     def snapshot(self) -> dict[str, Any]:
         now = time.time()
         is_live = (self._last_event_at is not None
@@ -392,6 +445,22 @@ class LiveStateReducer:
             "previous_map": self._previous_map,
             "round_number": self._round_number if is_live else None,
             "round_elapsed_seconds": round_elapsed,
+            "attacking_side": self._attacking_side,
+            # The last completed half, kept across the map change so the
+            # card can say what just happened while the next map loads.
+            "last_round_result": ({
+                **{k: v for k, v in self._last_round.items() if k != "ended_at"},
+                "ended_age_seconds": int(now - self._last_round["ended_at"]),
+            } if self._last_round else None),
+            # Stopwatch: the second half must beat the first half's time on
+            # the same map. Null in the first half, or when the halves do
+            # not line up (a lost MAP event, a restart).
+            "time_to_beat_seconds": (
+                self._last_round["duration_seconds"]
+                if (self._last_round and self._round_number == 2
+                    and self._last_round.get("round_number") == 1
+                    and self._last_round.get("map") == self._current_map)
+                else None),
             "roster": {
                 "axis": axis,
                 "allies": allies,
