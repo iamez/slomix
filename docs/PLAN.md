@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **11** — prešteto v `tests/data/endpoint_gap.txt` 8. 9. ob 09:00 (⛔ 9 → 11 je korekcija merilnika: klic, ki se konča z interpolacijo, je oblika `{}`, ne prefiks — `/api/stats/matches/{}` in `/api/sessions/{}` sta bila skrita; prej 9 po `/api/stats/player/{}/rounds` v #975) |
+| endpoint gap (H1) | **10** — prešteto v `tests/data/endpoint_gap.txt` 8. 9. ob 15:10 (10 po `/api/rounds/{}/player/{}/details`, R3a); prej 11 (⛔ 9 → 11 je korekcija merilnika: klic, ki se konča z interpolacijo, je oblika `{}`, ne prefiks — `/api/stats/matches/{}` in `/api/sessions/{}` sta bila skrita; prej 9 po `/api/stats/player/{}/rounds` v #975) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |

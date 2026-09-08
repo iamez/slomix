@@ -7,11 +7,11 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 2985,
+  "read": 3035,
   "unread": 517,
   "dropped": 42,
-  "endpoints": 176,
-  "endpoints_fully_read": 64,
+  "endpoints": 177,
+  "endpoints_fully_read": 65,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -534,6 +534,11 @@
    "read": 5,
    "unread": 0,
    "dropped": 1
+  },
+  "/api/rounds/{round_id}/player/{player_guid}/details": {
+   "read": 50,
+   "unread": 0,
+   "dropped": 0
   },
   "/api/rounds/{round_id}/viz": {
    "read": 31,
@@ -11399,6 +11404,256 @@
   {
    "endpoint": "/api/rounds/{round_id}/awards",
    "key": "round_number",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.accuracy",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.damage_given",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.damage_received",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.gibs",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.headshot_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.headshots",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.hits",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "combat.shots",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc.self_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc.team_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "misc.xp",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.dynamites_defused",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.dynamites_planted",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.returned",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "objectives.stolen",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "player_name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.id",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.map_name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.round_date",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "round.round_number",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.double_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.mega_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.multi_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.quad_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "sprees.triple_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.kill_assists",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.revives_given",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.times_revived",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.useful_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "support.useless_kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time.dead_minutes",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time.denied_playtime",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "time.played_seconds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.accuracy",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.headshots",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.hits",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/rounds/{round_id}/player/{player_guid}/details",
+   "key": "weapons.shots",
    "status": "read"
   },
   {

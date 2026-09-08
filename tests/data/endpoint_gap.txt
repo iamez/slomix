@@ -101,8 +101,7 @@
 #
 # COMPOSITES over player_comprehensive_stats — data is not the question:
 #   /api/players/{}/card                 rating + 90-day form + percentiles
-#   /api/rounds/{}/player/{}/details
-#   /api/rounds/{}/vs-stats              ⚠️ note /player/{guid}/vs-stats is a
+#   #   /api/rounds/{}/vs-stats              ⚠️ note /player/{guid}/vs-stats is a
 #                                        DIFFERENT endpoint (records_player.py)
 #   /api/stats/player/{}/form
 #   /api/stats/player/{}/rounds
@@ -190,6 +189,14 @@
 # built on it must say which gate it used, or the site will show two different
 # kill totals for one evening.
 #
+# 2026-09-08, /api/rounds/{}/player/{}/details DELETED: built as the inline
+# breakdown under a clicked player row of the session Rounds tab
+# (RoundPlayerDetailsPanel). Verified per docs/design/07 §C.1 — 200 on the
+# live server for round 11430, response committed as a fixture. ⛔ The legacy
+# matches.js:970 read `combat.useful_kills` and `w.weapon_name`; the recording
+# has `support.useful_kills` and `w.name` (a WS_ token, labelled by
+# lib/weapons.ts). The type was written from the recording, not from legacy.
+#
 # 2026-09-06, /api/players/{}/memory-card DELETED: built as a profile section.
 # Verified per docs/design/07 §C.1 — 200 on the live server, response
 # committed as a fixture. ⚠️ It is NOT the wrapped card of the same two names:
@@ -209,7 +216,6 @@
 /api/greatshot/{}/highlights/render
 /api/players/{}/awards
 /api/players/{}/card
-/api/rounds/{}/player/{}/details
 /api/rounds/{}/vs-stats
 /api/sessions/{}
 /api/sessions/{}/graphs
