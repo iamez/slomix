@@ -418,8 +418,10 @@ export interface MatchDetails {
     round_date: string | null;
     /** 'Axis' | 'Allies' | 'Draw' — the side, not the logical team. */
     winner: string;
-    duration: string;
-    outcome: string;
+    /** `rounds.actual_time` text, null when the round carried none. */
+    duration: string | null;
+    /** `rounds.round_outcome` raw — null on 26 rows (sessions_router). */
+    outcome: string | null;
     time_limit: string | null;
     gaming_session_id: number | null;
   };
@@ -2234,7 +2236,9 @@ export interface SessionTeamMatrix {
   /** The columns of the matrix, in play order; typed 2026-09-08 when the
    *  page started drawing it (the old React had the matrix, the new one
    *  showed the team totals only). */
-  maps?: { map_name: string; map_index: number; team_a_score: number; team_b_score: number }[];
+  /** Scores are null when stopwatch scoring was unavailable or the map is
+   *  not in its index (session_matrix_service tests pin both). */
+  maps?: { map_name: string; map_index: number; team_a_score: number | null; team_b_score: number | null }[];
   rosters?: { team_a: SessionMatrixPlayer[]; team_b: SessionMatrixPlayer[] };
   rounds_detail?: Record<string, SessionMatrixRoundRow[]>;
 }

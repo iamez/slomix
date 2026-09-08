@@ -15,7 +15,7 @@ import { useState } from 'react';
 import { DataTable, type DataColumn } from './DataTable';
 import { Cluster, Stack } from './layout';
 import { Panel } from './Panel';
-import { Lbl, Meta, figure } from './ui';
+import { Chip, Lbl, Meta, figure } from './ui';
 import { useSessionGraphs } from '../lib/queries';
 import { svgPath } from '../lib/spark';
 import type { SessionGraphPlayer, SessionGraphs as SessionGraphsData } from '../lib/types';
@@ -147,15 +147,7 @@ export function SessionGraphsPanel({ sessionId }: { sessionId: number }) {
             <Cluster gap={2} align="baseline" style={{ flexWrap: 'wrap' }}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>radar for</Lbl>
               {d.players.map((p) => (
-                <button
-                  key={p.guid}
-                  type="button"
-                  aria-pressed={p.guid === pick.guid}
-                  onClick={() => { setChosen(p.guid); }}
-                  style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-small)', color: p.guid === pick.guid ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
-                >
-                  {p.name}
-                </button>
+                <Chip key={p.guid} active={p.guid === pick.guid} label={p.name} onClick={() => { setChosen(p.guid); }} />
               ))}
             </Cluster>
             <Cluster gap={6} align="start" style={{ flexWrap: 'wrap' }}>

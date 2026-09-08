@@ -49,6 +49,19 @@ describe('MatchBoxScore', () => {
     expect(screen.getAllByTitle('headshot kills (not head hits)')).toHaveLength(2);
   });
 
+  it('says the half has no rows when both teams come back empty, and keeps the round line', async () => {
+    const empty: MatchDetails = { ...live, team1: { ...live.team1, players: [], totals: { kills: 0, deaths: 0, damage: 0 } }, team2: { ...live.team2, players: [], totals: { kills: 0, deaths: 0, damage: 0 } }, player_count: 0 };
+    renderPanel(() => Promise.resolve(new Response(JSON.stringify(empty), { status: 200 })));
+    await waitFor(() => expect(screen.getByText(/no player rows were recorded/)).toBeInTheDocument());
+    expect(screen.queryByText(/unavailable/i)).toBeNull();
+  });
+
+  it('survives a round whose outcome and duration are null', async () => {
+    const bare: MatchDetails = { ...live, match: { ...live.match, outcome: null, duration: null, time_limit: null } };
+    renderPanel(() => Promise.resolve(new Response(JSON.stringify(bare), { status: 200 })));
+    await waitFor(() => expect(screen.getByText(/duration unknown · outcome unknown/)).toBeInTheDocument());
+  });
+
   it('says unavailable on a 404, not that nobody played', async () => {
     renderPanel(() => Promise.resolve(new Response(JSON.stringify({ detail: 'Match not found' }), { status: 404 })));
     await waitFor(() => expect(screen.getByText(/unavailable/i)).toBeInTheDocument());

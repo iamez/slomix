@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
 
 import { DataTable, type DataColumn } from './DataTable';
 import { Cluster, Stack } from './layout';
-import { Absent, Lbl, Meta, SectionHead, figure } from './ui';
+import { Absent, Chip, Lbl, Meta, SectionHead, Unavailable, figure } from './ui';
 import { mapLabel } from '../lib/maps';
 import type { SessionMatrixCell, SessionMatrixPlayer, SessionTeamMatrix } from '../lib/types';
 
@@ -22,6 +22,10 @@ const METRICS: { key: MatrixMetric; label: string; title: string }[] = [
   { key: 'damage', label: 'damage', title: 'damage given on that map' },
 ];
 const STORAGE_KEY = 'spa.session.matrix.metric';
+const ABSENT_REASON: Record<string, string> = {
+  no_teams: 'no lua team rosters for this session, so no matrix',
+  no_rounds: 'no counted rounds in this session',
+};
 
 function readStoredMetric(): MatrixMetric {
   try {
@@ -39,7 +43,8 @@ function cellText(c: Pick<SessionMatrixCell, 'dpm' | 'kd' | 'damage'>, metric: M
 function columnsFor(maps: NonNullable<SessionTeamMatrix['maps']>, metric: MatrixMetric): DataColumn<SessionMatrixPlayer>[] {
   const perMap: DataColumn<SessionMatrixPlayer>[] = maps.map((m) => ({
     key: `map-${String(m.map_index)}`,
-    label: <span title={`${mapLabel(m.map_name)} · ${String(m.team_a_score)}–${String(m.team_b_score)}`}>{mapLabel(m.map_name)}</span>,
+    // A null score is an absent stopwatch result, shown as a dash, never as 'null'.
+    label: <span title={`${mapLabel(m.map_name)} · ${m.team_a_score == null ? '—' : figure(m.team_a_score)}–${m.team_b_score == null ? '—' : figure(m.team_b_score)}`}>{mapLabel(m.map_name)}</span>,
     align: 'right',
     format: (p) => {
       const cell = p.cells.find((c) => c.map_index === m.map_index);
@@ -52,7 +57,7 @@ function columnsFor(maps: NonNullable<SessionTeamMatrix['maps']>, metric: Matrix
     },
   }));
   return [
-    { key: 'player', label: 'player', sortValue: (p) => p.player_name },
+    { key: 'player', label: 'player', width: 160, align: 'left', sortValue: (p) => p.player_name },
     ...perMap,
     { key: 'total', label: 'session', align: 'right', title: 'the whole evening', format: (p) => cellText(p.totals, metric), sortValue: (p) => p.totals[metric] },
   ];
@@ -73,30 +78,23 @@ export function PlayerMapMatrix({ matrix }: { matrix: SessionTeamMatrix }) {
         aside={(
           <Cluster gap={2}>
             {METRICS.map((m) => (
-              <button
-                key={m.key}
-                type="button"
-                title={m.title}
-                aria-pressed={metric === m.key}
-                onClick={() => { setMetric(m.key); }}
-                style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.08em', textTransform: 'uppercase',
-                         color: metric === m.key ? 'var(--color-text-100)' : 'var(--color-text-500)' }}
-              >
-                {m.label}
-              </button>
+              <Chip key={m.key} active={metric === m.key} label={m.label} title={m.title} onClick={() => { setMetric(m.key); }} />
             ))}
           </Cluster>
         )}
       />
-      {!matrix.available || !rosters || maps.length === 0 ? (
-        <Absent reason="no matrix without the team rosters — this session has none" />
+      {!matrix.available && (matrix.reason === 'error' || matrix.reason === 'side_mapping_failed') ? (
+        // The instrument failed; that is not an empty result (Codex on #989).
+        <Unavailable what="player × map matrix" />
+      ) : !matrix.available || !rosters || maps.length === 0 ? (
+        <Absent reason={ABSENT_REASON[matrix.reason ?? ''] ?? 'no matrix without the team rosters — this session has none'} />
       ) : (
         <Stack gap={4}>
           {([['team_a', matrix.team_a_name ?? 'Team A'], ['team_b', matrix.team_b_name ?? 'Team B']] as const).map(([key, name]) => (
             <Stack key={key} gap={1}>
               <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{name}</Lbl>
               <DataTable<SessionMatrixPlayer>
-                parity={`session.matrix.${key}`}
+                parity={key === 'team_a' ? 'session.matrix.team-a' : 'session.matrix.team-b'}
                 label={`${name} by map`}
                 columns={columnsFor(maps, metric)}
                 rows={rosters[key]}

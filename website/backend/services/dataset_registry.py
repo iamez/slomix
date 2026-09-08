@@ -134,6 +134,12 @@ PROFILE_SECTIONS: tuple[DatasetDescriptor, ...] = (
 
 # Session detail — the Stats 2.0 surfaces, each under its own parity key.
 SESSION_SECTIONS: tuple[DatasetDescriptor, ...] = (
+    _session("session_player_map_matrix", "player × map matrix",
+             endpoint="/api/stats/session/{gaming_session_id}/detail", parity="session.matrix"),
+    _session("session_graphs", "playstyle radar, dpm timeline, advanced metrics",
+             endpoint="/api/stats/session/{gaming_session_id}/graphs", parity="session.graphs"),
+    _session("session_round_player_details", "a player's breakdown of one half",
+             endpoint="/api/rounds/{round_id}/player/{player_guid}/details", parity="session.rounds.player-details"),
     _session("session_basics", "basics table", endpoint=SESSION_ENDPOINT_BASICS, parity="session.basics"),
     _session("session_awards", "session awards", endpoint=SESSION_ENDPOINT_AWARDS, parity="session.awards",
              collected_by="derived"),
@@ -173,6 +179,12 @@ PROXIMITY_DATASETS: tuple[DatasetDescriptor, ...] = (
          shown_on=["proximity"], depends=["proximity_capture", "shots_fired"]),
     _lua("vehicle_progress", "vehicle progress and escorts", "objective_run_tracking",
          shown_on=["session-detail"], depends=["proximity_capture"]),
+    DatasetDescriptor(
+        key="match_box_score", label="box score of one half", collected_by="bot_parser", collection_toggle=None,
+        display_toggle_default=True, user_overridable=True,
+        default_visible_on=["home"], depends_on=[],
+        endpoint="/api/stats/matches/{match_id}", cost_ms_cold=None, parity_key="match.box-score",
+    ),
     DatasetDescriptor(
         key="kill_impact", label="kill impact (KIS)", collected_by="derived", collection_toggle=None,
         display_toggle_default=True, user_overridable=True,
