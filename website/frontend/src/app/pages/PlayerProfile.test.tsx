@@ -490,4 +490,3 @@ it('shows the recorded name history, gather record and combat timing', async () 
   expect(screen.getByText(new RegExp(`over ${rec.combat_timing.time_to_kill.kills.toLocaleString('en-US')} kills`))).toBeInTheDocument();
   expect(screen.getByText(new RegExp(`covers ${rec.combat_timing.return_fire.coverage_pct} % of deaths`))).toBeInTheDocument();
 });
-
