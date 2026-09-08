@@ -11,12 +11,14 @@ import { Link, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cluster, Stack } from '../components/layout';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Panel } from '../components/Panel';
 import { ApiError } from '../lib/api';
 import { mapLabel } from '../lib/maps';
 import {
   uploadGreatshotDemo, useGreatshotDetail, useGreatshotList, useGreatshotStatus,
+  useGreatshotCrossref,
 } from '../lib/queries';
-import type { GreatshotItem } from '../lib/types';
+import type { GreatshotCrossref, GreatshotItem } from '../lib/types';
 
 function fmtClock(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -224,6 +226,52 @@ export function GreatshotPage() {
   );
 }
 
+/** The demo against the database: which round the matcher picked, how
+ *  sure it is and on what, and one row per player with the demo's numbers
+ *  beside the database's. The matcher goes by map, duration, winner and
+ *  player overlap — not by date — so the recorded fixture pairs a demo
+ *  named 2026-02-03 with a round of 2026-08-18 at 90 %; the panel shows the
+ *  criteria so a reader can judge the match, not just its verdict. Demo
+ *  numbers the scanner does not carry (damage, accuracy) come back null or
+ *  0 and are printed as "—", never as measured. */
+function Crossref({ demoId }: { demoId: string }) {
+  const q = useGreatshotCrossref(demoId);
+  const n = (v: number | null | undefined) => (v == null ? '—' : figure(v));
+  return (
+    <div data-parity="greatshot.crossref">
+      <Panel<GreatshotCrossref>
+        label="against the database"
+        q={q}
+        empty={q.data != null && !q.data.matched ? q.data.reason : 'no players to compare'}
+        isEmpty={(d) => !d.matched || d.comparison.length === 0}
+      >
+        {(d) => d.matched ? (
+          <Stack gap={2}>
+            <Meta>
+              {d.round.map_name != null ? mapLabel(d.round.map_name) : 'unknown map'} R{d.round.round_number}
+              {d.round.round_date != null && <> · {d.round.round_date}</>}
+              {d.round.gaming_session_id != null && <> · <Link to={`/session-detail/${d.round.gaming_session_id}`} style={{ color: 'var(--color-accent)' }}>session {d.round.gaming_session_id}</Link></>}
+              {' · '}{figure(d.round.confidence)} % on {d.round.match_details.join(', ')}
+            </Meta>
+            <Stack gap={1} className="rows">
+              {d.comparison.map((c, i) => (
+                <Cluster key={`${c.demo_name ?? ''}:${c.db_name ?? ''}:${i}`} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0' }}>
+                  <span style={{ fontSize: 'var(--fs-row)' }}>{c.demo_name ?? c.db_name}</span>
+                  <Cluster gap={3} align="baseline">
+                    <Meta>demo {n(c.demo_stats?.kills)} / {n(c.demo_stats?.deaths)}</Meta>
+                    <span className="m" style={{ fontSize: 'var(--fs-small)' }}>db {n(c.db_stats?.kills)} / {n(c.db_stats?.deaths)}</span>
+                    {!c.matched && <Meta>{c.db_stats == null ? 'not in the round' : 'not in the demo'}</Meta>}
+                  </Cluster>
+                </Cluster>
+              ))}
+            </Stack>
+          </Stack>
+        ) : null}
+      </Panel>
+    </div>
+  );
+}
+
 export function GreatshotDemoPage() {
   const params = useParams();
   const demoId = params.demoId ?? null;
@@ -283,6 +331,8 @@ export function GreatshotDemoPage() {
           </Stack>
         )}
       </div>
+
+      <Crossref demoId={d.id} />
 
       <Cluster gap={5}>
         <a href={d.downloads.json} className="m" style={{ color: 'var(--color-accent)', textDecoration: 'none', fontSize: 'var(--fs-caption)' }}>report.json →</a>
