@@ -159,7 +159,7 @@ export function SessionGraphsPanel({ sessionId }: { sessionId: number }) {
     <Panel<SessionGraphsData>
       parity="session.graphs"
       label="playstyle"
-      aside={q.data ? `${q.data.gate === 'counts_toward_totals' ? 'counted rounds only' : q.data.gate} · ${figure(q.data.rounds_counted)} rounds` : undefined}
+      aside={q.data ? `${q.data.gate === 'counts_toward_totals' ? 'counted rounds only' : q.data.gate} · ${figure(q.data.rounds_counted)} rounds · ${figure(q.data.player_count)} players` : undefined}
       q={q}
       empty="no player rows over the counted rounds"
       isEmpty={(d) => d.players.length === 0}

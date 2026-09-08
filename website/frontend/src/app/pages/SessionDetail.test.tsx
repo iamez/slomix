@@ -315,7 +315,7 @@ describe('SessionDetail', () => {
   it('draws the playstyle radar, the dpm timeline and the advanced table over the counted rounds, without frag potential', async () => {
     renderPage();
     await openMore();
-    await waitFor(() => expect(screen.getByText('counted rounds only · 10 rounds')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('counted rounds only · 10 rounds · 7 players')).toBeInTheDocument());
     const first = (graphs as { players: { name: string }[] }).players[0];
     expect(screen.getByLabelText(`playstyle of ${first.name}`)).toBeInTheDocument();
     expect(screen.getByLabelText('dpm per round')).toBeInTheDocument();
