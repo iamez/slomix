@@ -205,7 +205,7 @@ export function RoundPlayerDetailsPanel({ roundId, playerGuid }: { roundId: numb
     <Panel<RoundPlayerDetails>
       parity="session.rounds.player-details"
       label="in this half"
-      aside={q.data ? `${q.data.player_name} · ${q.data.round.map_name} R${String(q.data.round.round_number)}` : undefined}
+      aside={q.data ? `${q.data.player_name} · ${q.data.round.map_name} R${String(q.data.round.round_number)} · round #${String(q.data.round.id)} · ${q.data.round.round_date}` : undefined}
       q={q}
       empty="no stats row for this player in this half"
       isEmpty={(d) => d.combat.kills === 0 && d.combat.deaths === 0 && d.time.played_seconds === 0}

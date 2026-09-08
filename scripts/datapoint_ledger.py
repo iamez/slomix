@@ -49,6 +49,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -208,11 +209,92 @@ def referenced_names(corpus: str) -> set[str]:
     return names
 
 
-def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
-    names = referenced_names("\n".join(sources.values()))
+_IMPORT_RE = re.compile(r"""from\s+['"](\.{1,2}/[^'"]+)['"]""")
+_HOOK_DEF_RE = re.compile(r"export\s+(?:function|const)\s+(use[A-Z]\w*)")
+# Files whose only job is plumbing: the hook file itself and the generic
+# widgets every page imports. They join every scope alike, so they neither
+# separate endpoints nor hide anything — listed so the rule is visible.
+_SCOPE_ALWAYS = ("lib/queries.ts",)
 
-    def is_read(leaf: str) -> bool:
-        return leaf.split(".")[-1] in names
+
+def _resolve_import(from_file: str, spec: str, sources: dict[str, str]) -> str | None:
+    base = os.path.normpath(os.path.join(os.path.dirname(from_file), spec)).replace(os.sep, "/")
+    for cand in (f"{base}.ts", f"{base}.tsx", f"{base}/index.ts", f"{base}/index.tsx"):
+        if cand in sources:
+            return cand
+    return None
+
+
+def _import_closure(seed: set[str], sources: dict[str, str]) -> set[str]:
+    seen: set[str] = set()
+    todo = list(seed)
+    while todo:
+        f = todo.pop()
+        if f in seen or f not in sources:
+            continue
+        seen.add(f)
+        for m in _IMPORT_RE.finditer(sources[f]):
+            target = _resolve_import(f, m.group(1), sources)
+            if target and target not in seen:
+                todo.append(target)
+    return seen
+
+
+def _hooks_defining(path: str, sources: dict[str, str]) -> tuple[set[str], set[str]]:
+    """(hook names whose body carries the path literal, files that carry the
+    literal outside a hook — a page calling apiGet itself)."""
+    hooks: set[str] = set()
+    direct: set[str] = set()
+    needle = f"'{path}'"
+    for file, text in sources.items():
+        if file.endswith("probes.ts"):
+            continue
+        for m in re.finditer(re.escape(needle), text):
+            before = text[: m.start()]
+            defs = list(_HOOK_DEF_RE.finditer(before))
+            if defs:
+                hooks.add(defs[-1].group(1))
+            else:
+                direct.add(file)
+    return hooks, direct
+
+
+def scope_files(path: str, sources: dict[str, str]) -> set[str] | None:
+    """The files that can READ this endpoint's answer: the pages/components
+    that call its hook (or carry the path themselves), plus everything they
+    import, transitively. None when no caller is found — the caller then
+    falls back to the whole app and says so.
+
+    ⛔ Why not one token set over src/app (the first version): a new panel
+    that names `advanced` or `survival_rate` for ITS endpoint flipped rows of
+    unrelated endpoints to read (Codex on #988, #990) — a reference is only
+    evidence when it sits in code that holds that endpoint's data."""
+    hooks, direct = _hooks_defining(path, sources)
+    callers: set[str] = set(direct)
+    for file, text in sources.items():
+        if any(re.search(rf"\b{re.escape(h)}\s*[(<]", text) for h in hooks):
+            callers.add(file)
+    callers.discard("lib/queries.ts")
+    if not callers:
+        return None
+    return _import_closure(callers | set(_SCOPE_ALWAYS), sources)
+
+
+def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
+    everywhere = referenced_names("\n".join(sources.values()))
+    names_cache: dict[frozenset[str], set[str]] = {}
+    scope_note: dict[str, str] = {}
+
+    def names_for(path: str) -> set[str]:
+        files = scope_files(path, sources)
+        if files is None:
+            scope_note[path] = "global: no caller found for the path literal, matched over the whole app"
+            return everywhere
+        key = frozenset(files)
+        if key not in names_cache:
+            names_cache[key] = referenced_names("\n".join(sources[f] for f in sorted(files)))
+        scope_note[path] = f"{len(files)} files reachable from the endpoint's callers"
+        return names_cache[key]
 
     rows: list[dict[str, Any]] = []
     unmeasured: list[str] = []
@@ -231,6 +313,7 @@ def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
         if keys is None:
             unmeasured.append(path)
             continue
+        names = names_for(path)
         for key, kind in keys:
             decision_key = f"{path} {key}"
             if kind == "data-map":
@@ -242,7 +325,7 @@ def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
             if reason:
                 rows.append({"endpoint": path, "key": key, "status": "dropped", "reason": reason})
                 continue
-            rows.append({"endpoint": path, "key": key, "status": "read" if is_read(key) else "unread"})
+            rows.append({"endpoint": path, "key": key, "status": "read" if key.split(".")[-1] in names else "unread"})
     rows.sort(key=lambda r: (r["endpoint"], r["key"]))
     counts = {"read": 0, "unread": 0, "dropped": 0}
     for r in rows:
@@ -254,7 +337,8 @@ def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
     return {
         "_note": "Generated by scripts/datapoint_ledger.py — do not edit by hand; decisions go to datapoint_decisions.json.",
         "unmeasured": sorted(unmeasured),
-        "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
+        "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over the comment-stripped source REACHABLE FROM THAT ENDPOINT'S CALLERS (the files calling its hook, and their imports); a name match is an upper bound on rendering",
+        "scope": dict(sorted(scope_note.items())),
         "summary": {**counts, "endpoints": len(per_endpoint), "endpoints_fully_read": sum(1 for d in per_endpoint.values() if d["unread"] == 0), "unmeasured": len(unmeasured)},
         "per_endpoint": per_endpoint,
         "rows": rows,
@@ -281,9 +365,22 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--check", action="store_true")
     ap.add_argument("--summary", action="store_true")
     ap.add_argument("--rebase-baseline", action="store_true", help="drop baseline lines that are read now (never adds)")
+    ap.add_argument("--reseed-baseline", action="store_true",
+                    help="rewrite the baseline to the current unread set, ADDING rows — only for a correction of the instrument itself; prints the delta so the commit can state it")
     args = ap.parse_args(argv)
     ledger = build(app_sources(), load_decisions())
     text = render(ledger)
+    if args.reseed_baseline:
+        current = unread_lines(ledger)
+        old = set(BASELINE.read_text(encoding="utf-8").splitlines()) if BASELINE.exists() else set()
+        BASELINE.write_text("\n".join(sorted(current)) + "\n", encoding="utf-8")
+        added, removed = sorted(current - old), sorted(old - current)
+        print(f"baseline reseeded: {len(old)} -> {len(current)} lines (+{len(added)} back to unread, -{len(removed)})")
+        for line in added:
+            print(f"  + {line}")
+        for line in removed:
+            print(f"  - {line}")
+        return 0
     if args.rebase_baseline:
         current = unread_lines(ledger)
         old = set(BASELINE.read_text(encoding="utf-8").splitlines()) if BASELINE.exists() else set()
