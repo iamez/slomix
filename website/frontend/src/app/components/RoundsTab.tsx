@@ -15,6 +15,7 @@ import { RoundsTable, mmss, type EmptyReason } from './RoundsTable';
 import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from './ui';
 import { DataTable, type DataColumn } from './DataTable';
 import { Panel } from './Panel';
+import { stripEtColors } from '../lib/names';
 import { weaponLabel } from '../lib/weapons';
 import { useRoundAwards, useRoundPlayerDetails } from '../lib/queries';
 import type { RoundPlayerDetails, SessionRounds } from '../lib/types';
@@ -205,7 +206,7 @@ export function RoundPlayerDetailsPanel({ roundId, playerGuid }: { roundId: numb
     <Panel<RoundPlayerDetails>
       parity="session.rounds.player-details"
       label="in this half"
-      aside={q.data ? `${q.data.player_name} · ${q.data.round.map_name} R${String(q.data.round.round_number)} · round #${String(q.data.round.id)} · ${q.data.round.round_date}` : undefined}
+      aside={q.data ? `${stripEtColors(q.data.player_name)} · ${q.data.round.map_name} R${String(q.data.round.round_number)} · round #${String(q.data.round.id)} · ${q.data.round.round_date}` : undefined}
       q={q}
       empty="no stats row for this player in this half"
       isEmpty={(d) => d.combat.kills === 0 && d.combat.deaths === 0 && d.time.played_seconds === 0}
