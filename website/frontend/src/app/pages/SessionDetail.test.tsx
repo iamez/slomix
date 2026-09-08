@@ -265,6 +265,30 @@ describe('SessionDetail', () => {
     expect(screen.getByRole('button', { name: 'one player' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('draws the player × map matrix with a metric switch, and a dash for a map not played', { timeout: 15000 }, async () => {
+    const tm = (detail as { team_matrix: { rosters: { team_a: { player_name: string; cells: { played: boolean; dpm: number; kd: number }[]; totals: { dpm: number; kd: number } }[] } } }).team_matrix;
+    const first = tm.rosters.team_a[0];
+    // The recording has every player on every map; the absent cell is
+    // constructed, because a fixture cannot fail on a value it lacks.
+    const withGap = {
+      ...detail,
+      team_matrix: {
+        ...tm,
+        rosters: { ...tm.rosters, team_a: [{ ...first, cells: first.cells.map((c, i) => (i === 0 ? { ...c, played: false, dpm: 0, kd: 0, damage: 0 } : c)) }, ...tm.rosters.team_a.slice(1)] },
+      },
+    };
+    renderPage(withOverride('/detail', () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withGap) } as Response)));
+    await openMore();
+    await waitFor(() => expect(screen.getByText('player × map')).toBeInTheDocument(), { timeout: 4000 });
+    const matrix = document.querySelector('[data-parity="session.matrix.team_a"]') as HTMLElement;
+    expect(matrix.textContent).toContain(first.player_name);
+    expect(matrix.textContent).toContain('—');
+    // the session column shows the player's evening dpm; switching to k/d swaps it
+    expect(matrix.textContent).toContain(String(first.totals.dpm));
+    fireEvent.click(screen.getByRole('button', { name: 'k/d' }));
+    await waitFor(() => expect((document.querySelector('[data-parity="session.matrix.team_a"]') as HTMLElement).textContent).toContain(first.totals.kd.toFixed(1)));
+  });
+
   it('shows the per-player totals on their own tab', async () => {
     renderPage(fixtureFetch, '/session-detail/154/players');
     await openMore();

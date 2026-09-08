@@ -7,8 +7,8 @@
  ],
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over comment-stripped src/app source; a name match is an upper bound on rendering",
  "summary": {
-  "read": 3058,
-  "unread": 515,
+  "read": 3059,
+  "unread": 514,
   "dropped": 42,
   "endpoints": 178,
   "endpoints_fully_read": 67,
@@ -701,8 +701,8 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/detail": {
-   "read": 46,
-   "unread": 5,
+   "read": 47,
+   "unread": 4,
    "dropped": 2
   },
   "/api/stats/session/{gaming_session_id}/good-night": {
@@ -15194,7 +15194,7 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",
    "key": "team_matrix.rosters",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",

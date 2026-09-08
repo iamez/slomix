@@ -360,7 +360,6 @@
 /api/stats/session/{gaming_session_id}/detail players.alive_pct_diff
 /api/stats/session/{gaming_session_id}/detail players.alive_pct_lua
 /api/stats/session/{gaming_session_id}/detail scoring.total_maps
-/api/stats/session/{gaming_session_id}/detail team_matrix.rosters
 /api/stats/session/{gaming_session_id}/detail team_matrix.rounds_detail
 /api/stats/session/{gaming_session_id}/mvp candidates.kis_rank
 /api/stats/session/{gaming_session_id}/mvp most_underrated_guid
