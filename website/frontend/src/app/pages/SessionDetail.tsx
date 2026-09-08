@@ -4,7 +4,9 @@ import { Cluster, Stack } from '../components/layout';
 import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
+import { PlayerMapMatrix } from '../components/PlayerMapMatrix';
 import { RoundsTab, roundsReason } from '../components/RoundsTab';
+import { SessionGraphsPanel } from '../components/SessionGraphs';
 import { TeamplayTab } from '../components/TeamplayTab';
 import { PlayerDrilldown } from '../components/PlayerDrilldown';
 import { SessionStory } from './Story';
@@ -691,6 +693,8 @@ function Summary({ detail, sessionId }: { detail: SessionDetailData; sessionId: 
       <More label="more about the night">
         <Scoreboard scoring={detail.scoring} />
         <TeamTotals matrix={detail.team_matrix} />
+        <PlayerMapMatrix matrix={detail.team_matrix} />
+        <SessionGraphsPanel sessionId={sessionId} />
         <LivesOfTheNight sessionId={sessionId} />
         {verdicts.isPending && <Pending label="form" />}
         {verdicts.isError && <Unavailable what="form" />}

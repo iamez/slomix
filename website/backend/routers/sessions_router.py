@@ -4,6 +4,7 @@ Session-related endpoints: last-session, session lists, session details, graphs.
 Extracted from api.py to reduce file size and improve maintainability.
 """
 
+import json
 import math
 from datetime import datetime
 from typing import Any
@@ -1211,34 +1212,9 @@ async def get_session_details(date: str, db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-@router.get("/sessions/{date}/graphs")
-async def get_session_graph_stats(
-    date: str,
-    gaming_session_id: int | None = None,
-    db: DatabaseAdapter = Depends(get_db),
-):
-    """
-    Get aggregated session stats formatted for graph rendering.
-    Returns data for:
-    - Combat Stats (Offense): kills, deaths, damage, K/D, DPM
-    - Combat Stats (Defense/Support): revives, gibs, headshots, time alive/dead
-    - Advanced Metrics: FragPotential, Damage Efficiency, Time Denied, Survival Rate
-    - Playstyle Analysis: Classification based on stats patterns
-    - DPM Timeline: Per-round DPM values for each player
-    """
-    # Get all player stats for this session date
-    # Use DISTINCT to avoid duplicates from the rounds join
-    if gaming_session_id is not None:
-        where_clause = "r.gaming_session_id = $1"
-        params = (gaming_session_id,)
-    else:
-        # round_date is stored as a 10-char 'YYYY-MM-DD' string, so the old
-        # SUBSTRING(...,1,10) wrapper was a no-op that also made the predicate
-        # non-sargable. Plain equality is equivalent and sargable.
-        where_clause = "p.round_date = $1"
-        params = (date,)
-
-    query = f"""
+# One SQL for both graph endpoints; `{where_clause}` is the only thing the
+# two disagree on (a date+status gate, or the counted round ids).
+_GRAPH_ROWS_SQL = """
         SELECT DISTINCT
             p.player_guid,
             p.player_name,
@@ -1277,9 +1253,41 @@ async def get_session_graph_stats(
         JOIN rounds r ON p.round_id = r.id
         WHERE {where_clause}
           AND r.round_number IN (1, 2)
-          AND (r.round_status IN ('completed', 'cancelled', 'substitution') OR r.round_status IS NULL)
         ORDER BY p.player_name, r.id
     """
+
+
+@router.get("/sessions/{date}/graphs")
+async def get_session_graph_stats(
+    date: str,
+    gaming_session_id: int | None = None,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """
+    Get aggregated session stats formatted for graph rendering.
+    Returns data for:
+    - Combat Stats (Offense): kills, deaths, damage, K/D, DPM
+    - Combat Stats (Defense/Support): revives, gibs, headshots, time alive/dead
+    - Advanced Metrics: FragPotential, Damage Efficiency, Time Denied, Survival Rate
+    - Playstyle Analysis: Classification based on stats patterns
+    - DPM Timeline: Per-round DPM values for each player
+    """
+    # Get all player stats for this session date
+    # Use DISTINCT to avoid duplicates from the rounds join
+    # This endpoint's own gate — status only, which /stats/session/{gsid}/graphs
+    # tightens to the counted trio (is_valid, bot round, status).
+    _status_gate = " AND (r.round_status IN ('completed', 'cancelled', 'substitution') OR r.round_status IS NULL)"
+    if gaming_session_id is not None:
+        where_clause = "r.gaming_session_id = $1" + _status_gate
+        params = (gaming_session_id,)
+    else:
+        # round_date is stored as a 10-char 'YYYY-MM-DD' string, so the old
+        # SUBSTRING(...,1,10) wrapper was a no-op that also made the predicate
+        # non-sargable. Plain equality is equivalent and sargable.
+        where_clause = "p.round_date = $1" + _status_gate
+        params = (date,)
+
+    query = _GRAPH_ROWS_SQL.format(where_clause=where_clause)
 
     try:
         rows = await db.fetch_all(query, params)
@@ -1290,6 +1298,15 @@ async def get_session_graph_stats(
     if not rows:
         raise HTTPException(status_code=404, detail="No stats found for this session")
 
+    players_data = _build_session_graph_players(rows)
+    return {"date": date, "player_count": len(players_data), "players": players_data}
+
+
+def _build_session_graph_players(rows) -> list[dict[str, Any]]:
+    """The per-player graph payload over the rows one gate selected — shared
+    by the date-keyed endpoint (its own status gate) and the gsid-keyed one
+    (`counts_toward_totals`, the Stats 2.0 gate), so the two never compute
+    the same player two ways."""
     # Aggregate stats per player
     player_stats = {}
     dpm_timeline = {}  # player -> list of (map_round, dpm)
@@ -1415,7 +1432,14 @@ async def get_session_graph_stats(
         round_dpm = (damage_given / (time_played / 60)) if time_played > 0 else 0
         # Use shorter map name format for timeline
         short_map = map_name.split("_")[-1][:8] if "_" in map_name else map_name[:8]
-        dpm_timeline[agg_key].append({"label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1)})
+        # The round's identity rides with the point so a client can align every
+        # player's series on the session's round axis instead of on the
+        # point's index (Codex on #990: a player who sat out a map had their
+        # points drawn under the wrong labels).
+        dpm_timeline[agg_key].append({
+            "label": f"{short_map} R{round_num}", "dpm": round(round_dpm, 1),
+            "round_id": round_id, "round_number": round_num, "map_name": map_name,
+        })
 
     # Calculate derived metrics and build response
     players_data = []
@@ -1501,7 +1525,146 @@ async def get_session_graph_stats(
     # Sort by DPM for consistent ordering
     players_data.sort(key=lambda x: x["combat_offense"]["dpm"], reverse=True)
 
-    return {"date": date, "player_count": len(players_data), "players": players_data}
+    return players_data
+
+
+class SessionGraphOffense(BaseModel):
+    kills: int
+    deaths: int
+    damage_given: int
+    kd: float
+    dpm: float
+
+
+class SessionGraphDefense(BaseModel):
+    revives: int
+    kill_assists: int
+    gibs: int
+    #: Head HITS (player_comprehensive_stats.headshots), not headshot kills.
+    headshots: int
+    useful_kills: int
+    full_selfkills: int
+    times_revived: int
+    team_kills: int
+    self_kills: int
+
+
+class SessionGraphAdvanced(BaseModel):
+    #: Served for the record; the owner's decision (2026) hides it from every
+    #: visitor-facing surface — the SPA does not draw it.
+    frag_potential: float
+    damage_efficiency: float
+    survival_rate: float
+    time_denied: float
+    time_denied_raw_seconds: int
+    time_dead_raw_seconds: int
+    useful_kills_per_round: float
+    deaths_per_round: float
+    rounds_played: int
+    aggression_score: float
+    pressure_score: float
+    risk_load: float
+    empty_death_burden: float
+    discipline_score: float
+    dead_time_share: float
+
+
+class SessionGraphPlaystyle(BaseModel):
+    aggression: float
+    precision: float
+    survivability: float
+    support: float
+    lethality: float
+    brutality: float
+    consistency: float
+    efficiency: float
+
+
+class SessionGraphPoint(BaseModel):
+    label: str
+    dpm: float
+    round_id: int
+    round_number: int
+    map_name: str | None
+
+
+class SessionGraphRound(BaseModel):
+    """One counted round of the evening, in play order — the x axis every
+    player's dpm series aligns on (a point names its round_id)."""
+
+    round_id: int
+    label: str
+    map_name: str | None
+    round_number: int
+
+
+class SessionGraphPlayer(BaseModel):
+    name: str
+    guid: str
+    combat_offense: SessionGraphOffense
+    combat_defense: SessionGraphDefense
+    advanced_metrics: SessionGraphAdvanced
+    playstyle: SessionGraphPlaystyle
+    dpm_timeline: list[SessionGraphPoint]
+
+
+class SessionGraphs(BaseModel):
+    """GET /api/stats/session/{gsid}/graphs — the playstyle radar, the
+    advanced metrics and the per-round DPM series of an evening, keyed by
+    gaming session (never by date: 13 of 176 days hold more than one
+    session, and the date form merges them). `gate` names the round filter
+    so a panel can say which total it agrees with."""
+
+    gaming_session_id: int
+    date: str
+    gate: str
+    rounds_counted: int
+    rounds: list[SessionGraphRound]
+    player_count: int
+    players: list[SessionGraphPlayer]
+
+
+@router.get("/stats/session/{gaming_session_id}/graphs", response_model=SessionGraphs)
+async def get_session_graphs(
+    gaming_session_id: int,
+    db: DatabaseAdapter = Depends(get_db),
+):
+    """The graphs of an evening over its COUNTED rounds — the same trio of
+    gates as /basics and /rounds (`counts_toward_totals`), so the kills a
+    radar rests on are the kills the basics table shows."""
+    round_rows = await db.fetch_all(SESSION_ROUNDS_SQL, (gaming_session_id,))
+    if not round_rows:
+        raise HTTPException(status_code=404, detail="Session not found")
+    round_ids = [r[0] for r in round_rows]
+    placeholders = ", ".join(f"${i + 1}" for i in range(len(round_ids)))
+    # Bots out per player as well as per round: rows older than the
+    # is_bot_round flag carry OMNIBOT guids / [BOT] names inside rounds the
+    # gate accepts, and /basics drops them — a percentile over the evening
+    # must rest on the same people (Codex on #990).
+    rows = await db.fetch_all(
+        _GRAPH_ROWS_SQL.format(where_clause=f"r.id IN ({placeholders}) {_BOT_PLAYER_FILTER}"), tuple(round_ids)
+    )
+    # Counted rounds with no player rows are a known absence: players is
+    # empty and the client says so, instead of a 404 it can only call an error.
+    players = _build_session_graph_players(rows) if rows else []
+    rounds = [
+        {
+            "round_id": r[0],
+            "label": f"{(r[1].split('_')[-1][:8] if r[1] and '_' in r[1] else (r[1] or '?')[:8])} R{r[2]}",
+            "map_name": r[1],
+            "round_number": int(r[2] or 0),
+        }
+        for r in round_rows
+    ]
+    return {
+        "gaming_session_id": gaming_session_id,
+        "date": str(round_rows[0][4]),
+        "gate": "counts_toward_totals",
+        "rounds_counted": len(round_ids),
+        "rounds": rounds,
+        "player_count": len(players),
+        "players": players,
+    }
 
 
 def _clamp_percentage(value: float | None) -> float | None:
@@ -3246,6 +3409,28 @@ class RoundPlayerRow(BaseModel):
     revives_given: int
     times_revived: int
     xp: float
+    #: Gibs on teammates.
+    team_gibs: int
+    #: Kills finished on an opponent someone else had brought low.
+    kill_steals: int
+    #: Damage soaked as the tank at the front (rare: 642 of 14,289 rows > 0).
+    tank_meatshield: int
+    #: The longest run of deaths without a kill.
+    death_spree_worst: int
+    #: True when time_dead_minutes was rebuilt from the round's timeline
+    #: (8,721 of 14,289 rows on 2026-09-08), not read from the stats file.
+    time_dead_reconstructed: bool
+
+
+class RoundSurrender(BaseModel):
+    caller_name: str
+    #: 1 = Axis, 2 = Allies — the side that gave up.
+    team: int | None
+
+
+class RoundPauses(BaseModel):
+    count: int
+    total_seconds: int
 
 
 class SessionRound(BaseModel):
@@ -3269,6 +3454,19 @@ class SessionRound(BaseModel):
     #: leave it out of totals, which one flag cannot do if it is missing.
     counts_toward_totals: bool
     match_id: str | None
+    #: None when nobody surrendered (or the webhook did not record the round).
+    surrender: RoundSurrender | None
+    #: Pauses the webhook counted, with their summed length.
+    pauses: RoundPauses
+    #: The stopwatch limit in minutes (webhook), null when not recorded.
+    time_limit_minutes: int | None
+    warmup_seconds: int | None
+    bot_player_count: int | None
+    #: Where the score came from ('verified_header' …), null when unknown.
+    score_confidence: str | None
+    #: The limit this half set for the next one (a first half's time becomes
+    #: the second half's target); null when not recorded.
+    next_timelimit_minutes: int | None
     players: list[RoundPlayerRow]
 
 
@@ -3333,8 +3531,24 @@ _SESSION_ROUNDS_SQL = (
     + round_duration_sql("r")
     + """ AS duration_seconds,
            r.end_reason, r.round_status, r.match_id,
-           r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round
+           r.is_valid, COALESCE(r.is_bot_round, FALSE) AS is_bot_round,
+           -- Appended LAST (positional mapping below). The webhook's own
+           -- record of the round (lua_round_teams, one row per round: 1127
+           -- rows, 1127 distinct round ids on 2026-09-08) — who called the
+           -- surrender, the pauses, the stopwatch limit, the warm-up — and
+           -- the round's bot count, score provenance and the limit it set
+           -- for the next half. None of it had a reader (ledger 2026-09-08).
+           NULLIF(l.surrender_caller_name, '') AS surrender_caller_name,
+           l.surrender_team,
+           COALESCE(l.pause_count, 0) AS pause_count,
+           l.lua_pause_events,
+           l.time_limit_minutes,
+           l.lua_warmup_seconds,
+           r.bot_player_count,
+           r.score_confidence,
+           r.next_timelimit_minutes
     FROM rounds r
+    LEFT JOIN lua_round_teams l ON l.round_id = r.id
     WHERE r.gaming_session_id = $1 AND r.round_number IN (1, 2)
     -- ⛔ ORDER BY the PLAY time, not created_at: the SELECT already computed
     -- played_at for display while the ordering quietly used ingestion time —
@@ -3351,7 +3565,12 @@ _SESSION_PLAYERS_SQL = """
     SELECT p.round_id, p.player_guid, p.player_name, p.team,
            p.time_played_seconds, p.gibs, p.damage_received, p.damage_given,
            p.kills, p.deaths, p.headshots, p.headshot_kills,
-           p.revives_given, p.times_revived, p.xp
+           p.revives_given, p.times_revived, p.xp,
+           -- Appended LAST: the four per-round counters nothing read
+           -- (ledger 2026-09-08) and the flag that says the dead time was
+           -- reconstructed rather than measured.
+           p.team_gibs, p.kill_steals, p.tank_meatshield, p.death_spree_worst,
+           COALESCE(p.time_dead_reconstructed, FALSE)
     FROM player_comprehensive_stats p
     JOIN rounds r ON r.id = p.round_id
     WHERE r.gaming_session_id = $1 AND p.round_number IN (1, 2)
@@ -3360,6 +3579,38 @@ _SESSION_PLAYERS_SQL = """
       AND COALESCE(p.player_name, '') NOT LIKE '[BOT]%'
     ORDER BY p.round_id, p.damage_given DESC
 """
+
+
+def _col(row, i: int, default=None):
+    """Positional read that survives a row shorter than the SELECT — the
+    appended webhook/provenance columns are optional for older callers."""
+    try:
+        return row[i]
+    except (IndexError, TypeError):
+        return default
+
+
+def _pause_seconds(events) -> int:
+    """Sum of the webhook's pause list (`[{"n","start","end","sec"}, …]`),
+    tolerant of the column arriving as text or as nothing."""
+    if not events:
+        return 0
+    if isinstance(events, str):
+        try:
+            events = json.loads(events)
+        except ValueError:
+            return 0
+    total = 0
+    for e in events if isinstance(events, list) else []:
+        if isinstance(e, dict):
+            sec = e.get("sec")
+            if sec is None and e.get("start") is not None and e.get("end") is not None:
+                sec = int(e["end"]) - int(e["start"])
+            try:
+                total += int(sec or 0)
+            except (TypeError, ValueError):
+                continue
+    return total
 
 
 @router.get("/stats/session/{gaming_session_id}/rounds", response_model=SessionRounds)
@@ -3391,6 +3642,14 @@ async def get_session_rounds(
                 revives_given=row[12] or 0,
                 times_revived=row[13] or 0,
                 xp=float(row[14] or 0),
+                # Appended columns read through _col: a row from before this
+                # change (the unit tests' fixtures, an older adapter) is
+                # shorter, and a short row must degrade to zeros, not raise.
+                team_gibs=_col(row, 15) or 0,
+                kill_steals=_col(row, 16) or 0,
+                tank_meatshield=_col(row, 17) or 0,
+                death_spree_worst=_col(row, 18) or 0,
+                time_dead_reconstructed=bool(_col(row, 19)),
             )
         )
 
@@ -3408,6 +3667,13 @@ async def get_session_rounds(
                 round_status=status,
                 counts_toward_totals=_counts_toward_totals(status, row[8], row[9]),
                 match_id=row[7],
+                surrender=RoundSurrender(caller_name=_col(row, 10), team=_col(row, 11)) if _col(row, 10) else None,
+                pauses=RoundPauses(count=int(_col(row, 12) or 0), total_seconds=_pause_seconds(_col(row, 13))),
+                time_limit_minutes=_col(row, 14),
+                warmup_seconds=_col(row, 15),
+                bot_player_count=_col(row, 16),
+                score_confidence=_col(row, 17),
+                next_timelimit_minutes=_col(row, 18),
                 players=by_round.get(row[0], []),
             )
         )

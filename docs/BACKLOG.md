@@ -7,6 +7,20 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-08, 22:00) Avtonomni popoldan (owner: »kar nadaljuj, čim
+  več«). MERGANO: #992 (merilnik meri po endpointu; unread 517 → 789 je
+  popravek instrumenta, ne strani), #987 R3a, #993 R4b. V VLAKU (DA dan):
+  #988 R3b → #989 R3c → #990 R3d → #991 R4a → #994 R5 → #995 R4c, nato build +
+  dev deploy. ODPRTO BREZ DA: #996 R6 (živi reducer obdrži pozicije in zadnje
+  uboje), #997 R6b (mini zemljevid na živi strani, naložen na #996).
+  ⛔ Skok (pravilo): owner je vprašal za ENG% z gibhub.gg → raziskano, ne
+  zgrajeno: bojni ENG% je DPM v drugi enoti (r 0,74–0,96), s štirimi kanali
+  (revivi, objektivi, streli) pa se odklopi (r −0,75 / 0,62 / −0,47) in
+  postane metrika AKTIVNOSTI; doc lokalno
+  `docs/research/ENG_PCT_RESEARCH_2026-09-08.md` §6, odločitev ownerja.
+  Naslednje: R7 higiena (community.js, keymap »Charts« → session.graphs,
+  »Map Distribution« odločitev), ENG% kanali le z DA, kill-impact/greatshot/
+  proximity/event ostanki merilnika.
 - (Fable 5.1, 2026-09-08, 12:05) Vlak zaključen: #980 (live glava; 11 Codex
   niti + drift tipov popravljeni), #981 (profil: name history, gathers,
   combat timing), #982 (story role boards s številkami), #983 (skill
