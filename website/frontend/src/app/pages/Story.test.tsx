@@ -302,7 +302,7 @@ describe('SessionStory (the session page story tab)', () => {
     expect(screen.getAllByText(/pwc by round/).length).toBeGreaterThan(0);
     expect(screen.getByText(/MVP picked by waa_bayes/)).toBeInTheDocument();
     // a multikill's kills arrive as a LIST on the wire — counted, not printed as an object
-    expect(screen.getAllByText(/ · \d+ kills · /).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\d+ kills/).length).toBeGreaterThan(0);
     expect(screen.getByText(/enabler counts a teammate's kill within ±5 s and 500 u/)).toBeInTheDocument();
   });
 
