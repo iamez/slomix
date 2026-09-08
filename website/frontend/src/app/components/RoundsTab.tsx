@@ -203,7 +203,7 @@ export function RoundPlayerDetailsPanel({ roundId, playerGuid }: { roundId: numb
   const q = useRoundPlayerDetails(roundId, playerGuid);
   return (
     <Panel<RoundPlayerDetails>
-      parity="session.rounds.player_details"
+      parity="session.rounds.player-details"
       label="in this half"
       aside={q.data ? `${q.data.player_name} · ${q.data.round.map_name} R${String(q.data.round.round_number)} · round #${String(q.data.round.id)} · ${q.data.round.round_date}` : undefined}
       q={q}
@@ -236,7 +236,7 @@ export function RoundPlayerDetailsPanel({ roundId, playerGuid }: { roundId: numb
             ['team kills', d.misc.team_kills], ['self kills', d.misc.self_kills],
           ]} />
           <DataTable<RoundPlayerDetails['weapons'][number]>
-            parity="session.rounds.player_details.weapons"
+            parity="session.rounds.player-details.weapons"
             label="weapons in this half"
             columns={WEAPON_COLUMNS}
             rows={d.weapons}

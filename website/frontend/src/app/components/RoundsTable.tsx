@@ -154,7 +154,9 @@ function PlayerRows({
                   onClick={onSelectPlayer ? () => { onSelectPlayer(p.player_guid); } : undefined}
                   disabled={!onSelectPlayer}
                   aria-expanded={onSelectPlayer ? open : undefined}
-                  style={{ all: 'unset', cursor: onSelectPlayer ? 'pointer' : 'default', color: 'inherit' }}
+                  // Not `all: unset`: that also drops the outline and hides
+                  // :focus-visible from tokens.css (Codex on #989).
+                  style={{ background: 'none', border: 0, padding: 0, font: 'inherit', cursor: onSelectPlayer ? 'pointer' : 'default', color: 'inherit' }}
                 >
                   {p.player_name}
                 </button>

@@ -52,7 +52,6 @@
 /api/greatshot/{demo_id}/crossref db_player_stats
 /api/greatshot/{demo_id}/crossref round.demo_round_index
 /api/greatshot/{demo_id}/crossref round.duration_seconds
-/api/greatshot/{demo_id}/crossref round.match_id
 /api/greatshot/{demo_id}/crossref round.player_count
 /api/greatshot/{demo_id}/crossref round.round_time
 /api/greatshot/{demo_id}/crossref round.winner_team
@@ -503,20 +502,11 @@
 /api/stats/last-session scoring.total_maps
 /api/stats/last-session stats_checks
 /api/stats/last-session unassigned_players.denied_playtime
-/api/stats/last-session unassigned_players.double_kills
 /api/stats/last-session unassigned_players.full_selfkills
-/api/stats/last-session unassigned_players.kd
 /api/stats/last-session unassigned_players.kill_assists
-/api/stats/last-session unassigned_players.mega_kills
-/api/stats/last-session unassigned_players.multi_kills
-/api/stats/last-session unassigned_players.quad_kills
 /api/stats/last-session unassigned_players.self_kills
 /api/stats/last-session unassigned_players.time_dead_seconds
 /api/stats/last-session unassigned_players.time_dead_seconds_raw
-/api/stats/last-session unassigned_players.time_played_seconds
-/api/stats/last-session unassigned_players.times_revived
-/api/stats/last-session unassigned_players.triple_kills
-/api/stats/last-session unassigned_players.useful_kills
 /api/stats/last-session warnings
 /api/stats/leaderboard deaths
 /api/stats/live-session last_round_time
@@ -526,7 +516,6 @@
 /api/stats/maps total_deaths
 /api/stats/matches allies_score
 /api/stats/matches axis_score
-/api/stats/matches match_id
 /api/stats/matches score_display
 /api/stats/matches team2_name
 /api/stats/overview most_active_14d
