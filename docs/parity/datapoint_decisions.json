@@ -1,0 +1,17 @@
+{
+ "_note": "Keys the ledger must not count as unread, each with the reason. Prefix form '<endpoint> <sub>.*' covers a sub-object. A decision is an allowance: it needs a reason a reviewer can check, and the test refuses one that names a key no fixture carries.",
+ "/api/storytelling/formula class_weights.*": "iterated: Story.tsx passes the whole object to TermGroup / Object.entries",
+ "/api/storytelling/formula distance_multipliers.*": "iterated: Story.tsx TermGroup / Object.entries",
+ "/api/storytelling/formula multipliers.*": "iterated: Story.tsx TermGroup / Object.entries",
+ "/api/storytelling/formula oksii_multipliers.*": "iterated: Story.tsx TermGroup / Object.entries",
+ "/api/storytelling/formula validity.*": "iterated: Story.tsx TermGroup / Object.entries",
+ "/api/rounds/{round_id}/awards categories.*": "iterated: RoundsTab.tsx Object.entries(awards.categories)",
+ "/api/stats/session/{gaming_session_id}/good-night components.*": "iterated: SessionDetail.tsx Object.entries(data.components)",
+ "/api/stats/session/{gaming_session_id}/detail scoring.debug": "debug block for operators, not a datapoint for a visitor",
+ "/api/stats/last-session scoring.debug": "debug block for operators, not a datapoint for a visitor",
+ "/api/stats/session/{gaming_session_id}/detail players.played_pct_lua": "retired on purpose: a literal copy of played_pct (BACKLOG 2026-09-03, sessions_router.py:2298)",
+ "/api/stats/session/{gaming_session_id}/detail players.alive_pct_lua": "retired with played_pct_lua: the Lua copy is not a second measurement",
+ "/api/stats/session/{gaming_session_id}/detail players.alive_pct_diff": "retired with played_pct_lua: the difference of two copies of one number",
+ "/api/live/state server_time": "transport field (the server's clock for the poll), not a datapoint",
+ "/api/datasets _note": "documentation string inside the payload"
+}

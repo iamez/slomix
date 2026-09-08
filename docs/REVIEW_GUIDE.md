@@ -109,3 +109,15 @@ Findings are triaged with the six-phase loop in
 zoom checklist → root cause → fix + verify with a mutation seen failing).
 Please classify each finding by that checklist's item number where you can;
 it makes the triage mechanical.
+
+## Datapoint ledger (2026-09-08)
+
+`docs/parity/datapoints.json` lists, for every endpoint the new SPA calls, which
+keys of its recorded response the app reads and which it does not
+(`scripts/datapoint_ledger.py`; ratchet in `tests/unit/test_datapoint_ledger.py`).
+An `unread` row is not a bug in the page that fetches it — it is a captured
+datapoint waiting for a panel. A `dropped` row carries a reason in
+`docs/parity/datapoint_decisions.json`; a decision without a reason, or naming a
+key no fixture has, fails the test. A name match is an upper bound: a key can be
+counted `read` and still not reach the DOM — the page tests are the other half.
+

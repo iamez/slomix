@@ -90,6 +90,22 @@ now; 5–7 touch behaviour and go through the owner's DA per PR as usual.
   market panel with admin controls beside its body — each is a design decision,
   not a mechanical edit.
 
+## The datapoint ledger (2026-09-08)
+
+"Capture everything" is the house rule; the ledger is how we see what is captured
+and never shown. `scripts/datapoint_ledger.py` reads every recorded fixture of an
+endpoint the app calls (`pages/__fixtures__`), lists its keys one level deep, and
+checks each name against comment-stripped `src/app` source with `lib/types.ts`
+excluded — a declaration is not a read. `docs/parity/datapoints.json` is the
+result (`read` / `unread` / `dropped`), `docs/parity/datapoint_decisions.json`
+holds the allowances with their reasons (iterated with `Object.entries`, debug
+blocks, deliberate retirements), and `tests/unit/test_datapoint_ledger.py` holds
+the unread count exactly (358 on 2026-09-08; lower it in the commit that reads a
+key). A row closes when a page reads the key — through `<Panel>`, with a fixture-
+driven test — never by deleting it. The rows are the field-level half of the
+audit of 2026-09-07 (old React tree, legacy JS, backend and DB columns with no
+reader); the plan that orders them is in BACKLOG.
+
 ## Guards that already exist (11) — extend, do not duplicate
 
 | guard | value (2026-09-07) | what it pins |
