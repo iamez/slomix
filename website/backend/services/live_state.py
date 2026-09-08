@@ -44,6 +44,18 @@ _ROSTER_LINGER_SECONDS = 600
 # a real remap — ignore it.
 _MAP_FLIPBACK_SECONDS = 60
 # How long a recent objective action stays surfaced in the snapshot.
+_RECENT_KILLS_MAX = 30
+_POSITION_FRESH_SECONDS = 60
+
+
+def _xy(pos: Any) -> dict[str, Any] | None:
+    """The parser's `{x, y, z}` (ints or None) reduced to the map plane;
+    None when there is no usable point."""
+    if not isinstance(pos, dict) or pos.get("x") is None or pos.get("y") is None:
+        return None
+    return {"x": pos["x"], "y": pos["y"]}
+
+
 _OBJECTIVE_WINDOW_SECONDS = 20
 # A gap this long between events is a session boundary (server down + restart),
 # not a quiet stretch of one match — the first event after it resets the roster.
@@ -90,6 +102,13 @@ class LiveStateReducer:
         # flush at the source) + an instant alive flag from LIVE_KILL (dead)
         # and LIVE_MOVEMENT (moving = alive). Reset on round/map boundaries.
         self._live_stats: dict[int, dict[str, Any]] = {}
+        # Last known position per slot from LIVE_MOVEMENT (x, y, yaw, at) and
+        # the recent kills with both positions from LIVE_KILL — the tracker
+        # sends them every few seconds and the reducer used to keep only the
+        # alive flag (ledger 2026-09-08). A mini map draws from these later;
+        # for now /state carries them.
+        self._positions: dict[int, dict[str, Any]] = {}
+        self._recent_kills: list[dict[str, Any]] = []
         # Stopwatch context a spectator needs and the raw stream never states:
         # which SIDE attacks on this map (constant per map — the two teams swap
         # sides between halves, the objective does not), what the last half
@@ -161,6 +180,8 @@ class LiveStateReducer:
             self._objectives.clear()
             self._roster_changes.clear()
             self._live_stats.clear()
+            self._positions.clear()
+            self._recent_kills.clear()
             self._round_number = None
             self._round_started_at = None
             # ⛔ THE MAP AND THE GAME STATE SURVIVED THIS RESET, and that made
@@ -255,6 +276,10 @@ class LiveStateReducer:
                 self._attacking_side = None
                 self._objectives = []
                 self._live_stats.clear()
+                self._positions.clear()
+                self._recent_kills.clear()
+            self._positions.clear()
+            self._recent_kills.clear()
 
         elif etype == "INIT_GAME":
             if self._game_state != "live":
@@ -264,6 +289,8 @@ class LiveStateReducer:
             self._game_state = "live"
             self._round_started_at = at
             self._live_stats.clear()  # the ladder is per-round, like HLTV's
+            self._positions.clear()
+            self._recent_kills.clear()
             # Stopwatch has exactly R1/R2. A third ROUND_START without a MAP
             # in between means the MAP event was lost (dropped batch) — treat
             # it as a fresh map's R1 instead of counting "R5" forever.
@@ -316,6 +343,14 @@ class LiveStateReducer:
             victim = self._slot(ev, "victim_slot")
             if victim is not None:
                 self._live_stat(victim)["alive"] = False
+            killer = self._slot(ev, "killer_slot")
+            self._recent_kills.append({
+                "killer_slot": killer, "victim_slot": victim,
+                "killer_pos": _xy(ev.get("killer_pos")), "victim_pos": _xy(ev.get("victim_pos")),
+                "distance": ev.get("distance"), "killer_health": ev.get("killer_health"),
+                "mod_id": ev.get("mod_id"), "at": at,
+            })
+            del self._recent_kills[:-_RECENT_KILLS_MAX]
 
         elif etype == "LIVE_MOVEMENT":
             for entry in ev.get("players") or []:
@@ -323,6 +358,8 @@ class LiveStateReducer:
                 if isinstance(slot, int):
                     # A moving player is alive (corpses don't emit positions).
                     self._live_stat(slot)["alive"] = True
+                    if entry.get("x") is not None and entry.get("y") is not None:
+                        self._positions[slot] = {"x": entry["x"], "y": entry["y"], "yaw": entry.get("yaw"), "at": at}
 
         elif etype == "DYNAMITE":
             actor = self._name_for_slot(self._slot(ev))
@@ -382,6 +419,10 @@ class LiveStateReducer:
                 "on_server_seconds": int(now - e["connected_at"]),
                 "on_side_seconds": int(now - e["team_since"]),
             }
+            pos = self._positions.get(slot)
+            if pos is not None and (now - pos["at"]) <= _POSITION_FRESH_SECONDS:
+                member["pos"] = {"x": pos["x"], "y": pos["y"], "yaw": pos.get("yaw"),
+                                 "age_seconds": int(now - pos["at"])}
             live = self._live_stats.get(slot)
             if live is not None:
                 elapsed = (now - self._round_started_at
@@ -416,6 +457,15 @@ class LiveStateReducer:
         recent_objectives = [
             o for o in self._objectives
             if (now - o["at"]) <= _OBJECTIVE_WINDOW_SECONDS
+        ] if is_live else []
+
+        recent_kills = [
+            {**{k: v for k, v in k_.items() if k != "at"},
+             "killer": self._name_for_slot(k_["killer_slot"]) if k_["killer_slot"] is not None else None,
+             "victim": self._name_for_slot(k_["victim_slot"]) if k_["victim_slot"] is not None else None,
+             "age_seconds": int(now - k_["at"])}
+            for k_ in self._recent_kills
+            if (now - k_["at"]) <= _OBJECTIVE_WINDOW_SECONDS
         ] if is_live else []
 
         recent_roster_changes = [
@@ -481,6 +531,7 @@ class LiveStateReducer:
                                       if session_start else None),
             "recent_objectives": recent_objectives,
             "recent_roster_changes": recent_roster_changes,
+            "recent_kills": recent_kills,
             "last_event_age_seconds": (int(now - self._last_event_at)
                                        if self._last_event_at else None),
             "server_time": now,
