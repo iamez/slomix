@@ -121,6 +121,7 @@ import type {
   RecentRound,
   RivalryLeaderboard,
   RoundAwards,
+  RoundPlayerDetails,
   RoundViz,
   SeasonAwards,
   SeasonCurrent,
@@ -629,6 +630,20 @@ export function useRecentRounds() {
  * rounds table lists up to 18 of them and eagerly fetching each one would be
  * 18 calls to answer a question nobody asked.
  */
+/** One player's breakdown of one half. Disabled until both ids are known —
+ *  and a disabled query is pending forever in React Query v5, so the caller
+ *  mounts it only once a row was clicked. */
+export function useRoundPlayerDetails(roundId: number | null, playerGuid: string | null) {
+  return useQuery({
+    queryKey: ['round-player-details', roundId, playerGuid],
+    enabled: roundId != null && playerGuid != null,
+    queryFn: () =>
+      apiGet('/api/rounds/{round_id}/player/{player_guid}/details', {
+        pathParams: { round_id: roundId!, player_guid: playerGuid! },
+      }) as Promise<RoundPlayerDetails>,
+  });
+}
+
 export function useRoundAwards(roundId: number | null) {
   return useQuery({
     queryKey: ['round-awards', roundId],
