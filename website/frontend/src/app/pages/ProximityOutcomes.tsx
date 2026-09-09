@@ -25,13 +25,14 @@ type KillEventRow = ProxKillOutcomeEvent & { id: string };
 const KILL_EVENT_COLUMNS: DataColumn<KillEventRow>[] = [
   { key: 'kill_time', label: 'at', title: 'the round clock', format: (e) => mmss(e.kill_time / 1000), sortValue: (e) => e.kill_time },
   { key: 'map', label: 'map', format: (e) => `${mapLabel(e.map_name)} R${String(e.round_number)}`, sortValue: (e) => `${e.map_name} ${String(e.round_number)}` },
-  { key: 'killer', label: 'killer', format: (e) => (e.killer_name ? stripEtColors(e.killer_name) : <Meta>—</Meta>), sortValue: (e) => e.killer_name },
+  { key: 'killer', label: 'killer', format: (e) => (e.killer_name ? <span title={e.killer_guid ?? undefined}>{stripEtColors(e.killer_name)}</span> : <Meta>—</Meta>), sortValue: (e) => e.killer_name },
   { key: 'victim', label: 'victim', format: (e) => (e.victim_name ? stripEtColors(e.victim_name) : <Meta>—</Meta>), sortValue: (e) => e.victim_name },
+  { key: 'kill_mod', label: 'mod', align: 'right', title: 'the engine means-of-death number of the kill', format: (e) => (e.kill_mod == null ? <Meta>—</Meta> : `#${String(e.kill_mod)}`), sortValue: (e) => e.kill_mod ?? null },
   { key: 'outcome', label: 'became', format: (e) => e.outcome.replace(/_/g, ' '), sortValue: (e) => e.outcome },
   { key: 'delta_ms', label: 'after', align: 'right', title: 'seconds from the kill to the outcome', format: (e) => mmss(e.delta_ms / 1000), sortValue: (e) => e.delta_ms },
   { key: 'effective_denied_ms', label: 'denied', align: 'right', title: 'seconds of playtime the kill denied', format: (e) => mmss(e.effective_denied_ms / 1000), sortValue: (e) => e.effective_denied_ms },
-  { key: 'gibber', label: 'gibbed by', format: (e) => (e.gibber_name ? stripEtColors(e.gibber_name) : <Meta>—</Meta>), sortValue: (e) => e.gibber_name },
-  { key: 'reviver', label: 'revived by', format: (e) => (e.reviver_name ? stripEtColors(e.reviver_name) : <Meta>—</Meta>), sortValue: (e) => e.reviver_name },
+  { key: 'gibber', label: 'gibbed by', format: (e) => (e.gibber_name ? <span title={e.gibber_guid ?? undefined}>{stripEtColors(e.gibber_name)}</span> : <Meta>—</Meta>), sortValue: (e) => e.gibber_name },
+  { key: 'reviver', label: 'revived by', format: (e) => (e.reviver_name ? <span title={e.reviver_guid ?? undefined}>{stripEtColors(e.reviver_name)}</span> : <Meta>—</Meta>), sortValue: (e) => e.reviver_name },
 ];
 
 function Tile({ label, value }: { label: string; value: string }) {
@@ -251,6 +252,11 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
                   val={`${figure(Math.round(p.pressure_seconds))} s`} />
               ))}
               <Meta>{d.scope_note}</Meta>
+              <Meta>
+                {d.maps_counted != null ? `${figure(d.maps_counted)} maps counted` : ''}
+                {d.scope_applied ? ` · scope applied: ${Object.entries(d.scope_applied).filter(([, v]) => v != null).map(([k, v]) => `${k.replace(/_/g, ' ')} ${String(v)}`).join(', ') || 'none'}` : ''}
+                {d.top_fragger_guids && d.top_fragger_guids.length > 0 ? ` · top fraggers left out of the board: ${d.top_fragger_guids.join(', ')}` : ''}
+              </Meta>
             </Stack>
           )}
         </ProxPanel>
