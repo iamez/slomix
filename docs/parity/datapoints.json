@@ -189,23 +189,23 @@
   "/api/voice-activity/history": "17 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3426,
-  "unread": 122,
-  "dropped": 141,
+  "read": 3441,
+  "unread": 100,
+  "dropped": 148,
   "endpoints": 180,
-  "endpoints_fully_read": 120,
+  "endpoints_fully_read": 135,
   "unmeasured": 3
  },
  "per_endpoint": {
   "/api/availability": {
    "read": 14,
-   "unread": 2,
-   "dropped": 0
+   "unread": 1,
+   "dropped": 1
   },
   "/api/availability/access": {
    "read": 4,
-   "unread": 2,
-   "dropped": 0
+   "unread": 1,
+   "dropped": 1
   },
   "/api/availability/promotion-preferences": {
    "read": 4,
@@ -258,8 +258,8 @@
    "dropped": 0
   },
   "/api/challenges/current": {
-   "read": 2,
-   "unread": 1,
+   "read": 3,
+   "unread": 0,
    "dropped": 0
   },
   "/api/datasets": {
@@ -308,8 +308,8 @@
    "dropped": 0
   },
   "/api/live/feed": {
-   "read": 4,
-   "unread": 1,
+   "read": 5,
+   "unread": 0,
    "dropped": 0
   },
   "/api/live/state": {
@@ -318,8 +318,8 @@
    "dropped": 1
   },
   "/api/monitoring/status": {
-   "read": 10,
-   "unread": 2,
+   "read": 12,
+   "unread": 0,
    "dropped": 0
   },
   "/api/planning/today": {
@@ -689,8 +689,8 @@
   },
   "/api/records/maps/segments": {
    "read": 7,
-   "unread": 2,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 2
   },
   "/api/replay/round/{round_id}/web": {
    "read": 73,
@@ -768,8 +768,8 @@
    "dropped": 0
   },
   "/api/skill/composite": {
-   "read": 17,
-   "unread": 2,
+   "read": 19,
+   "unread": 0,
    "dropped": 0
   },
   "/api/skill/formula": {
@@ -814,17 +814,17 @@
   },
   "/api/stats/last-session": {
    "read": 46,
-   "unread": 1,
-   "dropped": 11
+   "unread": 0,
+   "dropped": 12
   },
   "/api/stats/leaderboard": {
-   "read": 7,
-   "unread": 1,
+   "read": 8,
+   "unread": 0,
    "dropped": 0
   },
   "/api/stats/live-session": {
-   "read": 4,
-   "unread": 2,
+   "read": 6,
+   "unread": 0,
    "dropped": 0
   },
   "/api/stats/maps": {
@@ -869,8 +869,8 @@
   },
   "/api/stats/records": {
    "read": 94,
-   "unread": 1,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 1
   },
   "/api/stats/session-leaderboard": {
    "read": 5,
@@ -939,12 +939,12 @@
   },
   "/api/stats/weapons/by-player": {
    "read": 6,
-   "unread": 1,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 1
   },
   "/api/stats/weapons/by_player": {
-   "read": 6,
-   "unread": 1,
+   "read": 7,
+   "unread": 0,
    "dropped": 0
   },
   "/api/stats/weapons/hall-of-fame": {
@@ -953,8 +953,8 @@
    "dropped": 1
   },
   "/api/status": {
-   "read": 2,
-   "unread": 1,
+   "read": 3,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/best-lives": {
@@ -988,8 +988,8 @@
    "dropped": 0
   },
   "/api/storytelling/kill-impact": {
-   "read": 32,
-   "unread": 1,
+   "read": 33,
+   "unread": 0,
    "dropped": 17
   },
   "/api/storytelling/kill-impact/details": {
@@ -1068,8 +1068,8 @@
    "dropped": 1
   },
   "/api/system/overview": {
-   "read": 12,
-   "unread": 1,
+   "read": 13,
+   "unread": 0,
    "dropped": 0
   },
   "/api/uploads": {
@@ -1088,8 +1088,8 @@
    "dropped": 0
   },
   "/api/voice-activity/current": {
-   "read": 1,
-   "unread": 2,
+   "read": 3,
+   "unread": 0,
    "dropped": 0
   },
   "/api/voice-activity/history": {
@@ -1157,7 +1157,8 @@
   {
    "endpoint": "/api/availability",
    "key": "statuses",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "the status vocabulary the form's own options already enumerate (AvailabilityPage STATUS options); printing the enum would list the buttons twice"
   },
   {
    "endpoint": "/api/availability",
@@ -1207,7 +1208,8 @@
   {
    "endpoint": "/api/availability/access",
    "key": "website_user_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "an internal id the page never shows — the viewer is named by display name and linked guid; ids only travel in requests"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -1507,7 +1509,7 @@
   {
    "endpoint": "/api/challenges/current",
    "key": "week_start_date",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -2492,7 +2494,7 @@
   {
    "endpoint": "/api/live/feed",
    "key": "server_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/live/feed",
@@ -2618,7 +2620,7 @@
   {
    "endpoint": "/api/monitoring/status",
    "key": "server.last_recorded_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/monitoring/status",
@@ -2648,7 +2650,7 @@
   {
    "endpoint": "/api/monitoring/status",
    "key": "voice.last_recorded_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/monitoring/status",
@@ -11023,7 +11025,8 @@
   {
    "endpoint": "/api/records/maps/segments",
    "key": "records.fastest_seconds",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "alias: fastest_time is the m:ss of fastest_seconds and is the column shown (fixture: 205 → '3:25')"
   },
   {
    "endpoint": "/api/records/maps/segments",
@@ -11053,7 +11056,8 @@
   {
    "endpoint": "/api/records/maps/segments",
    "key": "records.winner_team",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "alias: winner_side is the server's string for winner_team and is the column shown (fixture: 1 → 'Axis')"
   },
   {
    "endpoint": "/api/records/maps/segments",
@@ -12705,7 +12709,7 @@
   {
    "endpoint": "/api/skill/composite",
    "key": "coverage.source_rows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/skill/composite",
@@ -12745,7 +12749,7 @@
   {
    "endpoint": "/api/skill/composite",
    "key": "players.details",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/skill/composite",
@@ -13925,7 +13929,8 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.time_dead_seconds_raw",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "the pre-repair value behind time_dead_seconds (time-fields lane 2026-09-02); the page shows the repaired figure and the repaired flag, never the raw one"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13955,7 +13960,7 @@
   {
    "endpoint": "/api/stats/leaderboard",
    "key": "deaths",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/leaderboard",
@@ -14010,12 +14015,12 @@
   {
    "endpoint": "/api/stats/live-session",
    "key": "last_round_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/live-session",
    "key": "last_update",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/live-session",
@@ -15071,7 +15076,8 @@
   {
    "endpoint": "/api/stats/records",
    "key": "revived",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "deliberate omission carried from legacy (RecordBook.tsx header): the backend sends a 'times revived' record, the legacy site never rendered it; adopting it is an owner decision"
   },
   {
    "endpoint": "/api/stats/records",
@@ -16490,7 +16496,8 @@
   {
    "endpoint": "/api/stats/weapons/by-player",
    "key": "player_count",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "PlayerDrilldown asks this endpoint for ONE guid, so player_count is always 1 there; the period-wide count is rendered on WeaponsPage from /by_player"
   },
   {
    "endpoint": "/api/stats/weapons/by-player",
@@ -16525,7 +16532,7 @@
   {
    "endpoint": "/api/stats/weapons/by_player",
    "key": "player_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/weapons/by_player",
@@ -16576,7 +16583,7 @@
   {
    "endpoint": "/api/status",
    "key": "service",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/status",
@@ -17420,7 +17427,7 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "compute",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -19343,7 +19350,7 @@
   {
    "endpoint": "/api/system/overview",
    "key": "linkage.breach_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/system/overview",
@@ -19618,12 +19625,12 @@
   {
    "endpoint": "/api/voice-activity/current",
    "key": "channels",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/voice-activity/current",
    "key": "members",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/voice-activity/current",

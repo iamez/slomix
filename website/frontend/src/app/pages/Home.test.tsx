@@ -13,6 +13,7 @@ import seasonLeaders from './__fixtures__/api_seasons_current_leaders.json';
 import seasonSummary from './__fixtures__/api_seasons_current_summary.json';
 import availability from './__fixtures__/api_availability.json';
 import movers from './__fixtures__/api_skill_movers.json';
+import liveSession from './__fixtures__/api_stats_live_session.json';
 import challenge from './__fixtures__/api_challenges_current.json';
 import tonight from './__fixtures__/api_stats_tonight.json';
 import calendar from './__fixtures__/api_stats_activity_calendar.json';
@@ -34,6 +35,7 @@ const FIXTURES = new Map<string, unknown>([
   ['/api/seasons/current/summary', seasonSummary],
   ['/api/availability', availability],
   ['/api/skill/movers', movers],
+  ['/api/stats/live-session', liveSession],
   ['/api/challenges/current', challenge],
   ['/api/stats/tonight', tonight],
   ['/api/stats/activity-calendar', calendar],
@@ -345,5 +347,14 @@ describe('season partial contract (#862)', () => {
     const newest = Object.keys(activity).sort().at(-1)!;
     expect(screen.getByLabelText(/rounds per day, 90 days ending \d{4}-\d{2}-\d{2}/)).toBeInTheDocument();
     expect(screen.getByTitle(`${newest}: ${activity[newest]} rounds`)).toBeInTheDocument();
+  });
+});
+
+describe('Home live-session line (ledger 2026-09-09)', () => {
+  it('says how long the last round took and when the import last ran', async () => {
+    renderHome();
+    const ls = liveSession as { last_round_time: string };
+    await waitFor(() => expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && new RegExp(`last round ${ls.last_round_time} · as of 2026-08-31 \\d\\d:\\d\\d UTC`).test(el.textContent ?? ''))).toBeInTheDocument());
+    expect(screen.getByText(/no challenge this week \(week of 2026-08-24\)/)).toBeInTheDocument();
   });
 });

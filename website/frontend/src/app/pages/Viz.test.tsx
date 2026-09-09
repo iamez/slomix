@@ -162,6 +162,8 @@ describe('WeaponsPage', () => {
     // never render as '16,148k'.
     expect(screen.getByText('16,148')).toBeInTheDocument();
     expect(screen.queryByText('16,148k')).toBeNull();
+    // player_count from the same response (recorded 25).
+    expect(screen.getByText('25 players in the period')).toBeInTheDocument();
     // Category filter narrows client-side; the share text stays global.
     fireEvent.click(screen.getByRole('button', { name: 'smg' }));
     // The grid heading counts the filtered rows (smg = mp40/thompson/sten);

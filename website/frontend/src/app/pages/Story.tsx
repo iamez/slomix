@@ -1267,7 +1267,7 @@ function CompositeFive({ data }: { data: CompositeStats }) {
           <tbody>
             {data.players.map((pl) => (
               <tr key={pl.player_guid} className="row">
-                <td style={{ padding: 'var(--space-1) var(--space-2)' }}>{stripEtColors(pl.player_name)}</td>
+                <td style={{ padding: 'var(--space-1) var(--space-2)' }} title={pl.details ? Object.entries(pl.details).map(([k, v]) => `${k.replace(/_/g, ' ')} ${v}`).join(' · ') : undefined}>{stripEtColors(pl.player_name)}</td>
                 <td className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)' }}>{figure(pl.kills)}</td>
                 {COMPOSITE_KEYS.map((k) => (
                   <td key={k} className="m" style={{ textAlign: 'right', padding: 'var(--space-1) var(--space-2)', color: unmeasured.has(k) ? 'var(--color-text-500)' : undefined }}>
@@ -1282,6 +1282,11 @@ function CompositeFive({ data }: { data: CompositeStats }) {
           </tbody>
         </table>
       </div>
+      {data.coverage?.source_rows && (
+        <Meta>
+          source rows: {Object.entries(data.coverage.source_rows).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}
+        </Meta>
+      )}
       {unmeasured.size > 0 && (
         <Meta>
           {[...unmeasured].sort().join(', ')}: unmeasured for this session — the source instruments captured no rows, so these columns have no value rather than a zero
@@ -1385,7 +1390,7 @@ export function SessionStory({ gsid }: { gsid: number }) {
         <Panel
           gap={3}
           label="kill impact"
-          aside="kis · kills · carrier · clutch"
+          aside={`kis · kills · carrier · clutch${kis.data?.compute?.status ? ` · compute ${kis.data.compute.status.replace(/_/g, ' ')}` : ''}`}
           q={kis}
           empty="no scored kills in this session"
           isEmpty={(d) => d.players.length === 0}
