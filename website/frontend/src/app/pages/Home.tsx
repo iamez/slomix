@@ -123,6 +123,11 @@ function Hero() {
         </div>
         <div className="m" style={{ fontSize: 'var(--fs-value)', color: 'var(--color-text-400)', marginTop: 'var(--space-3)' }}>
           {d.rounds} rounds · {mapsPlayed} maps · {d.player_count} players
+          {/* what the endpoint counts beside the box score (ledger 2026-09-09): maps by name, the scoring's map count, and the checks it raised */}
+          {d.map_counts && Object.keys(d.map_counts).length > 0 && <> · {Object.entries(d.map_counts).map(([m, n]) => `${m}${n > 1 ? ` ×${n}` : ''}`).join(', ')}</>}
+          {d.scoring.available && (d.scoring as { total_maps?: number }).total_maps != null && <> · {(d.scoring as { total_maps?: number }).total_maps} maps scored</>}
+          {(d.stats_checks?.length ?? 0) > 0 && <> · checks: {d.stats_checks!.join('; ')}</>}
+          {(d.warnings?.length ?? 0) > 0 && <> · ⚠ {(d.warnings as unknown[]).map(String).join('; ')}</>}
         </div>
         {/* No session id on the latest rounds is a supported backend state —
           * the date route is the fallback that still identifies the evening. */}
@@ -263,6 +268,7 @@ function Insights() {
           </span>
         }
       />
+      {data?.dates && data.dates.length > 0 && <Meta>{data.dates[0]} to {data.dates[data.dates.length - 1]} · {figure(data.dates.length)} days answered</Meta>}
       {trends.isError && <div style={{ marginTop: 'var(--space-4)' }}><Unavailable what="activity" /></div>}
       <div className="home-cols3" style={{ gap: 'var(--space-6)', marginTop: 'var(--space-4)' }}>
         {chart('rounds per day', data?.rounds, 'var(--color-accent)', `last ${days} days`)}

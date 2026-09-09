@@ -302,6 +302,11 @@ export type LastSessionScoring =
   | { available: false; reason?: string };
 
 export interface LastSession {
+  /** Since 2026-09-09 the Home card reads them: maps by name with their play
+   *  counts, the checks the aggregator raised (e.g. an unassigned player)
+   *  and its warnings. Optional: older recordings lack them. */
+  map_counts?: Record<string, number>;
+  stats_checks?: string[];
   date: string;
   /** null when the latest rounds carry no session id (sessions_router) —
    * the hero then links by DATE instead. */

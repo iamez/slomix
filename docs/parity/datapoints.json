@@ -23,10 +23,10 @@
   "/api/datasets": "8 files reachable from the endpoint's callers",
   "/api/diagnostics": "8 files reachable from the endpoint's callers",
   "/api/diagnostics/storytelling-completeness": "5 files reachable from the endpoint's callers",
-  "/api/greatshot": "9 files reachable from the endpoint's callers",
-  "/api/greatshot/{demo_id}": "9 files reachable from the endpoint's callers",
-  "/api/greatshot/{demo_id}/crossref": "9 files reachable from the endpoint's callers",
-  "/api/greatshot/{demo_id}/status": "9 files reachable from the endpoint's callers",
+  "/api/greatshot": "10 files reachable from the endpoint's callers",
+  "/api/greatshot/{demo_id}": "10 files reachable from the endpoint's callers",
+  "/api/greatshot/{demo_id}/crossref": "10 files reachable from the endpoint's callers",
+  "/api/greatshot/{demo_id}/status": "10 files reachable from the endpoint's callers",
   "/api/hall-of-fame": "5 files reachable from the endpoint's callers",
   "/api/live-status": "12 files reachable from the endpoint's callers",
   "/api/live/feed": "16 files reachable from the endpoint's callers",
@@ -189,11 +189,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3200,
-  "unread": 420,
-  "dropped": 69,
+  "read": 3226,
+  "unread": 341,
+  "dropped": 122,
   "endpoints": 180,
-  "endpoints_fully_read": 73,
+  "endpoints_fully_read": 81,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -273,24 +273,24 @@
    "dropped": 0
   },
   "/api/diagnostics/storytelling-completeness": {
-   "read": 18,
-   "unread": 5,
+   "read": 23,
+   "unread": 0,
    "dropped": 0
   },
   "/api/greatshot": {
-   "read": 14,
-   "unread": 1,
+   "read": 15,
+   "unread": 0,
    "dropped": 0
   },
   "/api/greatshot/{demo_id}": {
-   "read": 39,
-   "unread": 10,
+   "read": 49,
+   "unread": 0,
    "dropped": 2
   },
   "/api/greatshot/{demo_id}/crossref": {
-   "read": 16,
-   "unread": 6,
-   "dropped": 1
+   "read": 21,
+   "unread": 0,
+   "dropped": 2
   },
   "/api/greatshot/{demo_id}/status": {
    "read": 6,
@@ -774,8 +774,8 @@
   },
   "/api/skill/formula": {
    "read": 13,
-   "unread": 32,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 32
   },
   "/api/skill/leaderboard": {
    "read": 18,
@@ -813,9 +813,9 @@
    "dropped": 1
   },
   "/api/stats/last-session": {
-   "read": 43,
-   "unread": 10,
-   "dropped": 5
+   "read": 47,
+   "unread": 0,
+   "dropped": 11
   },
   "/api/stats/leaderboard": {
    "read": 7,
@@ -849,8 +849,8 @@
   },
   "/api/stats/player/{player_name}": {
    "read": 22,
-   "unread": 6,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 6
   },
   "/api/stats/player/{player_name}/form": {
    "read": 8,
@@ -928,9 +928,9 @@
    "dropped": 0
   },
   "/api/stats/trends": {
-   "read": 4,
-   "unread": 9,
-   "dropped": 0
+   "read": 5,
+   "unread": 0,
+   "dropped": 8
   },
   "/api/stats/weapons": {
    "read": 6,
@@ -1743,7 +1743,7 @@
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
    "key": "distinct_rounds_in_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
@@ -1763,7 +1763,7 @@
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
    "key": "kis_computed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
@@ -1773,7 +1773,7 @@
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
    "key": "kis_total_impact_sum",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
@@ -1833,7 +1833,7 @@
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
    "key": "unlinked_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
@@ -1843,7 +1843,7 @@
   {
    "endpoint": "/api/diagnostics/storytelling-completeness",
    "key": "wrong_round_kills",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot",
@@ -1853,7 +1853,7 @@
   {
    "endpoint": "/api/greatshot",
    "key": "items.created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot",
@@ -1928,12 +1928,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "analysis.created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "analysis.events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -1948,12 +1948,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "analysis.stats",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -1999,7 +1999,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "highlights.created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2079,7 +2079,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.file_size_bytes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2089,7 +2089,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.gametype",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2099,7 +2099,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.header",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2124,7 +2124,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.profile",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2134,7 +2134,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.rounds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2210,7 +2210,8 @@
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
    "key": "db_player_stats",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "the per-player db rows keyed by nickname; comparison[].db_stats carries the same rows, already printed per player"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
@@ -2236,12 +2237,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
    "key": "round.demo_round_index",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
    "key": "round.duration_seconds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
@@ -2266,7 +2267,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
    "key": "round.player_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
@@ -2286,12 +2287,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
    "key": "round.round_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/crossref",
    "key": "round.winner_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
@@ -12792,12 +12793,14 @@
   {
    "endpoint": "/api/skill/formula",
    "key": "metric_sources.pcs",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights maps every metric to its source (pcs / proximity) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metric_sources.proximity",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights maps every metric to its source (pcs / proximity) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
@@ -12807,77 +12810,92 @@
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.accuracy",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.clutch_factor",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.crossfire_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.denied_playtime_pm",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.dpm",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.dpr",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.kill_permanence",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.kill_quality",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.kpr",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.objective_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.revive_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.spawn_timing_eff",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.survival_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.trade_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "metrics.useful_kill_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)"
   },
   {
    "endpoint": "/api/skill/formula",
@@ -12922,77 +12940,92 @@
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.accuracy",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.clutch_factor",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.crossfire_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.denied_playtime_pm",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.dpm",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.dpr",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.kill_permanence",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.kill_quality",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.kpr",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.objective_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.revive_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.spawn_timing_eff",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.survival_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.trade_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/formula",
    "key": "weights.useful_kill_rate",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx"
   },
   {
    "endpoint": "/api/skill/leaderboard",
@@ -13614,7 +13647,7 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "map_counts",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13739,12 +13772,12 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "scoring.total_maps",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
    "key": "stats_checks",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13784,7 +13817,8 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.denied_playtime",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13799,7 +13833,8 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.full_selfkills",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13824,7 +13859,8 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.kill_assists",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13859,17 +13895,20 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.self_kills",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
   },
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.time_dead_seconds",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
   },
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.time_dead_seconds_raw",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13894,7 +13933,7 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "warnings",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/leaderboard",
@@ -14384,7 +14423,8 @@
   {
    "endpoint": "/api/stats/player/{player_name}",
    "key": "discord_linked",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice"
   },
   {
    "endpoint": "/api/stats/player/{player_name}",
@@ -14424,17 +14464,20 @@
   {
    "endpoint": "/api/stats/player/{player_name}",
    "key": "stats.favorite_map",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice"
   },
   {
    "endpoint": "/api/stats/player/{player_name}",
    "key": "stats.favorite_weapon",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice"
   },
   {
    "endpoint": "/api/stats/player/{player_name}",
    "key": "stats.games",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice"
   },
   {
    "endpoint": "/api/stats/player/{player_name}",
@@ -14469,12 +14512,14 @@
   {
    "endpoint": "/api/stats/player/{player_name}",
    "key": "stats.playtime_hours",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice"
   },
   {
    "endpoint": "/api/stats/player/{player_name}",
    "key": "stats.total_xp",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice"
   },
   {
    "endpoint": "/api/stats/player/{player_name}",
@@ -16323,7 +16368,7 @@
   {
    "endpoint": "/api/stats/trends",
    "key": "dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/trends",
@@ -16338,42 +16383,50 @@
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.et_brewdog",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.etl_adlernest",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.etl_frostbite",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.etl_sp_delivery",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.goldrush",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.supply",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.sw_goldrush_te",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",
    "key": "map_distribution.te_escape2",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: Home's insights sort the whole map distribution and draw the top eight"
   },
   {
    "endpoint": "/api/stats/trends",

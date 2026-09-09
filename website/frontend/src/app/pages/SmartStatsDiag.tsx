@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSessions, useStorytellingCompleteness, type DiagScope } from '../lib/queries';
 import type { StorytellingCompleteness } from '../lib/types';
-import { Absent, Lbl, lblStyle, Pending, rowStyle, SectionHead, StatusDot, Unavailable } from '../components/ui';
+import { Absent, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, StatusDot, Unavailable, figure } from '../components/ui';
 
 /**
  * Smart Stats diagnostics (docs/design/12 row 29) — legacy
@@ -155,6 +155,13 @@ export function SmartStatsDiag() {
             ))}
           </div>
 
+          {/* The counts behind the ratios (ledger 2026-09-09): what was unlinked
+            * or mislinked, how many rounds the kills span, whether KIS ran, and
+            * the impact sum it produced. */}
+          <Meta>
+            {figure(d.unlinked_kills)} kills without a round · {figure(d.wrong_round_kills)} in the wrong round · {figure(d.distinct_rounds_in_kills)} distinct rounds in the kills ·
+            {' '}KIS {d.kis_computed ? 'computed' : 'not computed'}{d.kis_total_impact_sum != null ? ` · impact sum ${figure(Math.round(d.kis_total_impact_sum))}` : ''}
+          </Meta>
           <div data-parity="smart-stats-diag.warnings" style={{ marginTop: 'var(--space-6)' }}>
             {d.warnings.length === 0 ? (
               <div style={{ ...rowStyle, display: 'flex', alignItems: 'baseline', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
