@@ -3050,8 +3050,17 @@ export interface ProxQuality {
     correlation_count?: number;
     complete_count?: number;
     avg_completeness_pct?: number;
+    /** Round SIDES the correlation expected against those proximity holds,
+     *  and the two ways they can be missing (typed 2026-09-10). */
+    expected_round_sides?: number;
+    present_proximity_sides?: number;
+    missing_existing_round_sides?: number;
+    unpaired_round_sides?: number;
+    latest_created_at?: string | null;
   };
   linkage?: { scope: string; status: string; breach_count: number };
+  /** When the KIS and the context caches were last written. */
+  cache_freshness?: { status: string; latest_context_created_at: string | null; latest_kis_created_at: string | null };
   /** RECORDS, not strings — joining them rendered "[object Object]" in the
    *  truth strip precisely when a warning existed (Codex on #861). */
   warnings: { code: string; level: string; message: string }[];
@@ -3385,6 +3394,8 @@ export interface CarrierReturns {
     returner_name: string | null; returner_team: string; flag_team: string;
     original_carrier_guid: string; return_delay_ms: number; map_name: string;
     return_time: number;
+    /** Where the flag lay when it was returned (map units). */
+    drop_x?: number; drop_y?: number; drop_z?: number;
   }[];
   /** avg_delay_ms arrives as NULL (not absent) on an empty scope —
    *  measured on 2026-09-01 and 2026-05-01. */
@@ -3397,6 +3408,9 @@ export interface VehicleProgress {
     vehicle_name: string; vehicle_type: string; map_name: string;
     session_date: string; round_number: number; total_distance: number;
     max_health: number; final_health: number; destroyed_count: number;
+    /** Where the mover began and ended the round (0,0,0 when unrecorded). */
+    start_x?: number; start_y?: number; start_z?: number;
+    end_x?: number; end_y?: number; end_z?: number;
   }[];
 }
 
@@ -3661,6 +3675,8 @@ export interface ProxEventDetail {
   round_number: number;
   round_start_unix: number | null;
   round_end_unix: number | null;
+  /** shared/round_time.py's canonical duration; absent on older recordings. */
+  round_duration_seconds?: number | null;
   map_name: string;
   target_guid: string | null;
   target_name: string | null;
@@ -4199,7 +4215,15 @@ export interface ProxTeamplay {
     avg_delay_ms: number; times_focused: number; focus_escapes: number;
     kill_rate_pct: number;
   }[];
-  sync: unknown[];
+  /** The same row shape as crossfire_kills, ranked by delay; and the
+   *  focus-survival board, which adds the survival share. */
+  sync: ProxTeamplayRow[];
+  focus_survival?: (ProxTeamplayRow & { survival_rate_pct: number })[];
+}
+export interface ProxTeamplayRow {
+  guid: string; name: string | null; crossfire_kills: number;
+  crossfire_participations: number; crossfire_final_blows: number;
+  avg_delay_ms: number; times_focused: number; focus_escapes: number;
 }
 
 export interface ProxTradesSummary {
