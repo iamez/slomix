@@ -8,6 +8,7 @@ import profile from './__fixtures__/api_players_identifier_profile.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';
+import playerCard from './__fixtures__/api_players_identifier_card.json';
 
 /** The player page against the RECORDED profile (vid, sections=all). */
 function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
@@ -24,6 +25,9 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   }
   if (/^\/api\/players\/[^/]+\/memory-card$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(memoryCard) } as Response);
+  }
+  if (/^\/api\/players\/[^/]+\/card$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(playerCard) } as Response);
   }
   return Promise.reject(new Error(`unexpected endpoint: ${path}`));
 }
@@ -321,6 +325,28 @@ describe('PlayerProfilePage', () => {
       vi.restoreAllMocks();
     }
   });
+  it('the player card survives a null rating value and withheld percentiles, and calls a 404 an absence', async () => {
+    const thin = { ...(playerCard as object), small_sample: true, rating: { value: null, tier: null, games_rated: null, trend: null }, percentiles: { dpm: null, kd: null } };
+    const withThin = (input: RequestInfo | URL): Promise<Response> => {
+      if (/^\/api\/players\/[^/]+\/card$/.test(String(input).split('?')[0])) return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(thin) } as Response);
+      return fixtureFetch(input);
+    };
+    renderProfile('vid', withThin);
+    await waitFor(() => expect(screen.getByText('not rated yet')).toBeInTheDocument());
+    expect(screen.getByText(/percentiles withheld under 10 rounds/)).toBeInTheDocument();
+    expect(screen.getAllByText('withheld').length).toBe(2);
+  });
+
+  it('the player card reads a 404 as no card, not as a failed request', async () => {
+    const gone = (input: RequestInfo | URL): Promise<Response> => {
+      if (/^\/api\/players\/[^/]+\/card$/.test(String(input).split('?')[0])) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({ detail: 'No recent rounds for player' }) } as Response);
+      return fixtureFetch(input);
+    };
+    renderProfile('vid', gone);
+    await waitFor(() => expect(screen.getByText(/no card — no counted round in the last 90 days/)).toBeInTheDocument());
+    expect(screen.queryByText(/player card: unavailable/)).toBeNull();
+  });
+
 });
 
 // ---------------------------------------------------------------------------

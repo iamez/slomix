@@ -14,5 +14,7 @@
  "/api/datasets _note": "documentation string inside the payload",
  "/api/stats/last-session map_counts.*": "data-map: the keys are map names (a table of counts by map), not fields",
  "/api/storytelling/kill-impact entries.*": "duplicate: `entries` is the same list as `players` (kis.py serves both names for the legacy page); the Story page reads `players`",
+ "/api/players/{identifier}/card percentiles.*": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source",
+ "/api/greatshot/{demo_id} highlights.clip_demo_path": "the server path of the cut clip; clip_download is built from the same row, so the path is the link's title and never a state of its own (Codex on #1003)",
  "/api/proximity/event/{event_id} round_end_unix": "the round's end wall time; the page prints the canonical round_duration_seconds instead of end − start, which includes pauses and reads 0:00 on zero sentinels (Codex on #1004)"
 }

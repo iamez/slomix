@@ -55,7 +55,9 @@ class _MovementMixin:
         players = []
         for r in (rows or []):
             distance = float(r[3] or 0)
-            alive_ms = int(r[8] or 0)
+            # NULL stays NULL: a track without a duration has no alive time,
+            # and 0 would read as "never alive" (Codex on #1002).
+            alive_ms = int(r[8]) if r[8] is not None else None
             players.append({
                 "guid_short": r[0],
                 "name": strip_et_colors(r[1] or r[0]),
@@ -64,14 +66,14 @@ class _MovementMixin:
                 # Distance per minute alive says something a session total
                 # cannot: a player with twice the alive time naturally walks
                 # twice as far without being any more active.
-                "distance_per_min": round(distance / (alive_ms / 60000), 1) if alive_ms > 0 else None,
+                "distance_per_min": round(distance / (alive_ms / 60000), 1) if alive_ms else None,
                 "avg_speed": round(float(r[4] or 0), 1),
                 "peak_speed": round(float(r[5] or 0), 1),
                 "sprint_pct": (
                     round(100.0 * float(r[6] or 0) / (alive_ms / 1000), 1)
-                    if alive_ms > 0 else None
+                    if alive_ms else None
                 ),
-                "post_spawn_distance": round(float(r[7] or 0), 1),
+                "post_spawn_distance": round(float(r[7]), 1) if r[7] is not None else None,
                 "alive_ms": alive_ms,
             })
 
