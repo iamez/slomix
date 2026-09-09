@@ -9,6 +9,7 @@ import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
 import { Lbl, Meta, SectionHead, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
+import { utcStamp } from '../lib/utcStamp';
 import { stripEtColors } from '../lib/names';
 import {
   useProxHeadshotRates, useProxKillOutcomes, useProxObjectivePressure,
@@ -91,8 +92,19 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
                   {d.v5_counts_unknown.length > 0 && <Meta>unknown: {d.v5_counts_unknown.join(', ')}</Meta>}
                 </Cluster>
                 {d.top_duos_partial && <Meta>the duo list is partial — not every pairing of the scope was scored</Meta>}
-                <Meta>{figure(d.range_days)}-day scope{d.generated_at ? ` · computed ${d.generated_at.slice(0, 16).replace('T', ' ')}` : ''}</Meta>
+                {!d.ready && d.message && <Meta>{d.message}</Meta>}
+                <Meta>{figure(d.range_days)}-day scope{d.generated_at ? ` · computed ${utcStamp(d.generated_at)}` : ''}</Meta>
               </Stack>
+              {/* The crossfire duos the endpoint ranks (legacy proximity.js drew them; the SPA dropped them until 2026-09-09). */}
+              {d.top_duos.length > 0 && (
+                <Stack gap={1} className="rows">
+                  <Lbl style={{ fontSize: 'var(--fs-caption)' }}>crossfire duos</Lbl>
+                  {d.top_duos.slice(0, 5).map((duo) => (
+                    <ProxRow key={`${duo.player1}+${duo.player2}`} name={`${stripEtColors(duo.player1)} + ${stripEtColors(duo.player2)}`}
+                      mid={`${figure(duo.crossfire_count)} crossfires · ${figure(Math.round(duo.avg_delay_ms))} ms apart`} val={`${figure(duo.crossfire_kills)} kills`} />
+                  ))}
+                </Stack>
+              )}
             </Stack>
           )}
         </ProxPanel>

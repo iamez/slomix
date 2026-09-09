@@ -9,7 +9,7 @@
 import { mmss } from '../components/RoundsTable';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { Stack } from '../components/layout';
-import { Lbl, Meta, figure } from '../components/ui';
+import { Lbl, Meta, figure, decimals } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import type { CarrierReturns, ObjectiveRuns } from '../lib/types';
@@ -75,14 +75,27 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                     {figure(d.summary.total_carries)} carries · {figure(d.summary.total_secures ?? 0)} secured
                     {' · '}{figure(d.summary.total_killed ?? 0)} carriers killed
                     {d.summary.secure_rate != null && <> · {d.summary.secure_rate.toFixed(1)}% secured</>}
+                    {d.summary.avg_distance != null && <> · {figure(Math.round(d.summary.avg_distance))} u per carry</>}
                   </Meta>
                 )}
                 {d.carriers.slice(0, 5).map((c) => (
                   <ProxRow
                     key={c.guid}
                     name={nameOf(c.name, c.guid)}
-                    mid={`${figure(c.secures)} secured · ${figure(c.killed)} killed · eff ${c.avg_efficiency.toFixed(2)}`}
+                    mid={`${figure(c.secures)} secured · ${figure(c.killed)} killed · ${figure(c.dropped)} dropped · eff ${c.avg_efficiency.toFixed(2)} · ${figure(Math.round(c.avg_duration_ms / 1000))} s per carry`}
                     val={`${figure(c.carries)} carries`}
+                  />
+                ))}
+                {/* The longest carries themselves: who, which side, how far
+                  * against the straight line, and when the flag was picked up. */}
+                {/* the endpoint answers the LATEST 20 carries, not the whole scope: this is the longest among them */}
+                {d.events.length > 0 && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>longest among the latest {figure(d.events.length)} carries</Lbl>}
+                {[...d.events].sort((a, b) => b.carry_distance - a.carry_distance).slice(0, 5).map((e, i) => (
+                  <ProxRow
+                    key={`${e.carrier_name ?? '?'}:${e.pickup_time}:${i}`}
+                    name={`${e.carrier_name ? stripEtColors(e.carrier_name) : 'unknown'} (${e.carrier_team.toLowerCase()}) · ${mapLabel(e.map_name)}`}
+                    mid={`${e.outcome}${e.killer_name ? ` by ${stripEtColors(e.killer_name)}` : ''} · ${figure(Math.round(e.carry_distance))} u carried, ${figure(Math.round(e.beeline_distance))} u straight (eff ${decimals(e.efficiency)}) · ${figure(Math.round(e.duration_ms / 1000))} s · picked up at ${mmss(e.pickup_time / 1000)}`}
+                    val={e.flag_team.replace(/flag$/, '')}
                   />
                 ))}
               </Stack>
@@ -237,7 +250,7 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.summary.objectives_tracked != null && (
-                  <Meta>{figure(d.summary.objectives_tracked)} objectives tracked · avg {figure(Math.round(d.summary.avg_time_near_obj_s ?? 0))} s near</Meta>
+                  <Meta>{figure(d.summary.objectives_tracked)} objectives tracked · avg {figure(Math.round(d.summary.avg_time_near_obj_s ?? 0))} s near{d.summary.avg_distance != null ? ` · avg ${figure(Math.round(d.summary.avg_distance))} u from the objective` : ''}</Meta>
                 )}
                 {d.players.slice(0, 5).map((p) => (
                   <ProxRow

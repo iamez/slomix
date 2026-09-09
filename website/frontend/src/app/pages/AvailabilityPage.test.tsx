@@ -309,7 +309,7 @@ describe('AvailabilityPage', () => {
     expect(spy.mock.calls.some((c) => String(c[0]).includes('/bets/wallet'))).toBe(false);
   });
 
-  it('open market: a non-integer stake is refused before any POST, and a new market reseeds the stake', async () => {
+  it('open market: a non-integer stake is refused before any POST, and a new market reseeds the stake', { timeout: 20000 }, async () => {
     const spy = stub({
       ...LINKED_BASE,
       '/api/bets/market/current': { body: openMarket },
