@@ -211,6 +211,8 @@ def referenced_names(corpus: str) -> set[str]:
 
 _IMPORT_RE = re.compile(r"""from\s+['"](\.{1,2}/[^'"]+)['"]""")
 _HOOK_DEF_RE = re.compile(r"export\s+(?:function|const)\s+(use[A-Z]\w*)")
+#: A type alias whose union carries path literals (queries.ts StoryPath) — not a caller.
+_TYPE_DEF_RE = re.compile(r"\btype\s+\w+\s*=")
 # Files whose only job is plumbing: the hook file itself and the generic
 # widgets every page imports. They join every scope alike, so they neither
 # separate endpoints nor hide anything — listed so the rule is visible.
@@ -252,6 +254,14 @@ def _hooks_defining(path: str, sources: dict[str, str]) -> tuple[set[str], set[s
         for m in re.finditer(re.escape(needle), text):
             before = text[: m.start()]
             defs = list(_HOOK_DEF_RE.finditer(before))
+            # ⛔ A literal inside a `type X = | '...' | '...'` union is not a
+            # call: without this the StoryPath union's members were credited
+            # to whichever hook happened to precede the union (useSsr once
+            # useStoryScopes was deleted), and unrelated callers of that hook
+            # entered the story endpoints' scope (Codex on #1008).
+            types = list(_TYPE_DEF_RE.finditer(before))
+            if types and (not defs or types[-1].start() > defs[-1].start()) and ";" not in text[types[-1].end(): m.start()]:
+                continue
             if defs:
                 hooks.add(defs[-1].group(1))
             else:
