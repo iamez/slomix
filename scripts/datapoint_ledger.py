@@ -288,8 +288,14 @@ def build(sources: dict[str, str], decisions: dict[str, str]) -> dict[str, Any]:
     def names_for(path: str) -> set[str]:
         files = scope_files(path, sources)
         if files is None:
-            scope_note[path] = "global: no caller found for the path literal, matched over the whole app"
-            return everywhere
+            # ⛔ No caller means NOTHING reads this endpoint. Matching its keys
+            # over the whole app let a field of a dead picker flip to `read`
+            # because another endpoint's field shares the name (Codex on
+            # #1002: /storytelling/scopes `sessions.accepted_round_count`
+            # went green when the box score printed its own scope). Dead is
+            # dead: every row stays unread until a caller exists.
+            scope_note[path] = "dead: no caller found for the path literal — nothing reads it, every row stays unread"
+            return set()
         key = frozenset(files)
         if key not in names_cache:
             names_cache[key] = referenced_names("\n".join(sources[f] for f in sorted(files)))

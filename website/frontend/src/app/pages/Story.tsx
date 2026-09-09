@@ -44,6 +44,12 @@ import type {
  */
 
 /** The generated paragraph, printed as prose and labelled as generated. */
+/** One stamp for a unix time on this page: UTC, minute precision, the same
+ *  string on every machine — never the browser's locale and zone. */
+function utcStamp(unix: number): string {
+  return `${new Date(unix * 1000).toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+}
+
 function Narrative({ gsid }: { gsid: number }) {
   const q = useStoryNarrative(gsid);
   if (q.isPending) return <Pending label="narrative" />;
@@ -71,6 +77,26 @@ function Narrative({ gsid }: { gsid: number }) {
 
 /** Map-by-map points. This is the scoreboard, and it is the one panel here
  * whose numbers come straight off the rounds rather than out of a model. */
+/** Every storytelling endpoint answers with the same scope object; it is
+ *  printed ONCE, from the first answer that carries one — the box score
+ *  when it is up, otherwise win contribution or movement (react-query
+ *  dedups the calls, so this costs nothing). Outside the box-score panel
+ *  on purpose: a failed semaphore must not take the evening's scope with it
+ *  (Codex on #1002). */
+function ScopeLine({ gsid }: { gsid: number }) {
+  const box = useStoryBoxScore(gsid);
+  const win = useStoryWinContribution(gsid);
+  const movement = useStoryMovement(gsid);
+  const scope = box.data?.scope ?? win.data?.scope ?? movement.data?.scope;
+  if (!scope) return null;
+  return (
+    <Meta>
+      scope: {scope.kind.replace(/_/g, ' ')} · {figure(scope.accepted_round_count)} accepted rounds · {scope.dates.join(', ')} · {scope.distinct_map_names.length} distinct maps ({scope.distinct_map_names.join(', ')})
+      {scope.last_round_unix != null ? ` · last round ${utcStamp(scope.last_round_unix)}` : ''}
+    </Meta>
+  );
+}
+
 function BoxScore({ data }: { data: StoryBoxScore }) {
   return (
     <Stack gap={3} parity="story.boxscore">
@@ -79,6 +105,8 @@ function BoxScore({ data }: { data: StoryBoxScore }) {
         aside={
           <span className="lbl">
             {data.alpha_team} {data.alpha_score} — {data.beta_score} {data.beta_team}
+            {data.winner === 'draw' ? ' · the evening was a draw' : data.winner_name ? ` · ${data.winner_name} took the evening` : ''}
+            {data.maps_completed != null ? ` · ${figure(data.maps_completed)} maps completed` : ''}
           </span>
         }
       />
@@ -189,6 +217,13 @@ function Moments({ gsid }: { gsid: number }) {
             </Cluster>
           </Cluster>
           <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)' }}>{m.narrative}</span>
+          {/* What a multikill or a team wipe carries besides its sentence:
+            * how long it took, who fell, how many, which side — fields the
+            * moments endpoint sends and the escorts endpoint does not
+            * (Codex on #1002: this line first landed in the wrong list). */}
+          {(m.duration_ms != null || (m.victims && m.victims.length > 0) || m.kills != null) && (
+            <Meta>{m.duration_ms != null ? `${figure(Math.round(m.duration_ms / 100) / 10)} s` : ''}{m.victims && m.victims.length > 0 ? `${m.duration_ms != null ? ' · ' : ''}${m.victims.join(', ')}` : ''}{m.kills != null ? ` · ${figure(Array.isArray(m.kills) ? m.kills.length : m.kills)} kills` : ''}{m.team ? ` · ${m.team}` : ''}</Meta>
+          )}
         </Stack>
       ))}
     </Stack>
@@ -482,8 +517,13 @@ function Movement({ gsid }: { gsid: number }) {
                   * all, and 0 would read as "stood still". */}
                 {p.distance_per_min == null ? '—' : figure(Math.round(p.distance_per_min))}
               </span>
-              <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 250, textAlign: 'right', whiteSpace: 'nowrap' }}>
-                per min · {figure(p.total_distance)} total · peak {figure(Math.round(p.peak_speed))}
+              <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', textAlign: 'right', maxWidth: '48ch' }}>
+                {/* avg = AVG over lives of each life's moving-only average
+                  * (PlayerTrack.avg_speed drops speed-0 samples; movement.py
+                  * averages lives unweighted) — not the session's mean speed.
+                  * post-spawn distance and alive time are null on tracks that
+                  * never carried them, and stay dashes, not zeros. */}
+                per min · {figure(p.total_distance)} total · peak {figure(Math.round(p.peak_speed))} · avg {figure(Math.round(p.avg_speed))} while moving (lives, unweighted) · {figure(p.lives)} lives · {p.post_spawn_distance == null ? '— after a spawn' : `${figure(Math.round(p.post_spawn_distance))} u after a spawn`} · {p.alive_ms == null ? '— alive' : `${mmss(Math.round(p.alive_ms / 1000))} alive`}
                 {p.sprint_pct == null ? '' : ` · ${p.sprint_pct.toFixed(0)}% sprint`}
               </span>
             </Cluster>
@@ -532,9 +572,14 @@ function WinContribution({ gsid }: { gsid: number }) {
             * pwc, and those disagree often enough that a page showing only
             * the board makes the badge look arbitrary (#783). */}
           <span className="m" style={{ fontSize: 'var(--fs-caption)', color: 'var(--color-text-500)' }}>
-            {mvpIsLeader
-              ? 'top of the board and MVP are the same player here — they are still two different metrics'
-              : `picked by waa_bayes (pwc in WON rounds ÷ rounds played, shrunk), not by the board below, which ${leader ? `${leader.name} leads` : 'is ordered by total pwc'}`}
+            {mvp.selected_by === 'total_pwc_fallback'
+              // compute_win_contribution() falls back to players_list[0] when
+              // nobody meets the MVP conditions — that IS the board's metric,
+              // so "two different metrics" would be false here.
+              ? 'nobody met the MVP conditions this session, so the MVP fell back to the top of the board by total pwc — one metric here, not two'
+              : mvpIsLeader
+                ? `top of the board and MVP are the same player here — they are still two different metrics (MVP picked by ${mvp.selected_by ?? 'waa_bayes'})`
+                : `picked by ${mvp.selected_by ?? 'waa_bayes'} (pwc in WON rounds ÷ rounds played, shrunk), not by the board below, which ${leader ? `${leader.name} leads` : 'is ordered by total pwc'}`}
           </span>
         </Stack>
       )}
@@ -551,6 +596,17 @@ function WinContribution({ gsid }: { gsid: number }) {
                 {p.rounds_won}–{p.rounds_lost}
               </span>
             </Cluster>
+            {/* The rest of the row (2026-09-09): waa raw, rounds played, pwc
+                round by round and the components the composite is made of. */}
+            <Meta>
+              {/* toFixed, not figure(): figure() folds to one decimal and would
+                * print waa 0.226 as 0.2 and two rounds' pwc as one number; each
+                * round is named by map and half, because a player who joined
+                * late has fewer entries than the session has rounds. */}
+              waa {p.waa.toFixed(3)} · {figure(p.total_rounds)} rounds
+              {p.per_round && p.per_round.length > 0 && <> · pwc by round {p.per_round.map((r) => `${r.map_name} R${r.round_number} ${r.won ? '✓' : '·'}${r.pwc.toFixed(2)}`).join(' · ')}</>}
+              {p.components && Object.keys(p.components).length > 0 && <> · {Object.entries(p.components).map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(3)}`).join(' · ')}</>}
+            </Meta>
           </Cluster>
         ))}
       </Stack>
@@ -881,6 +937,21 @@ export function KisDetails({ gsid, guid, name }: { gsid: number; guid: string; n
                 </span>
                 <span style={{ fontSize: 'var(--fs-small)' }}>{k.victim_name}</span>
                 <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>{k.map_name} R{k.round_number}</span>
+                {(k.is_carrier_kill || k.is_during_push || k.is_crossfire) && (
+                  <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>{[k.is_carrier_kill && 'carrier', k.is_during_push && 'during push', k.is_crossfire && 'crossfire'].filter(Boolean).join(' · ')}</span>
+                )}
+                {/* kis.py stores 0 for a kill with no combat-position record
+                  * and the endpoint COALESCEs to 0, so absence arrives as a
+                  * number. Nobody kills at 0 hp and no kill happens at 0v0
+                  * alive: those values are the missing record, not a
+                  * measurement, and are left out (Codex on #1002). */}
+                {(() => {
+                  const alive = k.axis_alive != null && k.allies_alive != null && (k.axis_alive > 0 || k.allies_alive > 0) ? ` · ${figure(k.axis_alive)}v${figure(k.allies_alive)} alive` : '';
+                  const hp = k.killer_health != null && k.killer_health > 0 ? ` · killer at ${figure(k.killer_health)} hp` : '';
+                  return (alive || hp || k.base_impact != null) ? (
+                    <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }} title="base impact · alive on each side at the kill · the killer's health (a kill recorded without its combat position carries neither)">base {k.base_impact != null ? figure(k.base_impact) : '—'}{alive}{hp}</span>
+                  ) : null;
+                })()}
               </Cluster>
               <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>
                 {applied.length === 0
@@ -1075,7 +1146,7 @@ function Roles({ gsid }: { gsid: number }) {
             rows={gravity.data.players}
             value={(r) => r.gravity_score ?? 0}
             detail={(r) => (r.engagements == null ? null
-              : `${figure(r.engagements)} engagements · ${r.avg_attackers ?? '—'} attackers avg · ${r.total_attention_ms != null ? mmss(Math.round(r.total_attention_ms / 1000)) : '—'} under attention`)}
+              : `${figure(r.engagements)} engagements · ${r.avg_attackers ?? '—'} attackers avg · ${r.total_attention_ms != null ? mmss(Math.round(r.total_attention_ms / 1000)) : '—'} under attention${r.total_engaged_ms != null ? ` · ${mmss(Math.round(r.total_engaged_ms / 1000))} engaged` : ''}${r.alive_ms != null ? ` of ${mmss(Math.round(r.alive_ms / 1000))} alive` : ''}`)}
           />
         )}
         {space.data && (
@@ -1095,7 +1166,7 @@ function Roles({ gsid }: { gsid: number }) {
             rows={enabler.data.players}
             value={(r) => r.enabler_score ?? 0}
             detail={(r) => (r.enabled_kills == null ? null
-              : `${figure(r.enabled_kills)} enabled · ${figure(r.crossfire_assists ?? 0)} crossfire · ${figure(r.trade_assists ?? 0)} trade · ${figure(r.own_kills ?? 0)} own kills`)}
+              : `${figure(r.enabled_kills)} enabled · ${figure(r.crossfire_assists ?? 0)} crossfire · ${figure(r.trade_assists ?? 0)} trade${r.total_assists != null ? ` (${figure(r.total_assists)} assists)` : ''} · ${figure(r.own_kills ?? 0)} own kills`)}
           />
         )}
         {lurker.data && (
@@ -1106,8 +1177,14 @@ function Roles({ gsid }: { gsid: number }) {
             value={(r) => r.solo_pct ?? 0}
             unit="%"
             detail={(r) => (r.solo_samples == null ? null
-              : `${figure(r.solo_samples)} of ${figure(r.total_samples ?? 0)} samples · ≈ ${r.solo_time_est_s != null ? mmss(Math.round(r.solo_time_est_s)) : '—'} alone · ${figure(r.tracks ?? 0)} tracks`)}
+              : `${figure(r.solo_samples)} of ${figure(r.total_samples ?? 0)} samples · ≈ ${r.solo_time_est_s != null ? mmss(Math.round(r.solo_time_est_s)) : '—'} alone${r.alive_ms != null ? ` of ${mmss(Math.round(r.alive_ms / 1000))} alive` : ''} · ${figure(r.tracks ?? 0)} tracks`)}
           />
+        )}
+        {lurker.data && (lurker.data.solo_radius != null || lurker.data.coverage) && (
+          <Meta>
+            alone = no teammate within {figure(lurker.data.solo_radius ?? 500)} u{lurker.data.downsample_ms != null ? `, sampled every ${figure(lurker.data.downsample_ms)} ms` : ''}
+            {lurker.data.coverage && <> · read {figure(lurker.data.coverage.tracks_used)} of {figure(lurker.data.coverage.tracks_fetched)} eligible tracks{lurker.data.coverage.tracks_skipped > 0 ? ` (${figure(lurker.data.coverage.tracks_skipped)} skipped)` : ''} — tracks of ≤ 2 s, without a path or without a round start are dropped before the count</>}
+          </Meta>
         )}
         {camp.data && (
           <RoleBoard
@@ -1124,7 +1201,13 @@ function Roles({ gsid }: { gsid: number }) {
           <Meta>
             camp profile read {figure(camp.data.coverage.tracks_used)} of {figure(camp.data.coverage.tracks_fetched)} tracks
             {camp.data.coverage.tracks_skipped > 0 && <> ({figure(camp.data.coverage.tracks_skipped)} skipped)</>}
-            {camp.data.thresholds && <> · hold = within {figure(camp.data.thresholds.hold_radius_u ?? 96)} u for {figure(camp.data.thresholds.hold_min_s ?? 4)} s · still = under {figure(camp.data.thresholds.still_speed_lt ?? 10)} u/s for {figure(camp.data.thresholds.still_min_s ?? 3)} s · cells {figure(camp.data.thresholds.cell_u ?? 512)} u · alive ≥ {figure(camp.data.thresholds.min_alive_s ?? 60)} s</>}
+            {camp.data.thresholds && <> · hold = within {figure(camp.data.thresholds.hold_radius_u ?? 96)} u for {figure(camp.data.thresholds.hold_min_s ?? 4)} s · still = under {figure(camp.data.thresholds.still_speed_lt ?? 10)} u/s for {figure(camp.data.thresholds.still_min_s ?? 3)} s · cells {figure(camp.data.thresholds.cell_u ?? 512)} u · alive ≥ {figure(camp.data.thresholds.min_alive_s ?? 60)} s · first {figure(camp.data.thresholds.spawn_skip_s ?? 3)} s after a spawn left out of the busiest cells only</>}
+          </Meta>
+        )}
+        {(enabler.data?.time_window_ms != null || space.data?.window_ms != null) && (
+          <Meta>
+            {enabler.data?.time_window_ms != null && <>enabler counts a teammate's kill within ±{figure(enabler.data.time_window_ms / 1000)} s and {figure(enabler.data.distance_threshold ?? 500)} u</>}
+            {space.data?.window_ms != null && <>{enabler.data?.time_window_ms != null ? ' · ' : ''}space counts a teammate's frag within {figure(space.data.window_ms / 1000)} s of the death</>}
           </Meta>
         )}
         {/* Not from the position tracker like its four neighbours — this one
@@ -1254,6 +1337,7 @@ export function SessionStory({ gsid }: { gsid: number }) {
       {box.isPending && <Pending label="scoreboard" />}
       {box.isError && <Unavailable what="scoreboard" />}
       {box.data && <BoxScore data={box.data} />}
+      <ScopeLine gsid={gsid} />
 
       <Stack gap={3}>
         <SectionHead label="moments" aside={<span className="lbl">detected · impact 1–5</span>} />
@@ -1428,6 +1512,7 @@ export function SessionStory({ gsid }: { gsid: number }) {
                 </Cluster>
                 <span className="m" style={{ fontSize: 'var(--fs-small)', color: 'var(--color-text-400)', maxWidth: '62ch' }}>
                   {p.narrative}
+                  {p.top_trait && <> <span className="lbl" style={{ fontSize: 'var(--fs-caption)' }}>· top trait {p.top_trait}</span></>}
                 </span>
               </Stack>
             ))}
