@@ -2168,8 +2168,10 @@ export interface StoryMovementPlayer {
   peak_speed: number;
   /** null for the same reason as distance_per_min (movement.py:70-73). */
   sprint_pct: number | null;
-  post_spawn_distance: number;
-  alive_ms: number;
+  /** Null on tracks that never carried them (older captures) — movement.py
+   *  keeps the NULL instead of folding it to 0. */
+  post_spawn_distance: number | null;
+  alive_ms: number | null;
 }
 
 /** GET /api/storytelling/useless-defense-deaths — defensive deaths that gave

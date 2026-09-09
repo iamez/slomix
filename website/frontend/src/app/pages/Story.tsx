@@ -518,7 +518,12 @@ function Movement({ gsid }: { gsid: number }) {
                 {p.distance_per_min == null ? '—' : figure(Math.round(p.distance_per_min))}
               </span>
               <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', textAlign: 'right', maxWidth: '48ch' }}>
-                per min · {figure(p.total_distance)} total · peak {figure(Math.round(p.peak_speed))} · avg {figure(Math.round(p.avg_speed))} · {figure(p.lives)} lives · {figure(Math.round(p.post_spawn_distance))} u after a spawn · {mmss(Math.round(p.alive_ms / 1000))} alive
+                {/* avg = AVG over lives of each life's moving-only average
+                  * (PlayerTrack.avg_speed drops speed-0 samples; movement.py
+                  * averages lives unweighted) — not the session's mean speed.
+                  * post-spawn distance and alive time are null on tracks that
+                  * never carried them, and stay dashes, not zeros. */}
+                per min · {figure(p.total_distance)} total · peak {figure(Math.round(p.peak_speed))} · avg {figure(Math.round(p.avg_speed))} while moving (lives, unweighted) · {figure(p.lives)} lives · {p.post_spawn_distance == null ? '— after a spawn' : `${figure(Math.round(p.post_spawn_distance))} u after a spawn`} · {p.alive_ms == null ? '— alive' : `${mmss(Math.round(p.alive_ms / 1000))} alive`}
                 {p.sprint_pct == null ? '' : ` · ${p.sprint_pct.toFixed(0)}% sprint`}
               </span>
             </Cluster>
@@ -594,9 +599,13 @@ function WinContribution({ gsid }: { gsid: number }) {
             {/* The rest of the row (2026-09-09): waa raw, rounds played, pwc
                 round by round and the components the composite is made of. */}
             <Meta>
-              waa {figure(Math.round(p.waa * 1000) / 1000)} · {figure(p.total_rounds)} rounds
-              {p.per_round && p.per_round.length > 0 && <> · pwc by round {p.per_round.map((r) => `${r.won ? '✓' : '·'}${figure(Math.round(r.pwc * 100) / 100)}`).join(' ')}</>}
-              {p.components && Object.keys(p.components).length > 0 && <> · {Object.entries(p.components).map(([k, v]) => `${k.replace(/_/g, ' ')} ${figure(Math.round(v * 1000) / 1000)}`).join(' · ')}</>}
+              {/* toFixed, not figure(): figure() folds to one decimal and would
+                * print waa 0.226 as 0.2 and two rounds' pwc as one number; each
+                * round is named by map and half, because a player who joined
+                * late has fewer entries than the session has rounds. */}
+              waa {p.waa.toFixed(3)} · {figure(p.total_rounds)} rounds
+              {p.per_round && p.per_round.length > 0 && <> · pwc by round {p.per_round.map((r) => `${r.map_name} R${r.round_number} ${r.won ? '✓' : '·'}${r.pwc.toFixed(2)}`).join(' · ')}</>}
+              {p.components && Object.keys(p.components).length > 0 && <> · {Object.entries(p.components).map(([k, v]) => `${k.replace(/_/g, ' ')} ${v.toFixed(3)}`).join(' · ')}</>}
             </Meta>
           </Cluster>
         ))}

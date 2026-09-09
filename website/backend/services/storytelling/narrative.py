@@ -748,20 +748,24 @@ class _NarrativeMixin:
             parts = []
 
             # Normalize to percentile rank (0-1) before comparing across metrics
-            traits = [
-                ("gravity", _pct_rank(gravity_score, raw_vals["gravity"])),
-                ("space", _pct_rank(space_score, raw_vals["space"])),
-                ("enabler", _pct_rank(enabler_score, raw_vals["enabler"])),
-                ("solo", _pct_rank(solo_pct, raw_vals["solo"])),
-            ]
-            top_trait = max(traits, key=lambda t: t[1])
+            # ⛔ Only the boards that HAVE a row for this player compete: a
+            # missing board would otherwise enter with a default of 0, rank
+            # 0.5 over its pool, and max() could crown "gravity" for a player
+            # who only has space telemetry. `all_guids` is the union of the
+            # four boards, so "any telemetry at all" is always true and is no
+            # guard (Codex on #1002, twice). No board → no trait, published
+            # as null.
+            traits = []
+            if g:
+                traits.append(("gravity", _pct_rank(gravity_score, raw_vals["gravity"])))
+            if s:
+                traits.append(("space", _pct_rank(space_score, raw_vals["space"])))
+            if e:
+                traits.append(("enabler", _pct_rank(enabler_score, raw_vals["enabler"])))
+            if lk:
+                traits.append(("solo", _pct_rank(solo_pct, raw_vals["solo"])))
+            top_trait = max(traits, key=lambda t: t[1]) if traits else (None, 0.0)
             pct = top_trait[1]  # How dominant is this trait (0.0-1.0)
-            # ⛔ A player with KIS data and NONE of the four role boards gets
-            # zeros above, `_pct_rank` answers 0.5 for every trait over an
-            # empty pool, and max() picks "gravity" by order. That is not a
-            # trait, it is the absence of telemetry — published as null
-            # (Codex on #1002).
-            has_role_telemetry = bool(g or s or e or lk)
 
             # ── Gravity: drew enemy heat ──
             if top_trait[0] == "gravity" and gravity_score > 0:
@@ -899,7 +903,7 @@ class _NarrativeMixin:
                 "name": name,
                 "narrative": "".join(parts).strip(),
                 "archetype": archetype,
-                "top_trait": top_trait[0] if has_role_telemetry else None,
+                "top_trait": top_trait[0],
                 "metrics": {
                     "gravity": gravity_score,
                     "space_score": space_score,
