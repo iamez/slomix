@@ -189,6 +189,16 @@
 # built on it must say which gate it used, or the site will show two different
 # kill totals for one evening.
 #
+# 2026-09-08, /api/players/{}/card DELETED: built as the profile's "player
+# card" panel (PlayerCardSection). Verified per docs/design/07 §C.1 — 200 on
+# the live server, response committed as a fixture. Its percentiles stay
+# labelled as their own pool and window (the 2026-09-06 measurement above).
+#
+# 2026-09-08, /api/sessions/{} — start_time / end_time now live on
+# /api/stats/session/{gsid}/basics as `clock` and the session head prints
+# them; the line stays until legacy sessions.js retires (same rule as
+# /api/stats/sessions), since the app never calls the date path.
+#
 # 2026-09-08, /api/sessions/{}/graphs STAYS, by design: the new app draws the
 # graphs from /api/stats/session/{gsid}/graphs (R3d — keyed by gaming
 # session, gate counts_toward_totals, response_model), never from the date
@@ -227,7 +237,6 @@
 /api/bets
 /api/greatshot/{}/highlights/render
 /api/players/{}/awards
-/api/players/{}/card
 /api/rounds/{}/vs-stats
 /api/sessions/{}
 /api/sessions/{}/graphs
