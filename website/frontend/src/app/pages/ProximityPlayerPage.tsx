@@ -203,7 +203,7 @@ export function ProximityPlayerPage() {
                   </Meta>
                 ))}
                 {row.missing_metrics && row.missing_metrics.length > 0 && <Meta>missing metrics: {row.missing_metrics.join(', ')}</Meta>}
-                {row.metric_weight_coverage != null && row.metric_weight_coverage < 1 && <Meta>weight coverage {figure(Math.round(row.metric_weight_coverage * 100))}% — the composite rests on the metrics that answered</Meta>}
+                {row.metric_weight_coverage != null && row.metric_weight_coverage < 1 && <Meta>weight coverage {figure(Math.round(row.metric_weight_coverage * 100))}% — an unanswered metric enters the composite at a neutral 0.5 percentile (prox_scoring.py), it is not left out</Meta>}
                 {(d.quality.failed_sources.length > 0 || d.quality.below_coverage_dropped > 0 || d.quality.metric_weight_coverage < 1) && (
                   <Meta>
                     quality: {d.quality.failed_sources.length > 0 ? `failed sources ${d.quality.failed_sources.join(', ')}` : 'every source answered'}

@@ -30,6 +30,15 @@ SERIES_BUCKET_MS = 1000
 SOLO_RADIUS = 500  # units from nearest teammate = "solo" (lurker convention)
 
 
+def _last_event(path: list) -> str | None:
+    """The `event` of the last path point, when the tracker wrote one."""
+    if not path:
+        return None
+    last = path[-1]
+    ev = last.get("event") if isinstance(last, dict) else None
+    return str(ev) if ev else None
+
+
 def _downsample_path(path: list, step_ms: int) -> list[dict]:
     """Thin a 200ms path to step_ms, keeping the rich per-point fields."""
     out: list[dict] = []
@@ -253,9 +262,11 @@ async def get_player_journey(
         ]
     except Exception as exc:
         logger.exception("player-journey objective lookup failed (continuing without)")
-        # Named, not zeroed: the summary says the count is unavailable rather
-        # than 0, and the page prints it as such (Codex on #1009).
+        # Named, not zeroed — and not partial either: a failure after the first
+        # query would otherwise leave the carrier rows in the lives while the
+        # summary says unavailable (Codex on #1009, twice).
         objective_events_unavailable = f"objective lookup failed: {type(exc).__name__}"
+        objective_events = []
 
     # Bucket every OTHER player's path once for the proximity series.
     others: list[dict] = []
@@ -354,7 +365,10 @@ async def get_player_journey(
             "duration_ms": int(r[6] or 0),
             "total_distance": float(r[8] or 0),
             "sprint_pct": float(r[9] or 0),
-            "death_type": "round_end" if death_ms is None else None,
+            # The tracker's last path event names how the life ended
+            # (killed / selfkill / fallen / world / teamkill / disconnect …);
+            # a life without a death time ended with the round.
+            "death_type": "round_end" if death_ms is None else _last_event(path),
             "path": _downsample_path(path, downsample_ms),
             "kills": kills,
             "death": death,
