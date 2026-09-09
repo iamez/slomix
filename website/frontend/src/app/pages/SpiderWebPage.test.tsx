@@ -405,6 +405,8 @@ describe('SpiderWebPage — line of sight (SW-3)', () => {
     await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
     expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')).toBeNull();
     expect(screen.queryByRole('button', { name: 'line of sight (oracle)' })).toBeNull();
+  });
+});
 
 describe('SpiderWebPage — the five Codex threads on #1005', () => {
   const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
