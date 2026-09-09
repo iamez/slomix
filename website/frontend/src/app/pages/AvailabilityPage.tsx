@@ -621,6 +621,12 @@ export function AvailabilityPage() {
             {pl.is_mock && (
               <Absent reason="this backend serves MOCK planning data and says so — nothing here is a real evening" />
             )}
+            {/* Counts the planning state derives from availability_entries even
+              * with no planning row (planning.py _planning_state) — the only
+              * summary an anonymous reader gets (Codex on #1008). */}
+            {(pl.participant_count != null || pl.committed_count != null) && (
+              <Meta>{figure(pl.participant_count ?? 0)} available tonight · {figure(pl.committed_count ?? 0)} committed</Meta>
+            )}
           </Stack>
           )}
         </Panel>
