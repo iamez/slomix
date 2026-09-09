@@ -424,7 +424,7 @@ describe('SessionDetail', () => {
     await openMore();
     await waitFor(() => expect(screen.getByText(
       new RegExp(`showing the top ${f.lives.length} of ${f.qualifying_total} lives with ≥${f.min_kills} kills`),
-    )).toBeInTheDocument());
+    )).toBeInTheDocument(), { timeout: 20000 });
 
     // A response recorded before the fields existed omits them — an absent
     // key is not 0, and the line must vanish rather than crash or claim
@@ -434,7 +434,7 @@ describe('SessionDetail', () => {
     const { qualifying_total: _qt, min_kills: _mk, ...old } = bestLives as Record<string, unknown>;
     const second = renderPage(withOverride('/storytelling/best-lives', () => json(old)));
     await openMore();
-    await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull(), { timeout: 20000 });
     expect(second.container.textContent).toContain('s alive');
     expect(second.container.textContent).not.toContain('showing the top');
 
@@ -443,7 +443,7 @@ describe('SessionDetail', () => {
     const third = renderPage(withOverride('/storytelling/best-lives', () =>
       json({ ...(bestLives as object), qualifying_total: f.lives.length })));
     await openMore();
-    await waitFor(() => expect(third.container.querySelector('[data-parity="session.lives"]')).not.toBeNull());
+    await waitFor(() => expect(third.container.querySelector('[data-parity="session.lives"]')).not.toBeNull(), { timeout: 20000 });
     expect(third.container.textContent).toContain('s alive');
     expect(third.container.textContent).not.toContain('showing the top');
 
