@@ -47,9 +47,13 @@ export function ActLink({ to, children, style }: { to: string; children: ReactNo
  * frozen-inventory diff and the H3 sweep key on these attributes, so every
  * section head can carry its identity without extra markup. */
 export function SectionHead({ label, aside, parity }: { label: ReactNode; aside?: ReactNode; parity?: string }) {
+  // A real <h2>, styled as the caption it always was: the page outline used
+  // to be one h1 and nothing else, so a screen reader could not jump
+  // between panels (visitor review 2026-09-07, a11y). Same size and colour
+  // as the label style, margin and weight reset so nothing moves.
   return (
     <div data-parity={parity} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-      <span style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{label}</span>
+      <h2 style={{ fontWeight: 'inherit', ...lblStyle, fontSize: 'var(--fs-caption)', margin: 0 }}>{label}</h2>
       {aside}
     </div>
   );
