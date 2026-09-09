@@ -4468,8 +4468,9 @@ export interface ProxMovers {
   limit: number;
   distance: (ProxMoversRow & { total_distance: number })[];
   sprint: (ProxMoversRow & { sprint_pct: number })[];
-  reaction: unknown[];
-  survival: unknown[];
+  /** Fastest reaction (ms to the first move after a hit) and longest life, top N each (recorded 5). */
+  reaction: (ProxMoversRow & { reaction_ms: number })[];
+  survival: (ProxMoversRow & { duration_ms: number })[];
 }
 
 /** mode ∈ kills_from | victims_die | player_dies | presence | aim — the

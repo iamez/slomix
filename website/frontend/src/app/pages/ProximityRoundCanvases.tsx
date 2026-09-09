@@ -53,6 +53,9 @@ function ClockBadge({ team, v }: { team: string; v: WaveClockValidation }) {
       {v.pass_ratio != null && (
         <> · {(v.pass_ratio * 100).toFixed(0)}% ({v.passing_landing_clusters}/{v.landing_clusters} clusters, {v.timing_observations} obs)</>
       )}
+      {/* the rest of the verdict's evidence (ledger 2026-09-09): the offset and the spawn callbacks it was checked against */}
+      {v.offset_ms != null && <> · offset {figure(v.offset_ms / 1000)} s</>}
+      {v.spawn_callbacks != null && <> · {figure(v.spawn_callbacks)} spawn callbacks{v.post_revive_spawn_callbacks != null && v.post_revive_spawn_callbacks > 0 ? ` (${figure(v.post_revive_spawn_callbacks)} post-revive)` : ''}</>}
     </Meta>
   );
 }
@@ -77,6 +80,14 @@ function WaveLedger({ sessionDate, mapName, roundNumber, roundStartUnix }: { ses
               <Cluster gap={4} style={{ flexWrap: 'wrap' }}>
                 {Object.entries(clocks).map(([team, v]) => <ClockBadge key={team} team={team} v={v} />)}
               </Cluster>
+            )}
+            {/* The clocks the ledger ran on, the protocol and the round length (ledger 2026-09-09). */}
+            {q.data.clocks && (
+              <Meta>
+                {q.data.clock_protocol} · round {figure(Math.round(q.data.round_len_ms / 1000))} s
+                {q.data.clocks.ALLIES && <> · allies wave every {q.data.clocks.ALLIES.interval_ms == null ? '—' : `${figure(Math.round(q.data.clocks.ALLIES.interval_ms / 1000))} s`}, offset {q.data.clocks.ALLIES.offset_ms == null ? '—' : `${figure(Math.round(q.data.clocks.ALLIES.offset_ms / 1000))} s`}</>}
+                {q.data.clocks.AXIS && <> · axis every {q.data.clocks.AXIS.interval_ms == null ? '—' : `${figure(Math.round(q.data.clocks.AXIS.interval_ms / 1000))} s`}, offset {q.data.clocks.AXIS.offset_ms == null ? '—' : `${figure(Math.round(q.data.clocks.AXIS.offset_ms / 1000))} s`}</>}
+              </Meta>
             )}
             {isFailureStatus(q.data.status) ? (
               <Unavailable what="wave cycles" />

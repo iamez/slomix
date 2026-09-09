@@ -28,6 +28,8 @@
  "/api/planning/today viewer": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row.",
  "/api/planning/today viewer.website_user_id": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row.",
  "/api/proximity/prox-scores players.rank": "assigned after the service filtered the cohort to this guid (useProxScoresForPlayer always sends player_guid), so it is 1 in every per-player answer; the cohort rank is the proximity leaderboard's (Codex on #1009)",
+ "/api/proximity/summary v5_counts.*": "iterated: Object.entries prints every source table's row count under 'v5 source rows in this scope' (ProximityOutcomes)",
+ "/api/proximity/events events.reaction_ms": "an alias: get_proximity_events sets reaction_ms and duration_ms from the same column (row[6]); combat_engagement has no reaction column, the drill-down's attackers carry first_hit_ms (Codex on #1010)",
  "/api/skill/formula weights.*": "iterated: FormulaWeights prints every metric's signed weight, its description (metrics.*) and its source (metric_sources.*) — SkillRating.tsx",
  "/api/skill/formula metrics.*": "iterated: printed beside each weight in FormulaWeights (SkillRating.tsx)",
  "/api/skill/formula metric_sources.*": "iterated: FormulaWeights maps every metric to its source (pcs / proximity) — SkillRating.tsx",

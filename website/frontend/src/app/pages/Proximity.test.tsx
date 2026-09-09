@@ -395,6 +395,10 @@ describe('Proximity', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'kanii' })[0]);
     await waitFor(() => expect(screen.getByText(/22 samples · mode kills_from/)).toBeInTheDocument());
     await waitFor(() => expect(screen.getByLabelText('pitch histogram')).toBeInTheDocument());
+    // the movers' other two boards and the timestamp (ledger 2026-09-09)
+    expect(screen.getByText('first move after a spawn')).toBeInTheDocument();
+    expect(screen.getByText('average life')).toBeInTheDocument();
+    expect(screen.getAllByText(/computed 2026-09-02 09:42 UTC/).length).toBeGreaterThan(0);
     // the circular statistics, the busiest zone's rose and the narrative (2026-09-09)
     await waitFor(() => expect(screen.getByText(/direction: mean yaw 31° · r 0\.28 · circular std ±91°/)).toBeInTheDocument());
     expect(screen.getByText(/a preferred direction \(Rayleigh p < 0\.001\)/)).toBeInTheDocument();
