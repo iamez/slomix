@@ -56,7 +56,12 @@ async def get_player_paths(
 
 
 @router.get("/replay/round/{round_id}/web")
-@limiter.limit("10/minute")
+# 60, not the router's 10: the spider-web page asks for a new moment on
+# every nudge (+200 ms) and for every point of view a reader tries, and ten
+# clicks a minute is ordinary exploring, not abuse (Codex on #1005). One
+# snapshot costs 2 ms without geometry and 45–110 ms with line of sight
+# (measured 2026-09-09), off the event loop — sixty a minute is nothing.
+@limiter.limit("60/minute")
 async def get_round_web(
     round_id: int,
     request: Request,
