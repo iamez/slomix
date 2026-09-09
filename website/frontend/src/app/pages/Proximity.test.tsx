@@ -253,6 +253,11 @@ describe('Proximity', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
     const newest = (scopes as { sessions: { session_date: string }[] }).sessions[0].session_date;
+    // The chip's hover names the three counts the scope carries (ledger 2026-09-09).
+    const first = (scopes as { sessions: { round_count: number; map_count: number; maps_played: number }[] }).sessions[0];
+    expect(screen.getByRole('button', { name: newest })).toHaveAttribute(
+      'title', `${first.round_count} rounds · ${first.map_count} distinct maps · ${first.maps_played} maps played`,
+    );
     const instrumentCalls = fetchSpy.mock.calls
       .map((c) => String(c[0]))
       // v7-status is the ONE deliberate exemption: the capture roadmap is

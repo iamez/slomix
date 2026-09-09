@@ -198,6 +198,11 @@ export function Proximity() {
   // independently caught the fall-through that would have fired thirteen
   // unbounded queries on a degraded page.
   const scopes = useProxScopes();
+  // Hover on a date chip: map_count is distinct names, maps_played counts
+  // replays as separate maps (completed R1s, the box score's rule), and a
+  // date can carry telemetry with zero completed R1s — hence both.
+  const chipTitle = (x: { map_count: number; maps_played: number; round_count: number } | undefined) =>
+    x == null ? undefined : `${x.round_count} rounds · ${x.map_count} distinct maps · ${x.maps_played} maps played`;
   const dates = [...new Set((scopes.data?.sessions ?? []).map((s) => s.session_date))].slice(0, 6);
   const [pickedDate, setPickedDate] = useState<string | null>(null);
   const windowPicked = pickedDate === 'window';
@@ -260,6 +265,7 @@ export function Proximity() {
                   type="button"
                   onClick={() => setPickedDate(d)}
                   aria-pressed={scopeDate === d}
+                  title={chipTitle(scopes.data?.sessions.find((x) => x.session_date === d))}
                   style={{ all: 'unset', cursor: 'pointer', fontSize: 'var(--fs-caption)', letterSpacing: '0.06em', color: scopeDate === d ? 'var(--color-text-100)' : 'var(--color-text-400)' }}
                 >
                   {d}

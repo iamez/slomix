@@ -3,7 +3,7 @@ import { useRecentRounds, useRoundViz } from '../lib/queries';
 import type { RoundViz, VizPlayer } from '../lib/types';
 import { mapLabel } from '../lib/maps';
 import { ChartCanvas } from '../../components/Chart';
-import { Absent, Lbl, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Lbl, Pending, rowStyle, SectionHead, Unavailable, figure } from '../components/ui';
 
 /**
  * Retro-viz (docs/design/12 row 23) — legacy retro-viz.js carried over:
@@ -121,20 +121,26 @@ function DamageTable({ players }: { players: VizPlayer[] }) {
   });
   return (
     <div data-parity="retro-viz.damage" style={{ overflowX: 'auto' }}>
-      <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
+      <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto auto auto', gap: 'var(--space-2)', padding: 'var(--space-2) 0' }}>
         <Lbl style={{ fontSize: 'var(--fs-caption)' }}>player</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>dmg given</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>dmg recv</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>tk dmg</Lbl>
         <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>tk recv</Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}><span title="kill assists">assists</span></Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}><span title="self kills">self</span></Lbl>
+        <Lbl style={{ fontSize: 'var(--fs-caption)', textAlign: 'right' }}>xp</Lbl>
       </div>
       {rows.map((p) => (
-        <div key={p.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0' }}>
+        <div key={p.guid} style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto auto auto', gap: 'var(--space-2)', alignItems: 'baseline', padding: 'var(--space-1) 0' }}>
           <span className="m" style={{ fontSize: 'var(--fs-small)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
           <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.damage_given, colMax.given, '96,165,250') }}>{p.damage_given.toLocaleString('en-US')}</span>
           <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.damage_received, colMax.received, '251,113,133') }}>{p.damage_received.toLocaleString('en-US')}</span>
           <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.team_damage_given, colMax.tk, '251,191,36') }}>{p.team_damage_given}</span>
           <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right', padding: '1px 6px', ...heat(p.team_damage_received, colMax.tkr, '167,139,250') }}>{p.team_damage_received}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right' }}>{p.kill_assists}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right' }}>{p.self_kills}</span>
+          <span className="m" style={{ fontSize: 'var(--fs-micro)', textAlign: 'right' }}>{figure(Math.round(p.xp))}</span>
         </div>
       ))}
     </div>

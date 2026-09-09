@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { titleFor } from '../lib/pageTitle';
 import { APP_ROUTES } from '../routes';
 
 /**
@@ -66,6 +68,8 @@ function SubNav({ section }: { section: 'stats' | 'telemetry' }) {
 export function AppShell() {
   const { pathname } = useLocation();
   const section = sectionFor(pathname);
+  // The tab names the page (lib/pageTitle.ts); a link preview reads app.html's static head.
+  useEffect(() => { document.title = titleFor(pathname); }, [pathname]);
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ borderBottom: '1px solid var(--color-rule-900)' }}>
@@ -116,11 +120,12 @@ export function AppShell() {
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#454340' }} />
               DEV
             </span>
-            {/* Known limitation until phase 6 (auth flows): the OAuth
-                callback returns to the legacy site, not to /app — the login
-                round-trip works, the return location does not yet. */}
+            {/* ?next= brings the callback back to THIS /app page; the
+                server accepts only a same-origin /app path (auth.py
+                _safe_next_path), so a foreign value falls back to the old
+                default return. */}
             <a
-              href="/auth/login"
+              href={`/auth/login?next=${encodeURIComponent(`/app${pathname === '/' ? '' : pathname}`)}`}
               style={{
                 fontSize: 'var(--fs-value)', letterSpacing: '0.14em', textTransform: 'uppercase',
                 color: 'var(--color-text-200)', textDecoration: 'none',
@@ -150,6 +155,7 @@ export function AppShell() {
         >
           <span>slomix · kept since january 2025</span>
           <span style={{ display: 'flex', gap: 'var(--space-4)' }}>
+            <Link to="/welcome" style={{ color: 'inherit', textDecoration: 'none' }}>welcome</Link>
             <Link to="/system" style={{ color: 'inherit', textDecoration: 'none' }}>system</Link>
             <Link to="/smart-stats-diag" style={{ color: 'inherit', textDecoration: 'none' }}>diag</Link>
             <span>et:legacy stopwatch</span>
