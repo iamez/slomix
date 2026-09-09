@@ -151,10 +151,11 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                   ))}
                 </Stack>
                 <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                  <Lbl>longest life</Lbl>
+                  {/* AVG(duration_ms) over the player's tracks (proximity_movement.py), not a single longest life */}
+                  <Lbl>average life</Lbl>
                   {d.survival.slice(0, 5).map((r) => (
                     <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
-                      val={`${figure(Math.round(r.duration_ms / 1000))} s`} />
+                      val={`avg ${figure(Math.round(r.duration_ms / 1000))} s`} />
                   ))}
                 </Stack>
               </Cluster>

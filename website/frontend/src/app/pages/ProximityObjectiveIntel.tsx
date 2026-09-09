@@ -88,7 +88,8 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                 ))}
                 {/* The longest carries themselves: who, which side, how far
                   * against the straight line, and when the flag was picked up. */}
-                {d.events.length > 0 && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>longest carries</Lbl>}
+                {/* the endpoint answers the LATEST 20 carries, not the whole scope: this is the longest among them */}
+                {d.events.length > 0 && <Lbl style={{ fontSize: 'var(--fs-caption)' }}>longest among the latest {figure(d.events.length)} carries</Lbl>}
                 {[...d.events].sort((a, b) => b.carry_distance - a.carry_distance).slice(0, 5).map((e, i) => (
                   <ProxRow
                     key={`${e.carrier_name ?? '?'}:${e.pickup_time}:${i}`}
@@ -249,7 +250,7 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.summary.objectives_tracked != null && (
-                  <Meta>{figure(d.summary.objectives_tracked)} objectives tracked · avg {figure(Math.round(d.summary.avg_time_near_obj_s ?? 0))} s near</Meta>
+                  <Meta>{figure(d.summary.objectives_tracked)} objectives tracked · avg {figure(Math.round(d.summary.avg_time_near_obj_s ?? 0))} s near{d.summary.avg_distance != null ? ` · avg ${figure(Math.round(d.summary.avg_distance))} u from the objective` : ''}</Meta>
                 )}
                 {d.players.slice(0, 5).map((p) => (
                   <ProxRow

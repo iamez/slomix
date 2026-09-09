@@ -253,7 +253,7 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
                   >
                     <ProxRow
                       name={`${e.target_name ? stripEtColors(e.target_name) : 'unknown'} · ${mapLabel(e.map)} r${e.round}${fmtRoundTime(e.round_time) != null ? ` · ${fmtRoundTime(e.round_time)}` : ''}`}
-                      mid={`${e.outcome ?? '—'}${e.crossfire ? ' · crossfire' : ''}${e.attackers != null && e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}${e.attacker_name ? ` · by ${stripEtColors(e.attacker_name)}${e.attacker_team ? ` (${e.attacker_team.toLowerCase()})` : ''}` : ''}${e.distance != null && e.distance > 0 ? ` · ${figure(Math.round(e.distance))} u` : ''}${e.reaction_ms != null && e.reaction_ms > 0 ? ` · reacted in ${figure(e.reaction_ms)} ms` : ''}`}
+                      mid={`${e.outcome ?? '—'}${e.crossfire ? ' · crossfire' : ''}${e.attackers != null && e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}${e.attacker_name ? ` · by ${stripEtColors(e.attacker_name)}${e.attacker_team ? ` (${e.attacker_team.toLowerCase()})` : ''}` : ''}${e.distance != null && e.distance > 0 ? ` · moved ${figure(Math.round(e.distance))} u` : ''}`}
                       val={e.duration_ms != null ? `${figure(Math.round(e.duration_ms / 100) / 10)} s` : '—'}
                     />
                   </button>

@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3266,
+  "read": 3265,
   "unread": 347,
-  "dropped": 76,
+  "dropped": 77,
   "endpoints": 180,
   "endpoints_fully_read": 83,
   "unmeasured": 3
@@ -478,9 +478,9 @@
    "dropped": 1
   },
   "/api/proximity/events": {
-   "read": 32,
+   "read": 31,
    "unread": 0,
-   "dropped": 0
+   "dropped": 1
   },
   "/api/proximity/focus-fire": {
    "read": 18,
@@ -6369,7 +6369,8 @@
   {
    "endpoint": "/api/proximity/events",
    "key": "events.reaction_ms",
-   "status": "read"
+   "status": "dropped",
+   "reason": "an alias: get_proximity_events sets reaction_ms and duration_ms from the same column (row[6]); combat_engagement has no reaction column, the drill-down's attackers carry first_hit_ms (Codex on #1010)"
   },
   {
    "endpoint": "/api/proximity/events",
