@@ -619,6 +619,16 @@ describe('SessionDetail — stats 2.0 summary', () => {
     expect(screen.getByRole('button', { name: /more about the night ▾/ })).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('a clock that knows its end but not its start still prints the end', async () => {
+    // _session_clock answers start:null, end, span:null when the first round
+    // lost both duration sources; the measured end must not vanish with it.
+    const endOnly = { ...basicsFull, clock: { start: null, end: '22:18', span_seconds: null } };
+    const { container } = renderPage(withOverride('/basics', () => json(endOnly)));
+    await waitFor(() => expect(container.querySelector('[data-parity="session.head"]')?.textContent).toContain('ended 22:18'));
+    expect(container.querySelector('[data-parity="session.head"]')?.textContent).toContain('start not measured');
+    expect(container.querySelector('[data-parity="session.head"]')?.textContent).not.toMatch(/wall clock|null/);
+  });
+
   it('a failed basics call leaves the rest of the summary standing', async () => {
     renderPage(withOverride('/basics', () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
     await waitFor(() => expect(screen.getByText(/the basics: unavailable/)).toBeInTheDocument());

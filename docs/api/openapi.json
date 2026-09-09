@@ -5355,6 +5355,9 @@
    },
    "SessionBasics": {
     "properties": {
+     "clock": {
+      "$ref": "#/components/schemas/SessionBasicsClock"
+     },
      "coverage": {
       "$ref": "#/components/schemas/SessionBasicsCoverage"
      },
@@ -5391,11 +5394,57 @@
     "required": [
      "gaming_session_id",
      "date",
+     "clock",
      "coverage",
      "teams",
      "players"
     ],
     "title": "SessionBasics",
+    "type": "object"
+   },
+   "SessionBasicsClock": {
+    "description": "When the evening ran — the two fields the date-keyed /api/sessions/{date}\ncarried and the gsid family did not (endpoint ratchet, 2026-09-08).",
+    "properties": {
+     "end": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "End"
+     },
+     "span_seconds": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Span Seconds"
+     },
+     "start": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Start"
+     }
+    },
+    "required": [
+     "start",
+     "end",
+     "span_seconds"
+    ],
+    "title": "SessionBasicsClock",
     "type": "object"
    },
    "SessionBasicsCoverage": {

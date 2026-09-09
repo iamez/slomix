@@ -443,6 +443,31 @@ export interface MatchDetails {
   player_count: number;
 }
 
+/** GET /api/players/{identifier}/card — the hover card the legacy player
+ *  list showed: the rating, the archetype, a 90-day form with percentiles
+ *  against the pool, a dpm sparkline, the badges earned and the career
+ *  totals. Recorded 2026-09-08 (corpus: api_players_identifier_card.json).
+ *  ⚠️ Its percentiles are NOT the rating components' — a different pool
+ *  and window (measured 2026-09-06: dpm 57 / survival 64 / revives 79
+ *  against 58.9 / 83.9 / 44.6 for one player). */
+export interface PlayerCard {
+  status: string;
+  guid: string;
+  name: string;
+  /** Present with null VALUES for a player without a rating row — not a
+   *  null object (Codex on #1001). */
+  rating: { value: number | null; tier: string | null; games_rated: number | null; trend: string | null } | null;
+  archetype: string | null;
+  window_days: number;
+  small_sample: boolean;
+  form: { rounds: number; kills: number; deaths: number; kd: number; dpm: number; revives: number; headshot_pct: number; time_dead_pct: number };
+  /** null values under small_sample (1–9 rounds in the window). */
+  percentiles: Record<string, number | null>;
+  sparkline_dpm: number[];
+  badges: { type: string; threshold: number; emoji: string; title: string; color: string }[];
+  career: { kills: number; sessions: number };
+}
+
 /** GET /api/seasons/current — corpus: api_seasons_current.json */
 export interface SeasonCurrent {
   id: string;
@@ -2575,6 +2600,11 @@ export interface SessionBasicsPlayer {
 export interface SessionBasics {
   gaming_session_id: number;
   date: string | null;
+  /** When the evening ran — the first counted round's start, the last one's
+   *  end (start + measured duration) and the span; nulls when unrecorded.
+   *  The two fields the date-keyed /api/sessions/{date} carried and the
+   *  gsid family did not (2026-09-08). */
+  clock: { start: string | null; end: string | null; span_seconds: number | null };
   coverage: SessionBasicsCoverage;
   teams: SessionBasicsTeam[];
   players: SessionBasicsPlayer[];

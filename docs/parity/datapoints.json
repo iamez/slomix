@@ -35,6 +35,7 @@
   "/api/planning/today": "8 files reachable from the endpoint's callers",
   "/api/player/{guid}/vs-stats": "13 files reachable from the endpoint's callers",
   "/api/player/{player_name}/matches": "11 files reachable from the endpoint's callers",
+  "/api/players/{identifier}/card": "11 files reachable from the endpoint's callers",
   "/api/players/{identifier}/memory-card": "11 files reachable from the endpoint's callers",
   "/api/players/{identifier}/profile": "13 files reachable from the endpoint's callers",
   "/api/players/{identifier}/wrapped": "7 files reachable from the endpoint's callers",
@@ -188,11 +189,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2923,
+  "read": 3085,
   "unread": 527,
-  "dropped": 190,
-  "endpoints": 179,
-  "endpoints_fully_read": 66,
+  "dropped": 67,
+  "endpoints": 180,
+  "endpoints_fully_read": 67,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -335,6 +336,11 @@
    "read": 18,
    "unread": 2,
    "dropped": 0
+  },
+  "/api/players/{identifier}/card": {
+   "read": 31,
+   "unread": 0,
+   "dropped": 4
   },
   "/api/players/{identifier}/memory-card": {
    "read": 12,
@@ -877,7 +883,7 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/basics": {
-   "read": 40,
+   "read": 44,
    "unread": 1,
    "dropped": 0
   },
@@ -952,9 +958,9 @@
    "dropped": 0
   },
   "/api/storytelling/best-lives": {
-   "read": 14,
+   "read": 21,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/box-score": {
    "read": 26,
@@ -962,14 +968,14 @@
    "dropped": 0
   },
   "/api/storytelling/camp-profile": {
-   "read": 28,
+   "read": 35,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/enabler": {
-   "read": 16,
+   "read": 23,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/formula": {
    "read": 17,
@@ -977,59 +983,59 @@
    "dropped": 19
   },
   "/api/storytelling/gravity": {
-   "read": 15,
+   "read": 22,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/kill-impact": {
-   "read": 25,
+   "read": 32,
    "unread": 1,
-   "dropped": 24
+   "dropped": 17
   },
   "/api/storytelling/kill-impact/details": {
-   "read": 39,
+   "read": 46,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/kill-matrix": {
-   "read": 15,
+   "read": 22,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/lurker-profile": {
-   "read": 20,
+   "read": 27,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/moments": {
-   "read": 18,
+   "read": 25,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/momentum": {
-   "read": 7,
+   "read": 14,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/momentum-session": {
-   "read": 18,
+   "read": 25,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/movement": {
-   "read": 15,
+   "read": 22,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/narrative": {
-   "read": 9,
+   "read": 16,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/player-narratives": {
-   "read": 10,
+   "read": 17,
    "unread": 0,
-   "dropped": 7
+   "dropped": 0
   },
   "/api/storytelling/scopes": {
    "read": 6,
@@ -1037,24 +1043,24 @@
    "dropped": 0
   },
   "/api/storytelling/space-created": {
-   "read": 14,
-   "unread": 0,
-   "dropped": 7
-  },
-  "/api/storytelling/synergy": {
-   "read": 13,
-   "unread": 0,
-   "dropped": 7
-  },
-  "/api/storytelling/useless-defense-deaths": {
-   "read": 15,
-   "unread": 0,
-   "dropped": 7
-  },
-  "/api/storytelling/win-contribution": {
    "read": 21,
    "unread": 0,
-   "dropped": 8
+   "dropped": 0
+  },
+  "/api/storytelling/synergy": {
+   "read": 20,
+   "unread": 0,
+   "dropped": 0
+  },
+  "/api/storytelling/useless-defense-deaths": {
+   "read": 22,
+   "unread": 0,
+   "dropped": 0
+  },
+  "/api/storytelling/win-contribution": {
+   "read": 29,
+   "unread": 0,
+   "dropped": 0
   },
   "/api/storytelling/win-contribution/formula": {
    "read": 13,
@@ -2965,6 +2971,185 @@
   {
    "endpoint": "/api/player/{player_name}/matches",
    "key": "xp",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "archetype",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.color",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.emoji",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.threshold",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.title",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.type",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career.sessions",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.dpm",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.headshot_pct",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.kd",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.revives",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.rounds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.time_dead_pct",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "guid",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.dpm",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.kd",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.revives",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.survival",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.games_rated",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.tier",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.trend",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.value",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "small_sample",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "sparkline_dpm",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "status",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "window_days",
    "status": "read"
   },
   {
@@ -14931,6 +15116,26 @@
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.end",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.span_seconds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.start",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
    "key": "coverage",
    "status": "read"
   },
@@ -16312,44 +16517,37 @@
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
@@ -16589,44 +16787,37 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16746,44 +16937,37 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -17067,44 +17251,37 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17331,44 +17508,37 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17543,44 +17713,37 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17695,44 +17858,37 @@
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
@@ -17832,44 +17988,37 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17964,44 +18113,37 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -18046,44 +18188,37 @@
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
@@ -18163,44 +18298,37 @@
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
@@ -18295,44 +18423,37 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18357,44 +18478,37 @@
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
@@ -18474,44 +18588,37 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18621,44 +18728,37 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18703,44 +18803,37 @@
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18835,44 +18928,37 @@
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
@@ -18942,8 +19028,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.components",
-   "status": "dropped",
-   "reason": "iterated: the win-contribution row prints every component through Object.entries"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19003,44 +19088,37 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.accepted_round_count",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.dates",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.distinct_map_names",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.gaming_session_id",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.kind",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.last_round_unix",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.version",
-   "status": "dropped",
-   "reason": "duplicate: every storytelling endpoint answers the same scope object; the Story page prints it once, from the box score (kind, accepted rounds, dates, maps, last round)"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
