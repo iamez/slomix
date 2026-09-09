@@ -159,27 +159,26 @@
   "/api/stats/weapons/by_player": "6 files reachable from the endpoint's callers",
   "/api/stats/weapons/hall-of-fame": "6 files reachable from the endpoint's callers",
   "/api/status": "16 files reachable from the endpoint's callers",
-  "/api/storytelling/best-lives": "22 files reachable from the endpoint's callers",
-  "/api/storytelling/box-score": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/camp-profile": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/enabler": "10 files reachable from the endpoint's callers",
+  "/api/storytelling/best-lives": "33 files reachable from the endpoint's callers",
+  "/api/storytelling/box-score": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/camp-profile": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/enabler": "23 files reachable from the endpoint's callers",
   "/api/storytelling/formula": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/gravity": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/kill-impact": "13 files reachable from the endpoint's callers",
+  "/api/storytelling/gravity": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/kill-impact": "25 files reachable from the endpoint's callers",
   "/api/storytelling/kill-impact/details": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/kill-matrix": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/lurker-profile": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/moments": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/momentum": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/momentum-session": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/movement": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/narrative": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/player-narratives": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/scopes": "dead: no caller found for the path literal — nothing reads it, every row stays unread",
-  "/api/storytelling/space-created": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/synergy": "12 files reachable from the endpoint's callers",
-  "/api/storytelling/useless-defense-deaths": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/win-contribution": "10 files reachable from the endpoint's callers",
+  "/api/storytelling/kill-matrix": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/lurker-profile": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/moments": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/momentum": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/momentum-session": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/movement": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/narrative": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/player-narratives": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/space-created": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/synergy": "24 files reachable from the endpoint's callers",
+  "/api/storytelling/useless-defense-deaths": "23 files reachable from the endpoint's callers",
+  "/api/storytelling/win-contribution": "23 files reachable from the endpoint's callers",
   "/api/storytelling/win-contribution/formula": "10 files reachable from the endpoint's callers",
   "/api/system/overview": "9 files reachable from the endpoint's callers",
   "/api/uploads": "6 files reachable from the endpoint's callers",
@@ -189,11 +188,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3200,
-  "unread": 393,
-  "dropped": 96,
-  "endpoints": 180,
-  "endpoints_fully_read": 76,
+  "read": 3202,
+  "unread": 400,
+  "dropped": 79,
+  "endpoints": 179,
+  "endpoints_fully_read": 74,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -209,8 +208,8 @@
   },
   "/api/availability/promotion-preferences": {
    "read": 4,
-   "unread": 0,
-   "dropped": 7
+   "unread": 7,
+   "dropped": 0
   },
   "/api/availability/promotions/campaign": {
    "read": 1,
@@ -323,9 +322,9 @@
    "dropped": 0
   },
   "/api/planning/today": {
-   "read": 16,
+   "read": 18,
    "unread": 0,
-   "dropped": 12
+   "dropped": 10
   },
   "/api/player/{guid}/vs-stats": {
    "read": 16,
@@ -1037,11 +1036,6 @@
    "unread": 0,
    "dropped": 0
   },
-  "/api/storytelling/scopes": {
-   "read": 0,
-   "unread": 0,
-   "dropped": 8
-  },
   "/api/storytelling/space-created": {
    "read": 21,
    "unread": 0,
@@ -1217,14 +1211,12 @@
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "encryption_enabled",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "notify_threshold",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -1234,32 +1226,27 @@
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "quiet_hours",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "signal_handle",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "signal_handle_masked",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "telegram_handle",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "telegram_handle_masked",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
+   "status": "unread"
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -2664,8 +2651,7 @@
   {
    "endpoint": "/api/planning/today",
    "key": "committed_count",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
+   "status": "read"
   },
   {
    "endpoint": "/api/planning/today",
@@ -2680,8 +2666,7 @@
   {
    "endpoint": "/api/planning/today",
    "key": "participant_count",
-   "status": "dropped",
-   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
+   "status": "read"
   },
   {
    "endpoint": "/api/planning/today",
@@ -18700,54 +18685,6 @@
    "endpoint": "/api/storytelling/player-narratives",
    "key": "status",
    "status": "read"
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "scope_version",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions.accepted_round_count",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions.distinct_map_names",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions.end_date",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions.gaming_session_id",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions.scope_version",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
-  },
-  {
-   "endpoint": "/api/storytelling/scopes",
-   "key": "sessions.start_date",
-   "status": "dropped",
-   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/space-created",

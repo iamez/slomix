@@ -3,6 +3,13 @@
 /api/availability viewer
 /api/availability/access can_submit
 /api/availability/access website_user_id
+/api/availability/promotion-preferences encryption_enabled
+/api/availability/promotion-preferences notify_threshold
+/api/availability/promotion-preferences quiet_hours
+/api/availability/promotion-preferences signal_handle
+/api/availability/promotion-preferences signal_handle_masked
+/api/availability/promotion-preferences telegram_handle
+/api/availability/promotion-preferences telegram_handle_masked
 /api/awards filters
 /api/awards/leaderboard filters
 /api/challenges/current week_start_date

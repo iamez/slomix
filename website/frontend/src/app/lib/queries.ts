@@ -163,7 +163,6 @@ import type {
   StoryPlayerNarratives,
   StoryPwcFormula,
   StoryRoleBoard,
-  StoryScopes,
   StorySynergy,
   StorytellingCompleteness,
   StoryUselessDefense,
@@ -784,15 +783,6 @@ export function useSsr(enabled: boolean) {
 // mounts them together on purpose: they answer different questions about the
 // same session, and a reader comparing them needs them to be the same run.
 // ---------------------------------------------------------------------------
-
-/** The session picker. gsid, never a date: a session can cross midnight. */
-export function useStoryScopes(limit: number) {
-  return useQuery({
-    queryKey: ['story-scopes', limit],
-    queryFn: () =>
-      apiGet('/api/storytelling/scopes', { query: { limit } }) as Promise<StoryScopes>,
-  });
-}
 
 function storyQuery<T>(name: string, path: StoryPath, gsid: number, extra?: Record<string, number | string>) {
   return {
