@@ -291,7 +291,6 @@
 /api/proximity/weapon-accuracy weapon_breakdown
 /api/records/maps/segments records.fastest_seconds
 /api/records/maps/segments records.winner_team
-/api/replay/round/{round_id}/web edges.distance
 /api/replay/round/{round_id}/web players.vx
 /api/replay/round/{round_id}/web players.vy
 /api/replay/round/{round_id}/web players.weapon

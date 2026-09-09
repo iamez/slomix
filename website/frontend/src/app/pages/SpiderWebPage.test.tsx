@@ -2,8 +2,8 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { makeQueryClient } from '../lib/queries';
-import { SpiderWebPage } from './SpiderWebPage';
+import { makeQueryClient, sameView } from '../lib/queries';
+import { SpiderWebPage, normalisePov } from './SpiderWebPage';
 import type { SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
 import worldJson from './__fixtures__/api_replay_round_round_id_web.json';
@@ -65,10 +65,10 @@ function stub(byUrl: (url: string) => unknown | undefined) {
   return spy;
 }
 
-function renderAt(roundId = '11344') {
+function renderAt(roundId = '11344', search = '') {
   return render(
     <QueryClientProvider client={makeQueryClient()}>
-      <MemoryRouter initialEntries={[`/spider-web/round/${roundId}`]}>
+      <MemoryRouter initialEntries={[`/spider-web/round/${roundId}${search}`]}>
         <Routes>
           <Route path="/spider-web/round/:roundId" element={<SpiderWebPage />} />
         </Routes>
@@ -184,5 +184,273 @@ describe('SpiderWebPage', () => {
     // And the pov really went to the server.
     const povUrls = spy.mock.calls.map((c) => String(c[0])).filter((u) => u.includes('pov='));
     expect(povUrls.length).toBeGreaterThan(0);
+  });
+});
+
+describe('SpiderWebPage — the scene (SW-2)', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [0, 0, 0, 100, 0, 0, 0, 100, 0, 0, 0, 200, 100, 0, 200, 0, 100, 200], indexes: [0, 1, 2, 3, 4, 5], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+  const serve = (spyUrls?: string[]) => stub((url) => {
+    if (spyUrls) spyUrls.push(url);
+    if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=') ? povForm : world;
+    if (url.includes('/assets/maps/geometry/')) return geometry;
+    return undefined;
+  });
+
+  it('draws one dot per placed player, the floors by height band, a scale bar, and no belief under the oracle', async () => {
+    serve();
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const svg = screen.getByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-player]').length).toBe(world.players.length));
+    // dead players are hollow rings, alive ones filled discs
+    expect(svg.querySelectorAll('[data-player][data-alive="no"]').length).toBe(world.players.filter((p) => !p.alive).length);
+    await waitFor(() => expect(svg.querySelectorAll('path').length).toBeGreaterThan(0));
+    expect(svg.querySelector('[data-scale-bar="512"]')).toBeTruthy();
+    expect(svg.querySelectorAll('[data-belief-subject]').length).toBe(0);
+    expect(screen.getByText(/oracle: you see everything that happened/)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${world.players.length}/${world.players.length} placed · 0 overlap conflicts`))).toBeInTheDocument();
+    // every mark takes its colour from a token, never a literal
+    for (const el of svg.querySelectorAll('[fill], [stroke]')) {
+      for (const attr of ['fill', 'stroke']) {
+        const v = el.getAttribute(attr);
+        if (v && v !== 'none' && v !== 'transparent') expect(v).toMatch(/^var\(--color-/);
+      }
+    }
+  });
+
+  it('under a team view names the enemies known but not placed, and states the own-team simplification', async () => {
+    // The recording, at 1:00: every contact region this side holds has
+    // widened past the 1,000-unit horizon (1,761–4,222 units). Drawing one
+    // would claim the whole map; the side still knows three enemies exist.
+    serve();
+    renderAt('11344', '?pov=team:AXIS');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const svg = screen.getByLabelText('reconstructed moment');
+    const holder = Object.values(povForm.information_state.holders)[0];
+    const horizon = holder.position_claim_max_radius ?? Infinity;
+    const subjects = new Set(holder.beliefs.filter((b) => b.subject_guid && b.region).map((b) => b.subject_guid));
+    expect(holder.beliefs.some((b) => b.subject_guid && b.region && b.region.radius <= horizon)).toBe(false);
+    expect(subjects.size).toBe(3);
+    await waitFor(() => expect(screen.getByText(/known but not placed \(region wider than the published horizon\)/)).toBeInTheDocument());
+    expect(svg.querySelectorAll('[data-belief-subject]').length).toBe(0);
+    // only the pov's own side is placed as dots; the enemy is a region, never a dot
+    expect(svg.querySelectorAll('[data-player]').length).toBe(povForm.players.length);
+    expect(screen.getByText(/own-team positions are drawn as known — a simplification/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'axis pov' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('draws a region inside the horizon as a dashed disc whose opacity is the confidence', async () => {
+    const holder = Object.values(povForm.information_state.holders)[0];
+    const fresh = holder.beliefs.findIndex((b) => b.subject_guid && b.region);
+    const shaped = {
+      ...povForm,
+      information_state: {
+        ...povForm.information_state,
+        holders: { [holder.holder_guid]: { ...holder, beliefs: holder.beliefs.map((b, i) => (i === fresh ? { ...b, region: { ...b.region!, radius: 300 }, confidence: 0.4 } : b)) } },
+      },
+    };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return shaped;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt('11344', '?pov=team:AXIS');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const svg = screen.getByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-belief-subject]').length).toBe(1));
+    const disc = svg.querySelector('[data-belief-subject]')!;
+    expect(disc.getAttribute('data-belief-subject')).toBe(holder.beliefs[fresh].subject_guid);
+    expect(disc.getAttribute('stroke-dasharray')).toBe('5 4');
+    expect(Number(disc.getAttribute('stroke-opacity'))).toBeCloseTo(0.4, 5);
+    // the other two subjects stay known in words
+    expect(screen.getByText(/known but not placed/).textContent).not.toContain(holder.beliefs[fresh].subject_guid!.slice(0, 8));
+  });
+
+  it('keeps the moment and the view in the URL, and a nudge reloads the next moment', async () => {
+    const urls: string[] = [];
+    serve(urls);
+    renderAt('11344', '?t=30000');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(urls.some((u) => u.includes('/web?t=30000'))).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: '+1 s' }));
+    await waitFor(() => expect(urls.some((u) => u.includes('/web?t=31000'))).toBe(true));
+    fireEvent.click(screen.getByRole('button', { name: '−200 ms' }));
+    await waitFor(() => expect(urls.some((u) => u.includes('/web?t=30800'))).toBe(true));
+    // a moment before the round's start is clamped, never requested as negative
+    expect(urls.every((u) => !u.includes('t=-'))).toBe(true);
+  });
+
+  it('offers every player as a point of view, remembering names across a switch', async () => {
+    const urls: string[] = [];
+    serve(urls);
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const first = world.players[0];
+    const chip = screen.getByRole('button', { name: first.name ?? first.guid.slice(0, 8) });
+    fireEvent.click(chip);
+    await waitFor(() => expect(urls.some((u) => u.includes(`pov=${first.guid}`))).toBe(true));
+    // the pov snapshot withholds three players, but their chips keep the names
+    // the world view carried — once the new view has loaded (no placeholder
+    // stands in across a switch, so the page is pending in between)
+    for (const g of povForm.withheld_by_pov) {
+      const known = world.players.find((p) => p.guid === g);
+      await waitFor(() => expect(screen.getByRole('button', { name: known?.name ?? g.slice(0, 8) })).toBeInTheDocument());
+    }
+  });
+
+  it('the camera turns on drag and flattens to plan on a click', async () => {
+    serve();
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const svg = screen.getByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-player] circle').length).toBeGreaterThan(0));
+    const before = svg.getAttribute('data-camera-yaw');
+    fireEvent.pointerDown(svg, { clientX: 100, clientY: 100, pointerId: 1 });
+    fireEvent.pointerMove(svg, { clientX: 160, clientY: 100, pointerId: 1 });
+    fireEvent.pointerUp(svg, { pointerId: 1 });
+    await waitFor(() => expect(svg.getAttribute('data-camera-yaw')).not.toBe(before));
+    fireEvent.click(screen.getByRole('button', { name: 'plan' }));
+    await waitFor(() => expect(svg.getAttribute('data-camera-pitch')).toBe('0.000'));
+    expect(screen.getByRole('button', { name: 'plan' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'reset view' }));
+    await waitFor(() => expect(svg.getAttribute('data-camera-yaw')).toBe('0.600'));
+  });
+
+  it('a map without floors still places the players and says the stage is missing', async () => {
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return world;
+      return undefined;
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/geometry/')) return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(world) } as Response);
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/floor mesh was never exported/)).toBeInTheDocument());
+    const svg = screen.getByLabelText('reconstructed moment');
+    expect(svg.querySelectorAll('[data-player]').length).toBe(world.players.length);
+    expect(svg.querySelectorAll('path').length).toBe(0);
+  });
+});
+
+describe('SpiderWebPage — the five Codex threads on #1005', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+
+  it('a snapshot of another point of view is not a placeholder for this one', () => {
+    // Across a switch the oracle's players would be drawn under a team's
+    // label until the request landed; within a view the previous moment may stand in.
+    expect(sameView(world, 'world')).toBe(world);
+    expect(sameView(world, 'team:AXIS')).toBeUndefined();
+    expect(sameView(povForm, 'team:AXIS')).toBe(povForm);
+    expect(sameView(povForm, 'world')).toBeUndefined();
+    expect(sameView(undefined, 'world')).toBeUndefined();
+  });
+
+  it('a failed geometry request is unavailable, not "never exported"', async () => {
+    stub((url) => (url.includes('/api/replay/round/11344/web') ? world : undefined));
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/geometry/')) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(world) } as Response);
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/this map's floor mesh: unavailable/)).toBeInTheDocument(), { timeout: 8000 });
+    expect(screen.queryByText(/floor mesh was never exported/)).toBeNull();
+    // the players still draw without a stage
+    expect(screen.getByLabelText('reconstructed moment').querySelectorAll('[data-player]').length).toBe(world.players.length);
+  });
+
+  it('a player without a state at this moment is still offered as a point of view', async () => {
+    const shaped: SpiderWebSnapshot = { ...world, gaps: { ...world.gaps, ABCDEF0123456789ABCDEF0123456789: 'no track covers this moment' } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return shaped;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'ABCDEF01' })).toBeInTheDocument();
+  });
+
+  it('the wheel zooms, on an svg that appeared after a first render without bounds', async () => {
+    // First answer: nobody placed and no geometry → Absent, no svg. Then the
+    // geometry arrives → the svg mounts; the wheel listener must be on it.
+    const empty: SpiderWebSnapshot = { ...world, players: [], edges: [], player_count: 0 };
+    let geometryReady = false;
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return empty;
+      if (url.includes('/assets/maps/geometry/')) return geometryReady ? geometry : undefined;
+      return undefined;
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/geometry/')) {
+        return geometryReady
+          ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(geometry) } as Response)
+          : new Promise((resolve) => setTimeout(() => { geometryReady = true; resolve({ ok: true, status: 200, json: () => Promise.resolve(geometry) } as Response); }, 60));
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(empty) } as Response);
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/nobody could be placed at this moment/)).toBeInTheDocument());
+    const svg = await screen.findByLabelText('reconstructed moment', {}, { timeout: 8000 });
+    fireEvent.wheel(svg, { deltaY: -100 });
+    await waitFor(() => expect(screen.getByText(/zoom 1\.15×/)).toBeInTheDocument());
+  });
+});
+
+describe('SpiderWebPage — the second Codex round on #1005', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+
+  it('normalises the pov from the URL the way the server reads it', () => {
+    expect(normalisePov(null)).toBe('world');
+    expect(normalisePov('World')).toBe('world');
+    expect(normalisePov('team:axis')).toBe('team:AXIS');
+    expect(normalisePov('AB12CD34EF')).toBe('AB12CD34EF');
+  });
+
+  it('?pov=World is the oracle: the world chip is active and the oracle sentence shows', async () => {
+    const urls: string[] = [];
+    stub((url) => {
+      urls.push(url);
+      if (url.includes('/api/replay/round/11344/web')) return world;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt('11344', '?pov=World');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'world' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/oracle: you see everything that happened/)).toBeInTheDocument();
+    expect(urls.every((u) => !u.includes('pov='))).toBe(true);
+  });
+
+  it('a view the server could not resolve does not claim it knew of nobody', async () => {
+    const unresolved: SpiderWebSnapshot = { ...povForm, information_state: { ...povForm.information_state, holders: {}, pov_unavailable: 'no players on team \'AXIS\' in this round' } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return unresolved;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt('11344', '?pov=team:AXIS');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.queryByText(/knew of no enemy position/)).toBeNull();
+    expect(screen.getByText(/beliefs — no players on team 'AXIS' in this round: unavailable/)).toBeInTheDocument();
+  });
+
+  it('draws the sides in their own tokens', async () => {
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return world;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt();
+    const svg = await screen.findByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-player]').length).toBeGreaterThan(0));
+    const fills = new Set([...svg.querySelectorAll('[data-player] circle')].map((c) => c.getAttribute('stroke')));
+    expect(fills.has('var(--color-axis)')).toBe(true);
+    expect(fills.has('var(--color-allies)')).toBe(true);
   });
 });

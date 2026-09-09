@@ -37,6 +37,23 @@ deploy NI naloga.
 | uploads r. 2 (ta veja) | upload form (single-shot ≤ 50 MiB z XHR napredkom + cancel; resumable init/PATCH/finalize z 409 resync, HEAD resync, stall guard, abort), delete na detailu (dvostopenjsko); fixturi iz ŽIVEGA kroga s sentinelom (init→PATCH→finalize→detail→DELETE) |
 | delovna površina | 2. 9.: 41→4 worktreejev, 400→43 lokalnih vej, #891 mergan; protokol v memory `worktree_cleanup_protocol_2026-09-02.md` |
 
+## Proga: spider web do konca (Fable 5.1, 9. 9. 2026) — owner: »celoten spiderweb naredi do konca avtonomno«
+
+Stanje slojev je v `docs/SPIDERWEB_STATUS.md`; spec `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`.
+»Do konca« pomeni: vse, kar spec dovoli brez ownerjevih vrat (Lua/prod) — narisano, izmerjeno
+ali z zapisanim razlogom, zakaj ne.
+
+| rezina | kaj | stanje |
+|---|---|---|
+| SW-2 platno | legacy kamera (axonometrična, vleka/kolešček/plan), floors po višini, p90 obroč, oznake brez premika, regije prepričanj pod team/player POV z obzorjem, merilo 512, POV po igralcu, trenutek v URL; `lib/spiderWeb.ts` + 48 prenesenih testov, SVG s tokeni | PR odprt 9. 9. |
+| SW-3 vidna linija | `edges[].line_of_sight` iz W6-validiranega BSP tracerja (99,92 %), SAMO v world POV kot **oracle diagnostika** (§6.1: prosta pot je nujen, ne zadosten pogoj; nikoli vir prepričanja); null z razlogom, kjer mape ni v etmain; na sceni preklop »line of sight (oracle)« + izpostavljenost (koliko živih nasprotnikov ima čist žarek) kot diagnostična številka, ne metrika | naslednja |
+| SW-4 sloj 4 harness | §8 referenčna implementacija: (igralec, runda) nabor, mediana ZNOTRAJ runde, kronološka delitev blokov 70/30, bootstrap po blokih (max-T), zamrznjen družinski manifest s hashem; kandidati, ki so danes izračunljivi: gibanje v nepokrit prostor (sloj 3), izpostavljenost (W6 LOS), poravnava z valom (oracle diagnostika, ne za ladjo), geometrijska izolacija (diagnostika); izid = tabela §8.5 v `docs/research/` (lokalno) + povzetek v STATUS; **na stran gre le, kar preživi §8.4** | po SW-3 |
+| SW-5 dokumenti | STATUS/PLAN/BACKLOG vrstice, ledger vrstice `replay/round/{}/web` na 0 | sproti |
+
+⛔ Ne v obsegu (ownerjeva vrata ali brez podatkov): Lua C1–C7 zajemi, `etl_supply` mesh (BSP ni v
+indeksiranem etmain), W4b navigacijski graf (rabi validacijo proti opazovanim potem — raziskava, ne
+rezina), objavljanje 12 neobjavljenih meshov (odločitev »premalo rund za bajte v javnem repu«).
+
 ## Proga: Astra (Codex CLI) — delovni paket predaje (7. 9. 2026)
 
 Vir resnice za Astrino delo: **`docs/HANDOFF-astra.md`** (§C vrstni red 1–20 s

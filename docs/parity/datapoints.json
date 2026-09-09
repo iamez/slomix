@@ -106,7 +106,7 @@
   "/api/proximity/vehicle-progress": "14 files reachable from the endpoint's callers",
   "/api/proximity/weapon-accuracy": "13 files reachable from the endpoint's callers",
   "/api/records/maps/segments": "7 files reachable from the endpoint's callers",
-  "/api/replay/round/{round_id}/web": "10 files reachable from the endpoint's callers",
+  "/api/replay/round/{round_id}/web": "12 files reachable from the endpoint's callers",
   "/api/rivalries/h2h/{guid1}/{guid2}": "7 files reachable from the endpoint's callers",
   "/api/rivalries/leaderboard": "7 files reachable from the endpoint's callers",
   "/api/rivalries/player/{guid}": "7 files reachable from the endpoint's callers",
@@ -189,8 +189,8 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3186,
-  "unread": 425,
+  "read": 3187,
+  "unread": 424,
   "dropped": 69,
   "endpoints": 180,
   "endpoints_fully_read": 72,
@@ -693,8 +693,8 @@
    "dropped": 0
   },
   "/api/replay/round/{round_id}/web": {
-   "read": 59,
-   "unread": 5,
+   "read": 60,
+   "unread": 4,
    "dropped": 1
   },
   "/api/rivalries/h2h/{guid1}/{guid2}": {
@@ -11115,7 +11115,7 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "edges.distance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
