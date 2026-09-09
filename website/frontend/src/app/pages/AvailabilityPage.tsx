@@ -610,6 +610,7 @@ export function AvailabilityPage() {
               {pl.session_ready.ready
                 ? `session ready — ${figure(pl.session_ready.looking_count)} looking (threshold ${figure(pl.session_ready.threshold)})`
                 : `${figure(pl.session_ready.looking_count)} of ${figure(pl.session_ready.threshold)} needed are looking`}
+              {pl.session_ready.event_key ? ` · event ${pl.session_ready.event_key}` : ''}
             </Meta>
             <Cluster gap={3} style={{ flexWrap: 'wrap' }}>
               {pl.participants.map((p) => (
