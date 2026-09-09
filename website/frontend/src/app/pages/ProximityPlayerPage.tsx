@@ -19,6 +19,7 @@ import {
 } from '../lib/queries';
 import { ProxPanel, ProxRow } from './proximityShared';
 import { WEAPON_NAMES } from '../lib/weapons';
+import { utcStamp } from '../lib/utcStamp';
 
 const PROFILE_DAYS = 90;
 const SCORE_DAYS = 30;
@@ -138,6 +139,9 @@ export function ProximityPlayerPage() {
           <Tile label="trades made" value={figure(p.trades_made)} />
           <Tile label="timed kills" value={figure(p.timed_kills)} />
           <Tile label="spawn denial" value={`${figure(Math.round(p.avg_denial_ms / 100) / 10)} s avg`} />
+          {p.escapes != null && <Tile label="escapes" value={figure(p.escapes)} />}
+          {p.avg_duration_ms != null && <Tile label="engagement length" value={`${figure(Math.round(p.avg_duration_ms / 100) / 10)} s avg`} />}
+          {p.spawn_avg_score != null && <Tile label="spawn timing score" value={decimals(p.spawn_avg_score)} />}
         </Cluster>
         <Cluster gap={6} style={{ flexWrap: 'wrap', marginTop: 'var(--space-4)' }}>
           <Tile label="return fire" value={`${figure(p.avg_return_fire_ms)} ms`} />
@@ -241,7 +245,8 @@ export function ProximityPlayerPage() {
                 {kp && <ProxRow name="revived against" mid={`${figure(kp.tapouts)} tapouts`} val={figure(kp.revives_against)} />}
                 {kp && <ProxRow name="denial per kill" val={`${figure(Math.round(kp.avg_denied_ms / 100) / 10)} s`} />}
                 {rv && <ProxRow name="own deaths revived" mid={`${figure(rv.times_revived)} of ${figure(rv.times_killed)}`} val={`${figure(Math.round(rv.revive_rate * 1000) / 10)}%`} />}
-                {rv && <ProxRow name="own deaths gibbed" val={`${figure(Math.round(rv.gib_rate * 1000) / 10)}%`} />}
+                {rv && <ProxRow name="own deaths gibbed" mid={`${figure(rv.times_gibbed)} gibbed · ${figure(rv.times_tapped)} tapped out`} val={`${figure(Math.round(rv.gib_rate * 1000) / 10)}%`} />}
+                {rv && rv.avg_wait_ms != null && <ProxRow name="wait before a revive" mid="average while down" val={`${figure(Math.round(rv.avg_wait_ms / 100) / 10)} s`} />}
               </Stack>
             );
           }}
@@ -304,6 +309,7 @@ export function ProximityPlayerPage() {
           empty="no crossfire pairs in this window" isEmpty={(d) => d.duos.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
+              {(!d.ready && d.message) || d.generated_at ? <Meta>{!d.ready && d.message ? `${d.message} · ` : ''}{d.generated_at ? `computed ${utcStamp(d.generated_at)}` : ''}</Meta> : null}
               {d.duos.slice(0, 6).map((u) => (
                 <ProxRow key={`${u.player1 ?? '?'}:${u.player2 ?? '?'}`}
                   name={`${u.player1 ? stripEtColors(u.player1) : '?'} + ${u.player2 ? stripEtColors(u.player2) : '?'}`}

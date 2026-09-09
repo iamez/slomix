@@ -108,6 +108,9 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
               </Cluster>
               <Cluster gap={3} align="baseline">
                 <Meta>{detailFor(category, e)}</Meta>
+                {/* what the composite left out: the unscored axes it still measured, and the axes it had to default (ledger 2026-09-09) */}
+                {e.unscored && Object.keys(e.unscored).length > 0 && <Meta>unscored {Object.entries(e.unscored).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}</Meta>}
+                {e.axes_defaulted && e.axes_defaulted.length > 0 && <Meta>defaulted: {e.axes_defaulted.join(', ')}</Meta>}
                 <span className="m" style={{ fontSize: 'var(--fs-value)', width: 92, textAlign: 'right' }}>
                   {fmtValue(category, e.value)}
                 </span>
@@ -119,6 +122,9 @@ function Board({ category, rangeDays }: { category: LbCategory; rangeDays: numbe
       {q.data?.category === 'power' && q.data.attribution && (
         <Meta>
           attribution: {figure(q.data.attribution.linked_valid)} of {figure(q.data.attribution.total_rows)} source rows linkable
+          {q.data.attribution.attributable_coverage != null && <> ({figure(Math.round(q.data.attribution.attributable_coverage * 100))}%)</>}
+          {q.data.attribution.linked_invalid_excluded != null && <> · {figure(q.data.attribution.linked_invalid_excluded)} linked to invalid rounds, excluded</>}
+          {q.data.attribution.unlinked_accepted != null && <> · {figure(q.data.attribution.unlinked_accepted)} unlinked, accepted</>}
           {q.data.formula_version != null && <> · formula {q.data.formula_version}</>}
         </Meta>
       )}
