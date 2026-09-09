@@ -196,6 +196,28 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                           pitch from {figure(d.pitch_hist.edges[0])}° to {figure(d.pitch_hist.edges[d.pitch_hist.edges.length - 1])}°
                           {' · '}{figure(d.total)} samples · yaw in {figure(d.yaw_buckets)} buckets of {figure(d.yaw_bucket_width_deg)}°
                         </Meta>
+                        {/* The circular statistics the legacy page drew (proximity.js:4175):
+                          * Rayleigh p < 0.05 = the shots have a preferred direction;
+                          * r near 0 = aimed everywhere. */}
+                        {d.circular && (
+                          <Meta>
+                            direction: mean yaw {figure(Math.round(d.circular.mean_yaw_deg))}° · r {(Math.round(d.circular.resultant_length * 100) / 100).toFixed(2)} · circular std ±{figure(Math.round(d.circular.circular_std_deg))}°
+                            {' · '}{d.circular.rayleigh_p < 0.05 ? `a preferred direction (Rayleigh p ${d.circular.rayleigh_p < 0.001 ? '< 0.001' : d.circular.rayleigh_p.toFixed(3)})` : `no preferred direction (Rayleigh p ${d.circular.rayleigh_p.toFixed(2)})`}
+                            {' · '}pitch {d.circular.pitch_mean_deg >= 0 ? '+' : ''}{figure(Math.round(d.circular.pitch_mean_deg))}° ± {figure(Math.round(d.circular.pitch_std_deg))}° over {figure(d.circular.n)} shots
+                          </Meta>
+                        )}
+                        {d.hotzones.some((h) => h.rose) && (() => {
+                          const top = [...d.hotzones].sort((a, b) => b.count - a.count)[0];
+                          const rose = top.rose ?? [];
+                          const peak = rose.indexOf(Math.max(...rose));
+                          return (
+                            <Meta>
+                              busiest zone ({figure(top.count)} shots): mean yaw {top.mean_yaw == null ? '—' : `${figure(Math.round(top.mean_yaw))}°`}, r {top.r == null ? '—' : (Math.round(top.r * 100) / 100).toFixed(2)}
+                              {rose.length > 0 ? ` · rose peak bucket ${figure(peak)} of ${figure(rose.length)} (${figure(Math.max(...rose))} shots)` : ''}
+                            </Meta>
+                          );
+                        })()}
+                        {d.narrative && d.narrative.length > 0 && <Meta>{d.narrative.join(' · ')}</Meta>}
                       </Stack>
                     );
                   }}

@@ -26,6 +26,20 @@ const SCORE_DAYS = 30;
 /** ET weapon ids as the tracker emits them (copied from the old tree's
  *  only consumer — the ids are engine constants, not guesses). */
 
+/** Seconds as h:mm, for stance and sprint totals over a 90-day window. */
+function hm(sec: number): string {
+  const s = Math.max(0, Math.round(sec));
+  return `${Math.floor(s / 3600)}:${String(Math.floor((s % 3600) / 60)).padStart(2, '0')} h`;
+}
+
+/** "2 of 3 metrics" for a category, from metrics_scored and the breakdown's live (weighted) members. */
+function metricsScored(row: { metrics_scored?: Record<string, number>; breakdown?: Record<string, Record<string, { weight: number }>> }, cat: string): string | undefined {
+  const scored = row.metrics_scored?.[cat];
+  if (scored == null) return undefined;
+  const live = row.breakdown?.[cat] ? Object.values(row.breakdown[cat]).filter((m) => m.weight > 0).length : null;
+  return live != null ? `${figure(scored)} of ${figure(live)} metrics scored` : `${figure(scored)} metrics scored`;
+}
+
 function Tile({ label, value }: { label: string; value: string }) {
   return (
     <div style={{ minWidth: 120 }}>
@@ -169,10 +183,31 @@ export function ProximityPlayerPage() {
             }
             return (
               <Stack gap={1} className="rows">
-                <ProxRow name="overall" mid={`rank ${figure(row.rank)} in window`} val={figure(row.prox_overall)} />
-                <ProxRow name="combat" val={figure(row.prox_combat)} />
-                <ProxRow name="team" val={figure(row.prox_team)} />
-                <ProxRow name="gamesense" val={figure(row.prox_gamesense)} />
+                <ProxRow name="overall" mid={`rank ${figure(row.rank)} of ${figure(d.player_count)} in window${d.scope.scoped ? ' (scoped)' : ''} · radar ${row.prox_radar.map((ax) => `${ax.label.toLowerCase()} ${figure(ax.value)}`).join(' / ')}`} val={figure(row.prox_overall)} />
+                <ProxRow name="combat" mid={metricsScored(row, 'prox_combat')} val={figure(row.prox_combat)} />
+                <ProxRow name="team" mid={metricsScored(row, 'prox_team')} val={figure(row.prox_team)} />
+                <ProxRow name="gamesense" mid={metricsScored(row, 'prox_gamesense')} val={figure(row.prox_gamesense)} />
+                {/* The breakdown the composite is made of: raw → percentile × weight
+                  * → contribution, per metric; a retired metric is named as such
+                  * rather than silently weighted 0. */}
+                {row.breakdown && Object.entries(row.breakdown).map(([cat, metrics]) => (
+                  <Meta key={cat}>
+                    {cat.replace('prox_', '')}: {Object.entries(metrics).map(([k, m]) => (
+                      m.retired_in
+                        ? `${m.label.toLowerCase()} retired in ${m.retired_in}`
+                        : `${m.label.toLowerCase()} ${m.raw == null ? '—' : (Math.round(m.raw * 100) / 100).toFixed(2)} → p${m.percentile == null ? '—' : figure(Math.round(m.percentile * 100))} × ${figure(m.weight)} = ${figure(m.contribution)}`
+                    )).join(' · ') || 'no metric scored'}
+                  </Meta>
+                ))}
+                {row.missing_metrics && row.missing_metrics.length > 0 && <Meta>missing metrics: {row.missing_metrics.join(', ')}</Meta>}
+                {row.metric_weight_coverage != null && row.metric_weight_coverage < 1 && <Meta>weight coverage {figure(Math.round(row.metric_weight_coverage * 100))}% — the composite rests on the metrics that answered</Meta>}
+                {(d.quality.failed_sources.length > 0 || d.quality.below_coverage_dropped > 0 || d.quality.metric_weight_coverage < 1) && (
+                  <Meta>
+                    quality: {d.quality.failed_sources.length > 0 ? `failed sources ${d.quality.failed_sources.join(', ')}` : 'every source answered'}
+                    {d.quality.below_coverage_dropped > 0 ? ` · ${figure(d.quality.below_coverage_dropped)} players dropped below the coverage floor` : ''}
+                    {d.quality.metric_weight_coverage < 1 ? ` · weight coverage ${figure(Math.round(d.quality.metric_weight_coverage * 100))}%` : ''}
+                  </Meta>
+                )}
                 {d.quality.successful_sources < d.quality.total_sources && (
                   <Meta>{figure(d.quality.successful_sources)}/{figure(d.quality.total_sources)} sources answered</Meta>
                 )}
@@ -308,7 +343,10 @@ export function ProximityPlayerPage() {
               <Stack gap={1} className="rows">
                 <ProxRow name="stance" mid={`crouch ${figure(row.crouching_pct)}% · prone ${figure(row.prone_pct)}%`} val={`stand ${figure(row.standing_pct)}%`} />
                 <ProxRow name="speed" mid={`peak avg ${figure(row.avg_peak_speed)} u/s`} val={`${figure(row.avg_speed)} u/s`} />
-                <ProxRow name="sprint share" val={`${figure(row.avg_sprint_pct)}%`} />
+                <ProxRow name="sprint share" mid={`${hm(row.sprint_sec)} sprinting`} val={`${figure(row.avg_sprint_pct)}%`} />
+                <ProxRow name="stance time" mid={`crouch ${hm(row.crouching_sec)} · prone ${hm(row.prone_sec)}`} val={`stand ${hm(row.standing_sec)}`} />
+                <ProxRow name="distance" mid={`${figure(Math.round(row.avg_distance_per_sec))} u/s while alive · ${figure(Math.round(row.avg_post_spawn_dist))} u after a spawn`} val={`${figure(Math.round(row.total_distance / 1000))} k u`} />
+                <ProxRow name="peak speed" mid={`fastest sample ${figure(Math.round(row.max_peak_speed))} u/s`} val={`${figure(row.avg_peak_speed)} u/s avg`} />
                 <ProxRow name="lives tracked" mid={`${figure(Math.round(row.alive_sec / 60))} min alive`} val={figure(row.tracks)} />
               </Stack>
             );
