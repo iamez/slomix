@@ -20,10 +20,10 @@
 
 ## Track: runtime v2 R01 (Astra)
 
-Last updated: 2026-09-08. Owner priority: system runtime; frontend stays with
+Last updated: 2026-09-09. Owner priority: system runtime; frontend stays with
 Fable. Worktree `/tmp/slomix-astra-runtime-r01`, branch
-`feat/db-runtime-events-r01`. Code prepared; PostgreSQL runtime proof pending.
-NOT merged, migrated, enabled or deployed.
+`feat/db-runtime-events-r01`. Code and isolated PostgreSQL proof complete;
+ready for PR review. NOT merged, live-migrated, enabled or deployed.
 
 - R01: migration 083 and neutral initial-import emitter on the existing
   canonical importer transaction; `EVENT_STREAM_ENABLED=false`. R1/R2 only,
@@ -31,9 +31,14 @@ NOT merged, migrated, enabled or deployed.
   transactional ID-only NOTIFY. No live migration, consumer or backfill.
 - Verify disabled/no-table behavior, retry deduplication, canonical wiring,
   event failure rollback and notifications at commit using isolated PostgreSQL.
-  Temporary test PostgreSQL launch permission requested; not yet run. Opt-in
-  integration tests refuse non-disposable socket paths and have no live-DB
-  fallback. The four PostgreSQL tests are SKIPPED, not passed.
+  Owner approved temporary PostgreSQL. On 2026-09-09 all four PG tests passed
+  on a fresh PostgreSQL 14.24 cluster with a private Unix socket, no TCP
+  listener, 16 MB shared buffers and no live-DB fallback. Two connections
+  proved pre-commit invisibility, commit-only NOTIFY, rollback of round/event,
+  missing-table rollback when enabled, OFF without migration, no R0, and one
+  event for two concurrent attempts. COUNT and row fetch independently agree.
+  Cluster stopped immediately; shutdown log and `pg_ctl: no server running`
+  both confirmed it. Test data/logs remain local in the disposable /tmp cluster.
 - Local verification: 21 new unit cases plus 18 neighboring importer cases
   pass (39 total); includes emitter and COMMIT failures. Disabled guard
   mutation failed with `AttributeError: 'NoneType' object has no attribute
@@ -41,7 +46,9 @@ NOT merged, migrated, enabled or deployed.
   clean; importer has the same 20 pre-existing Ruff findings as base HEAD.
   Minimal Python environment lacked `discord`; rerun used the existing full
   venv read-only, without installing anything. Success counters/logs now run
-  after COMMIT. No claim of real PostgreSQL transaction/notification proof yet.
+  after COMMIT. Combined rerun: 43 passed, zero skipped (39 unit + 4 PG).
+  PG proof exercises the real emitter/SQL; canonical importer wiring and
+  COMMIT failure are separately tested with mocks, not a full ingest replay.
 - R02: map and journal post-commit corrections before consumers.
 - R03: per-consumer receipts and durable catch-up, not maximum-ID cursors.
 - R04: independent Linux Python capture/import/retry plus watchdog; remove
