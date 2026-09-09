@@ -2943,6 +2943,9 @@ export interface PlayerMatchRound {
  *  only the teamplay duo boards have ever sent — so its crossfire board
  *  rendered "name + ?" forever; not carried. */
 export interface LbEntryBase {
+  /** The power board's extras: axes measured but not scored, and axes the composite had to default. */
+  unscored?: Record<string, number>;
+  axes_defaulted?: string[];
   guid: string;
   name: string;
   value: number;
@@ -3069,7 +3072,7 @@ export interface ProxQuality {
     unpaired_round_sides?: number;
     latest_created_at?: string | null;
   };
-  linkage?: { scope: string; status: string; breach_count: number };
+  linkage?: { scope: string; status: string; breach_count: number; metrics?: Record<string, number>; breaches?: { metric: string; value: number; threshold: number }[]; errors?: string[] };
   /** When the KIS and the context caches were last written. */
   cache_freshness?: { status: string; latest_context_created_at: string | null; latest_kis_created_at: string | null };
   /** RECORDS, not strings — joining them rendered "[object Object]" in the

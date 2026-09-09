@@ -199,9 +199,14 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                   <ProxRow
                     key={e.guid}
                     name={nameOf(e.name, e.guid)}
-                    mid={`${figure(e.plants)} plants · ${figure(e.defuses)} defuses · ${figure(e.constructions)} builds`}
+                    mid={`${figure(e.plants)} plants · ${figure(e.defuses)} defuses · ${figure(e.constructions)} builds · ${figure(e.destructions)} destroyed`}
                     val={`${figure(e.total_events)} events`}
                   />
+                ))}
+                {/* the latest engineer events (ledger 2026-09-09) */}
+                {(d.events ?? []).slice(0, 5).map((ev, i) => (
+                  <ProxRow key={`ev:${ev.session_date}:${ev.event_time}:${i}`} name={`${ev.event_type.replace(/_/g, ' ')} · ${ev.player_name ? stripEtColors(ev.player_name) : 'unknown'}${ev.player_team ? ` (${ev.player_team.toLowerCase()})` : ''}`}
+                    mid={`${mapLabel(ev.map_name)} r${String(ev.round_number)}${ev.track_name ? ` · ${ev.track_name}` : ''} · ${ev.session_date}`} val={mmss(ev.event_time / 1000)} />
                 ))}
               </Stack>
             )}
@@ -217,6 +222,7 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                 {d.summary.total_runs != null && (
                   <Meta>
                     {figure(d.summary.total_runs)} runs · {figure(d.summary.total_denied ?? 0)} denied
+                    {d.summary.total_solo != null && <> · {figure(d.summary.total_solo)} solo · {figure(d.summary.total_assisted ?? 0)} assisted · {figure(d.summary.total_team_effort ?? 0)} team effort · {figure(d.summary.total_unopposed ?? 0)} unopposed</>}
                     {d.summary.most_active_objective && <> · busiest: {d.summary.most_active_objective}</>}
                   </Meta>
                 )}

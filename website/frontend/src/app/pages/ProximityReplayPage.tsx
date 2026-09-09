@@ -88,7 +88,22 @@ export function ProximityReplayPage() {
       if (end > t.spawn_time) cur.alive_ms += end - t.spawn_time;
       byTeam.set(key, cur);
     }
-    return { total: rows.length, byTeam: [...byTeam.entries()] };
+    // what else the tracks carry (ledger 2026-09-09): the class mix, how the
+    // lives ended, and the median time to the first move after a spawn
+    const classes = new Map<string, number>();
+    const endings = new Map<string, number>();
+    const firstMoves: number[] = [];
+    for (const t of rows) {
+      classes.set((t.class ?? 'unknown').toLowerCase(), (classes.get((t.class ?? 'unknown').toLowerCase()) ?? 0) + 1);
+      endings.set(t.death_type ?? (t.death_time > t.spawn_time ? 'died' : 'round end'), (endings.get(t.death_type ?? (t.death_time > t.spawn_time ? 'died' : 'round end')) ?? 0) + 1);
+      if (t.first_move_time != null && t.first_move_time > t.spawn_time) firstMoves.push(t.first_move_time - t.spawn_time);
+    }
+    firstMoves.sort((a, b) => a - b);
+    return {
+      total: rows.length, reported: tracks.data?.track_count ?? rows.length, byTeam: [...byTeam.entries()],
+      classes: [...classes.entries()], endings: [...endings.entries()],
+      medianFirstMove: firstMoves.length > 0 ? firstMoves[Math.floor(firstMoves.length / 2)] : null,
+    };
   }, [tracks.data, roundEndMs]);
 
   if (roundId == null) {
@@ -162,7 +177,10 @@ export function ProximityReplayPage() {
             )}
             {trackStats && (
               <Stack gap={1} className="rows" style={{ marginTop: 'var(--space-3)', maxWidth: 480 }}>
-                <ProxRow name="lives tracked" val={figure(trackStats.total)} />
+                <ProxRow name="lives tracked" mid={trackStats.reported !== trackStats.total ? `${figure(trackStats.reported)} reported by the endpoint` : undefined} val={figure(trackStats.total)} />
+                <ProxRow name="classes" val={trackStats.classes.map(([c, n]) => `${c} ${figure(n)}`).join(' · ')} />
+                <ProxRow name="lives ended by" val={trackStats.endings.map(([c, n]) => `${c.replace(/_/g, ' ')} ${figure(n)}`).join(' · ')} />
+                {trackStats.medianFirstMove != null && <ProxRow name="first move after a spawn" mid="median over the lives" val={`${figure(trackStats.medianFirstMove)} ms`} />}
                 {trackStats.byTeam.map(([team, v]) => (
                   <ProxRow key={team} name={team}
                     mid={`${figure(Math.round(v.alive_ms / 1000 / 60))} min alive total`}
