@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-09, 17:30) ⛔ Skok (pravilo): owner je med vlakom train29
+  (#1008–#1011, ledger) prosil, naj bot NEHA reagirati na SuperBoyyeve slike v
+  slomix kanalu, a naj jih še preverja → `SUPASTATS_REACTIONS_ENABLED`
+  (privzeto false) v `bot/config.py`, `_react` v `supastats_cog.py` je no-op;
+  preverba in DM poročilo tečeta naprej (PR #1013). Vrnitev: vlak + dev deploy.
 - (Fable 5.1, 2026-09-09, 10:30) Owner: »ko vse končaš … celoten spiderweb
   do konca avtonomno«. MERGANO: #1001 (kartica + stenska ura), #1002 (story;
   13 Codex niti). V VLAKU: #1003 → #1004 (12 Codex niti popravljenih), nato
