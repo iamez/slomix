@@ -71,8 +71,19 @@ class TestBootstrapAndVerdict:
         cands = [Candidate("m", "planted", "positive", kind="positive_control"), Candidate("n", "noise", "positive", kind="negative_control")]
         out = l4.analyse(rows, cands, resamples=300, seed=7)
         by = {t["id"]: t for t in out["table"]}
-        assert by["m"]["verdict"] == "ships", by["m"]
+        assert by["m"]["verdict"].startswith("control passes"), by["m"]
         assert by["n"]["verdict"].startswith("fails"), by["n"]
+
+    def test_what_passing_means_depends_on_the_kind(self):
+        rows = self._corpus(signal=1.5)
+        kinds = [Candidate("m", "planted", "positive"), Candidate("m", "planted", "positive", kind="oracle_diagnostic"),
+                 Candidate("m", "planted", "positive", caveat="attackers move more and share the outcome"),
+                 Candidate("m", "planted", "positive", kind="negative_control")]
+        verdicts = [l4.analyse(rows, [c], resamples=200, seed=7)["table"][0]["verdict"] for c in kinds]
+        assert verdicts[0] == "passes §8.4; ships"
+        assert verdicts[1].startswith("passes the arithmetic; oracle diagnostic, does not ship")
+        assert verdicts[2] == "passes §8.4; NOT shipped: attackers move more and share the outcome"
+        assert verdicts[3].startswith("CONTROL PASSES")
 
     def test_the_wrong_frozen_direction_fails_even_when_the_effect_is_strong(self):
         rows = self._corpus(signal=1.5)

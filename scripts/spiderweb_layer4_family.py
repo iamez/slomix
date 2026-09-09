@@ -60,11 +60,13 @@ CANDIDATES: list[Candidate] = [
     Candidate("dpm", "damage given × 60 / seconds played, from player_comprehensive_stats for that round", "positive",
               {"source": "player_comprehensive_stats"}, kind="positive_control"),
     Candidate("noise", "uniform(0, 1) seeded by (round_id, guid)", "positive", {"seed": SEED}, kind="negative_control"),
-    Candidate("moving_share", "share of alive samples with speed > MOVING_UPS", "positive", {"moving_ups": MOVING_UPS}),
+    Candidate("moving_share", "share of alive samples with speed > MOVING_UPS", "positive", {"moving_ups": MOVING_UPS},
+              caveat="a within-round median split cannot separate 'moved more' from 'was on the attacking side' — attackers move more and share the outcome (§7.4.1); a side-stratified test needs the attacking side per round (lua_round_teams / W5)"),
     Candidate("isolation_share", "share of alive samples with no living teammate within ISOLATION_UNITS (straight-line, §7.4: geometric separation, not route support time)", "negative",
               {"isolation_units": ISOLATION_UNITS}, kind="oracle_diagnostic"),
     Candidate("blind_moving_share", "share of MOVING samples during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4", "negative",
-              {"moving_ups": MOVING_UPS, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"}),
+              {"moving_ups": MOVING_UPS, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"},
+              caveat="the information state is a lower bound on what the team knew (§6.2: Discord voice is never captured); 'blind' here is 'blind to the capture', and the median is 0.89 — nearly all movement is blind on this evidence"),
     Candidate("exposure_share", "share of alive samples with ≥ 1 living enemy holding a clear eye-to-body ray to the player (W6 tracer, static geometry) — §7.4 exposure, ORACLE form", "negative",
               {"tracer": "services/line_of_sight.py", "validation": "W6 2026-08-22, 99.92 %"}, kind="oracle_diagnostic"),
     Candidate("push_into_wave_share", "share of MOVING samples while the ENEMY's validated reinforcement wave lands within WAVE_IMMINENT_SHARE of its interval (oracle clock, §5.6/§6.3: never a scoring fallback)", "negative",
@@ -278,7 +280,15 @@ def analyse(args) -> None:
         lines.append(f"| `{t['id']}` | {t['kind']} | {t['expected']} | {_fmt(d['point'])} ({d['rounds']}) {ci(d['ci95'])} | {_fmt(c['point'])} ({c['rounds']}) {ci(c['ci95'])} {ci(c['sim95'])} | **{t['verdict']}** |")
     lines += ["", "effect = mean over rounds of (win rate of the upper median half − lower half) on that metric, within the round (§8.1); intervals from a block bootstrap over gaming_session_id (§8.2); the simultaneous interval is max-T over the whole family (§8.4). A candidate ships only with the frozen direction in both splits AND a simultaneous confirmation interval that excludes zero.", ""]
     for c in CANDIDATES:
-        lines.append(f"- `{c.id}` ({c.kind}, expected {c.expected_direction}): {c.formula}; parameters `{json.dumps(c.parameters)}`")
+        lines.append(f"- `{c.id}` ({c.kind}, expected {c.expected_direction}): {c.formula}; parameters `{json.dumps(c.parameters)}`" + (f"; ⚠️ {c.caveat}" if c.caveat else ""))
+    cover = {}
+    for r in rows:
+        for k, v in r.metrics.items():
+            cover.setdefault(k, [0, 0])
+            cover[k][1] += 1
+            if v is not None:
+                cover[k][0] += 1
+    lines += ["", "coverage (rows with a value): " + " · ".join(f"`{k}` {a}/{b}" for k, (a, b) in cover.items())]
     Path(args.out_md).write_text("\n".join(lines) + "\n")
     Path(args.out_manifest).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out_manifest).write_text(json.dumps({**man, "result": result}, indent=1, ensure_ascii=False) + "\n")

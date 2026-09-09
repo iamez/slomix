@@ -49,6 +49,9 @@ class Candidate:
     expected_direction: str  # "positive" | "negative"
     parameters: dict[str, Any] = field(default_factory=dict)
     kind: str = "candidate"  # "candidate" | "positive_control" | "negative_control" | "oracle_diagnostic"
+    #: What the arithmetic cannot see — a confound the reader must weigh
+    #: before believing a "passes" (§7.4.1: side and stage share the outcome).
+    caveat: str | None = None
 
 
 @dataclass(slots=True)
@@ -230,7 +233,18 @@ def verdict(candidate: Candidate, discovery: dict[str, Any], confirmation: dict[
     lo, hi = sim
     if lo <= 0 <= hi:
         return "fails: simultaneous interval includes zero"
-    return "ships"
+    # The arithmetic passed. What that MEANS depends on what was measured:
+    # a control passing is the harness working, an oracle passing is a
+    # diagnostic (§6.4 / P6: it consumed positions or a clock nobody had),
+    # and only a plain candidate is a signal — and even that ships to a page
+    # only once its caveat is answered.
+    if candidate.kind == "positive_control":
+        return "control passes (the harness sees a known signal)"
+    if candidate.kind == "negative_control":
+        return "CONTROL PASSES — the harness is broken"
+    if candidate.kind == "oracle_diagnostic":
+        return "passes the arithmetic; oracle diagnostic, does not ship (§6.4, P6)"
+    return "passes §8.4" + (f"; NOT shipped: {candidate.caveat}" if candidate.caveat else "; ships")
 
 
 def manifest(candidates: list[Candidate], *, cutoff: str | None, outcome: str, filters: list[str], seed: int, resamples: int, extra: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -239,7 +253,7 @@ def manifest(candidates: list[Candidate], *, cutoff: str | None, outcome: str, f
     is what a reader checks against the published table."""
     body = {
         "protocol": "docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md §8",
-        "candidates": [{"id": c.id, "kind": c.kind, "formula": c.formula, "expected_direction": c.expected_direction, "parameters": c.parameters} for c in candidates],
+        "candidates": [{"id": c.id, "kind": c.kind, "formula": c.formula, "expected_direction": c.expected_direction, "parameters": c.parameters, "caveat": c.caveat} for c in candidates],
         "split": {"rule": "earliest 70 % of gaming_session_id blocks by first round time = discovery; the rest = confirmation", "confirmation_starts_at": cutoff},
         "outcome": outcome,
         "filters": filters,

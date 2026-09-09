@@ -50,6 +50,29 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
   **cannot be reproduced offline**. W6 therefore compares `-2` against our
   world tracer; `-1` is diagnostics only.
 
+## Layer 4 — the §8 table (2026-09-09, manifest `72bdfc31…`)
+
+901 rounds, 57 gaming-session blocks (39 discovery / 18 confirmation, confirmation from
+2026-07-16), 5,622 (player, round) rows at a 5 s cadence, 2,000 block resamples, seed 20260909.
+Effect = mean over rounds of (win rate of the upper median half − lower half) within the round.
+Full table with intervals: `docs/spiderweb/layer4_family_manifest.json`
+(`docs/research/SPIDERWEB_LAYER4_FAMILY_2026-09-09.md` locally, with the dataset).
+
+| candidate | kind | discovery | confirmation [simultaneous 95] | verdict |
+|---|---|---|---|---|
+| `dpm` | positive control | +0.059 | +0.053 [+0.015, +0.091] | control passes — the harness sees a known within-round signal |
+| `noise` | negative control | −0.020 | −0.003 [−0.044, +0.037] | fails, as it must |
+| `moving_share` | candidate | +0.034 | +0.108 [+0.047, +0.167] | passes the arithmetic; **not shipped** — a within-round split cannot separate "moved more" from "was on the attacking side", which shares the outcome (§7.4.1); needs the attacking side per round |
+| `isolation_share` | oracle diagnostic | +0.081 | +0.032 | fails: wrong direction (the isolated win MORE — attackers spread out) |
+| `blind_moving_share` | candidate | +0.010 | −0.007 | fails: no direction; median 0.89 — on captured evidence almost all movement is "blind" (§6.2 lower bound) |
+| `exposure_share` | oracle diagnostic | −0.043 | −0.038 [−0.096, +0.019] | fails: simultaneous interval includes zero |
+| `push_into_wave_share` | oracle diagnostic | −0.049 | −0.116 [−0.214, −0.018] | passes the arithmetic; oracle clock, does not ship (§6.4, P6); coverage 4,131/5,622 rows (validated enemy clock only) |
+
+Nothing from layer 4 reaches a page. The two findings worth a follow-up are named, not scored:
+moving-into-an-imminent-enemy-wave reads as costly on the oracle clock (the recipient-clock
+version, §6.3, is what could ship), and "moving more" needs the attacking side per round to
+mean anything about a player.
+
 ## What is explicitly NOT validated or not done
 
 - `capture_policy.mode = "unknown"` is the truth for historical rounds:
