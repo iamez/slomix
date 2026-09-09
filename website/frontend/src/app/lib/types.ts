@@ -4015,6 +4015,10 @@ export interface SpiderWebSnapshot {
     pov_unavailable?: string | null;
     /** Channels the whole state cannot have (team pov: the union). */
     unavailable?: Record<string, string>;
+    /** A team or player view returns every own-team position as known —
+     *  the server says so (§6: the voice channel is not captured, so
+     *  own-team knowledge is a stated simplification, not a measurement). */
+    own_team_positions_are_a_simplification?: boolean;
   };
   gaps: Record<string, string>;
   /** Layer-1 validation the snapshot cites: where the coordinates were
@@ -4067,7 +4071,8 @@ export interface MapMesh {
   vertices: number[];
   indexes: number[];
   floor_normal_z: number;
-  bounds: unknown;
+  /** Null in the test stub; the exported files always carry one. */
+  bounds: { min: number[]; max: number[] } | null;
 }
 
 // ---------------------------------------------------------------------------

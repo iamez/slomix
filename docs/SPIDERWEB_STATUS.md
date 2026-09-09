@@ -16,7 +16,7 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
 | 0 capture | §2 | live. Lua tracker v6.14 on the game server writes 200 ms samples, combat, engagements, vehicle progress (`proximity/lua/proximity_tracker.lua`); parser `proximity/parser/parser.py`; tables `proximity_*`, `player_track`, `combat_engagement`, `vehicle_progress` | PR #916 (v6.14), earlier v6.x |
 | 1 the web (reconstruction of a round at one moment) | §4 | **built and merged** (#792, 2026-08-21; fixes #793). `GET /api/replay/round/{id}/web?t=<ms>` in `website/backend/routers/replay_router.py`, logic in `website/backend/services/round_web_service.py` | SPA page `SpiderWebPage.tsx` (`/spider-web/round/:roundId`, phase 5 slice SW-1, #880) |
 | 2 the clock | §5 | built inside layer 1's response: clock quality is a server verdict (`validated`, `internally_consistent_unvalidated`, `validation_failed`, …, `round_web_service.py` ~858) and the page shows it as a badge; **withheld** is a separate axis, not a sixth state | same endpoint/page |
-| 3 information state (what a team *could* know) | §6 | **not drawn**. Edges are computed; belief regions / information_state are not rendered (see follow-ups) | — |
+| 3 information state (what a team *could* know) | §6 | **computed and drawn** (#991 the belief tables, 2026-09-08; SW-2 the scene, 2026-09-09): per holder, the beliefs the server grants, counts and distances as intervals, and under a team or player point of view the belief REGIONS as dashed discs at the radius the server grew, opacity = confidence, past the published horizon named in words | `website/backend/services/information_state.py`; `website/frontend/src/app/pages/SpiderWebPage.tsx`, `components/SpiderWebScene.tsx`, `lib/spiderWeb.ts` |
 | 4 movement quality | §7 | **not started**; §7.5 says weights are choices, not facts | — |
 | validation W6 (offline trace vs engine) | §8, §10 C4 | **done, 2026-08-21/22**: 26,695 paired segments on all 8 project maps, agreement **99.92 %**, 0 hard errors; two maps at exactly 100 %; cost 9–13 µs per trace | `scripts/build_w6_trace_fixtures.py`, `scripts/compare_w6_engine_vs_offline.py`, `tests/unit/test_w6_control_expectations.py`; report is local (`docs/research/W6_OFFLINE_VS_ENGINE_2026-08-22.md`, not in the repo) |
 
@@ -65,9 +65,13 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
   volumes was measured (containment 5.9 %, free path 48.1 %) and a random-
   direction control killed both instruments — on 3 of 4 maps the path to the
   objective is *clearer* than random. Only `etl_ice` is worse than random.
-- SW-1 leaves out, by name (page footer): the 3D camera, belief regions and
-  label placement of the legacy canvas. These are follow-ups deferred behind
-  parity (PLAN, 2026-09-02), not missing parity.
+- SW-2 (2026-09-09) carried the legacy canvas whole into the SPA as SVG:
+  the axonometric camera (drag turns, shift-drag pans, wheel zooms, plan
+  view), the screen-space fit, floors by height band, the p90 error ring,
+  labels that drop rather than nudge, belief regions under a team/player
+  view, a 512-unit scale bar, per-player points of view and the moment in
+  the URL. The legacy module's own tests travelled with it
+  (`lib/spiderWeb.test.ts`, 48). Line of sight is still not drawn — next.
 - Layer 3/4 have no code. The owner's positional score is a goal, not a
   deliverable: any new metric must say which threads it joins
   (`proximity_*` samples, `storytelling_kill_impact`, W6 LOS, spawn timing,
