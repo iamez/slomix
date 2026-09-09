@@ -420,7 +420,7 @@ describe('SessionDetail', () => {
     // live 2026-08-31; all three numbers come from the fixture.
     const f = bestLives as { lives: unknown[]; qualifying_total: number; min_kills: number };
     expect(f.qualifying_total).toBeGreaterThan(f.lives.length);
-    renderPage();
+    const first = renderPage();
     await openMore();
     await waitFor(() => expect(screen.getByText(
       new RegExp(`showing the top ${f.lives.length} of ${f.qualifying_total} lives with ≥${f.min_kills} kills`),
@@ -432,6 +432,10 @@ describe('SessionDetail', () => {
     // above is still mounted and carries the line, so a screen-wide
     // queryByText would look at the wrong page and could never fail.
     const { qualifying_total: _qt, min_kills: _mk, ...old } = bestLives as Record<string, unknown>;
+    // Each tree is unmounted before the next mounts: four live pages, each
+    // with the matrix, the graphs and the role boards, is what made the
+    // fourth render time out on CI (#1017, #1022) even at 40 s.
+    first.unmount();
     const second = renderPage(withOverride('/storytelling/best-lives', () => json(old)));
     await openMore();
     await waitFor(() => expect(second.container.querySelector('[data-parity="session.lives"]')).not.toBeNull(), { timeout: 20000 });
@@ -440,6 +444,7 @@ describe('SessionDetail', () => {
 
     // And when everything qualifying is already on screen there is no cutoff
     // to disclose.
+    second.unmount();
     const third = renderPage(withOverride('/storytelling/best-lives', () =>
       json({ ...(bestLives as object), qualifying_total: f.lives.length })));
     await openMore();
@@ -450,6 +455,7 @@ describe('SessionDetail', () => {
     // The threshold is QUOTED, not hardcoded — the fixture's 3 equals the
     // backend constant, so only a moved value can tell the two apart (a
     // fixture cannot fail on a value it does not contain).
+    third.unmount();
     const fourth = renderPage(withOverride('/storytelling/best-lives', () =>
       json({ ...(bestLives as object), min_kills: 4 })));
     await openMore();
