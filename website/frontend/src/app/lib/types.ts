@@ -1691,6 +1691,7 @@ export interface StoryBoxScore {
   winner: string;
   winner_name: string;
   maps: StoryBoxScoreMap[];
+  scope?: StoryAnswerScope;
 }
 
 /** GET /api/storytelling/moments. `detail` varies by `type` — a carrier run
@@ -1706,6 +1707,12 @@ export interface StoryMoment {
   impact_stars: number;
   time_formatted: string;
   detail?: unknown;
+  /** multikill / team_wipe carry how long the run took and who fell;
+   *  `kills` is the LIST of the kills on that wire (Codex on #1002). */
+  duration_ms?: number;
+  victims?: string[];
+  kills?: unknown[] | number;
+  team?: string;
 }
 
 export interface StoryMoments {
@@ -1748,9 +1755,13 @@ export interface StoryPwcPlayer {
   rounds_lost: number;
   total_rounds: number;
   components: Record<string, number>;
+  /** pwc round by round, with the round's own figures. */
+  per_round?: { round_number: number; map_name: string; pwc: number; won: boolean; kills: number; damage: number; objectives: number; revives: number }[];
 }
 
 export interface StoryWinContribution {
+  /** The same scope object every storytelling answer carries (recorded). */
+  scope?: StoryAnswerScope;
   status: string;
   mvp: {
     guid: string;
@@ -1792,6 +1803,8 @@ export interface StoryKillImpact {
   players: StoryKisPlayer[];
   total: number;
   total_kills: number;
+  /** How the numbers were produced: read_only means served from the table. */
+  compute?: { status: string };
 }
 
 export interface StorySynergyGroup {
@@ -1878,6 +1891,27 @@ export interface StoryRoleBoard {
    *  used; the other boards do not. */
   coverage?: { tracks_fetched: number; tracks_used: number; tracks_skipped: number };
   thresholds?: Record<string, number>;
+  /** The metric's own constants, when the board publishes them: lurker's
+   *  radius and sampling, enabler's window and distance, space's window. */
+  solo_radius?: number;
+  downsample_ms?: number;
+  time_window_ms?: number;
+  distance_threshold?: number;
+  window_ms?: number;
+  /** Every storytelling answer carries the scope it was computed over. */
+  scope?: StoryAnswerScope;
+}
+
+/** The scope block every storytelling endpoint answers with — the same
+ *  object on all of them, so the page prints it once. */
+export interface StoryAnswerScope {
+  kind: string;
+  version?: string;
+  gaming_session_id: number;
+  dates: string[];
+  accepted_round_count: number;
+  distinct_map_names: string[];
+  last_round_unix: number | null;
 }
 
 /** GET /api/storytelling/player-narratives — generated prose per player. */
@@ -2058,6 +2092,9 @@ export interface StoryKisKill {
   is_objective_area: boolean | null;
   kill_time_ms: number | null;
   killer_health: number;
+  /** The flags and the moment's roster the multipliers were read from. */
+  axis_alive?: number | null;
+  allies_alive?: number | null;
 }
 
 export interface StoryKisDetails {
@@ -2116,8 +2153,8 @@ export interface StoryKillMatrixCell {
  *  engine units (the server refuses to invent a metre conversion). Same union
  *  shape as the matrix: the empty branch omits `unit` (movement.py:78-95). */
 export type StoryMovement =
-  | { status: string; available: false; reason: string; players: [] }
-  | { status: string; available: true; unit: string; players: StoryMovementPlayer[] };
+  | { status: string; available: false; reason: string; players: []; scope?: StoryAnswerScope }
+  | { status: string; available: true; unit: string; players: StoryMovementPlayer[]; scope?: StoryAnswerScope };
 
 export interface StoryMovementPlayer {
   guid_short: string;
@@ -2131,8 +2168,10 @@ export interface StoryMovementPlayer {
   peak_speed: number;
   /** null for the same reason as distance_per_min (movement.py:70-73). */
   sprint_pct: number | null;
-  post_spawn_distance: number;
-  alive_ms: number;
+  /** Null on tracks that never carried them (older captures) — movement.py
+   *  keeps the NULL instead of folding it to 0. */
+  post_spawn_distance: number | null;
+  alive_ms: number | null;
 }
 
 /** GET /api/storytelling/useless-defense-deaths — defensive deaths that gave

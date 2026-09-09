@@ -175,7 +175,7 @@
   "/api/storytelling/movement": "10 files reachable from the endpoint's callers",
   "/api/storytelling/narrative": "10 files reachable from the endpoint's callers",
   "/api/storytelling/player-narratives": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/scopes": "global: no caller found for the path literal, matched over the whole app",
+  "/api/storytelling/scopes": "dead: no caller found for the path literal — nothing reads it, every row stays unread",
   "/api/storytelling/space-created": "10 files reachable from the endpoint's callers",
   "/api/storytelling/synergy": "12 files reachable from the endpoint's callers",
   "/api/storytelling/useless-defense-deaths": "10 files reachable from the endpoint's callers",
@@ -189,11 +189,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2957,
-  "unread": 655,
+  "read": 3079,
+  "unread": 533,
   "dropped": 67,
   "endpoints": 180,
-  "endpoints_fully_read": 49,
+  "endpoints_fully_read": 67,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -958,23 +958,23 @@
    "dropped": 0
   },
   "/api/storytelling/best-lives": {
-   "read": 16,
-   "unread": 5,
+   "read": 21,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/box-score": {
-   "read": 19,
-   "unread": 7,
+   "read": 26,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/camp-profile": {
-   "read": 29,
-   "unread": 6,
+   "read": 35,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/enabler": {
-   "read": 15,
-   "unread": 8,
+   "read": 23,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/formula": {
@@ -983,83 +983,83 @@
    "dropped": 19
   },
   "/api/storytelling/gravity": {
-   "read": 15,
-   "unread": 7,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/kill-impact": {
-   "read": 27,
-   "unread": 6,
+   "read": 32,
+   "unread": 1,
    "dropped": 17
   },
   "/api/storytelling/kill-impact/details": {
-   "read": 34,
-   "unread": 12,
+   "read": 46,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/kill-matrix": {
-   "read": 17,
-   "unread": 5,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/lurker-profile": {
-   "read": 19,
-   "unread": 8,
+   "read": 27,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/moments": {
-   "read": 18,
-   "unread": 7,
+   "read": 25,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/momentum": {
-   "read": 9,
-   "unread": 5,
+   "read": 14,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/momentum-session": {
-   "read": 20,
-   "unread": 5,
+   "read": 25,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/movement": {
-   "read": 13,
-   "unread": 9,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/narrative": {
-   "read": 11,
-   "unread": 5,
+   "read": 16,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/player-narratives": {
-   "read": 11,
-   "unread": 6,
+   "read": 17,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/scopes": {
-   "read": 4,
-   "unread": 4,
+   "read": 0,
+   "unread": 8,
    "dropped": 0
   },
   "/api/storytelling/space-created": {
-   "read": 15,
-   "unread": 6,
+   "read": 21,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/synergy": {
-   "read": 15,
-   "unread": 5,
+   "read": 20,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/useless-defense-deaths": {
-   "read": 17,
-   "unread": 5,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/win-contribution": {
-   "read": 19,
-   "unread": 10,
+   "read": 29,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/win-contribution/formula": {
@@ -16517,17 +16517,17 @@
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
@@ -16537,12 +16537,12 @@
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
@@ -16637,7 +16637,7 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "maps_completed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
@@ -16647,17 +16647,17 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
@@ -16667,12 +16667,12 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
@@ -16692,7 +16692,7 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "winner_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16787,17 +16787,17 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16807,12 +16807,12 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16857,7 +16857,7 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.spawn_skip_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16877,7 +16877,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "distance_threshold",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16922,7 +16922,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "players.total_assists",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16937,17 +16937,17 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16957,12 +16957,12 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16982,7 +16982,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "time_window_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/formula",
@@ -17201,7 +17201,7 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "players.alive_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17241,7 +17241,7 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "players.total_engaged_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17251,17 +17251,17 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17271,12 +17271,12 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17508,17 +17508,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17528,12 +17528,12 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17573,17 +17573,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.allies_alive",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.axis_alive",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.base_impact",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17613,17 +17613,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.is_carrier_kill",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.is_crossfire",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.is_during_push",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17643,7 +17643,7 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.killer_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17713,17 +17713,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17733,12 +17733,12 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17858,17 +17858,17 @@
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
@@ -17878,12 +17878,12 @@
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
@@ -17928,7 +17928,7 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "downsample_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17943,7 +17943,7 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "players.alive_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17988,17 +17988,17 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -18008,12 +18008,12 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -18028,7 +18028,7 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "solo_radius",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -18048,7 +18048,7 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "moments.duration_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -18103,7 +18103,7 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "moments.victims",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -18113,17 +18113,17 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -18133,12 +18133,12 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -18188,17 +18188,17 @@
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
@@ -18208,12 +18208,12 @@
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
@@ -18298,17 +18298,17 @@
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
@@ -18318,12 +18318,12 @@
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
@@ -18368,12 +18368,12 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.alive_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.avg_speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18388,7 +18388,7 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.lives",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18403,7 +18403,7 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.post_spawn_distance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18423,17 +18423,17 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18443,12 +18443,12 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18478,17 +18478,17 @@
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
@@ -18498,12 +18498,12 @@
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
@@ -18578,7 +18578,7 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "player_narratives.top_trait",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18588,17 +18588,17 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18608,12 +18608,12 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18638,7 +18638,7 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/scopes",
@@ -18653,12 +18653,12 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.end_date",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.gaming_session_id",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/scopes",
@@ -18668,7 +18668,7 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.start_date",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18728,17 +18728,17 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18748,12 +18748,12 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18773,7 +18773,7 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "window_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18803,17 +18803,17 @@
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18823,12 +18823,12 @@
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18928,17 +18928,17 @@
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
@@ -18948,12 +18948,12 @@
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
@@ -19003,7 +19003,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "mvp.selected_by",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19028,7 +19028,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.components",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19043,7 +19043,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.per_round",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19063,12 +19063,12 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.total_rounds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.waa",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19088,17 +19088,17 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19108,12 +19108,12 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
