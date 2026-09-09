@@ -4523,6 +4523,8 @@ export type AvailabilityStatus = 'LOOKING' | 'AVAILABLE' | 'MAYBE' | 'NOT_PLAYIN
 // (#830, with the documented my_status tri-state) — reused, not redeclared.
 
 export interface PlanningToday {
+  /** Derived from availability_entries even with no planning row (planning.py _planning_state); absent on older recordings. */
+  committed_count?: number;
   date: string;
   session_ready: { ready: boolean; looking_count: number; threshold: number };
   unlocked: boolean;
