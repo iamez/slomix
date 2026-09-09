@@ -329,6 +329,12 @@ describe('Proximity', () => {
     fireEvent.click(screen.getAllByRole('button', { name: /carniee · supply r2/ })[0]);
     await waitFor(() => expect(screen.getByText(/\.lgz · 3 hits · 107 dmg/)).toBeInTheDocument());
     expect(screen.getByText(/carniee · 2 hits · 36 dmg/)).toBeInTheDocument();
+    // Codex on #1004: the hit window and the kill flag survive parseAttackers,
+    // the round's length is the canonical duration (12:00 recorded, not
+    // end − start), and the target's samples are summarised like the attacker's.
+    expect(screen.getAllByText(/hit from \d+:\d\d to \d+:\d\d/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/round lasted 12:00/)).toBeInTheDocument();
+    expect(screen.getByText(/target's samples — health/)).toBeInTheDocument();
     expect(screen.getByLabelText('engagement path')).toBeInTheDocument();
     expect(screen.getByText('solid — target · dashed — attacker')).toBeInTheDocument();
     expect(screen.getByText(/movement — target 283 u\/s · 3 turns/)).toBeInTheDocument();
@@ -371,7 +377,8 @@ describe('Proximity', () => {
     expect(screen.getByText(/session-wide metric; map\/round filters are not applied/)).toBeInTheDocument();
   });
 
-  it('renders the map overlays once a map is picked, and the player pair once a player is', async () => {
+  // the overlays draw a canvas over the recorded geometry; a loaded runner passed 5 s once (2026-09-09)
+  it('renders the map overlays once a map is picked, and the player pair once a player is', { timeout: 20000 }, async () => {
     vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
     renderPage();
     await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());

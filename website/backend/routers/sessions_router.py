@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from shared.config import load_config
-from shared.round_time import round_duration_sql
+from shared.round_time import round_duration_seconds, round_duration_sql
 from shared.services.session_stats_aggregator import SessionStatsAggregator
 from shared.services.stopwatch_scoring_service import StopwatchScoringService
 from shared.utils import escape_like_pattern
@@ -2519,10 +2519,24 @@ class SessionBasicsPlayer(BaseModel):
     alive_pct_drift: bool
 
 
+class SessionBasicsClock(BaseModel):
+    """When the evening ran — the two fields the date-keyed /api/sessions/{date}
+    carried and the gsid family did not (endpoint ratchet, 2026-09-08)."""
+
+    #: "HH:MM" of the first counted round's start — its stats file's write
+    #: time (≈ the round's end) minus its duration; null when unrecorded.
+    start: str | None
+    #: "HH:MM" of the last counted round's end — its stats file's write time.
+    end: str | None
+    #: Seconds from the first start to the last end; null with either missing.
+    span_seconds: int | None
+
+
 class SessionBasics(BaseModel):
     gaming_session_id: int
     #: The counted rounds' first date.
     date: str | None
+    clock: SessionBasicsClock
     coverage: SessionBasicsCoverage
     teams: list[SessionBasicsTeam]
     #: Sorted by dpm, descending.
@@ -2561,6 +2575,60 @@ class SessionAwards(BaseModel):
     #: Counted rounds that carry at least one engine award (~83 % since June).
     rounds_with_awards: int
     categories: list[SessionAwardCategory]
+
+
+def _round_time_hms(value) -> tuple[int, int, int] | None:
+    """`rounds.round_time` in either of its two forms ('HH:MM:SS' or 'HHMMSS'
+    zero-padded to six digits — the round_time family's dual form)."""
+    if value is None:
+        return None
+    digits = str(value).replace(":", "")
+    if not digits.isdigit():
+        return None
+    digits = digits.zfill(6)[-6:]
+    return int(digits[:2]), int(digits[2:4]), int(digits[4:6])
+
+
+def _session_clock(round_rows: list, first_round_pause_seconds: int = 0) -> dict[str, Any]:
+    """When the evening ran, from the rows SESSION_ROUNDS_SQL already returned.
+
+    `rounds.round_time` is the stats file's write time — the END of a round
+    (plus 0–3 s), the way bot/core/round_canonical.py derives a start from it
+    by subtracting the duration. So: start = first round's file time minus
+    its duration; end = last round's file time; span = the difference. The
+    duration comes from the canonical `round_duration_seconds` (measured
+    first, the parsed actual_time as the documented fallback), never from
+    one column alone. Everything stays on the file clock (local time), no
+    epoch mixed in.
+
+    The duration EXCLUDES pauses (shared/round_time.py; TIMING_DATA_SOURCES
+    §"actual_duration = round_end − round_start − pauses"), so a first round
+    interrupted by a pause would put the start late by the pause's length
+    and shorten the span by the same amount. The caller passes the first
+    round's pause seconds (the webhook's `lua_pause_events`, 0 when the
+    webhook has no record) and the start moves back by them (Codex, #1001)."""
+    if not round_rows:
+        return {"start": None, "end": None, "span_seconds": None}
+    first, last = round_rows[0], round_rows[-1]
+    first_t = _round_time_hms(first[5])
+    last_t = _round_time_hms(last[5])
+    first_duration = round_duration_seconds(
+        first[8] if len(first) > 8 else None, first[6] if len(first) > 6 else None
+    )
+    start_s = None
+    if first_t and first_duration is not None:
+        start_s = first_t[0] * 3600 + first_t[1] * 60 + first_t[2] - int(first_duration) - int(first_round_pause_seconds or 0)
+        if start_s < 0:
+            start_s += 86400  # the first round straddled midnight
+    end_s = last_t[0] * 3600 + last_t[1] * 60 + last_t[2] if last_t else None
+    start = f"{(start_s // 3600) % 24:02d}:{(start_s % 3600) // 60:02d}" if start_s is not None else None
+    end = f"{end_s // 3600:02d}:{(end_s % 3600) // 60:02d}" if end_s is not None else None
+    span = None
+    if start_s is not None and end_s is not None:
+        span = end_s - start_s
+        if span < 0:
+            span += 86400  # the evening crossed midnight
+    return {"start": start, "end": end, "span_seconds": span}
 
 
 async def _session_duration_seconds(db: DatabaseAdapter, round_rows: list, round_ids: list[int]) -> int:
@@ -2658,6 +2726,12 @@ async def get_session_basics(
         "SELECT COUNT(*) FROM rounds WHERE gaming_session_id = $1", (gaming_session_id,)
     )
     rounds_total = int(total_rounds_row[0]) if total_rounds_row and total_rounds_row[0] is not None else len(round_ids)
+    # The first round's pauses, for the wall clock (see _session_clock): the
+    # webhook's record, one row per round, absent for rounds it did not see.
+    pause_row = await db.fetch_one(
+        "SELECT lua_pause_events FROM lua_round_teams WHERE round_id = $1", (round_ids[0],)
+    )
+    first_round_pause_seconds = _pause_seconds(pause_row[0]) if pause_row else 0
 
     player_rows = await db.fetch_all(session_player_sql(placeholders, exclude_bots=True), tuple(round_ids))
     duration = await _session_duration_seconds(db, round_rows, round_ids)
@@ -2759,6 +2833,7 @@ async def get_session_basics(
     return {
         "gaming_session_id": gaming_session_id,
         "date": str(first_date) if first_date else None,
+        "clock": _session_clock(round_rows, first_round_pause_seconds),
         "coverage": {
             "rounds_counted": len(round_ids),
             "rounds_total": rounds_total,
