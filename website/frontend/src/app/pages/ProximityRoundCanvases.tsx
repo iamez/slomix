@@ -52,6 +52,9 @@ function ClockBadge({ team, v }: { team: string; v: WaveClockValidation }) {
       {v.pass_ratio != null && (
         <> · {(v.pass_ratio * 100).toFixed(0)}% ({v.passing_landing_clusters}/{v.landing_clusters} clusters, {v.timing_observations} obs)</>
       )}
+      {/* the rest of the verdict's evidence (ledger 2026-09-09): the offset and the spawn callbacks it was checked against */}
+      {v.offset_ms != null && <> · offset {figure(v.offset_ms / 1000)} s</>}
+      {v.spawn_callbacks != null && <> · {figure(v.spawn_callbacks)} spawn callbacks{v.post_revive_spawn_callbacks != null && v.post_revive_spawn_callbacks > 0 ? ` (${figure(v.post_revive_spawn_callbacks)} post-revive)` : ''}</>}
     </Meta>
   );
 }

@@ -18,6 +18,5 @@
  "/api/greatshot/{demo_id} highlights.clip_demo_path": "the server path of the cut clip; clip_download is built from the same row, so the path is the link's title and never a state of its own (Codex on #1003)",
  "/api/proximity/event/{event_id} round_end_unix": "the round's end wall time; the page prints the canonical round_duration_seconds instead of end − start, which includes pauses and reads 0:00 on zero sentinels (Codex on #1004)",
  "/api/proximity/summary v5_counts.*": "iterated: Object.entries prints every source table's row count under 'v5 source rows in this scope' (ProximityOutcomes)",
- "/api/proximity/competitive/wave-cycles clock_validation.*": "iterated: Object.entries draws a ClockBadge per team with every field (ProximityRoundCanvases)",
  "/api/proximity/events events.reaction_ms": "an alias: get_proximity_events sets reaction_ms and duration_ms from the same column (row[6]); combat_engagement has no reaction column, the drill-down's attackers carry first_hit_ms (Codex on #1010)"
 }

@@ -334,8 +334,10 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 {d.return_fire.slice(0, 3).map((r) => (
                   <ProxRow key={`rf:${r.guid}`} name={stripEtColors(r.name)} mid={`return fire · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
                 ))}
+                {/* one row per (player, class): the endpoint groups by class, so
+                  * the same player can sit on the board twice — say which class */}
                 {d.dodge.slice(0, 3).map((r) => (
-                  <ProxRow key={`dg:${r.guid}`} name={stripEtColors(r.name)} mid={`dodge · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
+                  <ProxRow key={`dg:${r.guid}:${r.player_class}`} name={`${stripEtColors(r.name)} (${r.player_class.toLowerCase()})`} mid={`dodge · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
                 ))}
                 {d.class_summary.map((c) => (
                   <ProxRow

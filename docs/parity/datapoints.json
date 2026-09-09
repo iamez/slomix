@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3265,
+  "read": 3267,
   "unread": 347,
-  "dropped": 77,
+  "dropped": 75,
   "endpoints": 180,
   "endpoints_fully_read": 83,
   "unmeasured": 3
@@ -443,9 +443,9 @@
    "dropped": 0
   },
   "/api/proximity/competitive/wave-cycles": {
-   "read": 30,
+   "read": 32,
    "unread": 0,
-   "dropped": 2
+   "dropped": 0
   },
   "/api/proximity/construction-events": {
    "read": 14,
@@ -5426,14 +5426,12 @@
   {
    "endpoint": "/api/proximity/competitive/wave-cycles",
    "key": "clock_validation.ALLIES",
-   "status": "dropped",
-   "reason": "iterated: Object.entries draws a ClockBadge per team with every field (ProximityRoundCanvases)"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/wave-cycles",
    "key": "clock_validation.AXIS",
-   "status": "dropped",
-   "reason": "iterated: Object.entries draws a ClockBadge per team with every field (ProximityRoundCanvases)"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/wave-cycles",

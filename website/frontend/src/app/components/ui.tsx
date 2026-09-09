@@ -293,3 +293,10 @@ export function Meta({ children, style }: { children: ReactNode; style?: CSSProp
 export function figure(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1);
 }
+
+/** A ratio or a p-value at a fixed number of places — the one place a page
+ *  may ask for more than figure()'s decimal, so `.toFixed` never spreads
+ *  through pages/ (website/frontend/AGENTS.md). */
+export function decimals(value: number, places = 2): string {
+  return value.toFixed(places);
+}

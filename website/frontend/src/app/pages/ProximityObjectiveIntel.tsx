@@ -9,7 +9,7 @@
 import { mmss } from '../components/RoundsTable';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { Stack } from '../components/layout';
-import { Lbl, Meta, figure } from '../components/ui';
+import { Lbl, Meta, figure, decimals } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import type { CarrierReturns, ObjectiveRuns } from '../lib/types';
@@ -94,7 +94,7 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                   <ProxRow
                     key={`${e.carrier_name ?? '?'}:${e.pickup_time}:${i}`}
                     name={`${e.carrier_name ? stripEtColors(e.carrier_name) : 'unknown'} (${e.carrier_team.toLowerCase()}) · ${mapLabel(e.map_name)}`}
-                    mid={`${e.outcome}${e.killer_name ? ` by ${stripEtColors(e.killer_name)}` : ''} · ${figure(Math.round(e.carry_distance))} u carried, ${figure(Math.round(e.beeline_distance))} u straight (eff ${e.efficiency.toFixed(2)}) · ${figure(Math.round(e.duration_ms / 1000))} s · picked up at ${mmss(e.pickup_time / 1000)}`}
+                    mid={`${e.outcome}${e.killer_name ? ` by ${stripEtColors(e.killer_name)}` : ''} · ${figure(Math.round(e.carry_distance))} u carried, ${figure(Math.round(e.beeline_distance))} u straight (eff ${decimals(e.efficiency)}) · ${figure(Math.round(e.duration_ms / 1000))} s · picked up at ${mmss(e.pickup_time / 1000)}`}
                     val={e.flag_team.replace(/flag$/, '')}
                   />
                 ))}

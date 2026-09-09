@@ -144,10 +144,11 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                 </Stack>
                 {/* The other two boards the endpoint answers and the page never drew (ledger 2026-09-09). */}
                 <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                  <Lbl>fastest reaction</Lbl>
+                  {/* AVG(time_to_first_move_ms): spawn → first move, not a reaction to a hit (proximity_movement.py) */}
+                  <Lbl>first move after a spawn</Lbl>
                   {d.reaction.slice(0, 5).map((r) => (
                     <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
-                      val={`${figure(r.reaction_ms)} ms`} />
+                      val={`avg ${figure(r.reaction_ms)} ms`} />
                   ))}
                 </Stack>
                 <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
