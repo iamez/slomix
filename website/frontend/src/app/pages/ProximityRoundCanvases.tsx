@@ -26,6 +26,7 @@ import {
 } from '../lib/queries';
 import type { JourneyLife, WaveClockValidation } from '../lib/types';
 import { ProxPanel, ProxRow } from './proximityShared';
+import { mmss } from '../components/RoundsTable';
 
 /** The five clock states, each its own tone — FAILED is not a weaker
  * UNVALIDATED: landings exist and they REFUTE the clock (17 §4). */
@@ -268,12 +269,20 @@ function Journey({ sessionDate, mapName, roundNumber, roundStartUnix }: { sessio
               <svg viewBox="0 0 420 260" style={{ width: '100%', maxWidth: 420, border: '1px solid var(--color-rule-900)' }} role="img" aria-label="paths of every life this round">
                 {q.data.lives.map((l) => <LifePath key={l.life_index} life={l} extent={extent} />)}
               </svg>
+              {q.data.player && (
+                <Meta>
+                  {q.data.player.name ? stripEtColors(q.data.player.name) : q.data.player.guid.slice(0, 8)} ({q.data.player.team.toLowerCase()}) ·
+                  {' '}{figure(q.data.summary.lives ?? q.data.lives.length)} lives · {figure(q.data.summary.kills ?? 0)} kills · {figure(q.data.summary.deaths ?? 0)} deaths
+                  {q.data.summary.avg_life_s != null ? ` · ${figure(q.data.summary.avg_life_s)} s per life` : ''}
+                  {q.data.summary.objective_events_unavailable ? ' · objective events unavailable (the lookup failed)' : q.data.summary.objective_events != null ? ` · ${figure(q.data.summary.objective_events)} objective events` : ''}
+                </Meta>
+              )}
               <Stack gap={1} className="rows">
                 {q.data.lives.map((l) => (
                   <ProxRow
                     key={l.life_index}
                     name={`life ${l.life_index} · ${l.player_class.toLowerCase()}`}
-                    mid={l.narrative}
+                    mid={`${l.narrative} · ${mmss(l.spawn_time_ms / 1000)}–${l.death_time_ms == null ? 'round end' : `${mmss(l.death_time_ms / 1000)}${l.death_type && l.death_type !== 'round_end' ? ` (${l.death_type.replace(/_/g, ' ')})` : ''}`} · ${figure(Math.round(l.total_distance))} u${l.sprint_pct != null ? ` · ${figure(Math.round(l.sprint_pct))}% sprint` : ''}${l.solo_pct != null ? ` · ${figure(Math.round(l.solo_pct))}% alone` : ''}${l.proximity_series ? ` · ${figure(l.proximity_series.length)} proximity samples` : ''}${l.objective_events && l.objective_events.length > 0 ? ` · ${figure(l.objective_events.length)} objective events` : ''}`}
                     val={`${figure(Math.round(l.duration_ms / 1000))} s · ${figure(l.kills.length)}k`}
                   />
                 ))}
