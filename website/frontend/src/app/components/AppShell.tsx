@@ -120,11 +120,12 @@ export function AppShell() {
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#454340' }} />
               DEV
             </span>
-            {/* Known limitation until phase 6 (auth flows): the OAuth
-                callback returns to the legacy site, not to /app — the login
-                round-trip works, the return location does not yet. */}
+            {/* ?next= brings the callback back to THIS /app page; the
+                server accepts only a same-origin /app path (auth.py
+                _safe_next_path), so a foreign value falls back to the old
+                default return. */}
             <a
-              href="/auth/login"
+              href={`/auth/login?next=${encodeURIComponent(`/app${pathname === '/' ? '' : pathname}`)}`}
               style={{
                 fontSize: 'var(--fs-value)', letterSpacing: '0.14em', textTransform: 'uppercase',
                 color: 'var(--color-text-200)', textDecoration: 'none',
