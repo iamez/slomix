@@ -155,6 +155,7 @@ export function AppShell() {
         >
           <span>slomix · kept since january 2025</span>
           <span style={{ display: 'flex', gap: 'var(--space-4)' }}>
+            <Link to="/welcome" style={{ color: 'inherit', textDecoration: 'none' }}>welcome</Link>
             <Link to="/system" style={{ color: 'inherit', textDecoration: 'none' }}>system</Link>
             <Link to="/smart-stats-diag" style={{ color: 'inherit', textDecoration: 'none' }}>diag</Link>
             <span>et:legacy stopwatch</span>
