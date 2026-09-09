@@ -18,6 +18,7 @@ import { mapLabel } from '../lib/maps';
 import { useMapMesh, useSpiderWebMoment } from '../lib/queries';
 import { SpiderWebScene } from '../components/SpiderWebScene';
 import { isTeamPov } from '../lib/spiderWeb';
+import { WEAPON_NAMES } from '../lib/weapons';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { mmss } from '../components/RoundsTable';
 import type { SpiderBelief, SpiderClock, SpiderPlayer, SpiderWebSnapshot } from '../lib/types';
@@ -95,7 +96,10 @@ function PlacedPlayers({ snap }: { snap: SpiderWebSnapshot }) {
     { key: 'health', label: 'hp', align: 'right', sortValue: (p) => p.health },
     { key: 'stance', label: 'stance', format: (p) => (p.stance == null ? <Meta>—</Meta> : STANCE_WORD[p.stance] ?? `stance ${String(p.stance)}`), sortValue: (p) => p.stance },
     { key: 'speed', label: 'speed', align: 'right', title: 'game units per second', format: (p) => (p.speed == null ? <Meta>—</Meta> : figure(Math.round(p.speed))), sortValue: (p) => p.speed },
+    { key: 'vx', label: 'vx', align: 'right', title: 'velocity along x, game units per second — derived from a causal same-life pair, null without one', format: (p) => (p.vx == null ? <Meta>—</Meta> : figure(Math.round(p.vx))), sortValue: (p) => p.vx },
+    { key: 'vy', label: 'vy', align: 'right', title: 'velocity along y, game units per second', format: (p) => (p.vy == null ? <Meta>—</Meta> : figure(Math.round(p.vy))), sortValue: (p) => p.vy },
     { key: 'vz', label: 'vz', align: 'right', title: 'vertical velocity — null when no second sample within the window', format: (p) => (p.vz == null ? <Meta>—</Meta> : figure(Math.round(p.vz))), sortValue: (p) => p.vz },
+    { key: 'weapon', label: 'weapon', title: 'the weapon held at the sample (engine weapon number, named where known)', format: (p) => (p.weapon == null ? <Meta>—</Meta> : (WEAPON_NAMES[Number(p.weapon)] ?? `#${String(p.weapon)}`)), sortValue: (p) => (p.weapon == null ? null : Number(p.weapon)) },
     { key: 'velocity_reason', label: 'velocity', title: 'why the velocity is what it is (the server names it)', format: (p) => p.velocity_reason ?? <Meta>—</Meta>, sortValue: (p) => p.velocity_reason },
     { key: 'velocity_stale_ms', label: 'v pair', align: 'right', title: 'ms between the two samples the velocity was derived from (the causal pair) — not the sample age, which is the stale column', format: (p) => (p.velocity_stale_ms == null ? <Meta>—</Meta> : figure(p.velocity_stale_ms)), sortValue: (p) => p.velocity_stale_ms },
     { key: 'stale_ms', label: 'stale', align: 'right', title: 'ms since the position sample', sortValue: (p) => p.stale_ms },
@@ -239,7 +243,7 @@ export function SpiderWebPage() {
       <Stack gap={2}>
         <Lbl>proximity · spider web · layers 1–3</Lbl>
         <h1 style={{ fontSize: 'var(--fs-title)', letterSpacing: 'var(--track-title)', textTransform: 'uppercase', margin: 'var(--space-3) 0 0', fontWeight: 500 }}>
-          {mapLabel(snap.map_name)} · round #{figure(snap.round_id)}
+          {mapLabel(snap.map_name)} · round #{figure(snap.round_id)}{snap.teams.length > 0 ? ` · ${snap.teams.map((t) => t.toLowerCase()).join(' v ')}` : ''}
         </h1>
         <Meta>
           {figure(snap.player_count)} players placed · capture {snap.capture_policy.mode}

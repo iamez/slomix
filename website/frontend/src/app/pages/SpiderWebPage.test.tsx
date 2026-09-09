@@ -117,6 +117,11 @@ describe('SpiderWebPage', () => {
     const players = document.querySelector('[data-parity="spider-web.players.table"]') as HTMLElement;
     for (const p of w.players) expect(players.textContent).toContain(p.name ?? p.guid.slice(0, 8));
     expect(screen.getByTitle('two tracks claimed this player at once')).toBeInTheDocument();
+    // the last four wire fields: vx, vy, the weapon by name, and the teams in the title
+    expect(screen.getByTitle(/velocity along x/)).toBeInTheDocument();
+    expect(screen.getByTitle(/velocity along y/)).toBeInTheDocument();
+    expect(screen.getByTitle(/weapon held at the sample/)).toBeInTheDocument();
+    expect(screen.getByText(/round #11,?344 · allies v axis/)).toBeInTheDocument();
     expect(screen.getByTitle(/nearest teammate — not tactical/)).toBeInTheDocument();
     // one row per belief across all holders
     const beliefs = document.querySelector('[data-parity="spider-web.beliefs.table"]') as HTMLElement;
@@ -388,10 +393,11 @@ describe('SpiderWebPage — line of sight (SW-3)', () => {
     expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('2 of 5 placed players had a clear ray to them');
   });
 
-  it('a point of view gets no overlay and says why', async () => {
+  it('a point of view gets no overlay and says why', { timeout: 20000 }, async () => {
     serve(world);
     renderAt('11344', '?pov=team:AXIS');
-    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    // generous: this page renders a full scene, and a loaded runner took 5.7 s once
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument(), { timeout: 10000 });
     expect(povForm.line_of_sight!.available).toBe(false);
     expect(screen.queryByRole('button', { name: 'line of sight (oracle)' })).toBeNull();
     expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('line of sight not traced: withheld under a point of view');
@@ -421,7 +427,7 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
     expect(sameView(undefined, 'world')).toBeUndefined();
   });
 
-  it('a failed geometry request is unavailable, not "never exported"', async () => {
+  it('a failed geometry request is unavailable, not "never exported"', { timeout: 20000 }, async () => {
     stub((url) => (url.includes('/api/replay/round/11344/web') ? world : undefined));
     vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -429,8 +435,8 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(world) } as Response);
     });
     renderAt();
-    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText(/this map's floor mesh: unavailable/)).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument(), { timeout: 10000 });
+    await waitFor(() => expect(screen.getByText(/this map's floor mesh: unavailable/)).toBeInTheDocument(), { timeout: 10000 });
     expect(screen.queryByText(/floor mesh was never exported/)).toBeNull();
     // the players still draw without a stage
     expect(screen.getByLabelText('reconstructed moment').querySelectorAll('[data-player]').length).toBe(world.players.length);
