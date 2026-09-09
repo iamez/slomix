@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { PlayerProfilePage } from './PlayerProfile';
 import profile from './__fixtures__/api_players_identifier_profile.json';
+import skillPlayer from './__fixtures__/api_skill_player_identifier.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';

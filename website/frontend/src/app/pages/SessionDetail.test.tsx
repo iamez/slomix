@@ -136,6 +136,8 @@ describe('SessionDetail', () => {
     renderPage();
     await openMore();
     await waitFor(() => expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument());
+    // The scoring block's own count, beside the score (recorded 6).
+    expect(screen.getByText('6 maps scored')).toBeInTheDocument();
     expect(screen.getAllByText('etl_adlernest').length).toBeGreaterThan(0);
     // A full hold is not a time, and the recording has one.
     expect(screen.getAllByText(/fullhold/).length).toBeGreaterThan(0);

@@ -17,6 +17,7 @@ import type {
   PlayerRoundsSeries,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
+import { utcStamp } from '../lib/utcStamp';
 import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 import { Panel } from '../components/Panel';
 
@@ -902,6 +903,8 @@ function RatingHistory({ playerId }: { playerId: string }) {
                 <Lbl>{s.session_date}</Lbl>
                 <Cluster gap={4} align="baseline">
                   <Meta>{figure(s.rounds)} rounds · {figure(s.maps)} maps</Meta>
+                  {/* That night's own rating, before it is folded into the running figure. */}
+                  {s.session_rating != null && <Meta><span title="that session's rating">night {s.session_rating}</span></Meta>}
                   <span className="m" style={{ fontSize: 'var(--fs-row)' }}>{s.cumulative_rating}</span>
                   {/* ⛔ A null delta is the FIRST session, not a flat one. */}
                   {s.delta == null ? <Meta>first</Meta>
@@ -931,6 +934,7 @@ function RatingComponents({ playerId }: { playerId: string }) {
         <div style={{ marginTop: 'var(--space-2)' }}>
           <Meta style={{ display: 'block', marginBottom: 'var(--space-2)' }}>
             et rating {skill.data.player.et_rating.toFixed(3)} · rank {skill.data.player.rank} of {skill.data.player.total_rated}
+            {' · '}<span>{`rated as ${skill.data.player.display_name}${skill.data.player.last_rated_at != null ? `, last ${utcStamp(skill.data.player.last_rated_at)}` : ''}`}</span>
             {/* games_rated STORES rounds (skill_rating_service writes the
               * aggregate's rounds into this column; the skill page labels
               * it rounds) — "games" would overstate the sample ~2x. */}
