@@ -18,18 +18,13 @@ import {
   useProxScoresFormula, useProxTradesPlayerStats,
 } from '../lib/queries';
 import { ProxPanel, ProxRow } from './proximityShared';
+import { WEAPON_NAMES } from '../lib/weapons';
 
 const PROFILE_DAYS = 90;
 const SCORE_DAYS = 30;
 
 /** ET weapon ids as the tracker emits them (copied from the old tree's
  *  only consumer — the ids are engine constants, not guesses). */
-const WEAPON_NAMES: Record<number, string> = {
-  3: 'Knife', 8: 'MP40', 9: 'Thompson', 10: 'Sten',
-  15: 'Panzerfaust', 19: 'FG42', 23: 'Garand', 28: 'K43',
-  32: 'Colt', 33: 'Luger', 35: 'Grenade', 36: 'Grenade',
-  44: 'Landmine', 47: 'Mortar', 50: 'Dynamite', 57: 'MG42',
-};
 
 function Tile({ label, value }: { label: string; value: string }) {
   return (

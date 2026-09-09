@@ -23,3 +23,13 @@ export function weaponLabel(token: string): string {
   const bare = token.replace(/^WS_/, '').replace(/_/g, ' ').toLowerCase();
   return bare.charAt(0).toUpperCase() + bare.slice(1);
 }
+
+/** The engine's weapon_t numbers → names, for fields that carry the number
+ *  (proximity weapon_id, the spider web's `weapon` at a sample). One copy:
+ *  it used to live in ProximityPlayerPage alone. */
+export const WEAPON_NAMES: Record<number, string> = {
+  3: 'Knife', 8: 'MP40', 9: 'Thompson', 10: 'Sten',
+  15: 'Panzerfaust', 19: 'FG42', 23: 'Garand', 28: 'K43',
+  32: 'Colt', 33: 'Luger', 35: 'Grenade', 36: 'Grenade',
+  44: 'Landmine', 47: 'Mortar', 50: 'Dynamite', 57: 'MG42',
+};

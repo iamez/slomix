@@ -56,9 +56,17 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
   `capabilities` is NULL in all 828 rows measured on 2026-08-21 and capture
   cadence is stored nowhere; the page shows this as a three-state snapshot
   integrity, not as an error.
-- Free path (line of sight) between players is still marked `unvalidated` in
-  the web output until §8 is signed off by the owner — W6 validated the
-  tracer, not the metric that would consume it. No metric eats LOS yet.
+- Line of sight (SW-3, 2026-09-09) is published in the WORLD view only, as
+  an oracle diagnostic: `edges[].line_of_sight` (eye-to-body availability
+  both ways, W6-validated tracer, static geometry) and a `line_of_sight`
+  block with the scope, the validation and per-player exposure (living
+  enemies with a clear ray to them). A team or player view gets
+  `available:false` with the reason. No metric eats it — §11 holds: a clear
+  ray is necessary, not sufficient, for having seen someone, and it is never
+  a belief source. Cost measured on dev: index scan 4.9 s once per process,
+  BSP 0.3 s per map, 45–110 ms per snapshot off the event loop
+  (`services/line_of_sight.py`). Maps without a BSP in the indexed etmain
+  tree (`etl_supply`) answer "no geometry", not zero exposure.
 - Layer 1 must not rank players (§4.6); the ceiling for all context is +2.51
   rating points.
 - Objective pressure keeps the radius-500 sphere: replacing it with objective
@@ -71,8 +79,8 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
   labels that drop rather than nudge, belief regions under a team/player
   view, a 512-unit scale bar, per-player points of view and the moment in
   the URL. The legacy module's own tests travelled with it
-  (`lib/spiderWeb.test.ts`, 48). Line of sight is still not drawn — next.
-- Layer 3/4 have no code. The owner's positional score is a goal, not a
+  (`lib/spiderWeb.test.ts`, 48). Line of sight followed in SW-3 (below).
+- Layer 4 has no code beyond the exposure diagnostic above; its harness is SW-4 (PLAN). The owner's positional score is a goal, not a
   deliverable: any new metric must say which threads it joins
   (`proximity_*` samples, `storytelling_kill_impact`, W6 LOS, spawn timing,
   reaction metrics) and follow the measurement discipline that already

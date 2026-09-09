@@ -1,0 +1,7204 @@
+{
+ "round_id": 11344,
+ "t_ms": 120000,
+ "map_name": "et_brewdog",
+ "round_duration_ms": 188000,
+ "teams": [
+  "ALLIES",
+  "AXIS"
+ ],
+ "first_position_ms": 500,
+ "capture_policy": {
+  "mode": "fixed",
+  "observation_interval_ms": 200,
+  "source": "declared",
+  "manifest_version": "1",
+  "capabilities": {
+   "aim_lock": "enabled",
+   "focus_fire": "enabled",
+   "shot_fired": "enabled",
+   "comm_events": "disabled",
+   "trade_kills": "enabled",
+   "spawn_select": "disabled",
+   "spawn_timing": "enabled",
+   "team_cohesion": "enabled",
+   "skill_snapshot": "disabled",
+   "carrier_returns": "enabled",
+   "carrier_tracking": "enabled",
+   "combat_positions": "enabled",
+   "escape_detection": "enabled",
+   "vehicle_tracking": "enabled",
+   "reaction_tracking": "enabled",
+   "heatmap_generation": "enabled",
+   "crossfire_detection": "enabled",
+   "engagement_tracking": "enabled",
+   "hit_region_tracking": "enabled",
+   "team_push_detection": "enabled",
+   "construction_tracking": "enabled",
+   "kill_outcome_tracking": "enabled",
+   "objective_run_tracking": "enabled",
+   "crossfire_opportunities": "enabled"
+  },
+  "manifest_count": 1,
+  "conflicting_flags": 0
+ },
+ "velocity_max_dt_ms": 400,
+ "clock": {
+  "AXIS": {
+   "status": "validated",
+   "interval_ms": 30000,
+   "offset_ms": 10000,
+   "timing_observations": 11,
+   "landing_clusters": 6,
+   "spawn_callbacks": 10,
+   "post_revive_spawn_callbacks": 0,
+   "passing_landing_clusters": 6,
+   "pass_ratio": 1.0,
+   "phase_ms": 10000,
+   "time_to_next_wave_ms": 20000
+  },
+  "ALLIES": {
+   "status": "validated",
+   "interval_ms": 25000,
+   "offset_ms": 15000,
+   "timing_observations": 14,
+   "landing_clusters": 6,
+   "spawn_callbacks": 11,
+   "post_revive_spawn_callbacks": 3,
+   "passing_landing_clusters": 6,
+   "pass_ratio": 1.0,
+   "phase_ms": 10000,
+   "time_to_next_wave_ms": 15000
+  }
+ },
+ "information_state": {
+  "holders": {
+   "5D9891600C7948FF85709360E669D5A4": {
+    "holder_guid": "5D9891600C7948FF85709360E669D5A4",
+    "known_enemy_count": 0,
+    "nearest_known_enemy_distance": null,
+    "nearest_heard_activity_distance": {
+     "min": 60.3,
+     "max": 1566.3
+    },
+    "beliefs": [
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "D8423F90F045D9D3E2C0550811C5A899",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "DB00AA454019890392D8DBFF5704C999",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 85000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119900,
+      "confidence": 0.98,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1424.0,
+       "y": 746.0,
+       "z": 77.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119750,
+      "confidence": 0.951,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1420.0,
+       "y": 737.0,
+       "z": 87.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 118650,
+      "confidence": 0.763,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1229.0,
+       "y": 877.0,
+       "z": 24.0,
+       "radius": 1136.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110625,
+      "confidence": 0.153,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110575,
+      "confidence": 0.152,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110525,
+      "confidence": 0.15,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110475,
+      "confidence": 0.149,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110425,
+      "confidence": 0.147,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110375,
+      "confidence": 0.146,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110325,
+      "confidence": 0.144,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110275,
+      "confidence": 0.143,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110225,
+      "confidence": 0.142,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110175,
+      "confidence": 0.14,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110125,
+      "confidence": 0.139,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110075,
+      "confidence": 0.137,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110025,
+      "confidence": 0.136,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109975,
+      "confidence": 0.135,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109925,
+      "confidence": 0.133,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109875,
+      "confidence": 0.132,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109825,
+      "confidence": 0.131,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109775,
+      "confidence": 0.129,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109725,
+      "confidence": 0.128,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109675,
+      "confidence": 0.127,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109625,
+      "confidence": 0.126,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109575,
+      "confidence": 0.124,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109525,
+      "confidence": 0.123,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109475,
+      "confidence": 0.122,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109425,
+      "confidence": 0.121,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109375,
+      "confidence": 0.119,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109325,
+      "confidence": 0.118,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109275,
+      "confidence": 0.117,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109225,
+      "confidence": 0.116,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109175,
+      "confidence": 0.115,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109125,
+      "confidence": 0.114,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109075,
+      "confidence": 0.112,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109025,
+      "confidence": 0.111,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108975,
+      "confidence": 0.11,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108925,
+      "confidence": 0.109,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108875,
+      "confidence": 0.108,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108825,
+      "confidence": 0.107,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108775,
+      "confidence": 0.106,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108725,
+      "confidence": 0.105,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108675,
+      "confidence": 0.104,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108625,
+      "confidence": 0.103,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98800,
+      "confidence": 0.071,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 106475,
+      "confidence": 0.067,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1594.0,
+       "y": 981.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": null,
+      "t_observed": 96375,
+      "confidence": 0.052,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 596.2,
+       "y": 288.2,
+       "z": 344.3,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 104625,
+      "confidence": 0.046,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2060.0,
+       "y": 1858.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 94950,
+      "confidence": 0.044,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 103325,
+      "confidence": 0.036,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1133.0,
+       "y": 331.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 102700,
+      "confidence": 0.031,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2105.0,
+       "y": 1837.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 91775,
+      "confidence": 0.029,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "DB00AA454019890392D8DBFF5704C999",
+      "roster_state": null,
+      "t_observed": 91225,
+      "confidence": 0.027,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 370.0,
+       "y": 432.2,
+       "z": 388.2,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101700,
+      "confidence": 0.026,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2076.0,
+       "y": 1826.0,
+       "z": 90.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101450,
+      "confidence": 0.024,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 641.0,
+       "y": 462.0,
+       "z": 352.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": null,
+      "t_observed": 89275,
+      "confidence": 0.021,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 426.8,
+       "y": -147.7,
+       "z": 344.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 100000,
+      "confidence": 0.018,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 421.0,
+       "y": 772.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99850,
+      "confidence": 0.018,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 428.0,
+       "y": 781.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99700,
+      "confidence": 0.017,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 438.0,
+       "y": 790.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99550,
+      "confidence": 0.017,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 449.0,
+       "y": 793.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99450,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1806.0,
+       "y": 1409.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99400,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 460.0,
+       "y": 796.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99300,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1796.0,
+       "y": 1403.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99250,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 803.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99150,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1789.0,
+       "y": 1399.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99100,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 815.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99075,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2132.0,
+       "y": 1574.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99000,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98950,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 825.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98925,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2129.0,
+       "y": 1533.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98850,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98800,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 830.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98750,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2131.0,
+       "y": 1494.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98700,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98650,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 462.0,
+       "y": 829.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98625,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2134.0,
+       "y": 1455.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98550,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1784.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98500,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 448.0,
+       "y": 810.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98475,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2130.0,
+       "y": 1415.0,
+       "z": 29.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98150,
+      "confidence": 0.013,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2090.0,
+       "y": 1348.0,
+       "z": 28.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98025,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2070.0,
+       "y": 1328.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97875,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2041.0,
+       "y": 1340.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97850,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2079.0,
+       "y": 1844.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97725,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2043.0,
+       "y": 1339.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97700,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2099.0,
+       "y": 1825.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97575,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2045.0,
+       "y": 1318.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97550,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2115.0,
+       "y": 1810.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2016.0,
+       "y": 1317.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2140.0,
+       "y": 1778.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2020.0,
+       "y": 1331.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2124.0,
+       "y": 1752.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97125,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2008.0,
+       "y": 1344.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97100,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2091.0,
+       "y": 1750.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97050,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 419.0,
+       "y": 312.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 96975,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1984.0,
+       "y": 1369.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     }
+    ],
+    "position_claim_max_radius": 1000.0,
+    "unavailable": {
+     "comm_events": "voice macros are not read: proximity_comm_event holds 96 rows across 2 rounds in the entire corpus, so no round can support this channel"
+    },
+    "notes": [
+     "beliefs are per player and a LOWER BOUND: Discord voice is not capturable and never will be",
+     "gunfire gives a region, never the shooter's telemetry point, and never resolves WHO fired",
+     "line-of-sight is not included here: it is an oracle upper bound, not an observation"
+    ]
+   },
+   "D8423F90F045D9D3E2C0550811C5A899": {
+    "holder_guid": "D8423F90F045D9D3E2C0550811C5A899",
+    "known_enemy_count": 1,
+    "nearest_known_enemy_distance": {
+     "min": 1307.3,
+     "max": 2101.3
+    },
+    "nearest_heard_activity_distance": null,
+    "beliefs": [
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "DB00AA454019890392D8DBFF5704C999",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 85000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": null,
+      "t_observed": 119575,
+      "confidence": 0.948,
+      "counts_as_known": true,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 1386.9,
+       "y": 701.0,
+       "z": 91.1,
+       "radius": 397.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "aim_lock",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": null,
+      "t_observed": 119200,
+      "confidence": 0.852,
+      "counts_as_known": true,
+      "capability": "aim_lock",
+      "expiry_basis": null,
+      "region": {
+       "x": 1340.3,
+       "y": 673.8,
+       "z": 91.1,
+       "radius": 397.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110625,
+      "confidence": 0.153,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110575,
+      "confidence": 0.152,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110525,
+      "confidence": 0.15,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110475,
+      "confidence": 0.149,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110425,
+      "confidence": 0.147,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110375,
+      "confidence": 0.146,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110325,
+      "confidence": 0.144,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110275,
+      "confidence": 0.143,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110225,
+      "confidence": 0.142,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110175,
+      "confidence": 0.14,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110125,
+      "confidence": 0.139,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110075,
+      "confidence": 0.137,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110025,
+      "confidence": 0.136,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109975,
+      "confidence": 0.135,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109925,
+      "confidence": 0.133,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109875,
+      "confidence": 0.132,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109825,
+      "confidence": 0.131,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109775,
+      "confidence": 0.129,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109725,
+      "confidence": 0.128,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109675,
+      "confidence": 0.127,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109625,
+      "confidence": 0.126,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109575,
+      "confidence": 0.124,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109525,
+      "confidence": 0.123,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109475,
+      "confidence": 0.122,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109425,
+      "confidence": 0.121,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109375,
+      "confidence": 0.119,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109325,
+      "confidence": 0.118,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109275,
+      "confidence": 0.117,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109225,
+      "confidence": 0.116,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109175,
+      "confidence": 0.115,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109125,
+      "confidence": 0.114,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109075,
+      "confidence": 0.112,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109025,
+      "confidence": 0.111,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108975,
+      "confidence": 0.11,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108925,
+      "confidence": 0.109,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108875,
+      "confidence": 0.108,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108825,
+      "confidence": 0.107,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108775,
+      "confidence": 0.106,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108725,
+      "confidence": 0.105,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108675,
+      "confidence": 0.104,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108625,
+      "confidence": 0.103,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": null,
+      "t_observed": 98850,
+      "confidence": 0.071,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 2130.7,
+       "y": 1500.5,
+       "z": 32.3,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 104625,
+      "confidence": 0.046,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2060.0,
+       "y": 1858.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99075,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2132.0,
+       "y": 1574.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98925,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2129.0,
+       "y": 1533.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98750,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2131.0,
+       "y": 1494.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98625,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2134.0,
+       "y": 1455.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98475,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2130.0,
+       "y": 1415.0,
+       "z": 29.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98150,
+      "confidence": 0.013,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2090.0,
+       "y": 1348.0,
+       "z": 28.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98025,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2070.0,
+       "y": 1328.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97875,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2041.0,
+       "y": 1340.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97850,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2079.0,
+       "y": 1844.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97725,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2043.0,
+       "y": 1339.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97700,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2099.0,
+       "y": 1825.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97575,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2045.0,
+       "y": 1318.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97550,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2115.0,
+       "y": 1810.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2016.0,
+       "y": 1317.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2140.0,
+       "y": 1778.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2020.0,
+       "y": 1331.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2124.0,
+       "y": 1752.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97125,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2008.0,
+       "y": 1344.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97100,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2091.0,
+       "y": 1750.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 96975,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1984.0,
+       "y": 1369.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     }
+    ],
+    "position_claim_max_radius": 1000.0,
+    "unavailable": {
+     "comm_events": "voice macros are not read: proximity_comm_event holds 96 rows across 2 rounds in the entire corpus, so no round can support this channel"
+    },
+    "notes": [
+     "beliefs are per player and a LOWER BOUND: Discord voice is not capturable and never will be",
+     "gunfire gives a region, never the shooter's telemetry point, and never resolves WHO fired",
+     "line-of-sight is not included here: it is an oracle upper bound, not an observation"
+    ]
+   },
+   "DB00AA454019890392D8DBFF5704C999": {
+    "holder_guid": "DB00AA454019890392D8DBFF5704C999",
+    "known_enemy_count": 0,
+    "nearest_known_enemy_distance": null,
+    "nearest_heard_activity_distance": {
+     "min": 38.6,
+     "max": 1544.6
+    },
+    "beliefs": [
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "D8423F90F045D9D3E2C0550811C5A899",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 85000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119900,
+      "confidence": 0.98,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1424.0,
+       "y": 746.0,
+       "z": 77.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119750,
+      "confidence": 0.951,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1420.0,
+       "y": 737.0,
+       "z": 87.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119200,
+      "confidence": 0.852,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 56.0,
+       "y": -398.0,
+       "z": 56.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 118650,
+      "confidence": 0.763,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1229.0,
+       "y": 877.0,
+       "z": 24.0,
+       "radius": 1136.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 111450,
+      "confidence": 0.181,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": -191.0,
+       "y": -725.0,
+       "z": 320.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 103325,
+      "confidence": 0.036,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1133.0,
+       "y": 331.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": null,
+      "t_observed": 91775,
+      "confidence": 0.029,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 429.6,
+       "y": 1086.8,
+       "z": 344.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 91225,
+      "confidence": 0.027,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101450,
+      "confidence": 0.024,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 641.0,
+       "y": 462.0,
+       "z": 352.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 100000,
+      "confidence": 0.018,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 421.0,
+       "y": 772.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99850,
+      "confidence": 0.018,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 428.0,
+       "y": 781.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99700,
+      "confidence": 0.017,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 438.0,
+       "y": 790.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99550,
+      "confidence": 0.017,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 449.0,
+       "y": 793.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99400,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 460.0,
+       "y": 796.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99250,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 803.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99100,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 815.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98950,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 825.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98800,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 830.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98650,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 462.0,
+       "y": 829.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98500,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 448.0,
+       "y": 810.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97350,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 680.0,
+       "y": 821.0,
+       "z": 209.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97050,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 419.0,
+       "y": 312.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     }
+    ],
+    "position_claim_max_radius": 1000.0,
+    "unavailable": {
+     "comm_events": "voice macros are not read: proximity_comm_event holds 96 rows across 2 rounds in the entire corpus, so no round can support this channel"
+    },
+    "notes": [
+     "beliefs are per player and a LOWER BOUND: Discord voice is not capturable and never will be",
+     "gunfire gives a region, never the shooter's telemetry point, and never resolves WHO fired",
+     "line-of-sight is not included here: it is an oracle upper bound, not an observation"
+    ]
+   },
+   "EDBB5DA97C9F52151865C5F223F9B951": {
+    "holder_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+    "known_enemy_count": 0,
+    "nearest_known_enemy_distance": null,
+    "nearest_heard_activity_distance": {
+     "min": 0.0,
+     "max": 971.5
+    },
+    "beliefs": [
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "D8423F90F045D9D3E2C0550811C5A899",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "DB00AA454019890392D8DBFF5704C999",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 85000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119900,
+      "confidence": 0.98,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1424.0,
+       "y": 746.0,
+       "z": 77.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119750,
+      "confidence": 0.951,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1420.0,
+       "y": 737.0,
+       "z": 87.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110625,
+      "confidence": 0.153,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110575,
+      "confidence": 0.152,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110525,
+      "confidence": 0.15,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110475,
+      "confidence": 0.149,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110425,
+      "confidence": 0.147,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110375,
+      "confidence": 0.146,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110325,
+      "confidence": 0.144,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110275,
+      "confidence": 0.143,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110225,
+      "confidence": 0.142,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110175,
+      "confidence": 0.14,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110125,
+      "confidence": 0.139,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110075,
+      "confidence": 0.137,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110025,
+      "confidence": 0.136,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109975,
+      "confidence": 0.135,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109925,
+      "confidence": 0.133,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109875,
+      "confidence": 0.132,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109825,
+      "confidence": 0.131,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109775,
+      "confidence": 0.129,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109725,
+      "confidence": 0.128,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109675,
+      "confidence": 0.127,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109625,
+      "confidence": 0.126,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109575,
+      "confidence": 0.124,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109525,
+      "confidence": 0.123,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109475,
+      "confidence": 0.122,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109425,
+      "confidence": 0.121,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109375,
+      "confidence": 0.119,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109325,
+      "confidence": 0.118,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109275,
+      "confidence": 0.117,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109225,
+      "confidence": 0.116,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109175,
+      "confidence": 0.115,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109125,
+      "confidence": 0.114,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109075,
+      "confidence": 0.112,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109025,
+      "confidence": 0.111,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108975,
+      "confidence": 0.11,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108925,
+      "confidence": 0.109,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108875,
+      "confidence": 0.108,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108825,
+      "confidence": 0.107,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108775,
+      "confidence": 0.106,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108725,
+      "confidence": 0.105,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108675,
+      "confidence": 0.104,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108625,
+      "confidence": 0.103,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98850,
+      "confidence": 0.071,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 106475,
+      "confidence": 0.067,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1594.0,
+       "y": 981.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": null,
+      "t_observed": 98025,
+      "confidence": 0.064,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 2078.4,
+       "y": 1844.6,
+       "z": 32.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 96800,
+      "confidence": 0.055,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 104625,
+      "confidence": 0.046,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2060.0,
+       "y": 1858.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 103325,
+      "confidence": 0.036,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1133.0,
+       "y": 331.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": null,
+      "t_observed": 93125,
+      "confidence": 0.035,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 2120.8,
+       "y": 1596.6,
+       "z": 32.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 102700,
+      "confidence": 0.031,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2105.0,
+       "y": 1837.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101700,
+      "confidence": 0.026,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2076.0,
+       "y": 1826.0,
+       "z": 90.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101450,
+      "confidence": 0.024,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 641.0,
+       "y": 462.0,
+       "z": 352.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 100000,
+      "confidence": 0.018,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 421.0,
+       "y": 772.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99850,
+      "confidence": 0.018,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 428.0,
+       "y": 781.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99700,
+      "confidence": 0.017,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 438.0,
+       "y": 790.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99550,
+      "confidence": 0.017,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 449.0,
+       "y": 793.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99450,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1806.0,
+       "y": 1409.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99400,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 460.0,
+       "y": 796.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99300,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1796.0,
+       "y": 1403.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99250,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 803.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99150,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1789.0,
+       "y": 1399.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99100,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 815.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99000,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98950,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 825.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98850,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98800,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 465.0,
+       "y": 830.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98700,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98650,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 462.0,
+       "y": 829.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98550,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1784.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98500,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 448.0,
+       "y": 810.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97850,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2079.0,
+       "y": 1844.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97700,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2099.0,
+       "y": 1825.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97550,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2115.0,
+       "y": 1810.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2140.0,
+       "y": 1778.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97350,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 680.0,
+       "y": 821.0,
+       "z": 209.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2124.0,
+       "y": 1752.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97100,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2091.0,
+       "y": 1750.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97050,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 419.0,
+       "y": 312.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     }
+    ],
+    "position_claim_max_radius": 1000.0,
+    "unavailable": {
+     "comm_events": "voice macros are not read: proximity_comm_event holds 96 rows across 2 rounds in the entire corpus, so no round can support this channel"
+    },
+    "notes": [
+     "beliefs are per player and a LOWER BOUND: Discord voice is not capturable and never will be",
+     "gunfire gives a region, never the shooter's telemetry point, and never resolves WHO fired",
+     "line-of-sight is not included here: it is an oracle upper bound, not an observation"
+    ]
+   },
+   "EF561EAA92BE11A8E562A904A262C4C6": {
+    "holder_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+    "known_enemy_count": 0,
+    "nearest_known_enemy_distance": null,
+    "nearest_heard_activity_distance": null,
+    "beliefs": [
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "D8423F90F045D9D3E2C0550811C5A899",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "DB00AA454019890392D8DBFF5704C999",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119575,
+      "confidence": 0.948,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 118650,
+      "confidence": 0.763,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1229.0,
+       "y": 877.0,
+       "z": 24.0,
+       "radius": 1136.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": null,
+      "t_observed": 98800,
+      "confidence": 0.071,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 610.3,
+       "y": 810.1,
+       "z": 248.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 96375,
+      "confidence": 0.052,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 104625,
+      "confidence": 0.046,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2060.0,
+       "y": 1858.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": null,
+      "t_observed": 94950,
+      "confidence": 0.044,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 395.4,
+       "y": 916.4,
+       "z": 344.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 102700,
+      "confidence": 0.031,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2105.0,
+       "y": 1837.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101700,
+      "confidence": 0.026,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2076.0,
+       "y": 1826.0,
+       "z": 90.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 89275,
+      "confidence": 0.021,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99450,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1806.0,
+       "y": 1409.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99300,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1796.0,
+       "y": 1403.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99150,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1789.0,
+       "y": 1399.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99075,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2132.0,
+       "y": 1574.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99000,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98925,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2129.0,
+       "y": 1533.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98850,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98750,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2131.0,
+       "y": 1494.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98700,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98625,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2134.0,
+       "y": 1455.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98550,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1784.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98475,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2130.0,
+       "y": 1415.0,
+       "z": 29.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98150,
+      "confidence": 0.013,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2090.0,
+       "y": 1348.0,
+       "z": 28.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98025,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2070.0,
+       "y": 1328.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97875,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2041.0,
+       "y": 1340.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97850,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2079.0,
+       "y": 1844.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97725,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2043.0,
+       "y": 1339.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97700,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2099.0,
+       "y": 1825.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97575,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2045.0,
+       "y": 1318.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97550,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2115.0,
+       "y": 1810.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2016.0,
+       "y": 1317.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2140.0,
+       "y": 1778.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97350,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 680.0,
+       "y": 821.0,
+       "z": 209.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2020.0,
+       "y": 1331.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2124.0,
+       "y": 1752.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97125,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2008.0,
+       "y": 1344.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97100,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2091.0,
+       "y": 1750.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 96975,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1984.0,
+       "y": 1369.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     }
+    ],
+    "position_claim_max_radius": 1000.0,
+    "unavailable": {
+     "comm_events": "voice macros are not read: proximity_comm_event holds 96 rows across 2 rounds in the entire corpus, so no round can support this channel"
+    },
+    "notes": [
+     "beliefs are per player and a LOWER BOUND: Discord voice is not capturable and never will be",
+     "gunfire gives a region, never the shooter's telemetry point, and never resolves WHO fired",
+     "line-of-sight is not included here: it is an oracle upper bound, not an observation"
+    ]
+   },
+   "1EDBF3002CE66FE4DFA626D92130E561": {
+    "holder_guid": "1EDBF3002CE66FE4DFA626D92130E561",
+    "known_enemy_count": 0,
+    "nearest_known_enemy_distance": null,
+    "nearest_heard_activity_distance": {
+     "min": 0.0,
+     "max": 1163.7
+    },
+    "beliefs": [
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "5D9891600C7948FF85709360E669D5A4",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "D8423F90F045D9D3E2C0550811C5A899",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "DB00AA454019890392D8DBFF5704C999",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 110000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "roster_state",
+      "source": "public_obituary",
+      "subject_guid": "EF561EAA92BE11A8E562A904A262C4C6",
+      "roster_state": "uncertain_after_down",
+      "t_observed": 85000,
+      "confidence": 1.0,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": "round_end",
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119900,
+      "confidence": 0.98,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1424.0,
+       "y": 746.0,
+       "z": 77.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119875,
+      "confidence": 0.975,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2434.0,
+       "y": 2050.0,
+       "z": 24.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119750,
+      "confidence": 0.951,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1420.0,
+       "y": 737.0,
+       "z": 87.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119725,
+      "confidence": 0.946,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2460.0,
+       "y": 2031.0,
+       "z": 24.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 119575,
+      "confidence": 0.919,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2478.0,
+       "y": 2015.0,
+       "z": 24.0,
+       "radius": 753.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 118650,
+      "confidence": 0.763,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1229.0,
+       "y": 877.0,
+       "z": 24.0,
+       "radius": 1136.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 116750,
+      "confidence": 0.522,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2165.0,
+       "y": 2487.0,
+       "z": 30.0,
+       "radius": 1834.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110625,
+      "confidence": 0.153,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110575,
+      "confidence": 0.152,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110525,
+      "confidence": 0.15,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110475,
+      "confidence": 0.149,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110425,
+      "confidence": 0.147,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110375,
+      "confidence": 0.146,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110325,
+      "confidence": 0.144,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110275,
+      "confidence": 0.143,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110225,
+      "confidence": 0.142,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110175,
+      "confidence": 0.14,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110125,
+      "confidence": 0.139,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110075,
+      "confidence": 0.137,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 110025,
+      "confidence": 0.136,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109975,
+      "confidence": 0.135,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109925,
+      "confidence": 0.133,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109875,
+      "confidence": 0.132,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109825,
+      "confidence": 0.131,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109775,
+      "confidence": 0.129,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109725,
+      "confidence": 0.128,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109675,
+      "confidence": 0.127,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109625,
+      "confidence": 0.126,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109575,
+      "confidence": 0.124,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109525,
+      "confidence": 0.123,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109475,
+      "confidence": 0.122,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109425,
+      "confidence": 0.121,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109375,
+      "confidence": 0.119,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109325,
+      "confidence": 0.118,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109275,
+      "confidence": 0.117,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109225,
+      "confidence": 0.116,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109175,
+      "confidence": 0.115,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109125,
+      "confidence": 0.114,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109075,
+      "confidence": 0.112,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 109025,
+      "confidence": 0.111,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108975,
+      "confidence": 0.11,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108925,
+      "confidence": 0.109,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108875,
+      "confidence": 0.108,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108825,
+      "confidence": 0.107,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108775,
+      "confidence": 0.106,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108725,
+      "confidence": 0.105,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108675,
+      "confidence": 0.104,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 108625,
+      "confidence": 0.103,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1551.0,
+       "y": 1120.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 106475,
+      "confidence": 0.067,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1594.0,
+       "y": 981.0,
+       "z": 344.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98025,
+      "confidence": 0.064,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "subject_position",
+      "source": "contact_hit",
+      "subject_guid": "EDBB5DA97C9F52151865C5F223F9B951",
+      "roster_state": null,
+      "t_observed": 96800,
+      "confidence": 0.055,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": {
+       "x": 1986.0,
+       "y": 1379.9,
+       "z": 32.1,
+       "radius": 2566.0
+      }
+     },
+     {
+      "kind": "nonspatial_contact",
+      "source": "incoming_damage",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 93125,
+      "confidence": 0.035,
+      "counts_as_known": false,
+      "capability": "core",
+      "expiry_basis": null,
+      "region": null
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 102700,
+      "confidence": 0.031,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2105.0,
+       "y": 1837.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 101700,
+      "confidence": 0.026,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2076.0,
+       "y": 1826.0,
+       "z": 90.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99450,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1806.0,
+       "y": 1409.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99300,
+      "confidence": 0.016,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1796.0,
+       "y": 1403.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99150,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1789.0,
+       "y": 1399.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99075,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2132.0,
+       "y": 1574.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 99000,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98925,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2129.0,
+       "y": 1533.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98850,
+      "confidence": 0.015,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98750,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2131.0,
+       "y": 1494.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98700,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1786.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98625,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2134.0,
+       "y": 1455.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98550,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1784.0,
+       "y": 1397.0,
+       "z": 396.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98475,
+      "confidence": 0.014,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2130.0,
+       "y": 1415.0,
+       "z": 29.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98150,
+      "confidence": 0.013,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2090.0,
+       "y": 1348.0,
+       "z": 28.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 98025,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2070.0,
+       "y": 1328.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97875,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2041.0,
+       "y": 1340.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97725,
+      "confidence": 0.012,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2043.0,
+       "y": 1339.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97575,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2045.0,
+       "y": 1318.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97425,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2016.0,
+       "y": 1317.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97275,
+      "confidence": 0.011,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2020.0,
+       "y": 1331.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 97125,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 2008.0,
+       "y": 1344.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     },
+     {
+      "kind": "position_region",
+      "source": "gunfire",
+      "subject_guid": null,
+      "roster_state": null,
+      "t_observed": 96975,
+      "confidence": 0.01,
+      "counts_as_known": false,
+      "capability": "shot_fired",
+      "expiry_basis": null,
+      "region": {
+       "x": 1984.0,
+       "y": 1369.0,
+       "z": 32.0,
+       "radius": 2922.0
+      }
+     }
+    ],
+    "position_claim_max_radius": 1000.0,
+    "unavailable": {
+     "comm_events": "voice macros are not read: proximity_comm_event holds 96 rows across 2 rounds in the entire corpus, so no round can support this channel"
+    },
+    "notes": [
+     "beliefs are per player and a LOWER BOUND: Discord voice is not capturable and never will be",
+     "gunfire gives a region, never the shooter's telemetry point, and never resolves WHO fired",
+     "line-of-sight is not included here: it is an oracle upper bound, not an observation"
+    ]
+   }
+  },
+  "audible_gunfire_radius": 1330.0,
+  "pov": "world"
+ },
+ "reconstruction_accuracy": {
+  "measured_at": "2026-08-22",
+  "script": "scripts/validate_layer1_reconstruction.py",
+  "rounds": 150,
+  "samples": {
+   "attacker": 7869,
+   "shot": 57929
+  },
+  "sources": [
+   "proximity_combat_position.attacker_*",
+   "proximity_shot_fired.origin_*"
+  ],
+  "unit": "game units (a player is about 40 wide)",
+  "excluded": "victim coordinate (shares a writer with the track's death sample)"
+ },
+ "player_count": 6,
+ "overlap_conflicts": 0,
+ "gaps": {},
+ "players": [
+  {
+   "guid": "1EDBF3002CE66FE4DFA626D92130E561",
+   "name": "kanii",
+   "team": "AXIS",
+   "class": "MEDIC",
+   "x": 2078.4,
+   "y": 1844.6,
+   "z": 32.1,
+   "health": 0,
+   "weapon": 3,
+   "stance": 0,
+   "speed": 0.0,
+   "alive": false,
+   "track_id": 143903,
+   "stale_ms": 22125,
+   "overlap_conflict": false,
+   "position_error": {
+    "p50": 530.0,
+    "p90": 1700.0,
+    "well_sampled": true,
+    "basis": "sample age 22125 ms"
+   },
+   "vx": null,
+   "vy": null,
+   "vz": null,
+   "velocity_stale_ms": null,
+   "velocity_reason": "not_alive"
+  },
+  {
+   "guid": "5D9891600C7948FF85709360E669D5A4",
+   "name": ".olz",
+   "team": "AXIS",
+   "class": "MEDIC",
+   "x": 1089.4,
+   "y": 1437.5,
+   "z": 344.1,
+   "health": 140,
+   "weapon": 3,
+   "stance": 0,
+   "speed": 264.4,
+   "alive": true,
+   "track_id": 143909,
+   "stale_ms": 0,
+   "overlap_conflict": false,
+   "position_error": {
+    "p50": 12.0,
+    "p90": 44.0,
+    "well_sampled": true,
+    "basis": "sample age 0 ms"
+   },
+   "vx": 196.5000000000009,
+   "vy": 71.00000000000023,
+   "vz": 0.0,
+   "velocity_stale_ms": 200,
+   "velocity_reason": null
+  },
+  {
+   "guid": "D8423F90F045D9D3E2C0550811C5A899",
+   "name": "vid",
+   "team": "AXIS",
+   "class": "MEDIC",
+   "x": 2424.2,
+   "y": 2051.6,
+   "z": 24.3,
+   "health": 140,
+   "weapon": 3,
+   "stance": 1,
+   "speed": 62.2,
+   "alive": true,
+   "track_id": 143910,
+   "stale_ms": 0,
+   "overlap_conflict": false,
+   "position_error": {
+    "p50": 12.0,
+    "p90": 44.0,
+    "well_sampled": true,
+    "basis": "sample age 0 ms"
+   },
+   "vx": -124.00000000000091,
+   "vy": 56.49999999999977,
+   "vz": 0.0,
+   "velocity_stale_ms": 200,
+   "velocity_reason": null
+  },
+  {
+   "guid": "DB00AA454019890392D8DBFF5704C999",
+   "name": "Cru3lzor.",
+   "team": "ALLIES",
+   "class": "MEDIC",
+   "x": 547.1,
+   "y": 151.9,
+   "z": 344.3,
+   "health": 134,
+   "weapon": 8,
+   "stance": 1,
+   "speed": 0.0,
+   "alive": true,
+   "track_id": 143911,
+   "stale_ms": 0,
+   "overlap_conflict": false,
+   "position_error": {
+    "p50": 12.0,
+    "p90": 44.0,
+    "well_sampled": true,
+    "basis": "sample age 0 ms"
+   },
+   "vx": 0.0,
+   "vy": 0.0,
+   "vz": 0.0,
+   "velocity_stale_ms": 200,
+   "velocity_reason": null
+  },
+  {
+   "guid": "EDBB5DA97C9F52151865C5F223F9B951",
+   "name": "SuperBoyy",
+   "team": "ALLIES",
+   "class": "MEDIC",
+   "x": 1368.9,
+   "y": 952.6,
+   "z": 31.9,
+   "health": 134,
+   "weapon": 8,
+   "stance": 0,
+   "speed": 270.7,
+   "alive": true,
+   "track_id": 143908,
+   "stale_ms": 0,
+   "overlap_conflict": false,
+   "position_error": {
+    "p50": 12.0,
+    "p90": 44.0,
+    "well_sampled": true,
+    "basis": "sample age 0 ms"
+   },
+   "vx": 117.5,
+   "vy": 240.5000000000001,
+   "vz": -1.0000000000000142,
+   "velocity_stale_ms": 200,
+   "velocity_reason": null
+  },
+  {
+   "guid": "EF561EAA92BE11A8E562A904A262C4C6",
+   "name": "carniee",
+   "team": "ALLIES",
+   "class": "ENGINEER",
+   "x": 1424.9,
+   "y": 756.6,
+   "z": 77.3,
+   "health": 16,
+   "weapon": 8,
+   "stance": 0,
+   "speed": 161.2,
+   "alive": true,
+   "track_id": 143907,
+   "stale_ms": 0,
+   "overlap_conflict": false,
+   "position_error": {
+    "p50": 12.0,
+    "p90": 44.0,
+    "well_sampled": true,
+    "basis": "sample age 0 ms"
+   },
+   "vx": null,
+   "vy": null,
+   "vz": null,
+   "velocity_stale_ms": null,
+   "velocity_reason": "disagrees_with_stored_speed"
+  }
+ ],
+ "withheld_by_pov": [],
+ "nearest_teammate_separation": {
+  "5D9891600C7948FF85709360E669D5A4": 1503.6894260451522,
+  "D8423F90F045D9D3E2C0550811C5A899": 1503.6894260451522,
+  "DB00AA454019890392D8DBFF5704C999": 1098.8557366642813,
+  "EDBB5DA97C9F52151865C5F223F9B951": 208.83764028546196,
+  "EF561EAA92BE11A8E562A904A262C4C6": 208.83764028546196
+ },
+ "edges": [
+  {
+   "a": "5D9891600C7948FF85709360E669D5A4",
+   "b": "D8423F90F045D9D3E2C0550811C5A899",
+   "kind": "teammate",
+   "distance": 1503.7,
+   "recently_contested": false,
+   "line_of_sight": null
+  },
+  {
+   "a": "5D9891600C7948FF85709360E669D5A4",
+   "b": "DB00AA454019890392D8DBFF5704C999",
+   "kind": "opponent",
+   "distance": 1395.3,
+   "recently_contested": false,
+   "line_of_sight": {
+    "a_to_b": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    },
+    "b_to_a": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    }
+   }
+  },
+  {
+   "a": "5D9891600C7948FF85709360E669D5A4",
+   "b": "EDBB5DA97C9F52151865C5F223F9B951",
+   "kind": "opponent",
+   "distance": 640.9,
+   "recently_contested": false,
+   "line_of_sight": {
+    "a_to_b": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    },
+    "b_to_a": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    }
+   }
+  },
+  {
+   "a": "5D9891600C7948FF85709360E669D5A4",
+   "b": "EF561EAA92BE11A8E562A904A262C4C6",
+   "kind": "opponent",
+   "distance": 804.6,
+   "recently_contested": true,
+   "line_of_sight": {
+    "a_to_b": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    },
+    "b_to_a": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    }
+   }
+  },
+  {
+   "a": "D8423F90F045D9D3E2C0550811C5A899",
+   "b": "DB00AA454019890392D8DBFF5704C999",
+   "kind": "opponent",
+   "distance": 2689.8,
+   "recently_contested": false,
+   "line_of_sight": {
+    "a_to_b": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    },
+    "b_to_a": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    }
+   }
+  },
+  {
+   "a": "D8423F90F045D9D3E2C0550811C5A899",
+   "b": "EDBB5DA97C9F52151865C5F223F9B951",
+   "kind": "opponent",
+   "distance": 1523.7,
+   "recently_contested": false,
+   "line_of_sight": {
+    "a_to_b": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    },
+    "b_to_a": {
+     "status": "blocked",
+     "reason": "static_geometry_blocked"
+    }
+   }
+  },
+  {
+   "a": "D8423F90F045D9D3E2C0550811C5A899",
+   "b": "EF561EAA92BE11A8E562A904A262C4C6",
+   "kind": "opponent",
+   "distance": 1636.6,
+   "recently_contested": true,
+   "line_of_sight": {
+    "a_to_b": {
+     "status": "clear",
+     "reason": "static_geometry_clear"
+    },
+    "b_to_a": {
+     "status": "clear",
+     "reason": "static_geometry_clear"
+    }
+   }
+  },
+  {
+   "a": "DB00AA454019890392D8DBFF5704C999",
+   "b": "EDBB5DA97C9F52151865C5F223F9B951",
+   "kind": "teammate",
+   "distance": 1189.1,
+   "recently_contested": false,
+   "line_of_sight": null
+  },
+  {
+   "a": "DB00AA454019890392D8DBFF5704C999",
+   "b": "EF561EAA92BE11A8E562A904A262C4C6",
+   "kind": "teammate",
+   "distance": 1098.9,
+   "recently_contested": true,
+   "line_of_sight": null
+  },
+  {
+   "a": "EDBB5DA97C9F52151865C5F223F9B951",
+   "b": "EF561EAA92BE11A8E562A904A262C4C6",
+   "kind": "teammate",
+   "distance": 208.8,
+   "recently_contested": true,
+   "line_of_sight": null
+  }
+ ],
+ "line_of_sight": {
+  "scope": "oracle diagnostic, world view only: a clear ray from the observer's eye to at least one point of the target's body in the static geometry \u2014 necessary, not sufficient, for having seen someone (\u00a76.1); never a belief source",
+  "validated_by": {
+   "measured_at": "2026-08-22",
+   "script": "scripts/build_w6_trace_fixtures.py",
+   "segments": 26695,
+   "maps": 8,
+   "agreement_pct": 99.92,
+   "compared_to": "engine et.trap_Trace with passEntityNum=-2 (world-only), paired offline/live fixtures",
+   "caveat": "the engine's bullet trace also clips runtime entities and antilag positions (MASK_SHOT, G_HistoricalTrace); a clear static ray is an upper bound"
+  },
+  "available": true,
+  "reason": null,
+  "geometry": "et_brewdog from et_brewdog_b6.pk3",
+  "pairs_traced": 6,
+  "exposure": {
+   "5D9891600C7948FF85709360E669D5A4": 0,
+   "DB00AA454019890392D8DBFF5704C999": 0,
+   "EDBB5DA97C9F52151865C5F223F9B951": 0,
+   "EF561EAA92BE11A8E562A904A262C4C6": 1,
+   "D8423F90F045D9D3E2C0550811C5A899": 1
+  }
+ },
+ "notes": [
+  "line-of-sight is an ORACLE DIAGNOSTIC, world view only: a clear ray is necessary, not sufficient, for having seen someone (\u00a76.1); validated against the engine's world trace by W6 (99.92 %); never a belief source",
+  "recently_contested means an engagement was open, which the tracker holds for up to 15s after the last hit \u2014 not 'under attack'",
+  "distances are geometric separation, not tactical support distance",
+  "`gaps` names every player without a state here and why; a player is never simply absent"
+ ]
+}

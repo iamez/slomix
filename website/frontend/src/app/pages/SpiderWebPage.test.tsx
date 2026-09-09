@@ -8,12 +8,15 @@ import type { SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
 import worldJson from './__fixtures__/api_replay_round_round_id_web.json';
 import povJson from './__fixtures__/api_replay_web_pov_form.json';
+import clearJson from './__fixtures__/api_replay_web_clear_moment.json';
 
 // The clock is a discriminated union (withheld vs known), which a JSON
 // import cannot satisfy at compile time — the check runs at runtime below,
 // like the replay page's event union.
 const world = worldJson as unknown as SpiderWebSnapshot;
 const povForm = povJson as unknown as SpiderWebSnapshot;
+/** The same round at 2:00, recorded 2026-09-09: one opponent pair with a clear ray both ways. */
+const clearMoment = clearJson as unknown as SpiderWebSnapshot;
 
 describe('the recorded snapshots against the clock union', () => {
   it('world clocks are the known form; the pov enemy clock is withheld with a reason', () => {
@@ -114,6 +117,11 @@ describe('SpiderWebPage', () => {
     const players = document.querySelector('[data-parity="spider-web.players.table"]') as HTMLElement;
     for (const p of w.players) expect(players.textContent).toContain(p.name ?? p.guid.slice(0, 8));
     expect(screen.getByTitle('two tracks claimed this player at once')).toBeInTheDocument();
+    // the last four wire fields: vx, vy, the weapon by name, and the teams in the title
+    expect(screen.getByTitle(/velocity along x/)).toBeInTheDocument();
+    expect(screen.getByTitle(/velocity along y/)).toBeInTheDocument();
+    expect(screen.getByTitle(/weapon held at the sample/)).toBeInTheDocument();
+    expect(screen.getByText(/round #11,?344 · allies v axis/)).toBeInTheDocument();
     expect(screen.getByTitle(/nearest teammate — not tactical/)).toBeInTheDocument();
     // one row per belief across all holders
     const beliefs = document.querySelector('[data-parity="spider-web.beliefs.table"]') as HTMLElement;
@@ -335,6 +343,78 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
   });
 });
 
+describe('SpiderWebPage — line of sight (SW-3)', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+  const serve = (moment: SpiderWebSnapshot) => stub((url) => {
+    if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=') ? povForm : moment;
+    if (url.includes('/assets/maps/geometry/')) return geometry;
+    return undefined;
+  });
+
+  it('the world view names the diagnostic, its validation, and draws it only once asked', async () => {
+    serve(world);
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const los = world.line_of_sight!;
+    expect(los.available).toBe(true);
+    const block = document.querySelector('[data-parity="spider-web.line-of-sight"]')!;
+    expect(block.textContent).toContain(`${los.pairs_traced} opponent pairs traced on ${los.geometry}`);
+    expect(block.textContent).toContain('99.92% agreement');
+    expect(block.textContent).toContain('never a belief');
+    const svg = screen.getByLabelText('reconstructed moment');
+    // off by default: no thread carries a verdict
+    expect(svg.querySelectorAll('[data-los]').length).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'line of sight (oracle)' }));
+    // at 1:00 every opponent pair is blocked both ways (the recording)
+    const traced = world.edges.filter((e) => e.line_of_sight);
+    expect(traced.length).toBe(los.pairs_traced);
+    await waitFor(() => expect(svg.querySelectorAll('[data-los="blocked"]').length).toBe(traced.length));
+    expect(svg.querySelectorAll('[data-los="clear"]').length).toBe(0);
+    // every placed player was traced and nobody was exposed
+    const players = document.querySelector('[data-parity="spider-web.players.table"]') as HTMLElement;
+    expect(screen.getByTitle(/living enemies with at least one clear ray/)).toBeInTheDocument();
+    expect(players.textContent).not.toContain('undefined');
+  });
+
+  it('a clear ray draws as a solid accent thread and counts as exposure for both ends', async () => {
+    serve(clearMoment);
+    renderAt('11344', '?t=120000');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const clear = clearMoment.edges.filter((e) => e.line_of_sight && e.line_of_sight.a_to_b.status === 'clear' && e.line_of_sight.b_to_a.status === 'clear');
+    expect(clear.length).toBe(1);
+    fireEvent.click(screen.getByRole('button', { name: 'line of sight (oracle)' }));
+    const svg = screen.getByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-los="clear"]').length).toBe(1));
+    const line = svg.querySelector('[data-los="clear"]')!;
+    expect(line.getAttribute('stroke')).toBe('var(--color-accent)');
+    expect(line.getAttribute('stroke-dasharray')).toBeNull();
+    const exposed = Object.entries(clearMoment.line_of_sight!.exposure).filter(([, n]) => n != null && n > 0).map(([g]) => g);
+    expect(exposed.sort()).toEqual([clear[0].a, clear[0].b].sort());
+    // six placed, one down: five living players sit in traced opponent pairs
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('2 of 5 living players in traced opponent pairs had a clear ray to them');
+  });
+
+  it('a point of view gets no overlay and says why', { timeout: 20000 }, async () => {
+    serve(world);
+    renderAt('11344', '?pov=team:AXIS');
+    // generous: this page renders a full scene, and a loaded runner took 5.7 s once
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument(), { timeout: 10000 });
+    expect(povForm.line_of_sight!.available).toBe(false);
+    expect(screen.queryByRole('button', { name: 'line of sight (oracle)' })).toBeNull();
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('line of sight not traced: withheld under a point of view');
+  });
+
+  it('a recording from before the diagnostic renders without the block', async () => {
+    const { line_of_sight: _dropped, ...older } = world;
+    const stripped = { ...older, edges: world.edges.map(({ line_of_sight: _l, ...e }) => e) } as unknown as SpiderWebSnapshot;
+    serve(stripped);
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'line of sight (oracle)' })).toBeNull();
+  });
+});
+
 describe('SpiderWebPage — the five Codex threads on #1005', () => {
   const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
 
@@ -348,7 +428,7 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
     expect(sameView(undefined, 'world')).toBeUndefined();
   });
 
-  it('a failed geometry request is unavailable, not "never exported"', async () => {
+  it('a failed geometry request is unavailable, not "never exported"', { timeout: 20000 }, async () => {
     stub((url) => (url.includes('/api/replay/round/11344/web') ? world : undefined));
     vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
@@ -356,8 +436,8 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(world) } as Response);
     });
     renderAt();
-    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
-    await waitFor(() => expect(screen.getByText(/this map's floor mesh: unavailable/)).toBeInTheDocument(), { timeout: 8000 });
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument(), { timeout: 10000 });
+    await waitFor(() => expect(screen.getByText(/this map's floor mesh: unavailable/)).toBeInTheDocument(), { timeout: 10000 });
     expect(screen.queryByText(/floor mesh was never exported/)).toBeNull();
     // the players still draw without a stage
     expect(screen.getByLabelText('reconstructed moment').querySelectorAll('[data-player]').length).toBe(world.players.length);
