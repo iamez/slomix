@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure, decimals } from '../components/ui';
+import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { PlayerMapMatrix } from '../components/PlayerMapMatrix';
