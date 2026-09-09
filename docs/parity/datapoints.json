@@ -175,6 +175,7 @@
   "/api/storytelling/movement": "10 files reachable from the endpoint's callers",
   "/api/storytelling/narrative": "10 files reachable from the endpoint's callers",
   "/api/storytelling/player-narratives": "10 files reachable from the endpoint's callers",
+  "/api/storytelling/scopes": "dead: no caller found for the path literal — nothing reads it, every row stays unread",
   "/api/storytelling/space-created": "10 files reachable from the endpoint's callers",
   "/api/storytelling/synergy": "12 files reachable from the endpoint's callers",
   "/api/storytelling/useless-defense-deaths": "10 files reachable from the endpoint's callers",
@@ -189,9 +190,9 @@
  },
  "summary": {
   "read": 3181,
-  "unread": 421,
+  "unread": 429,
   "dropped": 79,
-  "endpoints": 179,
+  "endpoints": 180,
   "endpoints_fully_read": 73,
   "unmeasured": 3
  },
@@ -1034,6 +1035,11 @@
   "/api/storytelling/player-narratives": {
    "read": 17,
    "unread": 0,
+   "dropped": 0
+  },
+  "/api/storytelling/scopes": {
+   "read": 0,
+   "unread": 8,
    "dropped": 0
   },
   "/api/storytelling/space-created": {
@@ -18685,6 +18691,46 @@
    "endpoint": "/api/storytelling/player-narratives",
    "key": "status",
    "status": "read"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "scope_version",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions.accepted_round_count",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions.distinct_map_names",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions.end_date",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions.gaming_session_id",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions.scope_version",
+   "status": "unread"
+  },
+  {
+   "endpoint": "/api/storytelling/scopes",
+   "key": "sessions.start_date",
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/space-created",

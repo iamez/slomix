@@ -408,6 +408,14 @@
 /api/stats/weapons/by_player player_count
 /api/status service
 /api/storytelling/kill-impact compute
+/api/storytelling/scopes scope_version
+/api/storytelling/scopes sessions
+/api/storytelling/scopes sessions.accepted_round_count
+/api/storytelling/scopes sessions.distinct_map_names
+/api/storytelling/scopes sessions.end_date
+/api/storytelling/scopes sessions.gaming_session_id
+/api/storytelling/scopes sessions.scope_version
+/api/storytelling/scopes sessions.start_date
 /api/system/overview linkage.breach_count
 /api/uploads items.description_preview
 /api/uploads/resumable/{session_id}/finalize file_size_bytes
