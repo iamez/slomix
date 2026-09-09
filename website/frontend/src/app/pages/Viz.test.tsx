@@ -299,6 +299,10 @@ describe('RetroViz', () => {
     for (const opt of screen.getAllByRole('option')) {
       expect(opt.textContent).not.toMatch(/match summary/i);
     }
+    // The damage table also carries assists, self kills and xp (ledger 2026-09-09).
+    await waitFor(() => expect(screen.getByTitle('kill assists')).toBeInTheDocument());
+    expect(screen.getByTitle('self kills')).toBeInTheDocument();
+    expect(screen.getByText('xp')).toBeInTheDocument();
     // Recorded round 11277: supply R1, winner_team 2 = Allies.
     await waitFor(() => expect(screen.getByText('Allies')).toBeInTheDocument());
     expect(screen.getByText('11:54')).toBeInTheDocument();
