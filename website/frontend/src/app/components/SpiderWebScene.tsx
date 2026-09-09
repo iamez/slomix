@@ -191,7 +191,7 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
       {los && (los.available
         ? <div data-parity="spider-web.line-of-sight"><Meta>
             line of sight: {figure(los.pairs_traced)} opponent pair{los.pairs_traced === 1 ? '' : 's'} traced on {los.geometry} ·
-            {' '}{Object.values(los.exposure).filter((n) => n > 0).length} of {Object.keys(los.exposure).length} placed players had a clear ray to them ·
+            {' '}{Object.values(los.exposure).filter((n) => n != null && n > 0).length} of {Object.keys(los.exposure).length} living players in traced opponent pairs had a clear ray to them{Object.values(los.exposure).some((n) => n == null) ? ` (${Object.values(los.exposure).filter((n) => n == null).length} undecided)` : ''} ·
             {' '}oracle diagnostic (a clear ray is necessary, not sufficient, for having seen someone; never a belief) ·
             {' '}validated {los.validated_by.measured_at}: {figure(los.validated_by.segments)} segments on {figure(los.validated_by.maps)} maps, {los.validated_by.agreement_pct}% agreement with the engine's world trace
           </Meta></div>

@@ -87,7 +87,7 @@ function hundredths(v: number): string {
  *  the geometric distance to the nearest teammate. */
 function PlacedPlayers({ snap }: { snap: SpiderWebSnapshot }) {
   const sep = snap.nearest_teammate_separation ?? {};
-  const exposure: Record<string, number> = snap.line_of_sight?.exposure ?? {};
+  const exposure: Record<string, number | null> = snap.line_of_sight?.exposure ?? {};
   const columns: DataColumn<SpiderPlayer>[] = [
     { key: 'name', label: 'player', width: 140, align: 'left', format: (p) => p.name ?? p.guid.slice(0, 8), sortValue: (p) => p.name ?? p.guid },
     { key: 'team', label: 'team', sortValue: (p) => p.team },
@@ -106,7 +106,7 @@ function PlacedPlayers({ snap }: { snap: SpiderWebSnapshot }) {
     { key: 'track_id', label: 'track', align: 'right', sortValue: (p) => p.track_id },
     { key: 'overlap_conflict', label: 'overlap', title: 'two tracks claimed this player at once', format: (p) => (p.overlap_conflict ? 'conflict' : <Meta>—</Meta>), sortValue: (p) => (p.overlap_conflict ? 1 : 0) },
     { key: 'nearest', label: 'nearest mate', align: 'right', title: 'geometric distance to the nearest teammate — not tactical support distance', format: (p) => (sep[p.guid] == null ? <Meta>—</Meta> : figure(Math.round(sep[p.guid]))), sortValue: (p) => sep[p.guid] ?? null },
-    { key: 'exposed', label: 'exposed to', align: 'right', title: 'oracle diagnostic: living enemies with at least one clear ray to this player\'s body in the static geometry (W6-validated tracer) — necessary, not sufficient, for being seen; dash = not traced (a view, a down player, no geometry)', format: (p) => (exposure[p.guid] == null ? <Meta>—</Meta> : figure(exposure[p.guid])), sortValue: (p) => exposure[p.guid] ?? null },
+    { key: 'exposed', label: 'exposed to', align: 'right', title: 'oracle diagnostic: living enemies with at least one clear ray to this player\'s body in the static geometry (W6-validated tracer) — necessary, not sufficient, for being seen; dash = not traced (a view, a down player, no geometry)', format: (p) => (exposure[p.guid] === undefined ? <Meta>—</Meta> : exposure[p.guid] === null ? <Meta>undecided</Meta> : figure(exposure[p.guid] as number)), sortValue: (p) => exposure[p.guid] ?? null },
   ];
   return (
     <div data-parity="spider-web.players">

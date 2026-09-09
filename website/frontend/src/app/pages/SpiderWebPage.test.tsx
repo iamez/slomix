@@ -388,9 +388,10 @@ describe('SpiderWebPage — line of sight (SW-3)', () => {
     const line = svg.querySelector('[data-los="clear"]')!;
     expect(line.getAttribute('stroke')).toBe('var(--color-accent)');
     expect(line.getAttribute('stroke-dasharray')).toBeNull();
-    const exposed = Object.entries(clearMoment.line_of_sight!.exposure).filter(([, n]) => n > 0).map(([g]) => g);
+    const exposed = Object.entries(clearMoment.line_of_sight!.exposure).filter(([, n]) => n != null && n > 0).map(([g]) => g);
     expect(exposed.sort()).toEqual([clear[0].a, clear[0].b].sort());
-    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('2 of 5 placed players had a clear ray to them');
+    // six placed, one down: five living players sit in traced opponent pairs
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('2 of 5 living players in traced opponent pairs had a clear ray to them');
   });
 
   it('a point of view gets no overlay and says why', { timeout: 20000 }, async () => {

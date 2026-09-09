@@ -79,7 +79,7 @@ validated. The design lives in `docs/PROXIMITY_SPIDER_WEB_SPEC_2026-07.md`
   labels that drop rather than nudge, belief regions under a team/player
   view, a 512-unit scale bar, per-player points of view and the moment in
   the URL. The legacy module's own tests travelled with it
-  (`lib/spiderWeb.test.ts`, 48). Line of sight is still not drawn — next.
+  (`lib/spiderWeb.test.ts`, 48). Line of sight followed in SW-3 (below).
 - Layer 4 has no code beyond the exposure diagnostic above; its harness is SW-4 (PLAN). The owner's positional score is a goal, not a
   deliverable: any new metric must say which threads it joins
   (`proximity_*` samples, `storytelling_kill_impact`, W6 LOS, spawn timing,

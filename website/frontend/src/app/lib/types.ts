@@ -3995,7 +3995,8 @@ export interface SpiderLineOfSight {
   validated_by: { measured_at: string; script: string; segments: number; maps: number; agreement_pct: number; compared_to: string; caveat: string };
   geometry: string | null;
   pairs_traced: number;
-  exposure: Record<string, number>;
+  /** Null = at least one incoming ray was indeterminate and none clear — undecided, not zero. */
+  exposure: Record<string, number | null>;
 }
 
 export interface SpiderWebSnapshot {
