@@ -412,7 +412,7 @@ describe('SessionDetail', () => {
 
   // Three full renders of a page that now carries the matrix and the graphs
   // (R3c/R3d): 5.4 s under jsdom on 2026-09-08, hence the wider budget.
-  it('states the lives cutoff from the payload, and stays silent on older wire shapes', { timeout: 20000 }, async () => {
+  it('states the lives cutoff from the payload, and stays silent on older wire shapes', { timeout: 40000 }, async () => {
     // The endpoint's `total` is len(lives) AFTER the limit — a total that is
     // not a total — so the disclosure reads qualifying_total, counted before
     // the cut (Codex on #842, fourth cutoff of the family). The recorded
@@ -455,7 +455,10 @@ describe('SessionDetail', () => {
     await openMore();
     // Fourth render of a page that now carries the matrix, the graphs and
     // the role boards: under CI load the default 1 s is not enough (#995).
-    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'), { timeout: 8000 });
+    // The fourth render on a cold CI runner took 13.6 s once (#1002's run
+    // 34320304211) — the wait is generous because the render is slow, not
+    // because the assertion is loose.
+    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'), { timeout: 20000 });
   });
 
   it('tells an empty night apart from a failed request', async () => {
@@ -617,6 +620,16 @@ describe('SessionDetail — stats 2.0 summary', () => {
     await waitFor(() => expect(screen.getByText('scoreboard')).toBeInTheDocument());
     expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /more about the night ▾/ })).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('a clock that knows its end but not its start still prints the end', async () => {
+    // _session_clock answers start:null, end, span:null when the first round
+    // lost both duration sources; the measured end must not vanish with it.
+    const endOnly = { ...basicsFull, clock: { start: null, end: '22:18', span_seconds: null } };
+    const { container } = renderPage(withOverride('/basics', () => json(endOnly)));
+    await waitFor(() => expect(container.querySelector('[data-parity="session.head"]')?.textContent).toContain('ended 22:18'));
+    expect(container.querySelector('[data-parity="session.head"]')?.textContent).toContain('start not measured');
+    expect(container.querySelector('[data-parity="session.head"]')?.textContent).not.toMatch(/wall clock|null/);
   });
 
   it('a failed basics call leaves the rest of the summary standing', async () => {

@@ -66,6 +66,9 @@ describe('GreatshotPage', () => {
       </QueryClientProvider>,
     );
     await waitFor(() => expect(screen.getByText('9 found')).toBeInTheDocument());
+    // the scanner's header the page used to drop: mod, profile, the cross-reference, the timings, the event count
+    expect(screen.getByText(/mod v2\.83\.1-34-ga127043 · ET:Legacy Main · \.dm_84 · matched round #11,274 · crossref 80 % \(map, duration \(diff=23\.4s\), winner\) · scanned in \d+(\.\d)? s · 119 events/)).toBeInTheDocument();
+    expect(screen.getByText(`${Object.keys((detailJson as { player_stats: Record<string, unknown> }).player_stats).length} seen`)).toBeInTheDocument();
     // No render job ever ran on this recording, so clip_download is null on
     // all nine — the recorded truth is ZERO clip links, asserted as such.
     const clips = screen.queryAllByText('clip →');

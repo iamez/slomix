@@ -153,9 +153,29 @@ export function ProximityOutcomes({ sessionDate }: { sessionDate: string | null 
             <Stack gap={1} className="rows">
               {d.crossfire_kills.slice(0, 8).map((l) => (
                 <ProxRow key={l.guid} name={l.name ? stripEtColors(l.name) : l.guid.slice(0, 8)}
-                  mid={`${figure(l.crossfire_participations)} participations · ${figure(Math.round(l.avg_delay_ms))} ms delay`}
+                  mid={`${figure(l.crossfire_participations)} participations · ${figure(l.crossfire_final_blows)} final blows · ${figure(Math.round(l.avg_delay_ms))} ms delay · focused ${figure(l.times_focused)}×, escaped ${figure(l.focus_escapes)}`}
                   val={`${figure(l.crossfire_kills)} kills`} />
               ))}
+              {d.focus_survival && d.focus_survival.length > 0 && (
+                <>
+                  <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>under focus — who got out</Lbl>
+                  {d.focus_survival.slice(0, 5).map((l) => (
+                    <ProxRow key={`f-${l.guid}`} name={l.name ? stripEtColors(l.name) : l.guid.slice(0, 8)}
+                      mid={`focused ${figure(l.times_focused)}× · escaped ${figure(l.focus_escapes)} · ${figure(l.crossfire_final_blows)} final blows`}
+                      val={`${figure(l.survival_rate_pct)}% survived`} />
+                  ))}
+                </>
+              )}
+              {d.sync.length > 0 && (
+                <>
+                  <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>tightest crossfire timing</Lbl>
+                  {d.sync.slice(0, 5).map((l) => (
+                    <ProxRow key={`s-${l.guid}`} name={l.name ? stripEtColors(l.name) : l.guid.slice(0, 8)}
+                      mid={`${figure(l.crossfire_participations)} participations · ${figure(l.crossfire_final_blows)} final blows · escaped ${figure(l.focus_escapes)} of ${figure(l.times_focused)}`}
+                      val={`${figure(Math.round(l.avg_delay_ms))} ms`} />
+                  ))}
+                </>
+              )}
             </Stack>
           )}
         </ProxPanel>
