@@ -8,6 +8,7 @@ import { AppShell } from './components/AppShell';
 import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { installErrorReporting } from './lib/errorReporting';
 import { Landing } from './pages/Landing';
+import { NotFound } from './pages/NotFound';
 import { About } from './pages/About';
 import { SystemPage } from './pages/SystemPage';
 import { SmartStatsDiag } from './pages/SmartStatsDiag';
@@ -141,7 +142,7 @@ const router = createBrowserRouter(
         // and bookmarks keep working — a redirect, not a 404 and not a stub.
         ...REDIRECTS.map((r) => ({ path: r.from, element: <Navigate to={r.to} replace /> })),
         ...PARAM_REDIRECTS.map((r) => ({ path: r.from, element: <ParamRedirect to={r.to} /> })),
-        { path: '*', element: <Stub label="Not found" phase={0} /> },
+        { path: '*', element: <NotFound /> },
       ],
     },
   ],
