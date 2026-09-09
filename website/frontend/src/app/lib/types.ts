@@ -1760,6 +1760,8 @@ export interface StoryPwcPlayer {
 }
 
 export interface StoryWinContribution {
+  /** The same scope object every storytelling answer carries (recorded). */
+  scope?: StoryAnswerScope;
   status: string;
   mvp: {
     guid: string;
@@ -2151,8 +2153,8 @@ export interface StoryKillMatrixCell {
  *  engine units (the server refuses to invent a metre conversion). Same union
  *  shape as the matrix: the empty branch omits `unit` (movement.py:78-95). */
 export type StoryMovement =
-  | { status: string; available: false; reason: string; players: [] }
-  | { status: string; available: true; unit: string; players: StoryMovementPlayer[] };
+  | { status: string; available: false; reason: string; players: []; scope?: StoryAnswerScope }
+  | { status: string; available: true; unit: string; players: StoryMovementPlayer[]; scope?: StoryAnswerScope };
 
 export interface StoryMovementPlayer {
   guid_short: string;
