@@ -17,7 +17,7 @@ import type {
   PlayerRoundsSeries,
 } from '../lib/types';
 import { mapLabel } from '../lib/maps';
-import { Absent, ActLink, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, ActLink, decimals, figure, Lbl, lblStyle, Meta, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
 import { Panel } from '../components/Panel';
 
 /**
@@ -124,6 +124,12 @@ function Header({ p }: { p: Profile }) {
             {id.first_seen ?? '—'} → {id.last_seen ?? '—'} · {figure(id.rounds ?? 0)} rounds
             {aliases.length > 0 && ` · also ${aliases.slice(0, 3).join(', ')}`}
             <IdentityLink link={id.identity_link} />
+            {/* Locale-derived, not a verified country (players_profile_router:118). */}
+            {id.country?.flag && ` · ${id.country.flag}${id.country.country ? ` ${id.country.country}` : ''}`}
+            {id.discord_linked && ' · discord linked'}
+            {id.twitch?.url && (
+              <> · <a href={id.twitch.url} style={{ color: 'inherit' }}>twitch{id.twitch.login ? `/${id.twitch.login}` : ''}</a></>
+            )}
           </div>
         ) : (
           <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="identity" /></div>
@@ -257,13 +263,13 @@ function Streaks({ p }: { p: Profile }) {
   );
 }
 
-function Weapons({ rows, available, totals }: { rows: ProfileWeaponRow[] | undefined; available: boolean; totals?: { total_shots?: number; total_hits?: number } }) {
+function Weapons({ rows, available, totals }: { rows: ProfileWeaponRow[] | undefined; available: boolean; totals?: { total_shots?: number; total_hits?: number; overall_accuracy?: number | null; overall_hs_accuracy?: number | null } }) {
   // An unavailable section carries no list at all — read defensively, then
   // let SectionBody name the state (Codex, #822).
   const top = [...(rows ?? [])].sort((a, b) => b.kills - a.kills).slice(0, 8);
   return (
     <div data-parity="profile.weapons" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills{totals?.total_shots != null && <> · {figure(totals.total_hits ?? 0)} of {figure(totals.total_shots)} shots hit</>}</Lbl>} />
+      <SectionHead label="weapons · top eight by kills" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>head hits, not headshot kills{totals?.total_shots != null && <> · {figure(totals.total_hits ?? 0)} of {figure(totals.total_shots)} shots hit</>}{totals?.overall_accuracy != null && <> · {pct(totals.overall_accuracy)} overall, {pct(totals.overall_hs_accuracy)} to the head</>}</Lbl>} />
       <SectionBody available={available} empty={top.length === 0} what="weapon stats">
         <div style={{ marginTop: 'var(--space-2)' }}>
           <div style={{ ...rowStyle, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto auto auto auto auto', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
@@ -312,6 +318,15 @@ function Body({ p }: { p: Profile }) {
                 <span>body {pct(t.body_pct)}</span>
                 <span>legs {pct(t.legs_pct)}</span>
               </div>
+              {/* Per weapon: head share is the server's, the rest derived from the counts. */}
+              {(p.hit_regions.per_weapon ?? []).slice(0, 6).map((w) => (
+                <div key={w.weapon} className="m" style={{ ...rowStyle, display: 'flex', justifyContent: 'space-between', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-400)', padding: 'var(--space-1) 0' }}>
+                  <span style={{ textTransform: 'uppercase' }}>{w.weapon}</span>
+                  <span>
+                    head {pct(w.head_pct)} · arms {pct(w.total ? (w.arms / w.total) * 100 : null)} · body {pct(w.total ? (w.body / w.total) * 100 : null)} · legs {pct(w.total ? (w.legs / w.total) * 100 : null)} · {figure(w.total)} hits
+                  </span>
+                </div>
+              ))}
             </>
           )}
         </SectionBody>
@@ -321,6 +336,7 @@ function Body({ p }: { p: Profile }) {
         <SectionBody available={m.available} empty={!m.tracks} what="movement">
           <div className="home-cols3" style={{ gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
             {([['avg speed', num(m.avg_speed)], ['peak', num(m.peak_speed)], ['sprint', pct(m.sprint_pct)],
+              ['sprinting', m.sprint_sec == null ? '—' : `${decimals(m.sprint_sec / 3600, 1)} h`],
               ['dist / life', num(m.avg_distance_per_life)], ['after spawn', num(m.avg_post_spawn_distance)],
               ['standing', pct(stance?.standing_pct)], ['crouching', pct(stance?.crouching_pct)]] as const)
               .map(([k, v]) => (
@@ -420,7 +436,7 @@ function Relationships({ p }: { p: Profile }) {
   const empty = killers.length === 0 && best.length === 0;
   return (
     <div data-parity="profile.relationships" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>the leading figure is what each list ranks by · synergy = dpm delta together</Lbl>} />
+      <SectionHead label="the people" aside={<Lbl style={{ fontSize: 'var(--fs-caption)' }}>the leading figure is what each list ranks by · synergy = dpm delta together{r.baseline_dpm != null && ` against a ${figure(r.baseline_dpm)} dpm baseline`}</Lbl>} />
       <SectionBody available={r.available} empty={empty} what="head-to-head history">
         <div className="about-grid-4" style={{ gap: 'var(--space-5)', marginTop: 'var(--space-2)' }}>
           {/* Measured at the source (rivalries_service): kills_by_player comes

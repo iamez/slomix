@@ -543,3 +543,57 @@ it('shows the recorded long tail: objectives, dynamite, sprees, duels, weapon de
   expect(screen.getByText(new RegExp(`of ${f(rec.weapons.total_shots)} shots hit`))).toBeInTheDocument();
   expect(screen.getByText('after spawn')).toBeInTheDocument();
 });
+
+/** Long tail (ledger 2026-09-09): the identity extras, the sprint clock,
+ *  the weapons' overall accuracy, the per-weapon hit split and the dpm
+ *  baseline behind synergy — every one from the recorded profile, except
+ *  the identity extras, which the recording has as null and an override
+ *  supplies. */
+describe('PlayerProfilePage long tail', () => {
+  it('names the country, the twitch handle and a linked discord when the server has them', async () => {
+    const withExtras = {
+      ...(profile as object),
+      identity: {
+        ...(profile as { identity: object }).identity,
+        country: { flag: '🇸🇮', country: 'Slovenia', locale: 'sl' },
+        twitch: { login: 'vid', url: 'https://twitch.tv/vid' },
+        discord_linked: true,
+      },
+    };
+    renderProfile('D8423F90', (input) => {
+      const path = String(input).split('?')[0];
+      if (/^\/api\/players\/[^/]+\/profile$/.test(path)) {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(withExtras) } as Response);
+      }
+      return fixtureFetch(input);
+    });
+    await waitFor(() => expect(screen.getByText(/🇸🇮 Slovenia/)).toBeInTheDocument());
+    expect(screen.getByText(/discord linked/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'twitch/vid' })).toHaveAttribute('href', 'https://twitch.tv/vid');
+  });
+
+  it('the recording keeps the extras absent, so none of the three prints', async () => {
+    renderProfile('D8423F90');
+    await waitFor(() => expect(screen.getByText('Mp40')).toBeInTheDocument());
+    expect(screen.queryByText(/discord linked/)).toBeNull();
+    expect(screen.queryByRole('link', { name: /twitch/ })).toBeNull();
+  });
+
+  it('reads the sprint clock, the overall accuracy, the per-weapon split and the dpm baseline from the recording', async () => {
+    renderProfile('D8423F90');
+    await waitFor(() => expect(screen.getByText('Mp40')).toBeInTheDocument());
+    const f = profile as {
+      movement: { sprint_sec: number };
+      weapons: { overall_accuracy: number; overall_hs_accuracy: number };
+      hit_regions: { per_weapon: { weapon: string; arms: number; total: number; head_pct: number }[] };
+      relationships: { baseline_dpm: number };
+    };
+    // 41 805 s → 11.6 h, computed from the fixture, not typed in.
+    expect(screen.getByText(`${(f.movement.sprint_sec / 3600).toFixed(1)} h`)).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`${f.weapons.overall_accuracy.toFixed(1)}% overall, ${f.weapons.overall_hs_accuracy.toFixed(1)}% to the head`))).toBeInTheDocument();
+    const w = f.hit_regions.per_weapon[0];
+    const arms = ((w.arms / w.total) * 100).toFixed(1);
+    expect(screen.getByText(new RegExp(`head ${w.head_pct.toFixed(1)}% · arms ${arms}%`))).toBeInTheDocument();
+    expect(screen.getByText(new RegExp(`against a ${f.relationships.baseline_dpm.toFixed(1)} dpm baseline`))).toBeInTheDocument();
+  });
+});
