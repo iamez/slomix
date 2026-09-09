@@ -3544,7 +3544,7 @@ export interface PlayerJourney {
   scope: ProxScope;
   player: { guid: string; name: string | null; team: string } | null;
   lives: JourneyLife[];
-  summary: { lives?: number };
+  summary: { lives?: number; kills?: number; deaths?: number; avg_life_s?: number | null; objective_events?: number | null; objective_events_unavailable?: string | null };
   message?: string | null;
 }
 
@@ -3782,6 +3782,13 @@ export interface ProxScoreRow {
   prox_gamesense: number;
   prox_overall: number;
   prox_radar: { label: string; value: number }[];
+  /** Per category, per metric: the raw value, its percentile in the window,
+   *  the weight and the contribution; a retired metric carries `retired_in`
+   *  and weight 0 (prox-web-v3.0 retired headshot % and return-fire speed). */
+  breakdown?: Record<string, Record<string, { label: string; raw: number | null; percentile: number | null; weight: number; contribution: number; retired_in?: string }>>;
+  metrics_scored?: Record<string, number>;
+  metric_weight_coverage?: number;
+  missing_metrics?: string[];
 }
 
 export interface ProxScores {
@@ -4485,10 +4492,16 @@ export interface ProxPlayerAim {
   total: number;
   sampled: boolean;
   scope: ProxScope;
-  hotzones: { x: number; y: number; count: number }[];
+  /** Each hot zone carries its yaw rose (one count per bucket), the mean yaw
+   *  and the resultant length r (0 = aimed everywhere, 1 = one direction). */
+  hotzones: { x: number; y: number; count: number; rose?: number[]; mean_yaw?: number | null; r?: number | null }[];
   yaw_buckets: number;
   yaw_bucket_width_deg: number;
   pitch_hist: { edges: number[]; counts: number[] };
+  /** Circular statistics over every shot's yaw and pitch (legacy proximity.js
+   *  4175): Rayleigh p < 0.05 = a preferred direction. */
+  circular?: { n: number; mean_yaw_deg: number; resultant_length: number; circular_std_deg: number; rayleigh_p: number; pitch_mean_deg: number; pitch_std_deg: number } | null;
+  narrative?: string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -4511,6 +4524,8 @@ export type AvailabilityStatus = 'LOOKING' | 'AVAILABLE' | 'MAYBE' | 'NOT_PLAYIN
 // (#830, with the documented my_status tri-state) — reused, not redeclared.
 
 export interface PlanningToday {
+  /** Derived from availability_entries even with no planning row (planning.py _planning_state); absent on older recordings. */
+  committed_count?: number;
   date: string;
   session_ready: { ready: boolean; looking_count: number; threshold: number };
   unlocked: boolean;

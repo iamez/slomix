@@ -399,6 +399,11 @@ describe('Proximity', () => {
     expect(screen.getByText('first move after a spawn')).toBeInTheDocument();
     expect(screen.getByText('average life')).toBeInTheDocument();
     expect(screen.getAllByText(/computed 2026-09-02 09:42 UTC/).length).toBeGreaterThan(0);
+    // the circular statistics, the busiest zone's rose and the narrative (2026-09-09)
+    await waitFor(() => expect(screen.getByText(/direction: mean yaw 31° · r 0\.28 · circular std ±91°/)).toBeInTheDocument());
+    expect(screen.getByText(/a preferred direction \(Rayleigh p < 0\.001\)/)).toBeInTheDocument();
+    expect(screen.getByText(/busiest zone \(437 shots\): mean yaw -135°, r 0\.02 · rose peak bucket 9 of 16 \(109 shots\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Most shots aimed NE \(29% of fire\)/)).toBeInTheDocument();
     expect(screen.getByText(/1,173 samples/)).toBeInTheDocument();
   });
 

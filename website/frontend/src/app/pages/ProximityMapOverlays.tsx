@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Meta, figure } from '../components/ui';
+import { Lbl, Meta, figure, decimals } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { utcStamp } from '../lib/utcStamp';
 import { stripEtColors } from '../lib/names';
@@ -218,6 +218,28 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                           pitch from {figure(d.pitch_hist.edges[0])}° to {figure(d.pitch_hist.edges[d.pitch_hist.edges.length - 1])}°
                           {' · '}{figure(d.total)} samples · yaw in {figure(d.yaw_buckets)} buckets of {figure(d.yaw_bucket_width_deg)}°
                         </Meta>
+                        {/* The circular statistics the legacy page drew (proximity.js:4175):
+                          * Rayleigh p < 0.05 = the shots have a preferred direction;
+                          * r near 0 = aimed everywhere. */}
+                        {d.circular && (
+                          <Meta>
+                            direction: mean yaw {figure(Math.round(d.circular.mean_yaw_deg))}° · r {decimals(d.circular.resultant_length)} · circular std ±{figure(Math.round(d.circular.circular_std_deg))}°
+                            {' · '}{d.circular.rayleigh_p < 0.05 ? `a preferred direction (Rayleigh p ${d.circular.rayleigh_p < 0.001 ? '< 0.001' : decimals(d.circular.rayleigh_p, 3)})` : `no preferred direction (Rayleigh p ${decimals(d.circular.rayleigh_p)})`}
+                            {' · '}pitch {d.circular.pitch_mean_deg >= 0 ? '+' : ''}{figure(Math.round(d.circular.pitch_mean_deg))}° ± {figure(Math.round(d.circular.pitch_std_deg))}° over {figure(d.circular.n)} shots
+                          </Meta>
+                        )}
+                        {d.hotzones.some((h) => h.rose) && (() => {
+                          const top = [...d.hotzones].sort((a, b) => b.count - a.count)[0];
+                          const rose = top.rose ?? [];
+                          const peak = rose.indexOf(Math.max(...rose));
+                          return (
+                            <Meta>
+                              busiest zone ({figure(top.count)} shots): mean yaw {top.mean_yaw == null ? '—' : `${figure(Math.round(top.mean_yaw))}°`}, r {top.r == null ? '—' : decimals(top.r)}
+                              {rose.length > 0 ? ` · rose peak bucket ${figure(peak + 1)} of ${figure(rose.length)} (${figure(Math.max(...rose))} shots)` : ''}
+                            </Meta>
+                          );
+                        })()}
+                        {d.narrative && d.narrative.length > 0 && <Meta>{d.narrative.join(' · ')}</Meta>}
                       </Stack>
                     );
                   }}
