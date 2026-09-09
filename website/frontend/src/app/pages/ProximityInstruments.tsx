@@ -12,7 +12,7 @@
  * is drawn as a thinned sparkline, never a table.
  */
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
+import { Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import { ProxPanel, ProxRow } from './proximityShared';
 import {
