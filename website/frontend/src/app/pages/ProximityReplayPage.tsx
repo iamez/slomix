@@ -32,8 +32,8 @@ function eventLine(e: ReplayTimelineEvent): { name: string; mid?: string; val: s
   switch (e.type) {
     case 'engagement':
       return {
-        name: `${e.victim_name ? stripEtColors(e.victim_name) : 'unknown'} ${e.outcome ?? 'engaged'}`,
-        mid: `${figure(e.damage)} dmg${e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}`,
+        name: `${e.victim_name ? stripEtColors(e.victim_name) : 'unknown'}${e.victim_team ? ` (${e.victim_team.toLowerCase()})` : ''} ${e.outcome ?? 'engaged'}`,
+        mid: `${figure(e.damage)} dmg${e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}${e.start_x != null && e.start_y != null && e.end_x != null && e.end_y != null ? ` · from ${figure(Math.round(e.start_x))}, ${figure(Math.round(e.start_y))} to ${figure(Math.round(e.end_x))}, ${figure(Math.round(e.end_y))}` : ''}${e.id != null ? ` · #${figure(e.id)}` : ''}`,
         val: fmtClock(e.time),
       };
     case 'spawn_timing_kill':

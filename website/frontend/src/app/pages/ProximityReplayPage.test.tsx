@@ -79,7 +79,7 @@ describe('ProximityReplayPage', () => {
     expect(screen.getByLabelText('round timeline')).toBeInTheDocument();
     expect(screen.getByText(/158 events/)).toBeInTheDocument();
     // One recorded line per union member:
-    expect(screen.getAllByText(/\.olz killed/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\.olz \(\w+\) killed/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/SuperBoyy avenged Cru3lzor\./).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/kanii timed SuperBoyy/).length).toBeGreaterThan(0);
     expect(screen.getAllByText(/allies push · 3 players/).length).toBeGreaterThan(0);
@@ -98,7 +98,7 @@ describe('ProximityReplayPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'trades' }));
     // 4 recorded trade kills; engagements are filtered out.
     expect(screen.getAllByText(/avenged/).length).toBe(4);
-    expect(screen.queryByText(/\.olz killed/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\.olz \(\w+\) killed/)).not.toBeInTheDocument();
   });
 
   it('renders the uncaptured form as absence with the round metadata kept', async () => {

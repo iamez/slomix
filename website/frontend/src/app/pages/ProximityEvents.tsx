@@ -19,6 +19,7 @@ import {
 } from '../lib/queries';
 import type { ProxEventAttacker } from '../lib/types';
 import { ProxPanel, ProxRow } from './proximityShared';
+import { utcStamp } from '../lib/utcStamp';
 
 const NO_ROWS = 'no rows in this scope — proximity capture only covers sessions where the tracker ran';
 
@@ -241,6 +242,7 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
         <ProxPanel label="engagements" aside="by round, latest in-round moments first · click a row for its record" q={events} empty={NO_ROWS} isEmpty={(d) => d.events.length === 0}>
           {(d) => (
             <Stack gap={1} className="rows">
+              {(!d.ready && d.message) || d.generated_at ? <Meta>{!d.ready && d.message ? `${d.message} · ` : ''}{d.generated_at ? `computed ${utcStamp(d.generated_at)}` : ''}</Meta> : null}
               {d.events.map((e) => (
                 <div key={e.id}>
                   <button
@@ -251,7 +253,7 @@ export function ProximityEvents({ sessionDate, mapName, roundNumber, roundStartU
                   >
                     <ProxRow
                       name={`${e.target_name ? stripEtColors(e.target_name) : 'unknown'} · ${mapLabel(e.map)} r${e.round}${fmtRoundTime(e.round_time) != null ? ` · ${fmtRoundTime(e.round_time)}` : ''}`}
-                      mid={`${e.outcome ?? '—'}${e.crossfire ? ' · crossfire' : ''}${e.attackers != null && e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}`}
+                      mid={`${e.outcome ?? '—'}${e.crossfire ? ' · crossfire' : ''}${e.attackers != null && e.attackers > 1 ? ` · ${figure(e.attackers)} attackers` : ''}${e.attacker_name ? ` · by ${stripEtColors(e.attacker_name)}${e.attacker_team ? ` (${e.attacker_team.toLowerCase()})` : ''}` : ''}${e.distance != null && e.distance > 0 ? ` · ${figure(Math.round(e.distance))} u` : ''}${e.reaction_ms != null && e.reaction_ms > 0 ? ` · reacted in ${figure(e.reaction_ms)} ms` : ''}`}
                       val={e.duration_ms != null ? `${figure(Math.round(e.duration_ms / 100) / 10)} s` : '—'}
                     />
                   </button>

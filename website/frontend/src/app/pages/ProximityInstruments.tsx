@@ -334,11 +334,16 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 {d.return_fire.slice(0, 3).map((r) => (
                   <ProxRow key={`rf:${r.guid}`} name={stripEtColors(r.name)} mid={`return fire · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
                 ))}
+                {d.dodge.slice(0, 3).map((r) => (
+                  <ProxRow key={`dg:${r.guid}`} name={stripEtColors(r.name)} mid={`dodge · ${figure(r.samples)} samples`} val={`${figure(r.reaction_ms)} ms`} />
+                ))}
                 {d.class_summary.map((c) => (
                   <ProxRow
                     key={c.player_class}
                     name={c.player_class.toLowerCase()}
-                    mid={`${figure(c.events)} events`}
+                    // the three channels with their sample counts: an average
+                    // without its denominator is a number, not a measurement
+                    mid={`${figure(c.events)} events · dodge ${c.avg_dodge_reaction_ms == null ? '—' : `${figure(c.avg_dodge_reaction_ms)} ms`} (${figure(c.dodge_samples)}) · support ${c.avg_support_reaction_ms == null ? '—' : `${figure(c.avg_support_reaction_ms)} ms`} (${figure(c.support_samples)}) · rf samples ${figure(c.return_samples)}`}
                     // null, not zero: a class with no return-fire SAMPLES has
                     // no average to claim (Codex on #861, P1).
                     val={c.avg_return_fire_ms == null ? '— rf' : `${figure(c.avg_return_fire_ms)} ms rf`}

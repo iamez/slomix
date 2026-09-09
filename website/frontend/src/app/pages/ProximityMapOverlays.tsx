@@ -9,6 +9,7 @@ import { useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
 import { Lbl, Meta, figure } from '../components/ui';
 import { mapLabel } from '../lib/maps';
+import { utcStamp } from '../lib/utcStamp';
 import { stripEtColors } from '../lib/names';
 import {
   useProxCombatHeatmap, useProxDangerZones, useProxHotzones, useProxKillLines,
@@ -121,25 +122,44 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
       </div>
 
       <div data-parity="proximity.movers">
-        <ProxPanel label="movers" aside="distance · sprint" q={movers} empty={NO_ROWS}
+        <ProxPanel label="movers" aside="distance · sprint · reaction · survival" q={movers} empty={NO_ROWS}
           isEmpty={(d) => d.distance.length === 0 && d.sprint.length === 0}>
           {(d) => (
-            <Cluster gap={7} align="start" style={{ flexWrap: 'wrap' }}>
-              <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                <Lbl>distance</Lbl>
-                {d.distance.slice(0, 5).map((r) => (
-                  <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)}
-                    val={`${figure(Math.round(r.total_distance / 1000))} k u`} />
-                ))}
-              </Stack>
-              <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
-                <Lbl>sprint share</Lbl>
-                {d.sprint.slice(0, 5).map((r) => (
-                  <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)}
-                    val={`${figure(r.sprint_pct)}%`} />
-                ))}
-              </Stack>
-            </Cluster>
+            <Stack gap={2}>
+              {!d.ready && d.message && <Meta>{d.message}</Meta>}
+              <Cluster gap={7} align="start" style={{ flexWrap: 'wrap' }}>
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  <Lbl>distance</Lbl>
+                  {d.distance.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`${figure(Math.round(r.total_distance / 1000))} k u`} />
+                  ))}
+                </Stack>
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  <Lbl>sprint share</Lbl>
+                  {d.sprint.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`${figure(r.sprint_pct)}%`} />
+                  ))}
+                </Stack>
+                {/* The other two boards the endpoint answers and the page never drew (ledger 2026-09-09). */}
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  <Lbl>fastest reaction</Lbl>
+                  {d.reaction.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`${figure(r.reaction_ms)} ms`} />
+                  ))}
+                </Stack>
+                <Stack gap={1} className="rows" style={{ minWidth: 240 }}>
+                  <Lbl>longest life</Lbl>
+                  {d.survival.slice(0, 5).map((r) => (
+                    <ProxRow key={r.guid} name={r.name ? stripEtColors(r.name) : r.guid.slice(0, 8)} mid={`${figure(r.tracks)} tracks`}
+                      val={`${figure(Math.round(r.duration_ms / 1000))} s`} />
+                  ))}
+                </Stack>
+              </Cluster>
+              {d.generated_at && <Meta>computed {utcStamp(d.generated_at)}</Meta>}
+            </Stack>
           )}
         </ProxPanel>
       </div>
