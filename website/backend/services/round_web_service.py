@@ -1529,8 +1529,13 @@ async def get_round_snapshot(
         )
     else:
         los_block, los_by_edge = line_of_sight.withheld(
-            "withheld under a point of view: the other side's true positions are not this view's to trace"
-            if tracks else "no linked player_track rows for this round"
+            "no linked player_track rows for this round" if not tracks
+            else "withheld under a point of view: the other side's true positions are not this view's to trace"
+            if (pov_team is not None or unresolved_team)
+            # The oracle asked, and nobody is placed: t before the first
+            # position sample, or everyone without a state — a data gap,
+            # not an access rule (Codex on #1006).
+            else "nobody is placed at this moment (before the first position sample, or every player without a state) — nothing to trace"
         ), {}
     payload: dict[str, Any] = {
         "round_id": round_id,

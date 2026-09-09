@@ -22,7 +22,9 @@ import { Cluster, Stack } from './layout';
 import { Absent, Chip, Meta, figure } from './ui';
 
 const W = 860; const H = 560;
-const TEAM_COLOR: Record<string, string> = { AXIS: 'var(--color-accent)', ALLIES: 'var(--color-accent-warm)' };
+// The sides' own tokens (tokens.css: --color-axis red, --color-allies blue),
+// the identity the legacy canvas carried — not the accent pair.
+const TEAM_COLOR: Record<string, string> = { AXIS: 'var(--color-axis)', ALLIES: 'var(--color-allies)' };
 const STANCE: Record<number, string> = { 0: 'standing', 1: 'crouching', 2: 'prone' };
 /** The scale bar's length in game units — a player is about 40 wide. */
 const SCALE_UNITS = 512;
@@ -189,7 +191,7 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
       {los && (los.available
         ? <div data-parity="spider-web.line-of-sight"><Meta>
             line of sight: {figure(los.pairs_traced)} opponent pair{los.pairs_traced === 1 ? '' : 's'} traced on {los.geometry} ·
-            {' '}{Object.values(los.exposure).filter((n) => n > 0).length} of {Object.keys(los.exposure).length} placed players had a clear ray to them ·
+            {' '}{Object.values(los.exposure).filter((n) => n != null && n > 0).length} of {Object.keys(los.exposure).length} living players in traced opponent pairs had a clear ray to them{Object.values(los.exposure).some((n) => n == null) ? ` (${Object.values(los.exposure).filter((n) => n == null).length} undecided)` : ''} ·
             {' '}oracle diagnostic (a clear ray is necessary, not sufficient, for having seen someone; never a belief) ·
             {' '}validated {los.validated_by.measured_at}: {figure(los.validated_by.segments)} segments on {figure(los.validated_by.maps)} maps, {los.validated_by.agreement_pct}% agreement with the engine's world trace
           </Meta></div>
@@ -197,7 +199,10 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
       {scene.unplaced.length > 0 && (
         <Meta>known but not placed (region wider than the published horizon): {scene.unplaced.map(nameOf).join(', ')} — this side knows they exist, not where they are</Meta>
       )}
-      {(isTeamPov(pov) || isPlayerPov(pov)) && scene.regions.length === 0 && scene.unplaced.length === 0 && (
+      {/* "Knew of nobody" is a measured empty result; a view the server could
+        * not resolve (pov_unavailable set) is not measured at all, and the
+        * beliefs panel below says so — this line must not speak for it. */}
+      {(isTeamPov(pov) || isPlayerPov(pov)) && !snap.information_state?.pov_unavailable && scene.regions.length === 0 && scene.unplaced.length === 0 && (
         <Meta>at this moment this view knew of no enemy position — nothing has been seen, hit or heard closely enough to place anyone</Meta>
       )}
       <Meta>

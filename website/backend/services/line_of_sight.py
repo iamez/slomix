@@ -76,11 +76,16 @@ def stance_of(value: Any) -> PlayerStance | None:
     tracer reports as `indeterminate / missing_stance` rather than guessing."""
     if isinstance(value, bool):
         return None
+    if isinstance(value, str):
+        return _STANCE.get(value.lower())
     try:
-        key: Any = int(value) if not isinstance(value, str) else value.lower()
-    except (TypeError, ValueError):
+        # Only a whole number is a code: 0.5 truncated to 0 would turn an
+        # unmeasured stance into a "standing" trace (Codex on #1006).
+        if isinstance(value, float) and not value.is_integer():
+            return None
+        return _STANCE.get(int(value))
+    except (TypeError, ValueError, OverflowError):
         return None
-    return _STANCE.get(key)
 
 
 class Tracer(Protocol):
@@ -187,19 +192,25 @@ def line_of_sight_for_edges(players: dict[str, Any], edges: list[Any], tracer: T
     return out
 
 
-def exposure(players: dict[str, Any], by_edge: dict[tuple[str, str], dict[str, Any]]) -> dict[str, int]:
-    """Per alive placed player: how many living enemies had a clear ray TO
-    them (the §7.4 "exposure" candidate's oracle form). Zero is a count, not
-    an absence — a player with no traced pair is simply not listed."""
-    counts: dict[str, int] = {}
+def exposure(players: dict[str, Any], by_edge: dict[tuple[str, str], dict[str, Any]]) -> dict[str, int | None]:
+    """Per living player in a traced opponent pair: how many living enemies
+    had a clear ray TO them (the §7.4 "exposure" candidate's oracle form).
+    Zero is a count, not an absence — a player with no traced pair is simply
+    not listed. ⛔ A player with an INDETERMINATE incoming ray and no clear
+    one is None, not 0: the tracer could not decide (a missing stance, an
+    uncompiled patch), and a zero would turn that into a measurement. With
+    at least one clear ray the count stands as a lower bound."""
+    clear: dict[str, int] = {}
+    undecided: dict[str, int] = {}
     for (a, b), v in by_edge.items():
-        counts.setdefault(a, 0)
-        counts.setdefault(b, 0)
-        if v["b_to_a"]["status"] == "clear":
-            counts[a] += 1
-        if v["a_to_b"]["status"] == "clear":
-            counts[b] += 1
-    return counts
+        for who, incoming in ((a, v["b_to_a"]["status"]), (b, v["a_to_b"]["status"])):
+            clear.setdefault(who, 0)
+            undecided.setdefault(who, 0)
+            if incoming == "clear":
+                clear[who] += 1
+            elif incoming == "indeterminate":
+                undecided[who] += 1
+    return {g: (clear[g] if clear[g] > 0 or undecided[g] == 0 else None) for g in clear}
 
 
 async def annotate(map_name: str | None, players: dict[str, Any], edges: list[Any], *, provider: GeometryProvider | None = None) -> tuple[dict[str, Any], dict[tuple[str, str], dict[str, Any]]]:

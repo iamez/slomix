@@ -62,6 +62,10 @@ class TestStance:
         assert los.stance_of(None) is None
         assert los.stance_of(7) is None
         assert los.stance_of(True) is None
+        assert los.stance_of(2.0) is PlayerStance.PRONE
+        # a fraction is not a code: 0.5 must not truncate to "standing"
+        assert los.stance_of(0.5) is None
+        assert los.stance_of(1.9) is None
 
 
 class TestLineOfSightForEdges:
@@ -89,10 +93,27 @@ class TestLineOfSightForEdges:
                    ("C", "B"): {"a_to_b": {"status": "clear"}, "b_to_a": {"status": "clear"}}}
         assert los.exposure({}, by_edge) == {"A": 0, "B": 2, "C": 1}
 
+    def test_an_undecided_incoming_ray_is_none_unless_a_clear_one_exists(self):
+        by_edge = {("A", "B"): {"a_to_b": {"status": "indeterminate"}, "b_to_a": {"status": "indeterminate"}},
+                   ("C", "B"): {"a_to_b": {"status": "clear"}, "b_to_a": {"status": "blocked"}}}
+        out = los.exposure({}, by_edge)
+        assert out["A"] is None          # only an undecided ray came in
+        assert out["B"] == 1             # one clear ray: a lower bound, not None
+        assert out["C"] == 0             # a decided blocked ray is a zero
 
-def _stub_track(guid, x, team):
-    path = [{"time": 0, "x": x, "y": 0.0, "z": 0.0, "health": 100, "stance": 0}]
-    return (guid, guid, team, "soldier", 0, None, path, "supply", 1)
+    @pytest.mark.asyncio
+    async def test_the_oracle_with_nobody_placed_names_the_gap_not_a_view(self):
+        db = _Db([_stub_track("A", 0.0, "AXIS", first_ms=1000), _stub_track("B", 100.0, "ALLIES", first_ms=1000)])
+        payload = await get_round_snapshot(db, 1, 0, los_provider=_FakeProvider(_FakeTracer()))
+        assert payload["information_state"]["pov"] == "world"
+        assert payload["players"] == []
+        assert payload["line_of_sight"]["available"] is False
+        assert payload["line_of_sight"]["reason"].startswith("nobody is placed at this moment")
+
+
+def _stub_track(guid, x, team, first_ms=0):
+    path = [{"time": first_ms, "x": x, "y": 0.0, "z": 0.0, "health": 100, "stance": 0}]
+    return (guid, guid, team, "soldier", first_ms, None, path, "supply", 1)
 
 
 class _Db:
