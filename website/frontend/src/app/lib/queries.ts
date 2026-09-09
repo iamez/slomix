@@ -1574,11 +1574,20 @@ export function useProxRoundTracks(roundId: number | null) {
  *  the last moment on screen while scrubbing; react-query's keying makes
  *  the winner commit (a superseded response can never overwrite a newer
  *  key's cache entry). */
+/** The previous snapshot may stand in while a new moment loads — but only
+ *  within the SAME point of view. Across a switch the oracle's players and
+ *  beliefs would be drawn under a team's label until the request landed
+ *  (Codex on #1005), so a snapshot of another view is not a placeholder. */
+export function sameView(prev: SpiderWebSnapshot | undefined, pov: string): SpiderWebSnapshot | undefined {
+  if (!prev) return undefined;
+  return (prev.information_state?.pov ?? 'world') === pov ? prev : undefined;
+}
+
 export function useSpiderWebMoment(roundId: number | null, tMs: number, pov: string) {
   return useQuery({
     queryKey: ['spider-web', roundId, tMs, pov],
     enabled: roundId != null,
-    placeholderData: (prev) => prev,
+    placeholderData: (prev) => sameView(prev, pov),
     queryFn: () =>
       apiGet('/api/replay/round/{round_id}/web', {
         pathParams: { round_id: roundId! },

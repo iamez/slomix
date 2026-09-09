@@ -217,7 +217,9 @@ export function SpiderWebPage() {
   // as bare guids: remembered from every snapshot this page has seen.
   const names = useRef(new Map<string, string>());
   if (snap) for (const p of snap.players) if (p.name) names.current.set(p.guid, stripEtColors(p.name));
-  const rosterGuids = snap ? [...new Set([...snap.players.map((p) => p.guid), ...snap.withheld_by_pov])] : [];
+  // Placed, withheld AND without a state (`gaps`): a player with no sample
+  // at this moment is still a point of view — at t=0 that is everyone.
+  const rosterGuids = snap ? [...new Set([...snap.players.map((p) => p.guid), ...snap.withheld_by_pov, ...Object.keys(snap.gaps ?? {})])] : [];
 
   if (roundId == null) {
     return <Absent block reason="no round named — the spider web opens from a round's engagement panel" />;
@@ -290,7 +292,11 @@ export function SpiderWebPage() {
       </div>
 
       <div data-parity="spider-web.canvas">
-        <SpiderWebScene snap={snap} mesh={mesh.isPending ? undefined : mesh.data ?? null} pov={pov} />
+        {/* null = the server said 404 (never exported, a named absence);
+          * undefined = still loading OR the request failed — a failure is
+          * said below as unavailable, not as "never exported". */}
+        <SpiderWebScene snap={snap} mesh={mesh.isPending || mesh.isError ? undefined : mesh.data ?? null} pov={pov} />
+        {mesh.isError && <Unavailable what="this map's floor mesh" />}
       </div>
 
       <div data-parity="spider-web.clock">

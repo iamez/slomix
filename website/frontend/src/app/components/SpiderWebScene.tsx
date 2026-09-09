@@ -11,7 +11,7 @@
  * horizon is named in words, a label that does not fit is dropped, and an
  * edge to an unplaced player is skipped (lib/spiderWeb.ts).
  */
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import type { MapMesh, SpiderWebSnapshot } from '../lib/types';
 import { stripEtColors } from '../lib/names';
 import {
@@ -33,20 +33,24 @@ function clampPitch(v: number) { return Math.min(1.5, Math.max(0, v)); }
  *  map was never exported (a named absence), and the mesh otherwise. */
 export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; mesh: MapMesh | null | undefined; pov: string }) {
   const [cam, setCam] = useState<Camera>(DEFAULT_CAMERA);
-  const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ x: number; y: number; pan: boolean } | null>(null);
 
   // The wheel must not scroll the page while it zooms the scene, and React's
-  // onWheel is passive — so the listener is attached by hand.
-  useEffect(() => {
-    const el = svgRef.current;
+  // onWheel is passive — so the listener is attached by hand, through a
+  // callback ref: the svg may appear only after a first render without
+  // bounds (a `?t=0` link while the geometry loads), and an effect with an
+  // empty dependency list would never see it (Codex on #1005).
+  const wheelCleanup = useRef<(() => void) | null>(null);
+  const svgRef = useCallback((el: SVGSVGElement | null) => {
+    wheelCleanup.current?.();
+    wheelCleanup.current = null;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       setCam((c) => ({ ...c, zoom: Math.min(6, Math.max(0.4, c.zoom * (e.deltaY < 0 ? 1.15 : 1 / 1.15))) }));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    wheelCleanup.current = () => el.removeEventListener('wheel', onWheel);
   }, []);
 
   const bounds = mesh?.bounds ?? boundsFromPlayers(snap.players);

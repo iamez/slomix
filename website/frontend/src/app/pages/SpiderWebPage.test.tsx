@@ -2,7 +2,7 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { makeQueryClient } from '../lib/queries';
+import { makeQueryClient, sameView } from '../lib/queries';
 import { SpiderWebPage } from './SpiderWebPage';
 import type { SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
@@ -289,10 +289,12 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
     const chip = screen.getByRole('button', { name: first.name ?? first.guid.slice(0, 8) });
     fireEvent.click(chip);
     await waitFor(() => expect(urls.some((u) => u.includes(`pov=${first.guid}`))).toBe(true));
-    // the pov snapshot withholds three players, but their chips keep the names the world view carried
+    // the pov snapshot withholds three players, but their chips keep the names
+    // the world view carried — once the new view has loaded (no placeholder
+    // stands in across a switch, so the page is pending in between)
     for (const g of povForm.withheld_by_pov) {
       const known = world.players.find((p) => p.guid === g);
-      expect(screen.getByRole('button', { name: known?.name ?? g.slice(0, 8) })).toBeInTheDocument();
+      await waitFor(() => expect(screen.getByRole('button', { name: known?.name ?? g.slice(0, 8) })).toBeInTheDocument());
     }
   });
 
@@ -330,6 +332,73 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
     const svg = screen.getByLabelText('reconstructed moment');
     expect(svg.querySelectorAll('[data-player]').length).toBe(world.players.length);
     expect(svg.querySelectorAll('path').length).toBe(0);
+  });
+});
+
+describe('SpiderWebPage — the five Codex threads on #1005', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+
+  it('a snapshot of another point of view is not a placeholder for this one', () => {
+    // Across a switch the oracle's players would be drawn under a team's
+    // label until the request landed; within a view the previous moment may stand in.
+    expect(sameView(world, 'world')).toBe(world);
+    expect(sameView(world, 'team:AXIS')).toBeUndefined();
+    expect(sameView(povForm, 'team:AXIS')).toBe(povForm);
+    expect(sameView(povForm, 'world')).toBeUndefined();
+    expect(sameView(undefined, 'world')).toBeUndefined();
+  });
+
+  it('a failed geometry request is unavailable, not "never exported"', async () => {
+    stub((url) => (url.includes('/api/replay/round/11344/web') ? world : undefined));
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/geometry/')) return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(world) } as Response);
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/this map's floor mesh: unavailable/)).toBeInTheDocument(), { timeout: 8000 });
+    expect(screen.queryByText(/floor mesh was never exported/)).toBeNull();
+    // the players still draw without a stage
+    expect(screen.getByLabelText('reconstructed moment').querySelectorAll('[data-player]').length).toBe(world.players.length);
+  });
+
+  it('a player without a state at this moment is still offered as a point of view', async () => {
+    const shaped: SpiderWebSnapshot = { ...world, gaps: { ...world.gaps, ABCDEF0123456789ABCDEF0123456789: 'no track covers this moment' } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return shaped;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'ABCDEF01' })).toBeInTheDocument();
+  });
+
+  it('the wheel zooms, on an svg that appeared after a first render without bounds', async () => {
+    // First answer: nobody placed and no geometry → Absent, no svg. Then the
+    // geometry arrives → the svg mounts; the wheel listener must be on it.
+    const empty: SpiderWebSnapshot = { ...world, players: [], edges: [], player_count: 0 };
+    let geometryReady = false;
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return empty;
+      if (url.includes('/assets/maps/geometry/')) return geometryReady ? geometry : undefined;
+      return undefined;
+    });
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes('/assets/maps/geometry/')) {
+        return geometryReady
+          ? Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(geometry) } as Response)
+          : new Promise((resolve) => setTimeout(() => { geometryReady = true; resolve({ ok: true, status: 200, json: () => Promise.resolve(geometry) } as Response); }, 60));
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(empty) } as Response);
+    });
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/nobody could be placed at this moment/)).toBeInTheDocument());
+    const svg = await screen.findByLabelText('reconstructed moment', {}, { timeout: 8000 });
+    fireEvent.wheel(svg, { deltaY: -100 });
+    await waitFor(() => expect(screen.getByText(/zoom 1\.15×/)).toBeInTheDocument());
   });
 });
 
