@@ -166,7 +166,8 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                     mid={[
                       v.vehicle_type ? v.vehicle_type.replace(/_/g, ' ') : null,
                       v.destroyed_count > 0 ? `destroyed ${figure(v.destroyed_count)}×` : null,
-                      v.max_health > 0 ? `health ${figure(v.final_health)} of ${figure(v.max_health)} at the end` : null,
+                      // -999 is the tracker's "no final health" sentinel (the goldrush recording carries it): destroyed or unrecorded, never a health
+                      v.max_health > 0 ? (v.final_health >= 0 ? `health ${figure(v.final_health)} of ${figure(v.max_health)} at the end` : `final health not recorded (of ${figure(v.max_health)})`) : null,
                       (v.end_x != null && v.end_y != null && (v.end_x !== 0 || v.end_y !== 0)) ? `ended at ${figure(Math.round(v.end_x))}, ${figure(Math.round(v.end_y))}${(v.start_x ?? 0) !== 0 || (v.start_y ?? 0) !== 0 ? ` from ${figure(Math.round(v.start_x ?? 0))}, ${figure(Math.round(v.start_y ?? 0))}` : ''}` : null,
                     ].filter(Boolean).join(' · ') || undefined}
                     val={`${figure(Math.round(v.total_distance))} u`}

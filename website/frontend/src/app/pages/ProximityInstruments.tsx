@@ -22,6 +22,7 @@ import {
   useProxSupportSummary,
 } from '../lib/queries';
 import { mapLabel } from '../lib/maps';
+import { utcStamp } from '../lib/utcStamp';
 import type { ProxCohesion } from '../lib/types';
 
 /** The data-completeness band: which source tables actually captured this
@@ -35,15 +36,17 @@ function QualityBand({ sessionDate }: { sessionDate: string | null }) {
       <SectionHead label="data completeness" aside={<span className="lbl">per source table · this scope</span>} />
       {q.isPending && <Pending label="data completeness" />}
       {q.isError && <Unavailable what="data completeness" />}
-      {q.data && (q.data.overall_status !== 'ready' && q.data.overall_status !== 'ok' ? (
+      {q.data && (q.data.overall_status !== 'ready' && q.data.overall_status !== 'ok' && q.data.overall_status !== 'partial' ? (
         // The HTTP-200 error shape carries only statuses — formatting its
         // missing counts crashed the whole route into the error boundary
-        // instead of this line (Codex on #861, P1).
+        // instead of this line (Codex on #861, P1). `partial` is NOT that
+        // shape: it carries the counts (missing sides, breaches) and is
+        // exactly when they matter (Codex on #1004).
         <Unavailable what={`data completeness (${q.data.overall_status})`} />
       ) : (
         <Stack gap={1}>
           <Meta>
-            scope {q.data.selected_scope_status} · maintenance {q.data.global_maintenance_status}
+            {q.data.overall_status === 'partial' && <>partial · </>}scope {q.data.selected_scope_status} · maintenance {q.data.global_maintenance_status}
             {q.data.round_correlation.avg_completeness_pct != null && (
               <>
                 {' · '}correlation {q.data.round_correlation.avg_completeness_pct.toFixed(1)}%
@@ -57,15 +60,16 @@ function QualityBand({ sessionDate }: { sessionDate: string | null }) {
                 {(q.data.round_correlation.unpaired_round_sides ?? 0) > 0 && <>, {figure(q.data.round_correlation.unpaired_round_sides ?? 0)} unpaired</>}
               </>
             )}
-            {q.data.linkage && <> · linkage {q.data.linkage.status}{q.data.linkage.breach_count > 0 ? ` (${figure(q.data.linkage.breach_count)} breaches)` : ''}</>}
+            {/* linkage is measured over the WHOLE database (_sanitize_linkage), never this scope — the scope is printed with it */}
+            {q.data.linkage && <> · linkage {q.data.linkage.status} ({q.data.linkage.scope}{q.data.linkage.breach_count > 0 ? `, ${figure(q.data.linkage.breach_count)} breaches` : ''})</>}
             {q.data.cache_freshness && (
               <>
                 {' · '}caches {q.data.cache_freshness.status}
-                {q.data.cache_freshness.latest_kis_created_at && <>, KIS {q.data.cache_freshness.latest_kis_created_at.slice(0, 16).replace('T', ' ')}</>}
-                {q.data.cache_freshness.latest_context_created_at && <>, context {q.data.cache_freshness.latest_context_created_at.slice(0, 16).replace('T', ' ')}</>}
+                {q.data.cache_freshness.latest_kis_created_at && <>, KIS {utcStamp(q.data.cache_freshness.latest_kis_created_at)}</>}
+                {q.data.cache_freshness.latest_context_created_at && <>, context {utcStamp(q.data.cache_freshness.latest_context_created_at)}</>}
               </>
             )}
-            {q.data.round_correlation.latest_created_at && <> · correlated {q.data.round_correlation.latest_created_at.slice(0, 16).replace('T', ' ')}</>}
+            {q.data.round_correlation.latest_created_at && <> · correlated {utcStamp(q.data.round_correlation.latest_created_at)}</>}
           </Meta>
           <Cluster gap={2} style={{ flexWrap: 'wrap' }}>
             {Object.entries(q.data.signals).map(([key, sig]) => (

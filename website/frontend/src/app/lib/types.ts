@@ -3606,6 +3606,8 @@ export interface ProxEventDetail {
   round_number: number;
   round_start_unix: number | null;
   round_end_unix: number | null;
+  /** shared/round_time.py's canonical duration; absent on older recordings. */
+  round_duration_seconds?: number | null;
   map_name: string;
   target_guid: string | null;
   target_name: string | null;
