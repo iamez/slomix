@@ -95,13 +95,19 @@ export function DataTable<Row>({
   };
 
   const template = columns.map((c) => (c.width != null ? `${c.width}px` : 'minmax(0, 1fr)')).join(' ');
+  // A table wider than its panel scrolls sideways; the first column (the
+  // name) stays put so a phone reading the 22-column players table still
+  // knows whose row it is at column 18 (visitor review 2026-09-07, mobile).
+  const stickyFirst = minWidth != null
+    ? ({ position: 'sticky', left: 0, zIndex: 1, background: 'var(--color-ink-950)', paddingRight: 'var(--space-2)' } as const)
+    : undefined;
   const gridStyle = { display: 'grid', gridTemplateColumns: template, columnGap: 'var(--space-3)', alignItems: 'center' } as const;
 
   return (
     <div data-parity={parity} role="region" aria-label={label} style={{ overflowX: 'auto' }}>
       <div style={{ minWidth: minWidth ?? undefined }}>
         <div className="row" style={{ ...gridStyle, padding: 'var(--space-2) 0' }}>
-          {columns.map((col) => {
+          {columns.map((col, i) => {
             const activeDir = sort != null && sort.key === col.key ? sort.dir : null;
             const active = activeDir != null;
             const sortable = col.sortValue != null;
@@ -110,6 +116,7 @@ export function DataTable<Row>({
               textAlign: col.align ?? 'right',
               background: 'none', border: 'none', padding: 0, cursor: sortable ? 'pointer' : 'default',
               color: active ? 'var(--color-accent)' : lblStyle.color,
+              ...(i === 0 ? stickyFirst : undefined),
             } as const;
             return sortable ? (
               <button
@@ -141,7 +148,7 @@ export function DataTable<Row>({
                       <span
                         key={col.key}
                         className={col.align === 'left' ? undefined : 'm'}
-                        style={{ textAlign: col.align ?? 'right', fontSize: 'var(--fs-small)', color: col.color?.(row), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                        style={{ textAlign: col.align ?? 'right', fontSize: 'var(--fs-small)', color: col.color?.(row), minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', ...(i === 0 ? stickyFirst : undefined) }}
                       >
                         {shown}
                         {i === 0 && renderExpanded && (
