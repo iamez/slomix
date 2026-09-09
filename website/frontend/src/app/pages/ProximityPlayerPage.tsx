@@ -9,7 +9,7 @@
  */
 import { useParams } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
 import { stripEtColors } from '../lib/names';
 import {
   useProxDuos, useProxHitRegions, useProxHitRegionsByWeapon,
@@ -183,7 +183,10 @@ export function ProximityPlayerPage() {
             }
             return (
               <Stack gap={1} className="rows">
-                <ProxRow name="overall" mid={`rank ${figure(row.rank)} of ${figure(d.player_count)} in window${d.scope.scoped ? ' (scoped)' : ''} · radar ${row.prox_radar.map((ax) => `${ax.label.toLowerCase()} ${figure(ax.value)}`).join(' / ')}`} val={figure(row.prox_overall)} />
+                {/* The query is filtered to this guid, so rank and player_count
+                  * describe a one-player answer, not the 30-day cohort: the
+                  * leaderboard carries the cohort rank (Codex on #1009). */}
+                <ProxRow name="overall" mid={`${d.scope.scoped ? 'scoped · ' : ''}answered for this player alone (${figure(d.player_count)} scored; the cohort rank is on the proximity leaderboard) · radar ${row.prox_radar.map((ax) => `${ax.label.toLowerCase()} ${figure(ax.value)}`).join(' / ')}`} val={figure(row.prox_overall)} />
                 <ProxRow name="combat" mid={metricsScored(row, 'prox_combat')} val={figure(row.prox_combat)} />
                 <ProxRow name="team" mid={metricsScored(row, 'prox_team')} val={figure(row.prox_team)} />
                 <ProxRow name="gamesense" mid={metricsScored(row, 'prox_gamesense')} val={figure(row.prox_gamesense)} />
@@ -195,7 +198,7 @@ export function ProximityPlayerPage() {
                     {cat.replace('prox_', '')}: {Object.entries(metrics).map(([k, m]) => (
                       m.retired_in
                         ? `${m.label.toLowerCase()} retired in ${m.retired_in}`
-                        : `${m.label.toLowerCase()} ${m.raw == null ? '—' : (Math.round(m.raw * 100) / 100).toFixed(2)} → p${m.percentile == null ? '—' : figure(Math.round(m.percentile * 100))} × ${figure(m.weight)} = ${figure(m.contribution)}`
+                        : `${m.label.toLowerCase()} ${m.raw == null ? '—' : decimals(m.raw)} → p${m.percentile == null ? '—' : figure(Math.round(m.percentile * 100))} × ${figure(m.weight)} = ${figure(m.contribution)}`
                     )).join(' · ') || 'no metric scored'}
                   </Meta>
                 ))}

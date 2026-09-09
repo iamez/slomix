@@ -7,7 +7,7 @@
  */
 import { useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
-import { Lbl, Meta, figure } from '../components/ui';
+import { Lbl, Meta, figure, decimals } from '../components/ui';
 import { mapLabel } from '../lib/maps';
 import { stripEtColors } from '../lib/names';
 import {
@@ -201,8 +201,8 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                           * r near 0 = aimed everywhere. */}
                         {d.circular && (
                           <Meta>
-                            direction: mean yaw {figure(Math.round(d.circular.mean_yaw_deg))}° · r {(Math.round(d.circular.resultant_length * 100) / 100).toFixed(2)} · circular std ±{figure(Math.round(d.circular.circular_std_deg))}°
-                            {' · '}{d.circular.rayleigh_p < 0.05 ? `a preferred direction (Rayleigh p ${d.circular.rayleigh_p < 0.001 ? '< 0.001' : d.circular.rayleigh_p.toFixed(3)})` : `no preferred direction (Rayleigh p ${d.circular.rayleigh_p.toFixed(2)})`}
+                            direction: mean yaw {figure(Math.round(d.circular.mean_yaw_deg))}° · r {decimals(d.circular.resultant_length)} · circular std ±{figure(Math.round(d.circular.circular_std_deg))}°
+                            {' · '}{d.circular.rayleigh_p < 0.05 ? `a preferred direction (Rayleigh p ${d.circular.rayleigh_p < 0.001 ? '< 0.001' : decimals(d.circular.rayleigh_p, 3)})` : `no preferred direction (Rayleigh p ${decimals(d.circular.rayleigh_p)})`}
                             {' · '}pitch {d.circular.pitch_mean_deg >= 0 ? '+' : ''}{figure(Math.round(d.circular.pitch_mean_deg))}° ± {figure(Math.round(d.circular.pitch_std_deg))}° over {figure(d.circular.n)} shots
                           </Meta>
                         )}
@@ -212,8 +212,8 @@ export function ProximityMapOverlays({ sessionDate, mapName }: { sessionDate: st
                           const peak = rose.indexOf(Math.max(...rose));
                           return (
                             <Meta>
-                              busiest zone ({figure(top.count)} shots): mean yaw {top.mean_yaw == null ? '—' : `${figure(Math.round(top.mean_yaw))}°`}, r {top.r == null ? '—' : (Math.round(top.r * 100) / 100).toFixed(2)}
-                              {rose.length > 0 ? ` · rose peak bucket ${figure(peak)} of ${figure(rose.length)} (${figure(Math.max(...rose))} shots)` : ''}
+                              busiest zone ({figure(top.count)} shots): mean yaw {top.mean_yaw == null ? '—' : `${figure(Math.round(top.mean_yaw))}°`}, r {top.r == null ? '—' : decimals(top.r)}
+                              {rose.length > 0 ? ` · rose peak bucket ${figure(peak + 1)} of ${figure(rose.length)} (${figure(Math.max(...rose))} shots)` : ''}
                             </Meta>
                           );
                         })()}

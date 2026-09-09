@@ -412,7 +412,7 @@ describe('SessionDetail', () => {
 
   // Three full renders of a page that now carries the matrix and the graphs
   // (R3c/R3d): 5.4 s under jsdom on 2026-09-08, hence the wider budget.
-  it('states the lives cutoff from the payload, and stays silent on older wire shapes', { timeout: 40000 }, async () => {
+  it('states the lives cutoff from the payload, and stays silent on older wire shapes', { timeout: 60000 }, async () => {
     // The endpoint's `total` is len(lives) AFTER the limit — a total that is
     // not a total — so the disclosure reads qualifying_total, counted before
     // the cut (Codex on #842, fourth cutoff of the family). The recorded
@@ -458,7 +458,7 @@ describe('SessionDetail', () => {
     // The fourth render on a cold CI runner took 13.6 s once (#1002's run
     // 34320304211) — the wait is generous because the render is slow, not
     // because the assertion is loose.
-    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'), { timeout: 20000 });
+    await waitFor(() => expect(fourth.container.textContent).toContain('≥4 kills'), { timeout: 40000 });
   });
 
   it('tells an empty night apart from a failed request', async () => {

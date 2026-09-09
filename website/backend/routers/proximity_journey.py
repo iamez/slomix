@@ -204,6 +204,7 @@ async def get_player_journey(
 
     # Objective involvement (carrier runs, objective runs, constructions).
     objective_events: list[dict] = []
+    objective_events_unavailable: str | None = None
     try:
         carrier_rows = await db.fetch_all(
             f"""
@@ -250,8 +251,11 @@ async def get_player_journey(
             {"type": "construction", "time": int(r[0] or 0), "action": r[1], "objective": r[2]}
             for r in (constr_rows or [])
         ]
-    except Exception:
+    except Exception as exc:
         logger.exception("player-journey objective lookup failed (continuing without)")
+        # Named, not zeroed: the summary says the count is unavailable rather
+        # than 0, and the page prints it as such (Codex on #1009).
+        objective_events_unavailable = f"objective lookup failed: {type(exc).__name__}"
 
     # Bucket every OTHER player's path once for the proximity series.
     others: list[dict] = []
@@ -372,6 +376,7 @@ async def get_player_journey(
             "kills": total_kills,
             "deaths": total_deaths,
             "avg_life_s": round(alive_total_ms / len(lives) / 1000, 1) if lives else 0,
-            "objective_events": len(objective_events),
+            "objective_events": None if objective_events_unavailable else len(objective_events),
+            "objective_events_unavailable": objective_events_unavailable,
         },
     }

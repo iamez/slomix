@@ -3544,7 +3544,7 @@ export interface PlayerJourney {
   scope: ProxScope;
   player: { guid: string; name: string | null; team: string } | null;
   lives: JourneyLife[];
-  summary: { lives?: number; kills?: number; deaths?: number; avg_life_s?: number | null; objective_events?: number };
+  summary: { lives?: number; kills?: number; deaths?: number; avg_life_s?: number | null; objective_events?: number | null; objective_events_unavailable?: string | null };
   message?: string | null;
 }
 

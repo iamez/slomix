@@ -185,7 +185,6 @@
 /api/proximity/player/{guid}/profile spawn_avg_score
 /api/proximity/player/{guid}/radar teamplay_formula_version
 /api/proximity/player/{guid}/radar unscored.avg_dodge_reaction_ms
-/api/proximity/prox-scores players.prox_radar
 /api/proximity/prox-scores/formula category_weights
 /api/proximity/push-deaths/heatmap perspective
 /api/proximity/push-deaths/heatmap unique_deaths

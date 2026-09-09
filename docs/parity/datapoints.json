@@ -190,10 +190,10 @@
  },
  "summary": {
   "read": 3239,
-  "unread": 381,
-  "dropped": 69,
+  "unread": 380,
+  "dropped": 70,
   "endpoints": 180,
-  "endpoints_fully_read": 76,
+  "endpoints_fully_read": 77,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -584,8 +584,8 @@
   },
   "/api/proximity/prox-scores": {
    "read": 32,
-   "unread": 1,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 1
   },
   "/api/proximity/prox-scores/formula": {
    "read": 7,
@@ -8778,7 +8778,7 @@
   {
    "endpoint": "/api/proximity/prox-scores",
    "key": "players.prox_radar",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/prox-scores",
@@ -8788,7 +8788,8 @@
   {
    "endpoint": "/api/proximity/prox-scores",
    "key": "players.rank",
-   "status": "read"
+   "status": "dropped",
+   "reason": "assigned after the service filtered the cohort to this guid (useProxScoresForPlayer always sends player_guid), so it is 1 in every per-player answer; the cohort rank is the proximity leaderboard's (Codex on #1009)"
   },
   {
    "endpoint": "/api/proximity/prox-scores",
