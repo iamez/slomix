@@ -190,10 +190,10 @@
  },
  "summary": {
   "read": 3200,
-  "unread": 420,
-  "dropped": 69,
+  "unread": 393,
+  "dropped": 96,
   "endpoints": 180,
-  "endpoints_fully_read": 73,
+  "endpoints_fully_read": 76,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -209,8 +209,8 @@
   },
   "/api/availability/promotion-preferences": {
    "read": 4,
-   "unread": 7,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 7
   },
   "/api/availability/promotions/campaign": {
    "read": 1,
@@ -324,8 +324,8 @@
   },
   "/api/planning/today": {
    "read": 16,
-   "unread": 12,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 12
   },
   "/api/player/{guid}/vs-stats": {
    "read": 16,
@@ -1039,8 +1039,8 @@
   },
   "/api/storytelling/scopes": {
    "read": 0,
-   "unread": 8,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 8
   },
   "/api/storytelling/space-created": {
    "read": 21,
@@ -1217,12 +1217,14 @@
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "encryption_enabled",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "notify_threshold",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -1232,27 +1234,32 @@
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "quiet_hours",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "signal_handle",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "signal_handle_masked",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "telegram_handle",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
    "key": "telegram_handle_masked",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): 2 website users, telegram/signal handles and encryption are the legacy account form's fields for a channel nobody uses; rebuild with the account page, not as a stray row."
   },
   {
    "endpoint": "/api/availability/promotion-preferences",
@@ -2657,7 +2664,8 @@
   {
    "endpoint": "/api/planning/today",
    "key": "committed_count",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
@@ -2672,7 +2680,8 @@
   {
    "endpoint": "/api/planning/today",
    "key": "participant_count",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
@@ -2702,17 +2711,20 @@
   {
    "endpoint": "/api/planning/today",
    "key": "session.created_at",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
    "key": "session.created_by_user_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
    "key": "session.discord_thread_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
@@ -2727,7 +2739,8 @@
   {
    "endpoint": "/api/planning/today",
    "key": "session.my_vote_suggestion_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
@@ -2737,17 +2750,20 @@
   {
    "endpoint": "/api/planning/today",
    "key": "session.suggestions",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
    "key": "session.teams",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
    "key": "session.updated_at",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
@@ -2772,12 +2788,14 @@
   {
    "endpoint": "/api/planning/today",
    "key": "unlocked",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
    "key": "viewer",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/planning/today",
@@ -2792,7 +2810,8 @@
   {
    "endpoint": "/api/planning/today",
    "key": "viewer.website_user_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "Tier 4, not built (2026-09-09): planning_sessions / planning_votes / planning_teams / planning_team_members hold 0 rows (measured 2026-09-09 and 2026-09-08); the old React planning panel always hit a 404. Read when the feature has a first row."
   },
   {
    "endpoint": "/api/player/{guid}/vs-stats",
@@ -18685,42 +18704,50 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "scope_version",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.accepted_round_count",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.distinct_map_names",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.end_date",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.gaming_session_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.scope_version",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.start_date",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead endpoint (2026-09-09): useStoryScopes has no caller — the SPA's story page is keyed by gaming session and the sessions list is the picker; the endpoint stays for the legacy page until its retirement."
   },
   {
    "endpoint": "/api/storytelling/space-created",
