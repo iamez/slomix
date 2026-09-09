@@ -7,7 +7,7 @@
  */
 import { useEffect, useState } from 'react';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, decimals } from '../components/ui';
 import { LiveMiniMap } from '../components/LiveMiniMap';
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
@@ -22,6 +22,7 @@ import {
   useServerActivityHistory, useTonight, useVoiceActivityHistory,
 } from '../lib/queries';
 import type { LiveRosterMember, LiveState, TonightMap, TonightStatus } from '../lib/types';
+import { utcStamp } from '../lib/utcStamp';
 
 function Spark({ pts, label }: { pts: { t: string; v: number }[]; label: string }) {
   if (pts.length < 2) return <Absent reason="not enough history for a line" />;
@@ -388,6 +389,14 @@ export function LivePage() {
           <Spark label="players over 24h"
             pts={server.data.data_points.map((p) => ({ t: p.timestamp, v: p.player_count }))} />
         )}
+        {server.data && (
+          <Meta>
+            {figure(server.data.summary.total_records)} samples · avg {decimals(server.data.summary.avg_players, 1)} players
+            {server.data.summary.peak_time ? ` · peak at ${utcStamp(server.data.summary.peak_time)}` : ' · no peak recorded'}
+            {' · '}online in {figure(server.data.data_points.filter((p) => p.online).length)} of {figure(server.data.data_points.length)} samples
+            {server.data.data_points.length > 0 && server.data.data_points[0].max_players != null ? ` · slots ${figure(server.data.data_points[0].max_players)}` : ''}
+          </Meta>
+        )}
       </div>
 
       <div data-parity="live.voice-activity">
@@ -397,6 +406,13 @@ export function LivePage() {
         {voice.data && (
           <Spark label="voice members over 24h"
             pts={voice.data.data_points.map((p) => ({ t: p.timestamp, v: p.member_count }))} />
+        )}
+        {voice.data && (
+          <Meta>
+            {figure(voice.data.summary.total_records)} samples · {figure(voice.data.summary.total_sessions)} voice sessions · avg {decimals(voice.data.summary.avg_members, 1)} members
+            {voice.data.summary.peak_time ? ` · peak at ${utcStamp(voice.data.summary.peak_time)}` : ' · no peak recorded'}
+            {(() => { const names = [...new Set(voice.data!.data_points.map((p) => p.channel_name).filter((n): n is string => n != null))]; return names.length > 0 ? ` · channels ${names.join(', ')}` : ' · no channel named in the samples'; })()}
+          </Meta>
         )}
       </div>
 

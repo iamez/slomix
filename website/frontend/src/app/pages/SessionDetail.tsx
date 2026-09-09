@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useParams, useNavigate } from 'react-router';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure } from '../components/ui';
+import { Absent, BigScore, FigureRow, Lbl, Meta, Pending, SectionHead, Tabs, Unavailable, figure, decimals } from '../components/ui';
 import { Panel } from '../components/Panel';
 import { DataTable, type DataColumn } from '../components/DataTable';
 import { PlayerMapMatrix } from '../components/PlayerMapMatrix';
@@ -283,6 +283,12 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
         label="mvp votes"
         aside={<span className="lbl">{figure(totalVotes)} votes cast by players</span>}
       />
+      {(q.data.my_vote != null || q.data.most_underrated_guid != null) && (
+        <Meta>
+          {q.data.my_vote != null ? `your vote: ${q.data.candidates.find((c) => c.guid === q.data.my_vote)?.name ?? String(q.data.my_vote)}` : 'you have not voted'}
+          {q.data.most_underrated_guid != null ? ` · most underrated: ${q.data.candidates.find((c) => c.guid === q.data.most_underrated_guid)?.name ?? q.data.most_underrated_guid}` : ''}
+        </Meta>
+      )}
       <Stack gap={1} className="rows">
         {q.data.candidates.filter((c) => c.votes > 0).map((c) => (
           <Cluster key={c.guid} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
@@ -292,6 +298,7 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
               <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 60, textAlign: 'right' }}>
                 {c.vote_pct.toFixed(0)}%
               </span>
+              {c.kis_rank != null && <Meta>KIS rank {figure(c.kis_rank)}</Meta>}
             </Cluster>
           </Cluster>
         ))}
@@ -356,6 +363,10 @@ const PLAYERS_COLUMNS: readonly DataColumn<SessionPlayerTotals>[] = [
   { key: 'dpm', label: 'dpm', title: 'damage given × 60 ÷ time played', width: 52, sortValue: (p) => p.dpm, format: (p) => p.dpm.toFixed(0) },
   { key: 'alive', label: 'alive %', title: 'Alive%: time not dead during the time the player actually played — engine figure when the stats file carried one, else 100 − dead ÷ played', width: 62,
     sortValue: (p) => p.alive_pct, format: (p) => pct(p.alive_pct) },
+  { key: 'alive_lua', label: 'alive % lua', title: 'Alive% as the tracker measured it (null when the tracker did not run) — the same name, a second measurement', width: 74,
+    sortValue: (p) => p.alive_pct_lua, format: (p) => (p.alive_pct_lua == null ? '—' : pct(p.alive_pct_lua)) },
+  { key: 'alive_diff', label: 'alive Δ', title: 'engine alive% minus tracker alive% — data about the capture, not the player', width: 60,
+    sortValue: (p) => p.alive_pct_diff, format: (p) => (p.alive_pct_diff == null ? '—' : `${p.alive_pct_diff > 0 ? '+' : ''}${decimals(p.alive_pct_diff, 1)}`) },
   { key: 'played', label: 'played %', title: 'Played%: share of the session duration the player was present', width: 66,
     sortValue: (p) => p.played_pct, format: (p) => pct(p.played_pct) },
   { key: 'dead', label: 'dead min', title: 'minutes dead, capped at minutes played per round', width: 62, sortValue: (p) => p.time_dead_minutes, format: (p) => p.time_dead_minutes.toFixed(1) },

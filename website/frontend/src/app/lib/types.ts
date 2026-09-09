@@ -357,6 +357,10 @@ export interface StatsTrends {
 /** One row of GET /api/stats/matches — corpus: api_stats_matches.json.
  * axis/allies score fields are null in the recording — read as nullable. */
 export interface MatchRow {
+  /** Recorded null on the corpus; the legacy leaderboard drew score_display when present. */
+  score_display?: string | null;
+  axis_score?: number | null;
+  allies_score?: number | null;
   id: number;
   /** Nullable for the same reason as LastSessionMatch, and by the same rule
    *  rather than a different mood: `get_recent_matches` selects
@@ -681,16 +685,14 @@ export interface LiveStatus {
     channel_name: string;
     /** true when the voice read failed INSIDE a 200 — count is then an
      * initialized zero, not a measurement (Codex on #811, wave 3). */
-    error?: boolean;
-  };
+    error?: boolean; updated_at?: string | null; };
   game_server: {
     online: boolean;
     hostname: string;
     map: string | null;
     player_count: number;
     max_players: number;
-    ping_ms: number | null;
-  };
+    ping_ms: number | null; updated_at?: string | null; };
 }
 
 /** GET /api/stats/activity-calendar?days= — corpus: api_stats_activity_calendar.json */
@@ -854,6 +856,10 @@ export interface AwardsLeaderboard {
  * Win rates are null when no side ever won — legacy defaulted them to 50,
  * an invented middle; here null renders a dash. */
 export interface MapStatsRow {
+  /** Recorded: min 0 is the endpoint's unknown sentinel, like avg_duration. */
+  min_duration: number;
+  max_duration: number;
+  total_deaths: number;
   name: string;
   total_rounds: number;
   matches_played: number;
@@ -4532,7 +4538,7 @@ export interface PlanningToday {
   /** Derived from availability_entries even with no planning row (planning.py _planning_state); absent on older recordings. */
   committed_count?: number;
   date: string;
-  session_ready: { ready: boolean; looking_count: number; threshold: number };
+  session_ready: { ready: boolean; looking_count: number; threshold: number; event_key?: string };
   unlocked: boolean;
   participant_count: number;
   participants: { user_id: number; display_name: string | null; status: string }[];
@@ -4916,6 +4922,8 @@ export interface MemoryCard {
 }
 
 export interface SkillPlayerForm {
+  /** The weights the form composite used (recorded: dpm, kd, obj, acc, kills, impact). */
+  form_weights?: Record<string, number>;
   status: string;
   player_guid: string;
   player_name: string | null;
