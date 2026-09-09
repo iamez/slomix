@@ -29,7 +29,7 @@ deploy NI naloga.
 | stanje | vrednost |
 |---|---|
 | izdana verzija (dev) | v1.44.0 (2026-09-02); vlak 1.45.0 = #882 |
-| endpoint gap (H1) | **9** — prešteto v `tests/data/endpoint_gap.txt` 8. 9. ob 15:40 (9 po `/api/stats/matches/{}` R3b in `/api/rounds/{}/player/{}/details` R3a); prej 11 (⛔ 9 → 11 je korekcija merilnika: klic, ki se konča z interpolacijo, je oblika `{}`, ne prefiks — `/api/stats/matches/{}` in `/api/sessions/{}` sta bila skrita; prej 9 po `/api/stats/player/{}/rounds` v #975) |
+| endpoint gap (H1) | **8** — prešteto v `tests/data/endpoint_gap.txt` 9. 9. ob 00:30 (8 po `/api/players/{}/card` R3e; prej 9 (9 po `/api/stats/matches/{}` R3b in `/api/rounds/{}/player/{}/details` R3a); prej 11 (⛔ 9 → 11 je korekcija merilnika: klic, ki se konča z interpolacijo, je oblika `{}`, ne prefiks — `/api/stats/matches/{}` in `/api/sessions/{}` sta bila skrita; prej 9 po `/api/stats/player/{}/rounds` v #975) |
 | proximity inventory pending | **0** (#884) |
 | zgrajene strani faze 5 | proximity (6 rezin + 8 outcome instrumentov), player profil, team comparison, replay, spider-web SW-1 |
 | zgrajene strani faze 6 | availability r. 1 (#887), uploads r. 1 (#888), live (#889, kurzor feeda popravljen po reviewu), greatshot (#890) |
@@ -269,7 +269,7 @@ watchdog r. 1 (obseg `docs/design/24`, lokalno).
 
 | ratchet | stanje |
 |---|---|
-| endpoint gap | **9** — (8. 9. 15:40, R3a + R3b) ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970) → 10 (#974) → 9 (#975) → 11 (korekcija merilnika 8. 9., trailing interpolacija). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
+| endpoint gap | **8** — (9. 9. 00:30, R3a–R3e) ⛔ isti dokument je 6. 9. navajal 3 IN 16; nobena ni bila prešteta, obe sta bili zapisani ob spremembi in nato zastareli. Zgodovina: 4 → 3 (rezina 3) → 19 (korekcija ekstraktorja 5. 9.) → 16 (faza 7) → 13 (5 zaprtih 6. 9.) → 12 (#955) → 11 (#970) → 10 (#974) → 9 (#975) → 11 (korekcija merilnika 8. 9., trailing interpolacija). Merilo je `grep -vcE '^\s*(#|$)' tests/data/endpoint_gap.txt`, ne spomin |
 | proximity inventory pending | **0** (#884) |
 
 ## Proga: Stats 2.0 — ena stran »Stats / Sessions« (Fable 5.1)

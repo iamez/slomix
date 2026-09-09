@@ -89,7 +89,8 @@ def stance_of(value: Any) -> PlayerStance | None:
 
 
 class Tracer(Protocol):
-    def trace_line_of_sight_availability(self, observer_origin, observer_stance, target_origin, target_stance): ...
+    def trace_line_of_sight_availability(self, observer_origin, observer_stance, target_origin, target_stance):
+        """Eye-to-body availability from the observer to the target (BspPointTracer, or a test double)."""
 
 
 class GeometryProvider:
