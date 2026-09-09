@@ -756,6 +756,12 @@ class _NarrativeMixin:
             ]
             top_trait = max(traits, key=lambda t: t[1])
             pct = top_trait[1]  # How dominant is this trait (0.0-1.0)
+            # ⛔ A player with KIS data and NONE of the four role boards gets
+            # zeros above, `_pct_rank` answers 0.5 for every trait over an
+            # empty pool, and max() picks "gravity" by order. That is not a
+            # trait, it is the absence of telemetry — published as null
+            # (Codex on #1002).
+            has_role_telemetry = bool(g or s or e or lk)
 
             # ── Gravity: drew enemy heat ──
             if top_trait[0] == "gravity" and gravity_score > 0:
@@ -893,7 +899,7 @@ class _NarrativeMixin:
                 "name": name,
                 "narrative": "".join(parts).strip(),
                 "archetype": archetype,
-                "top_trait": top_trait[0],
+                "top_trait": top_trait[0] if has_role_telemetry else None,
                 "metrics": {
                     "gravity": gravity_score,
                     "space_score": space_score,
