@@ -1,5 +1,9 @@
 # HANDOFF — 2026-09-06 (Fable 5.1 → naslednji agent)
 
+> **9. 9. 2026: novejša predaja je `docs/HANDOFF-fable-2026-09-09.md`** (owner odsoten ~3 mesece; spider web
+> zaključen, merilnik podatkovnih točk 583 → 238, bot brez reakcij na Supove slike). Začni tam; ta datoteka ostaja
+> kot posnetek stanja 6. 9. in pravil.
+
 Vstopna točka za avtonomnega agenta. Vir resnice za načrt je `docs/PLAN.md`,
 pozicije in odprte stvari so v `docs/BACKLOG.md`; ta datoteka pove, KJE smo,
 KAJ je naslednje in KAKO se dela (pravila + dokazi). Dizajn nove strani je v
