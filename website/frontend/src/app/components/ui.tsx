@@ -1,4 +1,4 @@
-import { Fragment, isValidElement } from 'react';
+import { Fragment, isValidElement, useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { Link } from 'react-router';
 
@@ -174,8 +174,27 @@ export function Tabs<T extends string>({
   );
 }
 
+/** Seconds after which a pending label starts counting, and after which it
+ *  says why: the proximity and skill backbones answer a cold cache window
+ *  in 5–26 s (audit 2026-09-07 B3), and a dot that never moves reads as
+ *  broken, not slow. */
+const PENDING_COUNT_AFTER_S = 3;
+const PENDING_EXPLAIN_AFTER_S = 15;
+
 export function Pending({ label }: { label: string }) {
-  return <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>{label}…</span>;
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    const started = Date.now();
+    const id = window.setInterval(() => setElapsed(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  return (
+    <span className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }} aria-live="polite">
+      {label}…
+      {elapsed >= PENDING_COUNT_AFTER_S ? ` ${figure(elapsed)} s so far` : ''}
+      {elapsed >= PENDING_EXPLAIN_AFTER_S ? ' — the first query of a cache window computes from the tables and can take ~20 s; the next ones are instant' : ''}
+    </span>
+  );
 }
 
 export function Unavailable({ what }: { what: string }) {

@@ -73,6 +73,16 @@ describe('DataTable', () => {
     expect(screen.queryByRole('button', { name: 'weapons for a' })).toBeNull();
   });
 
+  it('pins the first column only when the table is wider than its panel', () => {
+    const { unmount } = render(<DataTable<Row> label="wide" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} minWidth={1400} />);
+    expect(screen.getByRole('button', { name: 'player' })).toHaveStyle({ position: 'sticky', left: '0px' });
+    expect(screen.getByText('alpha')).toHaveStyle({ position: 'sticky' });
+    expect(screen.getByRole('button', { name: 'dpm' })).not.toHaveStyle({ position: 'sticky' });
+    unmount();
+    render(<DataTable<Row> label="narrow" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} />);
+    expect(screen.getByText('alpha')).not.toHaveStyle({ position: 'sticky' });
+  });
+
   it('says no rows on an empty input instead of rendering nothing', () => {
     render(<DataTable columns={COLUMNS} rows={[]} rowKey={(r) => r.id} />);
     expect(screen.getByText('no rows')).toBeInTheDocument();
