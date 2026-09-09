@@ -10,7 +10,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cluster, Stack } from '../components/layout';
-import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure } from '../components/ui';
+import { Absent, Lbl, Meta, Pending, SectionHead, Unavailable, figure, megabytes } from '../components/ui';
 import { Panel } from '../components/Panel';
 import { ApiError } from '../lib/api';
 import { mapLabel } from '../lib/maps';
@@ -20,6 +20,7 @@ import {
 } from '../lib/queries';
 import type { GreatshotCrossref, GreatshotItem } from '../lib/types';
 import { utcStamp } from '../lib/utcStamp';
+import { fmtRoundTime } from '../lib/roundTime';
 
 function fmtClock(ms: number): string {
   const s = Math.floor(ms / 1000);
@@ -209,6 +210,7 @@ export function GreatshotPage() {
                         {d.filename}
                         {d.duration_ms != null && <> · {fmtClock(d.duration_ms)}</>}
                         {d.mod != null && <> · {d.mod}</>}
+                        {d.created_at != null && <> · uploaded {utcStamp(d.created_at)}</>}
                       </Meta>
                     </Stack>
                     <Meta>
@@ -254,10 +256,10 @@ function Crossref({ demoId }: { demoId: string }) {
               {d.round.gaming_session_id != null && <> · <Link to={`/session-detail/${d.round.gaming_session_id}`} style={{ color: 'var(--color-accent)' }}>session {d.round.gaming_session_id}</Link></>}
               {' · '}{figure(d.round.confidence)} % on {d.round.match_details.join(', ')}
               {/* the matched round's own facts (ledger 2026-09-09) */}
-              {d.round.round_time != null && <> · file {String(d.round.round_time).length === 6 ? `${String(d.round.round_time).slice(0, 2)}:${String(d.round.round_time).slice(2, 4)}` : String(d.round.round_time)}</>}
+              {d.round.round_time != null && <> · file {fmtRoundTime(d.round.round_time) ?? String(d.round.round_time)}</>}
               {d.round.duration_seconds != null && <> · {fmtClock(d.round.duration_seconds * 1000)} long</>}
               {d.round.player_count != null && <> · {figure(d.round.player_count)} players in the db</>}
-              {d.round.winner_team != null && <> · won by {d.round.winner_team === 1 ? 'axis' : d.round.winner_team === 2 ? 'allies' : `team ${String(d.round.winner_team)}`}</>}
+              {d.round.winner_team != null && <> · {d.round.winner_team === 1 ? 'won by axis' : d.round.winner_team === 2 ? 'won by allies' : 'winner not recorded'}</>}
               {d.round.demo_round_index != null && <> · demo round #{figure(d.round.demo_round_index + 1)}</>}
             </Meta>
             <Stack gap={1} className="rows">
@@ -314,7 +316,7 @@ export function GreatshotDemoPage() {
         <Meta>
           {typeof d.metadata.gametype === 'string' && <>{d.metadata.gametype} · </>}
           {typeof d.metadata.profile === 'string' && <>profile {d.metadata.profile} · </>}
-          {typeof d.metadata.file_size_bytes === 'number' && <>{(d.metadata.file_size_bytes / 1048576).toFixed(1)} MB · </>}
+          {typeof d.metadata.file_size_bytes === 'number' && <>{megabytes(d.metadata.file_size_bytes)} · </>}
           {d.metadata.header != null && typeof d.metadata.header === 'object' && typeof (d.metadata.header as { sequence?: unknown }).sequence === 'number' && <>header seq {figure((d.metadata.header as { sequence: number }).sequence)} · </>}
           {Array.isArray(d.metadata.rounds) && d.metadata.rounds.length > 0 && <>{figure(d.metadata.rounds.length)} round{d.metadata.rounds.length === 1 ? '' : 's'} in the demo ({(d.metadata.rounds as { winner?: string }[]).map((r) => r.winner ?? '?').join(', ')}) · </>}
           {typeof d.metadata.mod_version === 'string' && <>mod {d.metadata.mod_version} · </>}
@@ -338,16 +340,26 @@ export function GreatshotDemoPage() {
           {d.analysis?.created_at != null && <> · analysed {utcStamp(String(d.analysis.created_at))}</>}
         </Meta>
         {/* The scanner's own counts and the events it listed (ledger 2026-09-09). */}
-        {d.analysis?.stats != null && (
-          <Meta>
-            scanner counted {figure(Number((d.analysis.stats as { kill_count?: number }).kill_count ?? 0))} kills · {figure(Number((d.analysis.stats as { chat_count?: number }).chat_count ?? 0))} chat lines · {figure(Number((d.analysis.stats as { event_count?: number }).event_count ?? 0))} events
-            {Array.isArray((d.analysis.stats as { top_killers?: { player: string; kills: number }[] }).top_killers) && <> · top killers {((d.analysis.stats as { top_killers: { player: string; kills: number }[] }).top_killers).slice(0, 3).map((k) => `${k.player} ${figure(k.kills)}`).join(', ')}</>}
-          </Meta>
-        )}
+        {d.analysis?.stats != null && (() => {
+          // Each count only when the scanner wrote it: an older analysis
+          // normalises a missing stats_json to {} and a `?? 0` would print a
+          // measured-looking zero (Codex on #1011).
+          const st = d.analysis.stats as { kill_count?: unknown; chat_count?: unknown; event_count?: unknown; top_killers?: unknown };
+          const counts = ([['kills', st.kill_count], ['chat lines', st.chat_count], ['events', st.event_count]] as [string, unknown][])
+            .filter(([, v]) => typeof v === 'number').map(([k, v]) => `${figure(v as number)} ${k}`);
+          const top = Array.isArray(st.top_killers) ? (st.top_killers as { player: string; kills: number }[]).slice(0, 3) : [];
+          return (
+            <Meta>
+              {counts.length > 0 ? `scanner counted ${counts.join(' · ')}` : 'scanner counts not recorded for this analysis'}
+              {top.length > 0 && <> · top killers {top.map((k) => `${k.player} ${figure(k.kills)}`).join(', ')}</>}
+            </Meta>
+          );
+        })()}
         {Array.isArray(d.analysis?.events) && d.analysis!.events.length > 0 && (
           <Meta>
             first events: {(d.analysis!.events as { type?: string; t_ms?: number; attacker?: string; message?: string; victim?: string }[]).slice(0, 5).map((e) => `${e.t_ms != null ? fmtClock(e.t_ms) : '?'} ${e.type ?? 'event'}${e.attacker ? ` ${e.attacker}` : ''}${e.victim ? ` → ${e.victim}` : ''}${e.message ? ` "${e.message}"` : ''}`).join(' · ')}
-            {d.analysis!.events.length > 5 ? ` · +${figure(d.analysis!.events.length - 5)} more` : ''}
+            {/* events_total, not events.length: the endpoint sends events[:500] and keeps the full count beside it */}
+            {(typeof d.analysis!.events_total === 'number' ? d.analysis!.events_total : d.analysis!.events.length) > 5 ? ` · +${figure((typeof d.analysis!.events_total === 'number' ? d.analysis!.events_total : d.analysis!.events.length) - 5)} more` : ''}
           </Meta>
         )}
         {d.error != null && <Absent reason={`the scanner stopped: ${d.error}`} />}
@@ -371,7 +383,7 @@ export function GreatshotDemoPage() {
                   {h.explanation != null && <Meta>{h.explanation}</Meta>}
                 </Stack>
                 <Cluster gap={3} align="baseline">
-                  <Meta>{fmtClock(h.start_ms)}–{fmtClock(h.end_ms)}{h.score != null && <> · score {figure(h.score)}</>}{h.created_at != null && <> · cut {utcStamp(String(h.created_at))}</>}</Meta>
+                  <Meta>{fmtClock(h.start_ms)}–{fmtClock(h.end_ms)}{h.score != null && <> · score {figure(h.score)}</>}{h.created_at != null && <> · detected {utcStamp(String(h.created_at))}</>}</Meta>
                   {/* clip_download and clip_demo_path come from the same row
                     * (greatshot.py get_greatshot_demo): both set or both null,
                     * so a "cut, not served" state cannot occur — the path is a

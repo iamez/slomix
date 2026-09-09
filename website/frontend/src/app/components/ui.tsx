@@ -293,3 +293,9 @@ export function Meta({ children, style }: { children: ReactNode; style?: CSSProp
 export function figure(value: number): string {
   return Number.isInteger(value) ? value.toLocaleString('en-US') : value.toFixed(1);
 }
+
+/** A byte count as MB to one decimal — the shared file-size formatter, so no
+ *  page carries its own (website/frontend/AGENTS.md). */
+export function megabytes(bytes: number): string {
+  return `${figure(Math.round(bytes / 104857.6) / 10)} MB`;
+}

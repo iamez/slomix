@@ -160,7 +160,7 @@ export function SmartStatsDiag() {
             * the impact sum it produced. */}
           <Meta>
             {figure(d.unlinked_kills)} kills without a round · {figure(d.wrong_round_kills)} in the wrong round · {figure(d.distinct_rounds_in_kills)} distinct rounds in the kills ·
-            {' '}KIS {d.kis_computed ? 'computed' : 'not computed'}{d.kis_total_impact_sum != null ? ` · impact sum ${figure(Math.round(d.kis_total_impact_sum))}` : ''}
+            {' '}KIS {d.kis_computed ? `computed${d.kis_total_impact_sum != null ? ` · impact sum ${figure(Math.round(d.kis_total_impact_sum))}` : ''}` : 'not computed (no impact sum to show)'}
           </Meta>
           <div data-parity="smart-stats-diag.warnings" style={{ marginTop: 'var(--space-6)' }}>
             {d.warnings.length === 0 ? (

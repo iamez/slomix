@@ -296,6 +296,7 @@
 /api/skill/player/{identifier}/form form_weights.impact
 /api/skill/player/{identifier}/form form_weights.obj
 /api/skill/player/{identifier}/history sessions.session_rating
+/api/stats/last-session unassigned_players.time_dead_seconds_raw
 /api/stats/leaderboard deaths
 /api/stats/live-session last_round_time
 /api/stats/live-session last_update

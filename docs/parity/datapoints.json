@@ -23,10 +23,10 @@
   "/api/datasets": "8 files reachable from the endpoint's callers",
   "/api/diagnostics": "8 files reachable from the endpoint's callers",
   "/api/diagnostics/storytelling-completeness": "5 files reachable from the endpoint's callers",
-  "/api/greatshot": "10 files reachable from the endpoint's callers",
-  "/api/greatshot/{demo_id}": "10 files reachable from the endpoint's callers",
-  "/api/greatshot/{demo_id}/crossref": "10 files reachable from the endpoint's callers",
-  "/api/greatshot/{demo_id}/status": "10 files reachable from the endpoint's callers",
+  "/api/greatshot": "11 files reachable from the endpoint's callers",
+  "/api/greatshot/{demo_id}": "11 files reachable from the endpoint's callers",
+  "/api/greatshot/{demo_id}/crossref": "11 files reachable from the endpoint's callers",
+  "/api/greatshot/{demo_id}/status": "11 files reachable from the endpoint's callers",
   "/api/hall-of-fame": "5 files reachable from the endpoint's callers",
   "/api/live-status": "12 files reachable from the endpoint's callers",
   "/api/live/feed": "16 files reachable from the endpoint's callers",
@@ -189,11 +189,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3226,
-  "unread": 341,
+  "read": 3225,
+  "unread": 342,
   "dropped": 122,
   "endpoints": 180,
-  "endpoints_fully_read": 81,
+  "endpoints_fully_read": 80,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -813,8 +813,8 @@
    "dropped": 1
   },
   "/api/stats/last-session": {
-   "read": 47,
-   "unread": 0,
+   "read": 46,
+   "unread": 1,
    "dropped": 11
   },
   "/api/stats/leaderboard": {
@@ -13647,7 +13647,8 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "map_counts",
-   "status": "read"
+   "status": "dropped",
+   "reason": "counts ROUNDS per map (an ordinary map is 2, a replayed one 4); the Home card counts plays from the R1 rows of matches instead (Codex on #1011)"
   },
   {
    "endpoint": "/api/stats/last-session",
@@ -13907,8 +13908,7 @@
   {
    "endpoint": "/api/stats/last-session",
    "key": "unassigned_players.time_dead_seconds_raw",
-   "status": "dropped",
-   "reason": "Home's last-night card is the box score and five sums; the same players' full 22 columns are the session page's basics table (SessionDetail), where these are read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/stats/last-session",
