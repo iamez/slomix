@@ -31,6 +31,12 @@ from typing import Any, Iterable
 
 #: Fewer players than this in a round and a median split says nothing.
 MIN_PLAYERS_PER_ROUND = 4
+#: A verdict needs a tail to estimate: fewer confirmation blocks than this,
+#: or fewer rounds than MIN_ROUNDS_PER_SPLIT in either split, is "unmeasured".
+#: Seen on the first partial run (4 confirmation blocks): a bootstrap over
+#: four blocks is a handful of discrete outcomes, not a distribution.
+MIN_CONFIRMATION_BLOCKS = 10
+MIN_ROUNDS_PER_SPLIT = 30
 
 
 @dataclass(frozen=True, slots=True)
@@ -174,7 +180,15 @@ def block_bootstrap(rows: list[Row], metrics: list[str], *, resamples: int, seed
         sim = None
         if t_crit is not None and se.get(m) not in (None, 0.0) and point[m] is not None:
             sim = (point[m] - t_crit * se[m], point[m] + t_crit * se[m])  # type: ignore[operator]
-        out[m] = {"point": point[m], "rounds": rounds[m], "se": se.get(m), "ci95": ci, "sim95": sim, "t_crit": t_crit}
+            # ⛔ Simultaneous means "at least as wide as the individual
+            # interval": the studentised band is symmetric and, over a few
+            # skewed blocks, came out NARROWER than the percentile interval
+            # (first partial run: dpm [−0.14, +0.19] individual, [+0.03, +0.13]
+            # simultaneous). The family-wise interval takes the union.
+            if ci is not None:
+                sim = (min(sim[0], ci[0]), max(sim[1], ci[1]))
+        out[m] = {"point": point[m], "rounds": rounds[m], "se": se.get(m), "ci95": ci, "sim95": sim, "t_crit": t_crit,
+                  "blocks": len(per_metric[m])}
     return out
 
 
@@ -205,6 +219,10 @@ def verdict(candidate: Candidate, discovery: dict[str, Any], confirmation: dict[
     sim = confirmation.get("sim95")
     if d_pt is None or c_pt is None or sim is None:
         return "unmeasured"
+    if confirmation.get("blocks", 0) < MIN_CONFIRMATION_BLOCKS:
+        return f"unmeasured: {confirmation.get('blocks', 0)} confirmation blocks, {MIN_CONFIRMATION_BLOCKS} needed"
+    if discovery.get("rounds", 0) < MIN_ROUNDS_PER_SPLIT or confirmation.get("rounds", 0) < MIN_ROUNDS_PER_SPLIT:
+        return f"unmeasured: {discovery.get('rounds', 0)}/{confirmation.get('rounds', 0)} rounds, {MIN_ROUNDS_PER_SPLIT} needed in each split"
     if direction_of(d_pt) != candidate.expected_direction:
         return "fails: discovery direction"
     if direction_of(c_pt) != candidate.expected_direction:

@@ -63,8 +63,8 @@ CANDIDATES: list[Candidate] = [
     Candidate("moving_share", "share of alive samples with speed > MOVING_UPS", "positive", {"moving_ups": MOVING_UPS}),
     Candidate("isolation_share", "share of alive samples with no living teammate within ISOLATION_UNITS (straight-line, §7.4: geometric separation, not route support time)", "negative",
               {"isolation_units": ISOLATION_UNITS}, kind="oracle_diagnostic"),
-    Candidate("blind_moving_share", "share of MOVING samples during which the holder's layer-3 known_enemy_count was 0 (moved without a known enemy — information-consistent movement, §7.4)", "negative",
-              {"moving_ups": MOVING_UPS, "counts_as_known": "information_state.counts_as_known"}),
+    Candidate("blind_moving_share", "share of MOVING samples during which the holder held NO placeable enemy belief (subject named, region inside position_claim_max_radius, counts_as_known) — moved without knowing where any enemy was; information-consistent movement, §7.4", "negative",
+              {"moving_ups": MOVING_UPS, "placeable": "subject_guid and region.radius <= position_claim_max_radius and counts_as_known"}),
     Candidate("exposure_share", "share of alive samples with ≥ 1 living enemy holding a clear eye-to-body ray to the player (W6 tracer, static geometry) — §7.4 exposure, ORACLE form", "negative",
               {"tracer": "services/line_of_sight.py", "validation": "W6 2026-08-22, 99.92 %"}, kind="oracle_diagnostic"),
     Candidate("push_into_wave_share", "share of MOVING samples while the ENEMY's validated reinforcement wave lands within WAVE_IMMINENT_SHARE of its interval (oracle clock, §5.6/§6.3: never a scoring fallback)", "negative",
@@ -155,8 +155,20 @@ async def collect_round(db, rid: int, meta: dict, *, cadence_ms: int, provider: 
             if d is None or d > ISOLATION_UNITS:
                 a["isolated"] += 1
             h = holders.get(g)
-            if moving and h is not None and h.get("known_enemy_count") == 0:
-                a["blind_moving"] += 1
+            # "Blind" = no enemy the holder could PLACE: a belief that names a
+            # subject, carries a region inside the published horizon and still
+            # counts as known. known_enemy_count alone would not do — a public
+            # obituary names an enemy without placing him, so it is rarely 0
+            # (probe 2026-09-09: 0.0 for 20 of 22 rows).
+            if moving and h is not None:
+                horizon = h.get("position_claim_max_radius") or float("inf")
+                placeable = any(
+                    b.get("subject_guid") and b.get("region") and b.get("counts_as_known")
+                    and b["region"].get("radius", float("inf")) <= horizon
+                    for b in h.get("beliefs", [])
+                )
+                if not placeable:
+                    a["blind_moving"] += 1
             if tracer is not None:
                 a["exposed_measured"] += 1
                 if g in exposed:

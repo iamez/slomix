@@ -49,7 +49,7 @@ class TestSplitBlocks:
 
 class TestBootstrapAndVerdict:
     @staticmethod
-    def _corpus(signal: float, seed=1, blocks=30, rounds_per_block=6, players=6):
+    def _corpus(signal: float, seed=1, blocks=40, rounds_per_block=6, players=6):
         rng = random.Random(seed)  # noqa: S311
         rows = []
         rid = 0
@@ -95,6 +95,21 @@ class TestBootstrapAndVerdict:
     def test_unmeasured_is_a_verdict_not_a_pass(self):
         c = Candidate("x", "nothing", "positive")
         assert l4.verdict(c, {"point": None}, {"point": None, "sim95": None}) == "unmeasured"
+
+    def test_too_few_confirmation_blocks_or_rounds_cannot_ship(self):
+        # a strong, right-direction effect on four blocks is still not a measurement
+        c = Candidate("x", "nothing", "positive")
+        strong = {"point": 0.3, "rounds": 40, "sim95": (0.1, 0.5), "blocks": 4}
+        assert l4.verdict(c, {"point": 0.3, "rounds": 100}, strong).startswith("unmeasured: 4 confirmation blocks")
+        thin = {"point": 0.3, "rounds": 12, "sim95": (0.1, 0.5), "blocks": 12}
+        assert l4.verdict(c, {"point": 0.3, "rounds": 100}, thin).startswith("unmeasured: 100/12 rounds")
+
+    def test_the_simultaneous_interval_is_never_narrower_than_the_individual_one(self):
+        rows = self._corpus(signal=0.8, blocks=6, rounds_per_block=3)
+        out = l4.block_bootstrap(rows, ["m"], resamples=200, seed=11)["m"]
+        lo, hi = out["ci95"]
+        slo, shi = out["sim95"]
+        assert slo <= lo + 1e-12 and shi >= hi - 1e-12
 
 
 class TestManifest:
