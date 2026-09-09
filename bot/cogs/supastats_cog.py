@@ -9,9 +9,12 @@ exposed 17 genuinely inverted historical rounds.
 This cog watches for that post, reads the screenshot and DMs the owner the
 whole run — detected, downloaded, read, matched to a session, compared — so a
 disagreement surfaces the morning it happens instead of months later. It never
-writes to the database; its only channel-visible act is a reaction on the
+writes to the database; its only channel-visible act WAS a reaction on the
 sheet post (✅ everything matches / ⚠️ differences found / ❌ unreadable).
 
+Reactions are OFF since 2026-09-09 unless SUPASTATS_REACTIONS_ENABLED=true —
+the owner asked the bot to keep checking and DMing, but to stop reacting on
+supa's messages.
 Retire it once our numbers and supa's agree and the project leaves prototype.
 """
 
@@ -131,6 +134,9 @@ class SupastatsCog(commands.Cog):
         Reactions guild permission (same non-critical pattern as
         webhook_handler_mixin)."""
         if target is None:
+            return
+        if not getattr(self.config, "supastats_reactions_enabled", False):
+            logger.debug("supastats: reaction %s withheld (SUPASTATS_REACTIONS_ENABLED is off)", emoji)
             return
         try:
             await target.add_reaction(emoji)
