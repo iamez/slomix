@@ -5,37 +5,45 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import './tokens.css';
 import { applyHashShim } from './hashShim';
 import { AppShell } from './components/AppShell';
+import { Pending } from './components/ui';
 import { RouteErrorBoundary } from './components/ErrorBoundary';
 import { installErrorReporting } from './lib/errorReporting';
-import { Landing } from './pages/Landing';
-import { About } from './pages/About';
-import { SystemPage } from './pages/SystemPage';
-import { SmartStatsDiag } from './pages/SmartStatsDiag';
-import { Home } from './pages/Home';
-import { SessionsList } from './pages/SessionsList';
-import { Leaderboards } from './pages/Leaderboards';
-import { RecordBook } from './pages/RecordBook';
-import { Awards } from './pages/Awards';
-import { MapsPage } from './pages/MapsPage';
-import { WeaponsPage } from './pages/WeaponsPage';
-import { FormPage } from './pages/FormPage';
-import { RetroViz } from './pages/RetroViz';
-import { PlayerProfilePage } from './pages/PlayerProfile';
-import { ComparePage } from './pages/ComparePage';
-import { WrappedPage } from './pages/WrappedPage';
-import { DesignCatalog } from './pages/DesignCatalog';
-import { Rivalries } from './pages/Rivalries';
-import { SessionDetail } from './pages/SessionDetail';
-import { Proximity } from './pages/Proximity';
-import { ProximityPlayerPage } from './pages/ProximityPlayerPage';
-import { ProximityTeamsPage } from './pages/ProximityTeamsPage';
-import { ProximityReplayPage } from './pages/ProximityReplayPage';
-import { SpiderWebPage } from './pages/SpiderWebPage';
-import { AvailabilityPage } from './pages/AvailabilityPage';
-import { UploadsPage, UploadDetailPage } from './pages/UploadsPage';
-import { GreatshotPage, GreatshotDemoPage } from './pages/GreatshotPage';
-import { LivePage } from './pages/LivePage';
-import { SkillRating } from './pages/SkillRating';
+
+// Route-level code splitting (audit 2026-09-07 B3: one 990 KB chunk, no
+// splitting): every page is its own chunk, fetched on first navigation to
+// it. The PAGES map below still names each page component, so
+// routes.test.ts keeps reading the wiring from source unchanged.
+const Landing = React.lazy(() => import('./pages/Landing').then((m) => ({ default: m.Landing })));
+const About = React.lazy(() => import('./pages/About').then((m) => ({ default: m.About })));
+const SystemPage = React.lazy(() => import('./pages/SystemPage').then((m) => ({ default: m.SystemPage })));
+const SmartStatsDiag = React.lazy(() => import('./pages/SmartStatsDiag').then((m) => ({ default: m.SmartStatsDiag })));
+const Home = React.lazy(() => import('./pages/Home').then((m) => ({ default: m.Home })));
+const SessionsList = React.lazy(() => import('./pages/SessionsList').then((m) => ({ default: m.SessionsList })));
+const Leaderboards = React.lazy(() => import('./pages/Leaderboards').then((m) => ({ default: m.Leaderboards })));
+const RecordBook = React.lazy(() => import('./pages/RecordBook').then((m) => ({ default: m.RecordBook })));
+const Awards = React.lazy(() => import('./pages/Awards').then((m) => ({ default: m.Awards })));
+const MapsPage = React.lazy(() => import('./pages/MapsPage').then((m) => ({ default: m.MapsPage })));
+const WeaponsPage = React.lazy(() => import('./pages/WeaponsPage').then((m) => ({ default: m.WeaponsPage })));
+const FormPage = React.lazy(() => import('./pages/FormPage').then((m) => ({ default: m.FormPage })));
+const RetroViz = React.lazy(() => import('./pages/RetroViz').then((m) => ({ default: m.RetroViz })));
+const PlayerProfilePage = React.lazy(() => import('./pages/PlayerProfile').then((m) => ({ default: m.PlayerProfilePage })));
+const ComparePage = React.lazy(() => import('./pages/ComparePage').then((m) => ({ default: m.ComparePage })));
+const WrappedPage = React.lazy(() => import('./pages/WrappedPage').then((m) => ({ default: m.WrappedPage })));
+const DesignCatalog = React.lazy(() => import('./pages/DesignCatalog').then((m) => ({ default: m.DesignCatalog })));
+const Rivalries = React.lazy(() => import('./pages/Rivalries').then((m) => ({ default: m.Rivalries })));
+const SessionDetail = React.lazy(() => import('./pages/SessionDetail').then((m) => ({ default: m.SessionDetail })));
+const Proximity = React.lazy(() => import('./pages/Proximity').then((m) => ({ default: m.Proximity })));
+const ProximityPlayerPage = React.lazy(() => import('./pages/ProximityPlayerPage').then((m) => ({ default: m.ProximityPlayerPage })));
+const ProximityTeamsPage = React.lazy(() => import('./pages/ProximityTeamsPage').then((m) => ({ default: m.ProximityTeamsPage })));
+const ProximityReplayPage = React.lazy(() => import('./pages/ProximityReplayPage').then((m) => ({ default: m.ProximityReplayPage })));
+const SpiderWebPage = React.lazy(() => import('./pages/SpiderWebPage').then((m) => ({ default: m.SpiderWebPage })));
+const AvailabilityPage = React.lazy(() => import('./pages/AvailabilityPage').then((m) => ({ default: m.AvailabilityPage })));
+const UploadsPage = React.lazy(() => import('./pages/UploadsPage').then((m) => ({ default: m.UploadsPage })));
+const UploadDetailPage = React.lazy(() => import('./pages/UploadsPage').then((m) => ({ default: m.UploadDetailPage })));
+const GreatshotPage = React.lazy(() => import('./pages/GreatshotPage').then((m) => ({ default: m.GreatshotPage })));
+const GreatshotDemoPage = React.lazy(() => import('./pages/GreatshotPage').then((m) => ({ default: m.GreatshotDemoPage })));
+const LivePage = React.lazy(() => import('./pages/LivePage').then((m) => ({ default: m.LivePage })));
+const SkillRating = React.lazy(() => import('./pages/SkillRating').then((m) => ({ default: m.SkillRating })));
 import { makeQueryClient } from './lib/queries';
 import { APP_ROUTES, PARAM_REDIRECTS, REDIRECTS } from './routes';
 
@@ -133,7 +141,9 @@ const router = createBrowserRouter(
           path: r.path,
           element: (
             <RouteErrorBoundary viewId={r.key}>
-              {PAGES[r.key] ?? <Stub label={r.label} phase={r.phase} />}
+              <React.Suspense fallback={<Pending label={r.label.toLowerCase()} />}>
+                {PAGES[r.key] ?? <Stub label={r.label} phase={r.phase} />}
+              </React.Suspense>
             </RouteErrorBoundary>
           ),
         })),
