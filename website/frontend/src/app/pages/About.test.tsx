@@ -93,6 +93,10 @@ describe('About', () => {
     // Probes: every row fires a real GET; the stub answers 200.
     expect(screen.getByText('Recent Matches')).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByText(/200 · \d+ ms/).length).toBe(API_PROBES.length));
+    // the 14-day window and the most active players, answered since phase 1 and shown since 2026-09-09
+    expect(screen.getByText(/most active, all time/)).toBeInTheDocument();
+    expect(screen.getByText(/\.olz · 1,793 rounds/)).toBeInTheDocument();
+    expect(screen.getByText(/kills, last 14 days/)).toBeInTheDocument();
   });
 
   it('marks failed probes without taking the page down', async () => {
@@ -202,6 +206,23 @@ describe('About — diagnostics panel, degraded states', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText(/the timing query did not run/)).toBeInTheDocument());
     expect(screen.queryByText('dead time, as stored')).toBeNull();
+  });
+
+  it('a 14-day figure whose query failed says unavailable, not a quiet fortnight', async () => {
+    // records_overview answers 200 with status "partial", a zero and the
+    // metric's LABEL in failed_metrics; the cell reads the label of the
+    // field it renders (Codex on #1003).
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/stats/overview') {
+        return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ...overview, status: 'partial', total_kills_14d: 0, failed_metrics: ['total_kills_recent'] }) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/kills, last 14 days/)).toBeInTheDocument());
+    const cell = screen.getByText(/kills, last 14 days/).parentElement!;
+    expect(cell.textContent).toContain('unavailable');
   });
 
   it('shows a monitoring table that failed as unavailable, not as zero rows', async () => {

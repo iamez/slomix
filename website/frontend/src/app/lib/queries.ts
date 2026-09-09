@@ -18,6 +18,7 @@ import type {
   BetsMarketCurrent,
   MarketOpenResponse,
   MemoryCard,
+  PlayerCard,
   PlayerVsStats,
   SkillPlayerForm,
   SkillPlayerHistory,
@@ -2150,6 +2151,18 @@ export function usePlayerVsStats(guid: string, sessionId: number) {
 }
 
 /** The career keepsake behind the profile's "memory card" section. */
+/** The hover card of the legacy player list, on the profile since 2026-09-08. */
+export function usePlayerCard(guid: string | null) {
+  return useQuery({
+    queryKey: ['player-card', guid],
+    enabled: !!guid,
+    retry: false,
+    queryFn: () => apiGet('/api/players/{identifier}/card', {
+      pathParams: { identifier: guid! },
+    }) as Promise<PlayerCard>,
+  });
+}
+
 export function useMemoryCard(guid: string | null) {
   return useQuery({
     queryKey: ['memory-card', guid],

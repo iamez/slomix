@@ -293,6 +293,37 @@ describe('SessionStory (the session page story tab)', () => {
     expect(screen.getAllByText(/objective specialist/).length).toBeGreaterThan(0);
   });
 
+  it('prints the scope once, the winner and the maps completed, and the dropped fields of movement, lurker and win contribution', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/scope: gaming session · 12 accepted rounds · 2026-08-27 · 4 distinct maps .* · last round 2026-08-2\d \d\d:\d\d UTC/)).toBeInTheDocument());
+    expect(screen.getByText(/Team B took the evening · 6 maps completed/)).toBeInTheDocument();
+    expect(screen.getAllByText(/lives · \d+ u after a spawn · \d+:\d\d alive/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/alone = no teammate within 500 u, sampled every 1,000 ms · read 937 of 937 eligible tracks — tracks of ≤ 2 s/)).toBeInTheDocument();
+    expect(screen.getAllByText(/pwc by round/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/MVP picked by waa_bayes/)).toBeInTheDocument();
+    // a multikill's kills arrive as a LIST on the wire — counted, not printed as an object
+    expect(screen.getAllByText(/\d+ kills/).length).toBeGreaterThan(0);
+    expect(screen.getByText(/enabler counts a teammate's kill within ±5 s and 500 u/)).toBeInTheDocument();
+  });
+
+  it('keeps the scope line when the box score fails, and counts the multikill in the moments list', async () => {
+    renderPage(withOverride('/storytelling/box-score', () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response)));
+    // the scope comes from the next storytelling answer that carries one
+    await waitFor(() => expect(screen.getByText(/scope: gaming session · 12 accepted rounds/)).toBeInTheDocument());
+    // and the kills line sits in the moments list, not among the escorts
+    const moments = document.querySelector('[data-parity="story.moments"]') as HTMLElement;
+    await waitFor(() => expect(moments?.textContent).toMatch(/\d+ kills/));
+    expect(document.querySelector('[data-parity="story.escorts"]')?.textContent ?? '').not.toMatch(/\d+ kills/);
+  });
+
+  it('a kill recorded without its combat position shows no 0v0 and no killer at 0 hp', async () => {
+    const zeroed = { ...kisDetails, kills: kisDetails.kills.map((k, i) => (i === 0 ? { ...k, axis_alive: 0, allies_alive: 0, killer_health: 0 } : k)) };
+    renderPage(withOverride('/storytelling/kill-impact/details', jsonOnce(zeroed)));
+    await waitFor(() => expect(screen.getAllByText(/alive/).length).toBeGreaterThan(0));
+    expect(document.body.textContent).not.toContain('0v0 alive');
+    expect(document.body.textContent).not.toContain('killer at 0 hp');
+  });
+
   it('says how much of the synergy composite was defaulted', async () => {
     const defaulted = { ...synergy, defaulted_players_count: 2 };
     renderPage(withOverride('/storytelling/synergy', () =>

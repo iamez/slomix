@@ -8,7 +8,7 @@
  "method": "keys of each called endpoint's recorded fixture (top level + one below) vs a name match over the comment-stripped source REACHABLE FROM THAT ENDPOINT'S CALLERS (the files calling its hook, and their imports); a name match is an upper bound on rendering",
  "scope": {
   "/api/availability": "13 files reachable from the endpoint's callers",
-  "/api/availability/access": "11 files reachable from the endpoint's callers",
+  "/api/availability/access": "12 files reachable from the endpoint's callers",
   "/api/availability/promotion-preferences": "8 files reachable from the endpoint's callers",
   "/api/availability/promotions/campaign": "8 files reachable from the endpoint's callers",
   "/api/availability/promotions/preview": "8 files reachable from the endpoint's callers",
@@ -18,10 +18,10 @@
   "/api/awards/leaderboard": "5 files reachable from the endpoint's callers",
   "/api/bets/market/current": "8 files reachable from the endpoint's callers",
   "/api/bets/wallet": "8 files reachable from the endpoint's callers",
-  "/api/build": "7 files reachable from the endpoint's callers",
+  "/api/build": "8 files reachable from the endpoint's callers",
   "/api/challenges/current": "12 files reachable from the endpoint's callers",
-  "/api/datasets": "7 files reachable from the endpoint's callers",
-  "/api/diagnostics": "7 files reachable from the endpoint's callers",
+  "/api/datasets": "8 files reachable from the endpoint's callers",
+  "/api/diagnostics": "8 files reachable from the endpoint's callers",
   "/api/diagnostics/storytelling-completeness": "5 files reachable from the endpoint's callers",
   "/api/greatshot": "9 files reachable from the endpoint's callers",
   "/api/greatshot/{demo_id}": "9 files reachable from the endpoint's callers",
@@ -35,43 +35,44 @@
   "/api/planning/today": "8 files reachable from the endpoint's callers",
   "/api/player/{guid}/vs-stats": "13 files reachable from the endpoint's callers",
   "/api/player/{player_name}/matches": "11 files reachable from the endpoint's callers",
+  "/api/players/{identifier}/card": "11 files reachable from the endpoint's callers",
   "/api/players/{identifier}/memory-card": "11 files reachable from the endpoint's callers",
   "/api/players/{identifier}/profile": "13 files reachable from the endpoint's callers",
   "/api/players/{identifier}/wrapped": "7 files reachable from the endpoint's callers",
-  "/api/proximity/aim-lock": "20 files reachable from the endpoint's callers",
+  "/api/proximity/aim-lock": "21 files reachable from the endpoint's callers",
   "/api/proximity/carrier-events": "14 files reachable from the endpoint's callers",
   "/api/proximity/carrier-kills": "14 files reachable from the endpoint's callers",
   "/api/proximity/carrier-returns": "14 files reachable from the endpoint's callers",
-  "/api/proximity/classes": "20 files reachable from the endpoint's callers",
-  "/api/proximity/cohesion": "20 files reachable from the endpoint's callers",
-  "/api/proximity/combat-position-stats": "20 files reachable from the endpoint's callers",
+  "/api/proximity/classes": "21 files reachable from the endpoint's callers",
+  "/api/proximity/cohesion": "21 files reachable from the endpoint's callers",
+  "/api/proximity/combat-position-stats": "21 files reachable from the endpoint's callers",
   "/api/proximity/combat-positions/danger-zones": "11 files reachable from the endpoint's callers",
   "/api/proximity/combat-positions/heatmap": "11 files reachable from the endpoint's callers",
   "/api/proximity/combat-positions/kill-lines": "11 files reachable from the endpoint's callers",
-  "/api/proximity/competitive/clutch": "20 files reachable from the endpoint's callers",
-  "/api/proximity/competitive/first-blood": "20 files reachable from the endpoint's callers",
-  "/api/proximity/competitive/man-advantage": "20 files reachable from the endpoint's callers",
-  "/api/proximity/competitive/personal-bests": "20 files reachable from the endpoint's callers",
+  "/api/proximity/competitive/clutch": "21 files reachable from the endpoint's callers",
+  "/api/proximity/competitive/first-blood": "21 files reachable from the endpoint's callers",
+  "/api/proximity/competitive/man-advantage": "21 files reachable from the endpoint's callers",
+  "/api/proximity/competitive/personal-bests": "21 files reachable from the endpoint's callers",
   "/api/proximity/competitive/player-card": "11 files reachable from the endpoint's callers",
-  "/api/proximity/competitive/side-splits": "20 files reachable from the endpoint's callers",
-  "/api/proximity/competitive/stagger": "20 files reachable from the endpoint's callers",
+  "/api/proximity/competitive/side-splits": "21 files reachable from the endpoint's callers",
+  "/api/proximity/competitive/stagger": "21 files reachable from the endpoint's callers",
   "/api/proximity/competitive/wave-cycles": "11 files reachable from the endpoint's callers",
   "/api/proximity/construction-events": "14 files reachable from the endpoint's callers",
-  "/api/proximity/crossfire-angles": "20 files reachable from the endpoint's callers",
+  "/api/proximity/crossfire-angles": "21 files reachable from the endpoint's callers",
   "/api/proximity/duos": "11 files reachable from the endpoint's callers",
-  "/api/proximity/engagements": "11 files reachable from the endpoint's callers",
+  "/api/proximity/engagements": "12 files reachable from the endpoint's callers",
   "/api/proximity/escort-credits": "14 files reachable from the endpoint's callers",
-  "/api/proximity/event/{event_id}": "11 files reachable from the endpoint's callers",
-  "/api/proximity/events": "11 files reachable from the endpoint's callers",
-  "/api/proximity/focus-fire": "20 files reachable from the endpoint's callers",
+  "/api/proximity/event/{event_id}": "12 files reachable from the endpoint's callers",
+  "/api/proximity/events": "12 files reachable from the endpoint's callers",
+  "/api/proximity/focus-fire": "21 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions": "11 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions/by-weapon": "11 files reachable from the endpoint's callers",
   "/api/proximity/hit-regions/headshot-rates": "13 files reachable from the endpoint's callers",
   "/api/proximity/hotzones": "11 files reachable from the endpoint's callers",
   "/api/proximity/kill-outcomes": "13 files reachable from the endpoint's callers",
   "/api/proximity/kill-outcomes/player-stats": "11 files reachable from the endpoint's callers",
-  "/api/proximity/leaderboards": "20 files reachable from the endpoint's callers",
-  "/api/proximity/lua-trades": "20 files reachable from the endpoint's callers",
+  "/api/proximity/leaderboards": "21 files reachable from the endpoint's callers",
+  "/api/proximity/lua-trades": "21 files reachable from the endpoint's callers",
   "/api/proximity/movement-stats": "11 files reachable from the endpoint's callers",
   "/api/proximity/movers": "11 files reachable from the endpoint's callers",
   "/api/proximity/objective-focus": "14 files reachable from the endpoint's callers",
@@ -86,17 +87,17 @@
   "/api/proximity/prox-scores": "11 files reachable from the endpoint's callers",
   "/api/proximity/prox-scores/formula": "11 files reachable from the endpoint's callers",
   "/api/proximity/push-deaths/heatmap": "11 files reachable from the endpoint's callers",
-  "/api/proximity/pushes": "20 files reachable from the endpoint's callers",
-  "/api/proximity/quality": "20 files reachable from the endpoint's callers",
-  "/api/proximity/reactions": "20 files reachable from the endpoint's callers",
-  "/api/proximity/revives": "20 files reachable from the endpoint's callers",
+  "/api/proximity/pushes": "21 files reachable from the endpoint's callers",
+  "/api/proximity/quality": "21 files reachable from the endpoint's callers",
+  "/api/proximity/reactions": "21 files reachable from the endpoint's callers",
+  "/api/proximity/revives": "21 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/team-comparison": "9 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/timeline": "11 files reachable from the endpoint's callers",
   "/api/proximity/round/{round_id}/tracks": "11 files reachable from the endpoint's callers",
-  "/api/proximity/scopes": "20 files reachable from the endpoint's callers",
-  "/api/proximity/spawn-timing": "20 files reachable from the endpoint's callers",
+  "/api/proximity/scopes": "21 files reachable from the endpoint's callers",
+  "/api/proximity/spawn-timing": "21 files reachable from the endpoint's callers",
   "/api/proximity/summary": "13 files reachable from the endpoint's callers",
-  "/api/proximity/support-summary": "20 files reachable from the endpoint's callers",
+  "/api/proximity/support-summary": "21 files reachable from the endpoint's callers",
   "/api/proximity/teamplay": "13 files reachable from the endpoint's callers",
   "/api/proximity/trades/events": "13 files reachable from the endpoint's callers",
   "/api/proximity/trades/player-stats": "13 files reachable from the endpoint's callers",
@@ -127,7 +128,7 @@
   "/api/skill/player/{identifier}": "11 files reachable from the endpoint's callers",
   "/api/skill/player/{identifier}/form": "11 files reachable from the endpoint's callers",
   "/api/skill/player/{identifier}/history": "11 files reachable from the endpoint's callers",
-  "/api/skill/ssr": "21 files reachable from the endpoint's callers",
+  "/api/skill/ssr": "22 files reachable from the endpoint's callers",
   "/api/stats/activity-calendar": "12 files reachable from the endpoint's callers",
   "/api/stats/last-session": "12 files reachable from the endpoint's callers",
   "/api/stats/leaderboard": "5 files reachable from the endpoint's callers",
@@ -174,13 +175,13 @@
   "/api/storytelling/movement": "10 files reachable from the endpoint's callers",
   "/api/storytelling/narrative": "10 files reachable from the endpoint's callers",
   "/api/storytelling/player-narratives": "10 files reachable from the endpoint's callers",
-  "/api/storytelling/scopes": "global: no caller found for the path literal, matched over the whole app",
+  "/api/storytelling/scopes": "dead: no caller found for the path literal — nothing reads it, every row stays unread",
   "/api/storytelling/space-created": "10 files reachable from the endpoint's callers",
   "/api/storytelling/synergy": "12 files reachable from the endpoint's callers",
   "/api/storytelling/useless-defense-deaths": "10 files reachable from the endpoint's callers",
   "/api/storytelling/win-contribution": "10 files reachable from the endpoint's callers",
   "/api/storytelling/win-contribution/formula": "10 files reachable from the endpoint's callers",
-  "/api/system/overview": "8 files reachable from the endpoint's callers",
+  "/api/system/overview": "9 files reachable from the endpoint's callers",
   "/api/uploads": "6 files reachable from the endpoint's callers",
   "/api/uploads/resumable/{session_id}/finalize": "3 files reachable from the endpoint's callers",
   "/api/uploads/{upload_id}": "6 files reachable from the endpoint's callers",
@@ -188,11 +189,11 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2936,
-  "unread": 650,
-  "dropped": 63,
-  "endpoints": 179,
-  "endpoints_fully_read": 49,
+  "read": 3200,
+  "unread": 420,
+  "dropped": 69,
+  "endpoints": 180,
+  "endpoints_fully_read": 73,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -262,8 +263,8 @@
    "dropped": 0
   },
   "/api/datasets": {
-   "read": 8,
-   "unread": 6,
+   "read": 14,
+   "unread": 0,
    "dropped": 1
   },
   "/api/diagnostics": {
@@ -277,14 +278,14 @@
    "dropped": 0
   },
   "/api/greatshot": {
-   "read": 12,
-   "unread": 3,
+   "read": 14,
+   "unread": 1,
    "dropped": 0
   },
   "/api/greatshot/{demo_id}": {
-   "read": 29,
-   "unread": 21,
-   "dropped": 1
+   "read": 39,
+   "unread": 10,
+   "dropped": 2
   },
   "/api/greatshot/{demo_id}/crossref": {
    "read": 16,
@@ -292,8 +293,8 @@
    "dropped": 1
   },
   "/api/greatshot/{demo_id}/status": {
-   "read": 4,
-   "unread": 2,
+   "read": 6,
+   "unread": 0,
    "dropped": 0
   },
   "/api/hall-of-fame": {
@@ -336,6 +337,11 @@
    "unread": 2,
    "dropped": 0
   },
+  "/api/players/{identifier}/card": {
+   "read": 31,
+   "unread": 0,
+   "dropped": 4
+  },
   "/api/players/{identifier}/memory-card": {
    "read": 12,
    "unread": 4,
@@ -357,8 +363,8 @@
    "dropped": 0
   },
   "/api/proximity/carrier-events": {
-   "read": 23,
-   "unread": 12,
+   "read": 25,
+   "unread": 10,
    "dropped": 0
   },
   "/api/proximity/carrier-kills": {
@@ -367,8 +373,8 @@
    "dropped": 0
   },
   "/api/proximity/carrier-returns": {
-   "read": 14,
-   "unread": 10,
+   "read": 24,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/classes": {
@@ -442,8 +448,8 @@
    "dropped": 0
   },
   "/api/proximity/construction-events": {
-   "read": 13,
-   "unread": 5,
+   "read": 14,
+   "unread": 4,
    "dropped": 0
   },
   "/api/proximity/crossfire-angles": {
@@ -467,13 +473,13 @@
    "dropped": 0
   },
   "/api/proximity/event/{event_id}": {
-   "read": 32,
-   "unread": 30,
-   "dropped": 0
+   "read": 60,
+   "unread": 2,
+   "dropped": 1
   },
   "/api/proximity/events": {
-   "read": 23,
-   "unread": 9,
+   "read": 25,
+   "unread": 7,
    "dropped": 0
   },
   "/api/proximity/focus-fire": {
@@ -597,8 +603,8 @@
    "dropped": 0
   },
   "/api/proximity/quality": {
-   "read": 22,
-   "unread": 13,
+   "read": 32,
+   "unread": 3,
    "dropped": 1
   },
   "/api/proximity/reactions": {
@@ -647,8 +653,8 @@
    "dropped": 0
   },
   "/api/proximity/teamplay": {
-   "read": 28,
-   "unread": 14,
+   "read": 40,
+   "unread": 2,
    "dropped": 0
   },
   "/api/proximity/trades/events": {
@@ -672,8 +678,8 @@
    "dropped": 0
   },
   "/api/proximity/vehicle-progress": {
-   "read": 8,
-   "unread": 9,
+   "read": 15,
+   "unread": 2,
    "dropped": 0
   },
   "/api/proximity/weapon-accuracy": {
@@ -837,8 +843,8 @@
    "dropped": 0
   },
   "/api/stats/overview": {
-   "read": 12,
-   "unread": 6,
+   "read": 18,
+   "unread": 0,
    "dropped": 0
   },
   "/api/stats/player/{player_name}": {
@@ -877,7 +883,7 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/basics": {
-   "read": 40,
+   "read": 44,
    "unread": 1,
    "dropped": 0
   },
@@ -952,23 +958,23 @@
    "dropped": 0
   },
   "/api/storytelling/best-lives": {
-   "read": 16,
-   "unread": 5,
+   "read": 21,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/box-score": {
-   "read": 19,
-   "unread": 7,
+   "read": 26,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/camp-profile": {
-   "read": 29,
-   "unread": 6,
+   "read": 35,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/enabler": {
-   "read": 15,
-   "unread": 8,
+   "read": 23,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/formula": {
@@ -977,83 +983,83 @@
    "dropped": 19
   },
   "/api/storytelling/gravity": {
-   "read": 15,
-   "unread": 7,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/kill-impact": {
-   "read": 27,
-   "unread": 6,
+   "read": 32,
+   "unread": 1,
    "dropped": 17
   },
   "/api/storytelling/kill-impact/details": {
-   "read": 34,
-   "unread": 12,
+   "read": 46,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/kill-matrix": {
-   "read": 17,
-   "unread": 5,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/lurker-profile": {
-   "read": 19,
-   "unread": 8,
+   "read": 27,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/moments": {
-   "read": 18,
-   "unread": 7,
+   "read": 25,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/momentum": {
-   "read": 9,
-   "unread": 5,
+   "read": 14,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/momentum-session": {
-   "read": 20,
-   "unread": 5,
+   "read": 25,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/movement": {
-   "read": 13,
-   "unread": 9,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/narrative": {
-   "read": 11,
-   "unread": 5,
+   "read": 16,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/player-narratives": {
-   "read": 11,
-   "unread": 6,
+   "read": 17,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/scopes": {
-   "read": 4,
-   "unread": 4,
+   "read": 0,
+   "unread": 8,
    "dropped": 0
   },
   "/api/storytelling/space-created": {
-   "read": 15,
-   "unread": 6,
+   "read": 21,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/synergy": {
-   "read": 15,
-   "unread": 5,
+   "read": 20,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/useless-defense-deaths": {
-   "read": 17,
-   "unread": 5,
+   "read": 22,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/win-contribution": {
-   "read": 19,
-   "unread": 10,
+   "read": 29,
+   "unread": 0,
    "dropped": 0
   },
   "/api/storytelling/win-contribution/formula": {
@@ -1067,8 +1073,8 @@
    "dropped": 0
   },
   "/api/uploads": {
-   "read": 15,
-   "unread": 4,
+   "read": 18,
+   "unread": 1,
    "dropped": 0
   },
   "/api/uploads/resumable/{session_id}/finalize": {
@@ -1077,8 +1083,8 @@
    "dropped": 0
   },
   "/api/uploads/{upload_id}": {
-   "read": 14,
-   "unread": 6,
+   "read": 20,
+   "unread": 0,
    "dropped": 0
   },
   "/api/voice-activity/current": {
@@ -1522,7 +1528,7 @@
   {
    "endpoint": "/api/datasets",
    "key": "datasets.collected_by",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -1537,17 +1543,17 @@
   {
    "endpoint": "/api/datasets",
    "key": "datasets.default_visible_on",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
    "key": "datasets.depends_on",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
    "key": "datasets.display_toggle_default",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -1567,12 +1573,12 @@
   {
    "endpoint": "/api/datasets",
    "key": "datasets.parity_key",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
    "key": "datasets.user_overridable",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/datasets",
@@ -1887,12 +1893,12 @@
   {
    "endpoint": "/api/greatshot",
    "key": "items.processing_finished_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot",
    "key": "items.processing_started_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot",
@@ -1932,7 +1938,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "analysis.events_total",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -1982,7 +1988,8 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "highlights.clip_demo_path",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "the server path of the cut clip; clip_download is built from the same row, so the path is the link's title and never a state of its own (Codex on #1003)"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2047,12 +2054,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.crossref_confidence",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.crossref_match_details",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2067,7 +2074,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.extension",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2102,7 +2109,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.matched_round_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2112,7 +2119,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.mod_version",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2122,7 +2129,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "metadata.profile_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2137,7 +2144,7 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "player_stats",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2148,12 +2155,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "processing_finished_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "processing_started_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",
@@ -2304,12 +2311,12 @@
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
    "key": "processing_finished_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
    "key": "processing_started_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}/status",
@@ -2965,6 +2972,185 @@
   {
    "endpoint": "/api/player/{player_name}/matches",
    "key": "xp",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "archetype",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.color",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.emoji",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.threshold",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.title",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "badges.type",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "career.sessions",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.deaths",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.dpm",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.headshot_pct",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.kd",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.kills",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.revives",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.rounds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "form.time_dead_pct",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "guid",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "name",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.dpm",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.kd",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.revives",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "percentiles.survival",
+   "status": "dropped",
+   "reason": "iterated: PlayerCardSection prints every percentile through Object.entries, so the pool's keys are not named in the source"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.games_rated",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.tier",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.trend",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "rating.value",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "small_sample",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "sparkline_dpm",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "status",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/players/{identifier}/card",
+   "key": "window_days",
    "status": "read"
   },
   {
@@ -3910,7 +4096,7 @@
   {
    "endpoint": "/api/proximity/carrier-events",
    "key": "events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-events",
@@ -3945,7 +4131,7 @@
   {
    "endpoint": "/api/proximity/carrier-events",
    "key": "events.flag_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-events",
@@ -4060,27 +4246,27 @@
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.drop_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.drop_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.drop_z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.flag_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
@@ -4090,27 +4276,27 @@
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.original_carrier_guid",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.return_delay_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.return_time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.returner_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
    "key": "events.returner_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/carrier-returns",
@@ -5430,7 +5616,7 @@
   {
    "endpoint": "/api/proximity/construction-events",
    "key": "events",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/construction-events",
@@ -5825,32 +6011,32 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.sprint",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.stance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.weapon",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5865,7 +6051,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attacker_path.z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5880,12 +6066,12 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attackers.first_hit_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attackers.got_kill",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5900,7 +6086,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "attackers.last_hit_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5930,17 +6116,17 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "end_time_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "end_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "end_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5960,7 +6146,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "num_attackers",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -5975,12 +6161,18 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "round_date",
-   "status": "unread"
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/proximity/event/{event_id}",
+   "key": "round_duration_seconds",
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "round_end_unix",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "the round's end wall time; the page prints the canonical round_duration_seconds instead of end − start, which includes pauses and reads 0:00 on zero sentinels (Codex on #1004)"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6010,17 +6202,17 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "start_time_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "start_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "start_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6040,7 +6232,7 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_guid",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6060,32 +6252,32 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.sprint",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.stance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.time",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.weapon",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6100,12 +6292,12 @@
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_path.z",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
    "key": "target_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/event/{event_id}",
@@ -6185,7 +6377,7 @@
   {
    "endpoint": "/api/proximity/events",
    "key": "events.round_date",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/events",
@@ -6210,7 +6402,7 @@
   {
    "endpoint": "/api/proximity/events",
    "key": "events.target_team",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/events",
@@ -8912,17 +9104,17 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "cache_freshness",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "cache_freshness.latest_context_created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "cache_freshness.latest_kis_created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -8942,12 +9134,12 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "linkage",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "linkage.breach_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -9002,22 +9194,22 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.expected_round_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.latest_created_at",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.missing_existing_round_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.present_proximity_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -9032,7 +9224,7 @@
   {
    "endpoint": "/api/proximity/quality",
    "key": "round_correlation.unpaired_round_sides",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/quality",
@@ -10083,7 +10275,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "crossfire_kills.crossfire_final_blows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10098,7 +10290,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "crossfire_kills.focus_escapes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10118,12 +10310,12 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "crossfire_kills.times_focused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10133,7 +10325,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.crossfire_final_blows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10148,7 +10340,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.focus_escapes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10163,12 +10355,12 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.survival_rate_pct",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "focus_survival.times_focused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10238,7 +10430,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10248,7 +10440,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync.crossfire_final_blows",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10263,7 +10455,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync.focus_escapes",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/teamplay",
@@ -10278,7 +10470,7 @@
   {
    "endpoint": "/api/proximity/teamplay",
    "key": "sync.times_focused",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/trades/events",
@@ -10688,12 +10880,12 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.end_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.end_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10703,7 +10895,7 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.final_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10713,7 +10905,7 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.max_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10728,12 +10920,12 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.start_x",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.start_y",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/vehicle-progress",
@@ -10753,7 +10945,7 @@
   {
    "endpoint": "/api/proximity/vehicle-progress",
    "key": "vehicles.vehicle_type",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/weapon-accuracy",
@@ -14067,7 +14259,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "most_active_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14082,7 +14274,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "most_active_overall",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14102,7 +14294,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "players_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14117,7 +14309,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "rounds_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14137,7 +14329,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "sessions_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14147,7 +14339,7 @@
   {
    "endpoint": "/api/stats/overview",
    "key": "total_kills_14d",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/stats/overview",
@@ -14972,6 +15164,26 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/awards",
    "key": "rounds_with_awards",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.end",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.span_seconds",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/stats/session/{gaming_session_id}/basics",
+   "key": "clock.start",
    "status": "read"
   },
   {
@@ -16357,17 +16569,17 @@
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
@@ -16377,12 +16589,12 @@
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/best-lives",
@@ -16477,7 +16689,7 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "maps_completed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
@@ -16487,17 +16699,17 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
@@ -16507,12 +16719,12 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/box-score",
@@ -16532,7 +16744,7 @@
   {
    "endpoint": "/api/storytelling/box-score",
    "key": "winner_name",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16627,17 +16839,17 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16647,12 +16859,12 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16697,7 +16909,7 @@
   {
    "endpoint": "/api/storytelling/camp-profile",
    "key": "thresholds.spawn_skip_s",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/camp-profile",
@@ -16717,7 +16929,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "distance_threshold",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16762,7 +16974,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "players.total_assists",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16777,17 +16989,17 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16797,12 +17009,12 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/enabler",
@@ -16822,7 +17034,7 @@
   {
    "endpoint": "/api/storytelling/enabler",
    "key": "time_window_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/formula",
@@ -17041,7 +17253,7 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "players.alive_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17081,7 +17293,7 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "players.total_engaged_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17091,17 +17303,17 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17111,12 +17323,12 @@
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/gravity",
@@ -17348,17 +17560,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17368,12 +17580,12 @@
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact",
@@ -17413,17 +17625,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.allies_alive",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.axis_alive",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.base_impact",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17453,17 +17665,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.is_carrier_kill",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.is_crossfire",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.is_during_push",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17483,7 +17695,7 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "kills.killer_health",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17553,17 +17765,17 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17573,12 +17785,12 @@
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-impact/details",
@@ -17698,17 +17910,17 @@
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
@@ -17718,12 +17930,12 @@
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/kill-matrix",
@@ -17768,7 +17980,7 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "downsample_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17783,7 +17995,7 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "players.alive_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17828,17 +18040,17 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17848,12 +18060,12 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17868,7 +18080,7 @@
   {
    "endpoint": "/api/storytelling/lurker-profile",
    "key": "solo_radius",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/lurker-profile",
@@ -17888,7 +18100,7 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "moments.duration_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -17943,7 +18155,7 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "moments.victims",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -17953,17 +18165,17 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -17973,12 +18185,12 @@
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/moments",
@@ -18028,17 +18240,17 @@
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
@@ -18048,12 +18260,12 @@
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum",
@@ -18138,17 +18350,17 @@
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
@@ -18158,12 +18370,12 @@
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/momentum-session",
@@ -18208,12 +18420,12 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.alive_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.avg_speed",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18228,7 +18440,7 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.lives",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18243,7 +18455,7 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "players.post_spawn_distance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18263,17 +18475,17 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18283,12 +18495,12 @@
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/movement",
@@ -18318,17 +18530,17 @@
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
@@ -18338,12 +18550,12 @@
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/narrative",
@@ -18418,7 +18630,7 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "player_narratives.top_trait",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18428,17 +18640,17 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18448,12 +18660,12 @@
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/player-narratives",
@@ -18478,7 +18690,7 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/scopes",
@@ -18493,12 +18705,12 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.end_date",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.gaming_session_id",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/scopes",
@@ -18508,7 +18720,7 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.start_date",
-   "status": "read"
+   "status": "unread"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18568,17 +18780,17 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18588,12 +18800,12 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/space-created",
@@ -18613,7 +18825,7 @@
   {
    "endpoint": "/api/storytelling/space-created",
    "key": "window_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18643,17 +18855,17 @@
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18663,12 +18875,12 @@
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/synergy",
@@ -18768,17 +18980,17 @@
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
@@ -18788,12 +19000,12 @@
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/useless-defense-deaths",
@@ -18843,7 +19055,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "mvp.selected_by",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -18868,7 +19080,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.components",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -18883,7 +19095,7 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.per_round",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -18903,12 +19115,12 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.total_rounds",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "players.waa",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -18928,17 +19140,17 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.accepted_round_count",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.dates",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.distinct_map_names",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -18948,12 +19160,12 @@
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.kind",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
    "key": "scope.last_round_unix",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/storytelling/win-contribution",
@@ -19139,7 +19351,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.extension",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
@@ -19159,7 +19371,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.poster_url",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
@@ -19174,7 +19386,7 @@
   {
    "endpoint": "/api/uploads",
    "key": "items.uploader_discord_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads",
@@ -19244,7 +19456,7 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "content_hash",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
@@ -19274,7 +19486,7 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "extension",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
@@ -19294,17 +19506,17 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "is_playable",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "mime_type",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "poster_url",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",
@@ -19324,7 +19536,7 @@
   {
    "endpoint": "/api/uploads/{upload_id}",
    "key": "uploader_discord_id",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/uploads/{upload_id}",

@@ -314,6 +314,11 @@ export function UploadDetailPage() {
           {d.download_count != null && <> · {figure(d.download_count)} downloads</>}
           {d.expires_at != null && <> · expires {d.expires_at.slice(0, 10)}</>}
         </Meta>
+        <Meta>
+          {d.mime_type ?? 'type unknown'} · {d.extension} · sha256 {d.content_hash.slice(0, 12)}…
+          {d.is_playable ? ' · plays in the browser' : ' · download only'}{d.poster_url ? ' · has a poster' : ''}
+          {d.uploader_discord_id ? ` · uploader id …${d.uploader_discord_id.slice(-6)}` : ''}
+        </Meta>
       </Stack>
       {d.description && <p style={{ maxWidth: '44em', margin: 0 }}>{d.description}</p>}
       {d.tags.length > 0 && (

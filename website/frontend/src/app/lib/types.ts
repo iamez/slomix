@@ -443,6 +443,31 @@ export interface MatchDetails {
   player_count: number;
 }
 
+/** GET /api/players/{identifier}/card — the hover card the legacy player
+ *  list showed: the rating, the archetype, a 90-day form with percentiles
+ *  against the pool, a dpm sparkline, the badges earned and the career
+ *  totals. Recorded 2026-09-08 (corpus: api_players_identifier_card.json).
+ *  ⚠️ Its percentiles are NOT the rating components' — a different pool
+ *  and window (measured 2026-09-06: dpm 57 / survival 64 / revives 79
+ *  against 58.9 / 83.9 / 44.6 for one player). */
+export interface PlayerCard {
+  status: string;
+  guid: string;
+  name: string;
+  /** Present with null VALUES for a player without a rating row — not a
+   *  null object (Codex on #1001). */
+  rating: { value: number | null; tier: string | null; games_rated: number | null; trend: string | null } | null;
+  archetype: string | null;
+  window_days: number;
+  small_sample: boolean;
+  form: { rounds: number; kills: number; deaths: number; kd: number; dpm: number; revives: number; headshot_pct: number; time_dead_pct: number };
+  /** null values under small_sample (1–9 rounds in the window). */
+  percentiles: Record<string, number | null>;
+  sparkline_dpm: number[];
+  badges: { type: string; threshold: number; emoji: string; title: string; color: string }[];
+  career: { kills: number; sessions: number };
+}
+
 /** GET /api/seasons/current — corpus: api_seasons_current.json */
 export interface SeasonCurrent {
   id: string;
@@ -1666,6 +1691,7 @@ export interface StoryBoxScore {
   winner: string;
   winner_name: string;
   maps: StoryBoxScoreMap[];
+  scope?: StoryAnswerScope;
 }
 
 /** GET /api/storytelling/moments. `detail` varies by `type` — a carrier run
@@ -1681,6 +1707,12 @@ export interface StoryMoment {
   impact_stars: number;
   time_formatted: string;
   detail?: unknown;
+  /** multikill / team_wipe carry how long the run took and who fell;
+   *  `kills` is the LIST of the kills on that wire (Codex on #1002). */
+  duration_ms?: number;
+  victims?: string[];
+  kills?: unknown[] | number;
+  team?: string;
 }
 
 export interface StoryMoments {
@@ -1723,9 +1755,13 @@ export interface StoryPwcPlayer {
   rounds_lost: number;
   total_rounds: number;
   components: Record<string, number>;
+  /** pwc round by round, with the round's own figures. */
+  per_round?: { round_number: number; map_name: string; pwc: number; won: boolean; kills: number; damage: number; objectives: number; revives: number }[];
 }
 
 export interface StoryWinContribution {
+  /** The same scope object every storytelling answer carries (recorded). */
+  scope?: StoryAnswerScope;
   status: string;
   mvp: {
     guid: string;
@@ -1767,6 +1803,8 @@ export interface StoryKillImpact {
   players: StoryKisPlayer[];
   total: number;
   total_kills: number;
+  /** How the numbers were produced: read_only means served from the table. */
+  compute?: { status: string };
 }
 
 export interface StorySynergyGroup {
@@ -1853,6 +1891,27 @@ export interface StoryRoleBoard {
    *  used; the other boards do not. */
   coverage?: { tracks_fetched: number; tracks_used: number; tracks_skipped: number };
   thresholds?: Record<string, number>;
+  /** The metric's own constants, when the board publishes them: lurker's
+   *  radius and sampling, enabler's window and distance, space's window. */
+  solo_radius?: number;
+  downsample_ms?: number;
+  time_window_ms?: number;
+  distance_threshold?: number;
+  window_ms?: number;
+  /** Every storytelling answer carries the scope it was computed over. */
+  scope?: StoryAnswerScope;
+}
+
+/** The scope block every storytelling endpoint answers with — the same
+ *  object on all of them, so the page prints it once. */
+export interface StoryAnswerScope {
+  kind: string;
+  version?: string;
+  gaming_session_id: number;
+  dates: string[];
+  accepted_round_count: number;
+  distinct_map_names: string[];
+  last_round_unix: number | null;
 }
 
 /** GET /api/storytelling/player-narratives — generated prose per player. */
@@ -2033,6 +2092,9 @@ export interface StoryKisKill {
   is_objective_area: boolean | null;
   kill_time_ms: number | null;
   killer_health: number;
+  /** The flags and the moment's roster the multipliers were read from. */
+  axis_alive?: number | null;
+  allies_alive?: number | null;
 }
 
 export interface StoryKisDetails {
@@ -2091,8 +2153,8 @@ export interface StoryKillMatrixCell {
  *  engine units (the server refuses to invent a metre conversion). Same union
  *  shape as the matrix: the empty branch omits `unit` (movement.py:78-95). */
 export type StoryMovement =
-  | { status: string; available: false; reason: string; players: [] }
-  | { status: string; available: true; unit: string; players: StoryMovementPlayer[] };
+  | { status: string; available: false; reason: string; players: []; scope?: StoryAnswerScope }
+  | { status: string; available: true; unit: string; players: StoryMovementPlayer[]; scope?: StoryAnswerScope };
 
 export interface StoryMovementPlayer {
   guid_short: string;
@@ -2106,8 +2168,10 @@ export interface StoryMovementPlayer {
   peak_speed: number;
   /** null for the same reason as distance_per_min (movement.py:70-73). */
   sprint_pct: number | null;
-  post_spawn_distance: number;
-  alive_ms: number;
+  /** Null on tracks that never carried them (older captures) — movement.py
+   *  keeps the NULL instead of folding it to 0. */
+  post_spawn_distance: number | null;
+  alive_ms: number | null;
 }
 
 /** GET /api/storytelling/useless-defense-deaths — defensive deaths that gave
@@ -2540,6 +2604,11 @@ export interface SessionBasicsPlayer {
 export interface SessionBasics {
   gaming_session_id: number;
   date: string | null;
+  /** When the evening ran — the first counted round's start, the last one's
+   *  end (start + measured duration) and the span; nulls when unrecorded.
+   *  The two fields the date-keyed /api/sessions/{date} carried and the
+   *  gsid family did not (2026-09-08). */
+  clock: { start: string | null; end: string | null; span_seconds: number | null };
   coverage: SessionBasicsCoverage;
   teams: SessionBasicsTeam[];
   players: SessionBasicsPlayer[];
@@ -2981,8 +3050,17 @@ export interface ProxQuality {
     correlation_count?: number;
     complete_count?: number;
     avg_completeness_pct?: number;
+    /** Round SIDES the correlation expected against those proximity holds,
+     *  and the two ways they can be missing (typed 2026-09-10). */
+    expected_round_sides?: number;
+    present_proximity_sides?: number;
+    missing_existing_round_sides?: number;
+    unpaired_round_sides?: number;
+    latest_created_at?: string | null;
   };
   linkage?: { scope: string; status: string; breach_count: number };
+  /** When the KIS and the context caches were last written. */
+  cache_freshness?: { status: string; latest_context_created_at: string | null; latest_kis_created_at: string | null };
   /** RECORDS, not strings — joining them rendered "[object Object]" in the
    *  truth strip precisely when a warning existed (Codex on #861). */
   warnings: { code: string; level: string; message: string }[];
@@ -3316,6 +3394,8 @@ export interface CarrierReturns {
     returner_name: string | null; returner_team: string; flag_team: string;
     original_carrier_guid: string; return_delay_ms: number; map_name: string;
     return_time: number;
+    /** Where the flag lay when it was returned (map units). */
+    drop_x?: number; drop_y?: number; drop_z?: number;
   }[];
   /** avg_delay_ms arrives as NULL (not absent) on an empty scope —
    *  measured on 2026-09-01 and 2026-05-01. */
@@ -3328,6 +3408,9 @@ export interface VehicleProgress {
     vehicle_name: string; vehicle_type: string; map_name: string;
     session_date: string; round_number: number; total_distance: number;
     max_health: number; final_health: number; destroyed_count: number;
+    /** Where the mover began and ended the round (0,0,0 when unrecorded). */
+    start_x?: number; start_y?: number; start_z?: number;
+    end_x?: number; end_y?: number; end_z?: number;
   }[];
 }
 
@@ -3592,6 +3675,8 @@ export interface ProxEventDetail {
   round_number: number;
   round_start_unix: number | null;
   round_end_unix: number | null;
+  /** shared/round_time.py's canonical duration; absent on older recordings. */
+  round_duration_seconds?: number | null;
   map_name: string;
   target_guid: string | null;
   target_name: string | null;
@@ -4160,7 +4245,15 @@ export interface ProxTeamplay {
     avg_delay_ms: number; times_focused: number; focus_escapes: number;
     kill_rate_pct: number;
   }[];
-  sync: unknown[];
+  /** The same row shape as crossfire_kills, ranked by delay; and the
+   *  focus-survival board, which adds the survival share. */
+  sync: ProxTeamplayRow[];
+  focus_survival?: (ProxTeamplayRow & { survival_rate_pct: number })[];
+}
+export interface ProxTeamplayRow {
+  guid: string; name: string | null; crossfire_kills: number;
+  crossfire_participations: number; crossfire_final_blows: number;
+  avg_delay_ms: number; times_focused: number; focus_escapes: number;
 }
 
 export interface ProxTradesSummary {
