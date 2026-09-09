@@ -702,6 +702,13 @@ function MemoryCardSection({ playerId }: { playerId: string }) {
       <Meta>a keepsake of your slomix history — measured against your own past, never a ladder</Meta>
       {card.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="memory card" /></div>}
       {card.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="memory card" /></div>}
+      {card.data != null && (card.data.nights != null || card.data.playing_since != null || card.data.signature_map != null) && (
+        <Meta>
+          {card.data.nights != null ? `${figure(card.data.nights)} nights` : ''}
+          {card.data.playing_since ? ` · playing since ${card.data.playing_since}` : ''}
+          {card.data.signature_map ? ` · signature map ${card.data.signature_map.map_name} (${figure(card.data.signature_map.rounds)} rounds, ${card.data.signature_map.lift_pct >= 0 ? '+' : ''}${figure(card.data.signature_map.lift_pct)}% over your own average)` : ''}
+        </Meta>
+      )}
       {card.data != null && facts.length === 0 && (
         <div style={{ marginTop: 'var(--space-2)' }}><Absent reason="nothing to keep yet — the card needs rounds behind it" /></div>
       )}
@@ -744,6 +751,8 @@ function PlayerForm({ playerId }: { playerId: string }) {
             <Delta pct={comp.delta_pct} />
             <Spark values={comp.series} />
             {d.session_date != null && <Meta>last session {d.session_date}</Meta>}
+            {comp.is_new && <Meta>new to the form window — no earlier baseline to compare against</Meta>}
+            {d.form_weights && <Meta>form weights: {Object.entries(d.form_weights).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}</Meta>}
           </Cluster>
           {/* The server's sentence, not a paraphrase of it. */}
           {d.baseline_desc != null && <Meta>{d.baseline_desc}</Meta>}

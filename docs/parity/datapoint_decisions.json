@@ -46,5 +46,7 @@
  "/api/stats/player/{player_name} stats.games": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice",
  "/api/stats/player/{player_name} stats.playtime_hours": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice",
  "/api/stats/player/{player_name} stats.total_xp": "usePlayerIdentity is read for the identity block only; its stats.* and discord flag duplicate the profile endpoint's lifetime/identity sections (PlayerProfile.tsx, the note at the identity panel) and are deliberately not shown twice",
- "/api/stats/last-session map_counts": "counts ROUNDS per map (an ordinary map is 2, a replayed one 4); the Home card counts plays from the R1 rows of matches instead (Codex on #1011)"
+ "/api/stats/last-session map_counts": "counts ROUNDS per map (an ordinary map is 2, a replayed one 4); the Home card counts plays from the R1 rows of matches instead (Codex on #1011)",
+ "/api/stats/session/{gaming_session_id}/detail players.alive_pct_lua": "the tracker's second Alive% measurement; the players table retired its Lua column on purpose (the page test pins no 'lua' header) and the drift is summarised per session from alive_pct_drift instead",
+ "/api/stats/session/{gaming_session_id}/detail players.alive_pct_diff": "engine minus tracker Alive% — data about the capture, retired from the players table with the Lua column (see alive_pct_lua)"
 }
