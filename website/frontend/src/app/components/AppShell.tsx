@@ -1,4 +1,6 @@
+import { useEffect } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
+import { titleFor } from '../lib/pageTitle';
 import { APP_ROUTES } from '../routes';
 
 /**
@@ -66,6 +68,8 @@ function SubNav({ section }: { section: 'stats' | 'telemetry' }) {
 export function AppShell() {
   const { pathname } = useLocation();
   const section = sectionFor(pathname);
+  // The tab names the page (lib/pageTitle.ts); a link preview reads app.html's static head.
+  useEffect(() => { document.title = titleFor(pathname); }, [pathname]);
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       <div style={{ borderBottom: '1px solid var(--color-rule-900)' }}>
