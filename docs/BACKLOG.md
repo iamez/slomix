@@ -7,6 +7,11 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-09, zvečer) **PREDAJA PRED DOPUSTOM**: `docs/HANDOFF-fable-2026-09-09.md`
+  (owner odsoten ~3 mesece; vnaprejšnji DA je veljal le za to sejo). Mergano danes:
+  #1001–#1011, #1013 (ledger + spider web + bot brez reakcij); dev deployan po
+  vsakem vlaku. Odprto brez ownerja: #956 (1.46.0), Astrini #1012/#979/#969/
+  #966/#965/#964/#962, review #924–#943/#967 (NEVER MERGE).
 - (Fable 5.1, 2026-09-09, 10:30) Owner: »ko vse končaš … celoten spiderweb
   do konca avtonomno«. MERGANO: #1001 (kartica + stenska ura), #1002 (story;
   13 Codex niti). V VLAKU: #1003 → #1004 (12 Codex niti popravljenih), nato

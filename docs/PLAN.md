@@ -22,6 +22,10 @@
 
 ### Kje smo
 
+> **Predaja 9. 9. 2026 (owner ~3 mesece odsoten): `docs/HANDOFF-fable-2026-09-09.md`** — vrstni red za vrnitev
+> je §3 tam (ownerjeve odločitve → merilnik → dolg nazaj strani). Spider web je zaključen (STATUS), release 1.46.0
+> (#956) čaka ownerja, Astrini PR-ji so nedotaknjeni.
+
 Nova SPA (website/frontend/src/app) — faza 5 ZAKLJUČENA, faza 6 v teku.
 Prod ZAMRZNJEN na v1.39.0 (ownerjeva odločitev 2026-08-28); dev soaka;
 deploy NI naloga.
