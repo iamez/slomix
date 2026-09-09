@@ -75,6 +75,7 @@ from proximity.parser.capability_manifest import FEATURE_FLAGS, is_declared
 from proximity.parser.capability_manifest import UNKNOWN as UNKNOWN_STATE
 from shared.round_time import round_duration_sql
 from website.backend.logging_config import get_app_logger
+from website.backend.services import line_of_sight
 from website.backend.services.clock_inputs import (
     clock_validation_payload,
     fetch_clock_lives_and_revives,
@@ -1349,6 +1350,7 @@ def _team_information(information: dict, pov_team: dict, t_ms: int) -> dict:
 async def get_round_snapshot(
     db, round_id: int, t_ms: int, *, max_stale_ms: int | None = None,
     velocity_max_dt_ms: int | None = None, pov: str | None = None,
+    los_provider: line_of_sight.GeometryProvider | None = None,
 ) -> dict[str, Any]:
     """One reconstructed moment of a round, as a plain dict.
 
@@ -1516,6 +1518,20 @@ async def get_round_snapshot(
             }
         else:
             information = {**information, "pov": pov or "world"}
+    # ⭐ Line of sight, world view only (SW-3, services/line_of_sight.py).
+    # Under a point of view the other side's true positions are withheld
+    # above, and a ray to a position the view never received would publish
+    # that position by another name.
+    if pov_team is None and not unresolved_team and snap_players:
+        los_block, los_by_edge = await line_of_sight.annotate(
+            next((t[7] for lives in (tracks or {}).values() for t in lives if t[7]), None),
+            snap.players, snap.edges, provider=los_provider,
+        )
+    else:
+        los_block, los_by_edge = line_of_sight.withheld(
+            "withheld under a point of view: the other side's true positions are not this view's to trace"
+            if tracks else "no linked player_track rows for this round"
+        ), {}
     payload: dict[str, Any] = {
         "round_id": round_id,
         "t_ms": t_ms,
@@ -1615,18 +1631,24 @@ async def get_round_snapshot(
         "edges": [
             {"a": e.a_guid, "b": e.b_guid, "kind": e.kind,
              "distance": round(e.distance, 1),
-             "recently_contested": e.recently_contested}
+             "recently_contested": e.recently_contested,
+             # None for a teammate pair, a down or unplaced player, or any
+             # view but the oracle's — the `line_of_sight` block says which.
+             "line_of_sight": los_by_edge.get((e.a_guid, e.b_guid))}
             for e in snap.edges
             if not withheld
             or (e.a_guid not in withheld and e.b_guid not in withheld)
         ],
+        "line_of_sight": los_block,
         # Each multi-line note is wrapped in its own parentheses. Inside a list
         # of strings, an implicit concatenation is indistinguishable from a
         # forgotten comma — which is exactly what CodeQL flags — so the intent
         # is written out rather than left to the reader (or the next linter).
         "notes": [
-            ("line-of-sight is NOT included: it is an oracle upper bound and "
-             "stays unvalidated until W6 (spec §6, §12)"),
+            ("line-of-sight is an ORACLE DIAGNOSTIC, world view only: a clear "
+             "ray is necessary, not sufficient, for having seen someone (§6.1); "
+             "validated against the engine's world trace by W6 (99.92 %); "
+             "never a belief source"),
             ("recently_contested means an engagement was open, which the tracker "
              "holds for up to 15s after the last hit — not 'under attack'"),
             "distances are geometric separation, not tactical support distance",

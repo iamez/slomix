@@ -8,12 +8,15 @@ import type { SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
 import worldJson from './__fixtures__/api_replay_round_round_id_web.json';
 import povJson from './__fixtures__/api_replay_web_pov_form.json';
+import clearJson from './__fixtures__/api_replay_web_clear_moment.json';
 
 // The clock is a discriminated union (withheld vs known), which a JSON
 // import cannot satisfy at compile time — the check runs at runtime below,
 // like the replay page's event union.
 const world = worldJson as unknown as SpiderWebSnapshot;
 const povForm = povJson as unknown as SpiderWebSnapshot;
+/** The same round at 2:00, recorded 2026-09-09: one opponent pair with a clear ray both ways. */
+const clearMoment = clearJson as unknown as SpiderWebSnapshot;
 
 describe('the recorded snapshots against the clock union', () => {
   it('world clocks are the known form; the pov enemy clock is withheld with a reason', () => {
@@ -330,6 +333,76 @@ describe('SpiderWebPage — the scene (SW-2)', () => {
     const svg = screen.getByLabelText('reconstructed moment');
     expect(svg.querySelectorAll('[data-player]').length).toBe(world.players.length);
     expect(svg.querySelectorAll('path').length).toBe(0);
+  });
+});
+
+describe('SpiderWebPage — line of sight (SW-3)', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+  const serve = (moment: SpiderWebSnapshot) => stub((url) => {
+    if (url.includes('/api/replay/round/11344/web')) return url.includes('pov=') ? povForm : moment;
+    if (url.includes('/assets/maps/geometry/')) return geometry;
+    return undefined;
+  });
+
+  it('the world view names the diagnostic, its validation, and draws it only once asked', async () => {
+    serve(world);
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const los = world.line_of_sight!;
+    expect(los.available).toBe(true);
+    const block = document.querySelector('[data-parity="spider-web.line-of-sight"]')!;
+    expect(block.textContent).toContain(`${los.pairs_traced} opponent pairs traced on ${los.geometry}`);
+    expect(block.textContent).toContain('99.92% agreement');
+    expect(block.textContent).toContain('never a belief');
+    const svg = screen.getByLabelText('reconstructed moment');
+    // off by default: no thread carries a verdict
+    expect(svg.querySelectorAll('[data-los]').length).toBe(0);
+    fireEvent.click(screen.getByRole('button', { name: 'line of sight (oracle)' }));
+    // at 1:00 every opponent pair is blocked both ways (the recording)
+    const traced = world.edges.filter((e) => e.line_of_sight);
+    expect(traced.length).toBe(los.pairs_traced);
+    await waitFor(() => expect(svg.querySelectorAll('[data-los="blocked"]').length).toBe(traced.length));
+    expect(svg.querySelectorAll('[data-los="clear"]').length).toBe(0);
+    // every placed player was traced and nobody was exposed
+    const players = document.querySelector('[data-parity="spider-web.players.table"]') as HTMLElement;
+    expect(screen.getByTitle(/living enemies with at least one clear ray/)).toBeInTheDocument();
+    expect(players.textContent).not.toContain('undefined');
+  });
+
+  it('a clear ray draws as a solid accent thread and counts as exposure for both ends', async () => {
+    serve(clearMoment);
+    renderAt('11344', '?t=120000');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    const clear = clearMoment.edges.filter((e) => e.line_of_sight && e.line_of_sight.a_to_b.status === 'clear' && e.line_of_sight.b_to_a.status === 'clear');
+    expect(clear.length).toBe(1);
+    fireEvent.click(screen.getByRole('button', { name: 'line of sight (oracle)' }));
+    const svg = screen.getByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-los="clear"]').length).toBe(1));
+    const line = svg.querySelector('[data-los="clear"]')!;
+    expect(line.getAttribute('stroke')).toBe('var(--color-accent)');
+    expect(line.getAttribute('stroke-dasharray')).toBeNull();
+    const exposed = Object.entries(clearMoment.line_of_sight!.exposure).filter(([, n]) => n > 0).map(([g]) => g);
+    expect(exposed.sort()).toEqual([clear[0].a, clear[0].b].sort());
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('2 of 5 placed players had a clear ray to them');
+  });
+
+  it('a point of view gets no overlay and says why', async () => {
+    serve(world);
+    renderAt('11344', '?pov=team:AXIS');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(povForm.line_of_sight!.available).toBe(false);
+    expect(screen.queryByRole('button', { name: 'line of sight (oracle)' })).toBeNull();
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')!.textContent).toContain('line of sight not traced: withheld under a point of view');
+  });
+
+  it('a recording from before the diagnostic renders without the block', async () => {
+    const { line_of_sight: _dropped, ...older } = world;
+    const stripped = { ...older, edges: world.edges.map(({ line_of_sight: _l, ...e }) => e) } as unknown as SpiderWebSnapshot;
+    serve(stripped);
+    renderAt();
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(document.querySelector('[data-parity="spider-web.line-of-sight"]')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'line of sight (oracle)' })).toBeNull();
   });
 });
 

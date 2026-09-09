@@ -31,8 +31,23 @@ function clampPitch(v: number) { return Math.min(1.5, Math.max(0, v)); }
 
 /** `mesh` is undefined while the geometry is still loading, null when the
  *  map was never exported (a named absence), and the mesh otherwise. */
+/** How an opponent thread reads once the line-of-sight overlay is on. */
+export function losKind(e: { line_of_sight?: { a_to_b: { status: string }; b_to_a: { status: string } } | null }): 'clear' | 'one-way' | 'blocked' | 'indeterminate' | null {
+  const v = e.line_of_sight;
+  if (!v) return null;
+  const a = v.a_to_b.status === 'clear'; const b = v.b_to_a.status === 'clear';
+  if (a && b) return 'clear';
+  if (a || b) return 'one-way';
+  if (v.a_to_b.status === 'blocked' && v.b_to_a.status === 'blocked') return 'blocked';
+  return 'indeterminate';
+}
+
 export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; mesh: MapMesh | null | undefined; pov: string }) {
   const [cam, setCam] = useState<Camera>(DEFAULT_CAMERA);
+  // The oracle overlay, off by default: it is a diagnostic, not the picture.
+  const [showLos, setShowLos] = useState(false);
+  const los = snap.line_of_sight;
+  const losOn = showLos && los?.available === true;
   const svgRef = useRef<SVGSVGElement>(null);
   const drag = useRef<{ x: number; y: number; pan: boolean } | null>(null);
 
@@ -113,16 +128,25 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
             <title>{`${nameOf(r.subject)} · believed within ${figure(Math.round(r.radius))} units from ${(r.source ?? 'a cue').replace(/_/g, ' ')} · confidence ${r.confidence.toFixed(2)}`}</title>
           </circle>
         ))}
-        {scene.edges.map(({ e, a, b, style }) => (
-          <line
-            key={`${e.a}-${e.b}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
-            data-edge-kind={e.kind} data-contested={e.recently_contested ? 'yes' : 'no'}
-            stroke={style.color} strokeOpacity={style.alpha} strokeWidth={style.width}
-            strokeDasharray={style.dash.length > 0 ? style.dash.join(' ') : undefined}
-          >
-            <title>{`${nameOf(e.a)} – ${nameOf(e.b)} · ${e.kind} · ${figure(Math.round(e.distance))} units${e.recently_contested ? ' · engagement open' : ''}`}</title>
-          </line>
-        ))}
+        {scene.edges.map(({ e, a, b, style }) => {
+          const kind = losOn ? losKind(e) : null;
+          // With the overlay on, an opponent thread says whether a ray was
+          // clear: solid accent both ways, half-dashed one way, faint dots
+          // when blocked, short dashes when the tracer could not decide.
+          const stroke = kind === 'clear' || kind === 'one-way' ? 'var(--color-accent)' : style.color;
+          const alpha = kind === 'clear' ? 0.85 : kind === 'one-way' ? 0.7 : kind === 'blocked' ? 0.18 : style.alpha;
+          const dash = kind === 'clear' ? undefined : kind === 'one-way' ? '7 3' : kind === 'blocked' ? '1 4' : kind === 'indeterminate' ? '2 2' : (style.dash.length > 0 ? style.dash.join(' ') : undefined);
+          return (
+            <line
+              key={`${e.a}-${e.b}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+              data-edge-kind={e.kind} data-contested={e.recently_contested ? 'yes' : 'no'} data-los={kind ?? undefined}
+              stroke={stroke} strokeOpacity={alpha} strokeWidth={kind === 'clear' ? 1.6 : style.width}
+              strokeDasharray={dash}
+            >
+              <title>{`${nameOf(e.a)} – ${nameOf(e.b)} · ${e.kind} · ${figure(Math.round(e.distance))} units${e.recently_contested ? ' · engagement open' : ''}${e.line_of_sight ? ` · ray ${nameOf(e.a)}→${nameOf(e.b)} ${e.line_of_sight.a_to_b.status}, ${nameOf(e.b)}→${nameOf(e.a)} ${e.line_of_sight.b_to_a.status}` : ''}`}</title>
+            </line>
+          );
+        })}
         {scene.players.map(({ p, s }) => {
           const color = TEAM_COLOR[p.team] ?? 'var(--color-text-400)';
           const p90 = p.alive && p.position_error ? p.position_error.p90 : 0;
@@ -152,9 +176,20 @@ export function SpiderWebScene({ snap, mesh, pov }: { snap: SpiderWebSnapshot; m
         <Chip active={!isPlan} label="tilted" onClick={() => setCam((c) => ({ ...c, pitch: DEFAULT_CAMERA.pitch }))} title="the default camera: turned a little and tipped, so heights read" />
         <Chip active={isPlan} label="plan" onClick={() => setCam((c) => ({ ...c, pitch: 0 }))} title="straight down: heights collapse, floor distances are true" />
         <Chip active={false} label="reset view" onClick={() => setCam(DEFAULT_CAMERA)} />
+        {los?.available && (
+          <Chip active={showLos} label="line of sight (oracle)" onClick={() => setShowLos((v) => !v)} title="a clear ray from an eye to a body point in the static geometry — necessary, not sufficient, for having seen someone; never a belief" />
+        )}
         <Meta>drag turns · shift-drag pans · wheel zooms · zoom {cam.zoom.toFixed(2)}×{isPlan ? '' : ` · pitch ${cam.pitch.toFixed(2)}`}</Meta>
       </Cluster>
       <Meta>{statusLine(snap)}</Meta>
+      {los && (los.available
+        ? <div data-parity="spider-web.line-of-sight"><Meta>
+            line of sight: {figure(los.pairs_traced)} opponent pair{los.pairs_traced === 1 ? '' : 's'} traced on {los.geometry} ·
+            {' '}{Object.values(los.exposure).filter((n) => n > 0).length} of {Object.keys(los.exposure).length} placed players had a clear ray to them ·
+            {' '}oracle diagnostic (a clear ray is necessary, not sufficient, for having seen someone; never a belief) ·
+            {' '}validated {los.validated_by.measured_at}: {figure(los.validated_by.segments)} segments on {figure(los.validated_by.maps)} maps, {los.validated_by.agreement_pct}% agreement with the engine's world trace
+          </Meta></div>
+        : <div data-parity="spider-web.line-of-sight"><Meta>line of sight not traced: {los.reason}</Meta></div>)}
       {scene.unplaced.length > 0 && (
         <Meta>known but not placed (region wider than the published horizon): {scene.unplaced.map(nameOf).join(', ')} — this side knows they exist, not where they are</Meta>
       )}

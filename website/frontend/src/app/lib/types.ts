@@ -3968,12 +3968,34 @@ export interface SpiderPlayer {
   velocity_reason: string | null;
 }
 
+/** One direction of a traced ray: the tracer's status and the reason it gives. */
+export interface SpiderLosVerdict { status: 'clear' | 'blocked' | 'indeterminate' | string; reason: string }
+
 export interface SpiderEdge {
   a: string;
   b: string;
   kind: string;
   distance: number;
   recently_contested: boolean;
+  /** SW-3, world view only: eye-to-body availability in both directions.
+   *  Null for a teammate pair, a down or unplaced player, any other view,
+   *  or a map without geometry — the snapshot's `line_of_sight` block says
+   *  which. Absent on recordings from before the diagnostic existed. */
+  line_of_sight?: { a_to_b: SpiderLosVerdict; b_to_a: SpiderLosVerdict } | null;
+}
+
+/** The oracle line-of-sight diagnostic (services/line_of_sight.py): what it
+ *  means, what validated it, and per player how many living enemies had a
+ *  clear ray to them. `available:false` carries the reason — a view, or a
+ *  host without the map's geometry. */
+export interface SpiderLineOfSight {
+  available: boolean;
+  reason: string | null;
+  scope: string;
+  validated_by: { measured_at: string; script: string; segments: number; maps: number; agreement_pct: number; compared_to: string; caveat: string };
+  geometry: string | null;
+  pairs_traced: number;
+  exposure: Record<string, number>;
 }
 
 export interface SpiderWebSnapshot {
@@ -4035,6 +4057,8 @@ export interface SpiderWebSnapshot {
   /** Geometric distance to the nearest teammate, by guid — not tactical
    *  support distance (the server's own note). */
   nearest_teammate_separation: Record<string, number>;
+  /** Absent on recordings from before SW-3. */
+  line_of_sight?: SpiderLineOfSight;
 }
 
 export interface SpiderBelief {

@@ -188,7 +188,7 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 2923,
+  "read": 2932,
   "unread": 654,
   "dropped": 63,
   "endpoints": 179,
@@ -687,7 +687,7 @@
    "dropped": 0
   },
   "/api/replay/round/{round_id}/web": {
-   "read": 60,
+   "read": 69,
    "unread": 4,
    "dropped": 1
   },
@@ -10932,6 +10932,11 @@
   },
   {
    "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "edges.line_of_sight",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
    "key": "edges.recently_contested",
    "status": "read"
   },
@@ -10963,6 +10968,46 @@
   {
    "endpoint": "/api/replay/round/{round_id}/web",
    "key": "information_state.pov",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.available",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.exposure",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.geometry",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.pairs_traced",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.reason",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.scope",
+   "status": "read"
+  },
+  {
+   "endpoint": "/api/replay/round/{round_id}/web",
+   "key": "line_of_sight.validated_by",
    "status": "read"
   },
   {
