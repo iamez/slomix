@@ -7,6 +7,17 @@
 
 ## Trenutna pozicija
 
+- (Fable 5.1, 2026-09-09, 10:30) Owner: »ko vse končaš … celoten spiderweb
+  do konca avtonomno«. MERGANO: #1001 (kartica + stenska ura), #1002 (story;
+  13 Codex niti). V VLAKU: #1003 → #1004 (12 Codex niti popravljenih), nato
+  build + dev deploy. SPIDER WEB (proga v `docs/PLAN.md`): #1005 SW-2 scena
+  (SVG, kamera, regije prepričanj, `?t=&pov=`; 9 Codex niti), #1006 SW-3
+  vidna linija kot oracle diagnostika (stacked; 10 niti; ledger `/web` 0),
+  SW-4 sloj 4 = §8 harness na veji `feat/spider-web-layer4-harness`
+  (`services/layer4_family.py`, `scripts/spiderweb_layer4_family.py`);
+  zbiralnik teče čez 901 rund. ⛔ Vsi trije čakajo DA za merge. Naslednje:
+  tabela §8.5 + manifest → STATUS/PLAN → PR; ena AskUserQuestion za DA; dev
+  deploy + živ dokaz spider weba (`/app/spider-web/round/11344?t=120000`).
 - (Fable 5.1, 2026-09-08, 22:00) Avtonomni popoldan (owner: »kar nadaljuj, čim
   več«). MERGANO: #992 (merilnik meri po endpointu; unread 517 → 789 je
   popravek instrumenta, ne strani), #987 R3a, #993 R4b. V VLAKU (DA dan):
