@@ -24698,6 +24698,24 @@
   "/auth/login": {
    "get": {
     "operationId": "login_auth_login_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "next",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "title": "Next"
+      }
+     }
+    ],
     "responses": {
      "200": {
       "content": {
@@ -24706,6 +24724,16 @@
        }
       },
       "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
      }
     },
     "summary": "Login",
