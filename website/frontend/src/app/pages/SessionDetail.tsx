@@ -283,6 +283,12 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
         label="mvp votes"
         aside={<span className="lbl">{figure(totalVotes)} votes cast by players</span>}
       />
+      {(q.data.my_vote != null || q.data.most_underrated_guid != null) && (
+        <Meta>
+          {q.data.my_vote != null ? `your vote: ${q.data.candidates.find((c) => c.guid === q.data.my_vote)?.name ?? String(q.data.my_vote)}` : 'you have not voted'}
+          {q.data.most_underrated_guid != null ? ` · most underrated: ${q.data.candidates.find((c) => c.guid === q.data.most_underrated_guid)?.name ?? q.data.most_underrated_guid}` : ''}
+        </Meta>
+      )}
       <Stack gap={1} className="rows">
         {q.data.candidates.filter((c) => c.votes > 0).map((c) => (
           <Cluster key={c.guid} gap={3} justify="between" align="center" className="row" style={{ padding: 'var(--space-2) 0' }}>
@@ -292,6 +298,7 @@ function MvpVotes({ sessionId }: { sessionId: number }) {
               <span className="m lbl" style={{ fontSize: 'var(--fs-caption)', width: 60, textAlign: 'right' }}>
                 {c.vote_pct.toFixed(0)}%
               </span>
+              {c.kis_rank != null && <Meta>KIS rank {figure(c.kis_rank)}</Meta>}
             </Cluster>
           </Cluster>
         ))}

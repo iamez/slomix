@@ -17,6 +17,7 @@ import {
 } from '../components/ui';
 import { MatchBoxScore } from '../components/MatchBoxScore';
 import { Panel } from '../components/Panel';
+import { utcStamp } from '../lib/utcStamp';
 
 /**
  * Home (docs/design/12 row 1) — visual canon is home.dc.html (decision O8);
@@ -90,6 +91,14 @@ function TopBand() {
                 {data.voice_channel.count > 0 ? `${data.voice_channel.count} in voice` : 'No one in voice'}
               </span>
             ))}
+          {data && !data.voice_channel.error && (
+            <Meta>
+              {data.voice_channel.channel_name ? `${data.voice_channel.channel_name}` : 'channel unnamed'}
+              {Array.isArray(data.voice_channel.members) && data.voice_channel.members.length > 0 ? ` · ${data.voice_channel.members.map(String).join(', ')}` : ''}
+              {data.voice_channel.updated_at ? ` · voice seen ${utcStamp(String(data.voice_channel.updated_at))}` : ''}
+              {data.game_server.updated_at ? ` · server seen ${utcStamp(String(data.game_server.updated_at))}` : ''}
+            </Meta>
+          )}
         </div>
       </div>
     </div>
@@ -489,10 +498,11 @@ function LatestGames() {
             <>
               <span style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 'var(--space-3)' }}>
                 <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {m.team1_players.join(' · ')} vs {m.team2_players.join(' · ')}
+                  {m.team1_name ? `${m.team1_name}: ` : ''}{m.team1_players.join(' · ')} vs {m.team2_name ? `${m.team2_name}: ` : ''}{m.team2_players.join(' · ')}
                 </span>
                 <span className="m" style={{ fontSize: 'var(--fs-small)', flex: 'none', color: m.outcome === 'Fullhold' ? 'var(--color-pos)' : m.winner === m.team1_name ? 'var(--color-accent)' : 'var(--color-accent-warm)' }}>
                   {m.winner.toLowerCase()} · {m.duration}
+                  {m.score_display ? ` · ${m.score_display}` : (m.axis_score != null && m.allies_score != null ? ` · axis ${m.axis_score}–${m.allies_score} allies` : '')}
                 </span>
               </span>
               <span className="m" style={{ display: 'flex', gap: 'var(--space-3)', fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)', marginTop: 'var(--space-1)' }}>
