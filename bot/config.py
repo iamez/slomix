@@ -145,6 +145,12 @@ class BotConfig:
         self.supastats_check_enabled: bool = str(
             self._get_config('SUPASTATS_CHECK_ENABLED', 'false')
         ).strip().lower() == 'true'
+        # Reactions on supa's post (✅ / ⚠️ / ❌) are OFF by default since
+        # 2026-09-09: the owner asked the bot to keep checking the sheet and
+        # DMing the report, but to stop reacting on his messages.
+        self.supastats_reactions_enabled: bool = str(
+            self._get_config('SUPASTATS_REACTIONS_ENABLED', 'false')
+        ).strip().lower() == 'true'
         self.supastats_channel_id: int = int(self._get_config('SUPASTATS_CHANNEL_ID', '0'))
         supastats_authors_str = str(self._get_config('SUPASTATS_AUTHOR_IDS', ''))
         self.supastats_author_ids: list[int] = [
