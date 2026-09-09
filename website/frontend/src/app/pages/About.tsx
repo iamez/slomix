@@ -132,6 +132,12 @@ function Counted() {
   if (!overview.isSuccess) return <div style={{ padding: 'var(--space-4) 0' }}><Unavailable what="counted" /></div>;
   const d = overview.data;
   const live = (n: number) => (n === 0 ? '—' : n.toLocaleString('en-US'));
+  // The handler answers 200 with status "partial", a zero and the metric's
+  // LABEL in failed_metrics when one query fails; a cell must read the label
+  // of the field it renders or a failure shows as a quiet fortnight
+  // (records_overview.py, the labels contract; Codex on #1003).
+  const failed = new Set(d.failed_metrics ?? []);
+  const or = (label: string, v: string) => (failed.has(label) ? 'unavailable' : v);
   const cells = [
     { k: 'kills', v: live(d.total_kills) },
     { k: 'rounds', v: live(d.rounds) },
@@ -141,12 +147,12 @@ function Counted() {
     { k: 'latest round', v: d.rounds_latest ?? '—' },
     // The 14-day window and the two most active players — answered since
     // phase 1, shown since 2026-09-09.
-    { k: `kills, last ${d.window_days ?? 14} days`, v: live(d.total_kills_14d) },
-    { k: `rounds, last ${d.window_days ?? 14} days`, v: live(d.rounds_14d) },
-    { k: `sessions, last ${d.window_days ?? 14} days`, v: live(d.sessions_14d) },
-    { k: `players, last ${d.window_days ?? 14} days`, v: live(d.players_14d) },
-    { k: 'most active, all time', v: d.most_active_overall ? `${d.most_active_overall.name} · ${figure(d.most_active_overall.rounds)} rounds` : '—' },
-    { k: `most active, last ${d.window_days ?? 14} days`, v: d.most_active_14d ? `${d.most_active_14d.name} · ${figure(d.most_active_14d.rounds)} rounds` : '—' },
+    { k: `kills, last ${d.window_days ?? 14} days`, v: or('total_kills_recent', live(d.total_kills_14d)) },
+    { k: `rounds, last ${d.window_days ?? 14} days`, v: or('rounds_recent', live(d.rounds_14d)) },
+    { k: `sessions, last ${d.window_days ?? 14} days`, v: or('sessions_recent', live(d.sessions_14d)) },
+    { k: `players, last ${d.window_days ?? 14} days`, v: or('players_recent', live(d.players_14d)) },
+    { k: 'most active, all time', v: or('active_overall', d.most_active_overall ? `${d.most_active_overall.name} · ${figure(d.most_active_overall.rounds)} rounds` : '—') },
+    { k: `most active, last ${d.window_days ?? 14} days`, v: or('active_recent', d.most_active_14d ? `${d.most_active_14d.name} · ${figure(d.most_active_14d.rounds)} rounds` : '—') },
   ];
   return (
     <>

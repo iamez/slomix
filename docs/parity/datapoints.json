@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "16 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3115,
+  "read": 3114,
   "unread": 497,
-  "dropped": 67,
+  "dropped": 68,
   "endpoints": 180,
   "endpoints_fully_read": 71,
   "unmeasured": 3
@@ -283,9 +283,9 @@
    "dropped": 0
   },
   "/api/greatshot/{demo_id}": {
-   "read": 40,
+   "read": 39,
    "unread": 10,
-   "dropped": 1
+   "dropped": 2
   },
   "/api/greatshot/{demo_id}/crossref": {
    "read": 16,
@@ -1988,7 +1988,8 @@
   {
    "endpoint": "/api/greatshot/{demo_id}",
    "key": "highlights.clip_demo_path",
-   "status": "read"
+   "status": "dropped",
+   "reason": "the server path of the cut clip; clip_download is built from the same row, so the path is the link's title and never a state of its own (Codex on #1003)"
   },
   {
    "endpoint": "/api/greatshot/{demo_id}",

@@ -308,9 +308,16 @@ export function GreatshotDemoPage() {
           {typeof d.metadata.mod_version === 'string' && <>mod {d.metadata.mod_version} · </>}
           {typeof d.metadata.profile_name === 'string' && <>{d.metadata.profile_name} · </>}
           {typeof d.metadata.extension === 'string' && <>{d.metadata.extension} · </>}
+          {/* "No round matched" is a RESULT of a finished analysis; before it
+            * ran (uploaded, scanning) or after it failed the same absence means
+            * "not measured" (Codex on #1003). */}
           {typeof d.metadata.matched_round_id === 'number'
             ? <>matched round #{figure(d.metadata.matched_round_id)}{typeof d.metadata.crossref_confidence === 'number' ? ` · crossref ${figure(d.metadata.crossref_confidence)} %` : ''}{Array.isArray(d.metadata.crossref_match_details) ? ` (${(d.metadata.crossref_match_details as string[]).join(', ')})` : ''}</>
-            : <>no stored round matched</>}
+            : d.status === 'analyzed' || d.status === 'analysed' || d.status === 'done'
+              ? <>no stored round matched</>
+              : d.status === 'failed' || d.error != null
+                ? <>round match unavailable (the analysis failed)</>
+                : <>round match pending ({d.status})</>}
           {d.processing_started_at != null && d.processing_finished_at != null && (
             <> · scanned in {figure(Math.round((Date.parse(d.processing_finished_at.replace(' ', 'T')) - Date.parse(d.processing_started_at.replace(' ', 'T'))) / 100) / 10)} s</>
           )}
@@ -338,10 +345,13 @@ export function GreatshotDemoPage() {
                 </Stack>
                 <Cluster gap={3} align="baseline">
                   <Meta>{fmtClock(h.start_ms)}–{fmtClock(h.end_ms)}{h.score != null && <> · score {figure(h.score)}</>}</Meta>
+                  {/* clip_download and clip_demo_path come from the same row
+                    * (greatshot.py get_greatshot_demo): both set or both null,
+                    * so a "cut, not served" state cannot occur — the path is a
+                    * ledger decision, not a branch (Codex on #1003). */}
                   {h.clip_download != null && (
-                    <a href={h.clip_download} className="lbl" style={{ color: 'var(--color-accent)', textDecoration: 'none' }}>clip →</a>
+                    <a href={h.clip_download} className="lbl" style={{ color: 'var(--color-accent)', textDecoration: 'none' }} title={h.clip_demo_path ?? undefined}>clip →</a>
                   )}
-                  {h.clip_download == null && h.clip_demo_path != null && <Meta>clip cut, not served: {h.clip_demo_path}</Meta>}
                 </Cluster>
               </Cluster>
             ))}
@@ -359,10 +369,19 @@ export function GreatshotDemoPage() {
               <Cluster key={name} gap={3} justify="between" align="baseline" className="row" style={{ padding: 'var(--space-1) 0', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: 'var(--fs-row)' }}>{name}</span>
                 <Meta>
+                  {/* A zero damage total beside a double-digit kill count is the
+                    * scanner not recording damage for that player (the recording
+                    * has .olz: 15 kills, 0 damage while others carry damage) —
+                    * printed as "not recorded", never as a measured 0. */}
                   {Object.entries((stats ?? {}) as Record<string, unknown>)
                     .filter(([, v]) => typeof v === 'number' || typeof v === 'string')
                     .slice(0, 8)
-                    .map(([k, v]) => `${k.replace(/_/g, ' ')} ${typeof v === 'number' ? figure(v) : String(v)}`)
+                    .map(([k, v]) => {
+                      const s = stats as Record<string, unknown>;
+                      const fought = (typeof s.kills === 'number' && s.kills > 0) || (typeof s.deaths === 'number' && s.deaths > 0);
+                      if (k.startsWith('damage') && v === 0 && fought) return `${k.replace(/_/g, ' ')} not recorded`;
+                      return `${k.replace(/_/g, ' ')} ${typeof v === 'number' ? figure(v) : String(v)}`;
+                    })
                     .join(' · ')}
                 </Meta>
               </Cluster>
