@@ -189,9 +189,9 @@
   "/api/voice-activity/history": "17 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3349,
+  "read": 3347,
   "unread": 201,
-  "dropped": 139,
+  "dropped": 141,
   "endpoints": 180,
   "endpoints_fully_read": 101,
   "unmeasured": 3
@@ -888,9 +888,9 @@
    "dropped": 0
   },
   "/api/stats/session/{gaming_session_id}/detail": {
-   "read": 49,
+   "read": 47,
    "unread": 2,
-   "dropped": 2
+   "dropped": 4
   },
   "/api/stats/session/{gaming_session_id}/good-night": {
    "read": 9,
@@ -15496,7 +15496,8 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",
    "key": "players.alive_pct_diff",
-   "status": "read"
+   "status": "dropped",
+   "reason": "engine minus tracker Alive% — data about the capture, retired from the players table with the Lua column (see alive_pct_lua)"
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",
@@ -15506,7 +15507,8 @@
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",
    "key": "players.alive_pct_lua",
-   "status": "read"
+   "status": "dropped",
+   "reason": "the tracker's second Alive% measurement; the players table retired its Lua column on purpose (the page test pins no 'lua' header) and the drift is summarised per session from alive_pct_drift instead"
   },
   {
    "endpoint": "/api/stats/session/{gaming_session_id}/detail",

@@ -640,7 +640,7 @@ describe('SessionDetail — stats 2.0 summary', () => {
 });
 
 describe('SessionDetail — stats 2.0 R4 tabs', () => {
-  it('the players tab is the legacy 22-column table plus the tracker\'s alive % and its Δ on the one DataTable, definitions on every header', async () => {
+  it('the players tab is the legacy 22-column table on the one DataTable, definitions on every header', async () => {
     const { container } = renderPage(fixtureFetch, '/session-detail/154/players');
     const table = await waitFor(() => {
       const el = container.querySelector('[data-parity="session.players"]');
@@ -649,8 +649,7 @@ describe('SessionDetail — stats 2.0 R4 tabs', () => {
     });
     await waitFor(() => expect(screen.getByText(/sorted by dpm/)).toBeInTheDocument());
     // 21 data columns; the expander rides in the first cell (legacy's 22nd).
-    // 21 legacy cells + alive % lua + alive Δ (ledger 2026-09-09)
-    expect(table.querySelectorAll('.row')[0].children.length).toBe(23);
+    expect(table.querySelectorAll('.row')[0].children.length).toBe(21);
     // The definitions are the writer's, not the legacy tooltips'.
     expect(screen.getByRole('button', { name: /^uk$|^uk ▾|^uk ▴/ })).toHaveAttribute('title', expect.stringMatching(/^useful kills — the victim had at least half the spawn cycle/));
     expect(screen.getByRole('button', { name: /^fsk/ })).toHaveAttribute('title', expect.stringMatching(/health > 0/));
