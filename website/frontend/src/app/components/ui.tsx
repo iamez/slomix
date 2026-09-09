@@ -298,6 +298,7 @@ export function figure(value: number): string {
  *  page carries its own (website/frontend/AGENTS.md). */
 export function megabytes(bytes: number): string {
   return `${figure(Math.round(bytes / 104857.6) / 10)} MB`;
+}
 
 /** A ratio or a p-value at a fixed number of places — the one place a page
  *  may ask for more than figure()'s decimal, so `.toFixed` never spreads
