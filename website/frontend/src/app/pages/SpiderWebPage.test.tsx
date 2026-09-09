@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient, sameView } from '../lib/queries';
-import { SpiderWebPage } from './SpiderWebPage';
+import { SpiderWebPage, normalisePov } from './SpiderWebPage';
 import type { SpiderWebSnapshot } from '../lib/types';
 import { isClockOwnHud, isClockWithheld } from '../lib/types';
 import worldJson from './__fixtures__/api_replay_round_round_id_web.json';
@@ -481,3 +481,55 @@ describe('SpiderWebPage — the five Codex threads on #1005', () => {
   });
 });
 
+describe('SpiderWebPage — the second Codex round on #1005', () => {
+  const geometry = { map_name: 'et_brewdog', vertices: [], indexes: [], floor_normal_z: 0.7, bounds: { min: [-1000, -1000, -100], max: [1000, 1000, 400] } };
+
+  it('normalises the pov from the URL the way the server reads it', () => {
+    expect(normalisePov(null)).toBe('world');
+    expect(normalisePov('World')).toBe('world');
+    expect(normalisePov('team:axis')).toBe('team:AXIS');
+    expect(normalisePov('AB12CD34EF')).toBe('AB12CD34EF');
+  });
+
+  it('?pov=World is the oracle: the world chip is active and the oracle sentence shows', async () => {
+    const urls: string[] = [];
+    stub((url) => {
+      urls.push(url);
+      if (url.includes('/api/replay/round/11344/web')) return world;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt('11344', '?pov=World');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'world' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText(/oracle: you see everything that happened/)).toBeInTheDocument();
+    expect(urls.every((u) => !u.includes('pov='))).toBe(true);
+  });
+
+  it('a view the server could not resolve does not claim it knew of nobody', async () => {
+    const unresolved: SpiderWebSnapshot = { ...povForm, information_state: { ...povForm.information_state, holders: {}, pov_unavailable: 'no players on team \'AXIS\' in this round' } };
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return unresolved;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt('11344', '?pov=team:AXIS');
+    await waitFor(() => expect(screen.getByText(/round #11,?344/)).toBeInTheDocument());
+    expect(screen.queryByText(/knew of no enemy position/)).toBeNull();
+    expect(screen.getByText(/beliefs — no players on team 'AXIS' in this round: unavailable/)).toBeInTheDocument();
+  });
+
+  it('draws the sides in their own tokens', async () => {
+    stub((url) => {
+      if (url.includes('/api/replay/round/11344/web')) return world;
+      if (url.includes('/assets/maps/geometry/')) return geometry;
+      return undefined;
+    });
+    renderAt();
+    const svg = await screen.findByLabelText('reconstructed moment');
+    await waitFor(() => expect(svg.querySelectorAll('[data-player]').length).toBeGreaterThan(0));
+    const fills = new Set([...svg.querySelectorAll('[data-player] circle')].map((c) => c.getAttribute('stroke')));
+    expect(fills.has('var(--color-axis)')).toBe(true);
+    expect(fills.has('var(--color-allies)')).toBe(true);
+  });
+});

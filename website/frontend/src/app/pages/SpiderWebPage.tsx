@@ -189,6 +189,15 @@ function Beliefs({ snap }: { snap: SpiderWebSnapshot }) {
   );
 }
 
+/** `world` in any case is the oracle, `team:x` is a team (upper-cased to the
+ *  server's spelling), anything else is a player guid as given. */
+export function normalisePov(raw: string | null): string {
+  const v = (raw ?? '').trim();
+  if (v === '' || v.toLowerCase() === 'world') return 'world';
+  if (v.toLowerCase().startsWith('team:')) return `team:${v.slice(5).toUpperCase()}`;
+  return v;
+}
+
 /** The steps the nudge buttons move the moment by. */
 const NUDGES: [string, number][] = [['−1 s', -1000], ['−200 ms', -200], ['+200 ms', 200], ['+1 s', 1000]];
 
@@ -199,7 +208,9 @@ export function SpiderWebPage() {
   // — a scene worth discussing is a scene worth linking to.
   const [search, setSearch] = useSearchParams();
   const tFromUrl = Number(search.get('t'));
-  const pov = search.get('pov') || 'world';
+  // The server compares the pov case-insensitively and answers `?pov=World`
+  // with the oracle; the page must see the same view it will draw.
+  const pov = normalisePov(search.get('pov'));
   const tCommitted = Number.isFinite(tFromUrl) && search.get('t') != null && tFromUrl >= 0 ? Math.round(tFromUrl) : 60000;
   const [tLive, setTLive] = useState(tCommitted);
   const moment = useSpiderWebMoment(roundId, tCommitted, pov);
