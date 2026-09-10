@@ -351,7 +351,33 @@ describe('season partial contract (#862)', () => {
 });
 
 describe('Home live-session line (ledger 2026-09-09)', () => {
+  // Own cleanup: the sentinel test below stubs fetch, and without this the
+  // next test would render against the sentinel instead of the recording.
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('hides the "0:00" the formatter emits for a round with no linked duration', async () => {
+    const sentinel = { ...(liveSession as object), last_round_time: '0:00' };
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const pathname = String(input).split('?')[0];
+      if (pathname === '/api/stats/live-session') {
+        return Promise.resolve({ ok: true, json: () => Promise.resolve(sentinel) } as Response);
+      }
+      return fixtureFetch(input);
+    }));
+    render(
+      <QueryClientProvider client={testClient()}>
+        <MemoryRouter><Home /></MemoryRouter>
+      </QueryClientProvider>,
+    );
+    await waitFor(() => expect(screen.getByText(/rounds imported in the last half hour/)).toBeInTheDocument());
+    expect(screen.queryByText(/last round 0:00/)).toBeNull();
+  });
+
   it('says how long the last round took and when the import last ran', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
     renderHome();
     const ls = liveSession as { last_round_time: string };
     await waitFor(() => expect(screen.getByText((_, el) => el?.tagName === 'SPAN' && new RegExp(`last round ${ls.last_round_time} · as of 2026-08-31 \\d\\d:\\d\\d UTC`).test(el.textContent ?? ''))).toBeInTheDocument());

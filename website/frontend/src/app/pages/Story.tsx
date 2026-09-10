@@ -1236,6 +1236,10 @@ function Roles({ gsid }: { gsid: number }) {
  * everything but cp. */
 const COMPOSITE_KEYS = ['tir', 'ci', 'kpi', 'sds', 'cp'] as const;
 
+function sourceRowsLine(rows: Record<string, number>): string {
+  return `source rows: ${Object.entries(rows).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}`;
+}
+
 function CompositeFive({ data }: { data: CompositeStats }) {
   if (isFailureStatus(data.status)) {
     return <Unavailable what="composite" />;
@@ -1245,7 +1249,14 @@ function CompositeFive({ data }: { data: CompositeStats }) {
     // every player with zero kills in counted rounds, so a support-only
     // or abandoned session lands here with telemetry present — the
     // coverage block is the honest oracle for what was captured.
-    return <Absent reason="no player qualified for the composite here (it needs kills in counted rounds) — the boards' coverage, not capture, decides this state" />;
+    return (
+      <Stack gap={2}>
+        <Absent reason="no player qualified for the composite here (it needs kills in counted rounds) — the boards' coverage, not capture, decides this state" />
+        {/* The coverage block is exactly what separates "nobody qualified"
+          * from "nothing was captured", so it must survive the empty list. */}
+        {data.coverage?.source_rows && <Meta>{sourceRowsLine(data.coverage.source_rows)}</Meta>}
+      </Stack>
+    );
   }
   const unmeasured = new Set(data.coverage.unmeasured_metrics);
   const partial = new Set(data.coverage.partially_synthetic_metrics);
@@ -1282,11 +1293,7 @@ function CompositeFive({ data }: { data: CompositeStats }) {
           </tbody>
         </table>
       </div>
-      {data.coverage?.source_rows && (
-        <Meta>
-          source rows: {Object.entries(data.coverage.source_rows).map(([k, v]) => `${k} ${figure(v)}`).join(' · ')}
-        </Meta>
-      )}
+      {data.coverage?.source_rows && <Meta>{sourceRowsLine(data.coverage.source_rows)}</Meta>}
       {unmeasured.size > 0 && (
         <Meta>
           {[...unmeasured].sort().join(', ')}: unmeasured for this session — the source instruments captured no rows, so these columns have no value rather than a zero

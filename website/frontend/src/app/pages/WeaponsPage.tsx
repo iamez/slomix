@@ -129,7 +129,7 @@ function MasteryGrid({ period }: { period: WeaponPeriod }) {
   const players = byPlayer.data?.players ?? [];
   return (
     <div data-parity="weapons.mastery" style={{ marginTop: 'var(--space-6)' }}>
-      <SectionHead label="player weapon mastery · top 4 weapons each" aside={byPlayer.data?.player_count != null ? <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{figure(byPlayer.data.player_count)} players in the period</Lbl> : undefined} />
+      <SectionHead label="player weapon mastery · top 4 weapons each" aside={byPlayer.data?.player_count != null ? <Lbl style={{ fontSize: 'var(--fs-caption)' }}>{figure(byPlayer.data.player_count)} players shown</Lbl> : undefined} />
       {byPlayer.isPending && <div style={{ marginTop: 'var(--space-2)' }}><Pending label="mastery" /></div>}
       {byPlayer.isError && <div style={{ marginTop: 'var(--space-2)' }}><Unavailable what="mastery" /></div>}
       {byPlayer.isSuccess && players.length === 0 && (

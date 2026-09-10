@@ -745,7 +745,10 @@ function Tonight() {
           {liveSession.data.rounds_completed} round{liveSession.data.rounds_completed === 1 ? '' : 's'} imported in the last half hour
           {' · '}{liveSession.data.current_map}
           {' · '}{liveSession.data.current_players} player{liveSession.data.current_players === 1 ? '' : 's'}
-          {liveSession.data.last_round_time && ` · last round ${liveSession.data.last_round_time}`}
+          {/* "0:00" is the formatter's output for a round whose duration has
+            * not been linked yet (Codex on #1026) — a sentinel, not a time. */}
+          {liveSession.data.last_round_time && liveSession.data.last_round_time !== '0:00'
+            && ` · last round ${liveSession.data.last_round_time}`}
           {liveSession.data.last_update && ` · as of ${utcStamp(liveSession.data.last_update)}`}
         </Meta>
       )}
