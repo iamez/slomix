@@ -124,12 +124,16 @@ Ostane:
 - **Odprto vprašanje brez odgovora**: prvi obisk hladnega cache okna še vedno plača 6–26 s na proximity/skill.
   #1019 to zdaj POVE, ne pospeši. Pospešek je odločitev 2 (poti B+E takoj, A kot ops poskus, C proizvajalec cachea).
 
-### 3d2. Varnost: en odprt Dependabot alert (10. 9.)
-`@vitest/mocker` < 4.1.11 (medium, path traversal / arbitrary file read prek Redirect Mock); repo ima `vitest ^4.1.0`
-(`website/frontend/package.json:53`). **Razvojna odvisnost, ne produkcijska** — zadeva stroj, ki poganja teste, ne
-strežnika. Popravek je dvig na `^4.1.11` + `npm install`, NAMERNO neizveden 10. 9.: `node_modules` so deljeni prek
-symlinka med delovnimi drevesi in vlak je prav takrat gradil SPA iz njih; namestitev sredi builda je tveganje brez
-nujnosti. Naredi ob mirnem drevesu in poženi cel `npx vitest run` pred pushem.
+### 3d2. Varnost: Dependabot PR **#1027** čaka na ownerja
+`@vitest/mocker` < 4.1.11 (medium, path traversal / arbitrary file read prek Redirect Mock). **Razvojna odvisnost,
+ne produkcijska** — zadeva stroj, ki poganja teste, ne strežnika.
+
+Dependabot je 9. 9. sam odprl **#1027** (dvig na 4.1.11, spremeni le `package.json` + `package-lock.json`) in
+**CI je zelen (15/15)**. NI mergan: ownerjev vnaprejšnji DA je veljal za PR-je, ki jih je odprl agent v tisti seji,
+ne za tuje PR-je — pravilo »nikoli merge brez dovoljenja za TA PR« stoji. Ob vrnitvi je to en klik.
+
+⚠️ Ne poganjaj `npm install` ročno med tekočim merge vlakom: `node_modules` so deljeni prek symlinka med vsemi
+delovnimi drevesi in vlak iz njih gradi SPA.
 
 ### 3d. Ostalo iz BACKLOG/KNOWN_ISSUES (nespremenjeno)
 Streli (`shot_fired`) so na puranu vklopljeni od 26. 8. (v6.11); lag populaciji A/B; `round_awards` podvojene vrstice;
