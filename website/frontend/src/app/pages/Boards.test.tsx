@@ -92,6 +92,8 @@ describe('Leaderboards', () => {
     expect(row?.getAttribute('href')).toBe('/profile/3C0354D3');
     // K/D formats to two decimals from the recording.
     expect(screen.getByText('1.51')).toBeInTheDocument();
+    // The kills cell says the deaths on hover (every recorded row carries them).
+    await waitFor(() => expect(screen.getAllByTitle(/^[\d,]+ deaths$/).length).toBeGreaterThan(0));
   });
 
   it('switching the stat refetches with the new key', async () => {
