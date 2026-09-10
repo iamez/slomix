@@ -160,6 +160,11 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
             {(d) => (
               <Stack gap={1} className="rows">
                 <Meta>{figure(d.total_events)} timed kills</Meta>
+                {/* Per team, from the same response: a side's denial average
+                  * is what a player's score is read against. */}
+                {d.team_averages.length > 0 && (
+                  <Meta>{d.team_averages.map((t) => `${t.team.toLowerCase()} ${t.avg_score.toFixed(3)} over ${figure(t.total_kills)} kills`).join(' · ')}</Meta>
+                )}
                 {/* The board wants 3+ kills per player — a narrow scope can
                   * hold real events and no qualifier (Codex on #861 r2). */}
                 {d.leaders.length === 0 && <Meta>nobody reached the three-kill board threshold here</Meta>}
@@ -178,7 +183,7 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
                 <Meta>{figure(d.total_events)} locks</Meta>
                 {d.leaders.length === 0 && <Meta>nobody reached the three-lock board threshold here</Meta>}
                 {d.leaders.slice(0, 5).map((l) => (
-                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}°`} val={`${figure(l.avg_lock_ms)} ms`} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.locks)} locks · err ${l.avg_err_deg.toFixed(1)}° · ${figure(l.avg_dist)} u away · ${figure(Math.round(l.total_lock_ms / 1000))} s on target`} val={`${figure(l.avg_lock_ms)} ms`} />
                 ))}
               </Stack>
             )}
@@ -205,14 +210,14 @@ export function ProximityInstruments({ sessionDate }: { sessionDate: string | nu
           <ProxPanel label="revives" aside="medics under pressure" q={revives} empty={noTracker} isEmpty={(d) => d.summary.total_revives === 0}>
             {(d) => (
               <Stack gap={1} className="rows">
-                <Meta>{figure(d.summary.total_revives)} revives · {d.summary.under_fire_pct.toFixed(1)}% under fire</Meta>
+                <Meta>{figure(d.summary.total_revives)} revives · {d.summary.under_fire_pct.toFixed(1)}% under fire · nearest enemy {figure(d.summary.avg_enemy_distance)} u away on average</Meta>
                 {/* The board needs 2+ revives per medic, so a sparse scope
                   * can have real totals and NO qualifying leader — the
                   * totals must survive that (Codex on #861). */}
                 {d.leaders.length === 0 ? (
                   <Meta>no medic reached the two-revive board threshold here</Meta>
                 ) : d.leaders.slice(0, 5).map((l) => (
-                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire`} val={figure(l.revives)} />
+                  <ProxRow key={l.guid} name={stripEtColors(l.name)} mid={`${figure(l.under_fire_count)} under fire · enemy ${figure(l.avg_enemy_dist)} u away`} val={figure(l.revives)} />
                 ))}
               </Stack>
             )}

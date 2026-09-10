@@ -271,6 +271,18 @@ describe('Proximity', () => {
     }
   });
 
+  it('the instruments print the figures their own responses carry — team denial, lock distance, revive distance, the stagger bar', async () => {
+    vi.stubGlobal('fetch', vi.fn(fetchFor(new Map([['/api/proximity/leaderboards', board]]))));
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/correlation/)).toBeInTheDocument());
+    // Each of these is summed or read from the same recording the panel draws.
+    await waitFor(() => expect(screen.getByText(/allies 0\.416 over 429 kills · axis 0\.440 over 575 kills/)).toBeInTheDocument());
+    expect(screen.getByText(/1,016 u away · 330 s on target/)).toBeInTheDocument();
+    expect(screen.getByText(/nearest enemy 929 u away on average/)).toBeInTheDocument();
+    expect(screen.getByText(/a kill counts as a stagger above a score of 0\.8/)).toBeInTheDocument();
+    expect(screen.getByText(/avg score 0\.445/)).toBeInTheDocument();
+  });
+
   it('mounts nothing unscoped when the scope lookup fails', async () => {
     // Three reviewers independently: a failed /proximity/scopes must not
     // fall through into thirteen unbounded instrument queries.

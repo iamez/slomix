@@ -59,5 +59,8 @@
   "/api/availability/promotion-preferences signal_handle": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
   "/api/availability/promotion-preferences signal_handle_masked": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
   "/api/availability/promotion-preferences telegram_handle": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
-  "/api/availability/promotion-preferences telegram_handle_masked": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only"
+  "/api/availability/promotion-preferences telegram_handle_masked": "not built: telegram/signal/encryption/quiet-hours/threshold preferences — 2 website users, owner tier 4 (audit 2026-09-07 B1); the SPA's availability page shows the Discord-side preference only",
+  "/api/proximity/objective-focus players.total_time_ms": "duplicate: the same figure as total_time_s, which the row prints (fixture: 810400 ms = 810.4 s)",
+  "/api/proximity/competitive/man-advantage teams.ALLIES": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)",
+  "/api/proximity/competitive/man-advantage teams.AXIS": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)"
 }
