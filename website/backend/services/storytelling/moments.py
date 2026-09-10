@@ -5,11 +5,15 @@ Imports all module-level names (constants, helpers) from .base.
 """
 from __future__ import annotations
 
+import json
 import time
 from typing import TYPE_CHECKING
 
 from .base import (
     CARRIER_RETURN_WINDOW_MS,
+    ESCORT_MOVER_MIN_DISTANCE,
+    ESCORT_MOVER_MIN_SHARE,
+    ESCORT_MOVER_STAR_SHARES,
     KILL_STREAK_WINDOW_MS,
     MULTIKILL_EXTENDED_WINDOW_MS,
     MULTIKILL_SHORT_WINDOW_MS,
@@ -70,9 +74,13 @@ _TYPE_PRIORITY: dict[str, int] = {
     "focus_survival": 5,      # survived a 3v1+ — personal, uncommon (37)
     "trade_chain": 5,         # avenged a teammate
     "push_success": 4,        # team coordination, less personal (60)
+    "escort_mover": 4,        # stayed with the truck/tank while it moved — only on vehicle maps (27 rounds since March)
     "team_wipe": 4,           # great but the commonest 5★ (251) — shouldn't always headline
     "kill_streak": 3,         # least cinematic; overlaps multikill
 }
+
+#: Every moment type a detector can emit — the `types=` filter's allowlist.
+MOMENT_TYPES: tuple[str, ...] = tuple(sorted(_TYPE_PRIORITY))
 
 
 def _director_rank(m: dict) -> tuple:
@@ -154,36 +162,78 @@ def _moments_cache_evict_oldest_computed() -> None:
     _MOMENTS_CACHE.pop(oldest, None)
 
 
+def _destroyed_by(raw) -> list[dict]:
+    """`proximity_vehicle_progress.destroyed_events` (JSONB, migration 082)
+    → `[{name, team, time_s, attacker_guid}]`, names colour-stripped, an
+    empty attacker kept as "" (the poll saw the death, nobody is credited).
+    None / unreadable → [] — the recording predates v6.14."""
+    if raw is None:
+        return []
+    events = raw
+    if isinstance(raw, str):
+        try:
+            events = json.loads(raw)
+        except (TypeError, ValueError):
+            return []
+    if not isinstance(events, list):
+        return []
+    out = []
+    for ev in events:
+        if not isinstance(ev, dict):
+            continue
+        out.append({
+            "name": strip_et_colors(str(ev.get("attacker_name") or "")),
+            "team": str(ev.get("attacker_team") or ""),
+            "attacker_guid": str(ev.get("attacker_guid") or ""),
+            "time_s": round(int(ev.get("time") or 0) / 1000, 1),
+        })
+    return out
+
+
 class _MomentsMixin:
     """Moments methods for StorytellingService."""
 
-    async def detect_moments(self, scope: GamingSessionScope, limit: int = 10) -> list:
-        """Detect highlight-reel moments for a session across 11 detectors.
+    async def detect_moments(
+        self, scope: GamingSessionScope, limit: int = 10, types: tuple[str, ...] | None = None,
+    ) -> list:
+        """Detect highlight-reel moments for a session across the detectors.
 
-        Results are memoized at module level per (gaming_session_id, limit) —
-        TTL 5 min for today, 1 h for historical. First caller computes,
-        subsequent callers hit the cache. Scoped by the full gaming session
-        (deep SS-C): a midnight-crossing session detects moments across ALL
-        its rounds, not just one date's fragment.
+        Results are memoized at module level per (gaming_session_id, limit,
+        types) — TTL 5 min for today, 1 h for historical. First caller
+        computes, subsequent callers hit the cache. Scoped by the full gaming
+        session (deep SS-C): a midnight-crossing session detects moments
+        across ALL its rounds, not just one date's fragment.
+
+        `types` keeps only those moment types, applied to the full pool
+        BEFORE the director's cut: a 3★ escort never survives a cut that has
+        ten 5★ moments above it, and the caller who asks for escorts wants
+        the escorts — ranked among themselves by the same director.
         """
         now = time.monotonic()
+        types_key = tuple(sorted(types)) if types else None
         # TTL "recency" keys off the session's LATEST date — a session that
         # ran past midnight is still "today" the morning after.
         ttl = _moments_cache_ttl(date.fromisoformat(scope.dates[-1]))
-        key = (scope.gaming_session_id, limit)
+        # The key grows a third element only when a filter is asked for, so
+        # every existing caller (and the cache tests' seam) keeps its shape.
+        key = (scope.gaming_session_id, limit, types_key) if types_key else (scope.gaming_session_id, limit)
         cached = _MOMENTS_CACHE.get(key)
         if cached and (now - cached[1]) < ttl:
             return cached[0]
 
         # Double-check under lock to prevent concurrent recompute when
         # several coroutines all miss the cache before any of them writes.
-        lock = _compute_locks.get(f"moments:{scope.gaming_session_id}:{limit}")
+        lock_name = f"moments:{scope.gaming_session_id}:{limit}"
+        if types_key:
+            lock_name += ":" + ",".join(types_key)
+        lock = _compute_locks.get(lock_name)
         async with lock:
             cached = _MOMENTS_CACHE.get(key)
             if cached and (time.monotonic() - cached[1]) < ttl:
                 return cached[0]
 
-            result = await self._detect_moments_uncached(scope, limit)
+            result = await (self._detect_moments_uncached(scope, limit, types_key) if types_key
+                            else self._detect_moments_uncached(scope, limit))
             _MOMENTS_CACHE[key] = (result, time.monotonic())
             _moments_cache_evict_oldest_computed()
             return result
@@ -208,6 +258,7 @@ class _MomentsMixin:
             self._detect_multi_revive,
             self._detect_team_wipes,
             self._detect_multikills,
+            self._detect_escort_mover,
         ]
         # Run all detectors in parallel — each hits DB independently (-1.5s per session)
         results = await asyncio.gather(
@@ -229,11 +280,17 @@ class _MomentsMixin:
                 m["time_formatted"] = _format_time_ms(m.get("time_ms", 0))
         return moments
 
-    async def _detect_moments_uncached(self, scope: GamingSessionScope, limit: int) -> list:
-        """Collect all detector moments, then pick the director's cut (see
-        _select_director_cut): star tiers as a hard boundary, then a type-priority
-        + player-spread diversity pass within each tier."""
+    async def _detect_moments_uncached(
+        self, scope: GamingSessionScope, limit: int, types: tuple[str, ...] | None = None,
+    ) -> list:
+        """Collect all detector moments, keep the requested types (if any),
+        then pick the director's cut (see _select_director_cut): star tiers
+        as a hard boundary, then a type-priority + player-spread diversity
+        pass within each tier."""
         moments = await self._collect_moments(scope)
+        if types:
+            wanted = set(types)
+            moments = [m for m in moments if m.get("type") in wanted]
         return _select_director_cut(moments, limit)
 
     async def _detect_kill_streaks(self, scope: GamingSessionScope) -> list:
@@ -571,6 +628,145 @@ class _MomentsMixin:
                 "detail": {
                     "carrier_guid": r[0], "duration_ms": r[4] or 0,
                     "carry_distance": distance, "efficiency": efficiency,
+                },
+            })
+        return moments
+
+    async def _detect_escort_mover(self, scope: GamingSessionScope) -> list:
+        """Detector L (stats 2.0 / docs/design/20 §4b): a player stayed with the
+        movable objective — the truck or tank — while it moved.
+
+        Reads two tables the tracker has written since v6 and nothing read
+        until now: proximity_vehicle_progress (one row per vehicle per round:
+        distance moved, destroyed count — NO time column) and
+        proximity_escort_credit (per player per vehicle per round:
+        distance-WEIGHTED credit_distance (× (1 − d/500)), unweighted
+        total_escort_distance, mounted / proximity time). Both carry the round
+        key the scope filters on, so the join is on the four-column key and
+        the scope's own filter, aliased to `vp`.
+
+        One moment per vehicle-round, credited to the top escort, when the
+        vehicle moved at least ESCORT_MOVER_MIN_DISTANCE and that escort's
+        weighted share of the vehicle's distance is at least
+        ESCORT_MOVER_MIN_SHARE. `credit_distance > 0` is in the SQL on
+        purpose: proximity credit accrues only while the vehicle MOVES, so a
+        medic standing beside a parked truck never appears here.
+
+        time_ms: the tables know the round's end but not when the push
+        happened, so the moment is placed at the round's end and says so in
+        detail.timestamp_source: "first_escort" when the v6.14 tracker
+        recorded the first moving tick with a player mounted or within
+        escort_radius (gameTime() ms since round start, unconverted —
+        migration 082); "first_move" when only the mover's own motion is
+        known (a supply truck drives itself at round start, so this can be
+        0:00); else "round_end" (older recordings), else "unknown". detail.destroyed_by lists who took the mover down
+        when the recording carries it (v6.14 VEHICLE_DESTROYED)."""
+        dates = [date.fromisoformat(d) for d in scope.dates]
+        starts, maps, rnums = scope.round_key_arrays()
+        rows = await self.db.fetch_all(f"""
+            SELECT vp.session_date, vp.round_number, vp.round_start_unix, vp.round_end_unix,
+                   vp.map_name, vp.vehicle_name, vp.vehicle_type, vp.total_distance,
+                   vp.destroyed_count,
+                   ec.player_guid, ec.player_name, ec.player_team,
+                   ec.credit_distance, ec.total_escort_distance,
+                   ec.mounted_time_ms, ec.proximity_time_ms, ec.samples,
+                   vp.first_move_time, vp.last_move_time, vp.destroyed_events,
+                   vp.first_escort_time, vp.last_escort_time
+            FROM proximity_vehicle_progress vp
+            JOIN proximity_escort_credit ec
+              ON ec.session_date = vp.session_date
+             AND ec.round_number = vp.round_number
+             AND ec.round_start_unix = vp.round_start_unix
+             AND ec.vehicle_name = vp.vehicle_name
+            WHERE vp.session_date = ANY($1) AND {scope.round_key_filter_sql(2, alias="vp")}
+              AND vp.total_distance >= $5
+              AND ec.credit_distance > 0
+            ORDER BY vp.round_start_unix, vp.vehicle_name, ec.credit_distance DESC
+        """, (dates, starts, maps, rnums, float(ESCORT_MOVER_MIN_DISTANCE)))
+
+        # Group by vehicle-round; rows arrive top escort first.
+        groups: dict[tuple, list] = {}
+        for r in (rows or []):
+            groups.setdefault((r[2], r[5]), []).append(r)
+
+        moments = []
+        for (_start, vehicle), escorts in groups.items():
+            top = escorts[0]
+            total = float(top[7] or 0)
+            if total <= 0:
+                continue
+            credit = float(top[12] or 0)
+            share = credit / total
+            if share < ESCORT_MOVER_MIN_SHARE:
+                continue
+            stars = 3
+            for tier, s in zip((3, 4, 5), ESCORT_MOVER_STAR_SHARES, strict=True):
+                if share >= s:
+                    stars = tier
+            name = strip_et_colors(top[10] or _safe_short(top[9]))
+            round_start = int(top[2] or 0)
+            round_end = int(top[3] or 0)
+            first_move = int(top[17] or 0) if len(top) > 17 else 0
+            last_move = int(top[18] or 0) if len(top) > 18 else 0
+            first_escort = int(top[20] or 0) if len(top) > 20 else 0
+            last_escort = int(top[21] or 0) if len(top) > 21 else 0
+            if first_escort > 0:
+                # The escorted move, ms since round start (the tracker's
+                # gameTime()) — the base every other moment's time_ms uses.
+                # A supply truck drives itself at round start, so the raw
+                # first move would date the escort to 0:00.
+                time_ms = first_escort
+                timestamp_source = "first_escort"
+            elif first_move > 0:
+                time_ms = first_move
+                timestamp_source = "first_move"
+            elif round_start > 0 and round_end > round_start:
+                time_ms = (round_end - round_start) * 1000
+                timestamp_source = "round_end"
+            else:
+                time_ms = 0
+                timestamp_source = "unknown"
+            mounted_ms = int(top[14] or 0)
+            destroyed = int(top[8] or 0)
+            destroyed_by = _destroyed_by(top[19] if len(top) > 19 else None)
+            mounted_txt = f", {mounted_ms / 1000:.0f}s mounted" if mounted_ms > 0 else ""
+            destroyed_txt = f"; the {vehicle} was destroyed {destroyed}×" if destroyed > 0 else ""
+            named = [d["name"] for d in destroyed_by if d["name"]]
+            if destroyed > 0 and named:
+                destroyed_txt += f" (by {', '.join(named)})"
+            moments.append({
+                "type": "escort_mover",
+                "round_number": top[1],
+                "map_name": top[4],
+                "time_ms": time_ms,
+                "player": name,
+                "narrative": (
+                    f"{name} escorted the {vehicle} on {top[4]} — {credit:.0f} of {total:.0f} units "
+                    f"within 500u ({share:.0%}){mounted_txt}{destroyed_txt}"
+                ),
+                "impact_stars": stars,
+                "detail": {
+                    "vehicle_name": vehicle,
+                    "vehicle_type": top[6],
+                    "distance_unit": "et_units",
+                    "total_distance": round(total, 1),
+                    # Two distances, two meanings — named, never conflated (docs/design/20 §6.4).
+                    "credit_distance": round(credit, 1),          # weighted by proximity (1 − d/500)
+                    "total_escort_distance": round(float(top[13] or 0), 1),  # unweighted
+                    "credit_share": round(share, 3),
+                    "mounted_time_ms": mounted_ms,
+                    "proximity_time_ms": int(top[15] or 0),
+                    "samples": int(top[16] or 0),
+                    "destroyed_count": destroyed,
+                    "escorts": [
+                        {"name": strip_et_colors(e[10] or _safe_short(e[9])), "guid": e[9],
+                         "credit_distance": round(float(e[12] or 0), 1)}
+                        for e in escorts[:3]
+                    ],
+                    "timestamp_source": timestamp_source,
+                    "move_window_s": round((last_move - first_move) / 1000, 1) if first_move > 0 and last_move >= first_move else None,
+                    "escort_window_s": round((last_escort - first_escort) / 1000, 1) if first_escort > 0 and last_escort >= first_escort else None,
+                    "destroyed_by": destroyed_by,
                 },
             })
         return moments
