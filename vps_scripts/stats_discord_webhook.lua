@@ -71,8 +71,87 @@
     License: MIT
 ]]--
 
+-- BEGIN frame_health v6.13 (identical in every module; tests/unit/test_lua_frame_health_block_identical.py pins it)
+-- Every Lua module runs in its own VM, and the engine calls their
+-- et_RunFrame hooks one after another (g_lua.c G_LuaHook_RunFrame). They
+-- share one clock (et.trap_Milliseconds) and one process, so each module
+-- can append its own frame cost to the SAME log the tracker's gap watcher
+-- writes, and the reader attributes a gap offline: sum of the modules'
+-- `self` inside the gap window is "our Lua", the rest is engine/host.
+--   FH init wall=<ms> version=6.13 mod=<name>   one per map load (write-path proof)
+--   FM wall=<frame end ms> mod=<name> self=<ms> top=<section>:<ms>
+--                                          when a frame cost >= self_threshold_ms
+-- Rate-limited to one line per second per module and capped per lua state.
+-- trap_FS paths are relative to the homepath game dir, so this is the
+-- tracker's ~/.etlegacy/legacy/proximity/frame_health.log for every module.
+local FH_MOD = "stats_discord_webhook"
+local fh = {
+    version = "6.13", log = "proximity/frame_health.log",
+    self_threshold_ms = 50, min_write_interval_ms = 1000, max_lines_per_state = 3000,
+    writes = 0, last_write = -math.huge, frame_start = nil, top_name = nil, top_ms = 0,
+    error_printed = false,
+}
+local function fh_now()
+    return (et and et.trap_Milliseconds and et.trap_Milliseconds()) or 0
+end
+local function fh_write(line)
+    if fh.writes >= fh.max_lines_per_state then return end
+    -- endstats append idiom: the SECOND return signals an open failure
+    local fd, open_len = et.trap_FS_FOpenFile(fh.log, et.FS_APPEND)
+    if not fd or fd == -1 or fd == 0 or open_len == -1 then return end
+    fh.writes = fh.writes + 1
+    et.trap_FS_Write(line, string.len(line), fd)
+    et.trap_FS_FCloseFile(fd)
+end
+local function fh_guard(what, f, ...)
+    local ok, err = pcall(f, ...)
+    if not ok and not fh.error_printed then
+        fh.error_printed = true
+        et.G_Print("[" .. FH_MOD .. "] frame_health " .. what .. " error: " .. tostring(err) .. "\n")
+    end
+end
+-- Call from et_InitGame: a map load (and map_restart) starts a fresh cadence.
+local function fh_init()
+    fh_guard("init", function()
+        fh.writes = 0
+        fh.last_write = -math.huge
+        fh.frame_start = nil
+        fh.top_name = nil
+        fh.top_ms = 0
+        fh_write(string.format("FH init wall=%d version=%s mod=%s\n", fh_now(), fh.version, FH_MOD))
+    end)
+end
+local function fh_begin()
+    fh.frame_start = fh_now()
+    fh.top_name = nil
+    fh.top_ms = 0
+end
+-- Call right after a known-costly section with the wall time taken before
+-- it: the costliest section of the frame is what the FM line names.
+local function fh_section(name, t0)
+    local ms = fh_now() - t0
+    if ms > fh.top_ms then
+        fh.top_ms = ms
+        fh.top_name = name
+    end
+end
+local function fh_end()
+    fh_guard("end", function()
+        if fh.frame_start == nil then return end
+        local now = fh_now()
+        local self_ms = now - fh.frame_start
+        fh.frame_start = nil
+        if self_ms < fh.self_threshold_ms then return end
+        if now - fh.last_write < fh.min_write_interval_ms then return end
+        fh.last_write = now
+        fh_write(string.format("FM wall=%d mod=%s self=%d top=%s:%d\n",
+            now, FH_MOD, self_ms, fh.top_name or "-", fh.top_ms))
+    end)
+end
+-- END frame_health v6.13
+
 local modname = "stats_discord_webhook"
-local version = "1.7.2"
+local version = "1.7.3"
 
 -- ============================================================================
 -- CONFIGURATION - EDIT THESE VALUES
@@ -115,7 +194,18 @@ local configuration = {
 
     -- Optional local gametimes output (for fallback + auditing)
     gametimes_enabled = true,
-    gametimes_dir = "/home/et/.etlegacy/legacy/gametimes",  -- absolute path to align with bot
+    -- Empty, NOT nil: apply_config_overrides() rejects any key missing from
+    -- this table as a typo ("unknown key ... ignored"), and a nil value makes
+    -- the key missing in Lua — which would silently disable the very override
+    -- documented below (#788 review). "" means "derive it".
+    --
+    -- get_gametimes_dir() derives the directory from the engine's own
+    -- fs_homepath, the same way resolve_config_path() finds this module's
+    -- config. A hardcoded absolute path here makes every instance on the box
+    -- write into the FIRST instance's directory — set one in
+    -- stats_discord_webhook_config.lua only to override deliberately, and only
+    -- when there is a single instance.
+    gametimes_dir = "",
     gametimes_write_on_failure_only = false,
 
     -- Spawn/death tracking (Oksii-inspired validation)
@@ -423,17 +513,52 @@ local function json_escape(str)
     return s
 end
 
+-- Where this instance writes its gametime JSON.
+--
+-- fs_homepath, not fs_basepath: the engine writes gamestats/, proximity/ and
+-- gametimes/ under the homepath, and on the production server fs_basepath is
+-- the bare string "." — it is started with `cd <gamedir> && ./etlded.x86_64`,
+-- so a basepath-derived path lands wherever the process happened to be
+-- launched from. Measured on puran 2026-08-20:
+--     fs_basepath=.  fs_homepath=/home/et/.etlegacy  fs_game=legacy
+--     actual output: /home/et/.etlegacy/legacy/gametimes  (33 files)
+--     under basepath: no such directory
+--
+-- Deriving it also keeps two instances apart. A second server with its own
+-- fs_homepath (the 2.85 test box, /home/et/.etlegacy-v2.85.0) would otherwise
+-- write its rounds into the 2.84 instance's directory, where the bot ingests
+-- them as if they were the first server's.
 local function get_gametimes_dir()
-    local dir = configuration.gametimes_dir or "gametimes"
-    if dir:sub(1, 1) == "/" then
+    local dir = configuration.gametimes_dir
+    -- An explicit absolute path is a deliberate override; honour it.
+    if dir and dir:sub(1, 1) == "/" then
         return dir
     end
-    local fs_basepath = et.trap_Cvar_Get("fs_basepath")
-    local fs_game = et.trap_Cvar_Get("fs_game")
-    if fs_basepath and fs_game then
-        return string.format("%s/%s/%s", fs_basepath, fs_game, dir)
+    -- "" is the "not set" default and is TRUTHY in Lua, so `or` does not catch
+    -- it — without this the path would end in a bare slash.
+    if not dir or dir == "" then
+        dir = "gametimes"
     end
-    return dir
+
+    local fs_game = et.trap_Cvar_Get("fs_game")
+    if not fs_game or fs_game == "" then
+        fs_game = "legacy"
+    end
+
+    local homepath = et.trap_Cvar_Get("fs_homepath")
+    if homepath and homepath:sub(1, 1) == "/" then
+        return string.format("%s/%s/%s", homepath, fs_game, dir)
+    end
+
+    -- basepath only if the engine gave an absolute one — see the note above.
+    local basepath = et.trap_Cvar_Get("fs_basepath")
+    if basepath and basepath:sub(1, 1) == "/" then
+        return string.format("%s/%s/%s", basepath, fs_game, dir)
+    end
+
+    -- Same last-resort rule as resolve_config_path: hardcoded only when the
+    -- engine gave us nothing usable at all.
+    return "/home/et/.etlegacy/legacy/" .. dir
 end
 
 local function ensure_dir(path)
@@ -792,34 +917,97 @@ end
 -- TEAM DATA COLLECTION
 -- ============================================================================
 
+-- v1.7.3: the roster is CUMULATIVE over the round, not a snapshot at
+-- intermission. The old collect-at-intermission call said "before players
+-- disconnect" — but a player who quits mid-round beats it (goldrush R2
+-- 2026-08-26: two quits ~30 s before the end left allies_players with ONE
+-- name of three; the stats file kept their stats fine, the roster lied).
+-- roster_seen maps guid -> {guid, name, team}: last-known PLAYING team
+-- wins (going spectator never erases it), scanned once a second while a
+-- round runs, reset on round start.
+local roster_seen = {}
+local roster_seen_last_scan = 0
+
+local function roster_reset()
+    roster_seen = {}
+    roster_seen_last_scan = 0
+end
+
+local function roster_scan(force)
+    -- Not during a pause: gamestate stays GS_PLAYING while paused, and a
+    -- spectator who joins a side mid-pause and leaves before the resume
+    -- was never a participant. Players already seen keep their entries.
+    -- `force` (the intermission collection) bypasses both gates: the
+    -- 1-second throttle would otherwise swallow the FINAL scan whenever a
+    -- frame scan already ran in the same os.time() second, losing a
+    -- last-moment join or team switch.
+    local now = os.time()
+    if not force then
+        if paused then return end
+        if now == roster_seen_last_scan then return end
+    end
+    roster_seen_last_scan = now
+    local max_clients = get_max_clients()
+    for clientNum = 0, max_clients - 1 do
+        local connected = safe_gentity_get(clientNum, "pers.connected")
+        if connected == CON_CONNECTED then
+            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+            if team == TEAM_AXIS or team == TEAM_ALLIES then
+                local guid = get_client_guid(clientNum)
+                local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
+                local clean_name = strip_color_codes(name)
+                -- A GUID-less client (empty-string fallback) must not share
+                -- the "" key with every other GUID-less client. The SLOT is
+                -- not an identity either — it gets reused after a leave, and
+                -- retiring by slot deleted whoever held it before (review
+                -- rounds 5-6). The NAME is the identity such a client
+                -- actually carries, so the fallback keys by name: a reused
+                -- slot with a different name collides with nothing, and when
+                -- the GUID finally appears the same player's name-keyed
+                -- fallback is the one retired. (Two simultaneous GUID-less
+                -- clients with the identical name would merge — a rename
+                -- while GUID-less leaves a stale extra entry: both benign,
+                -- and this feature errs toward keeping.)
+                local key = guid:sub(1, 32)
+                if key == "" then
+                    key = "noguid:" .. clean_name
+                else
+                    roster_seen["noguid:" .. clean_name] = nil
+                end
+                roster_seen[key] = {
+                    guid = guid:sub(1, 32),  -- First 32 chars of GUID
+                    name = clean_name,
+                    team = team,
+                    last_seen = now,
+                }
+            end
+        end
+    end
+end
+
 local function collect_team_data()
     local axis_players = {}
     local allies_players = {}
 
-    local max_clients = get_max_clients()
-    for clientNum = 0, max_clients - 1 do
-        -- Check if player is connected
-        local connected = safe_gentity_get(clientNum, "pers.connected")
-        if connected == CON_CONNECTED then
-            local guid = get_client_guid(clientNum)
-            local name = safe_gentity_get(clientNum, "pers.netname") or "unknown"
-            local team = tonumber(safe_gentity_get(clientNum, "sess.sessionTeam")) or 0
+    -- One final scan so the intermission state itself is captured; the
+    -- accumulated roster_seen then also contributes everyone who played
+    -- this round but already left. Forced: the throttle must not swallow it.
+    roster_scan(true)
 
-            -- Clean the name (remove color codes for cleaner display)
-            local clean_name = strip_color_codes(name)
-
-            local player_data = {
-                guid = guid:sub(1, 32),  -- First 32 chars of GUID
-                name = clean_name
-            }
-
-            if team == TEAM_AXIS then
-                table.insert(axis_players, player_data)
-                log(string.format("Axis player: %s (%s)", clean_name, guid:sub(1,8)))
-            elseif team == TEAM_ALLIES then
-                table.insert(allies_players, player_data)
-                log(string.format("Allies player: %s (%s)", clean_name, guid:sub(1,8)))
-            end
+    -- NO pre-clock heuristic, deliberately (three review rounds proved
+    -- every span/grace variant re-loses some real participant in a corner
+    -- of the map_restart path). A team member seen only during the
+    -- pre-clock warmup thus stays listed: cosmetic, pcs never confirms
+    -- them, and losing a real player is the exact failure this feature
+    -- exists to fix.
+    for _, p in pairs(roster_seen) do
+        local player_data = { guid = p.guid, name = p.name, last_seen = p.last_seen or 0 }
+        if p.team == TEAM_AXIS then
+            table.insert(axis_players, player_data)
+            log(string.format("Axis player: %s (%s)", p.name, p.guid:sub(1,8)))
+        elseif p.team == TEAM_ALLIES then
+            table.insert(allies_players, player_data)
+            log(string.format("Allies player: %s (%s)", p.name, p.guid:sub(1,8)))
         end
     end
 
@@ -834,7 +1022,25 @@ local function format_player_names(players)
     if #names == 0 then
         return "(none)"
     end
-    return table.concat(names, ", ")
+    local joined = table.concat(names, ", ")
+    -- Discord embed field values cap at 1024 chars. The cumulative roster
+    -- (v1.7.3) is no longer bounded by simultaneous client count, so a
+    -- reconnect-heavy round could overflow the field and fail the webhook;
+    -- truncate the DISPLAY string only — the JSON payload stays complete.
+    if #joined > 1000 then
+        -- Do not split a UTF-8 code point: sub() is byte-oriented and
+        -- json_escape passes non-ASCII through, so a cut inside a
+        -- multibyte name would make the whole webhook body invalid UTF-8.
+        -- Back up over continuation bytes (0x80-0xBF) to a boundary.
+        local cut = 997
+        while cut > 1 do
+            local b = joined:byte(cut + 1)
+            if b == nil or b < 0x80 or b > 0xBF then break end
+            cut = cut - 1
+        end
+        joined = joined:sub(1, cut) .. "..."
+    end
+    return joined
 end
 
 local function format_player_json(players)
@@ -843,16 +1049,36 @@ local function format_player_json(players)
         return "[]"
     end
 
+    -- ⚠️ This string is a DATA channel: the bot parses Axis_JSON /
+    -- Allies_JSON out of the Discord embed fields, and a field over 1024
+    -- chars fails the whole webhook. The cumulative roster (v1.7.3) is no
+    -- longer bounded by simultaneous client count, so cap by WHOLE entries
+    -- with the most recently seen players first — anyone dropped here is
+    -- the oldest sighting, and the bot's pcs-based roster healing restores
+    -- them on the database side.
+    local ordered = {}
+    for _, p in ipairs(players) do table.insert(ordered, p) end
+    table.sort(ordered, function(a, b)
+        return (a.last_seen or 0) > (b.last_seen or 0)
+    end)
+
     local parts = {}
-    for _, p in ipairs(players) do
+    local total_len = 2  -- brackets
+    for _, p in ipairs(ordered) do
         -- Use the RFC 8259-compliant escape (v1.6.4): names can contain raw
         -- control bytes from clipboard paste / binary corruption, and the
         -- prior inline `\` and `"` only escape let those through.
-        table.insert(parts, string.format(
+        local entry = string.format(
             '{"guid":"%s","name":"%s"}',
             json_escape(p.guid),
             json_escape(p.name)
-        ))
+        )
+        if total_len + #entry + 1 > 1000 then
+            log(string.format("Roster JSON cap: dropping oldest entry %s", p.name))
+        else
+            table.insert(parts, entry)
+            total_len = total_len + #entry + 1
+        end
     end
     return "[" .. table.concat(parts, ",") .. "]"
 end
@@ -1448,6 +1674,7 @@ local function handle_gamestate_change(new_gamestate)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()   -- Reset surrender vote for new round (v1.4.0)
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         round_started = true
         log(string.format("Round started at %d", round_start_unix))
         intermission_handled = false
@@ -1504,6 +1731,7 @@ end
 -- ============================================================================
 
 function et_InitGame(levelTime, randomSeed, restart)
+    fh_init()
     et.RegisterModname(string.format("%s %s", modname, version))
 
     -- Initialize state
@@ -1579,12 +1807,16 @@ function et_RunFrame(levelTime)
     local now_unix = os.time()
     if now_unix - last_pending_retry_unix >= configuration.pending_retry_interval_seconds then
         last_pending_retry_unix = now_unix
+        local fh_t0 = fh_now()
         pending_retry_sweep()
+        fh_section("sweep", fh_t0)
     end
 
     -- Check for gamestate changes
     local gamestate = tonumber(et.trap_Cvar_Get("gamestate"))
     handle_gamestate_change(gamestate)
+
+
 
     -- Fallback: detect round start reliably (even if gamestate transition is missed)
     if gamestate == GS_PLAYING and not round_started then
@@ -1611,6 +1843,7 @@ function et_RunFrame(levelTime)
         allies_names = ""
         reset_spawn_tracking()
         reset_surrender_vote()
+        roster_reset()           -- v1.7.3: cumulative roster starts fresh
         intermission_handled = false
         round_started = true
         log(string.format("Round started at %d (fallback)", round_start_unix))
@@ -1649,12 +1882,21 @@ function et_RunFrame(levelTime)
     if gamestate == GS_PLAYING then
         detect_pause()
         track_spawns(levelTime)
+        -- v1.7.3: accumulate the round roster (throttled to once per
+        -- second inside roster_scan) so mid-round quitters stay in the
+        -- team lists. AFTER detect_pause on purpose: the pause gate must
+        -- see THIS frame's pause bit, not the previous frame's.
+        if round_started then
+            roster_scan()
+        end
     end
 
     -- Send scheduled webhook
     if send_pending and levelTime >= scheduled_send_time then
         send_pending = false
+        local fh_t0 = fh_now()
         send_webhook()
+        fh_section("send", fh_t0)
     end
 end
 
@@ -1677,21 +1919,36 @@ function et_ClientUserinfoChanged(clientNum)
     return 0
 end
 
+-- NOTHING here may `return` a VALUE, 0 included. G_LuaHook_Obituary walks the
+-- loaded modules and stops at the first one whose return passes
+-- lua_isstring(L, -1) — and in the Lua C API that test is true for NUMBERS as
+-- well as strings. A bare `return 0` therefore reads as "handled, stop", and
+-- every module loaded after this one is silently skipped.
+--
+-- That is not theory: this module sits ahead of live_events.lua in lua_modules,
+-- so live_events never received a single obituary from the day it shipped
+-- (2026-08-12). Measured on the local server 2026-08-20: engine 28 kills, K
+-- lines 0; with this fix in place the two match 1:1. The live ladder's K/D
+-- columns and alive dots were dead the whole time — damage and DPM kept
+-- working, which is why it looked healthy.
+--
+-- The engine ignores this hook's return value otherwise (the documented
+-- et_Obituary contract has none), so returning nothing loses us nothing.
 function et_Obituary(target, attacker, meansOfDeath)
     if not configuration.spawn_tracking_enabled then
-        return 0
+        return
     end
     local connected = safe_gentity_get(target, "pers.connected")
     if connected ~= CON_CONNECTED then
-        return 0
+        return
     end
     local team = tonumber(safe_gentity_get(target, "sess.sessionTeam")) or 0
     if team ~= TEAM_AXIS and team ~= TEAM_ALLIES then
-        return 0
+        return
     end
     local guid = client_guid_cache[target] or get_client_guid(target)
     if not guid or guid == "" then
-        return 0
+        return
     end
     client_guid_cache[target] = guid
     local name = client_name_cache[target] or get_client_name(target)
@@ -1704,7 +1961,6 @@ function et_Obituary(target, attacker, meansOfDeath)
             entry.last_death_ms = death_ms
         end
     end
-    return 0
 end
 
 -- ============================================================================
@@ -1885,3 +2141,16 @@ end
 -- ============================================================================
 -- END OF SCRIPT
 -- ============================================================================
+
+-- BEGIN frame_health hook v6.13 (identical in every module)
+-- Wraps the module's own et_RunFrame so its whole cost -- early returns
+-- included -- lands in fh_end. An error inside is re-raised unchanged so
+-- the engine still prints it; the measurement is taken first.
+local fh_wrapped_run_frame = et_RunFrame
+function et_RunFrame(levelTime)
+    fh_begin()
+    local ok, err = pcall(fh_wrapped_run_frame, levelTime)
+    fh_end()
+    if not ok then error(err, 0) end
+end
+-- END frame_health hook v6.13
