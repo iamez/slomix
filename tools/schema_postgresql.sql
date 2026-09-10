@@ -1752,7 +1752,8 @@ CREATE TABLE public.player_comprehensive_stats (
     created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
     time_dead_minutes_original double precision,
     full_selfkills integer DEFAULT 0,
-    time_played_percent real DEFAULT 0
+    time_played_percent real DEFAULT 0,
+    time_dead_reconstructed boolean
 );
 
 
@@ -3421,7 +3422,12 @@ CREATE TABLE public.proximity_vehicle_progress (
     round_link_source character varying(32),
     round_link_reason character varying(64),
     round_linked_at timestamp without time zone,
-    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    first_move_time integer,
+    last_move_time integer,
+    first_escort_time integer,
+    last_escort_time integer,
+    destroyed_events jsonb
 );
 
 
@@ -3914,6 +3920,39 @@ CREATE SEQUENCE public.server_status_history_id_seq
 --
 
 ALTER SEQUENCE public.server_status_history_id_seq OWNED BY public.server_status_history.id;
+
+
+--
+-- Name: player_match_stats; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.player_match_stats AS
+ SELECT r.match_id,
+    pcs.player_guid,
+    max(pcs.player_name) AS player_name,
+    max(pcs.map_name) AS map_name,
+    min(pcs.round_date) AS round_date,
+    max(r.gaming_session_id) AS gaming_session_id,
+    count(*) AS halves,
+    sum(pcs.kills) AS kills,
+    sum(pcs.deaths) AS deaths,
+    sum(pcs.damage_given) AS damage_given,
+    sum(pcs.damage_received) AS damage_received,
+    sum(pcs.headshots) AS headshots,
+    sum(pcs.headshot_kills) AS headshot_kills,
+    sum(pcs.xp) AS xp,
+    sum(pcs.gibs) AS gibs,
+    sum(pcs.revives_given) AS revives_given,
+    sum(pcs.times_revived) AS times_revived,
+    sum(pcs.time_played_seconds) AS time_played_seconds,
+        CASE
+            WHEN sum(pcs.time_played_seconds) > 0 THEN round(sum(pcs.damage_given)::numeric * 60.0 / sum(pcs.time_played_seconds)::numeric, 1)
+            ELSE NULL::numeric
+        END AS dpm
+   FROM public.player_comprehensive_stats pcs
+     JOIN public.rounds r ON r.id = pcs.round_id
+  WHERE (pcs.round_number = ANY (ARRAY[1, 2])) AND pcs.time_played_seconds > 0 AND r.match_id IS NOT NULL AND r.is_valid IS DISTINCT FROM false AND r.round_status::text IS DISTINCT FROM 'orphan_r2'::text
+  GROUP BY r.match_id, pcs.player_guid;
 
 
 --
@@ -8959,6 +8998,102 @@ CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_unlinked_recent
 CREATE INDEX IF NOT EXISTS idx_proximity_shot_fired_mismatch_recent
     ON proximity_shot_fired (round_start_unix, round_id)
     WHERE round_id IS NOT NULL;
+-- Migration 079: every detection table's mismatch leg gets the 069 shape
+-- (shot_fired above was the only one that had it; measured 10-22 s sweeps).
+-- reaction_metric appears here too — the canonical schema is loaded as a
+-- superuser on fresh deploys, so the website_app ownership split that keeps
+-- it out of the migration file does not apply.
+CREATE INDEX IF NOT EXISTS idx_proximity_spawn_timing_mismatch_recent
+    ON proximity_spawn_timing (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_team_cohesion_mismatch_recent
+    ON proximity_team_cohesion (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_kill_outcome_mismatch_recent
+    ON proximity_kill_outcome (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_carrier_event_mismatch_recent
+    ON proximity_carrier_event (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_carrier_kill_mismatch_recent
+    ON proximity_carrier_kill (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_carrier_return_mismatch_recent
+    ON proximity_carrier_return (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_combat_position_mismatch_recent
+    ON proximity_combat_position (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_construction_event_mismatch_recent
+    ON proximity_construction_event (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_crossfire_opportunity_mismatch_recent
+    ON proximity_crossfire_opportunity (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_escort_credit_mismatch_recent
+    ON proximity_escort_credit (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_focus_fire_mismatch_recent
+    ON proximity_focus_fire (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_hit_region_mismatch_recent
+    ON proximity_hit_region (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_lua_trade_kill_mismatch_recent
+    ON proximity_lua_trade_kill (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_objective_focus_mismatch_recent
+    ON proximity_objective_focus (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_objective_run_mismatch_recent
+    ON proximity_objective_run (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_support_summary_mismatch_recent
+    ON proximity_support_summary (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_team_push_mismatch_recent
+    ON proximity_team_push (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_trade_event_mismatch_recent
+    ON proximity_trade_event (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_vehicle_progress_mismatch_recent
+    ON proximity_vehicle_progress (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_combat_engagement_mismatch_recent
+    ON combat_engagement (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_player_track_mismatch_recent
+    ON player_track (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_revive_mismatch_recent
+    ON proximity_revive (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_weapon_accuracy_mismatch_recent
+    ON proximity_weapon_accuracy (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_aim_lock_mismatch_recent
+    ON proximity_aim_lock (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_comm_event_mismatch_recent
+    ON proximity_comm_event (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_skill_snapshot_mismatch_recent
+    ON proximity_skill_snapshot (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_spawn_select_mismatch_recent
+    ON proximity_spawn_select (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_proximity_reaction_metric_mismatch_recent
+    ON proximity_reaction_metric (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
+-- lua_round_teams runs its own leg pair and had neither family (079).
+CREATE INDEX IF NOT EXISTS idx_lua_round_teams_unlinked_recent
+    ON lua_round_teams (round_start_unix)
+    WHERE round_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_lua_round_teams_mismatch_recent
+    ON lua_round_teams (round_start_unix, round_id)
+    WHERE round_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_proximity_revive_round_lookup_unlinked
     ON proximity_revive (map_name, round_number, round_start_unix, session_date)
     WHERE round_id IS NULL;
@@ -9038,3 +9173,11 @@ CREATE TABLE IF NOT EXISTS player_aim_summary (
     payload          JSONB       NOT NULL,
     computed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+-- Migration 080: the GIN jsonb_path_ops index behind the player-profile
+-- kill count (a containment test; the jsonb_array_elements EXISTS scan it
+-- replaces cost 3.4 s of the endpoint's 3.5 s warm latency). Loaded as a
+-- superuser on fresh deploys, so the etlegacy_user ownership note in the
+-- migration file does not apply here.
+CREATE INDEX IF NOT EXISTS idx_combat_engagement_attackers_gin
+    ON combat_engagement USING gin (attackers jsonb_path_ops);

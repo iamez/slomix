@@ -136,6 +136,21 @@ const ROUTE_DEFINITIONS = Object.freeze({
         parseHash: (hash) => (hash === '#/records' ? { tab: 'records' } : null),
         load: ({ legacy }) => legacy.loadRecordBookView({ tab: 'records' }),
     },
+    'spider-web': {
+        viewId: 'spider-web',
+        label: 'Spider Web',
+        mode: VIEW_MODE.LEGACY,
+        surfaceType: 'read-heavy',
+        migrationWave: 'B',
+        buildHash: ({ roundId } = {}) => `#/spider-web/round/${roundId || ''}`,
+        parseHash: (hash) => {
+            const m = /^#\/spider-web\/round\/(\d+)$/.exec(hash);
+            return m ? { roundId: m[1] } : null;
+        },
+        load: ({ params, legacy }) => (
+            legacy.loadSpiderWebView ? legacy.loadSpiderWebView(params || {}) : undefined
+        ),
+    },
     'record-book': {
         viewId: 'record-book',
         label: 'Record Book',

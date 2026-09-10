@@ -7,6 +7,7 @@ All methods live on ProximityCog via mixin inheritance.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from datetime import datetime, timezone
 
@@ -151,6 +152,21 @@ _RELINK_FALLBACK_TEMPLATE = (
     "WHERE map_name = $2 AND round_start_unix = $3 "
     "  AND (round_id IS NULL OR round_id != $1)"
 )
+
+# Roster healing appends one player object to exactly one of two columns.
+# Spelled out as two constant statements (not a formatted column name) so
+# the SQL is verifiably static.
+_ROSTER_HEAL_SQL = {
+    "axis_players": (
+        "UPDATE lua_round_teams SET axis_players = axis_players || ?::jsonb "
+        "WHERE round_id = ?"
+    ),
+    "allies_players": (
+        "UPDATE lua_round_teams "
+        "SET allies_players = allies_players || ?::jsonb "
+        "WHERE round_id = ?"
+    ),
+}
 # lua_round_teams has no session_date column (unlike every other table in
 # the fanout), so it can't use _RELINK_PRIMARY_TEMPLATE as-is. This uses
 # round_number + round_start_unix instead — still more precise than the
@@ -526,6 +542,68 @@ class _ProximityRelinkerMixin:
         except Exception as e:
             logger.error(f"Re-linker error: {e}", exc_info=True)
 
+    async def _heal_truncated_lua_rosters(self, lookback_hours: int = 48) -> int:
+        """Top up lua_round_teams rosters that miss players pcs knows about.
+
+        The webhook Lua (through v1.7.2) captured the roster AT INTERMISSION,
+        so a player who quit mid-round fell out of axis/allies_players even
+        though the stats file — and therefore player_comprehensive_stats —
+        kept their full row (goldrush R2 2026-08-26: two quits ~30 s early
+        left allies_players with one name of three). v1.7.3 accumulates the
+        roster in Lua; this is the bot-side safety net for servers still on
+        an older Lua, and for rounds captured before the deploy.
+
+        pcs stores 8-char GUID prefixes, the lua feed full 32-char GUIDs, so
+        membership compares on the 8-char prefix — the same convention
+        players_router uses. The appended entry reuses the player's full
+        GUID from any other lua row when one exists, else the 8-char prefix
+        (every consumer compares on the prefix). Returns rounds healed.
+        """
+        db = self.bot.db_adapter
+        cutoff = int(datetime.now(timezone.utc).timestamp()) - lookback_hours * 3600
+        rows = await db.fetch_all(
+            """
+            SELECT p.round_id, p.team, UPPER(p.player_guid), MAX(p.player_name)
+            FROM player_comprehensive_stats p
+            JOIN lua_round_teams l ON l.round_id = p.round_id
+            WHERE l.round_start_unix >= ?
+              AND p.player_name NOT ILIKE '[BOT]%'
+              AND p.player_guid NOT ILIKE 'OMNIBOT%'
+              AND p.team IN (1, 2)
+              AND NOT EXISTS (
+                  SELECT 1 FROM jsonb_array_elements(
+                      CASE WHEN p.team = 1 THEN l.axis_players
+                           ELSE l.allies_players END) x
+                  WHERE UPPER(LEFT(x->>'guid', 8))
+                        = UPPER(LEFT(p.player_guid, 8))
+              )
+            GROUP BY p.round_id, p.team, UPPER(p.player_guid)
+            """,
+            (cutoff,),
+        )
+        healed_rounds: set[int] = set()
+        for round_id, team, guid8, name in rows or []:
+            full = await db.fetch_one(
+                """
+                SELECT x->>'guid' FROM lua_round_teams l,
+                    LATERAL jsonb_array_elements(l.axis_players || l.allies_players) x
+                WHERE UPPER(LEFT(x->>'guid', 8)) = ? LIMIT 1
+                """,
+                (guid8,),
+            )
+            guid = (full[0] if full else None) or guid8
+            column = "axis_players" if team == 1 else "allies_players"
+            await db.execute(
+                _ROSTER_HEAL_SQL[column],
+                (json.dumps([{"guid": guid, "name": name}]), round_id),
+            )
+            healed_rounds.add(round_id)
+            logger.info(
+                "\U0001fa79 Lua roster healed: round %s %s += %s (%s)",
+                round_id, column, name, guid8,
+            )
+        return len(healed_rounds)
+
     @tasks.loop(minutes=5)
     async def relink_null_rounds(self):
         """Periodically attempt to link NULL round_id rows in proximity tables."""
@@ -536,3 +614,22 @@ class _ProximityRelinkerMixin:
         """Wait for bot to be ready + 60s before starting re-linker."""
         await self.bot.wait_until_ready()
         await asyncio.sleep(60)
+
+    @tasks.loop(minutes=5)
+    async def heal_lua_rosters(self):
+        """Top up truncated lua rosters from pcs.
+
+        A SEPARATE loop from relink_null_rounds on purpose: that one starts
+        only when PROXIMITY_ENABLED is true, while the Lua webhook stores
+        rosters regardless — a deployment with proximity off would never
+        heal (Codex, #819). The cog starts this loop unconditionally.
+        """
+        try:
+            await self._heal_truncated_lua_rosters()
+        except Exception:
+            logger.exception("Lua roster healing failed (non-fatal)")
+
+    @heal_lua_rosters.before_loop
+    async def before_heal_lua_rosters(self):
+        await self.bot.wait_until_ready()
+        await asyncio.sleep(90)

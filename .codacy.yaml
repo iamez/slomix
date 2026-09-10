@@ -65,3 +65,32 @@ engines:
       # point the GroupWritableRotatingFileHandler goes away too.
       - "bot/logging_config.py"
       - "website/backend/logging_config.py"
+      #
+      # W5b measurement provenance. This file shells out to `git` seven times —
+      # rev-parse, ls-files, status — to prove that a measurement ran from a
+      # clean tree and to hash the untracked files that could otherwise change
+      # a result without changing a commit. Provenance is the whole point of
+      # the module: without it an S5 number is a claim, not evidence.
+      #
+      # The 15 findings are B404 (importing subprocess at all), B603
+      # (subprocess without shell=True) and B607 (partial executable path).
+      # Every call passes a hardcoded argument LIST with no shell and no user
+      # input; `git` resolves through PATH deliberately, so the measurement
+      # uses the same git the developer's own commands do.
+      #
+      # All 15 are Low severity, and the repo's own gate agrees: bandit run the
+      # way CI runs it (`bandit -c pyproject.toml -r website/backend ... -ll`,
+      # the "Security (pip-audit + bandit)" job) reports 0 issues at medium and
+      # above and exits 0 on this file. Codacy's duplicate bandit pass counts
+      # Low as well and honours no inline `# nosec`, so it re-reports the same
+      # 15 accepted findings on every PR that touches the file.
+      #
+      # Scoped to the `bandit` engine and this one path. Every other Codacy
+      # engine still analyses it, and bandit still analyses the rest of the
+      # repository — the identical tool and rule set already runs against this
+      # file in CI. Same reasoning as the two entries above.
+      #
+      # Owner: iamez. Drops if the provenance helpers stop using subprocess
+      # (e.g. by reading .git directly), which would remove the findings at
+      # the root rather than silencing them.
+      - "website/backend/map_geometry/stage_measurement.py"

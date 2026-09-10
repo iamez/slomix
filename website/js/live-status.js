@@ -542,6 +542,33 @@ function formatDuration(seconds) {
 /**
  * Load detailed current voice members
  */
+/**
+ * Which of the three things the voice payload is saying.
+ *
+ * ⛔ STATUS BEFORE COUNT. The endpoint answers 200 with `total_count: 0` for
+ * nobody in voice, for no row written by the bot, and for a row that would
+ * not parse. Reading the count first rendered all three as "No one currently
+ * in voice", so a broken pipeline looked like a quiet evening.
+ *
+ * Exported and pure so the precedence is tested where it is decided, and so
+ * the React port inherits it.
+ */
+export function voiceRowKind(data) {
+    const d = data || {};
+    // `=== 'unavailable'` / `=== 'stale'`, not "not ok": a backend that
+    // predates these fields sends no `status` at all and must keep behaving
+    // as before.
+    if (d.status === 'unavailable') return 'unavailable';
+    // ⛔ A REPORT THAT STOPPED IS NOT A ROOM THAT EMPTIED. The bot writes
+    // every 30 s; when it stops, its last row stays in the table and the
+    // member list would be presented as current indefinitely. The backend
+    // decides the threshold (it is the bot's own 180 s), so this only has to
+    // stop the count from answering first (Codex, PR #808).
+    if (d.status === 'stale') return 'stale';
+    return (d.total_count || 0) > 0 ? 'members' : 'empty';
+}
+
+
 export async function loadCurrentVoiceMembers() {
     const container = document.getElementById('voice-members-detailed');
     if (!container) return;
@@ -549,6 +576,32 @@ export async function loadCurrentVoiceMembers() {
     try {
         const data = await fetchJSON(`${API_BASE}/voice-activity/current`);
         container.innerHTML = '';
+
+        // ⛔ STATUS BEFORE COUNT. The endpoint answers 200 with
+        // `total_count: 0` for three different situations — nobody in voice,
+        // no row written by the bot, and a row that would not parse — and it
+        // now says which in `status`. Reading the count first rendered all
+        // three as "No one currently in voice", so a broken pipeline looked
+        // like a quiet evening (Codex, PR #808).
+        const kind = voiceRowKind(data);
+        if (kind === 'unavailable' || kind === 'stale') {
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-3 text-amber-400/80';
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', 'mic-off');
+            icon.className = 'w-4 h-4';
+            const text = document.createElement('span');
+            text.className = 'text-sm';
+            // The reason names the fault — a missing row and a corrupt one
+            // need different fixes and the page should not flatten them.
+            text.textContent = kind === 'stale'
+                ? `Voice status stale${data.reason ? `: ${data.reason}` : ''}`
+                : `Voice status unavailable${data.reason ? `: ${data.reason}` : ''}`;
+            row.append(icon, text);
+            container.appendChild(row);
+            refreshLucideIcons();
+            return;
+        }
 
         if (data.total_count === 0) {
             const row = document.createElement('div');
