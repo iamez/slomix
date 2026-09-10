@@ -157,7 +157,7 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
                   <ProxRow
                     key={e.guid}
                     name={nameOf(e.name, e.guid)}
-                    mid={`${figure(Math.round(e.total_proximity_ms / 1000))} s alongside · ${figure(e.total_samples)} samples`}
+                    mid={`${figure(Math.round(e.total_proximity_ms / 1000))} s alongside · ${figure(Math.round(e.total_mounted_ms / 1000))} s aboard · vehicle moved ${figure(e.total_escort_distance)} u · ${figure(e.total_samples)} samples`}
                     val={`${figure(e.total_credit_distance)} u`}
                   />
                 ))}
@@ -256,7 +256,7 @@ export function ProximityObjectiveIntel({ sessionDate }: { sessionDate: string |
             {(d) => (
               <Stack gap={1} className="rows">
                 {d.summary.objectives_tracked != null && (
-                  <Meta>{figure(d.summary.objectives_tracked)} objectives tracked · avg {figure(Math.round(d.summary.avg_time_near_obj_s ?? 0))} s near{d.summary.avg_distance != null ? ` · avg ${figure(Math.round(d.summary.avg_distance))} u from the objective` : ''}</Meta>
+                  <Meta>{d.summary.unique_players != null && `${figure(d.summary.unique_players)} players · `} {figure(d.summary.objectives_tracked)} objectives tracked · avg {figure(Math.round(d.summary.avg_time_near_obj_s ?? 0))} s near{d.summary.avg_distance != null ? ` · avg ${figure(Math.round(d.summary.avg_distance))} u from the objective` : ''}</Meta>
                 )}
                 {d.players.slice(0, 5).map((p) => (
                   <ProxRow

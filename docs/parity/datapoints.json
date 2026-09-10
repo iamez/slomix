@@ -189,11 +189,11 @@
   "/api/voice-activity/history": "18 files reachable from the endpoint's callers"
  },
  "summary": {
-  "read": 3473,
-  "unread": 29,
-  "dropped": 187,
+  "read": 3485,
+  "unread": 6,
+  "dropped": 198,
   "endpoints": 180,
-  "endpoints_fully_read": 167,
+  "endpoints_fully_read": 176,
   "unmeasured": 3
  },
  "per_endpoint": {
@@ -358,8 +358,8 @@
    "dropped": 0
   },
   "/api/proximity/aim-lock": {
-   "read": 15,
-   "unread": 2,
+   "read": 17,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/carrier-events": {
@@ -419,12 +419,12 @@
   },
   "/api/proximity/competitive/man-advantage": {
    "read": 15,
-   "unread": 2,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 2
   },
   "/api/proximity/competitive/personal-bests": {
-   "read": 13,
-   "unread": 2,
+   "read": 15,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/competitive/player-card": {
@@ -438,8 +438,8 @@
    "dropped": 0
   },
   "/api/proximity/competitive/stagger": {
-   "read": 16,
-   "unread": 2,
+   "read": 18,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/competitive/wave-cycles": {
@@ -468,8 +468,8 @@
    "dropped": 0
   },
   "/api/proximity/escort-credits": {
-   "read": 7,
-   "unread": 2,
+   "read": 9,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/event/{event_id}": {
@@ -538,9 +538,9 @@
    "dropped": 0
   },
   "/api/proximity/objective-focus": {
-   "read": 18,
-   "unread": 2,
-   "dropped": 0
+   "read": 19,
+   "unread": 0,
+   "dropped": 1
   },
   "/api/proximity/objective-pressure": {
    "read": 12,
@@ -613,8 +613,8 @@
    "dropped": 0
   },
   "/api/proximity/revives": {
-   "read": 9,
-   "unread": 2,
+   "read": 11,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/round/{round_id}/team-comparison": {
@@ -638,8 +638,8 @@
    "dropped": 0
   },
   "/api/proximity/spawn-timing": {
-   "read": 17,
-   "unread": 1,
+   "read": 18,
+   "unread": 0,
    "dropped": 0
   },
   "/api/proximity/summary": {
@@ -1039,8 +1039,8 @@
   },
   "/api/storytelling/scopes": {
    "read": 0,
-   "unread": 8,
-   "dropped": 0
+   "unread": 0,
+   "dropped": 8
   },
   "/api/storytelling/space-created": {
    "read": 21,
@@ -3998,7 +3998,7 @@
   {
    "endpoint": "/api/proximity/aim-lock",
    "key": "leaders.avg_dist",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/aim-lock",
@@ -4033,7 +4033,7 @@
   {
    "endpoint": "/api/proximity/aim-lock",
    "key": "leaders.total_lock_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/aim-lock",
@@ -5048,12 +5048,14 @@
   {
    "endpoint": "/api/proximity/competitive/man-advantage",
    "key": "teams.ALLIES",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)"
   },
   {
    "endpoint": "/api/proximity/competitive/man-advantage",
    "key": "teams.AXIS",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)"
   },
   {
    "endpoint": "/api/proximity/competitive/man-advantage",
@@ -5118,7 +5120,7 @@
   {
    "endpoint": "/api/proximity/competitive/personal-bests",
    "key": "cards.sessions_played",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/personal-bests",
@@ -5133,7 +5135,7 @@
   {
    "endpoint": "/api/proximity/competitive/personal-bests",
    "key": "scope_applied",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/personal-bests",
@@ -5373,7 +5375,7 @@
   {
    "endpoint": "/api/proximity/competitive/stagger",
    "key": "players.avg_score",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/stagger",
@@ -5448,7 +5450,7 @@
   {
    "endpoint": "/api/proximity/competitive/stagger",
    "key": "threshold",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/competitive/wave-cycles",
@@ -6003,12 +6005,12 @@
   {
    "endpoint": "/api/proximity/escort-credits",
    "key": "escorts.total_escort_distance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/escort-credits",
    "key": "escorts.total_mounted_ms",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/escort-credits",
@@ -7811,7 +7813,8 @@
   {
    "endpoint": "/api/proximity/objective-focus",
    "key": "players.total_time_ms",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "duplicate: the same figure as total_time_s, which the row prints (fixture: 810400 ms = 810.4 s)"
   },
   {
    "endpoint": "/api/proximity/objective-focus",
@@ -7846,7 +7849,7 @@
   {
    "endpoint": "/api/proximity/objective-focus",
    "key": "summary.unique_players",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/objective-pressure",
@@ -9526,7 +9529,7 @@
   {
    "endpoint": "/api/proximity/revives",
    "key": "leaders.avg_enemy_dist",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/revives",
@@ -9561,7 +9564,7 @@
   {
    "endpoint": "/api/proximity/revives",
    "key": "summary.avg_enemy_distance",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/revives",
@@ -9986,7 +9989,7 @@
   {
    "endpoint": "/api/proximity/spawn-timing",
    "key": "team_averages",
-   "status": "unread"
+   "status": "read"
   },
   {
    "endpoint": "/api/proximity/spawn-timing",
@@ -18803,42 +18806,50 @@
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "scope_version",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.accepted_round_count",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.distinct_map_names",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.end_date",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.gaming_session_id",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.scope_version",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/scopes",
    "key": "sessions.start_date",
-   "status": "unread"
+   "status": "dropped",
+   "reason": "dead picker: /api/storytelling/scopes feeds a session picker that was never built. The hook (lib/queries.ts useStoryScopes) is KEPT on purpose — deleting it trips the H1 endpoint-gap ratchet and the proximity inventory both count the call (owner decision O9, 2026-09-07). The rows reopen the day the picker is built; until then this is a recorded absence, not a forgotten one."
   },
   {
    "endpoint": "/api/storytelling/space-created",
