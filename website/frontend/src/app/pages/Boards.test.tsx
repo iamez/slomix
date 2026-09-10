@@ -1,6 +1,6 @@
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router';
+import { MemoryRouter, useLocation } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeQueryClient } from '../lib/queries';
 import { Leaderboards } from './Leaderboards';
@@ -52,6 +52,31 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe('Leaderboards — the board is linkable', () => {
+  function Where() { const { search } = useLocation(); return <div data-testid="search">{search}</div>; }
+
+  it('a shared link opens on the stat and period it names, and the query goes there', async () => {
+    const spy = vi.fn(fixtureFetch);
+    vi.stubGlobal('fetch', spy);
+    renderPage(<Leaderboards />, '/leaderboards?stat=dpm&period=all');
+    await waitFor(() => expect(spy).toHaveBeenCalled());
+    const url = spy.mock.calls.map((c) => String(c[0])).find((u) => u.includes('/leaderboard'));
+    expect(url).toContain('stat=dpm');
+    expect(url).toContain('period=all');
+  });
+
+  it('picking a stat writes it to the address bar, and going back to the default clears it', async () => {
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderPage(<><Leaderboards /><Where /></>, '/leaderboards');
+    // The default board writes nothing: a bare link is the default view.
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''));
+    fireEvent.click(screen.getByRole('button', { name: 'DPM' }));
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe('?stat=dpm'));
+    fireEvent.click(screen.getByRole('button', { name: 'Rounds' }));
+    await waitFor(() => expect(screen.getByTestId('search').textContent).toBe(''));
+  });
+});
+
 describe('Leaderboards', () => {
   it('renders the recorded board with legacy defaults and formats per stat', async () => {
     const fetchSpy = vi.fn(fixtureFetch);
@@ -67,6 +92,8 @@ describe('Leaderboards', () => {
     expect(row?.getAttribute('href')).toBe('/profile/3C0354D3');
     // K/D formats to two decimals from the recording.
     expect(screen.getByText('1.51')).toBeInTheDocument();
+    // The kills cell says the deaths on hover (every recorded row carries them).
+    await waitFor(() => expect(screen.getAllByTitle(/^[\d,]+ deaths$/).length).toBeGreaterThan(0));
   });
 
   it('switching the stat refetches with the new key', async () => {
