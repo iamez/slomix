@@ -44,18 +44,6 @@ _ROSTER_LINGER_SECONDS = 600
 # a real remap — ignore it.
 _MAP_FLIPBACK_SECONDS = 60
 # How long a recent objective action stays surfaced in the snapshot.
-_RECENT_KILLS_MAX = 30
-_POSITION_FRESH_SECONDS = 60
-
-
-def _xy(pos: Any) -> dict[str, Any] | None:
-    """The parser's `{x, y, z}` (ints or None) reduced to the map plane;
-    None when there is no usable point."""
-    if not isinstance(pos, dict) or pos.get("x") is None or pos.get("y") is None:
-        return None
-    return {"x": pos["x"], "y": pos["y"]}
-
-
 _OBJECTIVE_WINDOW_SECONDS = 20
 # A gap this long between events is a session boundary (server down + restart),
 # not a quiet stretch of one match — the first event after it resets the roster.
@@ -70,9 +58,6 @@ def _is_named(name: Any) -> bool:
     return bool(name) and not str(name).startswith("slot ")
 
 
-_OTHER_SIDE = {"axis": "allies", "allies": "axis"}
-
-
 class LiveStateReducer:
     """Folds the live event stream into a current-state snapshot."""
 
@@ -82,12 +67,6 @@ class LiveStateReducer:
         self._current_map: str | None = None
         self._previous_map: str | None = None
         self._map_changed_at: float | None = None
-        # ⭐ CHANGED and ASSERTED are different questions. `_map_changed_at`
-        # only moves when the map is a NEW one, so a map confirmed by events
-        # for twenty minutes would report a twenty-minute-old "change". This
-        # moves on every map event, including one naming the map we already
-        # hold, because that is a fresh assertion that it is still the map.
-        self._map_asserted_at: float | None = None
         self._game_state: str = "unknown"  # warmup|live|between|mapchange|unknown
         self._round_number: int | None = None
         self._round_started_at: float | None = None
@@ -102,21 +81,6 @@ class LiveStateReducer:
         # flush at the source) + an instant alive flag from LIVE_KILL (dead)
         # and LIVE_MOVEMENT (moving = alive). Reset on round/map boundaries.
         self._live_stats: dict[int, dict[str, Any]] = {}
-        # Last known position per slot from LIVE_MOVEMENT (x, y, yaw, at) and
-        # the recent kills with both positions from LIVE_KILL — the tracker
-        # sends them every few seconds and the reducer used to keep only the
-        # alive flag (ledger 2026-09-08). A mini map draws from these later;
-        # for now /state carries them.
-        self._positions: dict[int, dict[str, Any]] = {}
-        self._recent_kills: list[dict[str, Any]] = []
-        # Stopwatch context a spectator needs and the raw stream never states:
-        # which SIDE attacks on this map (constant per map — the two teams swap
-        # sides between halves, the objective does not), what the last half
-        # ended on, and the time the second half must beat. Sourced from the
-        # events we already carry: an offensive POPUP (planted/stole) names
-        # the attacking side; EXIT's reason names how the half ended.
-        self._attacking_side: str | None = None
-        self._last_round: dict[str, Any] | None = None
 
     # -- helpers ------------------------------------------------------------
     @staticmethod
@@ -180,25 +144,8 @@ class LiveStateReducer:
             self._objectives.clear()
             self._roster_changes.clear()
             self._live_stats.clear()
-            self._positions.clear()
-            self._recent_kills.clear()
             self._round_number = None
             self._round_started_at = None
-            # ⛔ THE MAP AND THE GAME STATE SURVIVED THIS RESET, and that made
-            # a stale map look brand new. After a session gap the first event
-            # is usually a CONNECT, not a MAP: `is_live` flips back to true,
-            # `last_event_age_seconds` reads 1, and the snapshot presented the
-            # PREVIOUS session's map with no field a client could use to doubt
-            # it. Reproduced: 5,000 s of silence + one CONNECT gave
-            # `is_live=True, current_map='supply', game_state='mapchange'`
-            # (Codex on PR #806, via Fable).
-            #
-            # ⭐ The map is NOT cleared. A server that restarts usually comes
-            # back on the same map, and blanking it would trade a stale answer
-            # for no answer — this module's rule is to keep the value and
-            # publish its age. Clearing the ASSERTION is what makes it stale.
-            self._map_asserted_at = None
-            self._game_state = "unknown"
 
         self._last_event_at = at
 
@@ -247,17 +194,7 @@ class LiveStateReducer:
 
         elif etype in ("MAP", "LIVE_MAP"):
             new_map = (ev.get("map_name") or "").strip()
-            if new_map and new_map == self._current_map:
-                # An event naming the map we already hold changes nothing and
-                # CONFIRMS everything — that is the whole point of tracking
-                # assertion separately from change.
-                #
-                # ⚠️ ONLY for the map we hold. The first version asserted on
-                # any non-empty name, before the rejection below, so a lagging
-                # source ping-ponging back to the PREVIOUS map refreshed the
-                # evidence for a map that event did not name (Codex, PR #808).
-                self._map_asserted_at = at
-            elif new_map:
+            if new_map and new_map != self._current_map:
                 # Anti ping-pong: two sources report the map (legacy3 `MAP`,
                 # LIVEX `LIVE_MAP`). A "change" straight back to the previous
                 # map moments after the last change is the lagging source
@@ -270,16 +207,10 @@ class LiveStateReducer:
                 self._previous_map = self._current_map
                 self._current_map = new_map
                 self._map_changed_at = at
-                self._map_asserted_at = at
                 self._game_state = "mapchange"
                 self._round_number = None
-                self._attacking_side = None
                 self._objectives = []
                 self._live_stats.clear()
-                self._positions.clear()
-                self._recent_kills.clear()
-            self._positions.clear()
-            self._recent_kills.clear()
 
         elif etype == "INIT_GAME":
             if self._game_state != "live":
@@ -289,8 +220,6 @@ class LiveStateReducer:
             self._game_state = "live"
             self._round_started_at = at
             self._live_stats.clear()  # the ladder is per-round, like HLTV's
-            self._positions.clear()
-            self._recent_kills.clear()
             # Stopwatch has exactly R1/R2. A third ROUND_START without a MAP
             # in between means the MAP event was lost (dropped batch) — treat
             # it as a fresh map's R1 instead of counting "R5" forever.
@@ -303,17 +232,9 @@ class LiveStateReducer:
 
         elif etype == "EXIT":
             self._game_state = "between"
-            self._close_round(str(ev.get("reason") or ""), at)
 
         elif etype == "POPUP":
             verb = ev.get("verb")
-            raw_team = ev.get("team")
-            # legacy3 POPUP names the side ('allies'/'axis'); other events
-            # carry the engine number — accept both.
-            side = raw_team if raw_team in ("axis", "allies") else self._side(raw_team)
-            if verb in ("stole", "planted") and side in ("axis", "allies"):
-                # Only attackers steal and plant; defenders return and defuse.
-                self._attacking_side = side
             if verb in ("stole", "returned", "planted", "defused"):
                 # POPUP carries the team but no slot, so it stays team-level
                 # (player=None). FLAG_PICKUP/DYNAMITE below name the actor.
@@ -343,22 +264,6 @@ class LiveStateReducer:
             victim = self._slot(ev, "victim_slot")
             if victim is not None:
                 self._live_stat(victim)["alive"] = False
-            killer = self._slot(ev, "killer_slot")
-            # A self-kill / world kill arrives with the tracker's sentinels:
-            # distance -1, killer_health -1 and a killer_pos of 0,0 (measured
-            # on the recorded evening of 2026-09-07). Those are not a point on
-            # the map; a mini map would draw a line from the origin.
-            distance = ev.get("distance")
-            no_killer = isinstance(distance, (int, float)) and distance < 0
-            self._recent_kills.append({
-                "killer_slot": None if no_killer else killer, "victim_slot": victim,
-                "killer_pos": None if no_killer else _xy(ev.get("killer_pos")),
-                "victim_pos": _xy(ev.get("victim_pos")),
-                "distance": None if no_killer else distance,
-                "killer_health": None if no_killer else ev.get("killer_health"),
-                "mod_id": ev.get("mod_id"), "at": at,
-            })
-            del self._recent_kills[:-_RECENT_KILLS_MAX]
 
         elif etype == "LIVE_MOVEMENT":
             for entry in ev.get("players") or []:
@@ -366,8 +271,6 @@ class LiveStateReducer:
                 if isinstance(slot, int):
                     # A moving player is alive (corpses don't emit positions).
                     self._live_stat(slot)["alive"] = True
-                    if entry.get("x") is not None and entry.get("y") is not None:
-                        self._positions[slot] = {"x": entry["x"], "y": entry["y"], "yaw": entry.get("yaw"), "at": at}
 
         elif etype == "DYNAMITE":
             actor = self._name_for_slot(self._slot(ev))
@@ -378,39 +281,6 @@ class LiveStateReducer:
             })
 
     # -- snapshot -----------------------------------------------------------
-    def _close_round(self, reason: str, at: float) -> None:
-        """Record how the half ended. The engine writes three exit reasons:
-        `Timelimit hit.` (the defence held the whole clock), `Wolf EndRound.`
-        (the objective fell — or the second half beat the first half's time),
-        `<Side> Surrender`. The winner follows from the reason and the
-        attacking side; when the attacking side is unknown (no offensive
-        objective yet) the winner is left null rather than guessed."""
-        if self._round_started_at is None:
-            return
-        low = reason.lower()
-        if "timelimit" in low:
-            kind = "timelimit"
-            winner = _OTHER_SIDE.get(self._attacking_side or "")
-        elif "surrender" in low:
-            loser = "allies" if low.startswith("allies") else ("axis" if low.startswith("axis") else None)
-            kind = "surrender"
-            winner = _OTHER_SIDE.get(loser or "")
-        elif "endround" in low:
-            kind, winner = "objective", self._attacking_side
-        else:
-            kind, winner = "other", None
-        self._last_round = {
-            "round_number": self._round_number,
-            "map": self._current_map,
-            "reason": kind,
-            "reason_raw": reason,
-            "winner_side": winner,
-            "duration_seconds": int(at - self._round_started_at),
-            "full_hold": kind == "timelimit",
-            "ended_at": at,
-        }
-        self._round_started_at = None
-
     def snapshot(self) -> dict[str, Any]:
         now = time.time()
         is_live = (self._last_event_at is not None
@@ -427,10 +297,6 @@ class LiveStateReducer:
                 "on_server_seconds": int(now - e["connected_at"]),
                 "on_side_seconds": int(now - e["team_since"]),
             }
-            pos = self._positions.get(slot)
-            if pos is not None and (now - pos["at"]) <= _POSITION_FRESH_SECONDS:
-                member["pos"] = {"x": pos["x"], "y": pos["y"], "yaw": pos.get("yaw"),
-                                 "age_seconds": int(now - pos["at"])}
             live = self._live_stats.get(slot)
             if live is not None:
                 elapsed = (now - self._round_started_at
@@ -467,15 +333,6 @@ class LiveStateReducer:
             if (now - o["at"]) <= _OBJECTIVE_WINDOW_SECONDS
         ] if is_live else []
 
-        recent_kills = [
-            {**{k: v for k, v in k_.items() if k != "at"},
-             "killer": self._name_for_slot(k_["killer_slot"]) if k_["killer_slot"] is not None else None,
-             "victim": self._name_for_slot(k_["victim_slot"]) if k_["victim_slot"] is not None else None,
-             "age_seconds": int(now - k_["at"])}
-            for k_ in self._recent_kills
-            if (now - k_["at"]) <= _OBJECTIVE_WINDOW_SECONDS
-        ] if is_live else []
-
         recent_roster_changes = [
             {"name": c["name"], "action": c["action"], "side": c["side"],
              "age_seconds": int(now - c["at"])}
@@ -492,33 +349,9 @@ class LiveStateReducer:
             "is_live": is_live,
             "game_state": self._game_state if is_live else "idle",
             "current_map": self._current_map,
-            # ⭐ The map's own evidence, so a client can qualify it the way it
-            # already qualifies the roster. `map_confirmed` is false when the
-            # map has not been asserted by an event since the last session
-            # boundary — the case where `is_live` is true, the event age is
-            # seconds, and the map is still the previous session's.
-            "map_confirmed": self._map_asserted_at is not None,
-            "map_age_seconds": (int(now - self._map_asserted_at)
-                                if self._map_asserted_at is not None else None),
             "previous_map": self._previous_map,
             "round_number": self._round_number if is_live else None,
             "round_elapsed_seconds": round_elapsed,
-            "attacking_side": self._attacking_side,
-            # The last completed half, kept across the map change so the
-            # card can say what just happened while the next map loads.
-            "last_round_result": ({
-                **{k: v for k, v in self._last_round.items() if k != "ended_at"},
-                "ended_age_seconds": int(now - self._last_round["ended_at"]),
-            } if self._last_round else None),
-            # Stopwatch: the second half must beat the first half's time on
-            # the same map. Null in the first half, or when the halves do
-            # not line up (a lost MAP event, a restart).
-            "time_to_beat_seconds": (
-                self._last_round["duration_seconds"]
-                if (self._last_round and self._round_number == 2
-                    and self._last_round.get("round_number") == 1
-                    and self._last_round.get("map") == self._current_map)
-                else None),
             "roster": {
                 "axis": axis,
                 "allies": allies,
@@ -539,7 +372,6 @@ class LiveStateReducer:
                                       if session_start else None),
             "recent_objectives": recent_objectives,
             "recent_roster_changes": recent_roster_changes,
-            "recent_kills": recent_kills,
             "last_event_age_seconds": (int(now - self._last_event_at)
                                        if self._last_event_at else None),
             "server_time": now,
