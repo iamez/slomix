@@ -51,6 +51,7 @@ from website.backend.map_geometry.stage_semantics import (
     StageEffectProjection,
     W3EntityIndexLinkDisposition,
     W3EntityKind,
+    W3EntityReference,
     W3LinkedIdentityIndex,
     project_accumulator_action,
     project_stage_effect,
@@ -83,6 +84,21 @@ class KillTargetDisposition(StrEnum):
     SCRIPT_IDENTITY_RUNTIME_MUTABLE = "script_identity_runtime_mutable"
 
 
+class AlertTargetDisposition(StrEnum):
+    PROVEN_NO_SCRIPT_EVENT = "proven_no_script_event"
+    SCRIPT_EVENT_HANDLER_MISSING = "script_event_handler_missing"
+    SCRIPT_EVENT_DISPATCH = "script_event_dispatch"
+    SCRIPT_IDENTITY_OPAQUE = "script_identity_opaque"
+    SCRIPT_IDENTITY_RUNTIME_MUTABLE = "script_identity_runtime_mutable"
+    STATIC_PROPERTY_INVALID = "static_property_invalid"
+    USE_CALLBACK_MISSING = "use_callback_missing"
+    USE_CALLBACK_NOT_MODELED = "use_callback_not_modeled"
+    USE_CHAIN_CYCLE_NOT_MODELED = "use_chain_cycle_not_modeled"
+    USE_CHAIN_SCRIPT_EVENT_NOT_MODELED = "use_chain_script_event_not_modeled"
+    USE_LIFECYCLE_NOT_MODELED = "use_lifecycle_not_modeled"
+    USE_PARENT_SCRIPT_EVENT_NOT_MODELED = "use_parent_script_event_not_modeled"
+
+
 class StageSemanticDomain(StrEnum):
     OBJECTIVE = "objective"
     SPAWN = "spawn"
@@ -95,6 +111,12 @@ class SymbolicPathCompletion(StrEnum):
     TEMPORALLY_SUSPENDED = "temporally_suspended"
     ABORTED_BY_GUARD = "aborted_by_guard"
     BLOCKED = "blocked"
+
+
+class SymbolicTemporalBoundaryState(StrEnum):
+    PRIOR_MOVEMENT_ACTIVE = "prior_movement_active"
+    CURRENT_ACTION_WAITING = "current_action_waiting"
+    NEXT_FRAME_REENTRY = "next_frame_reentry"
 
 
 class SymbolicDispatchResolution(StrEnum):
@@ -164,7 +186,9 @@ def _set_may_dispatch_spawn(action: ScriptAction) -> bool:
     return "classname" in keys and "classname_nospawn" not in keys
 
 
-def _followspline_has_wait(action: ScriptAction) -> bool:
+def followspline_waits_for_completion(action: ScriptAction) -> bool:
+    """Return the pinned callback's parsed wait-option disposition."""
+
     direction = _ascii_fold(action.arguments[0]) if action.arguments else ""
     option_index = 4 if direction in {"accum", "globalaccum"} else 3
     while option_index < len(action.arguments):
@@ -173,6 +197,19 @@ def _followspline_has_wait(action: ScriptAction) -> bool:
             return True
         # ET:Legacy consumes these values before it reads the next option.
         option_index += {"length": 2, "roll": 3}.get(option, 1)
+    return False
+
+
+def gotomarker_waits_for_completion(effect: GotoMarkerEffect) -> bool:
+    """Return the pinned callback's parsed wait-option disposition."""
+
+    option_index = 1  # arguments[0] is speed
+    arguments = effect.arguments
+    while option_index < len(arguments):
+        option = _ascii_fold(arguments[option_index])
+        if option == "wait":
+            return True
+        option_index += 2 if option == "relative" else 1
     return False
 
 
@@ -191,6 +228,35 @@ def runtime_action_control_disposition(action: ScriptAction) -> RuntimeActionCon
 @dataclass(frozen=True, slots=True)
 class StageEffectInstruction:
     projection: StageEffectProjection
+    control_disposition: RuntimeActionControlDisposition = (
+        RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+    )
+    waits_for_completion: bool = False
+    alert_targets: tuple[AlertTargetProjection, ...] = ()
+
+    def __post_init__(self) -> None:
+        effect = self.projection.effect
+        is_gotomarker = isinstance(effect, GotoMarkerEffect)
+        expected_control = (
+            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+            if is_gotomarker
+            else RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+        )
+        if self.control_disposition is not expected_control:
+            raise ValueError("stage-effect control disposition does not match its source action")
+        if self.waits_for_completion != (is_gotomarker and gotomarker_waits_for_completion(effect)):
+            raise ValueError("stage-effect wait contract does not match its source arguments")
+        is_alert = isinstance(effect, AlertEntityEffect)
+        if self.alert_targets and not is_alert:
+            raise ValueError("only alertentity effects may carry alert target contracts")
+        if is_alert:
+            if not isinstance(self.projection, EntityTargetEffectProjection):
+                if self.alert_targets:
+                    raise ValueError("unresolved alertentity effects cannot carry alert target contracts")
+            elif tuple(target.entity_index for target in self.alert_targets) != (
+                self.projection.target_lookup.selected_entity_indices
+            ):
+                raise ValueError("alert target contracts do not match the projected target order")
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +286,22 @@ class RuntimeActionInstruction:
 
 
 @dataclass(frozen=True, slots=True)
+class AlertTargetProjection:
+    entity_index: int
+    classname: str
+    script_name: str | None
+    event_name: str | None
+    disposition: AlertTargetDisposition
+    event_handler_node_id: str | None = None
+    downstream_w3_references: tuple[W3EntityReference, ...] = ()
+
+    def __post_init__(self) -> None:
+        has_dispatch = self.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+        if has_dispatch != bool(self.event_name and self.event_handler_node_id):
+            raise ValueError("alert target dispatch metadata does not match its disposition")
+
+
+@dataclass(frozen=True, slots=True)
 class KillTargetProjection:
     entity_index: int
     classname: str
@@ -236,6 +318,9 @@ class KillInstruction:
     targets: tuple[KillTargetProjection, ...]
 
 
+SymbolicPathEffect: TypeAlias = StageEffectProjection | KillInstruction
+
+
 @dataclass(frozen=True, slots=True)
 class SymbolicDeathDispatch:
     source_node_id: str
@@ -243,6 +328,17 @@ class SymbolicDeathDispatch:
     target_entity_index: int
     target_node_id: str
     line: int
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicRuntimeEventDispatch:
+    source_node_id: str
+    source_entity_index: int
+    target_entity_index: int
+    event_name: str
+    target_node_id: str
+    line: int
+    origin: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -259,6 +355,7 @@ class SymbolicFrontierRelevance:
     unknown_domain_relevance: bool
     unknown_reasons: tuple[str, ...]
     continuations: tuple[SymbolicFrontierContinuation, ...]
+    mutates_accumulator_state: bool = False
 
 
 OrderedEventInstruction: TypeAlias = (
@@ -602,9 +699,8 @@ class SymbolicIntegerDomain:
 
     @property
     def exact_value(self) -> int | None:
-        if self.lower == self.upper and self.contains(self.lower):
-            return self.lower
-        return None
+        candidates = self._first_candidates(2)
+        return candidates[0] if len(candidates) == 1 else None
 
     def contains(self, value: int) -> bool:
         return (
@@ -624,10 +720,13 @@ class SymbolicIntegerDomain:
             (0, self.upper),
         )
 
-    def has_candidate(self) -> bool:
+    def _first_candidates(self, limit: int) -> tuple[int, ...]:
+        if limit < 1:
+            raise ValueError("symbolic candidate limit must be positive")
         if self.lower > self.upper or self.required_set_bits & self.required_clear_bits:
-            return False
+            return ()
         excluded_unsigned = {value % _UNSIGNED_MODULUS for value in self.excluded}
+        candidates: list[int] = []
         for segment_lower, segment_upper in self._unsigned_segments():
             lower = segment_lower
             while lower <= segment_upper:
@@ -640,16 +739,25 @@ class SymbolicIntegerDomain:
                 if candidate is None:
                     break
                 if candidate not in excluded_unsigned:
-                    return True
+                    candidates.append(
+                        candidate if candidate <= _SIGNED_INT_MAX else candidate - _UNSIGNED_MODULUS
+                    )
+                    if len(candidates) == limit:
+                        return tuple(candidates)
                 lower = candidate + 1
-        return False
+        return tuple(candidates)
+
+    def has_candidate(self) -> bool:
+        return bool(self._first_candidates(1))
 
     def _validated(self, **changes) -> SymbolicIntegerDomain | None:
         candidate = replace(self, **changes)
+        exact = candidate.exact_value
+        if exact is not None:
+            return SymbolicIntegerDomain.exact(exact)
         if not candidate.has_candidate():
             return None
-        exact = candidate.exact_value
-        return SymbolicIntegerDomain.exact(exact) if exact is not None else candidate
+        return candidate
 
     def refine_guard(
         self,
@@ -758,16 +866,120 @@ class SymbolicGuardDecision:
 
 
 @dataclass(frozen=True, slots=True)
+class SymbolicTemporalFrontierSnapshot:
+    """Exact construction-time inputs retained for one temporal scheduler seed."""
+
+    active_frames: tuple[tuple[int, str], ...]
+    caller_node_id: str
+    caller_entity_index: int
+    caller_instruction_offset: int
+    target_node_id: str
+    target_entity_indices: tuple[int, ...]
+    target_offset: int
+    dispatch_line: int
+    boundary_line: int
+    boundary_entity_index: int
+    boundary_state: SymbolicTemporalBoundaryState
+    entry_state: SymbolicAccumulatorState
+    entry_effects: tuple[SymbolicPathEffect, ...] = ()
+    entry_effect_entity_indices: tuple[int, ...] = ()
+    entry_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    entry_async_movement_stops: tuple[SymbolicAsyncMovementStop, ...] = ()
+    boundary_async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    entry_tag_parent_mutation_entity_indices: tuple[int, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.active_frames:
+            raise ValueError("temporal frontier snapshot requires its active invocation ancestry")
+        if self.active_frames[-1] != (self.caller_entity_index, self.caller_node_id):
+            raise ValueError("temporal frontier caller does not match its active invocation ancestry")
+        if self.caller_entity_index < 0 or self.boundary_entity_index < 0:
+            raise ValueError("temporal frontier snapshot entity indices must be non-negative")
+        if self.caller_instruction_offset < 1:
+            raise ValueError("temporal frontier caller offset must follow its dispatch instruction")
+        if not self.target_entity_indices:
+            raise ValueError("temporal frontier snapshot requires its concrete target group")
+        if not 0 <= self.target_offset < len(self.target_entity_indices):
+            raise ValueError("temporal frontier target offset is outside its concrete target group")
+        if self.dispatch_line <= 0 or self.boundary_line <= 0:
+            raise ValueError("temporal frontier source lines must be positive")
+        if len(self.entry_effects) != len(self.entry_effect_entity_indices):
+            raise ValueError("temporal frontier entry effect provenance is inconsistent")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicAsyncMovementStart:
+    source_entity_index: int
+    command: str
+    arguments: tuple[str, ...]
+    line: int
+
+    def __post_init__(self) -> None:
+        if self.source_entity_index < 0:
+            raise ValueError("symbolic asynchronous movement entity index must be non-negative")
+        if self.line <= 0:
+            raise ValueError("symbolic asynchronous movement line must be positive")
+        if self.command == "gotomarker":
+            if len(self.arguments) < 2:
+                raise ValueError("symbolic gotomarker start is missing its target or speed")
+            effect = GotoMarkerEffect(
+                self.arguments[0],
+                self.arguments[1:],
+                self.line,
+            )
+            if gotomarker_waits_for_completion(effect):
+                raise ValueError("waiting gotomarker cannot be an asynchronous movement start")
+        elif self.command == "followspline":
+            action = ScriptAction(self.command, self.arguments, " ".join(self.arguments), self.line, False)
+            if followspline_waits_for_completion(action):
+                raise ValueError("waiting followspline cannot be an asynchronous movement start")
+        else:
+            raise ValueError("symbolic asynchronous movement start requires a movement action")
+
+
+@dataclass(frozen=True, slots=True)
+class SymbolicAsyncMovementStop:
+    """One `halt` that cancelled movement, positioned against the start stream.
+
+    `starts_before` is how many asynchronous movement starts the path had already
+    recorded when this stop happened. It is what makes the two channels
+    interleavable: `halt; gotomarker` and `gotomarker; halt` produce the same
+    membership but opposite outcomes, and the engine agrees only with the
+    ordered reading.
+
+    A wall-clock or line number would not do. `_merge_symbolic_segment`
+    concatenates segments from different programs, so `ScriptAction.line` is not
+    monotone across a nested dispatch, while a count of preceding starts stays
+    correct under concatenation once the segment's stops are offset by the
+    prefix's start count.
+    """
+
+    source_entity_index: int
+    starts_before: int
+
+    def __post_init__(self) -> None:
+        if self.source_entity_index < 0:
+            raise ValueError("symbolic asynchronous movement stop entity index must be non-negative")
+        if self.starts_before < 0:
+            raise ValueError("symbolic asynchronous movement stop start count must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolicEventPath:
     source_entity_index: int
     state: SymbolicAccumulatorState
-    effects: tuple[StageEffectProjection, ...] = ()
+    effects: tuple[SymbolicPathEffect, ...] = ()
     effect_entity_indices: tuple[int, ...] = ()
+    async_movement_starts: tuple[SymbolicAsyncMovementStart, ...] = ()
+    async_movement_stops: tuple[SymbolicAsyncMovementStop, ...] = ()
+    tag_parent_mutation_entity_indices: tuple[int, ...] = ()
     guard_decisions: tuple[SymbolicGuardDecision, ...] = ()
     temporal_boundary_lines: tuple[int, ...] = ()
     temporal_boundary_entity_indices: tuple[int, ...] = ()
+    temporal_boundary_states: tuple[SymbolicTemporalBoundaryState, ...] = ()
     nested_dispatches: tuple[SymbolicDispatchProjection, ...] = ()
     death_dispatches: tuple[SymbolicDeathDispatch, ...] = ()
+    runtime_event_dispatches: tuple[SymbolicRuntimeEventDispatch, ...] = ()
     caller_replacement_lines: tuple[int, ...] = ()
     caller_replacement_entity_indices: tuple[int, ...] = ()
     frontier_continuations: tuple[SymbolicFrontierContinuation, ...] = ()
@@ -776,6 +988,7 @@ class SymbolicEventPath:
     blocker_line: int | None = None
     blocker_entity_index: int | None = None
     frontier_relevance: SymbolicFrontierRelevance | None = None
+    temporal_frontier_snapshot: SymbolicTemporalFrontierSnapshot | None = None
 
 
 def _write_refined_domain(
@@ -790,6 +1003,94 @@ def _write_refined_domain(
             instruction.buffer_index,
             domain,
             source_entity_index=path.source_entity_index,
+        ),
+    )
+
+
+def _with_temporal_boundary(
+    path: SymbolicEventPath,
+    *,
+    line: int,
+    entity_index: int,
+    state: SymbolicTemporalBoundaryState,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        temporal_boundary_lines=path.temporal_boundary_lines + (line,),
+        temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (entity_index,),
+        temporal_boundary_states=path.temporal_boundary_states + (state,),
+    )
+
+
+def _with_stage_effect(
+    path: SymbolicEventPath,
+    instruction: StageEffectInstruction,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        effects=path.effects + (instruction.projection,),
+        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+    )
+
+
+def _with_kill_effect(
+    path: SymbolicEventPath,
+    instruction: KillInstruction,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        effects=path.effects + (instruction,),
+        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+    )
+
+
+def _with_async_movement_start(
+    path: SymbolicEventPath,
+    *,
+    source_entity_index: int,
+    command: str,
+    arguments: tuple[str, ...],
+    line: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        async_movement_starts=path.async_movement_starts
+        + (SymbolicAsyncMovementStart(source_entity_index, command, arguments, line),),
+    )
+
+
+def _with_async_movement_stop(
+    path: SymbolicEventPath,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        async_movement_stops=(
+            path.async_movement_stops
+            + (
+                SymbolicAsyncMovementStop(
+                    source_entity_index,
+                    len(path.async_movement_starts),
+                ),
+            )
+        ),
+    )
+
+
+def _with_tag_parent_mutation(
+    path: SymbolicEventPath,
+    *,
+    source_entity_index: int,
+) -> SymbolicEventPath:
+    return replace(
+        path,
+        tag_parent_mutation_entity_indices=(
+            path.tag_parent_mutation_entity_indices + (source_entity_index,)
         ),
     )
 
@@ -893,6 +1194,36 @@ def _kill_instruction_blocker_reason(instruction: KillInstruction) -> str | None
         return "kill_multi_target_death_dispatch_not_modeled"
     if dispatch_targets:
         return "kill_death_dispatch_not_modeled"
+    return None
+
+
+def _alert_instruction_blocker_reason(instruction: StageEffectInstruction) -> str | None:
+    if not isinstance(instruction.projection.effect, AlertEntityEffect):
+        return None
+    if not isinstance(instruction.projection, EntityTargetEffectProjection):
+        return "alertentity_projection_unresolved"
+    if not instruction.projection.target_lookup.selected_entity_indices:
+        return "alertentity_target_missing"
+    blocking = next(
+        (
+            target.disposition
+            for target in instruction.alert_targets
+            if target.disposition
+            not in {
+                AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING,
+                AlertTargetDisposition.SCRIPT_EVENT_DISPATCH,
+            }
+        ),
+        None,
+    )
+    if blocking is not None:
+        return f"alertentity_{blocking.value}"
+    if any(
+        target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+        for target in instruction.alert_targets
+    ):
+        return "alertentity_dispatch_not_modeled"
     return None
 
 
@@ -1006,23 +1337,90 @@ def walk_symbolic_event_program(
                         continuing.append(branch)
                 continue
             if isinstance(instruction, StageEffectInstruction):
-                continuing.append(
-                    replace(
-                        path,
-                        effects=path.effects + (instruction.projection,),
-                        effect_entity_indices=path.effect_entity_indices + (source_entity_index,),
+                effected = _with_stage_effect(path, instruction, source_entity_index=source_entity_index)
+                if alert_blocker := _alert_instruction_blocker_reason(instruction):
+                    finished.append(
+                        _blocked_symbolic_path(
+                            effected,
+                            reason=alert_blocker,
+                            line=instruction.projection.effect.line,
+                            entity_index=source_entity_index,
+                        )
                     )
+                    continue
+                if (
+                    instruction.control_disposition
+                    is RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+                ):
+                    continuing.append(effected)
+                    continue
+                if not isinstance(instruction.projection.effect, GotoMarkerEffect):
+                    raise RuntimeError("only gotomarker stage effects may carry temporal control")
+
+                line = instruction.projection.effect.line
+                prior_motion = _with_temporal_boundary(
+                    path,
+                    line=line,
+                    entity_index=source_entity_index,
+                    state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
                 )
+                started = effected
+                if instruction.waits_for_completion:
+                    started_wait = _with_temporal_boundary(
+                        started,
+                        line=line,
+                        entity_index=source_entity_index,
+                        state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                    )
+                    if stop_at_temporal_boundary:
+                        finished.extend(
+                            (
+                                replace(prior_motion, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED),
+                                replace(started_wait, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED),
+                            )
+                        )
+                    else:
+                        # After a prior asynchronous move clears, ET re-enters with an old
+                        # stack-change time and completes this action without starting it.
+                        continuing.extend((prior_motion, started_wait))
+                else:
+                    started = _with_async_movement_start(
+                        started,
+                        source_entity_index=source_entity_index,
+                        command="gotomarker",
+                        arguments=(
+                            instruction.projection.effect.target,
+                            *instruction.projection.effect.arguments,
+                        ),
+                        line=line,
+                    )
+                    continuing.append(started)
+                    if stop_at_temporal_boundary:
+                        finished.append(
+                            replace(prior_motion, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED)
+                        )
+                    else:
+                        continuing.append(prior_motion)
                 continue
             if isinstance(instruction, ControlBarrierInstruction):
+                if instruction.kind is ControlBarrierKind.HALT:
+                    path = _with_async_movement_stop(
+                        path,
+                        source_entity_index=source_entity_index,
+                    )
                 if instruction.kind is ControlBarrierKind.WAIT:
                     # ET:Legacy skips waits during sudden death, so retain both
                     # the immediate and ordinary delayed continuations.
                     continuing.append(path)
-                delayed = replace(
+                delayed = _with_temporal_boundary(
                     path,
-                    temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
-                    temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (source_entity_index,),
+                    line=instruction.action.line,
+                    entity_index=source_entity_index,
+                    state=(
+                        SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING
+                        if instruction.kind is ControlBarrierKind.WAIT
+                        else SymbolicTemporalBoundaryState.NEXT_FRAME_REENTRY
+                    ),
                 )
                 if stop_at_temporal_boundary:
                     finished.append(replace(delayed, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED))
@@ -1041,13 +1439,18 @@ def walk_symbolic_event_program(
                 )
                 continue
             if isinstance(instruction, KillInstruction):
+                effected = _with_kill_effect(
+                    path,
+                    instruction,
+                    source_entity_index=source_entity_index,
+                )
                 blocker_reason = _kill_instruction_blocker_reason(instruction)
                 if blocker_reason is None:
-                    continuing.append(path)
+                    continuing.append(effected)
                 else:
                     finished.append(
                         replace(
-                            path,
+                            effected,
                             completion=SymbolicPathCompletion.BLOCKED,
                             blocker_reason=blocker_reason,
                             blocker_line=instruction.action.line,
@@ -1066,6 +1469,11 @@ def walk_symbolic_event_program(
                     )
                 )
                 continue
+            if instruction.action.command == "attachtotag":
+                path = _with_tag_parent_mutation(
+                    path,
+                    source_entity_index=source_entity_index,
+                )
             if instruction.control_disposition is RuntimeActionControlDisposition.MAY_STOP_ON_SPAWN_FAILURE:
                 continuing.append(path)
                 finished.append(
@@ -1078,17 +1486,70 @@ def walk_symbolic_event_program(
                     )
                 )
             elif instruction.control_disposition is RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE:
-                if instruction.action.command == "followspline" and not _followspline_has_wait(instruction.action):
-                    continuing.append(path)
-                delayed = replace(
-                    path,
-                    temporal_boundary_lines=path.temporal_boundary_lines + (instruction.action.line,),
-                    temporal_boundary_entity_indices=path.temporal_boundary_entity_indices + (source_entity_index,),
-                )
-                if stop_at_temporal_boundary:
-                    finished.append(replace(delayed, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED))
+                line = instruction.action.line
+                if instruction.action.command == "followspline":
+                    prior_motion = _with_temporal_boundary(
+                        path,
+                        line=line,
+                        entity_index=source_entity_index,
+                        state=SymbolicTemporalBoundaryState.PRIOR_MOVEMENT_ACTIVE,
+                    )
+                    if followspline_waits_for_completion(instruction.action):
+                        current_wait = _with_temporal_boundary(
+                            path,
+                            line=line,
+                            entity_index=source_entity_index,
+                            state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                        )
+                        if stop_at_temporal_boundary:
+                            finished.extend(
+                                (
+                                    replace(
+                                        prior_motion,
+                                        completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED,
+                                    ),
+                                    replace(
+                                        current_wait,
+                                        completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED,
+                                    ),
+                                )
+                            )
+                        else:
+                            # The prior-motion branch completes this action on re-entry;
+                            # only a first-call branch can start the waiting spline.
+                            continuing.extend((prior_motion, current_wait))
+                    else:
+                        continuing.append(
+                            _with_async_movement_start(
+                                path,
+                                source_entity_index=source_entity_index,
+                                command=instruction.action.command,
+                                arguments=instruction.action.arguments,
+                                line=instruction.action.line,
+                            )
+                        )
+                        if stop_at_temporal_boundary:
+                            finished.append(
+                                replace(
+                                    prior_motion,
+                                    completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED,
+                                )
+                            )
+                        else:
+                            continuing.append(prior_motion)
                 else:
-                    continuing.append(delayed)
+                    current_wait = _with_temporal_boundary(
+                        path,
+                        line=line,
+                        entity_index=source_entity_index,
+                        state=SymbolicTemporalBoundaryState.CURRENT_ACTION_WAITING,
+                    )
+                    if stop_at_temporal_boundary:
+                        finished.append(
+                            replace(current_wait, completion=SymbolicPathCompletion.TEMPORALLY_SUSPENDED)
+                        )
+                    else:
+                        continuing.append(current_wait)
             elif instruction.blocker_reason is None:
                 continuing.append(path)
             else:
@@ -1137,13 +1598,30 @@ def _merge_symbolic_segment(
         state=segment.state,
         effects=prefix.effects + segment.effects,
         effect_entity_indices=prefix.effect_entity_indices + segment.effect_entity_indices,
+        async_movement_starts=prefix.async_movement_starts + segment.async_movement_starts,
+        async_movement_stops=(
+            prefix.async_movement_stops
+            + tuple(
+                # The segment counted its own starts from zero; after
+                # concatenation they sit behind the prefix's, so every stop
+                # moves with them or the interleaving silently reorders.
+                replace(stop, starts_before=stop.starts_before + len(prefix.async_movement_starts))
+                for stop in segment.async_movement_stops
+            )
+        ),
+        tag_parent_mutation_entity_indices=(
+            prefix.tag_parent_mutation_entity_indices
+            + segment.tag_parent_mutation_entity_indices
+        ),
         guard_decisions=prefix.guard_decisions + segment.guard_decisions,
         temporal_boundary_lines=temporal_lines,
         temporal_boundary_entity_indices=(
             prefix.temporal_boundary_entity_indices + segment.temporal_boundary_entity_indices
         ),
+        temporal_boundary_states=prefix.temporal_boundary_states + segment.temporal_boundary_states,
         nested_dispatches=prefix.nested_dispatches + segment.nested_dispatches,
         death_dispatches=prefix.death_dispatches + segment.death_dispatches,
+        runtime_event_dispatches=prefix.runtime_event_dispatches + segment.runtime_event_dispatches,
         caller_replacement_lines=prefix.caller_replacement_lines + segment.caller_replacement_lines,
         caller_replacement_entity_indices=(
             prefix.caller_replacement_entity_indices + segment.caller_replacement_entity_indices
@@ -1215,20 +1693,26 @@ def _temporal_nested_outcome(
     target_entity_index: int,
     last_target: bool,
     dispatch_line: int,
+    snapshot: SymbolicTemporalFrontierSnapshot | None = None,
 ) -> SymbolicEventPath:
-    if target_entity_index == caller_entity_index and last_target:
-        return _record_caller_replacement(
+    if target_entity_index == caller_entity_index:
+        if last_target:
+            return _record_caller_replacement(
+                path,
+                line=dispatch_line,
+                entity_index=target_entity_index,
+            )
+        return _blocked_symbolic_path(
             path,
+            reason="same_entity_temporal_group_order_not_modeled",
             line=dispatch_line,
             entity_index=target_entity_index,
         )
+    if snapshot is None:
+        raise RuntimeError("cross-entity temporal frontier lost its construction-time snapshot")
     return _blocked_symbolic_path(
-        path,
-        reason=(
-            "same_entity_temporal_group_order_not_modeled"
-            if target_entity_index == caller_entity_index
-            else "cross_entity_temporal_interleaving_not_modeled"
-        ),
+        replace(path, temporal_frontier_snapshot=snapshot),
+        reason="cross_entity_temporal_interleaving_not_modeled",
         line=dispatch_line,
         entity_index=target_entity_index,
     )
@@ -1304,6 +1788,10 @@ def _walk_symbolic_stage_from(
                 program.instructions[position],
                 (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction),
             )
+            or (
+                isinstance(program.instructions[position], StageEffectInstruction)
+                and _alert_instruction_blocker_reason(program.instructions[position]) is not None
+            )
         ),
         None,
     )
@@ -1329,13 +1817,18 @@ def _walk_symbolic_stage_from(
         return _bounded_stage_paths(merged, max_paths=max_paths, line=line, entity_index=current_entity_index)
 
     instruction = program.instructions[nested_index]
-    if not isinstance(instruction, (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction)):
+    if not isinstance(
+        instruction,
+        (TriggerInstruction, AccumulatorConditionalTrigger, KillInstruction, StageEffectInstruction),
+    ):
         raise RuntimeError(f"nested instruction index {nested_index} does not identify a nested dispatch")
     dispatch_line = _instruction_line(instruction)
     if isinstance(instruction, AccumulatorConditionalTrigger):
         expected_blocker = "conditional_trigger_dispatch_not_modeled"
     elif isinstance(instruction, TriggerInstruction):
         expected_blocker = "trigger_dispatch_not_modeled"
+    elif isinstance(instruction, StageEffectInstruction):
+        expected_blocker = _alert_instruction_blocker_reason(instruction)
     else:
         expected_blocker = _kill_instruction_blocker_reason(instruction)
     outcomes: list[SymbolicEventPath] = []
@@ -1369,6 +1862,72 @@ def _walk_symbolic_stage_from(
                     break
             else:
                 outcomes.append(path)
+            continue
+
+        if isinstance(instruction, StageEffectInstruction):
+            if expected_blocker != "alertentity_dispatch_not_modeled":
+                outcomes.append(path)
+                continue
+            dispatch_targets = tuple(
+                target
+                for target in instruction.alert_targets
+                if target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+            )
+            if len(dispatch_targets) != 1 or dispatch_targets[0].event_handler_node_id is None:
+                outcomes.append(
+                    _blocked_symbolic_path(
+                        path,
+                        reason="alertentity_multi_event_dispatch_not_modeled",
+                        line=dispatch_line,
+                        entity_index=current_entity_index,
+                    )
+                )
+                continue
+            target = dispatch_targets[0]
+            target_program = index.program(target.event_handler_node_id)
+            if target.entity_index not in target_program.source.lookup.selected_entity_indices:
+                outcomes.append(
+                    _blocked_symbolic_path(
+                        path,
+                        reason="alertentity_dispatch_projection_invalid",
+                        line=dispatch_line,
+                        entity_index=current_entity_index,
+                    )
+                )
+                continue
+            runtime_dispatch = SymbolicRuntimeEventDispatch(
+                program.node.node_id,
+                current_entity_index,
+                target.entity_index,
+                target.event_name or "",
+                target.event_handler_node_id,
+                dispatch_line,
+                "alertentity_use_callback",
+            )
+            dispatched_path = replace(
+                path,
+                runtime_event_dispatches=path.runtime_event_dispatches + (runtime_dispatch,),
+            )
+            outcomes.extend(
+                _walk_symbolic_target_group(
+                    index,
+                    caller_program=program,
+                    caller_entity_index=current_entity_index,
+                    caller_instruction_offset=nested_index + 1,
+                    target_program=target_program,
+                    target_entity_indices=(target.entity_index,),
+                    target_offset=0,
+                    dispatch_line=dispatch_line,
+                    prefix=_resume_symbolic_path(dispatched_path),
+                    active_frames=active_frames,
+                    max_paths=max_paths,
+                    max_depth=max_depth,
+                    stop_at_temporal_boundary=stop_at_temporal_boundary,
+                    budget=budget,
+                )
+            )
+            if budget.exhausted:
+                break
             continue
 
         if isinstance(instruction, KillInstruction):
@@ -1590,6 +2149,35 @@ def _walk_symbolic_target_group(
     outcomes: list[SymbolicEventPath] = []
     for path in target_results:
         target_paused = len(path.temporal_boundary_lines) > temporal_count
+        snapshot = (
+            SymbolicTemporalFrontierSnapshot(
+                active_frames=active_frames,
+                caller_node_id=caller_program.node.node_id,
+                caller_entity_index=caller_entity_index,
+                caller_instruction_offset=caller_instruction_offset,
+                target_node_id=target_program.node.node_id,
+                target_entity_indices=target_entity_indices,
+                target_offset=target_offset,
+                dispatch_line=dispatch_line,
+                boundary_line=path.temporal_boundary_lines[temporal_count],
+                boundary_entity_index=path.temporal_boundary_entity_indices[temporal_count],
+                boundary_state=path.temporal_boundary_states[temporal_count],
+                entry_state=prefix.state,
+                entry_effects=prefix.effects,
+                entry_effect_entity_indices=prefix.effect_entity_indices,
+                entry_async_movement_starts=prefix.async_movement_starts,
+                entry_async_movement_stops=(
+                    prefix.async_movement_stops
+                ),
+                boundary_async_movement_starts=path.async_movement_starts,
+                entry_tag_parent_mutation_entity_indices=(
+                    prefix.tag_parent_mutation_entity_indices
+                ),
+            )
+            if target_paused and target_entity_index != caller_entity_index
+            else None
+        )
+
         if path.completion is SymbolicPathCompletion.BLOCKED:
             caller_is_replaced = target_paused and target_entity_index == caller_entity_index and last_target
             blocked_path = (
@@ -1632,6 +2220,7 @@ def _walk_symbolic_target_group(
                     target_entity_index=target_entity_index,
                     last_target=last_target,
                     dispatch_line=dispatch_line,
+                    snapshot=snapshot,
                 )
             )
             continue
@@ -1643,6 +2232,7 @@ def _walk_symbolic_target_group(
                     target_entity_index=target_entity_index,
                     last_target=last_target,
                     dispatch_line=dispatch_line,
+                    snapshot=snapshot,
                 )
             )
             continue
@@ -1712,23 +2302,65 @@ _DYNAMIC_ROUTE_RUNTIME_ACTIONS = frozenset(
     }
 )
 
+_W3_STAGE_DOMAINS: Mapping[W3EntityKind, frozenset[StageSemanticDomain]] = MappingProxyType(
+    {
+        W3EntityKind.SPAWN_POINT: frozenset({StageSemanticDomain.SPAWN}),
+        W3EntityKind.OBJECTIVE_VOLUME: frozenset({StageSemanticDomain.OBJECTIVE}),
+        W3EntityKind.OBJECTIVE_MARKER: frozenset(
+            {StageSemanticDomain.OBJECTIVE, StageSemanticDomain.SPAWN}
+        ),
+        W3EntityKind.COLLISION_ENTITY: frozenset({StageSemanticDomain.DYNAMIC_ROUTE}),
+    }
+)
+
+_GLOBAL_RUNTIME_STAGE_DOMAINS: Mapping[str, frozenset[StageSemanticDomain]] = MappingProxyType(
+    {
+        "wm_allied_respawntime": frozenset({StageSemanticDomain.SPAWN}),
+        "wm_axis_respawntime": frozenset({StageSemanticDomain.SPAWN}),
+        "wm_number_of_objectives": frozenset({StageSemanticDomain.OBJECTIVE}),
+    }
+)
+
+
+def _w3_reference_domains(references: tuple[W3EntityReference, ...]) -> set[StageSemanticDomain]:
+    return {
+        domain
+        for reference in references
+        for domain in _W3_STAGE_DOMAINS[reference.kind]
+    }
+
+
+def _exact_et_decimal(value: str) -> int | None:
+    token = value.strip(" \t\r\n\v\f")
+    digits = token[1:] if token[:1] in {"+", "-"} else token
+    if not digits or any(character < "0" or character > "9" for character in digits):
+        return None
+    try:
+        parsed = int(token, 10)
+    except ValueError:
+        return None
+    return parsed if _SIGNED_INT_MIN <= parsed <= _SIGNED_INT_MAX else None
+
 
 def _projection_domain_relevance(
     index: OrderedStageProgramIndex,
-    projection: StageEffectProjection,
+    projection: SymbolicPathEffect,
     *,
     source_entity_index: int,
 ) -> tuple[set[StageSemanticDomain], set[str]]:
+    if isinstance(projection, KillInstruction):
+        return {
+            domain
+            for target in projection.targets
+            for kind in index.w3_kinds(target.entity_index)
+            for domain in _W3_STAGE_DOMAINS[kind]
+        }, set()
     if isinstance(projection, (ObjectiveStatusEffectProjection, MainObjectiveEffectProjection)):
         return {StageSemanticDomain.OBJECTIVE}, set()
     if isinstance(projection, AutoSpawnEffectProjection):
         return {StageSemanticDomain.SPAWN}, set()
     if isinstance(projection, EntityTargetEffectProjection):
-        domains = {
-            StageSemanticDomain.DYNAMIC_ROUTE
-            for reference in projection.selected_w3_references
-            if reference.kind is W3EntityKind.COLLISION_ENTITY
-        }
+        domains = _w3_reference_domains(projection.selected_w3_references)
         reasons = {"effect_target_identity_missing"} if not projection.target_lookup.candidate_entity_indices else set()
         if projection.entity_index_link_disposition is W3EntityIndexLinkDisposition.UNPROVEN_IDENTITY_OVERRIDE:
             reasons.add("effect_target_w3_link_unproven_identity_override")
@@ -1760,6 +2392,38 @@ def _runtime_instruction_domain_relevance(
     command = instruction.action.command
     if command == "create":
         return {StageSemanticDomain.DYNAMIC_ROUTE}, set()
+    if command in _GLOBAL_RUNTIME_STAGE_DOMAINS:
+        return set(_GLOBAL_RUNTIME_STAGE_DOMAINS[command]), set()
+    if command == "setchargetimefactor":
+        if len(instruction.action.arguments) < 2:
+            return set(), {"runtime_setchargetimefactor_class_unclassified"}
+        player_class = _ascii_fold(instruction.action.arguments[1])
+        return (
+            ({StageSemanticDomain.DYNAMIC_ROUTE}, set())
+            if player_class == "engineer"
+            else (set(), set())
+        )
+    if command == "constructible_chargebarreq":
+        source_is_route = W3EntityKind.COLLISION_ENTITY in index.w3_kinds(source_entity_index)
+        reasons = (
+            set()
+            if source_is_route
+            else {"runtime_route_source_not_w3_linked:constructible_chargebarreq"}
+        )
+        return {StageSemanticDomain.DYNAMIC_ROUTE}, reasons
+    if command == "constructible_constructxpbonus":
+        value = (
+            _exact_et_decimal(instruction.action.arguments[0])
+            if instruction.action.arguments
+            else None
+        )
+        if value is None:
+            reasons = {"runtime_constructxpbonus_value_unclassified"}
+        elif value == 5:
+            reasons = {"runtime_constructxpbonus_omnibot_event_unverified"}
+        else:
+            reasons = set()
+        return set(), reasons
     if command not in _DYNAMIC_ROUTE_RUNTIME_ACTIONS:
         reasons = (
             {f"runtime_action_semantics_unclassified:{command}"}
@@ -1972,6 +2636,26 @@ def _collect_continuation_relevance(
             )
             domains.update(effect_domains)
             unknown_reasons.update(effect_unknown_reasons)
+            for target in instruction.alert_targets:
+                domains.update(_w3_reference_domains(target.downstream_w3_references))
+                if (
+                    target.disposition is AlertTargetDisposition.SCRIPT_EVENT_DISPATCH
+                    and target.event_handler_node_id is not None
+                ):
+                    collect(
+                        SymbolicFrontierContinuation(
+                            target.event_handler_node_id,
+                            target.entity_index,
+                            0,
+                            "reachable_alertentity_runtime_event",
+                        ),
+                        current_state,
+                    )
+                elif target.disposition not in {
+                    AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                    AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING,
+                }:
+                    unknown_reasons.add(f"alertentity_{target.disposition.value}")
             offset += 1
             continue
         if isinstance(instruction, TriggerInstruction):
@@ -2003,8 +2687,8 @@ def _collect_continuation_relevance(
             if not instruction.targets:
                 unknown_reasons.add("kill_target_identity_missing")
             for target in instruction.targets:
-                if W3EntityKind.COLLISION_ENTITY in index.w3_kinds(target.entity_index):
-                    domains.add(StageSemanticDomain.DYNAMIC_ROUTE)
+                for kind in index.w3_kinds(target.entity_index):
+                    domains.update(_W3_STAGE_DOMAINS[kind])
                 if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_OPAQUE:
                     unknown_reasons.add("kill_script_identity_opaque")
                 if target.disposition is KillTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE:
@@ -2321,21 +3005,26 @@ def classify_symbolic_frontier(
         relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
     if relevance_memo is None:
         relevance_memo = {}
+    mutates_accumulator_state = False
     for continuation in continuations:
+        mutation_observer = [False]
         continuation_domains, continuation_unknown_reasons = _collect_continuation_relevance(
             index,
             continuation,
             state=path.state,
             budget=relevance_budget,
             memo=relevance_memo,
+            mutation_observer=mutation_observer,
         )
         domains.update(continuation_domains)
         unknown_reasons.update(continuation_unknown_reasons)
+        mutates_accumulator_state |= mutation_observer[0]
     return SymbolicFrontierRelevance(
         tuple(sorted(domains, key=str)),
         bool(unknown_reasons),
         tuple(sorted(unknown_reasons)),
         tuple(continuations),
+        mutates_accumulator_state,
     )
 
 
@@ -2347,8 +3036,9 @@ def walk_symbolic_stage_program(
     initial_state: SymbolicAccumulatorState,
     max_paths: int = _DEFAULT_SYMBOLIC_PATH_BUDGET,
     max_depth: int = 64,
+    stop_at_temporal_boundary: bool = False,
 ) -> tuple[SymbolicEventPath, ...]:
-    """Walk nested events with one fail-closed work budget across all frames."""
+    """Walk a nested event segment with one fail-closed work budget."""
 
     if index.program(program.node.node_id) is not program:
         raise ValueError(f"source program {program.node.node_id!r} does not belong to this ordered-program index")
@@ -2369,7 +3059,7 @@ def walk_symbolic_stage_program(
         active_frames=((source_entity_index, program.node.node_id),),
         max_paths=max_paths,
         max_depth=max_depth,
-        stop_at_temporal_boundary=False,
+        stop_at_temporal_boundary=stop_at_temporal_boundary,
         budget=budget,
     )
     relevance_budget = _FrontierRelevanceBudget(_FRONTIER_RELEVANCE_WORK_BUDGET)
@@ -2525,6 +3215,339 @@ def _project_kill_action(
     return KillInstruction(action, lookup, tuple(targets))
 
 
+_ALERT_PROVEN_NO_EVENT_USE_CLASSES = frozenset(
+    {
+        "dlight",
+        "func_static",
+        "target_smoke",
+        "target_speaker",
+        "team_ctf_blueflag",
+        "team_ctf_bluespawn",
+        "team_ctf_redflag",
+        "team_ctf_redspawn",
+        "team_wolf_objective",
+    }
+)
+_ALERT_CHAIN_USE_CLASSES = frozenset({"target_effect", "target_explosion", "target_relay"})
+
+
+def _identity_property(identity, name: str) -> str | None:
+    folded = _ascii_fold(name)
+    return next((value for key, value in identity.properties if _ascii_fold(key) == folded), None)
+
+
+def _identity_int_property(identity, name: str, default: int = 0) -> int | None:
+    value = _identity_property(identity, name)
+    if value is None:
+        return default
+    # Q_atoi uses base-10 strtol. Require the complete property to be decimal;
+    # accepting only its prefix would not prove the static value is exact.
+    return _exact_et_decimal(value)
+
+
+def _func_explosive_has_possible_script_parent(
+    linked: W3LinkedIdentityIndex,
+    entity_index: int,
+) -> bool:
+    identity = linked.identities.entities[entity_index]
+    if not identity.target_name:
+        return False
+    first_target = linked.identities.lookup_first(
+        EntityIdentityNamespace.TARGET_NAME,
+        identity.target_name,
+    )
+    if first_target.selected_entity_indices != (entity_index,):
+        return False
+    for candidate in linked.identities.entities:
+        if (
+            _ascii_fold(candidate.classname) != "trigger_objective_info"
+            or not candidate.target
+            or _ascii_fold(candidate.target) != _ascii_fold(identity.target_name)
+        ):
+            continue
+        spawnflags = _identity_int_property(candidate, "spawnflags")
+        if spawnflags is None or spawnflags & 3:
+            return True
+    return False
+
+
+def _alert_use_chain_blocker(
+    linked: W3LinkedIdentityIndex,
+    target_name: str | None,
+    *,
+    active: frozenset[int] = frozenset(),
+) -> str | None:
+    if not target_name:
+        return None
+    lookup = linked.identities.lookup_all(EntityIdentityNamespace.TARGET_NAME, target_name)
+    for entity_index in lookup.selected_entity_indices:
+        if entity_index in active:
+            return "alertentity_use_chain_cycle_not_modeled"
+        identity = linked.identities.entities[entity_index]
+        classname = _ascii_fold(identity.classname)
+        if classname in _ALERT_PROVEN_NO_EVENT_USE_CLASSES:
+            continue
+        if classname in _ALERT_CHAIN_USE_CLASSES:
+            blocker = _alert_use_chain_blocker(
+                linked,
+                identity.target,
+                active=active | {entity_index},
+            )
+            if blocker is not None:
+                return blocker
+            continue
+        if classname in {"func_explosive", "script_mover", "target_script_trigger"}:
+            return "alertentity_use_chain_script_event_not_modeled"
+        return "alertentity_use_callback_not_modeled"
+    return None
+
+
+def _alert_use_chain_w3_references(
+    linked: W3LinkedIdentityIndex,
+    target_name: str | None,
+    *,
+    active: frozenset[int] = frozenset(),
+) -> tuple[W3EntityReference, ...]:
+    if not target_name:
+        return ()
+    lookup = linked.identities.lookup_all(EntityIdentityNamespace.TARGET_NAME, target_name)
+    references: list[W3EntityReference] = []
+    for entity_index in lookup.selected_entity_indices:
+        if entity_index in active:
+            continue
+        references.extend(
+            reference
+            for reference in linked.references
+            if reference.entity_index == entity_index
+        )
+        identity = linked.identities.entities[entity_index]
+        if _ascii_fold(identity.classname) in _ALERT_CHAIN_USE_CLASSES:
+            references.extend(
+                _alert_use_chain_w3_references(
+                    linked,
+                    identity.target,
+                    active=active | {entity_index},
+                )
+            )
+    return tuple(dict.fromkeys(references))
+
+
+def _alert_event_target(
+    *,
+    model: StaticStageModel,
+    linked: W3LinkedIdentityIndex,
+    entity_index: int,
+    event_name: str,
+) -> AlertTargetProjection:
+    identity = linked.identities.entities[entity_index]
+    script_name = identity.script_name
+    if script_name and _script_identity_may_change(model, script_name):
+        return AlertTargetProjection(
+            entity_index,
+            identity.classname,
+            script_name,
+            None,
+            AlertTargetDisposition.SCRIPT_IDENTITY_RUNTIME_MUTABLE,
+        )
+    if script_name and _has_only_opaque_script_identity(model, script_name):
+        return AlertTargetProjection(
+            entity_index,
+            identity.classname,
+            script_name,
+            None,
+            AlertTargetDisposition.SCRIPT_IDENTITY_OPAQUE,
+        )
+    handler = next(
+        (
+            node
+            for node in _script_program_nodes(model, script_name or "")
+            if node.event_name == event_name
+        ),
+        None,
+    )
+    if handler is None:
+        return AlertTargetProjection(
+            entity_index,
+            identity.classname,
+            script_name,
+            event_name,
+            AlertTargetDisposition.SCRIPT_EVENT_HANDLER_MISSING,
+        )
+    return AlertTargetProjection(
+        entity_index,
+        identity.classname,
+        script_name,
+        event_name,
+        AlertTargetDisposition.SCRIPT_EVENT_DISPATCH,
+        handler.node_id,
+    )
+
+
+def _project_alert_targets(
+    projection: StageEffectProjection,
+    *,
+    model: StaticStageModel,
+    linked: W3LinkedIdentityIndex,
+) -> tuple[AlertTargetProjection, ...]:
+    if not isinstance(projection, EntityTargetEffectProjection) or not isinstance(
+        projection.effect,
+        AlertEntityEffect,
+    ):
+        return ()
+    targets: list[AlertTargetProjection] = []
+    for entity_index in projection.target_lookup.selected_entity_indices:
+        identity = linked.identities.entities[entity_index]
+        classname = _ascii_fold(identity.classname)
+        chain_blocker = (
+            _alert_use_chain_blocker(linked, identity.target, active=frozenset({entity_index}))
+            if classname in _ALERT_CHAIN_USE_CLASSES or classname == "func_explosive"
+            else None
+        )
+        if chain_blocker is not None:
+            # Preserve the exact callback, recursive-cycle, or script-event
+            # blocker instead of flattening distinct frontier evidence.
+            disposition = {
+                "alertentity_use_callback_not_modeled": (
+                    AlertTargetDisposition.USE_CALLBACK_NOT_MODELED
+                ),
+                "alertentity_use_chain_cycle_not_modeled": (
+                    AlertTargetDisposition.USE_CHAIN_CYCLE_NOT_MODELED
+                ),
+                "alertentity_use_chain_script_event_not_modeled": (
+                    AlertTargetDisposition.USE_CHAIN_SCRIPT_EVENT_NOT_MODELED
+                ),
+            }[chain_blocker]
+            targets.append(
+                AlertTargetProjection(
+                    entity_index,
+                    identity.classname,
+                    identity.script_name,
+                    None,
+                    disposition,
+                )
+            )
+            continue
+        if classname == "func_explosive":
+            spawnflags = _identity_int_property(identity, "spawnflags")
+            if spawnflags is None:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.STATIC_PROPERTY_INVALID,
+                    )
+                )
+            elif spawnflags & 1:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.USE_LIFECYCLE_NOT_MODELED,
+                    )
+                )
+            elif _func_explosive_has_possible_script_parent(linked, entity_index):
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.USE_PARENT_SCRIPT_EVENT_NOT_MODELED,
+                    )
+                )
+            else:
+                targets.append(
+                    _alert_event_target(
+                        model=model,
+                        linked=linked,
+                        entity_index=entity_index,
+                        event_name="death",
+                    )
+                )
+            continue
+        if classname == "script_mover":
+            spawnflags = _identity_int_property(identity, "spawnflags")
+            health = _identity_int_property(identity, "health")
+            if spawnflags is None or health is None:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.STATIC_PROPERTY_INVALID,
+                    )
+                )
+            elif (spawnflags & 9) == 0:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.USE_CALLBACK_MISSING,
+                    )
+                )
+            elif spawnflags & 8 and not spawnflags & 1 and health != 0:
+                targets.append(
+                    _alert_event_target(
+                        model=model,
+                        linked=linked,
+                        entity_index=entity_index,
+                        event_name="rebirth",
+                    )
+                )
+            else:
+                targets.append(
+                    AlertTargetProjection(
+                        entity_index,
+                        identity.classname,
+                        identity.script_name,
+                        None,
+                        AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                    )
+                )
+            continue
+        if classname in _ALERT_PROVEN_NO_EVENT_USE_CLASSES or classname in _ALERT_CHAIN_USE_CLASSES:
+            targets.append(
+                AlertTargetProjection(
+                    entity_index,
+                    identity.classname,
+                    identity.script_name,
+                    None,
+                    AlertTargetDisposition.PROVEN_NO_SCRIPT_EVENT,
+                )
+            )
+            continue
+        targets.append(
+            AlertTargetProjection(
+                entity_index,
+                identity.classname,
+                identity.script_name,
+                None,
+                AlertTargetDisposition.USE_CALLBACK_NOT_MODELED,
+            )
+        )
+    return tuple(
+        replace(
+            target,
+            downstream_w3_references=_alert_use_chain_w3_references(
+                linked,
+                linked.identities.entities[target.entity_index].target,
+                active=frozenset({target.entity_index}),
+            ),
+        )
+        if _ascii_fold(linked.identities.entities[target.entity_index].classname)
+        in _ALERT_CHAIN_USE_CLASSES | {"func_explosive"}
+        else target
+        for target in targets
+    )
+
+
 def project_ordered_stage_programs(
     model: StaticStageModel,
     linked: W3LinkedIdentityIndex,
@@ -2561,14 +3584,24 @@ def project_ordered_stage_programs(
                     kind="stage-effect",
                     node_id=node.node_id,
                 )
+                projection = project_stage_effect(
+                    effect,
+                    source_script_name=node.entity_name,
+                    linked=linked,
+                    objectives=model.objectives,
+                )
+                is_gotomarker = isinstance(effect, GotoMarkerEffect)
+                alert_targets = _project_alert_targets(projection, model=model, linked=linked)
                 instructions.append(
                     StageEffectInstruction(
-                        project_stage_effect(
-                            effect,
-                            source_script_name=node.entity_name,
-                            linked=linked,
-                            objectives=model.objectives,
-                        )
+                        projection,
+                        (
+                            RuntimeActionControlDisposition.CONDITIONAL_TEMPORAL_PAUSE
+                            if is_gotomarker
+                            else RuntimeActionControlDisposition.IMMEDIATE_CURRENT_EVENT_CONTINUE
+                        ),
+                        is_gotomarker and gotomarker_waits_for_completion(effect),
+                        alert_targets,
                     )
                 )
                 continue
