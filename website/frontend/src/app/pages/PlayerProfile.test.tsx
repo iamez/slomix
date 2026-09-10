@@ -6,6 +6,7 @@ import { makeQueryClient } from '../lib/queries';
 import { PlayerProfilePage } from './PlayerProfile';
 import profile from './__fixtures__/api_players_identifier_profile.json';
 import skillPlayer from './__fixtures__/api_skill_player_identifier.json';
+import matchRounds from './__fixtures__/api_player_player_name_matches.json';
 import skillForm from './__fixtures__/api_skill_player_identifier_form.json';
 import skillHistory from './__fixtures__/api_skill_player_identifier_history.json';
 import memoryCard from './__fixtures__/api_players_identifier_memory_card.json';
@@ -26,6 +27,10 @@ function fixtureFetch(input: RequestInfo | URL): Promise<Response> {
   }
   if (/^\/api\/players\/[^/]+\/memory-card$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(memoryCard) } as Response);
+  }
+  // The round-level table's own endpoint (the legacy path), recorded.
+  if (/^\/api\/player\/[^/]+\/matches$/.test(path)) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(matchRounds) } as Response);
   }
   if (/^\/api\/players\/[^/]+\/card$/.test(path)) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(playerCard) } as Response);
@@ -596,6 +601,21 @@ describe('PlayerProfilePage long tail', () => {
     const arms = ((w.arms / w.total) * 100).toFixed(1);
     expect(screen.getByText(new RegExp(`head ${w.head_pct.toFixed(1)}% · arms ${arms}%`))).toBeInTheDocument();
     expect(screen.getByText(new RegExp(`against a ${f.relationships.baseline_dpm.toFixed(1)} dpm baseline`))).toBeInTheDocument();
+  });
+});
+
+describe('PlayerProfile — the recent rounds table', () => {
+  it('names the side played and the time on the clock behind every rate', async () => {
+    renderProfile('D8423F90');
+    // The recording's newest round: team 2 on this wire is Allies, 696 s played.
+    await waitFor(() => expect(screen.getAllByText('allies').length).toBeGreaterThan(0));
+    expect(screen.getAllByText('11:36').length).toBeGreaterThan(0);
+    // "played" appears elsewhere on the profile too, so the header is
+    // asserted inside the table it belongs to.
+    const table = screen.getByText('side').closest('table');
+    expect(table).not.toBeNull();
+    expect([...table!.querySelectorAll('th')].map((th) => th.textContent))
+      .toEqual(['date', 'map', 'r', 'side', 'played', 'hs kills', 'gibs', 'revives', 'dmg taken', 'acc']);
   });
 });
 

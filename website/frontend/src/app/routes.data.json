@@ -31,7 +31,7 @@
   "nav": "hidden",
   "phase": 4,
   "built": true,
-  "note": "Stats 2.0 R4: tabs summary/players/rounds/teamplay/story (SESSION_DETAIL_TABS in routes.ts). /rounds and /story* retired into these tabs \u2014 see REDIRECTS and PARAM_REDIRECTS."
+  "note": "Stats 2.0 R4: tabs summary/players/rounds/teamplay/story (SESSION_DETAIL_TABS in routes.ts). /rounds and /story* retired into these tabs — see REDIRECTS and PARAM_REDIRECTS."
  },
  {
   "key": "session-detail-date",
@@ -125,10 +125,11 @@
  {
   "key": "smart-stats-diag",
   "path": "/smart-stats-diag",
-  "label": "Smart Stats \u2014 Diag",
-  "nav": "footer",
+  "label": "Smart Stats — Diag",
+  "nav": "hidden",
   "phase": 1,
-  "built": true
+  "built": true,
+  "note": "Engineering page: reachable from About, not from the public footer (visitor review 2026-09-07). The route is unchanged, so existing links still resolve."
  },
  {
   "key": "live",
@@ -177,7 +178,7 @@
   "label": "Spider Web",
   "nav": "hidden",
   "phase": 5,
-  "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 \u00a73.5).",
+  "note": "New page owned by the spider-web workstream (PR #800); registered now so the route exists the day that page needs a home (docs/design/17 §3.5).",
   "built": true
  },
  {
@@ -232,9 +233,10 @@
   "key": "system",
   "path": "/system",
   "label": "System",
-  "nav": "footer",
+  "nav": "hidden",
   "phase": 1,
-  "built": true
+  "built": true,
+  "note": "Engineering page: reachable from About, not from the public footer (visitor review 2026-09-07). The route is unchanged, so existing links still resolve."
  },
  {
   "key": "design",
