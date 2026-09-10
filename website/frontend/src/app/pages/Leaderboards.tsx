@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
 import { useLeaderboard } from '../lib/queries';
-import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable } from '../components/ui';
+import { Absent, Chip, Lbl, lblStyle, Pending, rowStyle, SectionHead, Unavailable, figure } from '../components/ui';
 
 /**
  * Leaderboards (docs/design/12 row 3) — legacy leaderboard.js carried over:
@@ -96,9 +96,9 @@ export function Leaderboards() {
             >
               <span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-label)' }}>{String(row.rank).padStart(2, '0')}</span>
               <span className="m" style={{ fontSize: 'var(--fs-value)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.name}</span>
-              <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right', color: 'var(--color-text-100)' }}>{formatValue(stat, row.value)}</span>
+              <span className="m" style={{ fontSize: 'var(--fs-value)', textAlign: 'right', color: 'var(--color-text-100)' }} title={stat === 'kills' && row.deaths != null ? `${figure(row.deaths)} deaths` : undefined}>{formatValue(stat, row.value)}</span>
               {stat !== 'games' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.rounds}</span>}
-              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kills ?? '—'}</span>}
+              {stat !== 'kills' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }} title={row.deaths != null ? `${figure(row.deaths)} deaths` : undefined}>{row.kills ?? '—'}</span>}
               {stat !== 'kd' && <span className="m lb-aux" style={{ fontSize: 'var(--fs-small)', textAlign: 'right', color: 'var(--color-text-400)' }}>{row.kd.toFixed(2)}</span>}
             </Link>
           ))}
