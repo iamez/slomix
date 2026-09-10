@@ -470,7 +470,130 @@ _UPLOAD_SORTS = {
 }
 
 
-@router.get("")
+class UploadListItem(BaseModel):
+    """One card in the upload library.
+
+    ⚠️ THREE FIELDS ARE NULL IN EVERY LIVE ROW and they are NULLABLE, NOT
+    OPTIONAL — the keys are always present. `description_preview` is
+    `LEFT(COALESCE(description,''),160) or None`, so an upload with no
+    description sends null rather than `""`; `expires_at` is null when the
+    uploader kept the file forever, which is the default; `poster_url` is null
+    for anything that never had a thumbnail captured. A model that made any of
+    them a required non-null field would answer 500 on the FIRST item.
+
+    ⭐ `poster_url` is the only one of the three where the corpus shows both
+    states (2 of 7 sampled rows carry a URL), so the other two are typed from
+    the handler's own `if … else None`, not from a reading.
+    """
+
+    id: str
+    title: str
+    filename: str
+    category: str
+    extension: str
+    file_size_bytes: int
+    uploader_name: str
+    #: `uploads.uploader_discord_id` is nullable and reaches the payload raw.
+    #: ⛔ A STRING, NOT A NUMBER, AND THE DIFFERENCE IS A LIVE BUG. A Discord
+    #: snowflake is 18 digits; `Number.MAX_SAFE_INTEGER` is 16. Sent as a JSON
+    #: number, `JSON.parse` silently drops the last digit — measured:
+    #: 231165917604741121 arrives as ...120. `auth.py:314` already sends the
+    #: session id as `str()`, so `uploads.js:1191` compares an exact string
+    #: against a corrupted number and the uploader loses the delete
+    #: affordance on their own file whenever `can_delete` is absent.
+    #:
+    #: ⭐ The change is NOT lossy: a consumer doing `Number(x)` gets exactly
+    #: what it got before, and one doing `String(x)` now gets the right
+    #: digits instead of the wrong ones. (CodeRabbit on #830.)
+    uploader_discord_id: str | None
+    #: `uploads.download_count` is nullable and reaches the payload raw.
+    download_count: int | None
+    #: `str(created_at) if created_at else None` — the column is nullable.
+    created_at: str | None
+    #: First 160 characters of the description, or null when there is none.
+    description_preview: str | None
+    #: Null means kept forever (the default), not "unknown".
+    expires_at: str | None
+    share_url: str
+    #: Null → the card falls back to the category icon.
+    poster_url: str | None
+
+
+class UploadList(BaseModel):
+    """A page of the library.
+
+    ⭐ VISIBILITY IS NOT AUTH-DEPENDENT, and that is worth stating because the
+    opposite is the reasonable guess. The only gate on this query is `_LIVE`
+    (`status = 'active'` and not expired) — no user condition anywhere — so an
+    anonymous caller and the uploader receive byte-identical lists. "No files"
+    therefore means one thing here, unlike `/api/availability`, where an empty
+    answer has two readings.
+
+    `total` is the count BEFORE limit/offset, so `offset=999` correctly returns
+    `items: []` with `total: 2` rather than pretending the library is empty.
+    """
+
+    items: list[UploadListItem]
+    total: int
+    limit: int
+    offset: int
+    #: Echoed back so the client can tell which order it actually got.
+    sort: str
+
+
+class UploadDetail(BaseModel):
+    """One upload, in full.
+
+    ⚠️ `description` here is the WHOLE text; the list sends
+    `description_preview`, capped at 160 characters. Two names, two lengths —
+    a shared renderer that reads `description` off a list item finds nothing.
+
+    `can_delete` is the only field on this endpoint that depends on the
+    session: it is `_may_delete(request, uploader_discord_id)`, the same rule
+    the DELETE endpoint enforces, so the button a user sees and the answer
+    they get cannot drift apart. Measured: identical payload for anonymous and
+    owner except this one boolean.
+    """
+
+    id: str
+    title: str
+    #: Nullable column, passed through raw — the full text, uncapped.
+    description: str | None
+    filename: str
+    category: str
+    extension: str
+    file_size_bytes: int
+    #: Nullable column, passed through raw.
+    mime_type: str | None
+    uploader_name: str
+    #: ⛔ A STRING, NOT A NUMBER, AND THE DIFFERENCE IS A LIVE BUG. A Discord
+    #: snowflake is 18 digits; `Number.MAX_SAFE_INTEGER` is 16. Sent as a JSON
+    #: number, `JSON.parse` silently drops the last digit — measured:
+    #: 231165917604741121 arrives as ...120. `auth.py:314` already sends the
+    #: session id as `str()`, so `uploads.js:1191` compares an exact string
+    #: against a corrupted number and the uploader loses the delete
+    #: affordance on their own file whenever `can_delete` is absent.
+    #:
+    #: ⭐ The change is NOT lossy: a consumer doing `Number(x)` gets exactly
+    #: what it got before, and one doing `String(x)` now gets the right
+    #: digits instead of the wrong ones. (CodeRabbit on #830.)
+    uploader_discord_id: str | None
+    download_count: int | None
+    #: `content_hash_sha256` is NOT NULL in the schema.
+    content_hash: str
+    created_at: str | None
+    expires_at: str | None
+    can_delete: bool
+    #: Empty list when the upload has no tags — never null.
+    tags: list[str]
+    share_url: str
+    download_url: str
+    #: `extension == ".mp4"`, decided in the handler, not stored.
+    is_playable: bool
+    poster_url: str | None
+
+
+@router.get("", response_model=UploadList)
 async def list_uploads(
     category: str | None = Query(None, max_length=20),
     tag: str | None = Query(None, max_length=50),
@@ -540,7 +663,7 @@ async def list_uploads(
             "extension": r[4],
             "file_size_bytes": r[5],
             "uploader_name": r[6],
-            "uploader_discord_id": r[7],
+            "uploader_discord_id": str(r[7]) if r[7] is not None else None,
             "download_count": r[8],
             "created_at": str(r[9]) if r[9] else None,
             "description_preview": r[10] or None,
@@ -562,7 +685,7 @@ async def list_uploads(
 # GET /api/uploads/{upload_id}  —  Get upload details
 # ---------------------------------------------------------------------------
 
-@router.get("/{upload_id}")
+@router.get("/{upload_id}", response_model=UploadDetail)
 async def get_upload(upload_id: str, request: Request, db=Depends(get_db)):
     """Get details for a specific upload.
 
@@ -602,7 +725,7 @@ async def get_upload(upload_id: str, request: Request, db=Depends(get_db)):
         "file_size_bytes": row[6],
         "mime_type": row[7],
         "uploader_name": row[8],
-        "uploader_discord_id": row[9],
+        "uploader_discord_id": str(row[9]) if row[9] is not None else None,
         "download_count": row[10],
         "content_hash": row[11],
         "created_at": str(row[12]) if row[12] else None,

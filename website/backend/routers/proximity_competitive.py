@@ -32,9 +32,20 @@ from website.backend.routers.proximity_helpers import (
     _parse_iso_date,
     logger,
 )
+from website.backend.services.clock_inputs import (
+    clock_validation_payload as _clock_validation_payload,
+)
+from website.backend.services.clock_inputs import (
+    fetch_clock_lives_and_revives as _fetch_clock_lives_and_revives,
+)
+from website.backend.services.clock_inputs import (
+    is_bot_player as _is_bot_player,
+)
+from website.backend.services.clock_inputs import (
+    strict_clock_round_gate_sql as _strict_clock_round_gate_sql,
+)
 from website.backend.services.reinforcement_clock import (
     CLOCK_PROTOCOL_VERSION,
-    ClockValidation,
     PlayerLife,
     ReviveObservation,
     TimingObservation,
@@ -51,19 +62,6 @@ router = APIRouter()
 STAGGER_THRESHOLD = 0.8
 
 _TEAM_BY_NUM = {1: "AXIS", 2: "ALLIES"}
-
-
-def _strict_clock_round_gate_sql(prefix: str = "") -> str:
-    """Round gate shared by the measured clock protocol and live consumers."""
-    return (
-        "EXISTS (SELECT 1 FROM rounds clock_round "
-        f"WHERE clock_round.id = {prefix}round_id "
-        "AND clock_round.round_number IN (1, 2) "
-        "AND clock_round.is_valid IS DISTINCT FROM FALSE "
-        "AND clock_round.is_bot_round IS DISTINCT FROM TRUE "
-        "AND (clock_round.round_status IN ('completed', 'substitution') "
-        "OR clock_round.round_status IS NULL))"
-    )
 
 
 @router.get("/proximity/competitive/stagger")
@@ -199,77 +197,6 @@ async def get_first_blood_conversion(
         ),
         "players": players,
     }
-
-
-def _is_bot_player(guid: str | None, name: str | None) -> bool:
-    return (guid or "").upper().startswith("OMNIBOT") or (name or "").upper().startswith("[BOT]")
-
-
-def _clock_validation_payload(validation: ClockValidation) -> dict:
-    return {
-        "status": validation.status,
-        "interval_ms": validation.interval_ms,
-        "offset_ms": validation.offset_ms if validation.status == "validated" else None,
-        "timing_observations": validation.timing_observation_count,
-        "landing_clusters": validation.landing_count,
-        "spawn_callbacks": validation.spawn_observation_count,
-        "post_revive_spawn_callbacks": validation.post_revive_spawn_count,
-        "passing_landing_clusters": validation.passing_landing_count,
-        "pass_ratio": (
-            round(validation.pass_ratio, 6)
-            if validation.pass_ratio is not None
-            else None
-        ),
-    }
-
-
-async def _fetch_clock_lives_and_revives(
-    db: DatabaseAdapter,
-    round_id: int,
-) -> tuple[list[PlayerLife], list[ReviveObservation], int]:
-    track_rows = await db.fetch_all(
-        """
-        SELECT id, player_guid, player_name, team, spawn_time_ms, death_time_ms,
-               path -> -1 ->> 'event' AS death_type
-        FROM player_track
-        WHERE round_id = $1
-        ORDER BY player_guid, spawn_time_ms, id
-        """,
-        (round_id,),
-    )
-    revive_rows = await db.fetch_all(
-        """
-        SELECT revived_guid, revived_name, revive_time
-        FROM proximity_revive
-        WHERE round_id = $1
-        ORDER BY revive_time, id
-        """,
-        (round_id,),
-    )
-    lives = [
-        PlayerLife(
-            row_id=int(row[0]),
-            player_guid=str(row[1]),
-            team=str(row[3] or ""),
-            spawn_time_ms=int(row[4]),
-            death_time_ms=int(row[5]) if row[5] is not None else None,
-            death_type=row[6],
-        )
-        for row in (track_rows or [])
-        if not _is_bot_player(row[1], row[2])
-    ]
-    revives = [
-        ReviveObservation(player_guid=str(row[0]), time_ms=int(row[2]))
-        for row in (revive_rows or [])
-        if not _is_bot_player(row[0], row[1])
-    ]
-    track_bounds = [
-        value
-        for life in lives
-        for value in (life.spawn_time_ms, life.death_time_ms)
-        if value is not None
-    ]
-    return lives, revives, max(track_bounds, default=0)
 
 
 @router.get("/proximity/competitive/wave-cycles")

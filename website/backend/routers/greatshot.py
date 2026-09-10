@@ -109,6 +109,10 @@ async def upload_greatshot(
     user = _require_user(request)
     user_id = int(user["id"])
 
+    # A junk or truncated demo is the UPLOADER's error, in the scanner's
+    # own words — save_upload cleans the stored file and answers 400
+    # (measured live with a text file: the raw sniff error used to escape
+    # as an internal 500 and the junk stayed on disk).
     try:
         saved = await storage.save_upload(file)
     finally:

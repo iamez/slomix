@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from shared.round_time import round_duration_seconds
 from website.backend.dependencies import get_db
 from website.backend.local_database_adapter import DatabaseAdapter
 from website.backend.routers.proximity_helpers import (
@@ -173,12 +174,14 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
                    e.position_path, e.attackers, e.start_x, e.start_y, e.end_x, e.end_y, e.distance_traveled,
                    COALESCE(r_exact.id, r_fallback.id) AS round_id,
                    COALESCE(r_exact.round_date, r_fallback.round_date) AS round_date,
-                   COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time
+                   COALESCE(r_exact.round_time, r_fallback.round_time) AS round_time,
+                   COALESCE(r_exact.actual_duration_seconds, r_fallback.actual_duration_seconds) AS actual_duration_seconds,
+                   COALESCE(r_exact.actual_time, r_fallback.actual_time) AS actual_time
             FROM combat_engagement e
             LEFT JOIN rounds r_exact
               ON r_exact.id = e.round_id
             LEFT JOIN LATERAL (
-                SELECT id, round_date, round_time
+                SELECT id, round_date, round_time, actual_duration_seconds, actual_time
                 FROM rounds r
                 WHERE r_exact.id IS NULL
                   AND r.map_name = e.map_name
@@ -199,10 +202,11 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
                    e.start_time_ms, e.end_time_ms,
                    e.duration_ms, e.num_attackers, e.is_crossfire,
                    e.position_path, e.attackers, e.start_x, e.start_y, e.end_x, e.end_y, e.distance_traveled,
-                   r.id AS round_id, r.round_date, r.round_time
+                   r.id AS round_id, r.round_date, r.round_time,
+                   r.actual_duration_seconds, r.actual_time
             FROM combat_engagement e
             LEFT JOIN LATERAL (
-                SELECT id, round_date, round_time
+                SELECT id, round_date, round_time, actual_duration_seconds, actual_time
                 FROM rounds r
                 WHERE r.map_name = e.map_name
                   AND r.round_number = e.round_number
@@ -224,6 +228,10 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
         "round_number": row[2],
         "round_start_unix": row[3],
         "round_end_unix": row[4],
+        # The canonical duration (shared/round_time.py) — measured first, the
+        # parsed actual_time as the documented fallback; never end − start,
+        # which includes pauses and reads 0:00 on zero sentinels (Codex on #1004).
+        "round_duration_seconds": round_duration_seconds(row[-2], row[-1]),
         "map_name": row[5],
         "target_guid": row[6],
         "target_name": row[7],
@@ -261,12 +269,17 @@ async def get_proximity_event(event_id: int, db: DatabaseAdapter = Depends(get_d
                 if not guid:
                     return None
                 if round_start_unix and round_start_unix > 0:
+                    # One row per LIFE — pick the life nearest the engagement,
+                    # like the fallback branch below. ORDER BY spawn_time_ms
+                    # ASC always took the FIRST life, so any engagement in a
+                    # later life sliced an empty window: 0/60 sampled events
+                    # carried a derived path before this (2026-09-01).
                     track_row = await db.fetch_one(
                         "SELECT path FROM player_track "
                         "WHERE session_date = $1 AND map_name = $2 AND round_number = $3 "
                         "AND round_start_unix = $4 AND player_guid = $5 "
-                        "ORDER BY spawn_time_ms ASC LIMIT 1",
-                        (session_date, map_name, round_num, round_start_unix, guid),
+                        "ORDER BY ABS(spawn_time_ms - $6) ASC LIMIT 1",
+                        (session_date, map_name, round_num, round_start_unix, guid, start_time),
                     )
                 else:
                     track_row = await db.fetch_one(

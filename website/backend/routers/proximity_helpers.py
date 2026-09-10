@@ -337,7 +337,156 @@ def _build_proximity_where_clause(
     return "WHERE " + " AND ".join(clauses), params, scope
 
 
-async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name: str) -> bool:
+# ---------------------------------------------------------------------------
+# GUID prefix resolution (2026-09-06)
+#
+# The proximity tables hold the tracker's FULL 32-character guid; the session
+# and profile pages key players on the 8-character prefix that
+# player_comprehensive_stats stores. Every proximity endpoint compared the two
+# with `=`, so a link that carried the prefix rendered a valid "not tracked"
+# page for every player -- the parity sweep could not see it (#921 fixed the
+# one link; this fixes the endpoints). Measured on the live corpus: 34 full
+# guids -> 23 prefixes, and the only prefixes shared by more than one guid are
+# the bots' (`OMNIBOT0` x9, `OMNIBOT1` x4); every human prefix is unique.
+# So the prefix is a lossless key for humans and an honest 400 for bots.
+#
+# Cost: `LEFT(guid, 8) = $1` is a seq scan (en_US collation, no pattern-ops
+# index): 61 ms on player_track. The canonical column of
+# storytelling_kill_impact IS indexed and holds exactly the 8-char form for
+# humans, so that is tried first (sub-ms), player_track second (the two
+# tracked players without a kill), and hits are cached in-process for ten
+# minutes. A miss returns the prefix unchanged: an empty result, not a 500,
+# the same contract as the heatmap resolver this generalises.
+# ---------------------------------------------------------------------------
+_GUID_PREFIX_CACHE: dict[str, tuple[str, float]] = {}
+_GUID_PREFIX_CACHE_TTL_S = 600.0
+_GUID_PREFIX_CACHE_MAX = 512
+_BOT_GUID_PREFIXES = ("OMNIBOT", "SLOT")
+_GUID_CHARS = re.compile(r"^[A-Z0-9]+$")
+
+
+def normalise_player_guid(raw: str | None) -> str | None:
+    """Uppercase/strip a guid; 400 on the shapes that can never match a
+    player: too short, characters outside [A-Z0-9], or a bot prefix (the
+    only ambiguous prefixes in the corpus -- thirteen bots share two)."""
+    g = (raw or "").strip().upper()
+    if not g:
+        return None
+    if len(g) < 8 or len(g) > 32 or not _GUID_CHARS.match(g):
+        raise HTTPException(
+            status_code=400,
+            detail="player_guid must be 8 to 32 characters of [A-Z0-9]",
+        )
+    if len(g) < 32 and g.startswith(_BOT_GUID_PREFIXES):
+        raise HTTPException(
+            status_code=400,
+            detail="a bot guid prefix names several bots; pass the full 32-character guid",
+        )
+    return g
+
+
+async def resolve_player_guid(db: DatabaseAdapter, raw: str | None) -> str | None:
+    """8..31-character prefix -> the full 32-character guid the proximity
+    tables store; a full guid passes through; a miss returns the prefix
+    unchanged (empty results downstream). Fails open when the adapter has no
+    `fetch_val` (the unit-test fakes) or the lookup raises."""
+    g = normalise_player_guid(raw)
+    if g is None or len(g) == 32:
+        return g
+    key = g[:8]
+    now = time.monotonic()
+    hit = _GUID_PREFIX_CACHE.get(key)
+    if hit and now - hit[1] < _GUID_PREFIX_CACHE_TTL_S:
+        return hit[0]
+    fetch_val = getattr(db, "fetch_val", None)
+    if fetch_val is None:
+        return g
+    full: str | None = None
+    try:
+        row = await fetch_val(
+            "SELECT killer_guid FROM storytelling_kill_impact "
+            "WHERE killer_guid_canonical = $1 AND LENGTH(killer_guid) = 32 LIMIT 1",
+            (key,),
+        )
+        if not row:
+            row = await fetch_val(
+                "SELECT player_guid FROM player_track "
+                "WHERE LEFT(player_guid, 8) = $1 AND LENGTH(player_guid) = 32 "
+                "ORDER BY player_guid LIMIT 1",
+                (key,),
+            )
+        full = str(row) if row else None
+    except Exception:
+        logger.warning("player guid prefix resolution failed (input len=%d)", len(g), exc_info=True)
+        return g
+    if full is None:
+        return g
+    if len(_GUID_PREFIX_CACHE) >= _GUID_PREFIX_CACHE_MAX:
+        _GUID_PREFIX_CACHE.clear()
+    _GUID_PREFIX_CACHE[key] = (full, now)
+    return full
+
+
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
+def _safe_identifier(name: str) -> str:
+    """A table name that may be interpolated into `PRAGMA table_info(...)`.
+
+    SQLite does not accept a bound parameter where a table name goes, so this
+    one place has to interpolate. Every caller passes a literal from this
+    repository, and the pattern refuses anything that is not a bare identifier,
+    so the string that reaches SQL cannot come from a request.
+    """
+    if not _IDENTIFIER.match(name or ""):
+        raise ValueError(f"not a table identifier: {name!r}")
+    return name
+
+
+def _is_sqlite(db: object) -> bool:
+    """Duck-typed rather than imported: `SQLiteAdapter` is the only adapter that
+    carries a `db_path`, and importing it here would tie the proximity routers
+    to the local development module."""
+    return hasattr(db, "db_path")
+
+
+async def _table_column_exists(
+    db: DatabaseAdapter, table_name: str, column_name: str
+) -> bool | None:
+    """Is the column deployed? True / False / **None when we could not tell.**
+
+    ⛔ THREE STATES, NOT TWO. This returned `False` on any exception, and every
+    caller read `False` as "the telemetry table is not deployed yet" and
+    answered `{"status": "ok", ...empty}`. So with the database DOWN, eleven
+    endpoints told the client the answer was GOOD and empty — byte-identical to
+    a deployed-but-unpopulated table, and worse than silence: `responseStatus.ts`
+    classifies `ok` as success, so the page actively renders "nothing happened"
+    over an outage.
+
+    `None` is the third state. Callers must handle it explicitly; `not None` is
+    `True`, so a caller that forgets still takes the not-deployed branch rather
+    than crashing — but the branch is now reachable only by deciding to take it.
+    """
+    # ⛔ THE CATALOGUE QUERY IS NOT PORTABLE, AND ITS FAILURE IS NOT AN OUTAGE.
+    # `information_schema` does not exist in SQLite, so on the supported local
+    # SQLite configuration this raised on EVERY probe — and once an exception
+    # started meaning "the database did not answer", all eleven handlers would
+    # have reported an outage against a perfectly healthy dev database. An
+    # unsupported catalogue is a fact about the DIALECT, not about the server.
+    if _is_sqlite(db):
+        # ⚠️ Validated BEFORE the try. A table name that is not an identifier is
+        # a programming error in this repository, not a database outage, and
+        # letting the except below catch it would file the two under the same
+        # answer — the exact conflation this whole change is about.
+        table = _safe_identifier(table_name)
+        try:
+            rows = await db.fetch_all(f"PRAGMA table_info({table})")  # nosec B608 - identifier validated above
+            names = {str(r[1]).lower() for r in (rows or [])}
+            return column_name.lower() in names
+        except Exception as e:
+            logger.warning("_table_column_exists PRAGMA failed for %s.%s: %s",
+                           table_name, column_name, e)
+            return None
     try:
         return bool(
             await db.fetch_val(
@@ -354,7 +503,32 @@ async def _table_column_exists(db: DatabaseAdapter, table_name: str, column_name
         )
     except Exception as e:
         logger.warning("_table_column_exists check failed for %s.%s: %s", table_name, column_name, e)
-        return False
+        return None
+
+
+def _probe_unavailable(table_name: str, column_name: str, **payload: Any) -> dict[str, Any]:
+    """The answer when the deployment probe itself could not run.
+
+    ⚠️ `unavailable` on purpose, not a new word: it is already in
+    `FAILURE_STATUSES` in `website/frontend/src/app/lib/responseStatus.ts`, so
+    every page that already distinguishes a failure from an empty answer renders
+    this correctly with no new branch. A third spelling would need classifying
+    on both sides of the language boundary to say something the vocabulary can
+    already say.
+
+    The data keys are kept and left empty so the shape does not change — only
+    the claim about it does.
+    """
+    # ⚠️ `**payload` FIRST. Spread last, a caller passing `status=` or `reason=`
+    # would overwrite the two fields this helper exists to guarantee — a
+    # function whose whole job is to say "unavailable" quietly saying something
+    # else. The data keys are the caller's; these two are not.
+    return {
+        **payload,
+        "status": "unavailable",
+        "reason": (f"could not check whether {table_name}.{column_name} is "
+                   f"deployed — the database did not answer"),
+    }
 
 
 def _iter_attackers(attackers_raw: Any) -> list[dict[str, Any]]:
@@ -428,11 +602,43 @@ async def _load_scoped_guid_name_map(
         return {}
 
 
+def _guid_key(guid: object) -> str:
+    """The 8-character upper-case prefix — the only form both sides share.
+
+    ⛔ THE SAME PLAYER HAS TWO GUID LENGTHS IN THIS DATABASE. Measured:
+    `player_comprehensive_stats.player_guid` is 8 characters on 19,845 rows and
+    32 on 929, while the proximity tables store the 32-character form. Of 32
+    distinct long GUIDs sampled from `combat_engagement`, 28 have their 8-char
+    prefix present in `pcs` and ZERO match a full 32-char `pcs` guid.
+
+    So the site hands out the short form and these tables hold the long one, and
+    a raw string comparison silently matches nothing. `_resolve_name_for_guid`
+    already knew this and folded to `token[:8]`; the membership checks did not.
+    Codex on #860.
+    """
+    return str(guid or "").strip().upper()[:8]
+
+
 def _compute_scoped_duos(
     engagement_rows: list[Any],
     limit: int,
     guid_name_map: dict[str, str] | None = None,
+    player_guid: str | None = None,
 ) -> list[dict[str, Any]]:
+    """Crossfire pairs from scoped engagements, optionally about ONE player.
+
+    ⛔ `player_guid` used to be declared by `/proximity/duos` and read by
+    nothing: the caller asked about one player and was handed the whole board
+    with a 200. That is the shape of the `/proximity/revives` defect, where the
+    same silence showed 1,873 revives for a round that had 90.
+
+    Filtered in GUID space, not name space: the pairing itself works on display
+    names because that is what the board shows, but "was this player in this
+    engagement" is a question about identity, and two players can share a name.
+    The engagement is dropped first, and then any pair inside it that does not
+    include the requested player — the limit applies AFTER both, or asking about
+    one player would return the top pairs of everyone else, truncated.
+    """
     pair_stats: dict[tuple[str, str], dict[str, float]] = {}
 
     for row in engagement_rows:
@@ -469,11 +675,25 @@ def _compute_scoped_duos(
         if len(names) < 2 and len(participant_guids) >= 2:
             names = [_resolve_name_for_guid(guid, guid_name_map, guid_to_name) for guid in participant_guids]
 
+        wanted = _guid_key(player_guid)
+        matched = next((g for g in list(participant_guids) + list(guid_to_name)
+                        if _guid_key(g) == wanted), None) if wanted else None
+        if wanted and matched is None:
+            continue
+        # ⚠️ Resolved from the GUID THIS ENGAGEMENT CARRIES, not from the string
+        # the caller sent. `_resolve_name_for_guid` folds to `token[:8]` but does
+        # not fold case, so a lower-case request resolved to "unknown" and then
+        # matched no pair — membership succeeded and the answer was still empty.
+        wanted_name = (_resolve_name_for_guid(matched, guid_name_map, guid_to_name)
+                       if matched else "")
+
         unique_names = sorted({name for name in names if name})
         if len(unique_names) < 2:
             continue
 
         for p1, p2 in combinations(unique_names, 2):
+            if wanted_name and wanted_name not in (p1, p2):
+                continue
             key = (p1, p2)
             if key not in pair_stats:
                 pair_stats[key] = {

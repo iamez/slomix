@@ -4,6 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from shared.season_manager import SeasonManager
 from shared.utils import escape_like_pattern
@@ -23,7 +24,192 @@ router = APIRouter()
 logger = get_app_logger("api.records.awards")
 
 
-@router.get("/stats/records")
+class AwardLeaderRow(BaseModel):
+    """One row of the awards leaderboard, as this endpoint returns it.
+
+    ⚠️ MEASURED, NOT DESIGNED. Types are the union over all 20 rows of a live
+    response, not the first row: `guid` is null on some of them, and a model
+    that read only row 0 would have typed it `str` and dropped the nulls.
+
+    ⛔ `response_model` FILTERS. A field the handler returns and a model omits
+    disappears from the payload, silently, with a 200 — which is why
+    `tests/unit/test_response_models_drop_nothing.py` compares handler output
+    against the serialised model instead of trusting these classes.
+    """
+
+    rank: int
+    player: str
+    #: Null when the display name could not be resolved back to a guid.
+    guid: str | None
+    award_count: int
+    top_award: str
+    top_award_count: int
+
+
+class AwardLeaderboardFilters(BaseModel):
+    """Echo of the query that produced the rows above."""
+
+    days: int
+    #: Null means "no award_type filter was applied", not "unknown".
+    award_type: str | None
+
+
+class AwardLeaderboard(BaseModel):
+    leaderboard: list[AwardLeaderRow]
+    filters: AwardLeaderboardFilters
+
+
+class AwardRow(BaseModel):
+    """One awarded performance. `value` is a PRE-FORMATTED string, not a
+    number — the handler renders it per award type, so a numeric type here
+    would reject perfectly good rows."""
+
+    award: str
+    player: str
+    #: Null when the winning row carries no guid — legacy rows with
+    #: player_guid IS NULL pass the identity gate on purpose, and one of
+    #: them holding an award made the whole page a 500 (ResponseValidation
+    #: on awards[3].guid, measured on dev 2026-09-01; the leaderboard row
+    #: above learned this same lesson earlier and this model had not).
+    guid: str | None
+    value: str
+    date: str
+    map: str
+    round_number: int
+    round_id: int
+
+
+class AwardsFilters(BaseModel):
+    #: All three are null when the corresponding filter was not requested.
+    player: str | None
+    award_type: str | None
+    days: int | None
+
+
+class AwardsPage(BaseModel):
+    awards: list[AwardRow]
+    total: int
+    limit: int
+    offset: int
+    filters: AwardsFilters
+
+
+class HallOfFameRow(BaseModel):
+    """One entry in a hall-of-fame category.
+
+    `value` is `float` because one category (`most_dpm`) is fractional while the
+    rest are counts. Typing it `int` would silently truncate DPM — a schema is
+    as capable of corrupting a number as of dropping a field.
+    """
+
+    rank: int
+    player_guid: str
+    player_name: str
+    value: float
+    unit: str
+
+
+class HallOfFame(BaseModel):
+    """⚠️ `categories` is left as a plain mapping on purpose.
+
+    Twelve category names are present today (`most_kills`, `most_dpm`, …) and
+    the handler builds them from a list it can extend. Naming them here would
+    make this model the gate on which categories may exist: adding one to the
+    handler without editing this class would drop it from the response with a
+    200. The mapping keeps the row shape typed while leaving the key set open.
+    """
+
+    categories: dict[str, list[HallOfFameRow]]
+    period: str
+    #: Null when no delta window was requested.
+    delta_window_days: int | None
+    generated_at: str
+
+
+
+class RecordEntry(BaseModel):
+    """One record holder in one category, as this endpoint returns it.
+
+    ⚠️ MEASURED, NOT DESIGNED. `value` is `int` for the counting categories and
+    `float` for `accuracy`, `xp` and `match_xp` — the union keeps each on the
+    wire exactly as the query produced it. Widening it to a bare `float` would
+    rewrite `"value": 5994` as `"value": 5994.0` for every counting category:
+    a silent wire change on a page nobody would think to re-check.
+
+    `map` and `date` are `str` and NOT nullable, even though
+    `information_schema` reports all three columns of the `player_match_stats`
+    VIEW as `is_nullable = YES`. That report is about aggregates, not about
+    data: the view produces them as `max(map_name)` / `min(round_date)` over
+    columns that are `NOT NULL` in `player_comprehensive_stats`, and an
+    aggregate over a non-empty group cannot be null. Measured: 0 nulls in
+    6,863 view rows.
+
+    ⛔ This is the MIRROR of the `LEFT JOIN` trap in `SessionSummary`. There a
+    `NOT NULL` column arrives null because there was no row to join; here a
+    "nullable" column can never be null because the aggregate has one. The
+    schema is wrong in BOTH cases, in opposite directions — which is why the
+    rule is `schema -> handler -> what the query does to it`, and never the
+    schema alone.
+    """
+
+    player: str
+    #: ⛔ NON-NULL BY THE QUERY, NOT BY THE COLUMN. All thirteen statistic
+    #: columns are nullable in the schema (0 NULLs today), and PostgreSQL puts
+    #: NULLs FIRST on a `DESC` sort — so an unmeasured row could have been
+    #: SELECTED AS THE RECORD and shown as the best, and this model would then
+    #: have answered 500 on it. Both are closed by `AND {col} IS NOT NULL` in
+    #: every category query: a record is a MEASURED value, which is what the
+    #: word means (Codex on #830).
+    value: int | float
+    map: str
+    date: str
+
+
+class StatsRecords(BaseModel):
+    """All-time records, keyed by category. EVERY FIELD IS OPTIONAL ON PURPOSE.
+
+    ⛔ DO NOT make any category required. The handler omits a category's key
+    entirely when its query succeeded with no rows (`if rows:` below), so a
+    required field is a 500 on exactly the view that is hardest to notice: a
+    filtered one. Measured, not theorised — `?map_name=goldrush` (a real ET map
+    this server has never recorded) answers `{}` with HTTP 200, and every one
+    of the 19 categories is absent. All 18 maps that DO have data return all 19.
+
+    ⚠️ ABSENCE AND `[]` MEAN DIFFERENT THINGS HERE, and the meanings are the
+    reverse of the intuitive reading:
+      - key ABSENT  -> the query ran and found nothing (no records for this map)
+      - key PRESENT as `[]` -> the query RAISED and was swallowed per-category
+    `response_model_exclude_none=True` on the route preserves both states
+    exactly: an absent category stays absent, a failed one stays `[]`. A reader
+    cannot be expected to guess this, which is why it is written down here.
+    """
+
+    kills: list[RecordEntry] | None = None
+    damage: list[RecordEntry] | None = None
+    revives: list[RecordEntry] | None = None
+    gibs: list[RecordEntry] | None = None
+    headshots: list[RecordEntry] | None = None
+    xp: list[RecordEntry] | None = None
+    accuracy: list[RecordEntry] | None = None
+    revived: list[RecordEntry] | None = None
+    useful_kills: list[RecordEntry] | None = None
+    obj_stolen: list[RecordEntry] | None = None
+    obj_returned: list[RecordEntry] | None = None
+    dyna_planted: list[RecordEntry] | None = None
+    dyna_defused: list[RecordEntry] | None = None
+    match_damage: list[RecordEntry] | None = None
+    match_kills: list[RecordEntry] | None = None
+    match_headshots: list[RecordEntry] | None = None
+    match_xp: list[RecordEntry] | None = None
+    match_revives: list[RecordEntry] | None = None
+    match_gibs: list[RecordEntry] | None = None
+
+
+@router.get(
+    "/stats/records",
+    response_model=StatsRecords,
+    response_model_exclude_none=True,
+)
 async def get_records(
     map_name: str = None, limit: int = 1, db: DatabaseAdapter = Depends(get_db)
 ):
@@ -66,10 +252,13 @@ async def get_records(
     # flagged is_valid = FALSE by the importer); the [BOT]/OMNIBOT identity
     # filter is defence in depth for any historical round that predates the
     # validity flag. (Owner saw [BOT]vid holding the kills record.)
-    # round_status = 'orphan_r2' marks R2 rows whose R1 was never available:
-    # they hold raw CUMULATIVE (R1+R2) values, so any per-round record built
-    # on them is roughly doubled (the 2026-01-09 erdenberg "damage record"
-    # was exactly this).
+    # The round gate is the canonical trio: invalid rounds, bot rounds, and
+    # every status outside completed/substitution/NULL. The orphan-R2 case
+    # this comment used to single out (raw CUMULATIVE R1+R2 values doubling
+    # per-round records — the 2026-01-09 erdenberg "damage record") is one
+    # member of that family; the orphan-only spelling admitted the others
+    # and carried 6,614 uncounted-round kills into the public all-time
+    # numbers (measured 2026-09-01).
     base_where = (
         "WHERE round_number IN (1, 2) AND time_played_seconds > 0 "
         "AND player_name NOT LIKE '[BOT]%' "
@@ -77,7 +266,9 @@ async def get_records(
         "AND NOT EXISTS (SELECT 1 FROM rounds r "
         "                WHERE r.id = player_comprehensive_stats.round_id "
         "                  AND (r.is_valid IS FALSE "
-        "                       OR r.round_status = 'orphan_r2'))"
+        "                       OR r.is_bot_round IS TRUE "
+        "                       OR (r.round_status IS NOT NULL "
+        "                           AND r.round_status NOT IN ('completed', 'substitution'))))"
     )
     if map_name:
         base_where += " AND map_name = $1"
@@ -104,49 +295,54 @@ async def get_records(
                 map_name,
                 round_date
             FROM player_comprehensive_stats
-            {base_where} {extra_filter}
+            {base_where} {extra_filter} AND {col} IS NOT NULL
             ORDER BY {col} DESC
             LIMIT {limit_placeholder}
         """
         q_params = (map_name, limit) if map_name else (limit,)
         plans.append((key, query, q_params))
 
-    # Match-level records: both rounds of one map, summed per player. Summing
-    # the (already differential) R1+R2 rows by match_id is the trustworthy
-    # path — R0 "match summary" rows are a known-unreliable aggregate and are
-    # deliberately not used. Only summable counters get a match category
-    # (ratios like accuracy do not survive summation). A match missing its R2
-    # simply sums lower — it can never fake-inflate a record.
-    match_categories = {
-        "match_damage": "damage_given",
-        "match_kills": "kills",
-        "match_headshots": "headshots",
-        "match_xp": "xp",
-        "match_revives": "revives_given",
-        "match_gibs": "gibs",
-    }
-    match_map_filter = " AND pcs.map_name = $1" if map_name else ""
+    # Match-level records: both rounds of one map, summed per player. The sum
+    # lives in the player_match_stats VIEW (migration 078), not in six copies
+    # of the same GROUP BY here — and not in the round_number = 0 rows, which
+    # are a stored copy of the R2 capture that nothing reads (docs/CLAUDE.md).
+    # The view carries the structural gates (valid round, played half); the
+    # human/bot policy stays here, where it belongs. Only summable counters get
+    # a match category (ratios like accuracy do not survive summation). A match
+    # missing its R2 simply sums lower — it can never fake-inflate a record.
+    match_categories = (
+        ("match_damage", "damage_given"),
+        ("match_kills", "kills"),
+        ("match_headshots", "headshots"),
+        ("match_xp", "xp"),
+        ("match_revives", "revives_given"),
+        ("match_gibs", "gibs"),
+    )
+    # Ties are real here (two players with 72 headshots in a match, three with
+    # 298 xp) and a bare `ORDER BY value DESC` leaves which one is shown to
+    # whatever order the plan produces. That was stable in practice but never
+    # specified — and it did change when this query moved to the view. The
+    # tiebreak makes it explainable instead of incidental: most recent
+    # achievement first, then name. Values are unaffected, only which of several
+    # equal rows is displayed.
+    match_where = (
+        "WHERE player_name NOT LIKE '[BOT]%' "
+        "AND player_guid IS NOT NULL "
+        "AND player_guid NOT LIKE 'OMNIBOT%'"
+    )
+    if map_name:
+        match_where += " AND map_name = $1"
     match_limit_placeholder = "$2" if map_name else "$1"
-    for key, col in match_categories.items():
+    for key, col in match_categories:
         query = f"""
             SELECT
-                MAX(pcs.player_name) as player_name,
-                SUM(pcs.{col}) as value,
-                MAX(pcs.map_name) as map_name,
-                MIN(pcs.round_date) as round_date
-            FROM player_comprehensive_stats pcs
-            JOIN rounds r ON r.id = pcs.round_id
-            WHERE pcs.round_number IN (1, 2)
-              AND pcs.time_played_seconds > 0
-              AND pcs.player_name NOT LIKE '[BOT]%'
-              AND pcs.player_guid IS NOT NULL
-              AND pcs.player_guid NOT LIKE 'OMNIBOT%'
-              AND r.is_valid IS DISTINCT FROM FALSE
-              AND r.round_status IS DISTINCT FROM 'orphan_r2'
-              AND r.match_id IS NOT NULL
-              {match_map_filter}
-            GROUP BY r.match_id, pcs.player_guid
-            ORDER BY value DESC
+                player_name,
+                {col} as value,
+                map_name,
+                round_date
+            FROM player_match_stats
+            {match_where} AND {col} IS NOT NULL
+            ORDER BY value DESC, round_date DESC, player_name ASC
             LIMIT {match_limit_placeholder}
         """
         q_params = (map_name, limit) if map_name else (limit,)
@@ -171,7 +367,20 @@ async def get_records(
         if isinstance(outcome, BaseException) and not isinstance(outcome, Exception):
             raise outcome
         if isinstance(outcome, Exception):
-            # Match prior behavior: exception falls back to []
+            # ⛔ `[]` MEANS FAILED HERE, AND AN ABSENT KEY MEANS GENUINELY EMPTY.
+            # That is backwards from what any reader would guess, and it was an
+            # ACCIDENT: the success path below omits the key when there are no
+            # rows (`if rows:`), while this path sets it. The distinction is
+            # real and it is the only failure signal this endpoint has, so it is
+            # pinned by a test rather than left to be "tidied" into agreement.
+            #
+            # ⚠️ It is NOT fixed by adding a `status` field, which is what every
+            # other endpoint in this family got. `StatsRecords` is declared on
+            # the client as `export type StatsRecords = Record<string,
+            # RecordEntry[]>` — a type ALIAS whose values are all arrays — so a
+            # string field here breaks the SPA type. Changing the wire needs
+            # both sides moved together; until then, this comment and its test
+            # are the contract.
             logger.error(f"Error fetching record for {key}: {outcome}")
             results[key] = []
             continue
@@ -186,7 +395,7 @@ async def get_records(
     return results
 
 
-@router.get("/awards/leaderboard")
+@router.get("/awards/leaderboard", response_model=AwardLeaderboard)
 async def get_awards_leaderboard(
     limit: int = 20,
     days: int = 0,
@@ -486,7 +695,7 @@ async def get_player_awards(
     }
 
 
-@router.get("/awards")
+@router.get("/awards", response_model=AwardsPage)
 async def list_awards(
     limit: int = 50,
     offset: int = 0,
@@ -641,7 +850,7 @@ async def list_awards(
     }
 
 
-@router.get("/hall-of-fame")
+@router.get("/hall-of-fame", response_model=HallOfFame)
 async def get_hall_of_fame(
     period: str = "all_time",
     start_date: str | None = None,
