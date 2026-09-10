@@ -74,6 +74,9 @@
   "/api/stats/weapons/by-player player_count": "PlayerDrilldown asks this endpoint for ONE guid, so player_count is always 1 there; the period-wide count is rendered on WeaponsPage from /by_player",
   "/api/availability statuses": "the status vocabulary the form's own options already enumerate (AvailabilityPage STATUS options); printing the enum would list the buttons twice",
   "/api/availability/access website_user_id": "an internal id the page never shows — the viewer is named by display name and linked guid; ids only travel in requests",
+  "/api/diagnostics database.tests": "always empty: diagnostics_router.py:498 is the only mention of the key — it is initialised and never appended to, so rendering it would be dressing up a structure nobody fills",
+  "/api/availability/access can_submit": "duplicate: the server computes it as `authenticated and linked` (availability.py:435) and the page already holds both halves, which is also why it can say WHY submitting is unavailable",
+  "/api/availability viewer": "duplicate: the same {authenticated, linked_discord} pair the access endpoint returns (availability.py:686 vs :430), which the page already reads and acts on",
   "/api/proximity/objective-focus players.total_time_ms": "duplicate: the same figure as total_time_s, which the row prints (fixture: 810400 ms = 810.4 s)",
   "/api/proximity/competitive/man-advantage teams.ALLIES": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)",
   "/api/proximity/competitive/man-advantage teams.AXIS": "iterated: ProximityCompetitive prints every team through Object.entries(d.teams)"
