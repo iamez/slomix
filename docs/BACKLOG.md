@@ -7,6 +7,8 @@
 
 ## Trenutna pozicija
 
+- (Opus 5, 2026-09-10) **PREDAJA POSODOBLJENA**: `docs/HANDOFF-fable-2026-09-10.md` — merilnik 238 → 92 (→ 79 s #1028),
+  P0 in P1 dolga nazaj zaprta razen filtrov v URL, tabele dobile ARIA vloge; ostane §3b (sirote proximity) in §3c (filtri, izvoz, kontakt).
 - (Fable 5.1, 2026-09-09, zvečer) **PREDAJA PRED DOPUSTOM**: `docs/HANDOFF-fable-2026-09-09.md`
   (owner odsoten ~3 mesece; vnaprejšnji DA je veljal le za to sejo). Mergano danes:
   #1001–#1011, #1013 (ledger + spider web + bot brez reakcij); dev deployan po
