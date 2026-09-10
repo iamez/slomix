@@ -10,7 +10,6 @@ from website.backend.routers.proximity_helpers import (
     _build_proximity_where_clause,
     _proximity_stub_meta,
     logger,
-    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -32,7 +31,6 @@ async def get_proximity_movers(
     """
     payload = _proximity_stub_meta(range_days)
     safe_limit = max(1, min(int(limit or 5), 25))
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days,
         session_date,
@@ -161,7 +159,6 @@ async def get_proximity_reactions(
     """
     payload = _proximity_stub_meta(range_days)
     safe_limit = max(1, min(int(limit or 5), 25))
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days,
         session_date,

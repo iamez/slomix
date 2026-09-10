@@ -29,7 +29,6 @@ from website.backend.routers.proximity_helpers import (
     _round_quality_gate_sql,
     _timed_section,
     logger,
-    resolve_player_guid,
 )
 from website.backend.routers.proximity_movement import get_proximity_movers, get_proximity_reactions
 from website.backend.routers.proximity_objectives import (
@@ -161,13 +160,7 @@ async def get_proximity_dashboard(
         if isinstance(result, Exception):
             sections_dict[key] = {"_error": str(result), "status": "error"}
             err_count += 1
-        # ⛔ `unavailable` COUNTS AS A FAILED SECTION. It used to be impossible —
-        # the objective probes answered "ok" during an outage — and the moment
-        # they started telling the truth, an outage across all six of them was
-        # still reported here as `sections_ok: 6, sections_error: 0`. The
-        # aggregate would then be the last place still claiming the page was
-        # fine. Codex on #862.
-        elif isinstance(result, dict) and result.get("status") in ("error", "unavailable"):
+        elif isinstance(result, dict) and result.get("status") == "error":
             sections_dict[key] = result
             err_count += 1
         else:
@@ -587,7 +580,6 @@ async def get_proximity_kill_outcomes(
     is registered by proximity_positions but this local version is used
     only for internal dashboard calls.
     """
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["victim_guid", "killer_guid"],

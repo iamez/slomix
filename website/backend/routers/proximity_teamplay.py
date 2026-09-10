@@ -10,11 +10,9 @@ from website.backend.routers.proximity_helpers import (
     _compute_scoped_teamplay,
     _load_scoped_guid_name_map,
     _parse_iso_date,
-    _probe_unavailable,
     _proximity_stub_meta,
     _table_column_exists,
     logger,
-    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -102,7 +100,6 @@ async def get_proximity_spawn_timing(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Spawn timing efficiency leaderboard and team averages."""
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["killer_guid", "victim_guid"],
@@ -177,7 +174,6 @@ async def get_proximity_aim_lock(
     # ["guid","target_guid"] combined with GROUP BY guid meant filtering
     # the panel to player X returned rows keyed by the players who locked
     # onto X, not X (audit 2026-07-25 S12).
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["guid"],
@@ -369,7 +365,6 @@ async def get_proximity_crossfire_angles(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Crossfire opportunity analysis: utilization rate, angle buckets, top duos."""
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["teammate1_guid", "teammate2_guid"],
@@ -577,7 +572,6 @@ async def get_proximity_lua_trades(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Lua-detected trade kill analysis."""
-    player_guid = await resolve_player_guid(db, player_guid)
     where_sql, params, scope = _build_proximity_where_clause(
         range_days, session_date, map_name, round_number, round_start_unix,
         player_guid=player_guid, player_guid_columns=["trader_guid", "original_killer_guid", "original_victim_guid"],
@@ -660,10 +654,7 @@ async def get_proximity_focus_fire(
     db: DatabaseAdapter = Depends(get_db),
 ):
     """Focus fire intelligence — coordinated multi-attacker damage bursts."""
-    exists = await _table_column_exists(db, 'proximity_focus_fire', 'target_guid')
-    if exists is None:
-        return _probe_unavailable('proximity_focus_fire', 'target_guid', summary={}, targets=[], recent=[])
-    if not exists:
+    if not await _table_column_exists(db, 'proximity_focus_fire', 'target_guid'):
         return {"status": "ok", "summary": {}, "targets": [], "recent": []}
 
     where_parts: list = []

@@ -5,7 +5,6 @@ from bisect import bisect_right
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict
 
 from shared.guid_utils import short_guid
 from website.backend.dependencies import get_db
@@ -17,7 +16,6 @@ from website.backend.routers.proximity_helpers import (
     _round_quality_gate_sql,
     attribution_breakdown,
     logger,
-    resolve_player_guid,
 )
 
 router = APIRouter()
@@ -113,21 +111,6 @@ async def get_proximity_leaderboards(
         clauses.append(_round_quality_gate_sql(prefix))
         return " AND ".join(clauses), tuple(params), idx
 
-    def _no_bots(guid_col: str, name_col: str | None = None) -> str:
-        """Player-level bot exclusion, one spelling for every board.
-
-        The S6 gate excludes bot ROUNDS; OMNIBOT players in mixed human
-        rounds pass it, and measured on 31. 8. they held 7/10 spawn, 6/10
-        reactions and 7/10 focus-fire seats — a leaderboard mostly made of
-        bots. KROGT already carried this filter; the rest now speak it too.
-        Power needs it only on its seed query: every component map filters
-        by the seed's guid_set, so the percentile pools inherit the
-        exclusion from that one place."""
-        sql = f"{guid_col} NOT LIKE 'OMNIBOT%'"
-        if name_col:
-            sql += f" AND COALESCE({name_col}, '') NOT LIKE '%[BOT]%'"
-        return sql
-
     try:
         if category == "power":
             scope_where, scope_params, _ = _lb_scope(has_round_number=True)
@@ -139,8 +122,7 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS total,
                        SUM(CASE WHEN outcome = 'escaped' THEN 1 ELSE 0 END) AS escapes
                 FROM combat_engagement
-                WHERE killer_guid IS DISTINCT FROM target_guid
-                  AND {_no_bots('target_guid', 'target_name')} AND {scope_where}
+                WHERE killer_guid IS DISTINCT FROM target_guid AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY COUNT(*) DESC
@@ -422,7 +404,7 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(spawn_timing_score)::numeric, 3) AS avg_score,
                        ROUND(AVG(time_to_next_spawn)::numeric, 0) AS avg_denial_ms
                 FROM proximity_spawn_timing
-                WHERE {_no_bots('killer_guid', 'killer_name')} AND {scope_where}
+                WHERE {scope_where}
                 GROUP BY killer_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_score DESC
@@ -463,13 +445,13 @@ async def get_proximity_leaderboards(
                     SELECT c.teammate1_guid AS guid,
                            COUNT(*) AS cnt, SUM(c.angular_separation) AS sum_angle
                     FROM proximity_crossfire_opportunity c
-                    WHERE c.was_executed = true AND {_no_bots('c.teammate1_guid')} AND {scope_where}
+                    WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate1_guid
                     UNION ALL
                     SELECT c.teammate2_guid AS guid,
                            COUNT(*) AS cnt, SUM(c.angular_separation) AS sum_angle
                     FROM proximity_crossfire_opportunity c
-                    WHERE c.was_executed = true AND {_no_bots('c.teammate2_guid')} AND {scope_where}
+                    WHERE c.was_executed = true AND {scope_where}
                     GROUP BY c.teammate2_guid
                 ) sub GROUP BY guid
                 ORDER BY total DESC
@@ -505,7 +487,7 @@ async def get_proximity_leaderboards(
                        COUNT(*) AS trades,
                        ROUND(AVG(delta_ms)::numeric, 0) AS avg_reaction
                 FROM proximity_lua_trade_kill
-                WHERE {_no_bots('trader_guid', 'trader_name')} AND {scope_where}
+                WHERE {scope_where}
                 GROUP BY trader_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY trades DESC
@@ -530,8 +512,7 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(return_fire_ms)::numeric, 0) AS avg_rf,
                        COUNT(*) AS samples
                 FROM proximity_reaction_metric
-                WHERE return_fire_ms IS NOT NULL
-                  AND {_no_bots('target_guid', 'target_name')} AND {scope_where}
+                WHERE return_fire_ms IS NOT NULL AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_rf ASC
@@ -560,8 +541,7 @@ async def get_proximity_leaderboards(
                 FROM combat_engagement
                 -- self-rows (world/self-kill artifacts, ~12% of the table)
                 -- are not real engagements and deflated every rate (S14)
-                WHERE killer_guid IS DISTINCT FROM target_guid
-                  AND {_no_bots('target_guid', 'target_name')} AND {scope_where}
+                WHERE killer_guid IS DISTINCT FROM target_guid AND {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 5
                 ORDER BY escape_pct DESC
@@ -588,7 +568,7 @@ async def get_proximity_leaderboards(
                        SUM(total_distance)::int AS total_distance,
                        COUNT(*) AS tracks
                 FROM player_track
-                WHERE {_no_bots('player_guid', 'player_name')} AND {scope_where}
+                WHERE {scope_where}
                 GROUP BY player_guid
                 HAVING COUNT(*) >= 3
                 ORDER BY avg_speed DESC
@@ -616,7 +596,7 @@ async def get_proximity_leaderboards(
                        ROUND(AVG(attacker_count)::numeric, 1) AS avg_attackers,
                        ROUND(AVG(total_damage)::numeric, 0) AS avg_damage
                 FROM proximity_focus_fire
-                WHERE {_no_bots('target_guid', 'target_name')} AND {scope_where}
+                WHERE {scope_where}
                 GROUP BY target_guid
                 HAVING COUNT(*) >= 2
                 ORDER BY avg_score DESC
@@ -776,210 +756,7 @@ async def get_proximity_leaderboards(
         raise HTTPException(status_code=500, detail="leaderboards computation failed")
 
 
-class ProxFormulaMetric(BaseModel):
-    """One metric inside a category of the published formula."""
-
-    label: str
-    weight: float
-    invert: bool
-
-
-class ProxFormulaCategory(BaseModel):
-    """One scoring category, with the metrics that make it up.
-
-    ⭐ `metrics` IS AN OPEN DICT ON PURPOSE, and so is `categories` above it.
-    This endpoint exists so the page can CITE the formula instead of keeping
-    its own copy of the weights. If the schema pinned the metric names, it
-    would become a second copy — and the day a metric is added or retired, the
-    endpoint that publishes the formula would answer 500 or quietly drop it,
-    which is the failure mode the endpoint was built to prevent.
-    """
-
-    label: str
-    description: str
-    weight_in_overall: float
-    metrics: dict[str, ProxFormulaMetric]
-
-
-class ProxFormula(BaseModel):
-    """The scoring formula itself: weights, categories, metrics.
-
-    ⛔ THIS IS THE ONE ENDPOINT IN THE FAMILY WHERE A WRONG TYPE MISSTATES THE
-    METRIC RATHER THAN EMPTYING A PANEL. Everything here is an explanation of
-    what a score MEANS, so a dropped category or a coerced weight does not
-    look broken — it looks like a different formula.
-
-    `{"status": "ok", **get_formula_config()}` — the body is the service's own
-    config, spread into the response, so the shape follows the formula and not
-    this file.
-    """
-
-    status: str
-    #: Formula version, e.g. "3.0" — the page should display it next to any
-    #: score it explains.
-    version: str
-    min_engagements: int
-    category_weights: dict[str, float]
-    categories: dict[str, ProxFormulaCategory]
-
-
-class ProxMetricBreakdown(BaseModel):
-    """How one metric contributed to one player's category score.
-
-    ⚠️ `raw` and `percentile` are nullable — a player with no measurement for
-    that metric still appears in the breakdown, with the contribution zeroed,
-    rather than vanishing from it.
-
-    ⛔ A LIVE METRIC HAS FIVE KEYS; A RETIRED ONE HAS SIX. `retired_in` is
-    present on 364 of 504 sampled entries — a metric kept in the breakdown for
-    continuity but no longer carrying weight names the version that retired
-    it. Absent means "still live"; a null would read as "retirement unknown",
-    which is a different claim.
-
-    ⚠️ THE FIRST VERSION OF THIS MODEL GOT IT WRONG IN EXACTLY THE WAY THIS
-    DOCSTRING WARNS ABOUT. `retired_in: str | None = None` put
-    `"retired_in": null` on every live metric — 140 of them — and the
-    before/after comparison caught it. `exclude_none` is not the fix either:
-    `raw` and `percentile` use null as a VALUE (a player with no measurement
-    still appears, with the contribution zeroed) and would have been stripped
-    along with it. Hence a union, the same shape as `coverage` on
-    `/proximity/player-heatmap`.
-    """
-
-    label: str
-    raw: float | None
-    percentile: float | None
-    weight: float
-    contribution: float
-
-
-class ProxMetricBreakdownRetired(ProxMetricBreakdown):
-    """A metric still shown but no longer weighted — it names its retirement."""
-
-    retired_in: str
-
-
-class ProxRadarPoint(BaseModel):
-    label: str
-    value: float
-
-
-class ProxPlayerScore(BaseModel):
-    """One player's proximity score, with the arithmetic that produced it."""
-
-    guid: str
-    name: str
-    rank: int
-    engagements: int
-    tracks: int
-    prox_combat: float
-    prox_team: float
-    prox_gamesense: float
-    prox_overall: float
-    prox_radar: list[ProxRadarPoint]
-    #: category -> metric -> how it contributed.
-    breakdown: dict[
-        str, dict[str, ProxMetricBreakdownRetired | ProxMetricBreakdown]
-    ]
-    #: category -> how many of its metrics actually carry weight. Present so a
-    #: consumer can see that prox_combat's 0.40 share rests on ONE measurement
-    #: instead of inferring it from the breakdown (#556).
-    metrics_scored: dict[str, int]
-    metric_weight_coverage: float
-    #: Names of metrics this player had no data for. Empty in every sampled
-    #: response, so the element type comes from the service
-    #: (`[mk for mk in _METRIC_EFFECTIVE_WEIGHT if pdata.get(mk) is None]`),
-    #: not from a reading.
-    missing_metrics: list[str]
-
-
-class ProxScoresQuality(BaseModel):
-    """Whether the ranking can be trusted, carried with every response.
-
-    ⭐ `ranking_available` is the field that separates "nobody scored" from
-    "we could not score": an empty `players` list with
-    `ranking_available: false` is the second. Always present so the contract
-    does not depend on the dataset (Codex on #512).
-
-    `failed_sources` is empty in every sampled response; its element type is
-    the service's `s["source"]`, a string.
-    """
-
-    ranking_available: bool
-    successful_sources: int
-    total_sources: int
-    failed_sources: list[str]
-    metric_weight_coverage: float
-    below_coverage_dropped: int
-
-
-class ProxScoresQualityDegraded(BaseModel):
-    """⛔ P1: THE SHAPE THAT ONLY EXISTS WHEN SOMETHING IS ALREADY BROKEN.
-
-    `prox_scoring._degraded()` returns a deliberate 200 with
-    `status: "degraded"` and a quality object of FIVE keys — `_ok()` adds
-    `below_coverage_dropped`, `_degraded()` does not. Requiring that field
-    made FastAPI reject the degraded payload with a 500, hiding exactly the
-    failure metadata and empty ranking the caller is meant to receive (Codex
-    on #830).
-
-    ⭐ SECOND TIME THIS SHAPE OF BUG APPEARED IN ONE DAY, and I found the
-    first one myself: `linkage.metrics` on `/system/overview` is partial when
-    a subquery fails, and pinning the healthy key set would 500 precisely when
-    the page is needed most. Finding it there did not stop me writing it here.
-
-    Modelled as a union member rather than fixed in the service, so the wire is
-    unchanged and nothing about the degraded payload moves; the absence is
-    also what the frontend's hand-written type already expects
-    (`below_coverage_dropped?: number`).
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    ranking_available: bool
-    successful_sources: int
-    total_sources: int
-    failed_sources: list[str]
-    metric_weight_coverage: float
-
-
-class ProxScoresScope(BaseModel):
-    """⚠️ NOT the same shape as `ProximityScope` in proximity_positions.py.
-
-    This one carries `scoped` and has NO `player_guid`; that one carries
-    `player_guid` and no `scoped`. Two endpoints in the same family echo their
-    scope differently, so a shared helper that reads one shape off the other
-    finds a missing key rather than a null.
-    """
-
-    #: True when any scope filter was applied.
-    scoped: bool
-    session_date: str | None
-    map_name: str | None
-    round_number: int | None
-    round_start_unix: int | None
-
-
-class ProxScores(BaseModel):
-    """Proximity scores for the current scope.
-
-    ⚠️ `player_count` is the count BEFORE `limit`, like `total` on
-    `/api/uploads`: `?limit=1` answers one player with `player_count: 14`.
-    A consumer that reads it as "how many rows are below" gets 14 and renders
-    one.
-    """
-
-    status: str
-    version: str
-    formula_version: str
-    quality: ProxScoresQualityDegraded | ProxScoresQuality
-    range_days: int
-    scope: ProxScoresScope
-    player_count: int
-    players: list[ProxPlayerScore]
-
-
-@router.get("/proximity/prox-scores", response_model=ProxScores)
+@router.get("/proximity/prox-scores")
 @limiter.limit("15/minute")
 async def get_prox_scores(
     request: Request,
@@ -1007,7 +784,6 @@ async def get_prox_scores(
         compute_prox_scores,
     )
     parsed_date = _parse_iso_date(session_date) if isinstance(session_date, str) else session_date
-    player_guid = await resolve_player_guid(db, player_guid)
     try:
         result = await compute_prox_scores(
             db, range_days, player_guid,
@@ -1050,7 +826,7 @@ async def get_prox_scores(
         raise HTTPException(status_code=500, detail="prox-scores computation failed")
 
 
-@router.get("/proximity/prox-scores/formula", response_model=ProxFormula)
+@router.get("/proximity/prox-scores/formula")
 async def get_prox_scores_formula():
     """Return current formula config (weights, metrics, categories) for transparency."""
     from website.backend.services.prox_scoring import get_formula_config
@@ -1070,7 +846,6 @@ async def get_proximity_weapon_accuracy(
 ):
     """Weapon accuracy leaderboard or per-player breakdown."""
     safe_limit = max(1, min(limit, 50))
-    player_guid = await resolve_player_guid(db, player_guid)
     # Input validation BEFORE the try: the broad `except Exception` below
     # would otherwise convert these client errors into a 500 plus a noisy
     # error log (review on #548).
@@ -1212,12 +987,6 @@ async def get_proximity_revives(
 ):
     """Revive summary and medic leaderboard from proximity_revive table."""
     safe_limit = max(1, min(limit, 50))
-    # Parsed BEFORE the try: a malformed date is a bad request, and the
-    # blanket `except Exception` below would otherwise turn its 400 into
-    # "revives computation failed" — an input error reported as a server
-    # fault, which sends the reader to the wrong place entirely.
-    parsed_sd = _parse_iso_date(session_date)
-    player_guid = await resolve_player_guid(db, player_guid)
     try:
         clauses: list[str] = []
         params: list = []
@@ -1228,50 +997,17 @@ async def get_proximity_revives(
         if player_guid:
             params.append(player_guid.strip())
             clauses.append(f"medic_guid = ${len(params)}")
-        # These three were DECLARED and never read. proximity.js sends all
-        # of them on every scoped call (buildScopeParams), so a reader who
-        # narrowed the page to one round still saw the 30-day revive total
-        # sitting beside per-round panels — measured 2026-08-29: 1,873
-        # revives with `session_date=2026-08-27`, and 1,873 without it, while
-        # `map_name` correctly cut the same query to 320.
-        #
-        # A parameter that is accepted, validated and then discarded is the
-        # worst of the three states: the validation is what makes it look
-        # like it works.
-        # Parsed, not passed as text: the column is a `date`, so asyncpg
-        # infers the parameter type from it and rejects a string outright
-        # ('str' object has no attribute 'toordinal') — which is how the
-        # first version of this fix failed.
-        if parsed_sd is not None:
-            params.append(parsed_sd)
-            clauses.append(f"session_date = ${len(params)}")
-        if round_number is not None:
-            params.append(round_number)
-            clauses.append(f"round_number = ${len(params)}")
-        if round_start_unix is not None:
-            params.append(round_start_unix)
-            clauses.append(f"round_start_unix = ${len(params)}")
 
-        # ELSE, not AND — an explicit date REPLACES the rolling window, the
-        # same shape the scoped query above already uses. Adding the window
-        # on top turned my own scope fix into a worse bug than the one it
-        # cured: proximity.js sends range_days=30 alongside session_date, so
-        # any session older than thirty days answered ZERO instead of 12×
-        # too many (measured: 2026-06-21 → 0 revives, and 9 with
-        # range_days=365). My first tests could not catch it — every one of
-        # them scoped to a RECENT session, and a sample that cannot fail
-        # proves nothing.
-        #
-        # Audit P8 + migration 043: the window filters on session_date (play
-        # time). Rows with NULL session_date (re-linker hasn't populated
-        # round_id yet) fall back to created_at so the endpoint still
-        # surfaces them during the catch-up window.
-        if parsed_sd is None:
-            params.append(range_days)
-            clauses.append(
-                "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
-                "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
-            )
+        # Audit P8 + migration 043: filter on session_date (play time)
+        # now that the column exists and is backfilled. Rows with NULL
+        # session_date (re-linker hasn't populated round_id yet) fall
+        # back to created_at so the endpoint still surfaces them during
+        # the catch-up window.
+        params.append(range_days)
+        clauses.append(
+            "(session_date >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day' "
+            "OR (session_date IS NULL AND created_at >= CURRENT_DATE - $" + str(len(params)) + " * INTERVAL '1 day'))"
+        )
 
         where_sql = "WHERE " + " AND ".join(clauses)
         medic_filter = "medic_guid IS NOT NULL AND medic_guid != ''"

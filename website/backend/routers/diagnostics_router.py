@@ -8,10 +8,8 @@ import asyncio
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from shared.services.round_linkage_anomaly_service import assess_round_linkage_anomalies
 from website.backend.dependencies import get_db, require_admin_user
@@ -25,53 +23,6 @@ from website.backend.services.game_server_query import query_game_server
 from website.backend.services.session_scope import resolve_gaming_session_scope
 
 router = APIRouter()
-
-
-class VoiceMember(BaseModel):
-    """One person in voice, as this endpoint is willing to say it.
-
-    Deliberately narrow: the stored row carries more per member, and this
-    endpoint publishes a NAME and the channel it was heard in. Widening it is
-    a decision about what the site discloses, not a schema detail.
-    """
-
-    name: str
-    channel_name: str
-
-
-class VoiceChannel(BaseModel):
-    #: Null in the current writer — the channel is identified by name, and the
-    #: field is kept so a future writer can fill it without a schema change.
-    id: int | None
-    name: str
-    members: list[VoiceMember]
-
-
-class VoiceActivity(BaseModel):
-    """⛔ THREE STATES, AND THE WHOLE POINT IS THAT THEY DIFFER.
-
-    `ok` means we read the report and it is current — INCLUDING when nobody is
-    in voice. `stale` means we read it and it is too old to be called current.
-    `unavailable` means we could not read it at all. Before #808 all three
-    rendered as `total_count: 0`, so "voice is quiet" and "we cannot see voice"
-    looked identical to a client (Codex on #806, via Fable).
-
-    A response model has to preserve that distinction rather than flatten it:
-    `reason` is present in every branch and null in the healthy one, so its
-    ABSENCE never has to be interpreted.
-    """
-
-    #: 'ok' | 'stale' | 'unavailable'
-    status: str
-    #: Null when status is 'ok'; a sentence naming what went wrong otherwise.
-    reason: str | None
-    #: Null when there is nothing to be current about.
-    updated_at: str | None
-    age_seconds: int | None
-    total_count: int
-    members: list[VoiceMember]
-    channels: list[VoiceChannel]
-
 logger = get_app_logger("api.diagnostics")
 
 # Game server configuration (for direct UDP query)
@@ -271,83 +222,7 @@ async def _system_pipeline(db: DatabaseAdapter) -> list[dict]:
     return stages
 
 
-class SystemStage(BaseModel):
-    """One link in the capture -> parse -> derive chain.
-
-    `detail` is `**detail` in `_stage()` — every caller passes different
-    keyword arguments, so it is an open dict BY CONSTRUCTION. Typing it as a
-    model would drop whichever keys that particular stage happened to add.
-    """
-
-    key: str
-    label: str
-    state: str
-    summary: str
-    detail: dict[str, Any]
-
-
-class LinkageBreach(BaseModel):
-    """One threshold the linkage assessor found breached. Every field comes
-    from a `.get()` on a dict this router did not build, so all three are
-    nullable — none was null in the live sample (there were no breaches at
-    all, which is the same thing as no evidence)."""
-
-    metric: str | None
-    value: Any = None
-    threshold: Any = None
-
-
-class LinkageAvailable(BaseModel):
-    """The linkage assessment came back.
-
-    ⚠️ `metrics` IS AN OPEN DICT ON PURPOSE. The assessor starts it empty and
-    fills it per query, so a failed subquery yields PARTIAL metrics with the
-    status set to "error" — verified in
-    `bot/services/round_linkage_anomaly_service.py`, not assumed from the
-    router's comment. A fixed model with the eleven keys the healthy path
-    returns would answer 500 exactly when the system is already degraded.
-
-    `status` carries the assessor's own verdict and is read with `.get()`, so
-    it is nullable here. It is load-bearing: an empty `breaches` list proves
-    nothing when the status is "error", and without this field the frontend's
-    partial-assessment guard cannot fire (Codex on #809).
-    """
-
-    available: bool
-    status: str | None
-    metrics: dict[str, Any]
-    breach_count: int
-    breaches: list[LinkageBreach]
-
-
-class LinkageUnavailable(BaseModel):
-    """The assessment raised or came back as something other than a dict:
-    `{"available": false}`, a SINGLE key.
-
-    ⛔ Not `LinkageAvailable` with optional fields — that would put
-    `"metrics": null` and `"breach_count": null` on the wire for a payload the
-    handler deliberately keeps to one key.
-    """
-
-    available: bool
-
-
-class SystemOverview(BaseModel):
-    """End-to-end state of the pipeline.
-
-    Every section degrades on its own — a failing source sets that stage to
-    `state: "unknown"` rather than taking the page down — so the states worth
-    typing for are the DEGRADED ones, and none of them is reachable by varying
-    a URL. This endpoint takes no parameters at all.
-    """
-
-    generated_at: str
-    overall: str
-    stages: list[SystemStage]
-    linkage: LinkageAvailable | LinkageUnavailable
-
-
-@router.get("/system/overview", response_model=SystemOverview)
+@router.get("/system/overview")
 async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
     """End-to-end state of the pipeline, one stage per link in the chain.
 
@@ -409,12 +284,6 @@ async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
         breaches = linkage.get("breaches") or []
         linkage_out = {
             "available": True,
-            # The assessor's own verdict travels with the data: on a failed
-            # subquery it says "error" with PARTIAL metrics, and an empty
-            # breaches list then proves nothing — without this field the
-            # frontend's partial-assessment guard could never fire (Codex
-            # on #809).
-            "status": linkage.get("status"),
             "metrics": linkage.get("metrics") or {},
             "breach_count": len(breaches),
             "breaches": [
@@ -435,55 +304,7 @@ async def get_system_overview(db: DatabaseAdapter = Depends(get_db)):
     }
 
 
-class DiagnosticsTableCheck(BaseModel):
-    """One table the API reads. `row_count` is present only on `status: "ok"`
-    (every query is a COUNT, so it is an integer or absent — never null); the
-    other statuses carry `error` instead. A missing count is a reason, not a
-    zero, and the About panel renders it as one."""
-    name: str
-    status: str
-    required: bool
-    row_count: int | None = None
-    error: str | None = None
-
-
-class DiagnosticsMonitoringTable(BaseModel):
-    """`server_status_history` / `voice_status_history`. On failure the
-    handler sends count 0, last_recorded_at null AND `error` — read `error`
-    first, or the failure prints as "0 rows"."""
-    count: int
-    #: Always written by the handler (null when nothing was recorded), so it
-    #: is required-and-nullable on the wire, not optional.
-    last_recorded_at: str | None
-    error: str | None = None
-
-
-class DiagnosticsReport(BaseModel):
-    """GET /api/diagnostics. `time` is `{}` when its query raised or returned
-    no row; `pool` always carries `connected`; monitoring and pool never
-    change `status` (computed from issues/warnings before they are read).
-    Nested dicts stay open so an adapter-specific pool key is not dropped."""
-    model_config = {"extra": "allow"}
-
-    status: str
-    timestamp: str | None = None
-    database: dict[str, Any]
-    tables: list[DiagnosticsTableCheck]
-    issues: list[str]
-    warnings: list[str]
-    time: dict[str, int]
-    monitoring: dict[str, DiagnosticsMonitoringTable]
-    pool: dict[str, Any] | None = None
-    #: The last run of scripts/slomix_watchdog.py on this host (its
-    #: logs/watchdog_last.json), or null when it has never run here. Additive
-    #: since 2026-09-06; it never changes `status`.
-    watchdog: dict[str, Any] | None = None
-
-
-# exclude_unset, not exclude_none: the handler builds a dict, so a key it did
-# not write stays absent (a table without a count has no row_count key) while
-# a null it DID write (timestamp, last_recorded_at) is kept as the value it is.
-@router.get("/diagnostics", response_model=DiagnosticsReport, response_model_exclude_unset=True)
+@router.get("/diagnostics")
 async def get_diagnostics(
     db: DatabaseAdapter = Depends(get_db),
     _user: dict = Depends(require_admin_user),
@@ -693,53 +514,7 @@ async def get_diagnostics(
     else:
         results["pool"] = {"connected": False, "reason": "adapter has no pool_stats"}
 
-    # The watchdog's last report, when it has run on this host. Read-only,
-    # non-fatal, and deliberately NOT folded into `status`: the watchdog is
-    # an observer of this process among others, so its verdict is shown next
-    # to ours, not merged with it.
-    results["watchdog"] = read_watchdog_last()
-
     return results
-
-
-def read_watchdog_last(path: str | None = None, now: float | None = None) -> dict[str, Any] | None:
-    """Summarise logs/watchdog_last.json (scripts/slomix_watchdog.py) for the
-    About panel: when it ran, how old that is, one level per check, and how
-    many alerts the run produced. None when the file does not exist —
-    "the watchdog has not run here" is a fact, not a failure."""
-    import json as _json
-    import time as _time
-    from pathlib import Path as _Path
-
-    from website.backend.logging_config import LOG_DIR
-
-    target = _Path(path or os.getenv("WATCHDOG_LAST_FILE") or (LOG_DIR / "watchdog_last.json"))
-    if not target.exists():
-        return None
-    try:
-        data = _json.loads(target.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return {"error": "unreadable"}
-    ran_at = data.get("ran_at")
-    age: float | None = None
-    if isinstance(ran_at, str):
-        try:
-            t = datetime.fromisoformat(ran_at)
-            if t.tzinfo is None:
-                t = t.replace(tzinfo=timezone.utc)
-            age = max(0.0, (now if now is not None else _time.time()) - t.timestamp())
-        except ValueError:
-            age = None
-    findings = data.get("findings") or []
-    levels = {f.get("key"): f.get("level") for f in findings if isinstance(f, dict) and f.get("key")}
-    return {
-        "ran_at": ran_at,
-        "age_seconds": age,
-        "host": data.get("host"),
-        "levels": levels,
-        "alerts": len(data.get("alerts") or []),
-        "dry_run": bool(data.get("dry_run")),
-    }
 
 
 @router.get("/diagnostics/lua-webhook")
@@ -1135,82 +910,7 @@ async def get_time_audit(
     }
 
 
-class StorytellingWarning(BaseModel):
-    """⚠️ A WARNING HERE IS AN OBJECT, not a string.
-
-    `/stats/last-session` also has a `warnings` field and it is `list[str]`.
-    Same name, same site, different element type — which is exactly the kind of
-    thing a shared frontend helper gets wrong once and then everywhere.
-    """
-
-    level: str
-    message: str
-
-
-class StorytellingKnownIssue(BaseModel):
-    """A standing caveat about the data, returned with every answer so a ratio
-    is never read without the reasons it might be off."""
-
-    key: str
-    title: str
-    detail: str
-
-
-class StorytellingCompleteness(BaseModel):
-    """Smart Stats coverage for one date or one gaming session.
-
-    Measured across the states that matter rather than one happy call — all
-    THREE values of `status` were exercised (`ok`, `no_data`, `degraded`),
-    both scopes, and both refusals:
-
-        ?session_date=2026-08-27       200  ok         scope=date
-        ?session_date=2020-01-01       200  no_data    scope=date, 1 warning
-        ?gaming_session_id=153         200  ok         scope=gaming_session
-        ?gaming_session_id=137         200  degraded   scope=gaming_session
-        (neither parameter)            422  one of the two is required
-        ?session_date=ni-datum         400  must be YYYY-MM-DD
-
-    The key set is 20 in every 200, so nothing here is optional — but
-    `gaming_session_id` IS null on all three date-scoped answers, which is the
-    field a date-scoped sample would have typed `int`.
-
-    ⭐ All three ratios are `float` and stay float on the empty path, because
-    the guard is `else 0.0`. That is worth stating next to
-    `SeasonTotals.avg_rounds_per_day`, whose guard is `else 0` and which is
-    therefore `int | float`. Same shape of code, one character apart, two
-    different contracts.
-    """
-
-    #: The date asked for, or the scope's first date when asked by session id.
-    session_date: str
-    #: EVERY date the counted scope touches — a session can cross midnight, so
-    #: the single date above would label only half of what was counted.
-    session_dates: list[str]
-    #: Null whenever the answer was scoped by DATE (3 of 5 sampled calls).
-    gaming_session_id: int | None
-    #: "date" or "gaming_session".
-    scope: str
-    #: "ok", "no_data" or "degraded" — all three measured.
-    status: str
-    kills_total: int
-    kills_with_round: int
-    unlinked_kills: int
-    wrong_round_kills: int
-    distinct_rounds_in_kills: int
-    kis_rows: int
-    kis_computed: bool
-    rounds_total: int
-    rounds_correlated: int
-    completeness_ratio: float
-    linkage_ratio: float
-    correlation_ratio: float
-    kis_total_impact_sum: float
-    warnings: list[StorytellingWarning]
-    known_issues: list[StorytellingKnownIssue]
-
-
-@router.get("/diagnostics/storytelling-completeness",
-            response_model=StorytellingCompleteness)
+@router.get("/diagnostics/storytelling-completeness")
 async def get_storytelling_completeness(
     session_date: str | None = Query(None, description="YYYY-MM-DD (date-wide)"),
     # `db` keeps its position so existing positional callers (and the contract
@@ -1976,91 +1676,7 @@ async def get_voice_activity_history(
         }
 
 
-#: How old a voice report may be and still describe the present.
-#:
-#: NOT CHOSEN HERE. `bot/services/monitor_tasks_mixin.py` writes the row on a
-#: 30-second loop and that same service refuses to act on its own status rows
-#: once they pass 180 seconds. Re-deriving a different number on this side
-#: would give the system two opinions about the same staleness.
-VOICE_REPORT_STALE_AFTER_S = 180
-
-#: How far ahead of us a timestamp may sit and still count as clock skew.
-#:
-#: ⚠️ CHOSEN, NOT MEASURED, and worth saying so. The bot and the web process
-#: read the same PostgreSQL clock on NTP-synced hosts, where drift is
-#: sub-second — there is nothing here to derive a number FROM. Five seconds is
-#: wide enough that ordinary skew never trips it and narrow enough that a row
-#: dated minutes ahead is treated as what it is: undateable.
-VOICE_CLOCK_SKEW_GRACE_S = 5
-
-
-def _voice_report_iso(updated_at: object) -> str | None:
-    """The report's timestamp as an OFFSET-BEARING ISO string, or None.
-
-    ⛔ Never the stored value verbatim. PostgreSQL hands back an aware
-    datetime, the SQLite dev path a zone-less string, and older rows a naive
-    datetime — and `Date.parse` in a browser reads a zone-less date-time as
-    LOCAL time. The same row would then be "fresh" to the server's age
-    calculation (which reads naive as UTC) and hours old to a client outside
-    UTC. Anything we cannot parse is published as-is rather than dropped: a
-    string we do not understand is still evidence, and the age beside it is
-    already null.
-    """
-    if updated_at is None:
-        return None
-    stamp = updated_at
-    if isinstance(stamp, str):
-        try:
-            stamp = datetime.fromisoformat(stamp)
-        except ValueError:
-            return updated_at
-    if not hasattr(stamp, "isoformat"):
-        return str(updated_at)
-    if getattr(stamp, "tzinfo", None) is None:
-        stamp = stamp.replace(tzinfo=timezone.utc)
-    return stamp.isoformat()
-
-
-def _voice_report_age_seconds(updated_at: object) -> int | None:
-    """Seconds since the bot wrote this row, or None if it cannot be told.
-
-    ⚠️ Naive and aware datetimes both arrive here: PostgreSQL returns an aware
-    value, the SQLite dev path a string, and older rows a naive datetime.
-    Subtracting across that boundary raises TypeError, so a missing timezone
-    is read as UTC — the column the bot writes is UTC either way.
-
-    ⛔ None on anything unparseable, never 0. Zero would say "just written",
-    which is the one thing an unreadable timestamp cannot support.
-    """
-    if updated_at is None:
-        return None
-    stamp = updated_at
-    if isinstance(stamp, str):
-        try:
-            stamp = datetime.fromisoformat(stamp)
-        except ValueError:
-            return None
-    if not hasattr(stamp, "tzinfo"):
-        return None
-    if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=timezone.utc)
-    age = (datetime.now(timezone.utc) - stamp).total_seconds()
-    # ⛔ A FUTURE TIMESTAMP IS NOT EVIDENCE THAT THE BOT JUST PUBLISHED.
-    # `max(0, …)` normalised every negative age to zero, so a row dated ahead
-    # of the web process — a clock that drifted, a migrated or malformed row —
-    # reported `ok` and kept an old member list "current" until wall time
-    # caught up to that timestamp plus the whole staleness window
-    # (Codex, PR #808). Undateable is the honest answer, and it reads `stale`.
-    if age < -VOICE_CLOCK_SKEW_GRACE_S:
-        logger.warning(
-            "voice status timestamp is %.0fs in the future; treating as undateable",
-            -age,
-        )
-        return None
-    return max(0, int(age))
-
-
-@router.get("/voice-activity/current", response_model=VoiceActivity)
+@router.get("/voice-activity/current")
 async def get_current_voice_activity(
     db: DatabaseAdapter = Depends(get_db),
     # PUBLIC (owner-approved): Home current-voice widget. #80 regression
@@ -2090,73 +1706,12 @@ async def get_current_voice_activity(
                 status_data = json.loads(status_data)
 
             members = status_data.get("members") or []
-            # ⛔ `or`, not `.get(key, default)`. The default only applies when
-            # the KEY IS ABSENT — a key present with an explicit null returns
-            # the null, and it would then be validated AFTER this try block
-            # returns, so the malformed-row fallback below could not catch it
-            # and the endpoint would answer 500 instead of its unavailable
-            # payload (Codex on #830).
-            #
-            # Normalised rather than typed nullable, because here the fallback
-            # IS the meaning: a member whose name we do not know is "Unknown",
-            # not "no name". Contrast the award guid in records_matches, where
-            # null genuinely means unresolved and the model says so.
-            channel_name = status_data.get("channel_name") or "Gaming"
+            channel_name = status_data.get("channel_name", "Gaming")
             safe_members = [
-                {"name": (m.get("name") or "Unknown"), "channel_name": channel_name}
+                {"name": m.get("name", "Unknown"), "channel_name": channel_name}
                 for m in members
             ]
-            age = _voice_report_age_seconds(row[1])
             return {
-                # ⭐ "ok" means WE READ IT AND IT IS CURRENT, not that anybody
-                # is in voice. An empty channel is a real, reportable answer
-                # and must not look like a failure.
-                #
-                # ⛔ "stale" is its own answer, not a flavour of unavailable.
-                # The writer loops every 30 s
-                # (`bot/services/monitor_tasks_mixin.py`, `@tasks.loop(seconds=30)`)
-                # and that same service already discards its own reports past
-                # 180 s — so a row older than that means the bot stopped, and
-                # its member list could otherwise be presented as current
-                # indefinitely (Codex on PR #808). The threshold is the
-                # project's own, not a number chosen here.
-                # ⛔ "stale" means READ BUT NOT ESTABLISHED AS CURRENT, which
-                # covers two things: a report older than the threshold, and a
-                # report whose age cannot be determined at all. The second
-                # case used to answer "ok" — claiming currency from a
-                # timestamp we could not read, which is the exact failure this
-                # endpoint was changed to stop. An undateable row could be
-                # from a minute ago or from March.
-                "status": ("ok" if age is not None
-                           and age <= VOICE_REPORT_STALE_AFTER_S else "stale"),
-                "age_seconds": age,
-                # Already selected by the query above and then discarded, so a
-                # client could not tell a fresh report from one the bot stopped
-                # updating hours ago (Codex on PR #806, via Fable).
-                #
-                # ⚠️ `isoformat()` only when there is one to call. PostgreSQL
-                # hands back a datetime, the SQLite dev path a string — and an
-                # AttributeError here lands in the `except` below, which would
-                # report a perfectly good row as unavailable. A timestamp is
-                # not worth turning a working answer into a failure.
-                #
-                # ⛔ AND IT CARRIES ITS ZONE. Publishing the stored value
-                # verbatim meant a naive `2026-08-25 12:34:56` reached the
-                # page, where `Date.parse` reads a zone-less date-time as
-                # LOCAL time — so `_voice_report_age_seconds` called it fresh
-                # (it reads naive as UTC) while a browser two zones away
-                # labelled the same report hours old, or dated it in the
-                # future (Codex, PR #808). One value, two calendars.
-                "updated_at": _voice_report_iso(row[1]),
-                "reason": (
-                    None if age is not None and age <= VOICE_REPORT_STALE_AFTER_S
-                    else (
-                        f"the bot last published {age} s ago; it writes every 30 s"
-                        if age is not None
-                        else "the report carries no usable timestamp, so it "
-                             "cannot be shown as current"
-                    )
-                ),
                 "total_count": len(safe_members),
                 "members": safe_members,
                 "channels": (
@@ -2165,24 +1720,12 @@ async def get_current_voice_activity(
                     else []
                 ),
             }
-        reason = "the bot has not published a voice-channel status row"
     except (json.JSONDecodeError, KeyError, AttributeError, TypeError) as e:
         logger.debug(f"Voice status parse failed: {e}")
-        reason = f"the stored voice status could not be read ({type(e).__name__})"
 
-    # ⛔ A FAILURE IS NOT AN EMPTY ROOM. This used to return the same
-    # `total_count: 0` payload for three different situations — nobody in
-    # voice, no row written, and a row that would not parse — with an
-    # `error: None` key that appeared ONLY in the failure cases and whose
-    # value said there was no error. A client had nothing to branch on, so
-    # "voice is quiet" and "we cannot see voice" rendered identically
-    # (Codex on PR #806, via Fable).
     return {
-        "status": "unavailable",
-        "reason": reason,
-        "updated_at": None,
-        "age_seconds": None,
         "total_count": 0,
         "members": [],
         "channels": [],
+        "error": None,
     }
