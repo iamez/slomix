@@ -49,6 +49,31 @@ def test_round_duration_sql_matches_python_contract():
     sql = round_duration_sql("r")
     assert "NULLIF(r.actual_duration_seconds, 0)" in sql
     assert "split_part(r.actual_time" in sql
+    # The two used to be written separately and disagreed on corrupt clocks:
+    # SQL took `[0-9]{2}` seconds, so "4:60" parsed to 300 s in a query and
+    # to None in Python, while the module docstring said the SQL mirrors it.
+    # Substring assertions could not see that — they checked the shape, not
+    # the rule. This compares the SAME strings through both sides.
+    import re as _re
+
+    sql_pattern = _re.search(r"actual_time ~ '([^']+)'", sql).group(1)
+    # Minutes ASCII too. Python's `\d` matches Unicode digits and Postgres's
+    # does not, so `\d+` minutes with `[0-9]` seconds meant "٤:59" parsed to
+    # 299 in Python and was rejected by the SQL — the same divergence this
+    # consolidation removed, one character to its left (brother's review on
+    # #840). No ET clock carries such a digit; the point is that the two
+    # halves describe the same set for EVERY input.
+    assert "\\d" not in sql_pattern
+    assert parse_mmss("\u0664:59") is None
+    for clock, valid in [
+        ("8:27", True), ("0:00", True), ("12:59", True),
+        ("4:60", False), ("4:99", False), ("4:6", False), ("abc", False),
+    ]:
+        sql_ok = _re.match(sql_pattern, clock) is not None
+        py_ok = parse_mmss(clock) is not None
+        assert sql_ok == py_ok == valid, (
+            f"{clock!r}: sql={sql_ok} python={py_ok}, expected {valid}"
+        )
     # no bind placeholders — must be safe under both ? and $n adapters
     # (the lone `$` regex anchor inside the quoted literal is fine)
     assert "?" not in sql
