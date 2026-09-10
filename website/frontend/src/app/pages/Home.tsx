@@ -13,7 +13,7 @@ import {
 import type { LastSession, RecentPrediction, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
   Absent, ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
-  figure, lblStyle, rowStyle,
+  decimals, figure, lblStyle, rowStyle,
 } from '../components/ui';
 import { MatchBoxScore } from '../components/MatchBoxScore';
 import { Panel } from '../components/Panel';
@@ -338,6 +338,9 @@ function SeasonBlock() {
         { k: 'maps', v: seasonFig('maps_count', totals.maps) },
         { k: 'sessions', v: seasonFig('sessions_count', totals.sessions) },
         { k: 'kills', v: seasonFig('kills_total', totals.kills) },
+        { k: 'active days', v: seasonFig('active_days', totals.active_days) },
+        // Derived from rounds ÷ active days on the server, so it fails with active_days.
+        { k: 'rounds / day', v: seasonFig('active_days', totals.avg_rounds_per_day) },
         {
           // {name: null, plays: 0} is the endpoint's EMPTY season shape —
           // the object is truthy, the name is the gate (Codex wave 3).
@@ -385,6 +388,7 @@ function SeasonBlock() {
   return (
     <div data-parity="home.season">
       <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{s.days_left} days left</span>} />
+      {s.next_season_id != null && <Meta>{`then ${s.next_season_name} (season ${s.next_season_id})`}</Meta>}
       <div style={{ height: 3, background: 'var(--color-rule-900)', marginTop: 'var(--space-2)', position: 'relative' }}>
         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct.toFixed(0)}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
       </div>
@@ -622,7 +626,10 @@ function PulseRow() {
             {md.movers_up.length + md.movers_down.length + md.new_players.length === 0 && (
               <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no session to compare yet</div>
             )}
-            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>vs each player's own trailing form — not a ranking</Lbl>
+            {/* The server's own words for the baseline, and the weights the
+              * movement is scored with — so nobody reads it as a ladder. */}
+            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>{md.baseline_desc ?? "vs each player's own trailing form — not a ranking"}</Lbl>
+            {md.form_weights && <Meta>weights: {Object.entries(md.form_weights).map(([k, v]) => `${k} ${decimals(v, 2)}`).join(' · ')}</Meta>}
           </div>
         )}
       </div>

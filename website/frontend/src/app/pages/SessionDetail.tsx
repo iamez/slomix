@@ -78,9 +78,12 @@ function Scoreboard({ scoring }: { scoring: SessionScoring }) {
       <SectionHead
         label="scoreboard"
         aside={
-          <span className="lbl">
-            {scoring.team_a_name} {scoring.team_a_score} — {scoring.team_b_score} {scoring.team_b_name}
-          </span>
+          <Cluster gap={2} align="baseline">
+            <span className="lbl">
+              {scoring.team_a_name} {scoring.team_a_score} — {scoring.team_b_score} {scoring.team_b_name}
+            </span>
+            {scoring.total_maps != null && <Meta>{scoring.total_maps} maps scored</Meta>}
+          </Cluster>
         }
       />
       <Stack gap={1} className="rows">
