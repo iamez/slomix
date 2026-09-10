@@ -196,6 +196,11 @@ class SessionMatrixService:
                    p.team AS side,
                    SUM(p.kills) AS kills, SUM(p.deaths) AS deaths,
                    SUM(p.damage_given) AS damage,
+                   -- Damage TAKEN was the one number a player could not see
+                   -- per round anywhere on the site: this matrix omitted it
+                   -- and so did the per-player match history endpoint.
+                   -- (No braces in this comment: the query is an f-string.)
+                   SUM(p.damage_received) AS damage_received,
                    SUM(p.time_played_seconds) AS time_played,
                    SUM(p.revives_given) AS revives,
                    SUM(p.times_revived) AS times_revived,
@@ -244,16 +249,17 @@ class SessionMatrixService:
             kills = int(row[4] or 0)
             deaths = int(row[5] or 0)
             damage = int(row[6] or 0)
-            time_played = int(row[7] or 0)
-            revives = int(row[8] or 0)
-            times_revived = int(row[9] or 0)
-            assists = int(row[10] or 0)
-            gibs = int(row[11] or 0)
-            hs_kills = int(row[12] or 0)
-            hits = int(row[13] or 0)
-            shots = int(row[14] or 0)
-            weapon_hs = int(row[15] or 0)
-            rf_ms = float(row[16]) if row[16] is not None else None
+            damage_received = int(row[7] or 0)
+            time_played = int(row[8] or 0)
+            revives = int(row[9] or 0)
+            times_revived = int(row[10] or 0)
+            assists = int(row[11] or 0)
+            gibs = int(row[12] or 0)
+            hs_kills = int(row[13] or 0)
+            hits = int(row[14] or 0)
+            shots = int(row[15] or 0)
+            weapon_hs = int(row[16] or 0)
+            rf_ms = float(row[17]) if row[17] is not None else None
 
             if side is None:
                 continue
@@ -275,6 +281,7 @@ class SessionMatrixService:
                 "team": team_for_round,
                 "side": side,
                 "kills": kills, "deaths": deaths, "damage": damage,
+                "damage_received": damage_received,
                 "dpm": dpm_row, "kd": kd_row,
                 "time_played": time_played,
                 "revives": revives, "assists": assists, "gibs": gibs,

@@ -10,6 +10,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import time
 import uuid
 from dataclasses import dataclass
@@ -29,7 +30,19 @@ from website.backend.services.upload_validators import (
 
 logger = get_app_logger("upload.store")
 
-UPLOAD_STORAGE_ROOT_DEFAULT = "data/uploads"
+# Where uploads live. The historical default was the RELATIVE path
+# "data/uploads", which only ever landed in website/data/uploads because the
+# service happens to run with WorkingDirectory=<repo>/website — start the app
+# any other way and user uploads move somewhere else. Anchoring the default to
+# this package keeps the exact same directory while making it independent of
+# how the process was started.
+#
+# UPLOAD_STORAGE_ROOT overrides it, and production SHOULD point it outside the
+# git tree (see .env.example): on 2026-08-19 the v1.39.0 deploy aborted with
+# exit 128 because a git checkout tried to touch a user upload inside the work
+# tree. Code and writable user data do not belong in the same directory.
+_WEBSITE_DIR = Path(__file__).resolve().parents[2]
+UPLOAD_STORAGE_ROOT_DEFAULT = _WEBSITE_DIR / "data" / "uploads"
 UPLOAD_CHUNK_SIZE = 1024 * 1024  # 1MB chunks
 
 # Poster thumbnails (Faza 2): a client captures the first frame of a clip as a
@@ -85,13 +98,30 @@ class UploadStorageService:
 
     def ensure_storage_tree(self) -> None:
         """
-        Ensure storage directory exists with secure permissions.
+        Ensure storage directory exists and is not world-accessible.
 
-        Creates root directory with 0o700 permissions (owner read/write/execute only).
+        A root this service CREATES gets 0o700. An existing root keeps the
+        mode its operator gave it, minus any world bits: the app's security
+        interest is "no other user can read uploads", and re-imposing 0o700 on
+        every upload would silently undo a deliberate 2750 (the mode a server
+        wants when the storage lives outside the work tree and a group needs
+        read access for backups). Fighting the operator on every call is how a
+        provisioning script and the app end up disagreeing forever.
         """
+        created = not self.root.exists()
         self.root.mkdir(parents=True, exist_ok=True)
         try:
-            os.chmod(self.root, 0o700)
+            if created:
+                os.chmod(self.root, 0o700)
+                return
+            mode = stat.S_IMODE(self.root.stat().st_mode)
+            if mode & 0o007:
+                os.chmod(self.root, mode & ~0o007)
+                logger.warning(
+                    "Upload storage root %s was world-accessible (%o); "
+                    "stripped the world bits (now %o).",
+                    self.root, mode, mode & ~0o007,
+                )
         except OSError as e:
             logger.warning(f"Could not set storage root permissions: {e}")
 
@@ -620,18 +650,38 @@ class UploadStorageService:
 _storage: UploadStorageService | None = None
 
 
+def resolve_storage_root() -> Path:
+    """The configured storage root, as an absolute path.
+
+    An UPLOAD_STORAGE_ROOT that is relative is resolved against the website
+    package — the same anchor as the default — rather than against the current
+    working directory, so the location of user data never depends on how the
+    process was started.
+    """
+    configured = os.getenv("UPLOAD_STORAGE_ROOT", "").strip()
+    if not configured:
+        return UPLOAD_STORAGE_ROOT_DEFAULT
+    root = Path(configured)
+    if root.is_absolute():
+        return root
+    logger.warning(
+        "UPLOAD_STORAGE_ROOT is relative (%s); resolving it against %s. "
+        "Prefer an absolute path outside the git tree.", configured, _WEBSITE_DIR
+    )
+    return (_WEBSITE_DIR / root).resolve()
+
+
 def get_upload_storage() -> UploadStorageService:
     """
     Get global upload storage service singleton.
 
-    Storage root is configured via UPLOAD_STORAGE_ROOT environment variable,
-    or defaults to 'data/uploads'.
+    Storage root is configured via the UPLOAD_STORAGE_ROOT environment
+    variable, or defaults to <repo>/website/data/uploads.
 
     Returns:
         UploadStorageService instance
     """
     global _storage
     if _storage is None:
-        root = Path(os.getenv("UPLOAD_STORAGE_ROOT", UPLOAD_STORAGE_ROOT_DEFAULT))
-        _storage = UploadStorageService(storage_root=root)
+        _storage = UploadStorageService(storage_root=resolve_storage_root())
     return _storage

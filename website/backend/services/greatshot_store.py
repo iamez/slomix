@@ -12,6 +12,7 @@ from fastapi import HTTPException, UploadFile
 
 from greatshot.config import CONFIG
 from greatshot.scanner.api import sniff_demo_header_bytes
+from greatshot.scanner.errors import UnsupportedDemoError
 from website.backend.logging_config import get_app_logger
 
 logger = get_app_logger("greatshot.store")
@@ -98,6 +99,19 @@ class GreatshotStorageService:
             logger.warning(f"Could not check disk space: {e}")
             # Don't fail uploads if disk check fails, just log warning
 
+    @staticmethod
+    def _discard_rejected(stored_path: Path) -> None:
+        """A rejected upload leaves NOTHING behind — not the file, and not
+        the per-demo directory tree either (junk dirs accumulate the same
+        way junk files do; found via review on #890)."""
+        try:
+            stored_path.unlink(missing_ok=True)
+            originals_dir = stored_path.parent
+            originals_dir.rmdir()
+            originals_dir.parent.rmdir()
+        except OSError:
+            logger.debug("Could not fully clean up rejected upload")
+
     async def save_upload(self, upload: UploadFile) -> SavedGreatshotUpload:
         self.ensure_storage_tree()
 
@@ -133,10 +147,7 @@ class GreatshotStorageService:
                 total_bytes += len(chunk)
                 if total_bytes > self.max_upload_bytes:
                     handle.close()
-                    try:
-                        stored_path.unlink(missing_ok=True)
-                    except OSError:
-                        logger.debug("Could not clean up file after error")
+                    self._discard_rejected(stored_path)
                     raise HTTPException(
                         status_code=413,
                         detail=(
@@ -153,19 +164,18 @@ class GreatshotStorageService:
                 handle.write(chunk)
 
         if total_bytes == 0:
-            try:
-                stored_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            self._discard_rejected(stored_path)
             raise HTTPException(status_code=400, detail="Empty upload is not allowed.")
 
         try:
             sniff_demo_header_bytes(header_bytes)
+        except UnsupportedDemoError as exc:
+            # The scanner SPEAKING, not an accident — its words go out
+            # verbatim, and the junk upload does not stay on disk.
+            self._discard_rejected(stored_path)
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         except (ValueError, OSError) as exc:
-            try:
-                stored_path.unlink(missing_ok=True)
-            except OSError:
-                pass
+            self._discard_rejected(stored_path)
             raise HTTPException(status_code=400, detail=f"Invalid demo header: {exc}") from exc
 
         return SavedGreatshotUpload(

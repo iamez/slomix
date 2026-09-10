@@ -25,7 +25,7 @@ Format-agnostic: metrics work in 3v3 (medic/engi/covy) and 6v6 (full roster).
 import bisect
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 
 logger = logging.getLogger(__name__)
 
@@ -546,8 +546,27 @@ async def compute_all_ratings(db, *, epoch_start: "str | date | None" = None,
 
 async def compute_and_store_ratings(db) -> int:
     """Compute all ratings and upsert into player_skill_ratings table."""
+    run_started_at = datetime.now(timezone.utc)
     results = await compute_all_ratings(db)
 
+    # One transaction for the whole replacement. Every db.execute() commits on
+    # its own, so the sequence below — delete the bots, reconcile the cohort,
+    # write each player — used to be that many separately-visible states. A
+    # failure part-way left a board mixing this run with the last one, and
+    # because a single successful upsert refreshes last_rated_at, the next
+    # request saw a fresh timestamp and published that mixture for an hour;
+    # _pool_mean() then derived a prior from a population that never existed
+    # (Codex on #835). Either the run replaces the board or it changes
+    # nothing.
+    async with db.transaction():
+        await _replace_published_ratings(db, results, run_started_at)
+
+    logger.info("Stored ratings + history for %d players", len(results))
+    return len(results)
+
+
+async def _replace_published_ratings(db, results: list[dict], run_started_at) -> None:
+    """The write half of a rating run — called inside one transaction."""
     # Upserts never remove rows, so bot entries rated before the bot gate
     # existed would sit in the table forever — self-heal on every refresh.
     await db.execute(
@@ -557,6 +576,60 @@ async def compute_and_store_ratings(db) -> int:
     await db.execute(
         "DELETE FROM player_skill_history WHERE player_guid LIKE 'OMNIBOT%'"
     )
+
+    # The same sentence, one word wider: a row for ANY player who is no
+    # longer in the cohort sits in the table forever too. Measured on dev
+    # 2026-08-29 — three rows written 2026-05-06 (G4rch4, -C3jZi, MrAvAc)
+    # were still on the public leaderboard four months later. Their players
+    # had fallen under MIN_ROUNDS (the table said 6 rounds; they have 4), so
+    # no later run touched them, and their ratings predate the shrinkage fix
+    # entirely: MrAvAc's published rating equalled his raw score. A rating is
+    # a percentile against the cohort it was computed with, so a row from a
+    # different cohort is not comparable with the rest of the board — it is
+    # a different measurement wearing the same column.
+    #
+    # A rating is only ever published for players in the current run, so the
+    # table is reconciled to that run. History is NOT touched: player_skill_
+    # history keeps every snapshot, which is where the past belongs.
+    #
+    # ⛔ It must not delete a CONCURRENT run's work. Two requests can cross
+    # the one-hour staleness boundary together, so the delete only ever
+    # touches rows older than this run's own start: a fresher row is somebody
+    # else's finished work, never this run's leftover (Codex on #835).
+    #
+    # An EMPTY result reconciles too, and my first version was wrong to
+    # exempt it. I guarded it as "a bad run must not empty the table — that
+    # would turn a bad run into data loss", and that reason does not hold:
+    # these rows are a cache of a computation over player_comprehensive_stats,
+    # the next run rebuilds them, and player_skill_history keeps every
+    # snapshot regardless. Nothing is lost. What the guard did buy was the
+    # opposite of safety — an empty cohort left the previous board published
+    # under old timestamps, so the site kept showing players who no longer
+    # qualify while every request re-ran the full computation and threw the
+    # answer away. Between a board that goes visibly empty and a board that
+    # silently describes a population that no longer exists, empty is the one
+    # that gets noticed and fixed (Codex on #835).
+    #
+    # Note the compute side can return [] without raising: `if not rows`
+    # above logs a warning and returns. That is exactly the case worth
+    # surfacing rather than papering over.
+    if results:
+        await db.execute(
+            "DELETE FROM player_skill_ratings "
+            "WHERE player_guid <> ALL($1) AND last_rated_at < $2",
+            ([p["player_guid"] for p in results], run_started_at),
+        )
+    else:
+        # Same delete without the keep-list — an empty array parameter would
+        # leave asyncpg to guess the element type of `<> ALL($1)`.
+        logger.warning(
+            "Rating run produced no players; clearing the published board "
+            "(history is kept, the next successful run republishes)"
+        )
+        await db.execute(
+            "DELETE FROM player_skill_ratings WHERE last_rated_at < $1",
+            (run_started_at,),
+        )
 
     for player in results:
         components_json = json.dumps(player["components"])
@@ -586,9 +659,6 @@ async def compute_and_store_ratings(db) -> int:
             (player["player_guid"], player["et_rating"],
              components_json, player["rounds"]),
         )
-
-    logger.info("Stored ratings + history for %d players", len(results))
-    return len(results)
 
 
 # ---------------------------------------------------------------------------

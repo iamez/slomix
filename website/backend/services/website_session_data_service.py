@@ -240,7 +240,12 @@ class WebsiteSessionDataService(SessionDataService):
                     "duration": row[3],
                     "winner": winner_team_name or self._team_name(row[4]),
                     "outcome": row[5],
-                    "date": str(round_date),
+                    # `str(None)` is the string "None", not JSON null. The
+                    # column is nullable and nothing in this query filters
+                    # it, so the coercion would hand the frontend a date that
+                    # looks present and links to /session-detail/date/None.
+                    # Codex on #841. `_time_ago` already says "Unknown".
+                    "date": str(round_date) if round_date is not None else None,
                     "time_ago": self._time_ago(round_date),
                     "gaming_session_id": gaming_session_id,
                     "match_id": row[9] if len(row) > 9 else None,
