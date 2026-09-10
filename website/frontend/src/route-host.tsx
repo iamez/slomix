@@ -4,7 +4,7 @@ import { lazy, Suspense } from 'react';
 import type { ModernRouteContext } from './runtime/catalog';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Skeleton } from './components/Skeleton';
-import { installErrorReporting } from './lib/errorReporting';
+import { installErrorReporting } from './app/lib/errorReporting';
 import './styles/tailwind.css';
 
 installErrorReporting();
