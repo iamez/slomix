@@ -97,8 +97,10 @@ export interface VoiceCurrent {
    * Codex on #806, wave 5). Read defensively so the page starts qualifying
    * staleness the moment the backend exposes it (response_model work). */
   updated_at?: string | null;
-  members: unknown[];
-  channels: unknown[];
+  /** diagnostics_router voice-activity/current: a member is {name, channel_name};
+   *  a channel is {id, name, members} — one tracked channel today. */
+  members: { name: string; channel_name: string }[];
+  channels: { id: string | null; name: string; members: { name: string; channel_name: string }[] }[];
 }
 
 /** GET /api/stats/overview — corpus: api_stats_overview.json */
@@ -484,6 +486,7 @@ export interface SeasonCurrent {
   days_left: number;
   start_date: string;
   end_date: string;
+  next_season_id: number | string | null;
   next_season_name: string;
   next_season_start: string;
 }
@@ -619,6 +622,10 @@ export interface SkillMovers {
   movers_up: SkillMoverRow[];
   movers_down: SkillMoverRow[];
   new_players: SkillMoverRow[];
+  /** The server's own sentence for what the movement is measured against. */
+  baseline_desc: string | null;
+  /** The weights the movement is scored with (metric → weight). */
+  form_weights?: Record<string, number>;
 }
 
 /** GET /api/challenges/current — corpus: api_challenges_current.json
@@ -5048,7 +5055,8 @@ export interface LiveFeed {
   events: { seq: number; type: string; [k: string]: unknown }[];
   oldest_seq: number | null;
   last_seq: number;
-  server_time: number;
+  /** Epoch seconds; absent on the older feed-buffer shape a fixture still carries. */
+  server_time?: number;
 }
 
 export interface ActivityHistory {

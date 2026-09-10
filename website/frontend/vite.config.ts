@@ -17,6 +17,15 @@ export default defineConfig({
     // too and tries to run them as vitest tests, which fails immediately
     // ("Playwright Test did not expect test() to be called here").
     exclude: [...configDefaults.exclude, 'e2e/**'],
+    // A page test here mounts a real page: the session detail brings the
+    // matrix, the graphs and the role boards, and the proximity page mounts
+    // thirteen panels. Under the full suite's parallelism those exceed the
+    // 5 s default and fail as timeouts with nothing wrong — the same three
+    // files passed alone on the run that failed them together (2026-09-10,
+    // and the same shape on #1017 and #1025 CI). The waits inside the tests
+    // are already explicit where they need to be; this is the floor, not a
+    // substitute for them.
+    testTimeout: 30_000,
   },
   server: {
     host: '127.0.0.1',

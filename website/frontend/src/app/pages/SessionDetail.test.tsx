@@ -136,6 +136,8 @@ describe('SessionDetail', () => {
     renderPage();
     await openMore();
     await waitFor(() => expect(screen.getByText('Team A 5 — 7 Team B')).toBeInTheDocument());
+    // The scoring block's own count, beside the score (recorded 6).
+    expect(screen.getByText('6 maps scored')).toBeInTheDocument();
     expect(screen.getAllByText('etl_adlernest').length).toBeGreaterThan(0);
     // A full hold is not a time, and the recording has one.
     expect(screen.getAllByText(/fullhold/).length).toBeGreaterThan(0);
@@ -585,10 +587,12 @@ describe('SessionDetail — stats 2.0 summary', () => {
   it('a header click re-sorts the basics', async () => {
     renderPage();
     const kills = await screen.findByRole('button', { name: /^dmg/ });
+    // The sort state is on the columnheader wrapping the button (a11y pass).
+    const header = screen.getByRole('columnheader', { name: /^dmg/ });
     fireEvent.click(kills);
-    expect(kills).toHaveAttribute('aria-sort', 'descending');
+    expect(header).toHaveAttribute('aria-sort', 'descending');
     fireEvent.click(kills);
-    expect(kills).toHaveAttribute('aria-sort', 'ascending');
+    expect(header).toHaveAttribute('aria-sort', 'ascending');
   });
 
   it('the awards read as sentences with the nickname and the engine name behind it', async () => {
