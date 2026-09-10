@@ -539,6 +539,31 @@ clone_repository() {
     chown -R $SERVICE_USER:$SERVICE_USER $DEPLOY_DIR 2>/dev/null || true
 }
 
+arm_git_hooks() {
+    print_header "Arming Git Hooks"
+
+    # A guard that is written but not installed is not a guard. On 2026-08-19 a
+    # `git add -A` swept 55 foreign files — including a 23.8 MB spreadsheet of
+    # another player's data — into a commit that reached a PUBLIC repository.
+    # .pre-commit-config.yaml already carried a 500 kB limit that would have
+    # stopped it, but .git/hooks held nothing except .sample files, and CI only
+    # runs after the push, which for a public repo is after exposure.
+    #
+    # So the check lives at the irreversible step (push) and arms itself here,
+    # for every clone, instead of waiting for someone to remember.
+    if [ ! -d .git ]; then
+        print_warning "Not a git repository — skipping hook setup"
+        return 0
+    fi
+    if [ ! -x scripts/git-hooks/pre-push ]; then
+        print_warning "scripts/git-hooks/pre-push missing or not executable — skipping"
+        return 0
+    fi
+    git config core.hooksPath scripts/git-hooks
+    print_success "core.hooksPath -> scripts/git-hooks (pre-push guard active)"
+    echo "    Emergency exit, when you mean it: git push --no-verify"
+}
+
 setup_python_venv() {
     print_header "Setting up Python Virtual Environment"
     
@@ -986,6 +1011,7 @@ main() {
     fi
     echo "  • Install Python 3 and dependencies"
     echo "  • Setup virtual environment"
+    echo "  • Arm the pre-push guard (core.hooksPath)"
     if [ "$SKIP_GIT_CLONE" = false ]; then
         echo "  • Clone repository to $DEPLOY_DIR"
     fi
@@ -1024,6 +1050,7 @@ main() {
     fi
     
     setup_python_venv
+    arm_git_hooks
     configure_bot
     
     if [ "$SKIP_DB_IMPORT" = false ] && [ "$SKIP_POSTGRESQL" = false ]; then

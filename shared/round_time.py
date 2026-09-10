@@ -25,7 +25,27 @@ import re
 # Seconds are strictly 00-59: a stopwatch clock never renders "4:60", so a
 # value like that is corrupt header data and must read as unknown, not as a
 # plausible duration (coderabbit, PR #770).
-_MMSS_RE = re.compile(r"^(\d+):([0-5]\d)$")
+#
+# ONE pattern, written once and reused by the SQL below. It was two before,
+# and they disagreed: the SQL accepted `[0-9]{2}` seconds, so "4:60" parsed
+# to 300 s in a query and to None in Python — the module's own docstring says
+# the SQL "mirrors" the Python, and on that value it did not. Measured on
+# 2026-08-29: 0 of 2,147 R1/R2 rounds carry such a clock, so this is a latent
+# divergence, not a live wrong number. Latent is the moment to fix it.
+#
+# ⚠️ MINUTES ARE `[0-9]+`, NOT `\d+`. Python's `\d` matches Unicode digits and
+# PostgreSQL's does not, so `"٤:59"` parsed to 299 in Python and was rejected
+# by the SQL — a divergence of exactly the kind this consolidation exists to
+# remove, reintroduced one character to the left of the fix (brother's review
+# on #840). No ET clock carries such a digit; the point is that the two halves
+# now describe the same set for EVERY input, not just the plausible ones.
+_MMSS_MINUTES = "[0-9]+"
+_MMSS_SECONDS = "[0-5][0-9]"
+#: The clock's shape as a POSIX regex, for SQL that needs the VALIDITY test
+#: without the duration arithmetic. Exported so a caller writing its own
+#: guard can share this one rather than spell a third variant.
+MMSS_SQL_REGEX = f"^{_MMSS_MINUTES}:{_MMSS_SECONDS}$"
+_MMSS_RE = re.compile(rf"^({_MMSS_MINUTES}):({_MMSS_SECONDS})$")
 
 
 def parse_mmss(text: object) -> int | None:
@@ -84,7 +104,7 @@ def round_duration_sql(alias: str = "r") -> str:
     a = f"{alias}." if alias else ""
     return (
         f"COALESCE(NULLIF({a}actual_duration_seconds, 0), "
-        f"CASE WHEN {a}actual_time ~ '^[0-9]+:[0-9]{{2}}$' "
+        f"CASE WHEN {a}actual_time ~ '{MMSS_SQL_REGEX}' "
         f"THEN split_part({a}actual_time, ':', 1)::int * 60 "
         f"+ split_part({a}actual_time, ':', 2)::int END)"
     )
