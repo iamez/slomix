@@ -157,9 +157,13 @@ export function AppShell() {
         >
           <span>slomix · kept since january 2025</span>
           <span style={{ display: 'flex', gap: 'var(--space-4)' }}>
+            {/* system and diag are engineering pages, and a public footer
+              * carrying them reads as an unfinished site (visitor review
+              * 2026-09-07, trust). They live under About, which is where a
+              * reader goes to ask how the numbers are made — and both keep
+              * their own routes, so existing links still work. */}
             <Link to="/welcome" style={{ color: 'inherit', textDecoration: 'none' }}>welcome</Link>
-            <Link to="/system" style={{ color: 'inherit', textDecoration: 'none' }}>system</Link>
-            <Link to="/smart-stats-diag" style={{ color: 'inherit', textDecoration: 'none' }}>diag</Link>
+            <Link to="/admin" style={{ color: 'inherit', textDecoration: 'none' }}>about</Link>
             <span>et:legacy stopwatch</span>
           </span>
         </div>

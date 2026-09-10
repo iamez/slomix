@@ -218,9 +218,14 @@ function Health() {
           </div>
         ))}
       </div>
-      <Link to="/system" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', display: 'inline-block', marginTop: 'var(--space-3)', textDecoration: 'none' }}>
-        full system page →
-      </Link>
+      <div style={{ display: 'flex', gap: 'var(--space-4)', marginTop: 'var(--space-3)' }}>
+        <Link to="/system" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>
+          full system page →
+        </Link>
+        <Link to="/smart-stats-diag" style={{ ...lblStyle, fontSize: 'var(--fs-caption)', textDecoration: 'none' }}>
+          smart-stats diagnostics →
+        </Link>
+      </div>
     </div>
   );
 }
