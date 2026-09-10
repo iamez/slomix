@@ -34,11 +34,6 @@ const { chromium } = await import(
 
 const BASE_URL = process.env.AUDIT_BASE_URL ?? 'http://127.0.0.1:8000';
 const ANON_ONLY = process.argv.includes('--anon-only');
-const MANIFEST = process.argv.includes('--manifest');
-// --app sweeps the NEW standalone SPA under /app instead of the legacy hash
-// site. Same passes, same viewports, same manifest format, so the two can be
-// diffed against each other (docs/design/09 §H2).
-const APP_MODE = process.argv.includes('--app');
 const OWNER_ONLY = process.argv.includes('--owner-only');
 const OUT_DIR = (() => {
     const i = process.argv.indexOf('--out');
@@ -57,18 +52,44 @@ const VIEWPORTS = [
     { name: 'phone-390', width: 390, height: 844, shot: false },
 ];
 
-// The route lists and the registry check live in route_audit_list.mjs, which
-// imports no browser — so the guard can run in CI without Playwright (the
-// reason it could not is the reason it never did: brother's review on #839).
-import { ROUTES, appRoutes, assertRegistryCovered } from './route_audit_list.mjs';
+// Every route from docs/ROUTE_MAP_2026-07.md. Parametrised ones carry real
+// values so they are actually exercised rather than bouncing off a guard — the
+// stale-contract findings in the master review all live behind a param.
+const ROUTES = [
+    { name: 'home', hash: '' },
+    { name: 'sessions', hash: '#/sessions' },
+    { name: 'sessions2', hash: '#/sessions2' },
+    { name: 'session-detail (date, multi-session)', hash: '#/session-detail/date/2026-08-04' },
+    { name: 'leaderboards', hash: '#/leaderboards' },
+    { name: 'form', hash: '#/form' },
+    { name: 'maps', hash: '#/maps' },
+    { name: 'weapons', hash: '#/weapons' },
+    { name: 'records (alias)', hash: '#/records' },
+    { name: 'record-book', hash: '#/record-book' },
+    { name: 'hall-of-fame', hash: '#/hall-of-fame' },
+    { name: 'awards', hash: '#/awards' },
+    { name: 'profile (owner)', hash: '#/profile/E587CA5F' },
+    { name: 'profile (other)', hash: '#/profile/D8423F90' },
+    { name: 'skill-rating', hash: '#/skill-rating' },
+    { name: 'rivalries', hash: '#/rivalries' },
+    { name: 'story', hash: '#/story' },
+    { name: 'replay', hash: '#/replay' },
+    { name: 'retro-viz', hash: '#/retro-viz' },
+    { name: 'tonight', hash: '#/tonight' },
+    { name: 'proximity', hash: '#/proximity' },
+    { name: 'proximity-player', hash: '#/proximity/player/D8423F90' },
+    { name: 'proximity-replay', hash: '#/proximity/round/11175' },
+    { name: 'proximity-teams', hash: '#/proximity/round/11175/teams' },
+    { name: 'smart-stats-diag', hash: '#/smart-stats-diag' },
+    { name: 'greatshot', hash: '#/greatshot/demos' },
+    { name: 'uploads', hash: '#/uploads' },
+    { name: 'availability', hash: '#/availability' },
+    { name: 'admin', hash: '#/admin' },
+];
 
 // ---------------------------------------------------------------------------
 // Session cookie
 // ---------------------------------------------------------------------------
-
-// Legacy or app, chosen once so every pass below sweeps the same list.
-const ACTIVE_ROUTES = APP_MODE ? appRoutes() : ROUTES;
-if (!APP_MODE) await assertRegistryCovered();
 
 /**
  * Locate the interpreter, in the same order and with the same override as
@@ -212,10 +233,7 @@ async function collectPageFindings(page) {
         // the view rendered NOTHING, and a stuck panel is reported separately
         // with the element that owns it.
         out.stuckPanels = [];
-        // `.view-section.active` is the legacy shell's view; the SPA (--app)
-        // renders into #root > main. Without this, every app route read as
-        // "no .view-section.active" = DEAD (found 2026-09-06).
-        const active = document.querySelector('.view-section.active') ?? document.querySelector('#root main');
+        const active = document.querySelector('.view-section.active');
         if (!active) {
             out.deadState = 'no .view-section.active';
         } else {
@@ -283,118 +301,6 @@ async function collectPageFindings(page) {
     }, RENDER_ROT);
 }
 
-// --- H2 manifest mode (docs/design/09): one evaluate per route that freezes
-// what the page SHOWS — api paths, panel titles, table columns, canvases,
-// tabs, data-parity keys. Run once against legacy to produce
-// docs/parity/inventory.json; run against /app and feed both to
-// scripts/parity_diff.mjs.
-async function collectManifest(page) {
-    return page.evaluate(() => {
-        const norm = (s) => (s ?? '').replace(/\s+/g, ' ').trim();
-        // The legacy SPA keeps every view's panels in the DOM and hides the
-        // inactive ones — without a visibility walk the manifest freezes the
-        // UNION of all routes (measured: 17 identical panels everywhere).
-        const visCache = new WeakMap();
-        const isUserVisible = (el) => {
-            if (!el) return false;
-            if (visCache.has(el)) return visCache.get(el);
-            let ok = true;
-            for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
-                if (n.hasAttribute && n.hasAttribute('hidden')) { ok = false; break; }
-                const cs = getComputedStyle(n);
-                if (cs.display === 'none' || cs.visibility === 'hidden') { ok = false; break; }
-            }
-            visCache.set(el, ok);
-            return ok;
-        };
-        const out = { panelTitles: [], tableColumns: {}, canvasCount: 0, tabs: [], dataParityKeys: [] };
-        // Panels: legacy glass-cards key by heading text; new pages carry
-        // data-parity keys (collected separately below).
-        for (const card of document.querySelectorAll('.glass-card, .card, section')) {
-            if (!isUserVisible(card)) continue;
-            const h = card.querySelector('h1,h2,h3,h4,.card-title,.section-title');
-            const t = norm(h && h.textContent);
-            if (t) out.panelTitles.push(t);
-        }
-        let anonTable = 0;
-        for (const table of document.querySelectorAll('table')) {
-            if (!isUserVisible(table)) continue;
-            const cols = [...table.querySelectorAll('thead th, tr:first-child th')].map((th) => norm(th.textContent)).filter(Boolean);
-            if (!cols.length) continue;
-            const key = table.id || `table-${anonTable++}`;
-            out.tableColumns[key] = cols;
-        }
-        out.canvasCount = [...document.querySelectorAll('canvas')].filter(isUserVisible).length;
-        for (const tab of document.querySelectorAll('[role="tab"], .tab, .tab-button, .nav-tabs a')) {
-            if (!isUserVisible(tab)) continue;
-            const t = norm(tab.textContent);
-            if (t) out.tabs.push(t);
-        }
-        for (const el of document.querySelectorAll('[data-parity]')) {
-            if (!isUserVisible(el)) continue;
-            out.dataParityKeys.push(el.getAttribute('data-parity'));
-        }
-        out.panelTitles = [...new Set(out.panelTitles)].sort();
-        out.tabs = [...new Set(out.tabs)].sort();
-        out.dataParityKeys = [...new Set(out.dataParityKeys)].sort();
-        return out;
-    });
-}
-
-async function manifestRoute(context, route) {
-    const page = await context.newPage();
-    await page.setViewportSize({ width: 1440, height: 900 });
-    const apiPaths = new Set();
-    page.on('request', (req) => {
-        try {
-            const u = new URL(req.url());
-            if (u.pathname.startsWith('/api/')) apiPaths.add(u.pathname);
-        } catch { /* data: etc. */ }
-    });
-    try {
-        await page.goto(`${BASE_URL}/${route.hash}`, { waitUntil: 'networkidle', timeout: 30_000 });
-    } catch { /* manifest still collects what rendered */ }
-    await page.waitForTimeout(2500);
-    const dom = await collectManifest(page);
-    await page.close();
-    return { apiPaths: [...apiPaths].sort(), ...dom };
-}
-
-if (MANIFEST) {
-    const browser = await chromium.launch();
-    const context = await browser.newContext();
-    // ⛔ --anon-only must not need the owner's secret. This called
-    // mintOwnerSession() unconditionally, so an anonymous sweep died with
-    // "SESSION_SECRET not found in website/.env" — in a worktree that has no
-    // website/.env (it is untracked and local), the flag that promises to skip
-    // the owner pass could not run at all. Working around that by exporting
-    // the secret would put it in the process argv, where `ps` shows it to
-    // every user on the box.
-    //
-    // ⚠️ Without the flag the throw STAYS. An owner pass that quietly
-    // downgrades to anonymous would report every owner-only view as an
-    // anonymous redirect and call it a finding.
-    const ownerCookie = ANON_ONLY ? null : mintOwnerSession();
-    if (ownerCookie) {
-        const { hostname } = new URL(BASE_URL);
-        await context.addCookies([
-            { name: 'session', value: ownerCookie, domain: hostname, path: '/' },
-        ]);
-    }
-    const routesOut = {};
-    for (const route of ACTIVE_ROUTES) {
-        routesOut[route.name] = await manifestRoute(context, route);
-        process.stdout.write(`  manifest ${route.name.padEnd(38)} ${routesOut[route.name].apiPaths.length} api, ${routesOut[route.name].panelTitles.length} panels\n`);
-    }
-    await context.close();
-    await browser.close();
-    mkdirSync(OUT_DIR, { recursive: true });
-    const outFile = path.join(OUT_DIR, 'inventory.json');
-    writeFileSync(outFile, JSON.stringify({ baseUrl: BASE_URL, generated: new Date().toISOString(), routes: routesOut }, null, 2));
-    process.stdout.write(`\n  manifest -> ${outFile}\n`);
-    process.exit(0);
-}
-
 async function auditRoute(context, route, viewport, pass, outDir) {
     const page = await context.newPage();
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -431,15 +337,8 @@ async function auditRoute(context, route, viewport, pass, outDir) {
         navError = String(err.message).split('\n')[0];
     }
     // Legacy loaders run after networkidle (the router discards their promise),
-    // so give them a beat before reading the DOM. A navigation that timed out
-    // can leave the page closed; that is a finding for this route, not a
-    // reason to abort the whole sweep (it killed a 256-check run at 108 on
-    // 2026-09-06).
-    try {
-        await page.waitForTimeout(1800);
-    } catch (err) {
-        navError = navError ?? String(err.message).split('\n')[0];
-    }
+    // so give them a beat before reading the DOM.
+    await page.waitForTimeout(1800);
     const loadMs = Date.now() - started;
 
     const findings = navError
@@ -531,7 +430,7 @@ for (const { label, asOwner } of passes) {
             { name: 'session', value: ownerCookie, domain: hostname, path: '/' },
         ]);
     }
-    for (const route of ACTIVE_ROUTES) {
+    for (const route of ROUTES) {
         for (const viewport of VIEWPORTS) {
             const r = await auditRoute(context, route, viewport, label, OUT_DIR);
             results.push(r);
