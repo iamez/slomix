@@ -19,6 +19,7 @@
  * makes this correct before AND after that PR merges.
  */
 import { Fragment, type ReactNode } from 'react';
+import { utcStamp } from '../lib/utcStamp';
 
 import { Cluster, Stack } from './layout';
 import type { RoundPlayerRow, SessionRound } from '../lib/types';
@@ -217,6 +218,9 @@ function RoundHeading({ round }: { round: SessionRound }) {
       <span style={{ fontSize: FS.small, color: 'var(--color-text-400)',
                      fontVariantNumeric: 'tabular-nums' }}>
         {round.duration_seconds == null ? 'duration unknown' : mmss(round.duration_seconds)}
+      </span>
+      <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)' }} title="when the round was played">
+        {utcStamp(round.played_at)}
       </span>
       {round.end_reason ? (
         <span style={{ fontSize: FS.micro, color: 'var(--color-text-500)',

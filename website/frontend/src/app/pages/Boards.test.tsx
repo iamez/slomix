@@ -144,6 +144,10 @@ describe('RecordBook', () => {
     expect(screen.getAllByText('.olz').length).toBeGreaterThan(0);
     // Champions band hides on the recorded empty awards — the NORMAL state.
     expect(screen.queryByText(/champions/i)).not.toBeInTheDocument();
+    // The board says when it was computed (recorded 2026-08-24 13:35 UTC);
+    // the recording has no delta window, so no window is claimed.
+    expect(screen.getByText(/computed 2026-08-24 13:35 UTC/)).toBeInTheDocument();
+    expect(screen.queryByText(/rank deltas over/)).toBeNull();
   });
 
   it('season tab shows leaders and says the awards are not engraved yet', async () => {

@@ -486,6 +486,7 @@ export interface SeasonCurrent {
   days_left: number;
   start_date: string;
   end_date: string;
+  next_season_id: number | string | null;
   next_season_name: string;
   next_season_start: string;
 }
@@ -621,6 +622,10 @@ export interface SkillMovers {
   movers_up: SkillMoverRow[];
   movers_down: SkillMoverRow[];
   new_players: SkillMoverRow[];
+  /** The server's own sentence for what the movement is measured against. */
+  baseline_desc: string | null;
+  /** The weights the movement is scored with (metric → weight). */
+  form_weights?: Record<string, number>;
 }
 
 /** GET /api/challenges/current — corpus: api_challenges_current.json

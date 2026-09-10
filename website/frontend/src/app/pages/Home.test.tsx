@@ -384,3 +384,24 @@ describe('Home live-session line (ledger 2026-09-09)', () => {
     expect(screen.getByText(/no challenge this week \(week of 2026-08-24\)/)).toBeInTheDocument();
   });
 });
+
+describe('Home long tail (ledger 2026-09-09)', () => {
+  it('prints the movers baseline in the server\'s words with its weights, the season\'s active days, and the season after', async () => {
+    // Its own stub: the live-session describe above unstubs globals when it
+    // finishes, so this can no longer inherit an earlier test's fetch.
+    vi.stubGlobal('fetch', vi.fn(fixtureFetch));
+    renderHome();
+    await waitFor(() => expect(screen.getByText(/rank-vs-self, not a global ranking/)).toBeInTheDocument());
+    const m = movers as { form_weights: Record<string, number> };
+    expect(screen.getByText(new RegExp(`weights: dpm ${m.form_weights.dpm}`))).toBeInTheDocument();
+    const sum = seasonSummary as { totals: { active_days: number; avg_rounds_per_day: number } };
+    expect(screen.getByText('active days')).toBeInTheDocument();
+    expect(screen.getByText(String(sum.totals.active_days))).toBeInTheDocument();
+    expect(screen.getByText('rounds / day')).toBeInTheDocument();
+    expect(screen.getByText(String(sum.totals.avg_rounds_per_day))).toBeInTheDocument();
+    const cur = seasonCurrent as { next_season_id: number | string | null; next_season_name: string };
+    if (cur.next_season_id != null) {
+      expect(screen.getByText(`then ${cur.next_season_name} (season ${cur.next_season_id})`)).toBeInTheDocument();
+    }
+  });
+});

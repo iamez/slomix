@@ -13,10 +13,11 @@ import {
 import type { LastSession, RecentPrediction, SkillMoverRow, StatsTrends } from '../lib/types';
 import {
   Absent, ActLink, Lbl, Meta, Pending, SectionHead, StatusDot, Unavailable,
-  figure, lblStyle, rowStyle,
+  decimals, figure, lblStyle, rowStyle,
 } from '../components/ui';
 import { MatchBoxScore } from '../components/MatchBoxScore';
 import { Panel } from '../components/Panel';
+import { PlayerSearch } from '../components/PlayerSearch';
 import { utcStamp } from '../lib/utcStamp';
 
 /**
@@ -337,6 +338,9 @@ function SeasonBlock() {
         { k: 'maps', v: seasonFig('maps_count', totals.maps) },
         { k: 'sessions', v: seasonFig('sessions_count', totals.sessions) },
         { k: 'kills', v: seasonFig('kills_total', totals.kills) },
+        { k: 'active days', v: seasonFig('active_days', totals.active_days) },
+        // Derived from rounds ÷ active days on the server, so it fails with active_days.
+        { k: 'rounds / day', v: seasonFig('active_days', totals.avg_rounds_per_day) },
         {
           // {name: null, plays: 0} is the endpoint's EMPTY season shape —
           // the object is truthy, the name is the gate (Codex wave 3).
@@ -384,6 +388,7 @@ function SeasonBlock() {
   return (
     <div data-parity="home.season">
       <SectionHead label={s.name} aside={<span className="m" style={{ ...lblStyle, fontSize: 'var(--fs-caption)' }}>{s.days_left} days left</span>} />
+      {s.next_season_id != null && <Meta>{`then ${s.next_season_name} (season ${s.next_season_id})`}</Meta>}
       <div style={{ height: 3, background: 'var(--color-rule-900)', marginTop: 'var(--space-2)', position: 'relative' }}>
         <span style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct.toFixed(0)}%`, background: 'var(--color-accent-warm)', display: 'block' }} />
       </div>
@@ -621,7 +626,10 @@ function PulseRow() {
             {md.movers_up.length + md.movers_down.length + md.new_players.length === 0 && (
               <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no session to compare yet</div>
             )}
-            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>vs each player's own trailing form — not a ranking</Lbl>
+            {/* The server's own words for the baseline, and the weights the
+              * movement is scored with — so nobody reads it as a ladder. */}
+            <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>{md.baseline_desc ?? "vs each player's own trailing form — not a ranking"}</Lbl>
+            {md.form_weights && <Meta>weights: {Object.entries(md.form_weights).map(([k, v]) => `${k} ${decimals(v, 2)}`).join(' · ')}</Meta>}
           </div>
         )}
       </div>
@@ -790,56 +798,13 @@ function Tonight() {
   );
 }
 
-interface SearchHit { guid: string; name: string }
-
 function FindYourStats() {
   const overview = useOverview();
-  const [query, setQuery] = useState('');
-  // 300 ms debounce, the legacy value: /auth/players/search is rate-limited
-  // to 30/min, so a query key per keystroke would burn the budget in one
-  // typed name (Codex on #811).
-  const [debounced, setDebounced] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setDebounced(query.trim()), 300);
-    return () => clearTimeout(timer);
-  }, [query]);
-  const trimmed = debounced;
-  const search = useQuery({
-    queryKey: ['player-search', trimmed],
-    enabled: trimmed.length >= 2,
-    queryFn: () => apiGet('/auth/players/search', { query: { q: trimmed } }) as Promise<SearchHit[]>,
-  });
   const known = overview.data?.players_all_time;
   return (
     <div data-parity="home.search">
       <Lbl>find your stats</Lbl>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="player name or alias"
-        aria-label="Find your stats"
-        className="m"
-        style={{
-          width: '100%', marginTop: 'var(--space-3)', background: 'var(--color-ink-800)',
-          border: '1px solid var(--color-rule-700)', color: 'var(--color-text-100)',
-          fontSize: 'var(--fs-value)', padding: 'var(--space-2) var(--space-3)', boxSizing: 'border-box',
-        }}
-      />
-      {trimmed.length >= 2 && (
-        <div style={{ marginTop: 'var(--space-2)' }}>
-          {search.isPending && <Pending label="search" />}
-          {search.isError && <Unavailable what="search" />}
-          {search.data?.length === 0 && (
-            <div className="m" style={{ fontSize: 'var(--fs-micro)', color: 'var(--color-text-500)' }}>no player matches "{trimmed}"</div>
-          )}
-          {search.data?.slice(0, 6).map((hit) => (
-            <Link key={hit.guid} to={`/profile/${hit.guid}`} style={{ ...rowStyle, display: 'block', padding: 'var(--space-2) 0', textDecoration: 'none', color: 'var(--color-text-100)' }}>
-              <span className="m" style={{ fontSize: 'var(--fs-value)' }}>{hit.name}</span>
-            </Link>
-          ))}
-        </div>
-      )}
+      <PlayerSearch ariaLabel="Find your stats" placeholder="player name or alias" />
       <Lbl style={{ fontSize: 'var(--fs-caption)', marginTop: 'var(--space-2)' }}>
         {known != null ? `${known} players known · ` : ''}names resolve through every alias we have seen
       </Lbl>
