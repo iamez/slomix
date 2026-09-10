@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DataTable, type DataColumn } from './DataTable';
 
 type Row = { id: string; name: string; dpm: number; kis: number | null };
@@ -89,6 +89,44 @@ describe('DataTable', () => {
   it('says no rows on an empty input instead of rendering nothing', () => {
     render(<DataTable columns={COLUMNS} rows={[]} rowKey={(r) => r.id} />);
     expect(screen.getByText('no rows')).toBeInTheDocument();
+  });
+});
+
+describe('DataTable export', () => {
+  it('offers a CSV only when asked, and writes the rows in the order on screen', () => {
+    const saved: { name: string; text: string }[] = [];
+    const createURL = vi.fn(() => 'blob:x');
+    vi.stubGlobal('URL', { ...URL, createObjectURL: createURL, revokeObjectURL: vi.fn() });
+    // Capture what the anchor would download: jsdom has no real save path.
+    const realClick = HTMLAnchorElement.prototype.click;
+    HTMLAnchorElement.prototype.click = function click(this: HTMLAnchorElement) {
+      saved.push({ name: this.download, text: '' });
+    };
+    const blobText: string[] = [];
+    const RealBlob = globalThis.Blob;
+    vi.stubGlobal('Blob', class extends RealBlob {
+      constructor(parts: BlobPart[], options?: BlobPropertyBag) {
+        super(parts, options);
+        blobText.push(parts.map(String).join(''));
+      }
+    });
+
+    const plain = render(<DataTable<Row> label="players" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} />);
+    expect(screen.queryByRole('button', { name: /csv/i })).toBeNull();
+    plain.unmount();
+
+    render(<DataTable<Row> label="players" columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} defaultSort={{ key: 'dpm', dir: 'desc' }} exportable />);
+    fireEvent.click(screen.getByRole('button', { name: /csv/i }));
+
+    expect(saved).toHaveLength(1);
+    expect(saved[0].name).toMatch(/^slomix-players-\d{4}-\d\d-\d\d\.csv$/);
+    const csv = blobText[0].replace(/^﻿/, '');
+    // Header from the labels, then the rows in the SORTED order (dpm desc),
+    // with the null kis exported as an empty field, never as 0.
+    expect(csv).toBe('player,dpm,kis\r\nbravo,450,\r\nalpha,300,12.5\r\ncharlie,120,40');
+
+    HTMLAnchorElement.prototype.click = realClick;
+    vi.unstubAllGlobals();
   });
 });
 

@@ -17,6 +17,7 @@
  */
 import { useMemo, useState, type ReactNode } from 'react';
 import { Lbl, lblStyle } from './ui';
+import { csvFileName, downloadCsv, toCsv } from '../lib/csv';
 
 export interface DataColumn<Row> {
   key: string;
@@ -52,6 +53,10 @@ export interface DataTableProps<Row> {
   /** The row's name for the expander's aria-label — needed when the first
    *  cell renders a node (a Link), which the label cannot read. */
   expandName?: (row: Row) => string;
+  /** Offer the rows as a CSV. Off by default: a table of two figures is not
+   *  worth a download, and the caller knows which its readers would take
+   *  away. The file holds what is ON SCREEN, in the order on screen. */
+  exportable?: boolean;
 }
 
 const DASH = '—';
@@ -66,7 +71,7 @@ function compare(a: number | string | null, b: number | string | null): number {
 }
 
 export function DataTable<Row>({
-  columns, rows, rowKey, defaultSort, renderExpanded, expandLabel = 'more', minWidth, parity, label, expandName,
+  columns, rows, rowKey, defaultSort, renderExpanded, expandLabel = 'more', minWidth, parity, label, expandName, exportable,
 }: DataTableProps<Row>) {
   const [sort, setSort] = useState<{ key: string; dir: SortDir } | null>(defaultSort ?? null);
   const [open, setOpen] = useState<string | null>(null);
@@ -103,8 +108,38 @@ export function DataTable<Row>({
     : undefined;
   const gridStyle = { display: 'grid', gridTemplateColumns: template, columnGap: 'var(--space-3)', alignItems: 'center' } as const;
 
+  // The export reads the SORTED rows and the same accessors the cells use,
+  // so the file and the screen cannot disagree. A column whose format
+  // returns a node (a Link, a chip) exports its sort value instead — the
+  // number behind the ornament — and nothing at all when it has neither.
+  const exportRows = () => {
+    const header = columns.map((c) => (typeof c.label === 'string' ? c.label : c.key));
+    const body = sorted.map((row) => columns.map((c) => {
+      if (c.sortValue) return c.sortValue(row);
+      const shown = c.format?.(row);
+      return typeof shown === 'string' || typeof shown === 'number' ? shown : null;
+    }));
+    downloadCsv(csvFileName(label ?? parity ?? 'table'), toCsv(header, body));
+  };
+
   return (
     <div data-parity={parity} role="region" aria-label={label} style={{ overflowX: 'auto' }}>
+      {exportable && sorted.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            type="button"
+            onClick={exportRows}
+            className="m"
+            style={{
+              background: 'none', border: '1px solid var(--color-rule-700)', cursor: 'pointer',
+              color: 'var(--color-text-400)', fontSize: 'var(--fs-caption)', letterSpacing: '0.1em',
+              textTransform: 'uppercase', padding: 'var(--space-1) var(--space-2)',
+            }}
+          >
+            csv ↓
+          </button>
+        </div>
+      )}
       {/* The layout is a CSS grid, so the table semantics are declared rather
         * than inherited from <table>: without them a screen reader reads 22
         * columns of loose text with no header to tie a number to (visitor

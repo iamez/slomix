@@ -415,6 +415,7 @@ function PlayersTab({ players, sessionId, teams }: { players: SessionPlayerTotal
         renderExpanded={(p) => <PlayerDrilldown sessionId={sessionId} guid8={p.player_guid} name={p.player_name} />}
         minWidth={1400}
         label="players"
+        exportable
       />
       <Lbl style={{ fontSize: 'var(--fs-caption)' }}>
         totals over the session's counted rounds · sorted by dpm
@@ -559,6 +560,7 @@ function Basics({ basics, sessionId }: { basics: SessionBasics; sessionId: numbe
         renderExpanded={(p) => <PlayerDrilldown sessionId={sessionId} guid8={p.guid} name={p.name} />}
         minWidth={1160}
         label="the basics"
+        exportable
       />
       {!c.kis_covered && <Absent reason="KIS is not covered for this session — the proximity tracker scored no kill here, so the two kis columns say nothing, not zero" />}
       {c.kis_covered && c.kis_kills < c.total_kills && (
